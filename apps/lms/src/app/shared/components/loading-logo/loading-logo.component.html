@@ -1,0 +1,229 @@
+<div class="loading-container"
+     [class]="'size-' + size + ' color-' + color + (showDna ? ' show-dna' : '') + (inline ? ' inline-mode' : '') + (horizontal ? ' horizontal-mode' : '')">
+
+  @if (inline) {
+    <!-- Compact inline heartbeat (buttons, chips, small surfaces) -->
+    <div class="inline-heartbeat">
+      <div class="dna-particles">
+        <div class="particle p1"></div>
+        <div class="particle p2"></div>
+        <div class="particle p3"></div>
+        <div class="particle p4"></div>
+        <div class="particle p5"></div>
+        <div class="particle p6"></div>
+      </div>
+
+      <div class="glow-rings">
+        <div class="glow-ring r1"></div>
+        <div class="glow-ring r2"></div>
+        <div class="glow-ring r3"></div>
+      </div>
+
+      <svg class="heartbeat-logo" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient [attr.id]="'inlineGradient-' + uniqueId" x1="0%" y1="100%" x2="100%" y2="0%">
+            @if (color === 'white') {
+              <stop offset="0%" stop-color="#ffffff">
+                <animate attributeName="stop-color" values="#ffffff;#f0f0ff;#ffffff;#e8e8ff;#ffffff" dur="2s" repeatCount="indefinite"/>
+              </stop>
+              <stop offset="100%" stop-color="#f8f8ff">
+                <animate attributeName="stop-color" values="#f8f8ff;#ffffff;#e8e8ff;#ffffff;#f8f8ff" dur="2s" repeatCount="indefinite"/>
+              </stop>
+            } @else if (color === 'emerald') {
+              <stop offset="0%" stop-color="#047857">
+                <animate attributeName="stop-color" values="#047857;#059669;#10B981;#059669;#047857" dur="2s" repeatCount="indefinite"/>
+              </stop>
+              <stop offset="50%" stop-color="#10B981">
+                <animate attributeName="stop-color" values="#10B981;#34D399;#10B981;#059669;#10B981" dur="2s" repeatCount="indefinite"/>
+              </stop>
+              <stop offset="100%" stop-color="#34D399">
+                <animate attributeName="stop-color" values="#34D399;#6EE7B7;#34D399;#10B981;#34D399" dur="2s" repeatCount="indefinite"/>
+              </stop>
+            } @else {
+              <stop offset="0%" stop-color="#7C3AED">
+                <animate attributeName="stop-color" values="#7C3AED;#8B5CF6;#A855F7;#8B5CF6;#7C3AED" dur="2s" repeatCount="indefinite"/>
+              </stop>
+              <stop offset="50%" stop-color="#A855F7">
+                <animate attributeName="stop-color" values="#A855F7;#D946EF;#EC4899;#D946EF;#A855F7" dur="2s" repeatCount="indefinite"/>
+              </stop>
+              <stop offset="100%" stop-color="#EC4899">
+                <animate attributeName="stop-color" values="#EC4899;#F472B6;#EC4899;#D946EF;#EC4899" dur="2s" repeatCount="indefinite"/>
+              </stop>
+            }
+          </linearGradient>
+          <filter [attr.id]="'inlineGlow-' + uniqueId" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="4" result="blur1"/>
+            <feGaussianBlur stdDeviation="2" result="blur2"/>
+            <feMerge>
+              <feMergeNode in="blur1"/>
+              <feMergeNode in="blur2"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        <g class="logo-paths" [attr.filter]="'url(#inlineGlow-' + uniqueId + ')'">
+          <path d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" [attr.fill]="'url(#inlineGradient-' + uniqueId + ')'"/>
+          <path d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" [attr.fill]="'url(#inlineGradient-' + uniqueId + ')'"/>
+        </g>
+      </svg>
+    </div>
+  } @else if (showDna) {
+    <!-- Full DNA skeleton (splash screens, big loaders) -->
+    <div class="skeleton-wrapper">
+      <svg class="skeleton-svg" viewBox="0 0 900 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pfGradientAnimated" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#7C3AED">
+              <animate attributeName="stop-color" values="#7C3AED;#A855F7;#EC4899;#A855F7;#7C3AED" dur="3s" repeatCount="indefinite"/>
+            </stop>
+            <stop offset="50%" stop-color="#8B5CF6">
+              <animate attributeName="stop-color" values="#8B5CF6;#D946EF;#8B5CF6;#EC4899;#8B5CF6" dur="3s" repeatCount="indefinite"/>
+            </stop>
+            <stop offset="100%" stop-color="#A855F7">
+              <animate attributeName="stop-color" values="#A855F7;#EC4899;#7C3AED;#D946EF;#A855F7" dur="3s" repeatCount="indefinite"/>
+            </stop>
+          </linearGradient>
+          <filter id="pfGlowStrong" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="12" result="blur1"/>
+            <feGaussianBlur stdDeviation="6" result="blur2"/>
+            <feGaussianBlur stdDeviation="3" result="blur3"/>
+            <feMerge>
+              <feMergeNode in="blur1"/>
+              <feMergeNode in="blur2"/>
+              <feMergeNode in="blur3"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <filter id="dnaGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        <g class="dna-lines" filter="url(#dnaGlow)">
+          <path class="dna-line" d="M650 180C652 149 669 83 722 66L731 81C711 85 669 112 666 188">
+            <animateTransform attributeName="transform" type="translate" values="0,0; 5,-6; 10,0; 5,6; 0,0" dur="2.5s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2.5s" repeatCount="indefinite"/>
+          </path>
+          <path class="dna-line" d="M158 366C215 353 264 384 281 401V420C237 379 183 377 161 381C140 384 120 403 112 412L102 401C122 379 148 369 158 366Z">
+            <animateTransform attributeName="transform" type="translate" values="0,0; -6,5; 0,10; 6,5; 0,0" dur="3s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.25;0.55;0.25" dur="3s" repeatCount="indefinite"/>
+          </path>
+          <path class="dna-line" d="M648 193C648 194 654 204 645 257C636 312 589 330 566 334H565L573 356C677 322 667 243 665 202">
+            <animateTransform attributeName="transform" type="translate" values="0,0; 7,-3; 0,-7; -7,-3; 0,0" dur="3.5s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.2;0.5;0.2" dur="3.5s" repeatCount="indefinite"/>
+          </path>
+          <path class="dna-line" d="M682 194C654 186 614 161 598 150L603 171L666 203C725 234 790 218 815 207L810 194C739 218 718 204 682 194Z">
+            <animateTransform attributeName="transform" type="translate" values="0,0; -5,7; -10,0; -5,-7; 0,0" dur="2.8s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.25;0.6;0.25" dur="2.8s" repeatCount="indefinite"/>
+          </path>
+          <path class="dna-line" d="M164 551C220 585 261 554 274 535L298 538C247 603 183 582 157 563L164 551Z">
+            <animateTransform attributeName="transform" type="translate" values="0,0; 6,6; 0,0; -6,6; 0,0" dur="2.2s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.2;0.55;0.2" dur="2.2s" repeatCount="indefinite"/>
+          </path>
+        </g>
+
+        <g class="dna-fills">
+          <path class="dna-fill" d="M312 358L313 348L350 429L341 427L312 358Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M317 303L320 298L379 432L373 432L317 303Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.2s" begin="0.15s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M481 259L482 252L524 342L518 341L481 259Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.1s" begin="0.3s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M600 171L604 172L642 252L640 261L600 171Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="1.9s" begin="0.45s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M679 131L681 127L717 204L711 202L679 131Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.3s" begin="0.6s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M697 103L700 100L748 206L743 206L697 103Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2s" begin="0.2s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M716 88L720 86L773 203L769 204L716 88Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.1s" begin="0.35s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M495 218L498 212L554 337L549 339L495 218Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.2s" begin="0.5s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M524 185L528 182L592 325L587 327L524 185Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="1.9s" begin="0.1s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M562 169L567 168L625 297L621 302L562 169Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.3s" begin="0.7s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M344 280L350 278L413 422L408 425L344 280Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2s" begin="0.25s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M380 272L386 272L442 399L438 405L380 272Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.1s" begin="0.4s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M123 404L128 399L199 564L192 563L123 404Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2.2s" begin="0.15s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M159 382L166 381L242 558L237 561L159 382Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="1.9s" begin="0.55s" repeatCount="indefinite"/></path>
+          <path class="dna-fill" d="M211 383L217 385L273 524L272 531L211 383Z"><animate attributeName="fill-opacity" values="0.05;0.45;0.05" dur="2s" begin="0.35s" repeatCount="indefinite"/></path>
+        </g>
+
+        <g class="floating-particles">
+          <circle cx="200" cy="200" r="2" fill="rgba(139,92,246,0.6)"><animate attributeName="cy" values="200;180;200;220;200" dur="4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.3;0.8;0.3" dur="4s" repeatCount="indefinite"/></circle>
+          <circle cx="700" cy="150" r="1.5" fill="rgba(168,85,247,0.5)"><animate attributeName="cy" values="150;130;150;170;150" dur="3.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.2;0.7;0.2" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle cx="150" cy="450" r="2.5" fill="rgba(217,70,239,0.4)"><animate attributeName="cy" values="450;420;450;480;450" dur="5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.25;0.65;0.25" dur="5s" repeatCount="indefinite"/></circle>
+          <circle cx="750" cy="400" r="1.8" fill="rgba(236,72,153,0.5)"><animate attributeName="cy" values="400;370;400;430;400" dur="4.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.3;0.75;0.3" dur="4.2s" repeatCount="indefinite"/></circle>
+          <circle cx="550" cy="500" r="2" fill="rgba(139,92,246,0.5)"><animate attributeName="cy" values="500;470;500;530;500" dur="3.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.2;0.7;0.2" dur="3.8s" repeatCount="indefinite"/></circle>
+          <circle cx="300" cy="100" r="1.5" fill="rgba(168,85,247,0.4)"><animate attributeName="cy" values="100;80;100;120;100" dur="4.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.25;0.6;0.25" dur="4.5s" repeatCount="indefinite"/></circle>
+        </g>
+
+        <g class="pulse-rings">
+          <circle cx="400" cy="350" r="120" fill="none" stroke="rgba(139,92,246,0.3)" stroke-width="1">
+            <animate attributeName="r" values="100;160;100" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="3;0.5;3" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="400" cy="350" r="90" fill="none" stroke="rgba(168,85,247,0.25)" stroke-width="1">
+            <animate attributeName="r" values="80;140;80" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.35;0;0.35" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="2;0.3;2" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="400" cy="350" r="70" fill="none" stroke="rgba(217,70,239,0.2)" stroke-width="1">
+            <animate attributeName="r" values="60;120;60" dur="2s" begin="1s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-opacity" values="0.3;0;0.3" dur="2s" begin="1s" repeatCount="indefinite"/>
+            <animate attributeName="stroke-width" values="1.5;0.2;1.5" dur="2s" begin="1s" repeatCount="indefinite"/>
+          </circle>
+        </g>
+
+        <g class="pf-logo-group" filter="url(#pfGlowStrong)">
+          <path class="pf-logo" d="M287 297L274 534L299 537L313 310C316 298 334 267 379 272C425 277 448 319 450 345V306C441 258 394 246 374 246C324 248 295 272 287 297Z" fill="url(#pfGradientAnimated)"/>
+          <path class="pf-logo" d="M307 409C329 427 381 456 433 409C447 396 457 358 456 325C455 272 449 144 596 148L601 170C558 159 471 173 475 325C475 327 475 329 475 330C492 338 533 350 564 333L572 356C550 362 499 370 475 354C472 396 449 445 385 454C364 457 327 450 306 432L307 409Z" fill="url(#pfGradientAnimated)"/>
+        </g>
+      </svg>
+    </div>
+  } @else {
+    <!-- Standard logo pulse -->
+    <div class="logo-wrapper">
+      <svg class="animated-logo" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pfGradientPurple" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#7C3AED"/>
+            <stop offset="25%" stop-color="#8B5CF6"/>
+            <stop offset="50%" stop-color="#A855F7"/>
+            <stop offset="75%" stop-color="#D946EF"/>
+            <stop offset="100%" stop-color="#EC4899"/>
+          </linearGradient>
+          <linearGradient id="pfGradientEmerald" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#047857"/>
+            <stop offset="25%" stop-color="#059669"/>
+            <stop offset="50%" stop-color="#10B981"/>
+            <stop offset="75%" stop-color="#34D399"/>
+            <stop offset="100%" stop-color="#6EE7B7"/>
+          </linearGradient>
+          <linearGradient id="pfGradientWhite" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="50%" stop-color="#f8f8ff"/>
+            <stop offset="100%" stop-color="#ffffff"/>
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        @if (color === 'emerald') {
+          <path class="logo-path path-1" d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" fill="url(#pfGradientEmerald)" filter="url(#glow)"/>
+          <path class="logo-path path-2" d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" fill="url(#pfGradientEmerald)" filter="url(#glow)"/>
+        } @else if (color === 'white') {
+          <path class="logo-path path-1" d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" fill="url(#pfGradientWhite)" filter="url(#glow)"/>
+          <path class="logo-path path-2" d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" fill="url(#pfGradientWhite)" filter="url(#glow)"/>
+        } @else {
+          <path class="logo-path path-1" d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" fill="url(#pfGradientPurple)" filter="url(#glow)"/>
+          <path class="logo-path path-2" d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" fill="url(#pfGradientPurple)" filter="url(#glow)"/>
+        }
+      </svg>
+    </div>
+  }
+
+  @if (showText) {
+    <p class="loading-text">{{ text }}</p>
+  }
+</div>

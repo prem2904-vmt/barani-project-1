@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160">
+  <defs>
+    <linearGradient id="pfGradientFull" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="25%" stop-color="#8B5CF6"/>
+      <stop offset="50%" stop-color="#A855F7"/>
+      <stop offset="75%" stop-color="#D946EF"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <!-- Combined PF monogram -->
+  <g transform="translate(40, 10)" fill="none" stroke="url(#pfGradientFull)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <!-- P vertical stem -->
+    <path d="M20 100 L20 35"/>
+    <!-- P bowl connecting to infinity loop -->
+    <path d="M20 35 Q20 15 40 15 Q60 15 60 35 Q60 55 40 55 Q20 55 20 75 Q20 95 40 95 Q60 95 60 75"/>
+    <!-- F vertical stem -->
+    <path d="M60 75 L60 100"/>
+    <!-- F top arm going up and right -->
+    <path d="M60 35 Q60 15 80 15 L100 15"/>
+    <!-- F middle arm -->
+    <path d="M60 55 L85 55"/>
+  </g>
+  <!-- PREFRONTAL text -->
+  <text x="100" y="145" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="16" font-weight="500" letter-spacing="4">PREFRONTAL</text>
+</svg>

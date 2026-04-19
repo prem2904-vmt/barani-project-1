@@ -1,0 +1,8 @@
+{
+  "name": "@org/lms-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "lms-e2e"
+  }
+}
