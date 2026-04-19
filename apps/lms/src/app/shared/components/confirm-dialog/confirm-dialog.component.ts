@@ -14,35 +14,36 @@ export type ConfirmTone = 'primary' | 'danger';
         <div class="pf-cd-backdrop" (click)="cancel.emit()"></div>
 
         <div class="pf-cd-card" [attr.data-tone]="tone">
-          <span class="pf-cd-accent" aria-hidden="true"></span>
+          <span class="pf-cd-glow" aria-hidden="true"></span>
 
-          <div class="pf-cd-icon">
-            @if (tone === 'danger') {
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-                <path d="M12 9v4"/>
-                <path d="M12 17h.01"/>
-              </svg>
-            } @else {
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 16v-4"/>
-                <path d="M12 8h.01"/>
-              </svg>
-            }
-          </div>
+          <header class="pf-cd-head">
+            <span class="pf-cd-icon" aria-hidden="true">
+              @if (tone === 'danger') {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                  <path d="M12 9v4"/>
+                  <path d="M12 17h.01"/>
+                </svg>
+              } @else {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 16v-4"/>
+                  <path d="M12 8h.01"/>
+                </svg>
+              }
+            </span>
+            <div class="pf-cd-head-text">
+              <h2 class="pf-cd-title">{{ title }}</h2>
+              @if (message) { <p class="pf-cd-message">{{ message }}</p> }
+            </div>
+          </header>
 
-          <h2 class="pf-cd-title">{{ title }}</h2>
-          @if (message) {
-            <p class="pf-cd-message">{{ message }}</p>
-          }
-
-          <div class="pf-cd-actions">
+          <footer class="pf-cd-actions">
             <pf-touch-btn size="sm" variant="ghost" (pressed)="cancel.emit()">{{ cancelLabel }}</pf-touch-btn>
             <pf-touch-btn size="sm"
                           [variant]="tone === 'danger' ? 'danger' : 'primary'"
                           (pressed)="confirm.emit()">{{ confirmLabel }}</pf-touch-btn>
-          </div>
+          </footer>
         </div>
       </div>
     }
@@ -57,100 +58,107 @@ export type ConfirmTone = 'primary' | 'danger';
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 20px;
     }
-
     .pf-cd-backdrop {
       position: absolute;
       inset: 0;
-      background: rgba(5, 5, 15, 0.6);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      animation: pf-cd-fade 0.2s ease-out both;
+      background:
+        radial-gradient(1200px 800px at 50% 100%, rgba(124, 58, 237, 0.15), transparent 60%),
+        rgba(5, 5, 15, 0.72);
+      backdrop-filter: blur(14px) saturate(1.2);
+      -webkit-backdrop-filter: blur(14px) saturate(1.2);
+      animation: pf-cd-fade 0.22s ease-out both;
     }
 
     .pf-cd-card {
       position: relative;
       width: 100%;
       max-width: 26rem;
-      padding: 28px 26px 22px;
-      border-radius: 22px;
+      padding: 24px 24px 20px;
+      border-radius: 20px;
       background: var(--bg-card-solid);
       border: 1px solid var(--glass-border);
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-      text-align: center;
+      box-shadow:
+        0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+        0 30px 70px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(168, 85, 247, 0.08);
       overflow: hidden;
-      animation: pf-cd-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
-
-      /* Soft ambient glow bleeding from the top centered on the icon. */
-      background-image:
-        radial-gradient(320px 180px at 50% -10%, rgba(168, 85, 247, 0.18), transparent 70%);
-      background-color: var(--bg-card-solid);
+      animation: pf-cd-pop 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
     }
-
     .pf-cd-card[data-tone='danger'] {
-      background-image:
-        radial-gradient(320px 180px at 50% -10%, rgba(239, 68, 68, 0.22), transparent 70%);
+      box-shadow:
+        0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+        0 30px 70px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(239, 68, 68, 0.12);
     }
 
-    .pf-cd-accent {
+    .pf-cd-glow {
       position: absolute;
-      top: 0;
-      left: 10%;
-      right: 10%;
-      height: 2px;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(168, 85, 247, 0.85) 50%,
-        transparent 100%);
-      border-radius: 9999px;
-      filter: blur(0.3px);
+      top: -80px;
+      left: -40px;
+      width: 260px;
+      height: 200px;
+      pointer-events: none;
+      background: radial-gradient(closest-side, rgba(168, 85, 247, 0.35), transparent 70%);
+      filter: blur(20px);
+      opacity: 0.9;
     }
-    .pf-cd-card[data-tone='danger'] .pf-cd-accent {
-      background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(239, 68, 68, 0.9) 50%,
-        transparent 100%);
+    .pf-cd-card[data-tone='danger'] .pf-cd-glow {
+      background: radial-gradient(closest-side, rgba(239, 68, 68, 0.4), transparent 70%);
     }
 
+    .pf-cd-head {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
     .pf-cd-icon {
-      width: 56px;
-      height: 56px;
-      margin: 0 auto 16px;
-      border-radius: 9999px;
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(168, 85, 247, 0.1));
-      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
+      border: 1px solid rgba(168, 85, 247, 0.3);
       color: #c4b5fd;
-      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
+      box-shadow:
+        0 6px 18px rgba(124, 58, 237, 0.25),
+        0 0 0 4px rgba(124, 58, 237, 0.06);
     }
     .pf-cd-card[data-tone='danger'] .pf-cd-icon {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.28), rgba(239, 68, 68, 0.1));
-      border-color: rgba(239, 68, 68, 0.4);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.08));
+      border-color: rgba(239, 68, 68, 0.35);
       color: #fca5a5;
-      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+      box-shadow:
+        0 6px 18px rgba(239, 68, 68, 0.25),
+        0 0 0 4px rgba(239, 68, 68, 0.06);
     }
 
+    .pf-cd-head-text { flex: 1; min-width: 0; }
     .pf-cd-title {
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: -0.011em;
       color: var(--text-primary);
-      letter-spacing: -0.01em;
+      margin: 0;
     }
     .pf-cd-message {
-      margin-top: 8px;
+      margin: 6px 0 0;
       font-size: 13.5px;
-      line-height: 1.5;
+      line-height: 1.55;
       color: var(--text-secondary);
     }
 
     .pf-cd-actions {
       margin-top: 22px;
       display: flex;
-      justify-content: center;
-      gap: 10px;
+      justify-content: flex-end;
+      gap: 8px;
     }
 
     @keyframes pf-cd-fade {
@@ -158,12 +166,18 @@ export type ConfirmTone = 'primary' | 'danger';
       to   { opacity: 1; }
     }
     @keyframes pf-cd-pop {
-      from { opacity: 0; transform: translateY(16px) scale(0.94); }
+      from { opacity: 0; transform: translateY(10px) scale(0.96); }
       to   { opacity: 1; transform: translateY(0)    scale(1); }
     }
 
     @media (prefers-reduced-motion: reduce) {
       .pf-cd-backdrop, .pf-cd-card { animation: none; }
+    }
+    @media (max-width: 480px) {
+      .pf-cd-card { padding: 20px 18px 16px; border-radius: 18px; }
+      .pf-cd-icon { width: 36px; height: 36px; border-radius: 10px; }
+      .pf-cd-actions { flex-direction: column-reverse; }
+      .pf-cd-actions pf-touch-btn { width: 100%; }
     }
   `]
 })

@@ -18,7 +18,7 @@ export const PRIMARY_NAV: NavItem[] = [
     id: 'reception',
     label: 'Reception',
     href: '/reception',
-    iconPath: 'M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1'
+    iconPath: 'M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
   },
   {
     id: 'lab',
