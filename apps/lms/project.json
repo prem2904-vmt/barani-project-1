@@ -20,7 +20,13 @@
             "input": "apps/lms/public"
           }
         ],
-        "styles": ["apps/lms/src/styles.scss"]
+        "styles": ["apps/lms/src/styles.scss"],
+        "fileReplacements": [
+          {
+            "replace": "apps/lms/src/environments/environment.ts",
+            "with": "apps/lms/src/environments/environment.production.ts"
+          }
+        ]
       },
       "configurations": {
         "production": {
@@ -41,7 +47,8 @@
         "development": {
           "optimization": false,
           "extractLicenses": false,
-          "sourceMap": true
+          "sourceMap": true,
+          "fileReplacements": []
         }
       },
       "defaultConfiguration": "production"

@@ -1,11 +1,11 @@
 export const environment = {
   production: true,
-  apiUrl: '',
+  apiUrl: 'https://lab-fetch.prefrontal.health',
   supabase: {
     url: '',
     anonKey: ''
   },
   auth: {
-    bypass: false
+    bypass: true
   }
 };
