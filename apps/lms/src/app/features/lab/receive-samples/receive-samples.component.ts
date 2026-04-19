@@ -4,70 +4,210 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderSample } from '../../../shared/models/order.model';
+import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 @Component({
   selector: 'pf-receive-samples',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [
+    FormsModule,
+    DatePipe,
+    AvatarComponent,
+    ScreenHeaderComponent,
+    TileComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="p-8 max-w-5xl">
-      <header class="flex items-center justify-between mb-4">
-        <div>
-          <h1 class="text-2xl font-semibold">Receive samples</h1>
-          <p class="text-sm text-slate-600">Scan incoming barcodes or batch-receive the in-transit list.</p>
-        </div>
-        <button class="pf-btn pf-btn-ghost" (click)="refresh()">↻ Refresh</button>
-      </header>
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
 
-      <div class="pf-card mb-5">
-        <label class="pf-label">Scan barcode</label>
-        <div class="flex gap-2">
-          <input type="text" class="pf-input font-mono flex-1"
-                 placeholder="PF-AP-…"
-                 [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
-                 (keydown.enter)="receiveByBarcode()" autofocus />
-          <button class="pf-btn pf-btn-primary" [disabled]="!scanValue()" (click)="receiveByBarcode()">Receive</button>
-        </div>
-      </div>
+      <pf-screen-header
+        eyebrow="Lab intake"
+        title="Receive samples"
+        subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
+        <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+          <span icon-left aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+              <path d="M3 21v-5h5"/>
+            </svg>
+          </span>
+          Refresh
+        </pf-touch-btn>
+      </pf-screen-header>
 
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-xs uppercase tracking-wider text-slate-500">
-          In transit · {{ inTransit().length }}
-        </h3>
+      <!-- Scan hero -->
+      <pf-tile tone="violet" padding="lg" class="block mb-6">
+        <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
+               style="color: var(--text-muted);">Scan barcode</label>
         <div class="flex gap-2">
-          <button class="pf-btn pf-btn-ghost text-xs" (click)="toggleAll()">
+          <div class="scan-field">
+            <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+              <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+              <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
+            </svg>
+            <input type="text"
+                   placeholder="PF-AP-2026-00001-HAEM"
+                   [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
+                   (keydown.enter)="receiveByBarcode()"
+                   autofocus />
+          </div>
+          <pf-touch-btn size="md" variant="primary"
+                        [disabled]="!scanValue() || busy()"
+                        (pressed)="receiveByBarcode()">
+            Receive
+            <span icon-right aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"/>
+                <path d="m12 5 7 7-7 7"/>
+              </svg>
+            </span>
+          </pf-touch-btn>
+        </div>
+      </pf-tile>
+
+      <!-- In-transit header + batch actions -->
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                style="color: var(--text-secondary);">In transit</span>
+          <span class="text-[11px] font-mono"
+                style="color: var(--text-muted);">· {{ inTransit().length }}</span>
+        </div>
+        <div class="flex gap-2">
+          <pf-touch-btn size="sm" variant="ghost"
+                        [disabled]="inTransit().length === 0"
+                        (pressed)="toggleAll()">
             {{ allSelected() ? 'Deselect all' : 'Select all' }}
-          </button>
-          <button class="pf-btn pf-btn-primary text-xs"
-                  [disabled]="selectedIds().size === 0 || busy()"
-                  (click)="receiveSelected()">
-            Confirm receipt of {{ selectedIds().size || 0 }}
-          </button>
+          </pf-touch-btn>
+          <pf-touch-btn size="sm" variant="primary"
+                        [disabled]="selectedIds().size === 0 || busy()"
+                        (pressed)="receiveSelected()">
+            Receive {{ selectedIds().size || 0 }}
+          </pf-touch-btn>
         </div>
       </div>
 
       @if (inTransit().length === 0) {
-        <div class="pf-card text-sm text-slate-500">Nothing in transit.</div>
+        <pf-tile tone="default" padding="xl">
+          <p class="text-center text-[14px]" style="color: var(--text-secondary);">
+            Nothing in transit. Everything has been received.
+          </p>
+        </pf-tile>
       } @else {
-        <ul class="space-y-2">
+        <div class="space-y-2.5">
           @for (s of inTransit(); track s.id) {
-            <li class="pf-card flex items-center gap-3">
-              <input type="checkbox" [checked]="isSelected(s.id)" (change)="toggle(s.id)" />
-              <div class="flex-1 min-w-0">
-                <p class="font-medium text-sm">{{ s.order?.patient?.name ?? 'Patient' }}</p>
-                <p class="text-xs text-slate-500">
-                  {{ s.department?.name }} · {{ s.barcode }}
-                  · Picked {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
-                </p>
+            <pf-tile [tone]="isSelected(s.id) ? 'violet' : 'default'" padding="md">
+              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
+                <label class="pf-check" (click)="$event.stopPropagation()">
+                  <input type="checkbox" [checked]="isSelected(s.id)" (change)="toggle(s.id)" />
+                  <span class="pf-check-box" aria-hidden="true">
+                    @if (isSelected(s.id)) {
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 4 4L19 6"/>
+                      </svg>
+                    }
+                  </span>
+                </label>
+
+                <pf-avatar [name]="s.order?.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-[14.5px] truncate"
+                     style="color: var(--text-primary);">{{ s.order?.patient?.name ?? 'Patient' }}</p>
+                  <p class="text-[11.5px] font-mono mt-0.5 truncate"
+                     style="color: var(--text-tertiary);">
+                    {{ s.department?.name }} · {{ s.barcode }}
+                    · Picked {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
+                  </p>
+                </div>
+
+                <pf-touch-btn size="sm" variant="secondary" (pressed)="receiveOne(s.id)">
+                  Receive
+                </pf-touch-btn>
               </div>
-              <button class="pf-btn pf-btn-ghost text-xs" (click)="receiveOne(s.id)">Receive</button>
-            </li>
+            </pf-tile>
           }
-        </ul>
+        </div>
       }
     </section>
-  `
+  `,
+  styles: [`
+    /* Scan field: glass input with icon prefix, matching patient-search look */
+    .scan-field {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      padding: 0 16px 0 44px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .scan-field:hover { border-color: var(--glass-border-hover); }
+    .scan-field:focus-within {
+      border-color: rgba(168, 85, 247, 0.55);
+      background: var(--glass-bg-hover);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+    }
+    .scan-field input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+    .scan-field input::placeholder { color: var(--text-muted); }
+    .scan-icon {
+      position: absolute;
+      left: 16px;
+      width: 18px;
+      height: 18px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* Custom checkbox */
+    .pf-check { position: relative; display: inline-flex; cursor: pointer; }
+    .pf-check input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .pf-check-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .pf-check input:checked + .pf-check-box {
+      background: var(--gradient-primary);
+      border-color: transparent;
+      color: #ffffff;
+      box-shadow: 0 3px 10px rgba(124, 58, 237, 0.35);
+    }
+  `]
 })
 export class ReceiveSamplesComponent implements OnInit {
   private readonly api = inject(ApiService);

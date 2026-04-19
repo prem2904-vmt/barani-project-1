@@ -1,10 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { firstValueFrom, Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Branch, Department, Tenant } from '../../../shared/models/tenant.model';
+import { ChipComponent } from '../../../shared/primitives/chip.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { ToggleComponent } from '../../../shared/primitives/toggle.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 interface OrgDraft {
   name: string;
@@ -33,180 +40,384 @@ interface DepartmentDraft {
 @Component({
   selector: 'pf-setup-wizard',
   standalone: true,
-  imports: [FormsModule, BarcodeDisplayComponent],
+  imports: [
+    FormsModule,
+    BarcodeDisplayComponent,
+    ChipComponent,
+    ScreenHeaderComponent,
+    SelectComponent,
+    TileComponent,
+    ToggleComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="p-8 max-w-5xl mx-auto">
-      <header class="mb-6">
-        <h1 class="text-2xl font-semibold">Set up your lab</h1>
-        <p class="text-sm text-slate-600">Three short steps. You can edit everything later.</p>
-      </header>
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
 
-      <ol class="flex items-center gap-3 mb-8">
+      <pf-screen-header
+        eyebrow="First-time setup"
+        title="Set up your lab"
+        subtitle="Three short steps. You can edit everything later.">
+      </pf-screen-header>
+
+      <!-- Stepper -->
+      <ol class="stepper" role="list">
         @for (label of stepLabels; track $index) {
-          <li class="flex items-center gap-2">
-            <span class="h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold"
-                  [class.bg-[var(--color-primary)]]="$index <= step()"
-                  [class.text-white]="$index <= step()"
-                  [class.bg-slate-200]="$index > step()"
-                  [class.text-slate-500]="$index > step()">{{ $index + 1 }}</span>
-            <span class="text-sm"
-                  [class.font-semibold]="$index === step()"
-                  [class.text-slate-500]="$index !== step()">{{ label }}</span>
+          <li class="step" [class.step-active]="$index === step()" [class.step-done]="$index < step()">
+            <span class="step-dot">
+              @if ($index < step()) {
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m5 12 4 4L19 6"/>
+                </svg>
+              } @else {
+                {{ $index + 1 }}
+              }
+            </span>
+            <span class="step-label">{{ label }}</span>
             @if ($index < stepLabels.length - 1) {
-              <span class="w-10 h-px bg-slate-300 mx-1"></span>
+              <span class="step-connector" [class.step-connector-filled]="$index < step()"></span>
             }
           </li>
         }
       </ol>
 
+      <!-- Step 0: Organization -->
       @if (step() === 0) {
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="md:col-span-2 pf-card space-y-4">
-            <h2 class="text-base font-semibold">Organization details</h2>
-            <div>
-              <label class="pf-label">Organization name</label>
-              <input type="text" class="pf-input"
-                     [ngModel]="org().name" (ngModelChange)="updateOrg({ name: $event })"
-                     placeholder="Apollo Diagnostics" />
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="pf-label">Type</label>
-                <select class="pf-input" [ngModel]="org().type" (ngModelChange)="updateOrg({ type: $event })">
-                  <option value="independent">Independent lab</option>
-                  <option value="chain">Chain</option>
-                  <option value="hospital">Hospital</option>
-                  <option value="diagnostic_center">Diagnostic center</option>
-                </select>
-              </div>
-              <div>
-                <label class="pf-label">Vendor code <span class="text-slate-400 font-normal">(2–4 chars)</span></label>
-                <input type="text" class="pf-input uppercase" maxlength="4"
-                       [ngModel]="org().vendorCode" (ngModelChange)="updateVendorCode($event)" />
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="pf-label">GST number <span class="text-slate-400 font-normal">(optional)</span></label>
-                <input type="text" class="pf-input"
-                       [ngModel]="org().gstNumber" (ngModelChange)="updateOrg({ gstNumber: $event })" />
-              </div>
-              <div>
-                <label class="pf-label">Logo URL <span class="text-slate-400 font-normal">(optional)</span></label>
-                <input type="text" class="pf-input"
-                       [ngModel]="org().logoUrl" (ngModelChange)="updateOrg({ logoUrl: $event })" />
-              </div>
-            </div>
-          </div>
-          <div class="pf-card">
-            <h3 class="text-sm font-semibold mb-2">Barcode preview</h3>
-            <p class="text-xs text-slate-500 mb-3">Format <code class="bg-slate-100 px-1 rounded">PF-{{ org().vendorCode || '??' }}-YYYY-#####-DEPT</code></p>
-            <pf-barcode-display [code]="barcodePreview()"></pf-barcode-display>
-          </div>
-        </div>
-      }
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <pf-tile tone="default" padding="lg" class="md:col-span-2 block">
+            <h2 class="section-title">Organization details</h2>
 
-      @if (step() === 1) {
-        <div class="pf-card">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-base font-semibold">Branches</h2>
-            <button class="pf-btn pf-btn-ghost" (click)="addBranch()">+ Add branch</button>
-          </div>
-          @if (branches().length === 0) {
-            <p class="text-sm text-slate-500">Add at least one branch to continue.</p>
-          }
-          <div class="space-y-3">
-            @for (b of branches(); let i = $index; track i) {
-              <div class="grid grid-cols-12 gap-2 items-end border-b border-slate-100 pb-3">
-                <div class="col-span-3">
-                  <label class="pf-label">Name</label>
-                  <input type="text" class="pf-input" [ngModel]="b.name"
-                         (ngModelChange)="updateBranch(i, { name: $event })" />
+            <div class="space-y-4 mt-4">
+              <div>
+                <label class="pf-label">Organization name</label>
+                <input type="text" class="pf-input"
+                       [ngModel]="org().name"
+                       (ngModelChange)="updateOrg({ name: $event })"
+                       placeholder="Apollo Diagnostics" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="pf-label">Type</label>
+                  <pf-select
+                    [options]="typeOptions"
+                    [value]="org().type"
+                    (valueChange)="updateOrg({ type: $event })">
+                  </pf-select>
                 </div>
-                <div class="col-span-2">
-                  <label class="pf-label">Code</label>
-                  <input type="text" class="pf-input uppercase" [ngModel]="b.code"
-                         (ngModelChange)="updateBranch(i, { code: $event.toUpperCase() })" />
-                </div>
-                <div class="col-span-2">
-                  <label class="pf-label">City</label>
-                  <input type="text" class="pf-input" [ngModel]="b.city"
-                         (ngModelChange)="updateBranch(i, { city: $event })" />
-                </div>
-                <div class="col-span-2">
-                  <label class="pf-label">State</label>
-                  <input type="text" class="pf-input" [ngModel]="b.state"
-                         (ngModelChange)="updateBranch(i, { state: $event })" />
-                </div>
-                <div class="col-span-2">
-                  <label class="pf-label">Pincode</label>
-                  <input type="text" class="pf-input" [ngModel]="b.pincode"
-                         (ngModelChange)="updateBranch(i, { pincode: $event })" />
-                </div>
-                <div class="col-span-1 pb-2 text-right">
-                  <button class="text-slate-400 hover:text-red-500" (click)="removeBranch(i)">✕</button>
-                </div>
-                <div class="col-span-12">
-                  <label class="inline-flex items-center gap-2 text-xs">
-                    <input type="checkbox" [ngModel]="b.hasPfBox"
-                           (ngModelChange)="updateBranch(i, { hasPfBox: $event })" />
-                    <span>On-premise PF Box</span>
+                <div>
+                  <label class="pf-label">Vendor code
+                    <span class="text-[11px] font-normal" style="color: var(--text-muted);">(2–4 chars)</span>
                   </label>
+                  <input type="text" class="pf-input uppercase" maxlength="4"
+                         [ngModel]="org().vendorCode" (ngModelChange)="updateVendorCode($event)"
+                         placeholder="AP" />
                 </div>
               </div>
-            }
-          </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="pf-label">GST number
+                    <span class="text-[11px] font-normal" style="color: var(--text-muted);">(optional)</span>
+                  </label>
+                  <input type="text" class="pf-input"
+                         [ngModel]="org().gstNumber" (ngModelChange)="updateOrg({ gstNumber: $event })" />
+                </div>
+                <div>
+                  <label class="pf-label">Logo URL
+                    <span class="text-[11px] font-normal" style="color: var(--text-muted);">(optional)</span>
+                  </label>
+                  <input type="text" class="pf-input"
+                         [ngModel]="org().logoUrl" (ngModelChange)="updateOrg({ logoUrl: $event })" />
+                </div>
+              </div>
+            </div>
+          </pf-tile>
+
+          <pf-tile tone="violet" padding="lg" class="block">
+            <h3 class="section-title">Barcode preview</h3>
+            <p class="text-[11.5px] font-mono mt-2"
+               style="color: var(--text-tertiary);">
+              PF-{{ org().vendorCode || '??' }}-{{ year }}-#####-DEPT
+            </p>
+            <div class="mt-4">
+              <pf-barcode-display [code]="barcodePreview()"></pf-barcode-display>
+            </div>
+          </pf-tile>
         </div>
       }
 
-      @if (step() === 2) {
-        <div class="pf-card">
+      <!-- Step 1: Branches -->
+      @if (step() === 1) {
+        <pf-tile tone="default" padding="lg" class="block">
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-base font-semibold">Departments</h2>
-            <button class="pf-btn pf-btn-ghost" (click)="addDepartment()">+ Add department</button>
+            <h2 class="section-title">Branches</h2>
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="addBranch()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+              </span>
+              Add branch
+            </pf-touch-btn>
           </div>
-          <p class="text-xs text-slate-500 mb-3">Quick add:</p>
-          <div class="flex flex-wrap gap-2 mb-4">
-            @for (q of quickDepts; track q.code) {
-              <button type="button"
-                      class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50"
-                      (click)="addQuickDept(q)">+ {{ q.name }}</button>
-            }
-          </div>
-          <div class="space-y-2">
-            @for (d of departments(); let i = $index; track i) {
-              <div class="grid grid-cols-12 gap-2">
-                <div class="col-span-6"><input type="text" class="pf-input" [ngModel]="d.name"
-                                               (ngModelChange)="updateDept(i, { name: $event })" placeholder="Department name" /></div>
-                <div class="col-span-5"><input type="text" class="pf-input uppercase" [ngModel]="d.code"
-                                               (ngModelChange)="updateDept(i, { code: $event.toUpperCase() })" placeholder="CODE" /></div>
-                <div class="col-span-1 text-right pt-2">
-                  <button class="text-slate-400 hover:text-red-500" (click)="removeDept(i)">✕</button>
+
+          @if (branches().length === 0) {
+            <p class="text-[13px]" style="color: var(--text-tertiary);">
+              Add at least one branch to continue.
+            </p>
+          } @else {
+            <div class="space-y-3">
+              @for (b of branches(); let i = $index; track i) {
+                <div class="branch-row">
+                  <div class="grid grid-cols-12 gap-2">
+                    <div class="col-span-12 md:col-span-3">
+                      <label class="pf-label">Name</label>
+                      <input type="text" class="pf-input" [ngModel]="b.name"
+                             (ngModelChange)="updateBranch(i, { name: $event })"
+                             placeholder="Chennai Main" />
+                    </div>
+                    <div class="col-span-6 md:col-span-2">
+                      <label class="pf-label">Code</label>
+                      <input type="text" class="pf-input uppercase" [ngModel]="b.code"
+                             (ngModelChange)="updateBranch(i, { code: $event.toUpperCase() })"
+                             placeholder="MAIN" />
+                    </div>
+                    <div class="col-span-6 md:col-span-2">
+                      <label class="pf-label">City</label>
+                      <input type="text" class="pf-input" [ngModel]="b.city"
+                             (ngModelChange)="updateBranch(i, { city: $event })" />
+                    </div>
+                    <div class="col-span-4 md:col-span-2">
+                      <label class="pf-label">State</label>
+                      <input type="text" class="pf-input" [ngModel]="b.state"
+                             (ngModelChange)="updateBranch(i, { state: $event })" />
+                    </div>
+                    <div class="col-span-4 md:col-span-2">
+                      <label class="pf-label">Pincode</label>
+                      <input type="text" class="pf-input" [ngModel]="b.pincode"
+                             (ngModelChange)="updateBranch(i, { pincode: $event })" />
+                    </div>
+                    <div class="col-span-4 md:col-span-1 flex items-end justify-end">
+                      <button type="button" class="row-remove"
+                              [disabled]="branches().length <= 1"
+                              (click)="removeBranch(i)" aria-label="Remove branch">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M18 6 6 18"/>
+                          <path d="m6 6 12 12"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 flex items-center justify-between">
+                    <span class="text-[13px]" style="color: var(--text-secondary);">
+                      On-premise PF Box
+                    </span>
+                    <pf-toggle size="sm"
+                               [checked]="b.hasPfBox"
+                               (checkedChange)="updateBranch(i, { hasPfBox: $event })">
+                    </pf-toggle>
+                  </div>
                 </div>
-              </div>
-            }
-            @if (departments().length === 0) {
-              <p class="text-sm text-slate-500">Add at least one department to continue.</p>
-            }
-          </div>
-        </div>
+              }
+            </div>
+          }
+        </pf-tile>
       }
 
+      <!-- Step 2: Departments -->
+      @if (step() === 2) {
+        <pf-tile tone="default" padding="lg" class="block">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="section-title">Departments</h2>
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="addDepartment()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+              </span>
+              Add department
+            </pf-touch-btn>
+          </div>
+
+          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
+             style="color: var(--text-muted);">Quick add</p>
+          <div class="flex flex-wrap gap-2 mb-5">
+            @for (q of quickDepts; track q.code) {
+              <pf-chip tone="violet" size="sm" (tapped)="addQuickDept(q)">+ {{ q.name }}</pf-chip>
+            }
+          </div>
+
+          @if (departments().length === 0) {
+            <p class="text-[13px]" style="color: var(--text-tertiary);">
+              Add at least one department to continue.
+            </p>
+          } @else {
+            <div class="space-y-2">
+              @for (d of departments(); let i = $index; track i) {
+                <div class="grid grid-cols-12 gap-2">
+                  <div class="col-span-7 md:col-span-7">
+                    <input type="text" class="pf-input" [ngModel]="d.name"
+                           (ngModelChange)="updateDept(i, { name: $event })"
+                           placeholder="Department name" />
+                  </div>
+                  <div class="col-span-4 md:col-span-4">
+                    <input type="text" class="pf-input uppercase" [ngModel]="d.code"
+                           (ngModelChange)="updateDept(i, { code: $event.toUpperCase() })"
+                           placeholder="CODE" />
+                  </div>
+                  <div class="col-span-1 flex items-center justify-end">
+                    <button type="button" class="row-remove"
+                            (click)="removeDept(i)" aria-label="Remove">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </pf-tile>
+      }
+
+      <!-- Navigation -->
       <div class="mt-6 flex items-center justify-between">
-        <button class="pf-btn pf-btn-ghost"
-                [disabled]="step() === 0 || saving()"
-                (click)="back()">← Back</button>
+        <pf-touch-btn size="md" variant="ghost"
+                       [disabled]="step() === 0 || saving()"
+                       (pressed)="back()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </span>
+          Back
+        </pf-touch-btn>
+
         @if (step() < stepLabels.length - 1) {
-          <button class="pf-btn pf-btn-primary" [disabled]="!canAdvance()" (click)="forward()">Next →</button>
+          <pf-touch-btn size="md" variant="primary"
+                         [disabled]="!canAdvance()"
+                         (pressed)="forward()">
+            Next
+            <span icon-right aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+              </svg>
+            </span>
+          </pf-touch-btn>
         } @else {
-          <button class="pf-btn pf-btn-primary" [disabled]="!canAdvance() || saving()" (click)="finish()">
+          <pf-touch-btn size="md" variant="primary"
+                         [disabled]="!canAdvance() || saving()"
+                         (pressed)="finish()">
             {{ saving() ? 'Saving…' : 'Finish setup' }}
-          </button>
+          </pf-touch-btn>
         }
       </div>
     </section>
-  `
+  `,
+  styles: [`
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+
+    /* ── Stepper ─────────────────────────────────────────── */
+    .stepper {
+      list-style: none;
+      margin: 0 0 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+    }
+    .step {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .step-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12.5px;
+      font-weight: 600;
+      background: var(--glass-bg);
+      color: var(--text-muted);
+      border: 1px solid var(--glass-border);
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .step-active .step-dot {
+      background: var(--gradient-primary);
+      color: #ffffff;
+      border-color: transparent;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+    }
+    .step-done .step-dot {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .step-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .step-active .step-label {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .step-connector {
+      width: 48px;
+      height: 1px;
+      margin: 0 8px;
+      background: var(--border-muted);
+      flex-shrink: 0;
+    }
+    .step-connector-filled {
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.6), rgba(168, 85, 247, 0.5));
+    }
+
+    /* ── Branch row card ─────────────────────────────────── */
+    .branch-row {
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+    }
+
+    .row-remove {
+      width: 34px;
+      height: 34px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .row-remove:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .row-remove:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+  `]
 })
 export class SetupWizardComponent {
   private readonly api = inject(ApiService);
@@ -221,6 +432,14 @@ export class SetupWizardComponent {
     { name: 'Serology',      code: 'SERO' },
     { name: 'Histopathology',code: 'HISTO' }
   ];
+  readonly typeOptions: PfSelectOption<string>[] = [
+    { value: 'independent',       label: 'Independent lab' },
+    { value: 'chain',             label: 'Chain' },
+    { value: 'hospital',          label: 'Hospital' },
+    { value: 'diagnostic_center', label: 'Diagnostic center' }
+  ];
+
+  readonly year = new Date().getFullYear();
 
   private readonly _step = signal(0);
   private readonly _org = signal<OrgDraft>({ name: '', type: 'independent', vendorCode: '', gstNumber: '', logoUrl: '' });
@@ -236,8 +455,7 @@ export class SetupWizardComponent {
 
   readonly barcodePreview = computed(() => {
     const vc = this._org().vendorCode || '??';
-    const year = new Date().getFullYear();
-    return `PF-${vc.toUpperCase()}-${year}-00001-HAEM`;
+    return `PF-${vc.toUpperCase()}-${this.year}-00001-HAEM`;
   });
 
   readonly canAdvance = computed(() => {
@@ -324,7 +542,6 @@ export class SetupWizardComponent {
   }
 }
 
-import { firstValueFrom, Observable } from 'rxjs';
 function firstValueOfApi<T>(source: Observable<T>): Promise<T> {
   return firstValueFrom(source);
 }

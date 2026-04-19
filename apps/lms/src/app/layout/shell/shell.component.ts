@@ -2,24 +2,18 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ToastService } from '../../core/services/toast.service';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
-import { ClockComponent } from '../../shared/primitives/clock.component';
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
 
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent, ClockComponent],
+  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Ambient canvas comes from body background gradients; we only manage the content stack here. -->
     <div class="min-h-screen flex flex-col">
       <pf-top-strip></pf-top-strip>
-
-      <!-- Ambient clock — sits below the navbar on the right, reading as
-           watermark metadata rather than a widget. -->
-      <pf-clock size="sm" variant="bare"
-                class="pf-floating-clock hidden md:inline-flex"></pf-clock>
 
       <main class="flex-1 relative pb-tab-nav">
         <router-outlet></router-outlet>
@@ -51,22 +45,7 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
         }
       </div>
     </div>
-  `,
-  styles: [`
-    .pf-floating-clock {
-      position: fixed;
-      top: calc(var(--pf-topbar-offset, 80px) + 14px);
-      right: 1.25rem;
-      z-index: 25;
-      pointer-events: none;
-      opacity: 0.75;
-      transition: opacity 0.2s ease;
-    }
-    .pf-floating-clock:hover { opacity: 1; }
-    @media (min-width: 1024px) {
-      .pf-floating-clock { right: 2rem; }
-    }
-  `]
+  `
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);
