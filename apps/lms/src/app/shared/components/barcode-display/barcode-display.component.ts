@@ -1,43 +1,124 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Input,
+  OnChanges,
+  SimpleChanges,
+  ViewChild
+} from '@angular/core';
+import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 
+/**
+ * Renders a scannable Code128 barcode AND a QR code for the same value.
+ * Scanning either yields the identical string — so receive/scan flows can
+ * accept whichever the operator picks up first.
+ */
 @Component({
   selector: 'pf-barcode-display',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="rounded-lg border border-slate-200 bg-white p-3 inline-flex flex-col items-center gap-1">
-      <div class="flex items-end gap-[2px] h-12">
-        @for (bar of bars; track $index) {
-          <span class="bg-slate-900" [style.width.px]="bar.w" [style.height.%]="bar.h"></span>
-        }
+    <div class="pf-code-card">
+      <div class="pf-code-card__row">
+        <div class="pf-code-card__block">
+          <svg #barcode class="pf-code-card__bar" role="img" [attr.aria-label]="'Barcode ' + code"></svg>
+          <p class="pf-code-card__caption">Barcode · Code128</p>
+        </div>
+        <div class="pf-code-card__block">
+          <canvas #qr class="pf-code-card__qr" [attr.aria-label]="'QR code ' + code"></canvas>
+          <p class="pf-code-card__caption">QR</p>
+        </div>
       </div>
-      <div class="font-mono text-xs text-slate-700 tracking-wider">{{ code }}</div>
+      <p class="pf-code-card__value">{{ code }}</p>
     </div>
-  `
+  `,
+  styles: [`
+    :host { display: inline-block; }
+    .pf-code-card {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      background: #ffffff;
+      border: 1px solid var(--border-muted);
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .pf-code-card__row {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+    }
+    .pf-code-card__block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .pf-code-card__bar {
+      display: block;
+      height: 64px;
+      width: auto;
+      max-width: 260px;
+    }
+    .pf-code-card__qr {
+      display: block;
+      width: 96px;
+      height: 96px;
+      image-rendering: pixelated;
+    }
+    .pf-code-card__caption {
+      margin: 0;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .pf-code-card__value {
+      margin: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: #0f172a;
+    }
+  `]
 })
-export class BarcodeDisplayComponent {
+export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
   @Input() code = '';
 
-  get bars(): { w: number; h: number }[] {
-    const rng = this.seed(this.code || 'PF');
-    const arr: { w: number; h: number }[] = [];
-    for (let i = 0; i < 40; i++) {
-      arr.push({ w: rng() > 0.5 ? 3 : 1, h: 70 + Math.floor(rng() * 30) });
-    }
-    return arr;
-  }
+  @ViewChild('barcode', { static: true }) barcodeEl!: ElementRef<SVGSVGElement>;
+  @ViewChild('qr', { static: true }) qrEl!: ElementRef<HTMLCanvasElement>;
 
-  private seed(str: string): () => number {
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
+  ngAfterViewInit(): void { this.render(); }
+  ngOnChanges(_: SimpleChanges): void { if (this.barcodeEl && this.qrEl) this.render(); }
+
+  private render(): void {
+    const value = (this.code || '').trim();
+    if (!value) return;
+
+    try {
+      JsBarcode(this.barcodeEl.nativeElement, value, {
+        format: 'CODE128',
+        displayValue: false,
+        margin: 0,
+        height: 64,
+        width: 1.6,
+        background: '#ffffff',
+        lineColor: '#0f172a'
+      });
+    } catch {
+      /* ignore — JsBarcode rejects strings it can't encode */
     }
-    return () => {
-      h = Math.imul(h ^ (h >>> 15), 2246822507);
-      h = Math.imul(h ^ (h >>> 13), 3266489909);
-      const r = ((h ^= h >>> 16) >>> 0) / 4294967296;
-      return r;
-    };
+
+    QRCode.toCanvas(this.qrEl.nativeElement, value, {
+      margin: 0,
+      width: 96,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    }).catch(() => { /* ignore */ });
   }
 }

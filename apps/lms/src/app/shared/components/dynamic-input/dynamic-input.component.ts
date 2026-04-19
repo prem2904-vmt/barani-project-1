@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, comput
 import { FormsModule } from '@angular/forms';
 import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
+import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -36,7 +37,7 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let type = field.type;
@@ -94,21 +95,32 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         }
 
         @case ('select') {
-          <select class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)">
-            <option [ngValue]="null">— Select —</option>
-            @for (o of norm; track o.value) { <option [ngValue]="o.value">{{ o.label }}</option> }
-          </select>
+          <pf-select
+            [options]="selectOptions()"
+            [value]="value"
+            [placeholder]="field.placeholder ?? '— Select —'"
+            (valueChange)="emit($event)"></pf-select>
         }
 
         @case ('multiselect') {
-          <div class="flex flex-wrap gap-2">
+          <div class="pf-tile-grid">
             @for (o of norm; track o.value) {
               <button type="button"
-                      class="rounded-full border px-3 py-1 text-xs transition"
-                      [class.bg-[var(--color-accent)]]="isSelected(o.value)"
-                      [class.text-white]="isSelected(o.value)"
-                      [class.border-slate-300]="!isSelected(o.value)"
-                      (click)="toggleMulti(o.value)">{{ o.label }}</button>
+                      class="pf-tile-opt"
+                      [class.pf-tile-opt--on]="isSelected(o.value)"
+                      (click)="toggleMulti(o.value)">
+                <span class="pf-tile-opt__label">{{ o.label }}</span>
+                @if (o.sublabel) {
+                  <span class="pf-tile-opt__sub">{{ o.sublabel }}</span>
+                }
+                @if (isSelected(o.value)) {
+                  <svg class="pf-tile-opt__check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                }
+              </button>
+            } @empty {
+              <p class="pf-tile-empty">No options available.</p>
             }
           </div>
         }
@@ -269,6 +281,9 @@ export class DynamicInputComponent {
     if (!opts) return [];
     return opts.map(o => typeof o === 'string' ? { value: o, label: o } : o);
   });
+
+  selectOptions = computed<PfSelectOption<unknown>[]>(() =>
+    this.normalisedOptions().map(o => ({ value: o.value, label: o.label, hint: o.sublabel })));
 
   yesNoOptions = computed<FieldOption[]>(() => {
     const n = this.normalisedOptions();

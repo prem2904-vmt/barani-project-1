@@ -6,6 +6,7 @@ import {
   ConditionRule,
   WorkflowField
 } from '../../../shared/models/workflow.model';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
 interface OperatorOption { value: ConditionOperator; label: string; needsValue: boolean; }
 
@@ -24,7 +25,7 @@ const OPERATORS: OperatorOption[] = [
 @Component({
   selector: 'pf-condition-builder',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (rules().length === 0) {
@@ -52,24 +53,21 @@ const OPERATORS: OperatorOption[] = [
 
         <div class="flex-1 min-w-[140px]">
           <label class="text-[11px] text-slate-500">Field</label>
-          <select class="pf-input" [ngModel]="rule.field" (ngModelChange)="patch(i, { field: $event })">
-            <option [ngValue]="''">— pick —</option>
-            @for (f of fields(); track f.id) {
-              <option [ngValue]="f.name">{{ f.title }} <span class="text-slate-400">({{ f.name }})</span></option>
-            }
-            @for (meta of metaFields; track meta.value) {
-              <option [ngValue]="meta.value">{{ meta.label }}</option>
-            }
-          </select>
+          <pf-select
+            [options]="fieldOptions()"
+            [value]="rule.field"
+            placeholder="— pick —"
+            size="sm"
+            (valueChange)="patch(i, { field: $any($event) })"></pf-select>
         </div>
 
         <div class="w-40">
           <label class="text-[11px] text-slate-500">Operator</label>
-          <select class="pf-input" [ngModel]="rule.operator" (ngModelChange)="patch(i, { operator: $event })">
-            @for (op of operators; track op.value) {
-              <option [ngValue]="op.value">{{ op.label }}</option>
-            }
-          </select>
+          <pf-select
+            [options]="operatorOptions"
+            [value]="rule.operator"
+            size="sm"
+            (valueChange)="patch(i, { operator: $any($event) })"></pf-select>
         </div>
 
         @if (needsValue(rule.operator)) {
@@ -107,6 +105,14 @@ export class ConditionBuilderComponent {
     { value: 'age',              label: 'age (patient age)' },
     { value: 'user.permissions', label: 'user permissions' }
   ];
+
+  readonly operatorOptions: PfSelectOption<ConditionOperator>[] =
+    OPERATORS.map(o => ({ value: o.value, label: o.label }));
+
+  readonly fieldOptions = computed<PfSelectOption<string>[]>(() => [
+    ...this.fields().map(f => ({ value: f.name, label: f.title, hint: f.name })),
+    ...this.metaFields.map(m => ({ value: m.value, label: m.label }))
+  ]);
 
   readonly hasRules = computed(() => this.rules().length > 0);
 

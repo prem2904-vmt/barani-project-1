@@ -15,9 +15,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { Appointment } from '../../../shared/models/appointment.model';
 import { Order } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
-import { BookAppointmentComponent } from '../book-appointment/book-appointment.component';
-import { PatientProfileComponent } from '../patient-profile/patient-profile.component';
-import { PatientRegisterComponent } from '../patient-register/patient-register.component';
 
 type Tab = 'appointments' | 'orders';
 
@@ -26,7 +23,7 @@ type Tab = 'appointments' | 'orders';
   standalone: true,
   imports: [
     DatePipe,
-    PatientSearchComponent, PatientRegisterComponent, PatientProfileComponent, BookAppointmentComponent,
+    PatientSearchComponent,
     AvatarComponent, ChipComponent, ScreenHeaderComponent, SegmentedComponent,
     SkeletonComponent, TileComponent, TouchButtonComponent
   ],
@@ -161,7 +158,7 @@ type Tab = 'appointments' | 'orders';
           <ul class="grid grid-cols-1 md:grid-cols-2 gap-3">
             @for (o of orders(); track o.id) {
               <li>
-                <pf-tile tone="default" padding="md">
+                <pf-tile tone="default" padding="md" [clickable]="true" (tapped)="openOrder(o)">
                   <div class="flex items-start gap-3">
                     <pf-avatar [name]="o.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
                     <div class="flex-1 min-w-0">
@@ -178,19 +175,22 @@ type Tab = 'appointments' | 'orders';
                       </p>
                     </div>
                   </div>
-                  <div class="mt-4 grid grid-cols-4 gap-2 text-[11px] font-mono">
-                    @for (step of pipeline(o); track step.label) {
-                      <div class="flex items-center gap-1.5"
-                           [style.opacity]="step.state === 'pending' ? 0.45 : 1">
-                        <span class="h-1.5 w-1.5 rounded-full"
-                              [class.pf-dot-done]="step.state === 'done'"
-                              [class.pf-dot-active]="step.state === 'active'"
-                              [class.pf-dot-pending]="step.state === 'pending'"></span>
-                        <span class="uppercase tracking-wider"
-                              [style.color]="step.state === 'pending' ? 'var(--text-muted)' : 'var(--text-secondary)'">
-                          {{ step.label }}
+
+                  <div class="pf-tl">
+                    @for (step of pipeline(o); track step.label; let i = $index; let first = $first) {
+                      @if (!first) {
+                        <span class="pf-tl__line" [attr.data-state]="step.state"></span>
+                      }
+                      <span class="pf-tl__step" [attr.data-state]="step.state">
+                        <span class="pf-tl__node">
+                          @if (step.state === 'done') {
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="2 5 4 7 8 3"/>
+                            </svg>
+                          }
                         </span>
-                      </div>
+                        <span class="pf-tl__label">{{ step.label }}</span>
+                      </span>
                     }
                   </div>
                 </pf-tile>
@@ -201,25 +201,350 @@ type Tab = 'appointments' | 'orders';
       }
     </section>
 
-    <pf-patient-register [open]="registerOpen()"
-                        (closed)="registerOpen.set(false)"
-                        (registered)="onRegistered($event)"></pf-patient-register>
+    @if (selectedOrder(); as so) {
+      <div class="pf-drawer-bd" (click)="closeOrder()"></div>
+      <aside class="pf-drawer" role="dialog" aria-modal="true">
+        <header class="pf-drawer__hdr">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <pf-avatar [name]="so.patient?.name ?? 'Patient'" [size]="44"></pf-avatar>
+            <div class="min-w-0 flex-1">
+              <p class="text-[10.5px] font-mono uppercase tracking-[0.16em]"
+                 style="color: var(--text-muted);">Order · #{{ so.id.slice(0, 8) }}</p>
+              <p class="text-[17px] font-semibold truncate"
+                 style="color: var(--text-primary);">{{ so.patient?.name ?? 'Patient' }}</p>
+            </div>
+            <pf-chip [tone]="orderTone(so)" size="sm">{{ so.status }}</pf-chip>
+          </div>
+          <button type="button" class="pf-drawer__close" (click)="closeOrder()" aria-label="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+          </button>
+        </header>
 
-    <pf-patient-profile [open]="profileOpen()"
-                       [patientId]="profilePatientId()"
-                       (closed)="profileOpen.set(false)"
-                       (startOrder)="goOrder($event)"
-                       (bookAppointment)="startAppointment($event)"></pf-patient-profile>
+        <div class="pf-drawer__body">
+          <dl class="pf-drawer__meta">
+            <div>
+              <dt>Created</dt>
+              <dd>{{ so.createdAt | date:'MMM d, h:mm a' }}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{{ so.priority }}</dd>
+            </div>
+            <div>
+              <dt>Samples</dt>
+              <dd>{{ so.samples.length }}</dd>
+            </div>
+            <div>
+              <dt>Doctor</dt>
+              <dd>{{ so.refDoctorName || '—' }}</dd>
+            </div>
+          </dl>
 
-    <pf-book-appointment [open]="bookOpen()"
-                        [prefillPatient]="bookPatient()"
-                        (closed)="bookOpen.set(false)"
-                        (booked)="onBooked()"></pf-book-appointment>
+          <section>
+            <p class="pf-drawer__eyebrow">Timeline</p>
+            <ol class="pf-vtl">
+              @for (step of pipeline(so); track step.label) {
+                <li class="pf-vtl__row" [attr.data-state]="step.state">
+                  <span class="pf-vtl__node">
+                    @if (step.state === 'done') {
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="2 6 5 9 10 3"/>
+                      </svg>
+                    }
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <p class="pf-vtl__label">{{ step.label }}</p>
+                    <p class="pf-vtl__status">{{ stepCaption(so, step) }}</p>
+                  </div>
+                </li>
+              }
+            </ol>
+          </section>
+
+          <section>
+            <p class="pf-drawer__eyebrow">Samples · Tests</p>
+            @if (so.samples.length === 0) {
+              <p class="pf-drawer__empty">No samples yet.</p>
+            } @else {
+              @for (s of so.samples; track s.id) {
+                <div class="pf-sample-card">
+                  <div class="pf-sample-card__hdr">
+                    <span class="pf-sample-card__code">{{ s.barcode || s.id.slice(0, 8) }}</span>
+                    <pf-chip [tone]="sampleTone(s.status)" size="sm">{{ s.status }}</pf-chip>
+                  </div>
+                  <ul class="pf-sample-card__tests">
+                    @for (t of s.tests; track t.id) {
+                      <li>
+                        <span class="pf-sample-card__test-name">{{ t.test?.name ?? 'Test' }}</span>
+                        <pf-chip [tone]="testTone(t.status)" size="sm">{{ t.status }}</pf-chip>
+                      </li>
+                    } @empty {
+                      <li class="pf-sample-card__empty">No tests.</li>
+                    }
+                  </ul>
+                </div>
+              }
+            }
+          </section>
+        </div>
+      </aside>
+    }
   `,
   styles: [`
-    .pf-dot-done    { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
-    .pf-dot-active  { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.55); }
-    .pf-dot-pending { background: var(--border-muted); }
+    /* Inline timeline inside tile */
+    .pf-tl {
+      display: flex;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-muted);
+      gap: 0;
+    }
+    .pf-tl__line {
+      flex: 1;
+      height: 2px;
+      background: var(--border-muted);
+      margin: 0 4px 12px;
+      border-radius: 2px;
+    }
+    .pf-tl__line[data-state="done"]   { background: #10b981; }
+    .pf-tl__line[data-state="active"] { background: linear-gradient(90deg, #10b981 50%, var(--border-muted) 50%); }
+    .pf-tl__step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+    }
+    .pf-tl__node {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: var(--bg-card-solid);
+      border: 2px solid var(--border-muted);
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .pf-tl__step[data-state="done"]    .pf-tl__node { background: #10b981; border-color: #10b981; }
+    .pf-tl__step[data-state="active"]  .pf-tl__node { background: #f59e0b; border-color: #f59e0b; animation: pf-tl-pulse 1.6s infinite; }
+    .pf-tl__step[data-state="pending"] .pf-tl__node { background: var(--bg-card-solid); }
+    .pf-tl__label {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .pf-tl__step[data-state="done"]   .pf-tl__label,
+    .pf-tl__step[data-state="active"] .pf-tl__label { color: var(--text-secondary); }
+
+    @keyframes pf-tl-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+      50%      { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    }
+
+    /* Detail drawer (slide-over) */
+    .pf-drawer-bd {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      z-index: 60;
+      animation: pf-fade .18s ease-out both;
+    }
+    .pf-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(520px, 100vw);
+      background: var(--bg-card-solid);
+      border-left: 1px solid var(--glass-border);
+      box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4);
+      z-index: 61;
+      display: flex;
+      flex-direction: column;
+      animation: pf-drawer-in .22s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+    .pf-drawer__hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border-muted);
+    }
+    .pf-drawer__close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background .12s ease, color .12s ease;
+    }
+    .pf-drawer__close:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+
+    .pf-drawer__body {
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .pf-drawer__eyebrow {
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0 0 10px;
+    }
+    .pf-drawer__empty {
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+      margin: 0;
+    }
+    .pf-drawer__meta {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 14px;
+      padding: 12px 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      margin: 0;
+    }
+    .pf-drawer__meta dt {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .pf-drawer__meta dd {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    /* Vertical timeline inside drawer */
+    .pf-vtl {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      position: relative;
+    }
+    .pf-vtl::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: var(--border-muted);
+      border-radius: 2px;
+    }
+    .pf-vtl__row {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 6px 0 14px;
+    }
+    .pf-vtl__row:last-child { padding-bottom: 0; }
+    .pf-vtl__node {
+      position: relative;
+      z-index: 1;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: var(--bg-card-solid);
+      border: 2px solid var(--border-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .pf-vtl__row[data-state="done"]   .pf-vtl__node { background: #10b981; border-color: #10b981; }
+    .pf-vtl__row[data-state="active"] .pf-vtl__node { background: #f59e0b; border-color: #f59e0b; animation: pf-tl-pulse 1.6s infinite; }
+
+    .pf-vtl__label {
+      margin: 2px 0 0;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .pf-vtl__status {
+      margin: 2px 0 0;
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-tertiary);
+    }
+    .pf-vtl__row[data-state="pending"] .pf-vtl__label { color: var(--text-secondary); }
+
+    /* Sample card */
+    .pf-sample-card {
+      padding: 12px 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .pf-sample-card:last-child { margin-bottom: 0; }
+    .pf-sample-card__hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .pf-sample-card__code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .pf-sample-card__tests {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pf-sample-card__tests li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .pf-sample-card__test-name {
+      font-size: 12.5px;
+      color: var(--text-primary);
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pf-sample-card__empty {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   `]
 })
 export class ReceptionLandingComponent implements OnInit {
@@ -259,18 +584,13 @@ export class ReceptionLandingComponent implements OnInit {
 
   private readonly _appointments = signal<Appointment[]>([]);
   private readonly _orders = signal<Order[]>([]);
+  private readonly _selectedOrder = signal<Order | null>(null);
   readonly appointments = this._appointments.asReadonly();
   readonly orders = this._orders.asReadonly();
+  readonly selectedOrder = this._selectedOrder.asReadonly();
 
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
-
-  protected readonly registerOpen = signal(false);
-  protected readonly profileOpen = signal(false);
-  protected readonly profilePatientId = signal<string | null>(null);
-  protected readonly bookOpen = signal(false);
-  private readonly _bookPatient = signal<Patient | null>(null);
-  readonly bookPatient = this._bookPatient.asReadonly();
 
   ngOnInit() { this.refresh(); }
 
@@ -288,16 +608,10 @@ export class ReceptionLandingComponent implements OnInit {
     });
   }
 
-  openRegister() { this.registerOpen.set(true); }
+  openRegister() { this.router.navigate(['/reception/patients/new']); }
   searchFocus() { /* future: QR scanner */ }
-  openProfile(p: Patient) {
-    this.profilePatientId.set(p.id);
-    this.profileOpen.set(true);
-  }
-  openProfileById(id: string) {
-    this.profilePatientId.set(id);
-    this.profileOpen.set(true);
-  }
+  openProfile(p: Patient) { this.router.navigate(['/reception/patients', p.id]); }
+  openProfileById(id: string) { this.router.navigate(['/reception/patients', id]); }
 
   apptTone(a: Appointment): ChipTone {
     switch (a.status) {
@@ -318,37 +632,56 @@ export class ReceptionLandingComponent implements OnInit {
     }
   }
 
-  onRegistered(ev: { patient: Patient; createOrder: boolean }) {
-    this.registerOpen.set(false);
-    if (ev.createOrder) {
-      this.router.navigate(['/reception/order-create'], { queryParams: { patientId: ev.patient.id } });
-    } else {
-      this.profilePatientId.set(ev.patient.id);
-      this.profileOpen.set(true);
-    }
-  }
-
-  goOrder(p: Patient) {
-    this.profileOpen.set(false);
-    this.router.navigate(['/reception/order-create'], { queryParams: { patientId: p.id } });
-  }
-
-  startAppointment(p: Patient) {
-    this.profileOpen.set(false);
-    this._bookPatient.set(p);
-    this.bookOpen.set(true);
-  }
-
-  onBooked() {
-    this.bookOpen.set(false);
-    this._bookPatient.set(null);
-    this.refresh();
-  }
-
   checkIn(a: Appointment) {
     this.api.patch<Appointment>(`/api/appointments/${a.id}/checkin`).subscribe({
       next: () => { this.toasts.success('Checked in'); this.refresh(); }
     });
+  }
+
+  openOrder(o: Order) { this._selectedOrder.set(o); }
+  closeOrder() { this._selectedOrder.set(null); }
+
+  stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {
+    if (step.state === 'pending') return 'Pending';
+    switch (step.label) {
+      case 'Billing':
+        return step.state === 'done' ? 'Billed' : 'Billing in progress';
+      case 'Sample': {
+        const total = o.samples.length;
+        const collected = o.samples.filter(s => s.status && s.status !== 'pending').length;
+        const received = o.samples.filter(s => s.status === 'received' || s.status === 'processing').length;
+        if (step.state === 'done') return `${received}/${total} received at lab`;
+        return `${collected}/${total} collected`;
+      }
+      case 'Result': {
+        const all = o.samples.flatMap(s => s.tests ?? []);
+        const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
+        return `${validated}/${all.length} tests resulted`;
+      }
+      case 'Report':
+        return step.state === 'done' ? 'Report dispatched' : 'Awaiting validation';
+      default:
+        return '';
+    }
+  }
+
+  sampleTone(status: string | undefined): ChipTone {
+    switch (status) {
+      case 'received':
+      case 'processing': return 'violet';
+      case 'collected':  return 'amber';
+      case 'rejected':   return 'rose';
+      default:           return 'default';
+    }
+  }
+
+  testTone(status: string | undefined): ChipTone {
+    switch (status) {
+      case 'validated': return 'emerald';
+      case 'entered':   return 'violet';
+      case 'rejected':  return 'rose';
+      default:          return 'amber';
+    }
   }
 
   pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {

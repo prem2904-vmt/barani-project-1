@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { v4 as uuid } from 'uuid';
-import { SlideOverComponent } from '../../../shared/components/slide-over/slide-over.component';
+import { ToastService } from '../../../core/services/toast.service';
 import {
   ConditionRule,
   FieldOption,
@@ -10,7 +11,12 @@ import {
   ReferenceRange,
   WorkflowField
 } from '../../../shared/models/workflow.model';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
+import { WorkflowBuilderService } from './workflow-builder.service';
 
 type FieldCategory =
   | 'text' | 'numeric' | 'options' | 'boolean'
@@ -44,278 +50,388 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
   { value: 'quarter', label: '¼'       }
 ];
 
-export interface FieldEditorResult {
-  field: Partial<WorkflowField> & { id?: string };
-  mode: 'create' | 'edit';
-}
-
 @Component({
   selector: 'pf-field-editor',
   standalone: true,
-  imports: [FormsModule, SlideOverComponent, ConditionBuilderComponent],
+  imports: [
+    FormsModule,
+    ConditionBuilderComponent,
+    ScreenHeaderComponent,
+    SelectComponent,
+    TileComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-slide-over [open]="open()" [title]="title()" (closed)="cancelled.emit()">
-      <div class="space-y-4">
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="pf-label">Label <span class="text-red-500">*</span></label>
-            <input type="text" class="pf-input"
-                  [ngModel]="draft().title"
-                  (ngModelChange)="setTitle($event)" />
+      <pf-screen-header
+        [eyebrow]="eyebrow()"
+        [title]="title()"
+        [subtitle]="subtitle()">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="cancel()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </span>
+          Back
+        </pf-touch-btn>
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave()" (pressed)="submit()">
+          {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
+        </pf-touch-btn>
+      </pf-screen-header>
+
+      <!-- Basics -->
+      <pf-tile tone="default" padding="lg" class="block mb-4">
+        <h3 class="section-title">Basics</h3>
+        <div class="mt-4 space-y-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Label <span class="text-red-500">*</span></label>
+              <input type="text" class="pf-input"
+                     [ngModel]="draft().title"
+                     (ngModelChange)="setTitle($event)" />
+            </div>
+            <div>
+              <label class="pf-label">Name <span style="color: var(--text-muted);" class="font-normal">(auto)</span></label>
+              <input type="text" class="pf-input font-mono"
+                     [ngModel]="draft().name"
+                     [readonly]="!isCustom() || mode() === 'edit'"
+                     (ngModelChange)="patch({ name: $event })" />
+            </div>
           </div>
-          <div>
-            <label class="pf-label">Name <span class="text-slate-400 font-normal">(auto)</span></label>
-            <input type="text" class="pf-input font-mono"
-                  [ngModel]="draft().name"
-                  [readonly]="!isCustom() || mode() === 'edit'"
-                  (ngModelChange)="patch({ name: $event })" />
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Type <span class="text-red-500">*</span></label>
+              <pf-select
+                [options]="typeSelectOptions"
+                [value]="draft().type"
+                [disabled]="!isCustom()"
+                (valueChange)="setType($any($event))"></pf-select>
+            </div>
+            <div>
+              <label class="pf-label">Width</label>
+              <pf-select
+                [options]="widthSelectOptions"
+                [value]="draft().width ?? 'full'"
+                (valueChange)="patch({ width: $any($event) })"></pf-select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox"
+                     [ngModel]="!!draft().isRequired"
+                     (ngModelChange)="patch({ isRequired: $event })" />
+              <span>Required</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm"
+                   [class.opacity-50]="mode() === 'edit'">
+              <input type="checkbox"
+                     [ngModel]="isCustom()"
+                     [disabled]="mode() === 'edit'"
+                     (ngModelChange)="setStandard(!$event)" />
+              <span>Custom field <span style="color: var(--text-muted);">(stores to metadata)</span></span>
+            </label>
           </div>
         </div>
+      </pf-tile>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="pf-label">Type <span class="text-red-500">*</span></label>
-            <select class="pf-input"
-                    [ngModel]="draft().type"
-                    [disabled]="!isCustom()"
-                    (ngModelChange)="setType($event)">
-              @for (opt of typeMeta; track opt.type) {
-                <option [ngValue]="opt.type">{{ opt.label }}</option>
-              }
-            </select>
+      @if (category() === 'text') {
+        <pf-tile tone="default" padding="lg" class="block mb-4">
+          <h3 class="section-title">Hints</h3>
+          <div class="mt-4 space-y-3">
+            <div>
+              <label class="pf-label">Placeholder</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="draft().placeholder"
+                     (ngModelChange)="patch({ placeholder: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Helper text</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="draft().helperText"
+                     (ngModelChange)="patch({ helperText: $event })" />
+            </div>
           </div>
-          <div>
-            <label class="pf-label">Width</label>
-            <select class="pf-input"
-                    [ngModel]="draft().width ?? 'full'"
-                    (ngModelChange)="patch({ width: $event })">
-              @for (w of widths; track w.value) {
-                <option [ngValue]="w.value">{{ w.label }}</option>
-              }
-            </select>
-          </div>
-        </div>
+        </pf-tile>
+      }
 
-        <div class="grid grid-cols-2 gap-3">
-          <label class="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox"
-                  [ngModel]="!!draft().isRequired"
-                  (ngModelChange)="patch({ isRequired: $event })" />
-            <span>Required</span>
-          </label>
-          <label class="inline-flex items-center gap-2 text-sm"
-                 [class.opacity-50]="!isCustom()">
-            <input type="checkbox"
-                  [ngModel]="isCustom()"
-                  [disabled]="mode() === 'edit'"
-                  (ngModelChange)="setStandard(!$event)" />
-            <span>Custom field <span class="text-slate-400">(stores to metadata)</span></span>
-          </label>
-        </div>
-
-        @if (category() === 'text') {
-          <div class="border-t border-slate-100 pt-3">
-            <label class="pf-label">Placeholder</label>
-            <input type="text" class="pf-input"
-                  [ngModel]="draft().placeholder"
-                  (ngModelChange)="patch({ placeholder: $event })" />
-            <label class="pf-label mt-2">Helper text</label>
-            <input type="text" class="pf-input"
-                  [ngModel]="draft().helperText"
-                  (ngModelChange)="patch({ helperText: $event })" />
-          </div>
-        }
-
-        @if (category() === 'numeric') {
-          <div class="border-t border-slate-100 pt-3 space-y-3">
+      @if (category() === 'numeric') {
+        <pf-tile tone="default" padding="lg" class="block mb-4">
+          <h3 class="section-title">Numeric config</h3>
+          <div class="mt-4 space-y-4">
             <div>
               <label class="pf-label">Unit</label>
-              <input type="text" class="pf-input max-w-[160px]"
-                    [ngModel]="draft().unit"
-                    (ngModelChange)="patch({ unit: $event })" />
+              <input type="text" class="pf-input max-w-[200px]"
+                     [ngModel]="draft().unit"
+                     (ngModelChange)="patch({ unit: $event })" />
             </div>
 
             <div>
-              <p class="text-xs uppercase tracking-wider text-slate-500 mb-1">Reference ranges</p>
+              <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2" style="color: var(--text-muted);">
+                Reference ranges
+              </p>
               @for (range of draft().referenceRanges ?? []; let i = $index; track i) {
-                <div class="flex gap-2 items-end mb-1">
+                <div class="flex gap-2 items-end mb-2">
                   <div class="flex-1">
-                    <label class="text-[11px] text-slate-500">Segment</label>
+                    <label class="text-[11px]" style="color: var(--text-muted);">Segment</label>
                     <input type="text" class="pf-input"
-                          [ngModel]="range.segment"
-                          (ngModelChange)="patchRange(i, { segment: $event })"
-                          placeholder="normal | adult_male | adult_female | child" />
+                           [ngModel]="range.segment"
+                           (ngModelChange)="patchRange(i, { segment: $event })"
+                           placeholder="normal | adult_male | adult_female | child" />
                   </div>
-                  <div class="w-20">
-                    <label class="text-[11px] text-slate-500">Min</label>
+                  <div class="w-24">
+                    <label class="text-[11px]" style="color: var(--text-muted);">Min</label>
                     <input type="number" class="pf-input" step="any"
-                          [ngModel]="range.min"
-                          (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
+                           [ngModel]="range.min"
+                           (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
                   </div>
-                  <div class="w-20">
-                    <label class="text-[11px] text-slate-500">Max</label>
+                  <div class="w-24">
+                    <label class="text-[11px]" style="color: var(--text-muted);">Max</label>
                     <input type="number" class="pf-input" step="any"
-                          [ngModel]="range.max"
-                          (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
+                           [ngModel]="range.max"
+                           (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
                   </div>
-                  <button type="button" class="text-slate-400 hover:text-red-500 pb-1.5"
-                          (click)="removeRange(i)">✕</button>
+                  <button type="button" class="field-remove" (click)="removeRange(i)" aria-label="Remove">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                    </svg>
+                  </button>
                 </div>
               }
-              <button type="button" class="text-xs text-[var(--color-primary)] hover:underline"
-                      (click)="addRange()">+ Add range</button>
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="addRange()">
+                <span icon-left aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14"/><path d="M5 12h14"/>
+                  </svg>
+                </span>
+                Add range
+              </pf-touch-btn>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label class="pf-label">Critical low</label>
                 <input type="number" class="pf-input" step="any"
-                      [ngModel]="draft().criticalLow"
-                      (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
+                       [ngModel]="draft().criticalLow"
+                       (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
               </div>
               <div>
                 <label class="pf-label">Critical high</label>
                 <input type="number" class="pf-input" step="any"
-                      [ngModel]="draft().criticalHigh"
-                      (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
+                       [ngModel]="draft().criticalHigh"
+                       (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
               </div>
             </div>
           </div>
-        }
+        </pf-tile>
+      }
 
-        @if (category() === 'options') {
-          <div class="border-t border-slate-100 pt-3 space-y-3">
-            <p class="text-xs uppercase tracking-wider text-slate-500">Options</p>
+      @if (category() === 'options') {
+        <pf-tile tone="default" padding="lg" class="block mb-4">
+          <h3 class="section-title">Options</h3>
+          <div class="mt-4 space-y-3">
             @for (opt of draft().options ?? []; let i = $index; track i) {
               <div class="flex gap-2 items-end">
                 <div class="flex-1">
-                  <label class="text-[11px] text-slate-500">Label</label>
+                  <label class="text-[11px]" style="color: var(--text-muted);">Label</label>
                   <input type="text" class="pf-input"
-                        [ngModel]="opt.label"
-                        (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
+                         [ngModel]="opt.label"
+                         (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
                 </div>
-                <div class="w-32">
-                  <label class="text-[11px] text-slate-500">Value</label>
+                <div class="w-36">
+                  <label class="text-[11px]" style="color: var(--text-muted);">Value</label>
                   <input type="text" class="pf-input font-mono"
-                        [ngModel]="opt.value"
-                        (ngModelChange)="patchOption(i, { value: $event })" />
+                         [ngModel]="opt.value"
+                         (ngModelChange)="patchOption(i, { value: $event })" />
                 </div>
-                <button type="button" class="text-slate-400 hover:text-red-500 pb-1.5"
-                        (click)="removeOption(i)">✕</button>
+                <button type="button" class="field-remove" (click)="removeOption(i)" aria-label="Remove">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                  </svg>
+                </button>
               </div>
             }
-            <button type="button" class="text-xs text-[var(--color-primary)] hover:underline"
-                    (click)="addOption()">+ Add option</button>
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="addOption()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+              </span>
+              Add option
+            </pf-touch-btn>
 
             <div>
-              <label class="pf-label">Normal value <span class="text-slate-400 font-normal">(optional)</span></label>
-              <select class="pf-input"
-                      [ngModel]="draft().normalValue ?? ''"
-                      (ngModelChange)="patch({ normalValue: $event || undefined })">
-                <option [ngValue]="''">—</option>
-                @for (opt of draft().options ?? []; track opt.value) {
-                  <option [ngValue]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              <label class="pf-label">Normal value <span class="font-normal" style="color: var(--text-muted);">(optional)</span></label>
+              <pf-select
+                [options]="normalValueSelectOptions()"
+                [value]="(draft().normalValue ?? '') + ''"
+                placeholder="—"
+                (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
           </div>
-        }
+        </pf-tile>
+      }
 
-        @if (category() === 'boolean') {
-          <div class="border-t border-slate-100 pt-3 space-y-3">
-            <div class="grid grid-cols-2 gap-3">
+      @if (category() === 'boolean') {
+        <pf-tile tone="default" padding="lg" class="block mb-4">
+          <h3 class="section-title">Labels</h3>
+          <div class="mt-4 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label class="pf-label">Positive label</label>
                 <input type="text" class="pf-input"
-                      [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'"
-                      (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
+                       [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'"
+                       (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
               </div>
               <div>
                 <label class="pf-label">Negative label</label>
                 <input type="text" class="pf-input"
-                      [ngModel]="(draft().options?.[1]?.label) ?? 'No'"
-                      (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
+                       [ngModel]="(draft().options?.[1]?.label) ?? 'No'"
+                       (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
               </div>
             </div>
-            <div>
+            <div class="max-w-[220px]">
               <label class="pf-label">Normal value</label>
-              <select class="pf-input max-w-[200px]"
-                      [ngModel]="draft().normalValue ?? ''"
-                      (ngModelChange)="patch({ normalValue: $event || undefined })">
-                <option [ngValue]="''">—</option>
-                <option [ngValue]="(draft().options?.[0]?.value) ?? 'Yes'">Positive</option>
-                <option [ngValue]="(draft().options?.[1]?.value) ?? 'No'">Negative</option>
-              </select>
+              <pf-select
+                [options]="booleanNormalSelectOptions()"
+                [value]="(draft().normalValue ?? '') + ''"
+                placeholder="—"
+                (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
           </div>
-        }
+        </pf-tile>
+      }
 
-        <div class="border-t border-slate-100 pt-3">
-          <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Show when</p>
+      <pf-tile tone="default" padding="lg" class="block">
+        <h3 class="section-title">Show when</h3>
+        <div class="mt-4">
           <pf-condition-builder
             [rules]="draft().showWhen ?? []"
             [fields]="availableFields()"
             emptyLabel="Always visible."
-            (rulesChange)="patch({ showWhen: $event.length === 0 ? undefined : $event })">
+            (rulesChange)="onConditionsChange($event)">
           </pf-condition-builder>
         </div>
-
-      </div>
-
-      <div footer class="flex justify-end gap-2">
-        <button type="button" class="pf-btn pf-btn-ghost" (click)="cancelled.emit()">Cancel</button>
-        <button type="button" class="pf-btn pf-btn-primary"
-                [disabled]="!canSave()"
-                (click)="submit()">
-          {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
-        </button>
-      </div>
-    </pf-slide-over>
-  `
+      </pf-tile>
+    </section>
+  `,
+  styles: [`
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+    .field-remove {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+      flex-shrink: 0;
+    }
+    .field-remove:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+  `]
 })
-export class FieldEditorComponent {
-  readonly open = input<boolean>(false);
-  readonly mode = input<'create' | 'edit'>('create');
-  readonly initial = input<WorkflowField | null>(null);
-  readonly availableFields = input<WorkflowField[]>([]);
-
-  readonly saved = output<FieldEditorResult>();
-  readonly cancelled = output<void>();
+export class FieldEditorComponent implements OnInit {
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly toasts = inject(ToastService);
+  protected readonly builder = inject(WorkflowBuilderService);
 
   readonly typeMeta = TYPE_META;
   readonly widths = WIDTHS;
 
-  private readonly _draft = signal<Partial<WorkflowField>>(this.emptyDraft());
-  readonly draft = this._draft.asReadonly();
+  readonly typeSelectOptions: PfSelectOption<FieldType>[] =
+    TYPE_META.map(t => ({ value: t.type, label: t.label, hint: t.category }));
+  readonly widthSelectOptions: PfSelectOption<FieldWidth>[] =
+    WIDTHS.map(w => ({ value: w.value, label: w.label }));
+  readonly normalValueSelectOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: '—' },
+    ...((this.draft().options ?? []).map(o => ({ value: String(o.value), label: o.label })))
+  ]);
+  readonly booleanNormalSelectOptions = computed<PfSelectOption<string>[]>(() => {
+    const opts = this.draft().options ?? [];
+    return [
+      { value: '', label: '—' },
+      { value: String(opts[0]?.value ?? 'Yes'), label: 'Positive' },
+      { value: String(opts[1]?.value ?? 'No'),  label: 'Negative' }
+    ];
+  });
 
+  private readonly _screen = signal<string | null>(null);
+  private readonly _stepId = signal<string | null>(null);
+  private readonly _fieldId = signal<string | null>(null);
+  private readonly _draft = signal<Partial<WorkflowField>>(emptyDraft());
+
+  readonly draft = this._draft.asReadonly();
+  readonly mode = computed<'create' | 'edit'>(() => this._fieldId() ? 'edit' : 'create');
+  readonly title = computed(() => this.mode() === 'edit' ? 'Edit field' : 'Add field');
+  readonly eyebrow = computed(() => {
+    const screen = this._screen() ?? '';
+    const stepName = this.builder.workflow()?.steps.find(s => s.id === this._stepId())?.title ?? '';
+    return stepName ? `Workflow · ${screen} · ${stepName}` : `Workflow · ${screen}`;
+  });
+  readonly subtitle = computed(() =>
+    this.mode() === 'edit'
+      ? 'Update the label, validations, options, or conditions.'
+      : 'Configure a field for lab staff to fill in at this step.'
+  );
   readonly category = computed<FieldCategory>(() => {
     const t = this._draft().type;
     if (!t) return 'other';
     return TYPE_META.find(m => m.type === t)?.category ?? 'other';
   });
-
-  readonly title = computed(() => this.mode() === 'edit' ? 'Edit field' : 'Add field');
   readonly isCustom = computed(() => !this._draft().isStandard);
-
+  readonly availableFields = computed<WorkflowField[]>(() => this.builder.allFields());
   readonly canSave = computed(() => {
     const d = this._draft();
     return !!(d.title && d.title.trim() && d.name && d.name.trim() && d.type);
   });
 
-  constructor() {
-    effect(() => {
-      // Re-seed when the slide-over opens.
-      if (this.open()) {
-        const src = this.initial();
-        if (src) {
-          this._draft.set({ ...src });
-        } else {
-          this._draft.set(this.emptyDraft());
-        }
-      }
-    });
+  ngOnInit() {
+    const screen = this.route.snapshot.paramMap.get('screen');
+    const stepId = this.route.snapshot.paramMap.get('stepId');
+    const fieldId = this.route.snapshot.paramMap.get('fieldId');
+    this._screen.set(screen);
+    this._stepId.set(stepId);
+    this._fieldId.set(fieldId);
+
+    if (screen && !this.builder.workflow()) {
+      this.builder.loadWorkflow(screen).subscribe({
+        next: () => this.seedDraft(),
+        error: () => this.toasts.error('Could not load workflow')
+      });
+    } else {
+      this.seedDraft();
+    }
+  }
+
+  private seedDraft() {
+    const fieldId = this._fieldId();
+    const stepId = this._stepId();
+    if (fieldId && stepId) {
+      const step = this.builder.workflow()?.steps.find(s => s.id === stepId);
+      const field = step?.fields.find(f => f.id === fieldId);
+      this._draft.set(field ? { ...field } : emptyDraft());
+    } else {
+      this._draft.set(emptyDraft());
+    }
   }
 
   patch(updates: Partial<WorkflowField>): void {
@@ -324,16 +440,14 @@ export class FieldEditorComponent {
 
   setTitle(v: string): void {
     const patch: Partial<WorkflowField> = { title: v };
-    // auto-derive name for new custom fields only
     if (this.mode() === 'create' && this.isCustom()) {
-      patch.name = this.toSnakeCase(v);
+      patch.name = toSnakeCase(v);
     }
     this.patch(patch);
   }
 
   setType(type: FieldType): void {
     const patch: Partial<WorkflowField> = { type };
-    // seed sensible defaults per category
     const category = TYPE_META.find(m => m.type === type)?.category;
     if (category === 'options' && !this._draft().options) {
       patch.options = [{ value: 'Option 1', label: 'Option 1' }];
@@ -357,7 +471,6 @@ export class FieldEditorComponent {
     this.patch({ isStandard, storageKey });
   }
 
-  // Options ------------------------------------------------------
   addOption(): void {
     const list = [...(this._draft().options ?? [])];
     const n = list.length + 1;
@@ -377,7 +490,6 @@ export class FieldEditorComponent {
     this.patch({ options: list });
   }
 
-  // Reference ranges --------------------------------------------
   addRange(): void {
     const list = [...(this._draft().referenceRanges ?? [])];
     list.push({ segment: 'normal', min: undefined, max: undefined });
@@ -399,44 +511,56 @@ export class FieldEditorComponent {
     return Number.isNaN(n) ? undefined : n;
   }
 
+  onConditionsChange(rules: ConditionRule[]): void {
+    this.patch({ showWhen: rules.length === 0 ? undefined : rules });
+  }
+
+  cancel() { this.backToBuilder(); }
+
   submit(): void {
     if (!this.canSave()) return;
+    const stepId = this._stepId();
+    if (!stepId) return;
     const d = this._draft();
     const isCustom = !d.isStandard;
     const name = d.name!.trim();
     const storageKey = d.storageKey ?? (isCustom ? `metadata.${name}` : name);
-    this.saved.emit({
-      field: {
-        ...d,
-        name,
-        isStandard: !!d.isStandard,
-        storageKey,
-        id: d.id ?? uuid()
-      },
-      mode: this.mode()
-    });
-  }
-
-  private emptyDraft(): Partial<WorkflowField> {
-    return {
-      title: '',
-      name: '',
-      type: 'text',
-      isStandard: false,
-      isRequired: false,
-      isEditable: true,
-      width: 'full',
-      storageKey: ''
+    const payload: Partial<WorkflowField> & { id?: string } = {
+      ...d,
+      name,
+      isStandard: !!d.isStandard,
+      storageKey,
+      id: d.id ?? uuid()
     };
+
+    if (this.mode() === 'edit' && payload.id) {
+      this.builder.updateField(stepId, payload.id, payload);
+    } else {
+      this.builder.addField(stepId, payload);
+    }
+    this.backToBuilder();
   }
 
-  private toSnakeCase(str: string): string {
-    return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  private backToBuilder() {
+    const screen = this._screen();
+    if (screen) this.router.navigate(['/admin/workflows', screen]);
+    else this.router.navigateByUrl('/admin/workflows');
   }
+}
 
-  /** Condition rule change is handled by nested component which emits unknown
-      value shape; we normalise here. */
-  _onConditionsChange(rules: ConditionRule[]): void {
-    this.patch({ showWhen: rules.length === 0 ? undefined : rules });
-  }
+function emptyDraft(): Partial<WorkflowField> {
+  return {
+    title: '',
+    name: '',
+    type: 'text',
+    isStandard: false,
+    isRequired: false,
+    isEditable: true,
+    width: 'full',
+    storageKey: ''
+  };
+}
+
+function toSnakeCase(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }

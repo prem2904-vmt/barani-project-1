@@ -49,80 +49,59 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5 items-start">
-        <aside class="space-y-3">
-          @if (patient(); as p) {
-            <pf-tile tone="violet" padding="md">
-              <div class="flex items-center gap-3">
-                <pf-avatar [name]="p.name" [size]="48"></pf-avatar>
-                <div class="min-w-0 flex-1">
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-0.5"
-                     style="color: var(--text-muted);">Patient</p>
-                  <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ p.name }}</p>
-                </div>
-              </div>
-              <dl class="mt-3 grid grid-cols-3 gap-2 text-[12px]">
-                <div>
-                  <dt class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--text-muted);">Sex</dt>
-                  <dd class="mt-0.5" style="color: var(--text-primary);">{{ p.sex }}</dd>
-                </div>
-                <div>
-                  <dt class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--text-muted);">Age</dt>
-                  <dd class="mt-0.5" style="color: var(--text-primary);">{{ p.age }}y</dd>
-                </div>
-                <div>
-                  <dt class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--text-muted);">Phone</dt>
-                  <dd class="mt-0.5 truncate" style="color: var(--text-primary);">{{ p.phone }}</dd>
-                </div>
-              </dl>
-            </pf-tile>
-          } @else {
-            <pf-tile tone="amber" padding="md">
-              <p class="text-[13px]" style="color: var(--text-primary);">No patient selected.</p>
-              <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                Open order create from a patient profile.
-              </p>
-            </pf-tile>
-          }
-
-          <pf-tile tone="default" padding="md">
-            <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1"
-               style="color: var(--text-muted);">Workflow</p>
-            <p class="text-[13px]" style="color: var(--text-secondary);">
-              <code class="pf-code">order_creation</code>
-              <span class="ml-1" style="color: var(--text-muted);">v{{ record()?.version ?? '—' }}</span>
+      @if (patient(); as p) {
+        <div class="pf-patient-banner">
+          <pf-avatar [name]="p.name" [size]="40"></pf-avatar>
+          <div class="min-w-0 flex-1">
+            <p class="pf-patient-banner__name">{{ p.name }}</p>
+            <p class="pf-patient-banner__meta">
+              {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
+              @if (p.phone) { · {{ p.phone }} }
             </p>
-          </pf-tile>
-        </aside>
+          </div>
+        </div>
+      }
 
-        <pf-tile tone="default" padding="lg">
-          @if (config(); as cfg) {
-            <pf-workflow-renderer
-              [config]="cfg"
-              [context]="context()"
-              [resources]="resources()"
-              [submitting]="saving()"
-              [finishLabel]="'Create order → Billing'"
-              (valuesChange)="values.set($event)"
-              (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
-          } @else {
-            <div class="text-center py-12">
-              <p class="text-[13px]" style="color: var(--text-tertiary);">Loading workflow…</p>
-            </div>
-          }
-        </pf-tile>
-      </div>
+      <pf-tile tone="default" padding="lg">
+        @if (config(); as cfg) {
+          <pf-workflow-renderer
+            [config]="cfg"
+            [context]="context()"
+            [resources]="resources()"
+            [submitting]="saving()"
+            [finishLabel]="'Create order → Billing'"
+            (valuesChange)="values.set($event)"
+            (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
+        } @else {
+          <div class="text-center py-12">
+            <p class="text-[13px]" style="color: var(--text-tertiary);">Loading workflow…</p>
+          </div>
+        }
+      </pf-tile>
     </section>
   `,
   styles: [`
-    .pf-code {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 6px;
+    .pf-patient-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
+      border-radius: 12px;
+    }
+    .pf-patient-banner__name {
+      font-size: 14px;
+      font-weight: 600;
       color: var(--text-primary);
+      margin: 0;
+    }
+    .pf-patient-banner__meta {
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-tertiary);
+      margin: 2px 0 0;
     }
   `]
 })
@@ -163,7 +142,8 @@ export class OrderCreateComponent implements OnInit {
     dataSources: {
       tests: this._tests().map(t => ({
         value: t.id,
-        label: `${t.name} — ₹${t.price}${t.type === 'package' ? ' (pkg)' : ''}`
+        label: t.name,
+        sublabel: `₹${t.price}${t.type === 'package' ? ' · package' : ''}`
       })),
       doctors: [] as Array<{ value: string; label: string }>,
       patients: this._patient()
@@ -173,9 +153,13 @@ export class OrderCreateComponent implements OnInit {
   }));
 
   ngOnInit() {
-    this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
+    this.api.get<Test[]>('/api/tests/').subscribe({
+      next: l => this._tests.set(l ?? []),
+      error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+    });
     this.api.get<WorkflowConfigRecord>('/api/workflows/order_creation').subscribe({
-      next: r => { this._record.set(r); try { this._config.set(JSON.parse(r.configJson)); } catch { /* ignore */ } }
+      next: r => { this._record.set(r); try { this._config.set(JSON.parse(r.configJson)); } catch { /* ignore */ } },
+      error: () => this.toasts.error('Could not load order workflow')
     });
 
     const pid = this.route.snapshot.queryParamMap.get('patientId');
@@ -184,7 +168,6 @@ export class OrderCreateComponent implements OnInit {
         next: res => this._patient.set(res.patient),
         error: () => this.toasts.error('Could not load patient')
       });
-      this.values.set({ 'patient::patient_id': pid });
     } else {
       this.toasts.warning('Open order create from a patient profile');
     }
@@ -198,15 +181,16 @@ export class OrderCreateComponent implements OnInit {
     const bySteps = splitByStep(values);
     const { metadata } = splitByStorage(cfg, values);
 
-    const testIds = (bySteps['tests']?.['test_ids'] as string[] | undefined) ?? [];
+    const step = bySteps['order'] ?? {};
+    const testIds = (step['test_ids'] as string[] | undefined) ?? [];
     if (!testIds.length) {
       this.toasts.warning('Select at least one test.');
       return;
     }
 
-    const refDoctorName = bySteps['referral']?.['ref_doctor_name'] as string | undefined;
-    const refDoctorId = bySteps['referral']?.['ref_doctor_id'] as string | undefined;
-    const priority = (bySteps['referral']?.['priority'] as string | undefined) ?? 'routine';
+    const refDoctorName = step['ref_doctor_name'] as string | undefined;
+    const refDoctorId = step['ref_doctor_id'] as string | undefined;
+    const priority = (step['priority'] as string | undefined) ?? 'Normal';
 
     this._saving.set(true);
     this.api.post<Order>('/api/orders/', {

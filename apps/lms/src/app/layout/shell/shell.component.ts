@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ToastService } from '../../core/services/toast.service';
+import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
@@ -8,11 +9,14 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent],
+  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Ambient canvas comes from body background gradients; we only manage the content stack here. -->
-    <div class="min-h-screen flex flex-col">
+    <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
+    <pf-ambient-bg></pf-ambient-bg>
+
+    <!-- Everything above sits in a stacking context on top of the ambient. -->
+    <div class="shell-stack">
       <pf-top-strip></pf-top-strip>
 
       <main class="flex-1 relative pb-tab-nav">
@@ -45,7 +49,16 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
         }
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    .shell-stack {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+  `]
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);

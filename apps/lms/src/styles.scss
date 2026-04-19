@@ -214,25 +214,18 @@ body {
 }
 
 /*
- * Dark theme ambient glow.
- * Larger radii, lower alpha, softer edges (fade-out pushed to 85%) —
- * avoids the visible semicircle that was snagging the eye in the
- * top-left quadrant. No fixed attachment so it scrolls naturally.
+ * Body is now a flat base — ambient flow lives in <pf-ambient-bg> which
+ * handles the DNA blobs, drifting pulse lines, and helix coils. Flat base
+ * keeps scroll cheap and lets the ambient layer paint without a second
+ * gradient fighting it.
  */
 :root.dark body,
 :root:not(.light) body {
-  background:
-    radial-gradient(900px 520px at -10% -30%, rgba(124, 58, 237, 0.06), rgba(124, 58, 237, 0) 85%),
-    radial-gradient(800px 480px at 120% -20%, rgba(236, 72, 153, 0.04), rgba(236, 72, 153, 0) 85%),
-    radial-gradient(900px 700px at 50% 120%,  rgba(168, 85, 247, 0.05), rgba(168, 85, 247, 0) 85%),
-    linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
+  background: var(--bg-primary);
 }
 
 :root.light body {
-  background:
-    radial-gradient(900px 520px at -10% -30%, rgba(124, 58, 237, 0.10), rgba(124, 58, 237, 0) 85%),
-    radial-gradient(800px 480px at 120% -20%, rgba(236, 72, 153, 0.06), rgba(236, 72, 153, 0) 85%),
-    linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  background: var(--bg-primary);
 }
 
 * { box-sizing: border-box; }
@@ -605,6 +598,67 @@ pf-shell main > router-outlet + * {
   font-weight: 500;
   border: 1px solid var(--glass-border);
   background: var(--glass-bg);
+}
+
+/* =============================================================
+   TILE-STYLE MULTI-SELECT (test picker, option grids)
+   ============================================================= */
+.pf-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.pf-tile-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 36px 10px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+  min-height: 56px;
+}
+.pf-tile-opt:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+.pf-tile-opt:active { transform: scale(0.99); }
+
+.pf-tile-opt--on {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+.pf-tile-opt__label {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.pf-tile-opt__sub {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-tile-opt__check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--color-violet-500);
+}
+
+.pf-tile-empty {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  padding: 8px;
 }
 
 /* =============================================================

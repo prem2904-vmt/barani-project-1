@@ -1,51 +1,70 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { SlideOverComponent } from '../../../shared/components/slide-over/slide-over.component';
 import {
   WorkflowRendererComponent,
   splitByStorage
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 import { Patient } from '../../../shared/models/patient.model';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues } from '../../../shared/models/workflow.model';
 
 @Component({
   selector: 'pf-patient-register',
   standalone: true,
-  imports: [SlideOverComponent, WorkflowRendererComponent],
+  imports: [
+    WorkflowRendererComponent,
+    ScreenHeaderComponent,
+    TileComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-slide-over [open]="open" [title]="'Register patient'" (closed)="closed.emit()">
-      @if (config(); as cfg) {
-        <pf-workflow-renderer
-          [config]="cfg"
-          [context]="context()"
-          [submitting]="saving()"
-          [finishLabel]="'Register patient'"
-          (valuesChange)="values.set($event)"
-          (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
-      } @else {
-        <p class="text-sm text-slate-500">Loading workflow…</p>
-      }
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
 
-      <div footer>
-        <p class="text-xs text-slate-500">
-          Config: <code>patient_registration v{{ record()?.version }}</code>
-          · standard fields write to dedicated columns, custom fields into <code>attributes</code>.
-        </p>
-      </div>
-    </pf-slide-over>
+      <pf-screen-header
+        eyebrow="Reception · Registration"
+        title="Register patient"
+        subtitle="Standard fields save to dedicated columns; custom fields into the attributes JSON.">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </span>
+          Back
+        </pf-touch-btn>
+      </pf-screen-header>
+
+      <pf-tile tone="default" padding="lg" class="block">
+        @if (config(); as cfg) {
+          <pf-workflow-renderer
+            [config]="cfg"
+            [context]="context()"
+            [submitting]="saving()"
+            [finishLabel]="'Register patient'"
+            (valuesChange)="values.set($event)"
+            (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
+        } @else {
+          <p class="text-[13px]" style="color: var(--text-tertiary);">Loading workflow…</p>
+        }
+      </pf-tile>
+
+      <p class="text-[11px] font-mono mt-3 px-1" style="color: var(--text-muted);">
+        Config: patient_registration v{{ record()?.version ?? '—' }}
+      </p>
+    </section>
   `
 })
 export class PatientRegisterComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
-
-  @Input() open = false;
-  @Output() closed = new EventEmitter<void>();
-  @Output() registered = new EventEmitter<{ patient: Patient; createOrder: boolean }>();
+  private readonly router = inject(Router);
 
   private readonly _record = signal<WorkflowConfigRecord | null>(null);
   private readonly _config = signal<WorkflowConfig | null>(null);
@@ -84,6 +103,8 @@ export class PatientRegisterComponent implements OnInit {
     });
   }
 
+  back() { this.router.navigateByUrl('/reception'); }
+
   onComplete(values: WorkflowFormValues) {
     const cfg = this._config();
     if (!cfg || this._saving()) return;
@@ -105,7 +126,8 @@ export class PatientRegisterComponent implements OnInit {
         this._saving.set(false);
         this.toasts.success(`Registered ${patient.name}`);
         this.values.set({});
-        this.registered.emit({ patient, createOrder: false });
+        // After registration: navigate to the new patient's profile page.
+        this.router.navigate(['/reception/patients', patient.id]);
       },
       error: e => {
         this._saving.set(false);

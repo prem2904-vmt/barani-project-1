@@ -99,6 +99,7 @@ interface EnterResponse {
             [config]="config()!"
             [context]="context()"
             [resources]="resources()"
+            [initialValues]="initialValues()"
             [submitting]="saving()"
             [finishLabel]="'Submit result'"
             (valuesChange)="values.set($event)"
@@ -163,6 +164,23 @@ export class ResultEntryComponent implements OnInit {
   readonly resources = computed(() => ({
     testParameters: this.parameters()
   }));
+
+  /** Pre-fill workflow values from the existing result snapshot so edits start
+   *  from the current state instead of an empty form. Keys match the
+   *  workflow-renderer's `step::field` convention — the single entry step is
+   *  named "results", and each field's name equals the parameter name. */
+  readonly initialValues = computed<WorkflowFormValues>(() => {
+    const raw = this._ot()?.currentResult;
+    if (!raw) return {};
+    try {
+      const snap = JSON.parse(raw) as { values?: Record<string, unknown> };
+      const out: WorkflowFormValues = {};
+      for (const [k, v] of Object.entries(snap.values ?? {})) {
+        out[`results::${k}`] = v;
+      }
+      return out;
+    } catch { return {}; }
+  });
 
   readonly context = computed<WorkflowContext>(() => {
     const p = this._ot()?.subOrder?.order?.patient;
@@ -274,5 +292,13 @@ export class ResultEntryComponent implements OnInit {
     });
   }
 
-  back() { this.router.navigateByUrl('/lab/my-work'); }
+  back() {
+    const ot = this._ot();
+    const returnTo = this.route.snapshot.queryParamMap.get('returnTo');
+    if (returnTo === 'validate' && ot) {
+      this.router.navigate(['/pathologist/validate', ot.id]);
+      return;
+    }
+    this.router.navigateByUrl('/lab/my-work');
+  }
 }

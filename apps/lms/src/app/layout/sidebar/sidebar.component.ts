@@ -16,7 +16,7 @@ interface NavSection { title: string; links: NavLink[]; }
       <a routerLink="/admin" class="flex items-center gap-2 px-5 h-16"
          style="border-bottom: 1px solid rgba(255, 255, 255, 0.12);">
         <pf-logo-mark size="sm" variant="mono"></pf-logo-mark>
-        <span class="font-semibold tracking-tight">Prefrontal · LMS</span>
+        <span class="font-semibold tracking-tight">Prefrontal · Lab Management System</span>
       </a>
       <nav class="flex-1 overflow-y-auto py-4">
         @for (section of sections; track section.title) {

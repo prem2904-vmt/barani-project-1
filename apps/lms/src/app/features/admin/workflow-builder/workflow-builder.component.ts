@@ -17,11 +17,11 @@ import {
 } from '../../../shared/models/workflow.model';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
-import { FieldEditorComponent, FieldEditorResult } from './field-editor.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
 
 interface HistoryRow {
@@ -39,11 +39,11 @@ interface HistoryRow {
     FormsModule,
     DragDropModule,
     DatePipe,
-    FieldEditorComponent,
     ConditionBuilderComponent,
     WorkflowRendererComponent,
     ChipComponent,
     ScreenHeaderComponent,
+    SelectComponent,
     TileComponent,
     ToggleComponent,
     TouchButtonComponent
@@ -197,15 +197,11 @@ interface HistoryRow {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label class="pf-label">Type</label>
-                    <select class="pf-input"
-                            [ngModel]="step.type"
-                            [disabled]="step.isStandard"
-                            (ngModelChange)="builder.updateStep(step.id, { type: $event })">
-                      <option value="entry">Entry</option>
-                      <option value="summary">Summary</option>
-                      <option value="payment">Payment</option>
-                      <option value="confirmation">Confirmation</option>
-                    </select>
+                    <pf-select
+                      [options]="stepTypeSelectOptions"
+                      [value]="step.type"
+                      [disabled]="step.isStandard"
+                      (valueChange)="builder.updateStep(step.id, { type: $any($event) })"></pf-select>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Required</span>
@@ -320,14 +316,11 @@ interface HistoryRow {
 
                   <div class="grid grid-cols-[180px_1fr] gap-3 items-center mb-3">
                     <label class="text-[13px]" style="color: var(--text-secondary);">Default next step</label>
-                    <select class="pf-input"
-                            [ngModel]="step.afterStep.defaultNextStep ?? ''"
-                            (ngModelChange)="setDefaultNext(step.id, $event || null)">
-                      <option [ngValue]="''">— Finish workflow —</option>
-                      @for (s of otherSteps(step.id); track s.id) {
-                        <option [ngValue]="s.name">{{ s.title }}</option>
-                      }
-                    </select>
+                    <pf-select
+                      [options]="defaultNextOptions(step.id)"
+                      [value]="step.afterStep.defaultNextStep ?? ''"
+                      placeholder="— Finish workflow —"
+                      (valueChange)="setDefaultNext(step.id, $any($event) || null)"></pf-select>
                   </div>
 
                   <div class="space-y-2">
@@ -352,13 +345,10 @@ interface HistoryRow {
                         </pf-condition-builder>
                         <div class="mt-2 grid grid-cols-[100px_1fr] items-center gap-2">
                           <span class="text-[12px]" style="color: var(--text-tertiary);">Go to step</span>
-                          <select class="pf-input"
-                                  [ngModel]="route.goToStep"
-                                  (ngModelChange)="updateRouteTarget(step.id, i, $event)">
-                            @for (s of otherSteps(step.id); track s.id) {
-                              <option [ngValue]="s.name">{{ s.title }}</option>
-                            }
-                          </select>
+                          <pf-select
+                            [options]="goToStepOptions(step.id)"
+                            [value]="route.goToStep"
+                            (valueChange)="updateRouteTarget(step.id, i, $any($event))"></pf-select>
                         </div>
                       </div>
                     }
@@ -381,16 +371,6 @@ interface HistoryRow {
 
         </div>
       </section>
-
-      <!-- ──────── Field editor slide-over ──────── -->
-      <pf-field-editor
-        [open]="editorOpen()"
-        [mode]="editorMode()"
-        [initial]="editorInitial()"
-        [availableFields]="builder.allFields()"
-        (saved)="onFieldSaved($event)"
-        (cancelled)="closeEditor()">
-      </pf-field-editor>
 
       <!-- ──────── Undo toast ──────── -->
       @if (builder.lastDeletedField(); as del) {
@@ -698,15 +678,6 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
 
   readonly screenName = signal<string | null>(null);
 
-  // editor state
-  private readonly _editorOpen = signal(false);
-  private readonly _editorMode = signal<'create' | 'edit'>('create');
-  private readonly _editorStepId = signal<string | null>(null);
-  private readonly _editorInitial = signal<WorkflowField | null>(null);
-  readonly editorOpen = this._editorOpen.asReadonly();
-  readonly editorMode = this._editorMode.asReadonly();
-  readonly editorInitial = this._editorInitial.asReadonly();
-
   readonly saving = signal(false);
 
   // Preview + history state
@@ -734,6 +705,24 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
       available_slots: ['09:00', '09:30', '10:00'].map(s => ({ value: s, label: s }))
     }
   };
+
+  readonly stepTypeSelectOptions: PfSelectOption<string>[] = [
+    { value: 'entry', label: 'Entry' },
+    { value: 'summary', label: 'Summary' },
+    { value: 'payment', label: 'Payment' },
+    { value: 'confirmation', label: 'Confirmation' }
+  ];
+
+  defaultNextOptions(currentStepId: string): PfSelectOption<string>[] {
+    return [
+      { value: '', label: '— Finish workflow —' },
+      ...this.otherSteps(currentStepId).map(s => ({ value: s.name, label: s.title }))
+    ];
+  }
+
+  goToStepOptions(currentStepId: string): PfSelectOption<string>[] {
+    return this.otherSteps(currentStepId).map(s => ({ value: s.name, label: s.title }));
+  }
 
   private readonly _paramSub = effect(() => {
     // Route-driven load.
@@ -808,30 +797,15 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
 
   // Field ops
   openAddField(stepId: string) {
-    this._editorStepId.set(stepId);
-    this._editorMode.set('create');
-    this._editorInitial.set(null);
-    this._editorOpen.set(true);
+    const screen = this.screenName();
+    if (!screen) return;
+    this.router.navigate(['/admin/workflows', screen, 'steps', stepId, 'fields', 'new']);
   }
 
   openEditField(stepId: string, field: WorkflowField) {
-    this._editorStepId.set(stepId);
-    this._editorMode.set('edit');
-    this._editorInitial.set(field);
-    this._editorOpen.set(true);
-  }
-
-  closeEditor() { this._editorOpen.set(false); }
-
-  onFieldSaved(result: FieldEditorResult) {
-    const stepId = this._editorStepId();
-    if (!stepId) return;
-    if (result.mode === 'create') {
-      this.builder.addField(stepId, result.field);
-    } else if (result.field.id) {
-      this.builder.updateField(stepId, result.field.id, result.field);
-    }
-    this._editorOpen.set(false);
+    const screen = this.screenName();
+    if (!screen) return;
+    this.router.navigate(['/admin/workflows', screen, 'steps', stepId, 'fields', field.id, 'edit']);
   }
 
   deleteField(stepId: string, fieldId: string) {

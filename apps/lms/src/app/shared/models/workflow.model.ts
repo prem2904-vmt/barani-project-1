@@ -55,6 +55,7 @@ export type ValidationType =
 export interface FieldOption {
   value: string;
   label: string;
+  sublabel?: string;
 }
 
 export interface ValidationRule {

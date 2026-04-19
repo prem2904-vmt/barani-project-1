@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { Patient } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
@@ -9,7 +8,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [FormsModule, AvatarComponent],
+  imports: [AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wrap">
@@ -21,16 +20,16 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         </svg>
         <input type="text"
                [placeholder]="placeholder"
-               [(ngModel)]="query"
-               (input)="onInput()"
+               [value]="query()"
+               (input)="onInput($event)"
                (focus)="onFocus()"
                (blur)="onBlur()"
                (keydown.escape)="close()"
                (keydown.arrowdown)="nudge($event, 1)"
                (keydown.arrowup)="nudge($event, -1)"
                (keydown.enter)="pickHighlighted($event)" />
-        @if (query.length > 0) {
-          <button type="button" class="field-clear" aria-label="Clear" (click)="clear()">
+        @if (query().length > 0) {
+          <button type="button" class="field-clear" aria-label="Clear" (mousedown)="clear(); $event.preventDefault()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 6 6 18"/>
               <path d="m6 6 12 12"/>
@@ -58,7 +57,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
             @case ('loading') {
               <div class="panel-state">
                 <span class="panel-spinner" aria-hidden="true"></span>
-                <span>Searching for "<strong>{{ query }}</strong>"…</span>
+                <span>Searching for "<strong>{{ query() }}</strong>"…</span>
               </div>
             }
             @case ('empty') {
@@ -66,7 +65,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
                 </svg>
-                <span>No patient matches "<strong>{{ query }}</strong>"</span>
+                <span>No patient matches "<strong>{{ query() }}</strong>"</span>
               </div>
             }
             @case ('results') {
@@ -183,7 +182,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       left: 0;
       right: 0;
       top: calc(100% + 8px);
-      z-index: 30;
+      z-index: 50;
       max-height: 22rem;
       overflow-y: auto;
       background: var(--bg-card-solid);
@@ -281,7 +280,7 @@ export class PatientSearchComponent {
   @Input() placeholder = 'Search patient by name, phone, or ABHA';
   @Output() picked = new EventEmitter<Patient>();
 
-  protected query = '';
+  protected readonly query = signal('');
   protected readonly _focused = signal(false);
   protected readonly _highlight = signal<number>(-1);
 
@@ -291,7 +290,7 @@ export class PatientSearchComponent {
 
   /** Compose the current search state for the dropdown body. */
   readonly state = computed<SearchState>(() => {
-    const q = this.query.trim();
+    const q = this.query().trim();
     if (q.length === 0) return 'idle';
     if (q.length < 2) return 'hint';
     if (this._loading()) return 'loading';
@@ -299,7 +298,7 @@ export class PatientSearchComponent {
     return 'results';
   });
 
-  readonly open = computed(() => this._focused() && this.state() !== 'idle');
+  readonly open = computed(() => this.state() !== 'idle');
 
   private _timer?: ReturnType<typeof setTimeout>;
   private _blurTimer?: ReturnType<typeof setTimeout>;
@@ -310,13 +309,14 @@ export class PatientSearchComponent {
   }
 
   onBlur() {
-    // Delay closing so a mousedown on a row still fires.
     this._blurTimer = setTimeout(() => this._focused.set(false), 180);
   }
 
-  onInput() {
+  onInput(ev: Event) {
+    const value = (ev.target as HTMLInputElement).value;
+    this.query.set(value);
     clearTimeout(this._timer);
-    const q = this.query.trim();
+    const q = value.trim();
     if (q.length < 2) {
       this._results.set([]);
       this._loading.set(false);
@@ -343,18 +343,20 @@ export class PatientSearchComponent {
   }
 
   clear() {
-    this.query = '';
+    this.query.set('');
     this._results.set([]);
     this._loading.set(false);
     this._highlight.set(-1);
   }
 
   close() {
+    this.query.set('');
+    this._results.set([]);
     this._focused.set(false);
   }
 
   pick(p: Patient) {
-    this.query = p.name;
+    this.query.set(p.name);
     this._results.set([]);
     this._focused.set(false);
     this.picked.emit(p);

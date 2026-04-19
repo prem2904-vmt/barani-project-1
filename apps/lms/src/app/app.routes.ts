@@ -20,8 +20,28 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
       },
       {
+        path: 'admin/users/invite',
+        loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
+      },
+      {
+        path: 'admin/roles/new',
+        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+      },
+      {
+        path: 'admin/roles/:id/edit',
+        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+      },
+      {
         path: 'admin/tests',
         loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
+      },
+      {
+        path: 'admin/tests/new',
+        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
+      },
+      {
+        path: 'admin/tests/:id/edit',
+        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/branches',
@@ -48,6 +68,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
+        path: 'admin/workflows/:screen/steps/:stepId/fields/new',
+        loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
+      },
+      {
+        path: 'admin/workflows/:screen/steps/:stepId/fields/:fieldId/edit',
+        loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
+      },
+      {
         path: 'setup',
         loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
       },
@@ -56,6 +84,18 @@ export const appRoutes: Route[] = [
       {
         path: 'reception',
         loadComponent: () => import('./features/reception/reception-landing/reception-landing.component').then(m => m.ReceptionLandingComponent)
+      },
+      {
+        path: 'reception/patients/new',
+        loadComponent: () => import('./features/reception/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
+      },
+      {
+        path: 'reception/patients/:id',
+        loadComponent: () => import('./features/reception/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
+      },
+      {
+        path: 'reception/appointments/new',
+        loadComponent: () => import('./features/reception/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
       },
       {
         path: 'reception/order-create',
@@ -96,6 +136,10 @@ export const appRoutes: Route[] = [
       {
         path: 'pathologist',
         loadComponent: () => import('./features/pathologist/pending-validation/pending-validation.component').then(m => m.PendingValidationComponent)
+      },
+      {
+        path: 'pathologist/validate/:id',
+        loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 
       // Reports

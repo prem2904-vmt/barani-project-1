@@ -6,7 +6,6 @@ import { ToastService } from '../../../core/services/toast.service';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import {
   WorkflowRendererComponent,
-  WorkflowStepCompleteEvent,
   splitByStep
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 import { Bill } from '../../../shared/models/bill.model';
@@ -17,83 +16,174 @@ import {
   WorkflowContext,
   WorkflowFormValues
 } from '../../../shared/models/workflow.model';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 @Component({
   selector: 'pf-billing',
   standalone: true,
-  imports: [CurrencyInrPipe, WorkflowRendererComponent],
+  imports: [
+    CurrencyInrPipe,
+    WorkflowRendererComponent,
+    ScreenHeaderComponent,
+    TileComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="p-8 max-w-6xl pb-12">
-      <header class="mb-4">
-        <button class="text-xs text-slate-500 hover:text-slate-900 mb-1" (click)="back()">← Back</button>
-        <h1 class="text-2xl font-semibold">Billing</h1>
-        @if (order()) { <p class="text-sm text-slate-600">Order for <strong>{{ order()!.patient?.name }}</strong></p> }
-      </header>
+    <section class="px-4 md:px-8 pt-6 pb-12 max-w-6xl mx-auto">
+      <pf-screen-header
+        eyebrow="Reception · Billing"
+        title="Collect payment"
+        [subtitle]="order()?.patient?.name ? 'Order for ' + order()!.patient!.name : 'Order billing'">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </span>
+          Back
+        </pf-touch-btn>
+      </pf-screen-header>
 
       @if (bill(); as b) {
-        <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
-          <div class="pf-card p-0 overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-50">
-                <tr class="text-left">
-                  <th class="px-4 py-2 font-medium">Test</th>
-                  <th class="px-4 py-2 font-medium text-right">Price</th>
-                  <th class="px-4 py-2 font-medium text-right">Tax</th>
-                  <th class="px-4 py-2 font-medium text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (item of b.items; track item.id) {
-                  <tr class="border-t border-slate-100">
-                    <td class="px-4 py-2">{{ item.testName }}</td>
-                    <td class="px-4 py-2 text-right">{{ item.price | inr }}</td>
-                    <td class="px-4 py-2 text-right text-slate-500">
-                      {{ (item.cgstAmount + item.sgstAmount + item.igstAmount) | inr }}
-                    </td>
-                    <td class="px-4 py-2 text-right font-medium">{{ item.total | inr }}</td>
-                  </tr>
-                }
-              </tbody>
-              <tfoot class="bg-slate-50">
-                <tr><td colspan="2" class="px-4 py-2 text-right text-slate-500">Sub-total</td>
-                    <td colspan="2" class="px-4 py-2 text-right">{{ b.subTotal | inr }}</td></tr>
-                @if (b.totalDiscount) {
-                  <tr><td colspan="2" class="px-4 py-2 text-right text-slate-500">Discount</td>
-                      <td colspan="2" class="px-4 py-2 text-right text-emerald-600">- {{ b.totalDiscount | inr }}</td></tr>
-                }
-                <tr><td colspan="2" class="px-4 py-2 text-right text-slate-500">GST</td>
-                    <td colspan="2" class="px-4 py-2 text-right">{{ b.totalTax | inr }}</td></tr>
-                <tr class="border-t border-slate-200">
-                  <td colspan="2" class="px-4 py-3 text-right font-semibold">Payable</td>
-                  <td colspan="2" class="px-4 py-3 text-right text-lg font-semibold">{{ b.totalPayable | inr }}</td></tr>
-              </tfoot>
-            </table>
-          </div>
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">
+          <pf-tile tone="default" padding="lg">
+            <p class="pf-bill-eyebrow">Order summary</p>
+            <ul class="pf-bill-list">
+              @for (item of b.items; track item.id) {
+                <li class="pf-bill-row">
+                  <div class="min-w-0 flex-1">
+                    <p class="pf-bill-name">{{ item.testName }}</p>
+                    @let tax = item.cgstAmount + item.sgstAmount + item.igstAmount;
+                    @if (tax > 0) {
+                      <p class="pf-bill-sub">incl. tax {{ tax | inr }}</p>
+                    }
+                  </div>
+                  <p class="pf-bill-amount">{{ item.total | inr }}</p>
+                </li>
+              }
+            </ul>
 
-          <aside class="pf-card">
+            <div class="pf-bill-totals">
+              <div class="pf-bill-line">
+                <span class="pf-bill-line-label">Sub-total</span>
+                <span class="pf-bill-line-value">{{ b.subTotal | inr }}</span>
+              </div>
+              @if (b.totalDiscount) {
+                <div class="pf-bill-line">
+                  <span class="pf-bill-line-label">Discount</span>
+                  <span class="pf-bill-line-value" style="color: var(--color-success);">−{{ b.totalDiscount | inr }}</span>
+                </div>
+              }
+              <div class="pf-bill-line">
+                <span class="pf-bill-line-label">GST</span>
+                <span class="pf-bill-line-value">{{ b.totalTax | inr }}</span>
+              </div>
+              <div class="pf-bill-line pf-bill-line--total">
+                <span class="pf-bill-line-label">Payable</span>
+                <span class="pf-bill-line-value">{{ b.totalPayable | inr }}</span>
+              </div>
+            </div>
+          </pf-tile>
+
+          <pf-tile tone="default" padding="lg">
             @if (config(); as cfg) {
               <pf-workflow-renderer
                 [config]="cfg"
                 [context]="context()"
                 [submitting]="saving()"
-                [finishLabel]="'Collect payment →'"
+                [finishLabel]="'Collect ' + (b.totalPayable | inr)"
                 (valuesChange)="values.set($event)"
-                (stepComplete)="onStepComplete($event)"
                 (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
             } @else {
-              <p class="text-sm text-slate-500">Loading workflow…</p>
+              <p class="text-[13px]" style="color: var(--text-tertiary);">Loading…</p>
             }
-            <p class="text-[11px] text-slate-400 mt-2">
-              Config: <code>billing v{{ record()?.version }}</code>
-            </p>
-          </aside>
+          </pf-tile>
         </div>
       } @else {
-        <div class="pf-card text-sm text-slate-500">Generating bill…</div>
+        <pf-tile tone="default" padding="xl">
+          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">Generating bill…</p>
+        </pf-tile>
       }
     </section>
-  `
+  `,
+  styles: [`
+    .pf-bill-eyebrow {
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0 0 10px;
+    }
+    .pf-bill-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pf-bill-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-muted);
+    }
+    .pf-bill-row:last-child { border-bottom: 0; }
+    .pf-bill-name {
+      margin: 0;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .pf-bill-sub {
+      margin: 2px 0 0;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-tertiary);
+    }
+    .pf-bill-amount {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    .pf-bill-totals {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pf-bill-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .pf-bill-line-label {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+    .pf-bill-line-value {
+      font-size: 13.5px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+    .pf-bill-line--total {
+      margin-top: 6px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-muted);
+    }
+    .pf-bill-line--total .pf-bill-line-label { font-weight: 600; color: var(--text-primary); }
+    .pf-bill-line--total .pf-bill-line-value { font-weight: 700; font-size: 18px; }
+  `]
 })
 export class BillingComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -139,40 +229,40 @@ export class BillingComponent implements OnInit {
     });
   }
 
-  onStepComplete(ev: WorkflowStepCompleteEvent): void {
-    if (ev.step.name !== 'discount') return;
-    const b = this._bill();
-    if (!b) return;
-    const bySteps = splitByStep(ev.values);
-    const pct = Number(bySteps['discount']?.['discount_pct']) || 0;
-    if (pct <= 0) return;
-    const amount = Math.round((b.subTotal * pct / 100) * 100) / 100;
-    this.api.post<Bill>(`/api/billing/${b.id}/discount`, {
-      amount,
-      reason: (bySteps['discount']?.['discount_reason'] as string) ?? 'Reception discount'
-    }).subscribe({
-      next: updated => { this._bill.set(updated); this.toasts.success(`Applied ${pct}% discount`); }
-    });
-  }
-
   onComplete(values: WorkflowFormValues): void {
     const b = this._bill();
     if (!b || this._saving()) return;
-    const bySteps = splitByStep(values);
-    const mode = String(bySteps['payment']?.['payment_mode'] ?? 'cash').toLowerCase();
-    const referenceNo = bySteps['payment']?.['reference_no'] as string | undefined;
+
+    const step = splitByStep(values)['payment'] ?? {};
+    const mode = String(step['payment_mode'] ?? 'Cash').toLowerCase();
+    const referenceNo = step['reference_no'] as string | undefined;
+    const pct = Number(step['discount_pct']) || 0;
+    const reason = (step['discount_reason'] as string) ?? 'Reception discount';
 
     this._saving.set(true);
-    this.api.post<Bill>(`/api/billing/${b.id}/payment`, {
-      amount: b.totalPayable, mode, referenceNo: referenceNo || undefined
-    }).subscribe({
-      next: () => {
-        this._saving.set(false);
-        this.toasts.success('Payment collected');
-        this.router.navigate(['/reception/post-payment'], { queryParams: { orderId: b.orderId } });
-      },
-      error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
-    });
+
+    const payAfterDiscount = (bill: Bill) => {
+      this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+        amount: bill.totalPayable, mode, referenceNo: referenceNo || undefined
+      }).subscribe({
+        next: () => {
+          this._saving.set(false);
+          this.toasts.success('Payment collected');
+          this.router.navigate(['/reception/post-payment'], { queryParams: { orderId: bill.orderId } });
+        },
+        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
+      });
+    };
+
+    if (pct > 0) {
+      const amount = Math.round((b.subTotal * pct / 100) * 100) / 100;
+      this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount, reason }).subscribe({
+        next: updated => { this._bill.set(updated); payAfterDiscount(updated); },
+        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Could not apply discount'); }
+      });
+    } else {
+      payAfterDiscount(b);
+    }
   }
 
   back() { this.router.navigateByUrl('/reception'); }

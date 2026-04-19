@@ -1,10 +1,10 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { SlideOverComponent } from '../../../shared/components/slide-over/slide-over.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -31,7 +31,6 @@ interface ResultSnapshot {
   imports: [
     FormsModule,
     DatePipe,
-    SlideOverComponent,
     TatIndicatorComponent,
     AvatarComponent,
     ChipComponent,
@@ -149,84 +148,6 @@ interface ResultSnapshot {
       }
     </section>
 
-    <pf-slide-over [open]="validateOpen()" [title]="'Validate result'" (closed)="validateOpen.set(false)">
-      @if (selected(); as t) {
-        <div class="space-y-4">
-          <div>
-            <p class="font-semibold text-[16px]" style="color: var(--text-primary);">{{ t.test?.name }}</p>
-            <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-              {{ t.subOrder?.order?.patient?.name }} · {{ t.test?.department?.name }}
-            </p>
-          </div>
-
-          @if (snapshot()?.flags?.critical) {
-            <div class="rounded-xl p-3 text-[12px] flex items-start gap-2"
-                 style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #fca5a5;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5">
-                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-                <path d="M12 9v4"/>
-                <path d="M12 17h.01"/>
-              </svg>
-              <span>Flagged as critical. Validation sends this to the referring doctor.</span>
-            </div>
-          }
-
-          <div class="rounded-2xl p-4"
-               style="background: var(--glass-bg); border: 1px solid var(--glass-border);">
-            <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-               style="color: var(--text-muted);">Values</p>
-            @if (valueRows().length === 0) {
-              <p class="text-[12px]" style="color: var(--text-tertiary);">No values recorded.</p>
-            } @else {
-              <table class="w-full text-[13px]">
-                <thead class="text-[11px] font-mono uppercase tracking-wider text-left"
-                       style="color: var(--text-muted);">
-                  <tr>
-                    <th class="pb-2 font-normal">Parameter</th>
-                    <th class="pb-2 font-normal">Value</th>
-                    <th class="pb-2 font-normal">Flag</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (r of valueRows(); track r.name) {
-                    <tr style="border-top: 1px solid var(--border-muted);">
-                      <td class="py-2" style="color: var(--text-secondary);">{{ r.title }}</td>
-                      <td class="py-2" style="color: var(--text-primary);">
-                        <span class="font-medium">{{ r.value }}</span>
-                        <span class="ml-1" style="color: var(--text-muted);">{{ r.unit ?? '' }}</span>
-                      </td>
-                      <td class="py-2">
-                        <span class="pf-flag" [class]="'pf-flag-' + r.flag">
-                          {{ r.flag === 'critical' ? 'CRITICAL' : r.flag === 'abnormal' ? 'abnormal' : 'normal' }}
-                        </span>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          </div>
-
-          <div>
-            <label class="pf-label">Clinical comment (optional)</label>
-            <textarea class="pf-input min-h-[88px]"
-                      [value]="comment()"
-                      (input)="onComment($event)"
-                      placeholder="Notes for the report or follow-up team…"></textarea>
-          </div>
-        </div>
-      }
-
-      @if (selected(); as t) {
-        <ng-container footer>
-          <div class="flex justify-end gap-2 w-full">
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="validateOpen.set(false)">Close</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="secondary" (pressed)="openReject(t)">Reject</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" (pressed)="validate(t)">Validate</pf-touch-btn>
-          </div>
-        </ng-container>
-      }
-    </pf-slide-over>
   `,
   styles: [`
     .pf-urg-dot {
@@ -248,23 +169,13 @@ interface ResultSnapshot {
       box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
     }
 
-    .pf-flag {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-    .pf-flag-normal   { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
-    .pf-flag-abnormal { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
-    .pf-flag-critical { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
   `]
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly router = inject(Router);
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'mine', label: 'My queue' },
@@ -300,45 +211,6 @@ export class PendingValidationComponent implements OnInit {
     ];
   });
 
-  // validate slide-over
-  protected readonly validateOpen = signal(false);
-  private readonly _selected = signal<OrderTest | null>(null);
-  readonly selected = this._selected.asReadonly();
-  private readonly _comment = signal('');
-  readonly comment = this._comment.asReadonly();
-
-  readonly snapshot = computed<ResultSnapshot | null>(() => {
-    const raw = this._selected()?.currentResult;
-    if (!raw) return null;
-    try { return JSON.parse(raw) as ResultSnapshot; } catch { return null; }
-  });
-
-  readonly valueRows = computed(() => {
-    const t = this._selected();
-    const snap = this.snapshot();
-    if (!t?.test?.parameters || !snap?.values) return [];
-
-    let params: Array<{ name: string; title: string; unit?: string; criticalLow?: number; criticalHigh?: number; referenceRanges?: Array<{ segment: string; min: number; max: number }> }> = [];
-    try {
-      const blob = JSON.parse(t.test.parameters);
-      params = blob.parameters ?? [];
-    } catch { return []; }
-
-    return params.map(p => {
-      const v = snap.values![p.name];
-      const n = Number(v);
-      let flag: 'normal' | 'abnormal' | 'critical' = 'normal';
-      if (!Number.isNaN(n)) {
-        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-        else {
-          const r = (p.referenceRanges ?? [])[0];
-          if (r && (n < r.min || n > r.max)) flag = 'abnormal';
-        }
-      }
-      return { name: p.name, title: p.title, value: v ?? '—', unit: p.unit, flag };
-    });
-  });
-
   isCritical(t: OrderTest): boolean {
     if (!t.currentResult) return false;
     try {
@@ -358,22 +230,8 @@ export class PendingValidationComponent implements OnInit {
     });
   }
 
-  onComment(e: Event) { this._comment.set((e.target as HTMLTextAreaElement).value); }
-
   openValidate(t: OrderTest) {
-    this._selected.set(t);
-    this._comment.set('');
-    this.validateOpen.set(true);
-  }
-
-  validate(t: OrderTest) {
-    this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: this._comment() || null }).subscribe({
-      next: () => {
-        this.toasts.success('Validated');
-        this.validateOpen.set(false);
-        this._rows.update(l => l.filter(x => x.id !== t.id));
-      }
-    });
+    this.router.navigate(['/pathologist/validate', t.id]);
   }
 
   async openReject(t: OrderTest) {
@@ -387,10 +245,9 @@ export class PendingValidationComponent implements OnInit {
       confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).subscribe({
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason }).subscribe({
       next: () => {
         this.toasts.success('Rejected — lab tech notified');
-        this.validateOpen.set(false);
         this._rows.update(l => l.filter(x => x.id !== t.id));
       }
     });
