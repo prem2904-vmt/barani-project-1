@@ -2,7 +2,13 @@
   "name": "@org/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build": "nx build lms && rm -rf public && cp -r dist/apps/lms/browser public",
+    "start": "nx serve lms"
+  },
+  "engines": {
+    "node": "22.x"
+  },
   "private": true,
   "devDependencies": {
     "@angular-devkit/core": "~21.2.0",
