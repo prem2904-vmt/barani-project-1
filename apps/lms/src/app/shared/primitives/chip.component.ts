@@ -48,6 +48,7 @@ export type ChipSize = 'sm' | 'md';
 
     button:hover:not(:disabled) { filter: brightness(1.1); }
 
+
     /* Selected state always wins */
     .is-selected.t-default,
     .is-selected {

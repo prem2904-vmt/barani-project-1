@@ -15,8 +15,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       <div class="relative flex items-center gap-2 p-1.5 pl-3 sm:pl-4 rounded-full backdrop-blur-2xl border"
            style="background: var(--header-bg); border-color: var(--header-border);">
 
-        <!-- Brand lockup — PF glyph · ECG pulse · PREFRONTAL · Lab Management System
-             (matches the resident-fe home navbar treatment). -->
+        <!-- Brand lockup — PF glyph · ECG pulse · PREFRONTAL · Lab Management System -->
         <a routerLink="/admin" class="pf-brand-lockup press" aria-label="Prefrontal · Lab Management System · Home">
           <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
@@ -265,14 +264,15 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
     .pf-brand-text {
       display: none;
       flex-direction: column;
-      align-items: center;
-      line-height: 1.05;
-      margin-left: -4px;
+      align-items: flex-start;
+      line-height: 1;
+      gap: 3px;
+      margin-left: -2px;
     }
     .pf-brand-name {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       background: linear-gradient(135deg, #8b5cf6, #ec4899);
       -webkit-background-clip: text;
       background-clip: text;
@@ -281,20 +281,15 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       animation: pf-brand-name-beat 2.5s ease-in-out infinite;
     }
     .pf-brand-sub {
-      margin-top: 3px;
-      font-size: 9px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      text-align: center;
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
       white-space: nowrap;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      color: transparent;
-      animation: pf-brand-sub-beat 2.5s ease-in-out infinite;
+      color: var(--text-muted);
+    }
+    :root.light .pf-brand-sub {
+      color: #7c3aed;
+      opacity: 0.7;
     }
 
     /* Desktop: show ECG pulse + wordmark block. */
@@ -323,17 +318,9 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       45%           { opacity: 1;   transform: scale(1.03); filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.55)); }
       55%           { opacity: 1;   transform: scale(1.01); filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.35)); }
     }
-    /* Same cadence as the wordmark so both lines beat together as one heartbeat. */
-    @keyframes pf-brand-sub-beat {
-      0%, 35%, 100% { opacity: 0.85; transform: scale(1);    filter: none; }
-      45%           { opacity: 1;    transform: scale(1.04); filter: drop-shadow(0 0 5px rgba(236, 72, 153, 0.5)); }
-      55%           { opacity: 1;    transform: scale(1.01); filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.35)); }
-    }
 
     @media (prefers-reduced-motion: reduce) {
-      .pf-brand-pulse-path,
-      .pf-brand-name,
-      .pf-brand-sub { animation: none; }
+      .pf-brand-pulse-path, .pf-brand-name { animation: none; }
       .pf-brand-pulse-path { stroke-dashoffset: 0; opacity: 1; }
     }
 
