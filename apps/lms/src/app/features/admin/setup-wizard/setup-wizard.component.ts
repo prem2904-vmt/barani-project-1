@@ -5,7 +5,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
-import { Branch, Department, Tenant } from '../../../shared/models/tenant.model';
+import { Branch, Department, SubBranch, Tenant } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
@@ -21,6 +21,12 @@ interface OrgDraft {
   logoUrl: string;
 }
 
+interface SubBranchDraft {
+  name: string;
+  code: string;
+  type: string;
+}
+
 interface BranchDraft {
   name: string;
   code: string;
@@ -29,6 +35,7 @@ interface BranchDraft {
   state: string;
   pincode: string;
   hasPfBox: boolean;
+  subBranches: SubBranchDraft[];
 }
 
 interface DepartmentDraft {
@@ -52,7 +59,7 @@ interface DepartmentDraft {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
+    <section class="px-4 md:px-8 pt-6 pb-10">
 
       <pf-screen-header
         eyebrow="First-time setup"
@@ -217,6 +224,44 @@ interface DepartmentDraft {
                                [checked]="b.hasPfBox"
                                (checkedChange)="updateBranch(i, { hasPfBox: $event })">
                     </pf-toggle>
+                  </div>
+
+                  <!-- Sub-branches under this branch -->
+                  <div class="sub-branches-section">
+                    @if (b.subBranches.length > 0) {
+                      <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
+                         style="color: var(--text-muted);">Sub-branches</p>
+                      <div class="space-y-1.5 mb-2">
+                        @for (sb of b.subBranches; let sbi = $index; track sbi) {
+                          <div class="sub-branch-row">
+                            <span class="sub-branch-arrow">→</span>
+                            <input type="text" class="pf-input flex-1 min-w-0" placeholder="Sub-branch name"
+                                   [ngModel]="sb.name"
+                                   (ngModelChange)="updateSubBranch(i, sbi, { name: $event })" />
+                            <input type="text" class="pf-input w-28 uppercase" placeholder="CODE"
+                                   [ngModel]="sb.code"
+                                   (ngModelChange)="updateSubBranch(i, sbi, { code: $event.toUpperCase() })" />
+                            <select class="pf-input w-36"
+                                    [ngModel]="sb.type"
+                                    (ngModelChange)="updateSubBranch(i, sbi, { type: $event })">
+                              <option value="lab">Lab</option>
+                              <option value="collection-center">Collection</option>
+                              <option value="satellite">Satellite</option>
+                            </select>
+                            <button type="button" class="row-remove"
+                                    (click)="removeSubBranch(i, sbi)" aria-label="Remove sub-branch">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 6 6 18"/>
+                                <path d="m6 6 12 12"/>
+                              </svg>
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                    <button type="button" class="add-sub-link" (click)="addSubBranch(i)">
+                      + Add sub-branch
+                    </button>
                   </div>
                 </div>
               }
@@ -417,6 +462,34 @@ interface DepartmentDraft {
       opacity: 0.35;
       cursor: not-allowed;
     }
+
+    .sub-branches-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border-muted);
+      padding-left: 18px;
+    }
+    .sub-branch-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sub-branch-arrow {
+      color: #ec4899;
+      font-weight: 600;
+      font-size: 14px;
+      margin-right: 2px;
+    }
+    .add-sub-link {
+      background: none;
+      border: none;
+      color: #ec4899;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .add-sub-link:hover { text-decoration: underline; }
   `]
 })
 export class SetupWizardComponent {
@@ -443,7 +516,7 @@ export class SetupWizardComponent {
 
   private readonly _step = signal(0);
   private readonly _org = signal<OrgDraft>({ name: '', type: 'independent', vendorCode: '', gstNumber: '', logoUrl: '' });
-  private readonly _branches = signal<BranchDraft[]>([{ name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false }]);
+  private readonly _branches = signal<BranchDraft[]>([{ name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false, subBranches: [] }]);
   private readonly _departments = signal<DepartmentDraft[]>([]);
   private readonly _saving = signal(false);
 
@@ -465,7 +538,12 @@ export class SetupWizardComponent {
       return o.name.trim().length > 0 && o.vendorCode.trim().length >= 2;
     }
     if (s === 1) {
-      return this._branches().every(b => b.name.trim() && b.code.trim()) && this._branches().length > 0;
+      const branches = this._branches();
+      if (branches.length === 0) return false;
+      return branches.every(b =>
+        b.name.trim() && b.code.trim() &&
+        b.subBranches.every(sb => sb.name.trim() && sb.code.trim())
+      );
     }
     if (s === 2) {
       return this._departments().every(d => d.name.trim() && d.code.trim()) && this._departments().length > 0;
@@ -477,7 +555,7 @@ export class SetupWizardComponent {
   updateVendorCode(v: string) { this.updateOrg({ vendorCode: (v ?? '').toUpperCase().slice(0, 4) }); }
 
   addBranch() {
-    this._branches.update(list => [...list, { name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false }]);
+    this._branches.update(list => [...list, { name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false, subBranches: [] }]);
   }
   updateBranch(i: number, patch: Partial<BranchDraft>) {
     this._branches.update(list => list.map((b, idx) => idx === i ? { ...b, ...patch } : b));
@@ -485,6 +563,28 @@ export class SetupWizardComponent {
   removeBranch(i: number) {
     if (this._branches().length <= 1) return;
     this._branches.update(list => list.filter((_, idx) => idx !== i));
+  }
+
+  addSubBranch(branchIndex: number) {
+    this._branches.update(list => list.map((b, idx) =>
+      idx === branchIndex
+        ? { ...b, subBranches: [...b.subBranches, { name: '', code: '', type: 'lab' }] }
+        : b
+    ));
+  }
+  updateSubBranch(branchIndex: number, subIndex: number, patch: Partial<SubBranchDraft>) {
+    this._branches.update(list => list.map((b, idx) =>
+      idx === branchIndex
+        ? { ...b, subBranches: b.subBranches.map((sb, si) => si === subIndex ? { ...sb, ...patch } : sb) }
+        : b
+    ));
+  }
+  removeSubBranch(branchIndex: number, subIndex: number) {
+    this._branches.update(list => list.map((b, idx) =>
+      idx === branchIndex
+        ? { ...b, subBranches: b.subBranches.filter((_, si) => si !== subIndex) }
+        : b
+    ));
   }
 
   addDepartment() {
@@ -520,8 +620,15 @@ export class SetupWizardComponent {
 
       const createdBranches: Branch[] = [];
       for (const b of this._branches()) {
-        const saved = await firstValueOfApi(this.api.post<Branch>('/api/tenants/branches', b));
+        const { subBranches, ...branchBody } = b;
+        const saved = await firstValueOfApi(this.api.post<Branch>('/api/tenants/branches', branchBody));
         createdBranches.push(saved);
+        for (const sb of subBranches) {
+          await firstValueOfApi(this.api.post<SubBranch>(
+            `/api/tenants/branches/${saved.id}/sub-branches`,
+            { name: sb.name, code: sb.code, type: sb.type }
+          ));
+        }
       }
 
       for (const d of this._departments()) {

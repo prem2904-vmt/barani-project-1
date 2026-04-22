@@ -35,6 +35,27 @@ export interface Branch {
   timezone: string;
   isActive: boolean;
   createdAt: string;
+  subBranches?: SubBranch[];
+  departments?: Department[];
+}
+
+export interface SubBranch {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  name: string;
+  code: string;
+  type: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  stateCode?: string;
+  phone?: string;
+  email?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  departments?: Department[];
 }
 
 export interface Region {
@@ -50,6 +71,7 @@ export interface Department {
   id: string;
   tenantId: string;
   branchId?: string;
+  subBranchId?: string;
   name: string;
   code: string;
   isActive: boolean;

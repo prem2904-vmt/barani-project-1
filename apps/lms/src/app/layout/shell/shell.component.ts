@@ -19,7 +19,7 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
     <div class="shell-stack">
       <pf-top-strip></pf-top-strip>
 
-      <main class="flex-1 relative pb-tab-nav">
+      <main class="shell-main relative">
         <router-outlet></router-outlet>
       </main>
 
@@ -75,9 +75,22 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
     .shell-stack {
       position: relative;
       z-index: 1;
-      min-height: 100vh;
+      height: 100%;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* main holds the routed feature; it does NOT scroll — the feature host does.
+     * Bottom padding leaves room for the floating bottom-nav pill on mobile + tablet. */
+    .shell-main {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      padding-bottom: var(--tab-nav-total-height, 0px);
+    }
+    @media (min-width: 1280px) {
+      .shell-main { padding-bottom: 0; }
     }
 
     /* Toast */

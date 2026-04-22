@@ -40,7 +40,7 @@ interface Tile {
   imports: [RouterLink, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-5 md:px-8 pt-5 pb-10 max-w-6xl mx-auto">
+    <section class="px-5 md:px-8 pt-5 pb-10">
 
       <!-- Eyebrow + greeting -->
       <header class="mb-6">
@@ -89,7 +89,7 @@ interface Tile {
       <h2 class="text-[11px] font-mono uppercase tracking-[0.14em] mb-3"
           style="color: var(--text-muted);">Configuration</h2>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
         @for (tile of tiles; track tile.title) {
           <a [routerLink]="tile.href" class="pf-card group press block">
             <div class="flex items-start gap-4">

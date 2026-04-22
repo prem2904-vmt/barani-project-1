@@ -17,6 +17,20 @@ type Level = 'urgent' | 'high' | 'normal';
 type Bucket = { level: Level; items: Enriched[] };
 type Enriched = OrderTest & { _level: Level; _remainingMin: number };
 
+interface CounterSpec {
+  id: 'pending' | 'critical' | 'in_progress' | 'done' | 'all';
+  label: string;
+  tone: 'amber' | 'rose' | 'violet' | 'emerald' | 'default';
+}
+
+const COUNTERS: CounterSpec[] = [
+  { id: 'pending',     label: 'Pending',     tone: 'amber' },
+  { id: 'critical',    label: 'Critical',    tone: 'rose' },
+  { id: 'in_progress', label: 'In progress', tone: 'violet' },
+  { id: 'done',        label: 'Done today',  tone: 'emerald' },
+  { id: 'all',         label: 'All',         tone: 'default' }
+];
+
 @Component({
   selector: 'pf-my-work',
   standalone: true,
@@ -26,10 +40,10 @@ type Enriched = OrderTest & { _level: Level; _remainingMin: number };
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-5 md:px-8 pt-5 pb-10 max-w-6xl mx-auto">
+    <section class="px-5 md:px-8 lg:px-10 pt-5 pb-10">
 
       <pf-screen-header eyebrow="Lab workbench"
-                        subtitle="Your queue, the unassigned pool, and rejected samples.">
+                        subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
         <div actions>
           <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()">
@@ -44,6 +58,48 @@ type Enriched = OrderTest & { _level: Level; _remainingMin: number };
         </div>
       </pf-screen-header>
 
+      <!-- Big scan bar -->
+      <div class="pf-scan-row">
+        <div class="pf-scan">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
+            <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
+          </svg>
+          <input type="text"
+                 [value]="scan()"
+                 (input)="setScan(asInput($event))"
+                 (keydown.enter)="scanSubmit()"
+                 placeholder="Scan barcode or type PF-XXXX-XXXXX…"
+                 class="pf-scan__input"/>
+          <span class="pf-scan__live">
+            <span class="pf-scan__dot"></span>
+            SCANNER · READY
+          </span>
+        </div>
+        <pf-touch-btn variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+          Open
+          <span icon-right>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14m-5-6 6 6-6 6"/>
+            </svg>
+          </span>
+        </pf-touch-btn>
+      </div>
+
+      <!-- Counter tiles -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+        @for (c of counters; track c.id) {
+          <button type="button"
+                  class="pf-counter"
+                  [class.pf-counter--on]="counter() === c.id"
+                  [attr.data-tone]="c.tone"
+                  (click)="setCounter(c.id)">
+            <span class="pf-counter__label">{{ c.label }}</span>
+            <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Secondary filter: my work / service queue / rejected -->
       <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
         <pf-segmented [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"/>
         <p class="text-[11px] font-mono uppercase tracking-[0.14em]"
@@ -53,7 +109,7 @@ type Enriched = OrderTest & { _level: Level; _remainingMin: number };
       </div>
 
       @if (loading() && rows().length === 0) {
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           @for (i of [0,1,2,3]; track i) {
             <pf-tile tone="default" padding="md">
               <div class="flex items-start gap-3">
@@ -82,7 +138,7 @@ type Enriched = OrderTest & { _level: Level; _remainingMin: number };
               </h3>
             </div>
 
-            <ul class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
                 <li>
                   <pf-tile [tone]="toneFor(bucket.level)" padding="md">
@@ -131,6 +187,117 @@ type Enriched = OrderTest & { _level: Level; _remainingMin: number };
     </section>
   `,
   styles: [`
+    /* Scan bar */
+    .pf-scan-row {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .pf-scan {
+      position: relative;
+      flex: 1;
+      min-width: 280px;
+    }
+    .pf-scan__icon {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--color-violet-400, #a78bfa);
+    }
+    .pf-scan__input {
+      width: 100%;
+      height: 64px;
+      padding: 0 180px 0 58px;
+      border-radius: 20px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      font-size: 16px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      outline: none;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+    }
+    .pf-scan__input::placeholder { color: var(--text-muted); }
+    .pf-scan__input:focus {
+      background: var(--glass-bg-hover);
+      border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+    }
+    .pf-scan__live {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .pf-scan__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: #34d399;
+      animation: pf-scan-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pf-scan-pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%      { opacity: 1;   transform: scale(1.3); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
+    }
+
+    /* Counter tiles */
+    .pf-counter {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
+    }
+    .pf-counter:hover { background: var(--glass-bg-hover); }
+    .pf-counter:active { transform: scale(0.98); }
+    .pf-counter[data-tone='amber']   { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
+    .pf-counter[data-tone='rose']    { background: rgba(239, 68, 68, 0.1);  border-color: rgba(239, 68, 68, 0.25); }
+    .pf-counter[data-tone='violet']  { background: rgba(124, 58, 237, 0.1); border-color: rgba(168, 85, 247, 0.28); }
+    .pf-counter[data-tone='emerald'] { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); }
+    .pf-counter[data-tone='default'] { background: var(--glass-bg); border-color: var(--glass-border); }
+
+    .pf-counter__label {
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-muted);
+    }
+    .pf-counter__value {
+      font-size: 30px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+      margin-top: 2px;
+    }
+    .pf-counter--on {
+      background: #ffffff !important;
+      border-color: #ffffff !important;
+      color: #0f172a !important;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    }
+    .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.6); }
+
+    /* Urgency dot (kept from prior) */
     .pf-dot {
       width: 10px;
       height: 10px;
@@ -152,10 +319,20 @@ export class MyWorkComponent implements OnInit {
     { value: 'service_queue' as Tab, label: 'Service Queue' },
     { value: 'rejected'      as Tab, label: 'Rejected' }
   ];
+  readonly counters = COUNTERS;
 
   private readonly _tab = signal<Tab>('my_work');
   readonly tab = this._tab.asReadonly();
   setTab(t: Tab) { this._tab.set(t); this.refresh(); }
+
+  private readonly _counter = signal<CounterSpec['id']>('all');
+  readonly counter = this._counter.asReadonly();
+  setCounter(c: CounterSpec['id']) { this._counter.set(c); }
+
+  private readonly _scan = signal<string>('');
+  readonly scan = this._scan.asReadonly();
+  setScan(v: string) { this._scan.set(v); }
+  asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   private readonly _rows = signal<OrderTest[]>([]);
   readonly rows = this._rows.asReadonly();
@@ -167,7 +344,17 @@ export class MyWorkComponent implements OnInit {
   countFor(t: Tab): number { return this._counts()[t]; }
 
   readonly buckets = computed<Bucket[]>(() => {
-    const enriched: Enriched[] = this._rows().map(t => {
+    const enriched: Enriched[] = this.enrich(this._rows());
+    const filtered = this.filterByCounter(enriched);
+    return [
+      { level: 'urgent' as const, items: filtered.filter(e => e._level === 'urgent') },
+      { level: 'high'   as const, items: filtered.filter(e => e._level === 'high') },
+      { level: 'normal' as const, items: filtered.filter(e => e._level === 'normal') }
+    ];
+  });
+
+  private enrich(rows: OrderTest[]): Enriched[] {
+    return rows.map(t => {
       const ral = t.subOrder?.receivedAtLab;
       const budget = (t.test?.tatHours ?? 0) * 60;
       const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
@@ -175,12 +362,37 @@ export class MyWorkComponent implements OnInit {
       const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
       return { ...t, _level: level, _remainingMin: remaining };
     });
-    return [
-      { level: 'urgent' as const, items: enriched.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, items: enriched.filter(e => e._level === 'high') },
-      { level: 'normal' as const, items: enriched.filter(e => e._level === 'normal') }
-    ];
-  });
+  }
+
+  /** Counter-tile filter runs on top of the segmented tab filter. */
+  private filterByCounter(list: Enriched[]): Enriched[] {
+    switch (this._counter()) {
+      case 'pending':     return list.filter(t => t.status === 'pending' || t.status === 're_entry');
+      case 'critical':    return list.filter(t => this.isCritical(t));
+      case 'in_progress': return list.filter(t => t.status === 'in_progress' || t.status === 'entered');
+      case 'done':        return list.filter(t => t.status === 'validated' || t.status === 'signed_off');
+      default:            return list;
+    }
+  }
+
+  counterValue(id: CounterSpec['id']): number {
+    const enriched = this.enrich(this._rows());
+    switch (id) {
+      case 'pending':     return enriched.filter(t => t.status === 'pending' || t.status === 're_entry').length;
+      case 'critical':    return enriched.filter(t => this.isCritical(t)).length;
+      case 'in_progress': return enriched.filter(t => t.status === 'in_progress' || t.status === 'entered').length;
+      case 'done':        return enriched.filter(t => t.status === 'validated' || t.status === 'signed_off').length;
+      default:            return enriched.length;
+    }
+  }
+
+  private isCritical(t: OrderTest): boolean {
+    if (!t.currentResult) return false;
+    try {
+      const snap = JSON.parse(t.currentResult) as { flags?: { critical?: boolean } };
+      return snap.flags?.critical === true;
+    } catch { return false; }
+  }
 
   toneFor(level: Level): TileTone {
     return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
@@ -216,6 +428,24 @@ export class MyWorkComponent implements OnInit {
     if (tab === 'rejected') return t.status === 're_entry';
     if (tab === 'my_work')  return t.status !== 're_entry';
     return true;
+  }
+
+  /** Try to resolve a scanned barcode/OrderTest id → jump to result entry. */
+  scanSubmit() {
+    const q = this._scan().trim();
+    if (!q) return;
+    // Straight match against loaded rows first (covers both id and barcode).
+    const hit = this._rows().find(r =>
+      r.id === q ||
+      r.subOrder?.barcode === q ||
+      r.subOrder?.id === q
+    );
+    if (hit) { this.enter(hit); return; }
+    // Otherwise try a direct fetch by id.
+    this.api.get<OrderTest>(`/api/results/${q}`).subscribe({
+      next: t => { if (t) this.enter(t); else this.toasts.warning('No match for scan'); },
+      error: () => this.toasts.warning('No match for scan')
+    });
   }
 
   pickUp(t: OrderTest) {

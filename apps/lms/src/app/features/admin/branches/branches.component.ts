@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Branch, Department } from '../../../shared/models/tenant.model';
+import { Branch, Department, SubBranch } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -20,11 +20,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-5xl mx-auto">
+    <section class="px-4 md:px-8 pt-6 pb-10">
       <pf-screen-header
         eyebrow="Admin"
         title="Branches & Departments"
-        subtitle="Manage collection sites and their lab departments.">
+        subtitle="Manage collection sites, sub-branches, and their lab departments.">
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewBranch()">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -84,7 +84,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                     <pf-chip tone="violet" size="sm">PF Box</pf-chip>
                   }
                   <span class="text-[12px] font-mono" style="color: var(--text-muted);">
-                    {{ departmentsFor(b.id).length }} depts
+                    {{ subBranchesFor(b.id).length }} sub · {{ allDeptsFor(b.id).length }} depts
                   </span>
                   <span class="pf-chevron" [class.pf-chevron-open]="isOpen(b.id)" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -96,9 +96,113 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
               @if (isOpen(b.id)) {
                 <div class="pf-branch-body">
+                  <!-- SUB-BRANCHES -->
                   <div class="flex items-center justify-between mb-3">
                     <h4 class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                        style="color: var(--text-muted);">Departments</h4>
+                        style="color: var(--text-muted);">Sub-branches</h4>
+                    <pf-touch-btn size="sm" variant="ghost" (pressed)="beginAddSubBranch(b.id)">
+                      <span icon-left aria-hidden="true">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 5v14"/>
+                          <path d="M5 12h14"/>
+                        </svg>
+                      </span>
+                      Add sub-branch
+                    </pf-touch-btn>
+                  </div>
+
+                  @if (subBranchesFor(b.id).length === 0) {
+                    <p class="text-[13px] mb-3" style="color: var(--text-tertiary);">
+                      No sub-branches.
+                    </p>
+                  } @else {
+                    <div class="space-y-2 mb-3">
+                      @for (sb of subBranchesFor(b.id); track sb.id) {
+                        <div class="pf-sub-card">
+                          <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                              <span class="pf-sub-badge">{{ codeInitials(sb.code) }}</span>
+                              <div>
+                                <p class="text-[14px] font-semibold" style="color: var(--text-primary);">
+                                  → {{ sb.name }}
+                                </p>
+                                <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">
+                                  {{ sb.code }} · {{ sb.type }}
+                                </p>
+                              </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              @if (sb.isActive) {
+                                <span class="pf-dot-on" aria-label="Active"></span>
+                              } @else {
+                                <pf-chip tone="default" size="sm">Inactive</pf-chip>
+                              }
+                              <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivateSubBranch(sb)">
+                                {{ sb.isActive ? 'Deactivate' : '—' }}
+                              </pf-touch-btn>
+                            </div>
+                          </div>
+                          <div class="pf-sub-deps">
+                            <span class="text-[11px] font-mono uppercase tracking-[0.14em]"
+                                  style="color: var(--text-muted);">Departments</span>
+                            @if (deptsForSubBranch(sb.id).length === 0) {
+                              <span class="text-[12px]" style="color: var(--text-tertiary);">None assigned</span>
+                            } @else {
+                              @for (d of deptsForSubBranch(sb.id); track d.id) {
+                                <div class="pf-dept-pill">
+                                  <span>{{ d.name }}</span>
+                                  <button type="button" class="pf-unassign"
+                                          (click)="unassignDepartment(sb.id, d.id)"
+                                          title="Unassign from sub-branch">
+                                    ×
+                                  </button>
+                                </div>
+                              }
+                            }
+                            @if (unassignedDeptsFor(b.id).length > 0) {
+                              <select class="pf-mini-select"
+                                      [ngModel]="''"
+                                      (ngModelChange)="assignDepartment(sb.id, $event)">
+                                <option value="" disabled>+ Assign department</option>
+                                @for (d of unassignedDeptsFor(b.id); track d.id) {
+                                  <option [value]="d.id">{{ d.name }}</option>
+                                }
+                              </select>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  @if (addingSubBranchFor() === b.id) {
+                    <div class="pf-sub-form">
+                      <div class="grid grid-cols-2 gap-2">
+                        <input type="text" class="pf-input" placeholder="Sub-branch name"
+                               [ngModel]="subBranchDraft().name" (ngModelChange)="patchSubBranchDraft({ name: $event })" />
+                        <input type="text" class="pf-input uppercase" placeholder="CODE"
+                               [ngModel]="subBranchDraft().code" (ngModelChange)="patchSubBranchDraft({ code: $event.toUpperCase() })" />
+                        <select class="pf-input"
+                                [ngModel]="subBranchDraft().type"
+                                (ngModelChange)="patchSubBranchDraft({ type: $event })">
+                          <option value="lab">Lab (in-house)</option>
+                          <option value="collection-center">Collection center</option>
+                          <option value="satellite">Satellite</option>
+                        </select>
+                        <input type="text" class="pf-input" placeholder="City"
+                               [ngModel]="subBranchDraft().city" (ngModelChange)="patchSubBranchDraft({ city: $event })" />
+                      </div>
+                      <div class="flex gap-2 justify-end mt-3">
+                        <pf-touch-btn size="sm" variant="ghost" (pressed)="cancelAddSubBranch()">Cancel</pf-touch-btn>
+                        <pf-touch-btn size="sm" variant="primary" (pressed)="createSubBranch(b.id)">Save</pf-touch-btn>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- BRANCH-LEVEL DEPARTMENTS (not routed to any sub-branch) -->
+                  <div class="pf-branch-deps-header">
+                    <h4 class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                        style="color: var(--text-muted);">Branch departments (unassigned)</h4>
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="beginAddDept(b.id)">
                       <span icon-left aria-hidden="true">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -110,23 +214,35 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                     </pf-touch-btn>
                   </div>
 
-                  @if (departmentsFor(b.id).length === 0) {
+                  @if (unassignedDeptsFor(b.id).length === 0) {
                     <p class="text-[13px]" style="color: var(--text-tertiary);">
-                      No departments yet.
+                      All departments are assigned to sub-branches.
                     </p>
                   } @else {
                     <div class="space-y-1.5">
-                      @for (d of departmentsFor(b.id); track d.id) {
+                      @for (d of unassignedDeptsFor(b.id); track d.id) {
                         <div class="pf-dept-row">
                           <div>
                             <span class="text-[14px] font-medium" style="color: var(--text-primary);">{{ d.name }}</span>
                             <span class="text-[11px] font-mono ml-2" style="color: var(--text-muted);">{{ d.code }}</span>
                           </div>
-                          @if (d.isActive) {
-                            <span class="pf-dot-on" aria-label="Active"></span>
-                          } @else {
-                            <span class="pf-dot-off" aria-label="Inactive"></span>
-                          }
+                          <div class="flex items-center gap-2">
+                            @if (subBranchesFor(b.id).length > 0) {
+                              <select class="pf-mini-select"
+                                      [ngModel]="''"
+                                      (ngModelChange)="assignDepartment($event, d.id)">
+                                <option value="" disabled>Assign →</option>
+                                @for (sb of subBranchesFor(b.id); track sb.id) {
+                                  <option [value]="sb.id">{{ sb.name }}</option>
+                                }
+                              </select>
+                            }
+                            @if (d.isActive) {
+                              <span class="pf-dot-on" aria-label="Active"></span>
+                            } @else {
+                              <span class="pf-dot-off" aria-label="Inactive"></span>
+                            }
+                          </div>
                         </div>
                       }
                     </div>
@@ -178,18 +294,98 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       letter-spacing: 0.02em;
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
     }
-
-    .pf-chevron {
+    .pf-sub-badge {
       display: inline-flex;
-      color: var(--text-muted);
-      transition: transform 0.2s ease;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(236, 72, 153, 0.12);
+      color: #ec4899;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid rgba(236, 72, 153, 0.25);
     }
+
+    .pf-chevron { display: inline-flex; color: var(--text-muted); transition: transform 0.2s ease; }
     .pf-chevron-open { transform: rotate(180deg); }
 
     .pf-branch-body {
       padding: 16px 18px 18px;
       border-top: 1px solid var(--border-muted);
       background: var(--glass-bg);
+    }
+
+    .pf-sub-card {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--border-muted);
+      border-left: 3px solid rgba(236, 72, 153, 0.55);
+    }
+    .pf-sub-deps {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .pf-dept-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 4px 4px 10px;
+      border-radius: 9999px;
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.22);
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+    .pf-unassign {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .pf-mini-select {
+      appearance: none;
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-muted);
+      background: var(--bg-card-solid);
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .pf-sub-form {
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--bg-card-solid);
+      border: 1px dashed var(--border-muted);
+      margin-bottom: 12px;
+    }
+
+    .pf-branch-deps-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 14px 0 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-muted);
     }
 
     .pf-dept-row {
@@ -203,18 +399,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     }
 
     .pf-dot-on {
-      width: 8px;
-      height: 8px;
-      border-radius: 9999px;
+      width: 8px; height: 8px; border-radius: 9999px;
       background: #10b981;
       box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
     }
     .pf-dot-off {
-      width: 8px;
-      height: 8px;
-      border-radius: 9999px;
-      background: var(--text-muted);
-      opacity: 0.4;
+      width: 8px; height: 8px; border-radius: 9999px;
+      background: var(--text-muted); opacity: 0.4;
     }
   `]
 })
@@ -223,10 +414,12 @@ export class BranchesComponent implements OnInit {
   private readonly toasts = inject(ToastService);
 
   private readonly _branches = signal<Branch[]>([]);
+  private readonly _subBranches = signal<SubBranch[]>([]);
   private readonly _departments = signal<Department[]>([]);
   private readonly _openIds = signal<Set<string>>(new Set());
 
   readonly branches = this._branches.asReadonly();
+  readonly subBranches = this._subBranches.asReadonly();
   readonly departments = this._departments.asReadonly();
 
   protected readonly newBranchOpen = signal(false);
@@ -237,8 +430,21 @@ export class BranchesComponent implements OnInit {
   private readonly _deptDraft = signal({ name: '', code: '' });
   readonly deptDraft = this._deptDraft.asReadonly();
 
+  protected readonly addingSubBranchFor = signal<string | null>(null);
+  private readonly _subBranchDraft = signal({ name: '', code: '', type: 'lab', city: '' });
+  readonly subBranchDraft = this._subBranchDraft.asReadonly();
+
   ngOnInit() {
-    this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: l => this._branches.set(l ?? []) });
+    // Hierarchical fetch pulls branches with their sub-branches+departments eagerly
+    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
+      next: list => {
+        const branches = list ?? [];
+        this._branches.set(branches);
+        const subs: SubBranch[] = [];
+        branches.forEach(b => { (b.subBranches ?? []).forEach(sb => subs.push(sb)); });
+        this._subBranches.set(subs);
+      }
+    });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []) });
   }
 
@@ -253,10 +459,20 @@ export class BranchesComponent implements OnInit {
   }
   isOpen(id: string) { return this._openIds().has(id); }
 
-  departmentsFor(branchId: string): Department[] {
+  subBranchesFor(branchId: string): SubBranch[] {
+    return this._subBranches().filter(sb => sb.branchId === branchId);
+  }
+  allDeptsFor(branchId: string): Department[] {
     return this._departments().filter(d => d.branchId === branchId);
   }
+  unassignedDeptsFor(branchId: string): Department[] {
+    return this._departments().filter(d => d.branchId === branchId && !d.subBranchId);
+  }
+  deptsForSubBranch(subBranchId: string): Department[] {
+    return this._departments().filter(d => d.subBranchId === subBranchId);
+  }
 
+  // ── Branch ─────────────────────────────────────
   toggleNewBranch() {
     this.newBranchOpen.update(v => !v);
     this._newBranch.set({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false });
@@ -272,6 +488,37 @@ export class BranchesComponent implements OnInit {
     });
   }
 
+  // ── Sub-branch ─────────────────────────────────
+  beginAddSubBranch(branchId: string) {
+    this.addingSubBranchFor.set(branchId);
+    this._subBranchDraft.set({ name: '', code: '', type: 'lab', city: '' });
+  }
+  patchSubBranchDraft(p: Partial<{ name: string; code: string; type: string; city: string }>) {
+    this._subBranchDraft.update(v => ({ ...v, ...p }));
+  }
+  cancelAddSubBranch() { this.addingSubBranchFor.set(null); }
+  createSubBranch(branchId: string) {
+    const d = this._subBranchDraft();
+    if (!d.name.trim() || !d.code.trim()) { this.toasts.warning('Name and code required'); return; }
+    this.api.post<SubBranch>(`/api/tenants/branches/${branchId}/sub-branches`, d).subscribe({
+      next: saved => {
+        this._subBranches.update(list => [...list, saved]);
+        this.toasts.success('Sub-branch added');
+        this.cancelAddSubBranch();
+      }
+    });
+  }
+  deactivateSubBranch(sb: SubBranch) {
+    if (!sb.isActive) return;
+    this.api.delete(`/api/tenants/sub-branches/${sb.id}`).subscribe({
+      next: () => {
+        this._subBranches.update(list => list.map(x => x.id === sb.id ? { ...x, isActive: false } : x));
+        this.toasts.success('Sub-branch deactivated');
+      }
+    });
+  }
+
+  // ── Department ─────────────────────────────────
   beginAddDept(branchId: string) {
     this.addingDeptFor.set(branchId);
     this._deptDraft.set({ name: '', code: '' });
@@ -283,6 +530,25 @@ export class BranchesComponent implements OnInit {
     if (!d.name.trim() || !d.code.trim()) { this.toasts.warning('Name and code required'); return; }
     this.api.post<Department>('/api/tenants/departments', { name: d.name, code: d.code, branchId }).subscribe({
       next: saved => { this._departments.update(list => [...list, saved]); this.toasts.success('Department added'); this.cancelAddDept(); }
+    });
+  }
+
+  // ── Assignment ─────────────────────────────────
+  assignDepartment(subBranchId: string, departmentId: string) {
+    if (!subBranchId || !departmentId) return;
+    this.api.post(`/api/tenants/sub-branches/${subBranchId}/departments/${departmentId}`, {}).subscribe({
+      next: () => {
+        this._departments.update(list => list.map(d => d.id === departmentId ? { ...d, subBranchId } : d));
+        this.toasts.success('Department assigned');
+      }
+    });
+  }
+  unassignDepartment(subBranchId: string, departmentId: string) {
+    this.api.delete(`/api/tenants/sub-branches/${subBranchId}/departments/${departmentId}`).subscribe({
+      next: () => {
+        this._departments.update(list => list.map(d => d.id === departmentId ? { ...d, subBranchId: undefined } : d));
+        this.toasts.success('Department unassigned');
+      }
     });
   }
 }

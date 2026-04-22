@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { ApiService } from '../../core/services/api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
+import { Tenant } from '../../shared/models/tenant.model';
 import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
 
 @Component({
@@ -44,12 +46,44 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
           </span>
         </a>
 
+        <!-- Branch selector — layout change: sits on the LEFT, right after the brand (reference layout) -->
+        <div class="relative shrink-0 ml-1">
+          <button type="button"
+                  (click)="toggleBranch()"
+                  class="pf-strip-chip h-10 sm:h-11 px-3 sm:px-4 rounded-full flex items-center gap-2 text-[12.5px] font-medium press">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V7l8-4 8 4v14M9 21v-5h6v5M12 8v4m-2-2h4"/>
+            </svg>
+            <span class="max-w-[100px] lg:max-w-[140px] truncate">{{ branch() }}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
+          @if (branchOpen()) {
+            <div class="absolute top-full mt-2 left-0 z-40 min-w-[220px] rounded-2xl p-2 slide-up glass-card-elevated">
+              @for (b of branches; track b) {
+                <button type="button"
+                        (click)="selectBranch(b)"
+                        class="w-full text-left h-10 px-3 rounded-xl text-[13px] press flex items-center justify-between"
+                        [class]="b === branch() ? 'pf-branch-active' : 'pf-branch-item'">
+                  <span>{{ b }}</span>
+                  @if (b === branch()) {
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 12 4 4L19 6"/>
+                    </svg>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
+
         <div class="flex-1 min-w-0"></div>
 
         <!-- Desktop nav (hidden < md so bottom-nav is the only nav on mobile).
              Absolute-centered so it stays in the middle regardless of left/right
              cluster widths. -->
-        <nav class="pf-topnav-center hidden md:flex">
+        <nav class="pf-topnav-center hidden xl:flex">
           @for (n of primary; track n.id) {
             <a [routerLink]="n.href"
                routerLinkActive="pf-topnav-active"
@@ -123,39 +157,19 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
           }
         </button>
 
-        <!-- Branch selector (sits after the theme toggle) -->
-        <div class="relative shrink-0">
-          <button type="button"
-                  (click)="toggleBranch()"
-                  class="pf-strip-chip h-10 sm:h-11 px-3 sm:px-4 rounded-full flex items-center gap-2 text-[12.5px] font-medium press">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 21V7l8-4 8 4v14M9 21v-5h6v5M12 8v4m-2-2h4"/>
-            </svg>
-            <span class="hidden sm:inline max-w-[100px] lg:max-w-[140px] truncate">{{ branch() }}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-          </button>
-          @if (branchOpen()) {
-            <div class="absolute top-full mt-2 right-0 z-40 min-w-[220px] rounded-2xl p-2 slide-up glass-card-elevated">
-              @for (b of branches; track b) {
-                <button type="button"
-                        (click)="selectBranch(b)"
-                        class="w-full text-left h-10 px-3 rounded-xl text-[13px] press flex items-center justify-between"
-                        [class]="b === branch() ? 'pf-branch-active' : 'pf-branch-item'">
-                  <span>{{ b }}</span>
-                  @if (b === branch()) {
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="m5 12 4 4L19 6"/>
-                    </svg>
-                  }
-                </button>
-              }
-            </div>
-          }
-        </div>
-
         <div class="w-px h-6 mx-1 hidden sm:block" style="background: var(--border-muted);"></div>
+
+        <!-- Vendor logo slot — tenant's logo, or a dashed placeholder linking to settings. -->
+        <a routerLink="/admin"
+           class="pf-vendor-logo press hidden sm:inline-flex"
+           [class.pf-vendor-logo-empty]="!tenantLogo()"
+           [attr.aria-label]="tenantLogo() ? (tenantName() + ' — logo') : 'Add your organization logo'">
+          @if (tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-vendor-logo-img" />
+          } @else {
+            <span class="pf-vendor-logo-text">YOUR LOGO</span>
+          }
+        </a>
 
         <!-- Profile avatar — click to open name / role / logout -->
         <div class="relative">
@@ -292,10 +306,13 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       opacity: 0.7;
     }
 
-    /* Desktop: show ECG pulse + wordmark block. */
-    @media (min-width: 640px) {
+    /* Reveal brand lockup progressively: pulse at tablet, wordmark only when
+     * there's room alongside the centered desktop nav (xl+). */
+    @media (min-width: 768px) {
       .pf-brand-pulse { display: block; }
-      .pf-brand-text  { display: flex; }
+    }
+    @media (min-width: 1280px) {
+      .pf-brand-text { display: flex; }
     }
 
     @keyframes pf-brand-pd {
@@ -577,6 +594,44 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       color: #fca5a5;
     }
 
+    /* Vendor logo slot --------------------------------------- */
+    .pf-vendor-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 2.25rem;
+      padding: 0 14px;
+      margin: 0 4px;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .pf-vendor-logo:hover { transform: translateY(-1px); }
+    .pf-vendor-logo-empty {
+      border: 1.5px dashed #ec4899;
+      background: transparent;
+    }
+    .pf-vendor-logo-empty:hover {
+      background: rgba(236, 72, 153, 0.08);
+      border-color: #f472b6;
+    }
+    .pf-vendor-logo-text {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: #ec4899;
+      text-transform: uppercase;
+    }
+    :root.light .pf-vendor-logo-empty { border-color: #db2777; }
+    :root.light .pf-vendor-logo-text  { color: #db2777; }
+
+    .pf-vendor-logo-img {
+      max-height: 1.5rem;
+      max-width: 6rem;
+      object-fit: contain;
+      display: block;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .pf-more-pop, .pf-profile-pop { animation: none; }
       .pf-avatar-ring { animation: none; }
@@ -586,6 +641,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   private readonly auth = inject(AuthService);
+  private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -598,9 +654,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly branchOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly profileOpen = signal(false);
+  private readonly _tenant = signal<Tenant | null>(null);
 
   readonly isDark = computed(() => this.themeService.isDark());
   readonly userName = () => this.auth.user()?.name ?? 'User';
+  readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
+  readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
   readonly initials = () => {
     const n = this.auth.user()?.name ?? 'U';
     return n.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
@@ -609,6 +668,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   ngOnInit() {
     const u = this.auth.user();
     if (u?.branchName) this.branch.set(u.branchName);
+    this.api.get<Tenant | null>('/api/tenants/current').subscribe({
+      next: t => this._tenant.set(t ?? null),
+      error: () => { /* stay with placeholder */ }
+    });
   }
   ngOnDestroy() { /* no-op */ }
 

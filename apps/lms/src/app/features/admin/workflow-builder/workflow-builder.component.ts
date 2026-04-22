@@ -51,7 +51,7 @@ interface HistoryRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!screenName()) {
-      <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto">
+      <section class="px-4 md:px-8 pt-6 pb-10">
         <pf-screen-header
           eyebrow="Admin"
           title="Workflow Builder"
@@ -100,7 +100,7 @@ interface HistoryRow {
     }
 
     @if (screenName() && builder.workflow(); as wf) {
-      <section class="px-4 md:px-6 pt-6 pb-10 max-w-7xl mx-auto">
+      <section class="px-4 md:px-6 pt-6 pb-10">
         <pf-screen-header
           [eyebrow]="'Workflow · v' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '—')"
           [title]="wf.title"

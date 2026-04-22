@@ -42,7 +42,7 @@ interface ResultSnapshot {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto">
+    <section class="px-4 md:px-8 pt-6 pb-10">
       <pf-screen-header
         eyebrow="Validation queue"
         title="Pending validation"

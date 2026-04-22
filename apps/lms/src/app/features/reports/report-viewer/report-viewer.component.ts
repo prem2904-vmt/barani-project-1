@@ -37,7 +37,7 @@ interface ReportData {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-12 max-w-5xl mx-auto pf-report-section">
+    <section class="px-4 md:px-8 pt-6 pb-12 pf-report-section">
       <pf-screen-header
         eyebrow="Reports"
         title="Report viewer"
