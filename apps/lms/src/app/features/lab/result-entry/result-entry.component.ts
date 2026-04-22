@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
@@ -18,6 +19,24 @@ interface EnterResponse {
 
 type FlagTone = 'critical' | 'low' | 'high' | 'normal';
 interface Flag { tone: FlagTone; label: string }
+
+// Render kinds the main parameter switch handles. Used by inputKindFor()
+// and the template below. Kept broad so richer types (buttonSelect, multi)
+// can diverge from the single-chip 'choice' bucket they used to share.
+type InputKind =
+  | 'numeric'
+  | 'text'
+  | 'textarea'
+  | 'radio'
+  | 'yesno'
+  | 'dropdown'
+  | 'chips-multi'
+  | 'buttonSelect'
+  | 'toggle'
+  | 'checkbox'
+  | 'date'
+  | 'section-header'
+  | 'info-text';
 
 @Component({
   selector: 'pf-result-entry',
@@ -149,16 +168,70 @@ interface Flag { tone: FlagTone; label: string }
                          to the right when present, otherwise input gets the full width. -->
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
-                        @case ('choice') {
+                        @case ('dropdown') {
+                          <select class="pf-param__input pf-param__select"
+                                  [value]="valueOf(p.name) ?? ''"
+                                  (focus)="setActive(p.name)"
+                                  (change)="setValue(p.name, asSelect($event))">
+                            <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
+                            @for (opt of p.options ?? []; track opt) {
+                              <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
+                            }
+                          </select>
+                        }
+                        @case ('chips-multi') {
                           <div class="pf-param__choices">
                             @for (opt of p.options ?? []; track opt) {
                               <pf-chip
-                                [selected]="valueOf(p.name) === opt"
-                                (tapped)="setValue(p.name, opt)">
+                                [selected]="isOptionOn(p.name, opt)"
+                                (tapped)="toggleOption(p.name, opt)">
                                 {{ opt }}
                               </pf-chip>
                             }
                           </div>
+                        }
+                        @case ('buttonSelect') {
+                          <div class="pf-param__btnsel">
+                            @for (opt of p.options ?? []; track opt) {
+                              <button type="button"
+                                      class="pf-btnsel__opt press"
+                                      [class.pf-btnsel__opt--on]="valueOf(p.name) === opt"
+                                      (click)="setValue(p.name, opt)">
+                                {{ opt }}
+                              </button>
+                            }
+                          </div>
+                        }
+                        @case ('toggle') {
+                          <label class="pf-toggle-row">
+                            <input type="checkbox"
+                                   class="pf-toggle-input"
+                                   [checked]="boolValueOf(p.name)"
+                                   (change)="setBoolValue(p.name, $any($event.target).checked)" />
+                            <span class="pf-toggle-track"><span class="pf-toggle-thumb"></span></span>
+                            <span class="pf-toggle-label">{{ boolValueOf(p.name) ? 'On' : 'Off' }}</span>
+                          </label>
+                        }
+                        @case ('checkbox') {
+                          <label class="pf-checkbox-row">
+                            <input type="checkbox"
+                                   [checked]="boolValueOf(p.name)"
+                                   (change)="setBoolValue(p.name, $any($event.target).checked)" />
+                            <span>{{ boolValueOf(p.name) ? 'Yes' : 'No' }}</span>
+                          </label>
+                        }
+                        @case ('date') {
+                          <input type="date"
+                                 class="pf-param__input pf-param__date"
+                                 [value]="valueOf(p.name) ?? ''"
+                                 (focus)="setActive(p.name)"
+                                 (change)="setValue(p.name, asInput($event))"/>
+                        }
+                        @case ('section-header') {
+                          <h4 class="pf-section-heading">{{ p.title }}</h4>
+                        }
+                        @case ('info-text') {
+                          <p class="pf-info-note">{{ p.normalValue ?? p.title }}</p>
                         }
                         @case ('radio') {
                           <div class="pf-param__radio">
@@ -220,6 +293,15 @@ interface Flag { tone: FlagTone; label: string }
                         }
                       }
                     </div>
+
+                    @if (errorFor(p.name); as err) {
+                      <p class="pf-param__error">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                        </svg>
+                        {{ err }}
+                      </p>
+                    }
                   </div>
                 }
               </div>
@@ -299,6 +381,26 @@ interface Flag { tone: FlagTone; label: string }
                             (click)="pickOption(opt)">
                       <span class="pf-rail__opt-tick">
                         @if (valueOf(activeParam()!) === opt) {
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m5 12 4 4L19 6"/>
+                          </svg>
+                        }
+                      </span>
+                      <span class="pf-rail__opt-label">{{ opt }}</span>
+                    </button>
+                  }
+                </div>
+              }
+
+              @case ('choice-multi') {
+                <div class="pf-rail__options">
+                  @for (opt of activeOptions(); track opt) {
+                    <button type="button"
+                            class="pf-rail__opt press"
+                            [class.pf-rail__opt--on]="isOptionOn(activeParam()!, opt)"
+                            (click)="toggleOption(activeParam()!, opt)">
+                      <span class="pf-rail__opt-tick">
+                        @if (isOptionOn(activeParam()!, opt)) {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="m5 12 4 4L19 6"/>
                           </svg>
@@ -762,6 +864,132 @@ interface Flag { tone: FlagTone; label: string }
 
     .pf-param__choices { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-param__radio { display: flex; flex-wrap: wrap; gap: 16px; }
+
+    /* ── Dropdown (type: select) ─────────────────────────────── */
+    .pf-param__select {
+      appearance: none;
+      -webkit-appearance: none;
+      padding-right: 32px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237c7c8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+    .pf-param__date { cursor: pointer; }
+
+    /* ── Button-select pills (type: buttonSelect) ────────────── */
+    .pf-param__btnsel { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pf-btnsel__opt {
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .pf-btnsel__opt:hover {
+      background: var(--glass-bg-hover);
+      border-color: var(--glass-border-hover);
+    }
+    .pf-btnsel__opt--on {
+      background: var(--gradient-primary);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+    }
+
+    /* ── Toggle switch (type: toggle) ────────────────────────── */
+    .pf-toggle-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .pf-toggle-input { position: absolute; opacity: 0; pointer-events: none; }
+    .pf-toggle-track {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      border-radius: 9999px;
+      background: var(--border-muted);
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+    .pf-toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s ease;
+    }
+    .pf-toggle-input:checked + .pf-toggle-track { background: var(--gradient-primary); }
+    .pf-toggle-input:checked + .pf-toggle-track .pf-toggle-thumb { transform: translateX(20px); }
+    .pf-toggle-label { font-weight: 500; color: var(--text-primary); }
+
+    /* ── Checkbox (type: checkbox) ───────────────────────────── */
+    .pf-checkbox-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13.5px;
+      color: var(--text-primary);
+    }
+    .pf-checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #a855f7;
+    }
+
+    /* ── Layout-only kinds ───────────────────────────────────── */
+    .pf-section-heading {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-muted);
+    }
+    .pf-info-note {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    /* ── Inline validation error ─────────────────────────────── */
+    .pf-param__error {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 6px 0 0 12px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      font-size: 11.5px;
+      font-weight: 500;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.02em;
+    }
+    :root.light .pf-param__error {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #b91c1c;
+    }
     .pf-radio-row {
       display: inline-flex;
       align-items: center;
@@ -1516,15 +1744,56 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (!raw) return null;
     try { return JSON.parse(raw) as TestParametersBlob; } catch { return null; }
   });
-  readonly parameters = computed<TestParameter[]>(() => this._paramsBlob()?.parameters ?? []);
+  readonly allParameters = computed<TestParameter[]>(() => this._paramsBlob()?.parameters ?? []);
+  // FormField[] parallel to `parameters`, carries showWhen + richer type.
+  // Older tests without the new editor saved only `parameters`, so this may be empty.
+  private readonly _fields = computed<FormField[]>(() => this._paramsBlob()?.fields ?? []);
+  private readonly _fieldByName = computed<Map<string, FormField>>(() => {
+    const map = new Map<string, FormField>();
+    for (const f of this._fields()) map.set(f.name, f);
+    return map;
+  });
+  // Map field values keyed by FormField.id, which is what showWhen rules
+  // reference. Result-entry stores values under param.name, so we
+  // translate via the FormField.name → FormField.id mapping.
+  private readonly _valuesByFieldId = computed<Record<string, unknown>>(() => {
+    const values = this._values();
+    const out: Record<string, unknown> = {};
+    for (const f of this._fields()) out[f.id] = values[f.name];
+    return out;
+  });
+  // Visibility-filtered view. Fields with no showWhen always pass; fields
+  // from legacy tests (no FormField entry) always pass too.
+  readonly parameters = computed<TestParameter[]>(() => {
+    const all = this.allParameters();
+    const fields = this._fields();
+    if (fields.length === 0) return all;
+    const showWhenByName = new Map(fields.map(f => [f.name, f.showWhen]));
+    const valsById = this._valuesByFieldId();
+    return all.filter(p => {
+      const sw = showWhenByName.get(p.name);
+      return sw ? evaluateShowWhen(sw, valsById) : true;
+    });
+  });
 
-  readonly requiredCount = computed(() => this.parameters().length);
+  // Layout-only kinds don't participate in required/filled accounting.
+  private isLayoutKind(k: InputKind): boolean {
+    return k === 'section-header' || k === 'info-text';
+  }
+  private hasValue(v: unknown, kind: InputKind): boolean {
+    if (kind === 'checkbox' || kind === 'toggle') return typeof v === 'boolean';
+    if (Array.isArray(v)) return v.length > 0;
+    return v !== undefined && v !== null && v !== '';
+  }
+
+  private countableParameters(): TestParameter[] {
+    return this.parameters().filter(p => !this.isLayoutKind(this.inputKindFor(p)));
+  }
+
+  readonly requiredCount = computed(() => this.countableParameters().length);
   readonly filledCount = computed(() => {
     const v = this._values();
-    return this.parameters().filter(p => {
-      const x = v[p.name];
-      return x !== undefined && x !== null && x !== '';
-    }).length;
+    return this.countableParameters().filter(p => this.hasValue(v[p.name], this.inputKindFor(p))).length;
   });
   readonly filledPercent = computed(() => {
     const r = this.requiredCount();
@@ -1533,14 +1802,40 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly filledPercentRounded = computed(() => Math.round(this.filledPercent()));
 
   isFilled(name: string): boolean {
-    const v = this._values()[name];
-    return v !== undefined && v !== null && v !== '';
+    const p = this.parameters().find(x => x.name === name);
+    const kind: InputKind = p ? this.inputKindFor(p) : 'text';
+    return this.hasValue(this._values()[name], kind);
   }
+
+  // Run the FormField validator (if a new-format field exists). Returns the
+  // first failing message or null. Drives the inline error under each input
+  // and gates canSubmit.
+  errorFor(name: string): string | null {
+    const field = this._fieldByName().get(name);
+    if (!field) return null;
+    return validateFieldValue(field, this._values()[name]);
+  }
+  hasErrorFor(name: string): boolean { return !!this.errorFor(name); }
+
+  // True when ANY visible parameter has an error. Submit is blocked while true.
+  readonly hasValidationErrors = computed(() => {
+    const fieldByName = this._fieldByName();
+    if (fieldByName.size === 0) return false;
+    const values = this._values();
+    return this.parameters().some(p => {
+      const f = fieldByName.get(p.name);
+      return f ? !!validateFieldValue(f, values[p.name]) : false;
+    });
+  });
 
   isParamCritical(p: TestParameter): boolean {
     return this.flagFor(p)?.tone === 'critical';
   }
-  readonly canSubmit = computed(() => this.filledCount() === this.requiredCount() && this.requiredCount() > 0);
+  readonly canSubmit = computed(() =>
+    this.filledCount() === this.requiredCount() &&
+    this.requiredCount() > 0 &&
+    !this.hasValidationErrors()
+  );
 
   // TAT
   readonly tatElapsedMin = computed(() => {
@@ -1616,22 +1911,42 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return this.parameters().find(p => p.name === name) ?? null;
   });
 
-  readonly railKind = computed<'numeric' | 'choice' | 'radio' | 'yesno' | 'text' | 'idle'>(() => {
+  // Rail is a simpler UI than the main param cell — it only understands
+  // a handful of input surfaces. Map richer kinds to the closest rail
+  // affordance (dropdown/chips-multi/buttonSelect all reuse the 'choice'
+  // option-list layout; toggle/checkbox collapse to yesno; layout-only
+  // kinds hide the rail entirely).
+  readonly railKind = computed<'numeric' | 'choice' | 'choice-multi' | 'radio' | 'yesno' | 'text' | 'idle'>(() => {
     const p = this.activeParamDef();
     if (!p) return 'idle';
     const k = this.inputKindFor(p);
-    // textarea falls back to the same "type directly" hint as text
-    return k === 'textarea' ? 'text' : k;
+    switch (k) {
+      case 'numeric':        return 'numeric';
+      case 'textarea':
+      case 'text':
+      case 'date':           return 'text';
+      case 'dropdown':
+      case 'buttonSelect':   return 'choice';
+      case 'chips-multi':    return 'choice-multi';
+      case 'radio':          return 'radio';
+      case 'yesno':
+      case 'toggle':
+      case 'checkbox':       return 'yesno';
+      case 'section-header':
+      case 'info-text':      return 'idle';
+      default:               return 'idle';
+    }
   });
 
   readonly railEyebrow = computed(() => {
     switch (this.railKind()) {
-      case 'numeric': return 'Numeric keypad';
-      case 'choice':  return 'Options';
-      case 'radio':   return 'Select one';
-      case 'yesno':   return 'Yes or No';
-      case 'text':    return 'Keyboard input';
-      default:        return 'Input helper';
+      case 'numeric':      return 'Numeric keypad';
+      case 'choice':       return 'Options';
+      case 'choice-multi': return 'Select any';
+      case 'radio':        return 'Select one';
+      case 'yesno':        return 'Yes or No';
+      case 'text':         return 'Keyboard input';
+      default:             return 'Input helper';
     }
   });
 
@@ -1662,26 +1977,33 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit() { /* no-op — numInputs are ready for advance() */ }
 
-  inputKindFor(p: TestParameter): 'numeric' | 'text' | 'textarea' | 'choice' | 'radio' | 'yesno' {
-    switch (p.type) {
+  // Unified render-kind enum. When the test carries new-format `fields[]`,
+  // we route off FormField.type (richer vocabulary); otherwise fall back to
+  // the legacy TestParameter.type. Single-vs-multi behavior (select vs
+  // multiselect) lives at this layer so the template can branch cleanly.
+  inputKindFor(p: TestParameter): InputKind {
+    const field = this._fieldByName().get(p.name);
+    const t = field?.type ?? p.type;
+    switch (t) {
       case 'numeric':
       case 'numeric_with_range':
+      case 'number':
         return 'numeric';
-      case 'text':
-        return 'text';
-      case 'textarea':
-        return 'textarea';
-      case 'select':
-      case 'multiselect':
-      case 'button_select':
-      case 'toggle':
-        return 'choice';
-      case 'radio':
-        return 'radio';
+      case 'text':          return 'text';
+      case 'textarea':      return 'textarea';
+      case 'select':        return 'dropdown';
+      case 'multiselect':   return 'chips-multi';
+      case 'buttonSelect':
+      case 'button_select': return 'buttonSelect';
+      case 'radio':         return 'radio';
       case 'yesno':
-        return 'yesno';
-      default:
-        return 'text';
+      case 'yesNoNa':       return 'yesno';
+      case 'toggle':        return 'toggle';
+      case 'checkbox':      return 'checkbox';
+      case 'date':          return 'date';
+      case 'section-header':return 'section-header';
+      case 'info-text':     return 'info-text';
+      default:              return 'text';
     }
   }
 
@@ -1733,6 +2055,29 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   unitFor(name: string): string | undefined {
     return this.parameters().find(p => p.name === name)?.unit;
   }
+
+  // Multi-value helpers for multiselect fields. Values stored as string[],
+  // with toggle semantics: tapping an option flips it in/out of the array.
+  isOptionOn(name: string, opt: string): boolean {
+    const v = this._values()[name];
+    return Array.isArray(v) && (v as unknown[]).map(String).includes(opt);
+  }
+  toggleOption(name: string, opt: string) {
+    this._values.update(s => {
+      const current = Array.isArray(s[name]) ? (s[name] as unknown[]).map(String) : [];
+      const idx = current.indexOf(opt);
+      const next = idx >= 0 ? current.filter(x => x !== opt) : [...current, opt];
+      return { ...s, [name]: next };
+    });
+  }
+  boolValueOf(name: string): boolean {
+    return this._values()[name] === true;
+  }
+  setBoolValue(name: string, v: boolean) {
+    this._values.update(s => ({ ...s, [name]: v }));
+  }
+  // <select> change handler — emits the chosen option value.
+  asSelect(ev: Event): string { return (ev.target as HTMLSelectElement).value; }
 
   setValue(name: string, value: string) {
     this._values.update(s => ({ ...s, [name]: value }));

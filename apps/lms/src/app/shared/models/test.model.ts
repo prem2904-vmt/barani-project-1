@@ -37,6 +37,11 @@ export interface TestParametersBlob {
   sampleType?: string;
   tatHours?: number;
   parameters: TestParameter[];
+  // New-format parallel array produced by the test editor. Carries richer
+  // per-field metadata (id, showWhen, conditional links) that the legacy
+  // TestParameter shape can't express. Renderers should prefer this when
+  // present and fall back to `parameters` otherwise.
+  fields?: import('../forms/form-field.model').FormField[];
 }
 
 export interface TestCondition {

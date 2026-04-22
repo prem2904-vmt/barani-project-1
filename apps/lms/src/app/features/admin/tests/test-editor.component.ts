@@ -4,24 +4,23 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Department } from '../../../shared/models/tenant.model';
-import { Test, TestParametersBlob } from '../../../shared/models/test.model';
+import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import {
+  ConditionEditorComponent,
+  FieldOption,
+  FieldTypePickerComponent,
+  FormField,
+  FormFieldType,
+  ShowWhen,
+  ValidationEditorComponent,
+  ValidationPatch,
+  hasOptions as registryHasOptions
+} from '../../../shared/forms';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-
-interface ParameterRow {
-  name: string;
-  title: string;
-  type: string;
-  unit?: string;
-  options?: string[];
-  referenceRanges?: { segment: string; min?: number; max?: number }[];
-  criticalLow?: number;
-  criticalHigh?: number;
-  normalValue?: string;
-}
 
 interface DraftTest {
   id?: string;
@@ -48,12 +47,54 @@ function makeEmptyDraft(): DraftTest {
   };
 }
 
+// Legacy TestParameter.type → new FormFieldType. Keeps round-tripping stable
+// for tests created before the form-builder-style schema existed.
+const LEGACY_TYPE_MAP: Record<string, FormFieldType> = {
+  numeric:            'number',
+  numeric_with_range: 'number',
+  critical_numeric:   'number',
+  text:               'text',
+  textarea:           'textarea',
+  select:             'select',
+  multiselect:        'multiselect',
+  radio:              'radio',
+  button_select:      'buttonSelect',
+  yesno:              'yesno',
+  toggle:             'toggle',
+  date:               'date'
+};
+
+// Back-map for save: FormFieldType → TestParameter.type. For types without a
+// legacy equivalent (e.g. `section-header`, `info-text`) we fall through to
+// a safe string so the JSON blob stays parseable by older clients.
+const FORWARD_TYPE_MAP: Partial<Record<FormFieldType, TestParameter['type']>> = {
+  number:      'numeric_with_range',
+  text:        'text',
+  textarea:    'textarea',
+  select:      'select',
+  multiselect: 'multiselect',
+  radio:       'radio',
+  buttonSelect:'button_select',
+  yesno:       'yesno',
+  toggle:      'toggle',
+  date:        'date'
+};
+
+let fieldCounter = 0;
+function newFieldId(): string {
+  fieldCounter += 1;
+  return `fld_${Date.now().toString(36)}_${fieldCounter}`;
+}
+
 @Component({
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
     FormsModule,
+    ConditionEditorComponent,
+    FieldTypePickerComponent,
     NumberInputComponent,
+    ValidationEditorComponent,
     ScreenHeaderComponent,
     SelectComponent,
     TileComponent,
@@ -132,7 +173,7 @@ function makeEmptyDraft(): DraftTest {
       <!-- Parameters -->
       <pf-tile tone="default" padding="lg" class="block">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="section-title">Parameters ({{ editedParams().length }})</h3>
+          <h3 class="section-title">Parameters ({{ fields().length }})</h3>
           <pf-touch-btn size="sm" variant="ghost" (pressed)="addParameter()">
             <span icon-left aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -144,39 +185,38 @@ function makeEmptyDraft(): DraftTest {
           </pf-touch-btn>
         </div>
 
-        @if (editedParams().length === 0) {
+        @if (fields().length === 0) {
           <p class="text-[13px]" style="color: var(--text-tertiary);">
             No parameters yet. Add one to let lab staff enter results.
           </p>
         } @else {
           <div class="space-y-3">
-            @for (p of editedParams(); let i = $index; track i) {
+            @for (p of fields(); let i = $index; track p.id) {
               <div class="param-row space-y-2">
                 <div class="grid grid-cols-12 gap-2">
                   <div class="col-span-12 md:col-span-4">
                     <label class="text-[11px] font-mono" style="color: var(--text-muted);">Label</label>
                     <input type="text" class="pf-input text-sm"
-                           [ngModel]="p.title"
-                           (ngModelChange)="patchParam(i, { title: $event, name: deriveName($event, p.name) })" />
+                           [ngModel]="p.label"
+                           (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
                   </div>
                   <div class="col-span-6 md:col-span-3">
                     <label class="text-[11px] font-mono" style="color: var(--text-muted);">Type</label>
-                    <pf-select size="sm"
-                               [options]="paramTypeOptions"
-                               [value]="p.type"
-                               (valueChange)="patchParam(i, { type: $event })">
-                    </pf-select>
+                    <pf-field-type-picker
+                      [value]="p.type"
+                      (valueChange)="patchField(i, { type: $event })">
+                    </pf-field-type-picker>
                   </div>
                   <div class="col-span-5 md:col-span-3">
                     <label class="text-[11px] font-mono" style="color: var(--text-muted);">Unit</label>
                     <input type="text" class="pf-input text-sm"
                            [ngModel]="p.unit"
                            [disabled]="!isNumericType(p.type)"
-                           (ngModelChange)="patchParam(i, { unit: $event })" />
+                           (ngModelChange)="patchField(i, { unit: $event })" />
                   </div>
                   <div class="col-span-1 md:col-span-2 flex items-end justify-end">
                     <button type="button" class="param-remove"
-                            (click)="removeParam(i)" aria-label="Remove">
+                            (click)="removeField(i)" aria-label="Remove">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18 6 6 18"/>
                         <path d="m6 6 12 12"/>
@@ -205,28 +245,56 @@ function makeEmptyDraft(): DraftTest {
                       <label class="text-[11px] font-mono" style="color: var(--text-muted);">Critical low</label>
                       <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
                                         [value]="p.criticalLow ?? null"
-                                        (valueChange)="patchParam(i, { criticalLow: $event ?? undefined })">
+                                        (valueChange)="patchField(i, { criticalLow: $event ?? undefined })">
                       </pf-number-input>
                     </div>
                     <div>
                       <label class="text-[11px] font-mono" style="color: var(--text-muted);">Critical high</label>
                       <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
                                         [value]="p.criticalHigh ?? null"
-                                        (valueChange)="patchParam(i, { criticalHigh: $event ?? undefined })">
+                                        (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })">
                       </pf-number-input>
                     </div>
                   </div>
                 }
 
-                @if (hasOptions(p.type)) {
+                @if (typeHasOptions(p.type)) {
                   <div>
-                    <label class="text-[11px] font-mono" style="color: var(--text-muted);">Options (comma-separated)</label>
+                    <label class="text-[11px] font-mono" style="color: var(--text-muted);">
+                      Options (comma-separated)
+                      @if ((p.options ?? []).length > 0) {
+                        <span class="pf-option-count">{{ (p.options ?? []).length }}</span>
+                      }
+                    </label>
                     <input type="text" class="pf-input text-sm"
-                           [ngModel]="(p.options ?? []).join(', ')"
-                           (ngModelChange)="patchParam(i, { options: splitOptions($event) })"
-                           placeholder="Positive, Negative" />
+                           [ngModel]="optionsAsString(p)"
+                           (ngModelChange)="onOptionsTyped(i, $event)"
+                           placeholder="Positive, Negative, Equivocal" />
+                    @if ((p.options ?? []).length > 0) {
+                      <div class="pf-option-chips">
+                        @for (opt of p.options ?? []; track opt.id) {
+                          <span class="pf-option-chip">{{ opt.label }}</span>
+                        }
+                      </div>
+                    }
                   </div>
                 }
+
+                <div class="pf-param-footer">
+                  <pf-validation-editor
+                    [type]="p.type"
+                    [isRequired]="p.isRequired"
+                    [validation]="p.validation ?? null"
+                    (change)="patchValidation(i, $event)">
+                  </pf-validation-editor>
+
+                  <pf-condition-editor
+                    [peers]="peersFor(i)"
+                    [value]="p.showWhen ?? null"
+                    (valueChange)="patchCondition(i, $event)"
+                    (remove)="patchCondition(i, null)">
+                  </pf-condition-editor>
+                </div>
               </div>
             }
           </div>
@@ -266,6 +334,45 @@ function makeEmptyDraft(): DraftTest {
       color: #fca5a5;
       border-color: rgba(239, 68, 68, 0.3);
     }
+
+    .pf-option-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 16px;
+      padding: 0 5px;
+      margin-left: 6px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #c4b5fd;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .pf-option-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .pf-option-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.12);
+      color: var(--text-primary);
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+    .pf-param-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .pf-param-footer > * { flex: 0 0 auto; }
   `]
 })
 export class TestEditorComponent implements OnInit {
@@ -282,21 +389,6 @@ export class TestEditorComponent implements OnInit {
     { value: 'direct',   label: 'Direct',   hint: 'Result goes straight to reports' },
     { value: 'approval', label: 'Approval', hint: 'Needs pathologist validation' }
   ];
-  readonly paramTypes = [
-    { value: 'numeric',              label: 'Numeric' },
-    { value: 'numeric_with_range',   label: 'Numeric w/ range' },
-    { value: 'critical_numeric',     label: 'Numeric w/ critical' },
-    { value: 'text',                 label: 'Free text' },
-    { value: 'select',               label: 'Dropdown' },
-    { value: 'radio',                label: 'Radio buttons' },
-    { value: 'button_select',        label: 'Button select' },
-    { value: 'multiselect',          label: 'Multi-select' },
-    { value: 'yesno',                label: 'Yes / No' },
-    { value: 'toggle',               label: 'Toggle' }
-  ];
-  readonly paramTypeOptions: PfSelectOption<string>[] = this.paramTypes.map(t => ({
-    value: t.value, label: t.label
-  }));
 
   private readonly _departments = signal<Department[]>([]);
   readonly departments = this._departments.asReadonly();
@@ -308,8 +400,8 @@ export class TestEditorComponent implements OnInit {
   private readonly _draft = signal<DraftTest>(makeEmptyDraft());
   readonly draft = this._draft.asReadonly();
 
-  private readonly _editedParams = signal<ParameterRow[]>([]);
-  readonly editedParams = this._editedParams.asReadonly();
+  private readonly _fields = signal<FormField[]>([]);
+  readonly fields = this._fields.asReadonly();
 
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
@@ -343,76 +435,177 @@ export class TestEditorComponent implements OnInit {
       parametersJson: t.parameters ?? '', conditionsJson: t.conditions ?? '[]',
       isActive: t.isActive
     });
-    this._editedParams.set(this.loadParameters(t.parameters ?? ''));
+    this._fields.set(this.loadParameters(t.parameters ?? ''));
   }
 
-  isNumericType(t: string): boolean {
-    return t === 'numeric' || t === 'numeric_with_range' || t === 'critical_numeric';
+  // Is this a numeric field (shows reference-range row)?
+  isNumericType(t: FormFieldType): boolean {
+    return t === 'number';
   }
-  hasOptions(t: string): boolean {
-    return ['select', 'radio', 'button_select', 'multiselect'].includes(t);
+  // Does the registry say this type has an options editor?
+  typeHasOptions(t: FormFieldType): boolean { return registryHasOptions(t); }
+
+  // Parse is lossy (it strips empty segments so "A, " normalises to [A]),
+  // which used to eat trailing commas as the user typed. We keep the raw
+  // string alongside the parsed FieldOption[] so the input stays stable
+  // mid-type and only parses on write.
+  protected optionsAsString(f: FormField): string {
+    const draft = (f as FormField & { _optionsDraft?: string })._optionsDraft;
+    if (typeof draft === 'string') return draft;
+    return (f.options ?? []).map(o => o.label).join(', ');
   }
-  splitOptions(s: string): string[] {
-    return s.split(',').map(x => x.trim()).filter(Boolean);
+  protected parseOptions(s: string): FieldOption[] {
+    return s.split(',').map(x => x.trim()).filter(Boolean).map((label, i) => ({
+      id: `opt_${i}_${label.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
+      label,
+      value: label,
+      order: i
+    }));
   }
-  deriveName(title: string, currentName: string | undefined): string {
+  protected onOptionsTyped(i: number, raw: string) {
+    this._fields.update(list => list.map((p, idx) => idx === i
+      ? ({ ...p, _optionsDraft: raw, options: this.parseOptions(raw) } as FormField)
+      : p));
+    this.persistFieldsToDraft();
+  }
+
+  deriveName(label: string, currentName: string | undefined): string {
     if (currentName && currentName.trim() && !currentName.startsWith('new_param')) return currentName;
-    return title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || currentName || '';
+    return label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || currentName || '';
   }
 
-  private loadParameters(draftJson: string): ParameterRow[] {
+  // Peers available as condition sources — every OTHER field.
+  peersFor(index: number): FormField[] {
+    return this._fields().filter((_, i) => i !== index);
+  }
+
+  private loadParameters(draftJson: string): FormField[] {
     if (!draftJson) return [];
     try {
-      const blob = JSON.parse(draftJson) as TestParametersBlob;
-      return (blob.parameters ?? []).map(p => ({
-        name: p.name, title: p.title, type: p.type, unit: p.unit, options: p.options,
-        referenceRanges: p.referenceRanges, criticalLow: p.criticalLow,
-        criticalHigh: p.criticalHigh, normalValue: p.normalValue as string | undefined
-      }));
+      const blob = JSON.parse(draftJson) as TestParametersBlob & { fields?: FormField[] };
+      // New-format blobs carry `fields`; legacy blobs have `parameters`.
+      if (Array.isArray(blob.fields)) return blob.fields;
+      return (blob.parameters ?? []).map((p, i) => this.legacyToField(p, i));
     } catch { return []; }
   }
 
-  private persistParamsToDraft() {
-    const params = this._editedParams();
+  private legacyToField(p: TestParameter, order: number): FormField {
+    const type = LEGACY_TYPE_MAP[p.type] ?? 'text';
+    return {
+      id: p.id || newFieldId(),
+      name: p.name,
+      label: p.title,
+      type,
+      order,
+      isRequired: false,
+      isConditional: false,
+      unit: p.unit,
+      referenceRanges: p.referenceRanges ?? null,
+      criticalLow: p.criticalLow ?? null,
+      criticalHigh: p.criticalHigh ?? null,
+      normalValue: p.normalValue ?? null,
+      options: p.options?.map((label, i) => ({
+        id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
+        label: label ?? '',
+        value: label ?? '',
+        order: i
+      })) ?? null
+    };
+  }
+
+  private fieldToLegacy(f: FormField): TestParameter {
+    const legacyType = FORWARD_TYPE_MAP[f.type] ?? 'text';
+    return {
+      id: f.id,
+      name: f.name,
+      title: f.label,
+      type: legacyType,
+      unit: f.unit ?? undefined,
+      options: f.options?.map(o => o.label) ?? undefined,
+      referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
+      normalValue: f.normalValue ?? undefined,
+      criticalLow: f.criticalLow ?? undefined,
+      criticalHigh: f.criticalHigh ?? undefined
+    };
+  }
+
+  private persistFieldsToDraft() {
+    const fields = this._fields();
+    // Strip transient UI state (e.g., _optionsDraft) so it never persists.
+    const cleanFields = fields.map(f => {
+      const { _optionsDraft, ...rest } = f as FormField & { _optionsDraft?: string };
+      void _optionsDraft;
+      return rest as FormField;
+    });
+    // Dual-write: keep `parameters` (legacy) in sync for older consumers,
+    // add `fields` (new shape) so conditional visibility round-trips.
     const existing = (() => {
       try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
     })();
-    const blob = { ...existing, parameters: params };
+    const blob = {
+      ...existing,
+      parameters: cleanFields.map(f => this.fieldToLegacy(f)),
+      fields: cleanFields
+    };
     this.patch({ parametersJson: JSON.stringify(blob) });
   }
 
   addParameter() {
-    const idx = this._editedParams().length + 1;
-    this._editedParams.update(list => [...list, {
+    const idx = this._fields().length + 1;
+    const field: FormField = {
+      id: newFieldId(),
       name: `new_param_${idx}`,
-      title: `New parameter ${idx}`,
-      type: 'numeric_with_range',
+      label: `New parameter ${idx}`,
+      type: 'number',
+      order: idx - 1,
+      isRequired: false,
+      isConditional: false,
       unit: '',
-      referenceRanges: [{ segment: 'normal', min: undefined, max: undefined }]
-    }]);
-    this.persistParamsToDraft();
+      referenceRanges: [{ segment: 'normal', min: null, max: null }]
+    };
+    this._fields.update(list => [...list, field]);
+    this.persistFieldsToDraft();
   }
 
-  patchParam(i: number, updates: Partial<ParameterRow>) {
-    this._editedParams.update(list =>
+  patchField(i: number, updates: Partial<FormField>) {
+    this._fields.update(list =>
       list.map((p, idx) => idx === i ? { ...p, ...updates } : p)
     );
-    this.persistParamsToDraft();
+    this.persistFieldsToDraft();
   }
 
-  patchRange(i: number, updates: Partial<{ min?: number; max?: number }>) {
-    this._editedParams.update(list => list.map((p, idx) => {
+  patchRange(i: number, updates: Partial<{ min: number | undefined; max: number | undefined }>) {
+    this._fields.update(list => list.map((p, idx) => {
       if (idx !== i) return p;
       const ranges = [...(p.referenceRanges ?? [{ segment: 'normal' }])];
-      ranges[0] = { ...ranges[0], segment: ranges[0].segment ?? 'normal', ...updates };
+      ranges[0] = {
+        ...ranges[0],
+        segment: ranges[0].segment ?? 'normal',
+        ...('min' in updates ? { min: updates.min ?? null } : {}),
+        ...('max' in updates ? { max: updates.max ?? null } : {})
+      };
       return { ...p, referenceRanges: ranges };
     }));
-    this.persistParamsToDraft();
+    this.persistFieldsToDraft();
   }
 
-  removeParam(i: number) {
-    this._editedParams.update(list => list.filter((_, idx) => idx !== i));
-    this.persistParamsToDraft();
+  patchCondition(i: number, showWhen: ShowWhen | null) {
+    this._fields.update(list => list.map((p, idx) => idx === i
+      ? { ...p, showWhen, isConditional: !!showWhen }
+      : p));
+    this.persistFieldsToDraft();
+  }
+
+  patchValidation(i: number, v: ValidationPatch) {
+    this._fields.update(list => list.map((p, idx) => idx === i
+      ? { ...p, isRequired: v.isRequired, validation: v.validation }
+      : p));
+    this.persistFieldsToDraft();
+  }
+
+  removeField(i: number) {
+    this._fields.update(list => list.filter((_, idx) => idx !== i));
+    this.persistFieldsToDraft();
   }
 
   patch(p: Partial<DraftTest>) { this._draft.update(d => ({ ...d, ...p })); }

@@ -1,0 +1,236 @@
+// Shared form-field schema. Ported from form-builder's Form.model.ts so the
+// test editor + workflow builder share one vocabulary for field types,
+// conditional visibility, and per-type config.
+//
+// Scope is narrower than form-builder's full Form/Page/Section tree — a lab
+// test currently needs only a flat array of fields (parameters). When richer
+// structures are required (grouped sections, multi-page narratives), lift
+// Page/Section from form-builder as-is; the leaf types here will still apply.
+
+// ── Field type taxonomy ───────────────────────────────────────────────
+
+export type FormFieldType =
+  | 'text'
+  | 'number'
+  | 'textarea'
+  | 'voice-text'
+  | 'select'
+  | 'multiselect'
+  | 'checkbox'
+  | 'radio'
+  | 'duration'
+  | 'duration-time'
+  | 'duration-period'
+  | 'date'
+  | 'time'
+  | 'datetime'
+  | 'buttonSelect'
+  | 'imageSelect'
+  | 'yesno'
+  | 'yesNoNa'
+  | 'toggle'
+  | 'phone'
+  | 'email'
+  | 'multiTextbox'
+  | 'imageGallery'
+  | 'scribblePad'
+  | 'imageInfo'
+  | 'signature'
+  | 'file-upload'
+  | 'section-header'
+  | 'info-text'
+  | 'size'
+  | 'measure'
+  | 'table'
+  | 'recursive'
+  | 'recursivePages';
+
+// Groups for the field-type picker UI.
+export type FormFieldCategory = 'input' | 'choice' | 'layout' | 'media' | 'advanced';
+
+// Width bucket — maps to CSS in the renderer.
+export type FormFieldWidth = 'full' | 'half' | 'third' | 'quarter';
+
+// ── Conditional visibility ────────────────────────────────────────────
+
+export type ConditionOperator =
+  | 'equals'
+  | 'notEquals'
+  | 'contains'
+  | 'notContains'
+  | 'isEmpty'
+  | 'isNotEmpty'
+  | 'greaterThan'
+  | 'lessThan'
+  | 'greaterThanOrEqual'
+  | 'lessThanOrEqual';
+
+export interface ConditionRule {
+  fieldId: string; // Source field whose value drives the condition
+  operator: ConditionOperator;
+  value?: unknown;
+}
+
+export interface ShowWhen {
+  logic: 'AND' | 'OR';
+  visibility?: 'show' | 'hide'; // default 'show'
+  conditions: ConditionRule[];
+}
+
+// ── Options (for select/multiselect/radio/buttonSelect/imageSelect) ───
+
+export interface FieldOption {
+  id: string;
+  label: string;
+  value: string;
+  order: number;
+  icon?: string | null;
+  image?: string | null;
+  color?: string | null;
+  description?: string | null;
+}
+
+// ── Validation ────────────────────────────────────────────────────────
+
+export interface ValidationConfig {
+  minLength?: number | null;
+  maxLength?: number | null;
+  min?: number | null;
+  max?: number | null;
+  pattern?: string | null;
+  errorMessage?: string | null;
+}
+
+// ── Reference ranges (lab-specific — keeps test-editor semantics) ─────
+
+export interface ReferenceRange {
+  segment: string; // e.g. "Male adult", "Female adult", "0-1 yr"
+  min?: number | null;
+  max?: number | null;
+  unit?: string | null;
+}
+
+// ── Per-type config blocks (stubs where complex renders aren't needed yet) ─
+
+export type ImageGalleryLayout = '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '3x2';
+
+export interface ImageGalleryConfig {
+  layout: ImageGalleryLayout;
+  maxImages: number;
+  maxSizeMB: number;
+  allowCamera: boolean;
+  allowUpload: boolean;
+  compressImages: boolean;
+  compressionQuality: number;
+  requireDescription: boolean;
+  descriptionPlaceholder?: string;
+}
+
+export interface ScribblePadConfig {
+  width: number;
+  height: number;
+  strokeColor: string;
+  strokeWidth: number;
+  backgroundColor: string;
+  showDescription: boolean;
+  descriptionPlaceholder?: string;
+  descriptionRequired: boolean;
+}
+
+export type SizeUnitType = 'cm' | 'mm' | 'inch' | 'feet' | 'meter';
+
+export interface SizeConfig {
+  boxCount: number;
+  defaultUnit: SizeUnitType;
+}
+
+export interface MeasureConfig {
+  min: number;
+  max: number;
+  step: number;
+  defaultUnit: string;
+}
+
+export type DurationUnitType = 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
+
+// ── Conditional link (set/copy value when conditions fire) ────────────
+
+export type LinkConditionOperator =
+  | 'equals'
+  | 'notEquals'
+  | 'contains'
+  | 'isSelected'
+  | 'hasValue'
+  | 'isEmpty'
+  | 'isNotEmpty'
+  | 'greaterThan'
+  | 'lessThan';
+
+export interface LinkTriggerCondition {
+  sourceRef: string; // fieldId or composite ref
+  operator: LinkConditionOperator;
+  value?: unknown;
+}
+
+export type LinkActionType = 'setValue' | 'copyValue' | 'makeRequired' | 'makeOptional' | 'show' | 'hide';
+
+export interface LinkTriggerAction {
+  targetRef: string;
+  actionType: LinkActionType;
+  value?: unknown;
+  sourceRef?: string;
+}
+
+export interface ConditionalLinkTrigger {
+  id: string;
+  name: string;
+  conditions: LinkTriggerCondition[];
+  conditionLogic: 'AND' | 'OR';
+  actions: LinkTriggerAction[];
+  enabled: boolean;
+}
+
+// ── FormField — the leaf interface that replaces test-editor's ParameterRow ─
+
+export interface FormField {
+  id: string;
+  name: string;          // machine name, snake_case
+  label: string;         // display label
+  type: FormFieldType;
+  order: number;
+
+  placeholder?: string | null;
+  helperText?: string | null;
+  icon?: string | null;
+  width?: FormFieldWidth;
+
+  isRequired: boolean;
+  isConditional: boolean;
+  showWhen?: ShowWhen | null;
+
+  defaultValue?: unknown;
+  validation?: ValidationConfig | null;
+  options?: FieldOption[] | null;
+
+  // Lab-specific extras (preserved from existing test-editor ParameterRow)
+  unit?: string | null;
+  referenceRanges?: ReferenceRange[] | null;
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  normalValue?: string | null;
+
+  // Per-type configs (only populated for the matching type)
+  defaultUnit?: DurationUnitType | null;
+  imageGalleryConfig?: ImageGalleryConfig | null;
+  scribblePadConfig?: ScribblePadConfig | null;
+  sizeConfig?: SizeConfig | null;
+  measureConfig?: MeasureConfig | null;
+
+  disabled?: boolean;
+}
+
+// Convenience bundle used where a single test stores many fields + triggers.
+export interface FormFieldBundle {
+  fields: FormField[];
+  conditionalLinks?: ConditionalLinkTrigger[] | null;
+}
