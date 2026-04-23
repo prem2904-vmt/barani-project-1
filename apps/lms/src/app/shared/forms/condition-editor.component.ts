@@ -39,20 +39,22 @@ const VISIBILITY_OPTIONS: PfSelectOption<'show' | 'hide'>[] = [
   template: `
     @if (showWhen()) {
       <div class="pf-condition-editor">
-        <div class="flex items-center gap-2 mb-2">
-          <pf-select size="sm" [options]="visibilityOptions"
-                     [value]="showWhen()!.visibility ?? 'show'"
-                     (valueChange)="onVisibilityChange($event)"></pf-select>
-          <pf-select size="sm" [options]="logicOptions"
-                     [value]="showWhen()!.logic"
-                     (valueChange)="onLogicChange($event)"></pf-select>
-          <span class="text-[11px] font-mono flex-1" style="color: var(--text-muted);">
-            of these rules match
-          </span>
-          <button type="button" class="pf-cond-btn-ghost" (click)="remove.emit()" aria-label="Remove all conditions">
+        <div class="pf-cond-header">
+          <div class="pf-cond-header__selects">
+            <pf-select size="sm" [options]="visibilityOptions"
+                       [value]="showWhen()!.visibility ?? 'show'"
+                       (valueChange)="onVisibilityChange($event)"></pf-select>
+            <pf-select size="sm" [options]="logicOptions"
+                       [value]="showWhen()!.logic"
+                       (valueChange)="onLogicChange($event)"></pf-select>
+          </div>
+          <button type="button" class="pf-cond-btn-ghost pf-cond-header__remove"
+                  (click)="remove.emit()"
+                  aria-label="Remove all conditions">
             Remove
           </button>
         </div>
+        <p class="pf-cond-helper">of these rules match</p>
 
         @for (rule of showWhen()!.conditions; track $index; let i = $index) {
           <div class="pf-condition-row">
@@ -105,12 +107,42 @@ const VISIBILITY_OPTIONS: PfSelectOption<'show' | 'hide'>[] = [
       background: var(--bg-card-solid);
       border: 1px dashed rgba(236, 72, 153, 0.35);
     }
+
+    .pf-cond-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+    .pf-cond-header__selects {
+      display: flex;
+      gap: 8px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .pf-cond-header__selects > * { min-width: 0; }
+    .pf-cond-header__remove {
+      flex-shrink: 0;
+      padding: 0 10px;
+      width: auto;
+      font-size: 12px;
+    }
+
+    .pf-cond-helper {
+      margin: 0 0 8px 2px;
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
     .pf-condition-row {
       display: grid;
-      grid-template-columns: 1.4fr 1.1fr 1fr 28px;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, 1fr) 28px;
       gap: 6px;
       margin-bottom: 6px;
     }
+    .pf-condition-row > * { min-width: 0; }
     .pf-cond-empty-slot { visibility: hidden; }
 
     .pf-cond-btn-ghost {

@@ -12,6 +12,11 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wrap">
+      <!-- Pulsing halo behind the field — draws the eye on the Frontdesk
+           landing so the patient search is the unambiguous next action.
+           Pauses the animation while the field is focused so it doesn't
+           distract the user mid-type. -->
+      <span class="pulse" aria-hidden="true" [class.pulse--paused]="_focused()"></span>
       <div class="field" [class.field-focused]="_focused()">
         <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -105,23 +110,48 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
     .wrap { position: relative; width: 100%; }
 
+    /* ── Pulsing halo behind the field ──────────────────────── */
+    .pulse {
+      position: absolute;
+      inset: -6px;
+      border-radius: 22px;
+      pointer-events: none;
+      background: linear-gradient(135deg,
+        rgba(124, 58, 237, 0.55),
+        rgba(236, 72, 153, 0.55));
+      opacity: 0;
+      filter: blur(14px);
+      animation: pf-ps-pulse 2.4s ease-in-out infinite;
+      z-index: 0;
+    }
+    .pulse--paused { animation: none; opacity: 0; }
+
+    @keyframes pf-ps-pulse {
+      0%, 100% { opacity: 0.18; transform: scale(1); }
+      50%      { opacity: 0.45; transform: scale(1.03); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pulse { animation: none; opacity: 0.2; }
+    }
+
     /* ── Field ──────────────────────────────────────────────── */
     .field {
       position: relative;
       display: flex;
       align-items: center;
-      height: 44px;
-      padding: 0 44px 0 42px;
+      height: 60px;
+      padding: 0 56px 0 56px;
       background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
+      border: 1.5px solid var(--glass-border);
+      border-radius: 18px;
       transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      z-index: 1;
     }
     .field:hover { border-color: var(--glass-border-hover); }
     .field.field-focused {
-      border-color: rgba(168, 85, 247, 0.55);
+      border-color: rgba(168, 85, 247, 0.7);
       background: var(--glass-bg-hover);
-      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+      box-shadow: 0 0 0 6px rgba(124, 58, 237, 0.18);
     }
     .field input {
       flex: 1;
@@ -130,24 +160,30 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       outline: 0;
       background: transparent;
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
     }
-    .field input::placeholder { color: var(--text-muted); }
+    .field input::placeholder { color: var(--text-muted); font-weight: 400; }
     .field-icon {
       position: absolute;
-      left: 14px;
-      width: 16px;
-      height: 16px;
+      left: 20px;
+      width: 22px;
+      height: 22px;
       color: var(--text-muted);
       pointer-events: none;
+      transition: color 0.15s ease, transform 0.2s ease;
     }
-    .field.field-focused .field-icon { color: var(--text-secondary); }
+    .field.field-focused .field-icon {
+      color: #a855f7;
+      transform: scale(1.05);
+    }
 
     .field-clear {
       position: absolute;
-      right: 10px;
-      width: 22px;
-      height: 22px;
+      right: 16px;
+      width: 28px;
+      height: 28px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -164,15 +200,15 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     }
 
     .field-spinner, .panel-spinner {
-      width: 14px;
-      height: 14px;
+      width: 18px;
+      height: 18px;
       border-radius: 9999px;
       border: 2px solid rgba(168, 85, 247, 0.3);
       border-top-color: rgba(168, 85, 247, 0.9);
       animation: pf-ps-spin 0.8s linear infinite;
       display: inline-block;
     }
-    .field-spinner { position: absolute; right: 14px; }
+    .field-spinner { position: absolute; right: 20px; }
 
     @keyframes pf-ps-spin { to { transform: rotate(360deg); } }
 
@@ -181,7 +217,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       position: absolute;
       left: 0;
       right: 0;
-      top: calc(100% + 8px);
+      top: calc(100% + 12px);
       z-index: 50;
       max-height: 22rem;
       overflow-y: auto;

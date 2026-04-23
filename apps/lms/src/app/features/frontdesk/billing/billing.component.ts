@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -44,9 +45,18 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
       <pf-screen-header
-        eyebrow="Reception · Billing"
+        eyebrow="Frontdesk · Billing"
         title="Collect payment"
         [subtitle]="subtitle()">
+        <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
+             after save and raises a billing request instead. Flag is
+             persisted in localStorage via FrontdeskSettingsService. -->
+        <label actions class="pf-collect-toggle" title="Frontdesk collects payment">
+          <input type="checkbox"
+                 [checked]="collectsBilling()"
+                 (change)="setCollectsBilling($any($event.target).checked)" />
+          <span>Frontdesk collects</span>
+        </label>
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -259,6 +269,29 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     </section>
   `,
   styles: [`
+    /* Admin flag in the header: "Frontdesk collects" toggles whether the
+     * Order tab routes here automatically after save. */
+    .pf-collect-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .pf-collect-toggle:hover { background: var(--glass-bg-hover); }
+    .pf-collect-toggle input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #a855f7;
+    }
+
     .pf-eyebrow {
       margin: 0;
       font-size: 10.5px;
@@ -611,6 +644,10 @@ export class BillingComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly settings = inject(FrontdeskSettingsService);
+
+  readonly collectsBilling = this.settings.collectsBilling;
+  setCollectsBilling(v: boolean) { this.settings.setCollectsBilling(v); }
 
   readonly modes = PAY_MODES;
   readonly quickAdd = QUICK_ADD;
@@ -672,7 +709,7 @@ export class BillingComponent implements OnInit {
 
   ngOnInit() {
     const orderId = this.route.snapshot.queryParamMap.get('orderId');
-    if (!orderId) { this.toasts.error('No order id'); this.router.navigateByUrl('/reception'); return; }
+    if (!orderId) { this.toasts.error('No order id'); this.router.navigateByUrl('/frontdesk'); return; }
 
     this.api.get<Order>(`/api/orders/${orderId}`).subscribe({ next: o => this._order.set(o) });
     this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
@@ -717,7 +754,7 @@ export class BillingComponent implements OnInit {
         next: () => {
           this._saving.set(false);
           this.toasts.success('Payment collected');
-          this.router.navigate(['/reception/post-payment'], { queryParams: { orderId: bill.orderId } });
+          this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: bill.orderId } });
         },
         error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
       });
@@ -738,5 +775,5 @@ export class BillingComponent implements OnInit {
     }
   }
 
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 }

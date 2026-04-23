@@ -34,7 +34,7 @@ interface StaffMember {
 }
 
 @Component({
-  selector: 'pf-reception-landing',
+  selector: 'pf-frontdesk-landing',
   standalone: true,
   imports: [DatePipe, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,7 +44,7 @@ interface StaffMember {
       <!-- ── Compact header ─────────────────────────────────────── -->
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
-          <span class="pf-head__eyebrow">Reception · Front desk</span>
+          <span class="pf-head__eyebrow">Frontdesk · Front desk</span>
           <h1 class="pf-head__title">
             Good day, <span class="pf-head__name">{{ firstName() }}</span>
           </h1>
@@ -1243,7 +1243,7 @@ interface StaffMember {
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   `]
 })
-export class ReceptionLandingComponent implements OnInit {
+export class FrontdeskLandingComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
@@ -1472,23 +1472,23 @@ export class ReceptionLandingComponent implements OnInit {
   }
 
   // ── Navigation & actions ──────────────────────────────────
-  openRegister() { this.router.navigate(['/reception/patients/new']); }
+  openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
   searchFocus() { this.toasts.success('QR scanner · coming soon'); }
-  openProfile(p: Patient) { this.router.navigate(['/reception/patients', p.id]); }
+  openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
   openAppointment(a: Appointment) {
-    if (a.patientId) this.router.navigate(['/reception/patients', a.patientId]);
+    if (a.patientId) this.router.navigate(['/frontdesk/patients', a.patientId]);
   }
   openOrder(o: Order) { this._selectedOrder.set(o); }
   closeOrder() { this._selectedOrder.set(null); }
   openStraggler(s: StragglerItem) {
-    if (s.orderId) this.router.navigate(['/reception/patients', s.patientId]);
-    else if (s.patientId) this.router.navigate(['/reception/patients', s.patientId]);
+    if (s.orderId) this.router.navigate(['/frontdesk/patients', s.patientId]);
+    else if (s.patientId) this.router.navigate(['/frontdesk/patients', s.patientId]);
   }
   quickBook(o: Order) {
-    if (o.patientId) this.router.navigate(['/reception/order-create'], { queryParams: { patientId: o.patientId } });
+    if (o.patientId) this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId } });
   }
   collectPayment(b: Bill) {
-    this.router.navigate(['/reception/billing'], { queryParams: { orderId: b.orderId } });
+    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: b.orderId } });
   }
   checkIn(a: Appointment) {
     this.api.patch<Appointment>(`/api/appointments/${a.id}/checkin`).subscribe({

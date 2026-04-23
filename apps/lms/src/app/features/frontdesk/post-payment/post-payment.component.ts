@@ -191,7 +191,7 @@ export class PostPaymentComponent implements OnInit {
 
   ngOnInit() {
     const id = this.route.snapshot.queryParamMap.get('orderId');
-    if (!id) { this.router.navigateByUrl('/reception'); return; }
+    if (!id) { this.router.navigateByUrl('/frontdesk'); return; }
     this.api.get<Order>(`/api/orders/${id}`).subscribe({
       next: o => this._order.set(o),
       error: () => this.toasts.error('Could not load order')
@@ -204,5 +204,5 @@ export class PostPaymentComponent implements OnInit {
     this.waSent.set(true);
     this.toasts.success('Confirmation queued (demo)');
   }
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 }

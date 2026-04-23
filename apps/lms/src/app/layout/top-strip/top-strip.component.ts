@@ -1,10 +1,9 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { ApiService } from '../../core/services/api.service';
+import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
-import { Tenant } from '../../shared/models/tenant.model';
 import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
 
 @Component({
@@ -14,10 +13,12 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="sticky top-0 z-40 safe-area-top px-3 sm:px-4 pt-3 sm:pt-4">
-      <div class="relative flex items-center gap-2 p-1.5 pl-3 sm:pl-4 rounded-full backdrop-blur-2xl border"
+      <div class="pf-topstrip-bar relative flex items-center gap-2 rounded-full backdrop-blur-2xl border"
            style="background: var(--header-bg); border-color: var(--header-border);">
 
-        <!-- Brand lockup — PF glyph · ECG pulse · PREFRONTAL · Lab Management System -->
+        <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
+             Goes to /admin landing. Branch switching lives on the tenant
+             brand pill (right side). -->
         <a routerLink="/admin" class="pf-brand-lockup press" aria-label="Prefrontal · Lab Management System · Home">
           <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
@@ -45,38 +46,6 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
             <span class="pf-brand-sub">Lab Management System</span>
           </span>
         </a>
-
-        <!-- Branch selector — layout change: sits on the LEFT, right after the brand (reference layout) -->
-        <div class="relative shrink-0 ml-1">
-          <button type="button"
-                  (click)="toggleBranch()"
-                  class="pf-strip-chip h-10 sm:h-11 px-3 sm:px-4 rounded-full flex items-center gap-2 text-[12.5px] font-medium press">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 21V7l8-4 8 4v14M9 21v-5h6v5M12 8v4m-2-2h4"/>
-            </svg>
-            <span class="max-w-[100px] lg:max-w-[140px] truncate">{{ branch() }}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-          </button>
-          @if (branchOpen()) {
-            <div class="absolute top-full mt-2 left-0 z-40 min-w-[220px] rounded-2xl p-2 slide-up glass-card-elevated">
-              @for (b of branches; track b) {
-                <button type="button"
-                        (click)="selectBranch(b)"
-                        class="w-full text-left h-10 px-3 rounded-xl text-[13px] press flex items-center justify-between"
-                        [class]="b === branch() ? 'pf-branch-active' : 'pf-branch-item'">
-                  <span>{{ b }}</span>
-                  @if (b === branch()) {
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="m5 12 4 4L19 6"/>
-                    </svg>
-                  }
-                </button>
-              }
-            </div>
-          }
-        </div>
 
         <div class="flex-1 min-w-0"></div>
 
@@ -135,41 +104,63 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
 
         <!-- Right cluster -->
 
-        <button type="button" class="pf-strip-btn press" aria-label="Search">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-          </svg>
-        </button>
-
         <pf-notification-bell></pf-notification-bell>
-
-        <button type="button" (click)="themeService.toggle()"
-                class="pf-strip-btn press" [attr.aria-label]="'Switch to ' + (isDark() ? 'light' : 'dark') + ' theme'">
-          @if (isDark()) {
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="4"/>
-              <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
-            </svg>
-          } @else {
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 14.5A8 8 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>
-            </svg>
-          }
-        </button>
 
         <div class="w-px h-6 mx-1 hidden sm:block" style="background: var(--border-muted);"></div>
 
-        <!-- Vendor logo slot — tenant's logo, or a dashed placeholder linking to settings. -->
-        <a routerLink="/admin"
-           class="pf-vendor-logo press hidden sm:inline-flex"
-           [class.pf-vendor-logo-empty]="!tenantLogo()"
-           [attr.aria-label]="tenantLogo() ? (tenantName() + ' — logo') : 'Add your organization logo'">
-          @if (tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-vendor-logo-img" />
-          } @else {
-            <span class="pf-vendor-logo-text">YOUR LOGO</span>
+        <!-- Tenant brand pill doubles as branch switcher. Click the
+             logo/name → opens branch dropdown. Branding settings is
+             reachable from the profile popover.
+             Only renders once the tenant fetch has resolved so the
+             "YOUR LOGO" placeholder doesn't flash before real branding
+             loads. -->
+        @if (tenantLoaded()) {
+        <div class="relative hidden sm:block">
+          <button type="button"
+                  class="pf-vendor-logo press"
+                  [class.pf-vendor-logo-empty]="!hasBrand()"
+                  [class.pf-vendor-logo--open]="branchOpen()"
+                  [attr.aria-expanded]="branchOpen()"
+                  [attr.aria-label]="'Switch branch — currently ' + branch()"
+                  (click)="toggleBranch()">
+            @if (showLogo() && tenantLogo()) {
+              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-vendor-logo-img" />
+            }
+            @if (showName() && brandingName(); as label) {
+              <span class="pf-vendor-logo-text">{{ label }}</span>
+            }
+            @if (!hasBrand()) {
+              <span class="pf-vendor-logo-text">YOUR LOGO</span>
+            }
+            <svg class="pf-vendor-logo-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
+
+          @if (branchOpen()) {
+            <div class="pf-brand-pop" role="menu">
+              <div class="pf-brand-pop__head">
+                <span class="pf-brand-pop__eyebrow">Active branch</span>
+                <p class="pf-brand-pop__current">{{ branch() }}</p>
+              </div>
+              <div class="pf-brand-pop__divider"></div>
+              @for (b of branches; track b) {
+                <button type="button"
+                        (click)="selectBranch(b)"
+                        class="pf-brand-pop__item"
+                        [class.pf-brand-pop__item--active]="b === branch()">
+                  <span class="truncate">{{ b }}</span>
+                  @if (b === branch()) {
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 12 4 4L19 6"/>
+                    </svg>
+                  }
+                </button>
+              }
+            </div>
           }
-        </a>
+        </div>
+        }
 
         <!-- Profile avatar — click to open name / role / logout -->
         <div class="relative">
@@ -197,6 +188,14 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
               </header>
 
               <div class="pf-profile-divider"></div>
+
+              <a routerLink="/setup" class="pf-profile-item press"
+                 (click)="closeProfile()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+                </svg>
+                <span>Tenant branding</span>
+              </a>
 
               <button type="button" class="pf-profile-item press"
                       (click)="themeService.toggle(); closeProfile()">
@@ -230,20 +229,51 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
     </header>
   `,
   styles: [`
-    /* Brand lockup — PF glyph + ECG pulse + PREFRONTAL + LMS ----- */
+    /* Top strip bar — fixed 64px+ height so every interactive element
+     * inside it can adopt a consistent vertical rhythm. Padding + children
+     * (44px pills) = 64px exact. */
+    .pf-topstrip-bar {
+      min-height: 64px;
+      padding: 10px 16px 10px 12px;
+    }
+    @media (max-width: 639px) {
+      .pf-topstrip-bar { padding: 8px 12px; min-height: 60px; }
+    }
+
+    /* Brand lockup — PF glyph + ECG pulse + PREFRONTAL + branch switcher */
     .pf-brand-lockup {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       flex-shrink: 0;
-      padding-right: 8px;
+      padding: 4px 10px 4px 4px;
+      border-radius: 9999px;
       text-decoration: none;
-      transition: opacity 0.2s ease;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: inherit;
+      transition: background 0.15s ease, opacity 0.2s ease;
     }
-    .pf-brand-lockup:hover { opacity: 0.92; }
+    .pf-brand-lockup:hover { background: var(--bg-hover); opacity: 0.96; }
+    .pf-brand-lockup--open { background: var(--bg-hover); }
+
+    .pf-brand-chev {
+      color: var(--text-muted);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+    .pf-brand-lockup--open .pf-brand-chev { transform: rotate(180deg); color: var(--text-primary); }
+
+    .pf-brand-branch-icon {
+      display: inline-block;
+      margin-right: 4px;
+      vertical-align: -1px;
+      color: #a855f7;
+    }
 
     .pf-brand-glyph {
-      width: 26px;
+      width: 30px;
       height: auto;
       flex-shrink: 0;
       filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.35));
@@ -295,15 +325,83 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       animation: pf-brand-name-beat 2.5s ease-in-out infinite;
     }
     .pf-brand-sub {
-      font-size: 9.5px;
-      font-weight: 500;
-      letter-spacing: 0.06em;
+      display: inline-flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       white-space: nowrap;
-      color: var(--text-muted);
+      color: var(--text-secondary);
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    :root.light .pf-brand-sub {
-      color: #7c3aed;
-      opacity: 0.7;
+    :root.light .pf-brand-sub { color: #7c3aed; }
+
+    /* Branch popover hanging off the brand lockup ------------- */
+    .pf-brand-pop {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      min-width: 240px;
+      padding: 6px;
+      border-radius: 18px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      z-index: 40;
+      overflow: hidden;
+      animation: pf-pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .pf-brand-pop__head { padding: 10px 12px 6px; }
+    .pf-brand-pop__eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-brand-pop__current {
+      margin: 4px 0 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .pf-brand-pop__divider {
+      height: 1px;
+      margin: 4px 8px;
+      background: var(--border-muted);
+    }
+    .pf-brand-pop__item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+      text-align: left;
+    }
+    .pf-brand-pop__item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .pf-brand-pop__item--active {
+      background: var(--gradient-primary);
+      color: #ffffff;
+    }
+    .pf-brand-pop__item--active:hover {
+      background: var(--gradient-primary);
+      color: #ffffff;
     }
 
     /* Reveal brand lockup progressively: pulse at tablet, wordmark only when
@@ -342,8 +440,8 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
     }
 
     .pf-strip-btn {
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2.75rem;
+      height: 2.75rem;
       border-radius: 9999px;
       display: inline-flex;
       align-items: center;
@@ -389,8 +487,8 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      height: 2.5rem;
-      padding: 0 12px;
+      height: 2.75rem;
+      padding: 0 14px;
       border-radius: 9999px;
       color: var(--text-secondary);
       font-size: 13px;
@@ -468,8 +566,8 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
     /* Profile avatar + popover ------------------------------- */
     .pf-avatar-btn {
       position: relative;
-      width: 2.25rem;
-      height: 2.25rem;
+      width: 2.75rem;
+      height: 2.75rem;
       border-radius: 9999px;
       padding: 0;
       background: transparent;
@@ -483,8 +581,8 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2rem;
-      height: 2rem;
+      width: 2.4rem;
+      height: 2.4rem;
       border-radius: 9999px;
       background: var(--gradient-primary);
       color: #ffffff;
@@ -594,43 +692,78 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
       color: #fca5a5;
     }
 
-    /* Vendor logo slot --------------------------------------- */
+    /* Vendor brand slot (logo / name / both) ------------------ */
     .pf-vendor-logo {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      height: 2.25rem;
+      gap: 8px;
+      height: 2.75rem;
       padding: 0 14px;
       margin: 0 4px;
-      border-radius: 12px;
+      border-radius: 14px;
       text-decoration: none;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
       transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      /* 140 (text) + 80 (logo) + 12 (chev) + 16 (inner gaps) + 24 (padding). */
+      max-width: 280px;
     }
-    .pf-vendor-logo:hover { transform: translateY(-1px); }
+    .pf-vendor-logo:hover {
+      transform: translateY(-1px);
+      background: var(--glass-bg-hover);
+      border-color: var(--glass-border-hover);
+    }
     .pf-vendor-logo-empty {
-      border: 1.5px dashed #ec4899;
-      background: transparent;
+      border-style: dashed;
+      border-color: rgba(236, 72, 153, 0.55);
+      background: rgba(236, 72, 153, 0.05);
     }
     .pf-vendor-logo-empty:hover {
-      background: rgba(236, 72, 153, 0.08);
-      border-color: #f472b6;
+      background: rgba(236, 72, 153, 0.12);
+      border-color: #ec4899;
     }
     .pf-vendor-logo-text {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.14em;
-      color: #ec4899;
+      letter-spacing: 0.08em;
+      color: var(--text-primary);
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* Sized to fit 10 characters of wide uppercase glyphs (e.g. "WWWWWWWWWW")
+       * with the current font + letter-spacing. Anything shorter fits with
+       * room to spare; anything longer still ellipses. */
+      max-width: 140px;
     }
-    :root.light .pf-vendor-logo-empty { border-color: #db2777; }
-    :root.light .pf-vendor-logo-text  { color: #db2777; }
+    .pf-vendor-logo-empty .pf-vendor-logo-text {
+      color: #ec4899;
+      letter-spacing: 0.14em;
+    }
+    :root.light .pf-vendor-logo-empty .pf-vendor-logo-text { color: #db2777; }
 
     .pf-vendor-logo-img {
-      max-height: 1.5rem;
-      max-width: 6rem;
+      max-height: 1.6rem;
+      max-width: 5rem;
       object-fit: contain;
       display: block;
+      flex-shrink: 0;
     }
+    .pf-vendor-logo-chev {
+      color: var(--text-muted);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+    .pf-vendor-logo--open {
+      background: var(--glass-bg-hover);
+      border-color: var(--glass-border-hover);
+    }
+    .pf-vendor-logo--open .pf-vendor-logo-chev {
+      transform: rotate(180deg);
+      color: var(--text-primary);
+    }
+
 
     @media (prefers-reduced-motion: reduce) {
       .pf-more-pop, .pf-profile-pop { animation: none; }
@@ -641,7 +774,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   private readonly auth = inject(AuthService);
-  private readonly api = inject(ApiService);
+  private readonly tenantState = inject(TenantStateService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -654,12 +787,46 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly branchOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly profileOpen = signal(false);
-  private readonly _tenant = signal<Tenant | null>(null);
+  // Pulls from the shared service so branding saves reflect instantly.
+  private readonly _tenant = this.tenantState.tenant;
+  // Gate the brand pill on this so the "YOUR LOGO" placeholder doesn't
+  // flash before the first /api/tenants/current resolves.
+  readonly tenantLoaded = computed(() => this.tenantState.status() === 'loaded');
 
   readonly isDark = computed(() => this.themeService.isDark());
   readonly userName = () => this.auth.user()?.name ?? 'User';
   readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
   readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
+
+  // Branding mode resolution. Default 'both' when unset so existing tenants
+  // keep rendering what they already had. The name falls back to a
+  // 10-char slice of the official name when the admin hasn't set an
+  // explicit brandingName.
+  private readonly _brandingMode = computed(() => this._tenant()?.brandingMode ?? 'both');
+  readonly brandingName = computed(() => {
+    const t = this._tenant();
+    const explicit = t?.brandingName?.trim();
+    if (explicit) return explicit.slice(0, 10);
+    const full = t?.name?.trim();
+    return full ? full.slice(0, 10) : null;
+  });
+  readonly showLogo = computed(() => {
+    const m = this._brandingMode();
+    return m === 'logo' || m === 'both';
+  });
+  readonly showName = computed(() => {
+    const m = this._brandingMode();
+    return m === 'name' || m === 'both';
+  });
+  readonly hasBrand = computed(() => {
+    const logoOk = this.showLogo() && !!this.tenantLogo();
+    const nameOk = this.showName() && !!this.brandingName();
+    return logoOk || nameOk;
+  });
+  readonly brandAriaLabel = computed(() => {
+    if (!this.hasBrand()) return 'Add your organization logo or name';
+    return `${this.tenantName()} — branding`;
+  });
   readonly initials = () => {
     const n = this.auth.user()?.name ?? 'U';
     return n.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
@@ -668,10 +835,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   ngOnInit() {
     const u = this.auth.user();
     if (u?.branchName) this.branch.set(u.branchName);
-    this.api.get<Tenant | null>('/api/tenants/current').subscribe({
-      next: t => this._tenant.set(t ?? null),
-      error: () => { /* stay with placeholder */ }
-    });
+    this.tenantState.ensureLoaded();
   }
   ngOnDestroy() { /* no-op */ }
 

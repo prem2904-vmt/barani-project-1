@@ -85,8 +85,8 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     /* Button matches the top-strip .pf-strip-btn slot exactly. */
     .pf-bell-btn {
       position: relative;
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2.75rem;
+      height: 2.75rem;
       border-radius: 9999px;
       display: inline-flex;
       align-items: center;

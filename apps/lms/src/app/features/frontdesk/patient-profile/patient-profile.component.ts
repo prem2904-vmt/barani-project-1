@@ -33,7 +33,7 @@ interface ProfilePayload {
     <section class="px-4 md:px-8 pt-6 pb-10">
 
       <pf-screen-header
-        eyebrow="Reception · Patient profile"
+        eyebrow="Frontdesk · Patient profile"
         [title]="patient()?.name ?? 'Patient profile'"
         subtitle="Contact details, identifiers, and past visits.">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
@@ -233,14 +233,14 @@ export class PatientProfileComponent implements OnInit {
     return tests;
   }
 
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 
   startOrder(p: Patient) {
-    this.router.navigate(['/reception/order-create'], { queryParams: { patientId: p.id } });
+    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
   }
 
   bookAppointment(p: Patient) {
-    this.router.navigate(['/reception/appointments/new'], { queryParams: { patientId: p.id } });
+    this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
   }
 
   private load(id: string) {

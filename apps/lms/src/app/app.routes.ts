@@ -80,35 +80,54 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
       },
 
-      // Reception
+      // Frontdesk — orders / appointments / billing under one sticky
+      // shell. Children swap inside the shell's <router-outlet>.
       {
-        path: 'reception',
-        loadComponent: () => import('./features/reception/reception-landing/reception-landing.component').then(m => m.ReceptionLandingComponent)
+        path: 'frontdesk',
+        loadComponent: () => import('./features/frontdesk/frontdesk-shell.component').then(m => m.FrontdeskShellComponent),
+        children: [
+          // Default = insights landing (greeting, KPIs, stragglers, patient
+          // search). Picking a patient from the search navigates to
+          // patients/:id (history), from which "New order" jumps to /order.
+          {
+            path: '',
+            pathMatch: 'full',
+            loadComponent: () => import('./features/frontdesk/frontdesk-landing/frontdesk-landing.component').then(m => m.FrontdeskLandingComponent)
+          },
+          {
+            path: 'order',
+            loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
+          },
+          {
+            path: 'billing',
+            loadComponent: () => import('./features/frontdesk/billing/billing.component').then(m => m.BillingComponent)
+          },
+          {
+            path: 'appointments/new',
+            loadComponent: () => import('./features/frontdesk/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
+          },
+          {
+            path: 'patients/new',
+            loadComponent: () => import('./features/frontdesk/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
+          },
+          {
+            path: 'patients/:id',
+            loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
+          },
+          {
+            path: 'post-payment',
+            loadComponent: () => import('./features/frontdesk/post-payment/post-payment.component').then(m => m.PostPaymentComponent)
+          }
+        ]
       },
-      {
-        path: 'reception/patients/new',
-        loadComponent: () => import('./features/reception/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
-      },
-      {
-        path: 'reception/patients/:id',
-        loadComponent: () => import('./features/reception/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
-      },
-      {
-        path: 'reception/appointments/new',
-        loadComponent: () => import('./features/reception/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
-      },
-      {
-        path: 'reception/order-create',
-        loadComponent: () => import('./features/reception/order-create/order-create.component').then(m => m.OrderCreateComponent)
-      },
-      {
-        path: 'reception/billing',
-        loadComponent: () => import('./features/reception/billing/billing.component').then(m => m.BillingComponent)
-      },
-      {
-        path: 'reception/post-payment',
-        loadComponent: () => import('./features/reception/post-payment/post-payment.component').then(m => m.PostPaymentComponent)
-      },
+      // Legacy /reception redirects so existing bookmarks still work.
+      { path: 'reception',                  redirectTo: 'frontdesk' },
+      { path: 'reception/order-create',     redirectTo: 'frontdesk/order' },
+      { path: 'reception/billing',          redirectTo: 'frontdesk/billing' },
+      { path: 'reception/appointments/new', redirectTo: 'frontdesk/appointments/new' },
+      { path: 'reception/patients/new',     redirectTo: 'frontdesk/patients/new' },
+      { path: 'reception/patients/:id',     redirectTo: 'frontdesk/patients/:id' },
+      { path: 'reception/post-payment',     redirectTo: 'frontdesk/post-payment' },
 
       // Lab
       {

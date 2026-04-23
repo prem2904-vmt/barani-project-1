@@ -36,7 +36,7 @@ import {
     <section class="px-4 md:px-8 pt-6 pb-10">
 
       <pf-screen-header
-        eyebrow="Reception · Appointments"
+        eyebrow="Frontdesk · Appointments"
         title="Book appointment"
         subtitle="Pick a date and slot. WhatsApp confirmation queues automatically.">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
@@ -158,7 +158,7 @@ export class BookAppointmentComponent implements OnInit {
     }
   }
 
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 
   onComplete(values: WorkflowFormValues): void {
     if (this._saving()) return;
@@ -183,7 +183,7 @@ export class BookAppointmentComponent implements OnInit {
       next: () => {
         this._saving.set(false);
         this.toasts.success(`Booked for ${this._prefillPatient()?.name ?? 'patient'}`);
-        this.router.navigateByUrl('/reception');
+        this.router.navigateByUrl('/frontdesk');
       },
       error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Booking failed'); }
     });

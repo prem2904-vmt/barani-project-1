@@ -21,22 +21,42 @@ type FlagTone = 'critical' | 'low' | 'high' | 'normal';
 interface Flag { tone: FlagTone; label: string }
 
 // Render kinds the main parameter switch handles. Used by inputKindFor()
-// and the template below. Kept broad so richer types (buttonSelect, multi)
-// can diverge from the single-chip 'choice' bucket they used to share.
+// and the template below. Kept broad so each field type can diverge from
+// the single-chip 'choice' bucket they used to share.
 type InputKind =
   | 'numeric'
   | 'text'
   | 'textarea'
   | 'radio'
   | 'yesno'
+  | 'yesnona'
   | 'dropdown'
   | 'chips-multi'
   | 'buttonSelect'
   | 'toggle'
   | 'checkbox'
   | 'date'
+  | 'time'
+  | 'datetime'
+  | 'phone'
+  | 'email'
+  | 'duration'
+  | 'size'
+  | 'measure'
+  | 'image-select'
+  | 'voice-text'
+  | 'file'
+  | 'image-gallery'
+  | 'canvas'
+  | 'stub'
   | 'section-header'
   | 'info-text';
+
+// Duration unit options by field type — keeps the compound input simple.
+const DURATION_UNITS_LONG = ['days', 'weeks', 'months', 'years'] as const;
+const DURATION_UNITS_TIME = ['seconds', 'minutes', 'hours', 'days'] as const;
+const DURATION_PERIODS = ['morning', 'afternoon', 'evening', 'night'] as const;
+const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
 @Component({
   selector: 'pf-result-entry',
@@ -248,6 +268,209 @@ type InputKind =
                           <div class="pf-param__choices">
                             <pf-chip [selected]="valueOf(p.name) === 'yes'" (tapped)="setValue(p.name, 'yes')">Yes</pf-chip>
                             <pf-chip [selected]="valueOf(p.name) === 'no'"  (tapped)="setValue(p.name, 'no')">No</pf-chip>
+                          </div>
+                        }
+                        @case ('yesnona') {
+                          <div class="pf-param__choices">
+                            <pf-chip [selected]="valueOf(p.name) === 'yes'" (tapped)="setValue(p.name, 'yes')">Yes</pf-chip>
+                            <pf-chip [selected]="valueOf(p.name) === 'no'"  (tapped)="setValue(p.name, 'no')">No</pf-chip>
+                            <pf-chip [selected]="valueOf(p.name) === 'na'"  (tapped)="setValue(p.name, 'na')">N/A</pf-chip>
+                          </div>
+                        }
+                        @case ('phone') {
+                          <input type="tel"
+                                 inputmode="tel"
+                                 class="pf-param__input"
+                                 [value]="valueOf(p.name) ?? ''"
+                                 (focus)="setActive(p.name)"
+                                 (input)="setValue(p.name, asInput($event))"
+                                 (keydown.enter)="advanceFrom(p.name)"
+                                 placeholder="+91 98765 43210"/>
+                        }
+                        @case ('email') {
+                          <input type="email"
+                                 inputmode="email"
+                                 class="pf-param__input"
+                                 [value]="valueOf(p.name) ?? ''"
+                                 (focus)="setActive(p.name)"
+                                 (input)="setValue(p.name, asInput($event))"
+                                 (keydown.enter)="advanceFrom(p.name)"
+                                 placeholder="name@example.com"/>
+                        }
+                        @case ('time') {
+                          <input type="time"
+                                 class="pf-param__input pf-param__date"
+                                 [value]="valueOf(p.name) ?? ''"
+                                 (focus)="setActive(p.name)"
+                                 (change)="setValue(p.name, asInput($event))"/>
+                        }
+                        @case ('datetime') {
+                          <input type="datetime-local"
+                                 class="pf-param__input pf-param__date"
+                                 [value]="valueOf(p.name) ?? ''"
+                                 (focus)="setActive(p.name)"
+                                 (change)="setValue(p.name, asInput($event))"/>
+                        }
+                        @case ('duration') {
+                          <div class="pf-param__duration">
+                            <input type="number"
+                                   inputmode="numeric"
+                                   class="pf-param__input pf-param__input--num"
+                                   [value]="durationValueOf(p.name).value ?? ''"
+                                   (focus)="setActive(p.name)"
+                                   (input)="setDurationValue(p.name, { value: toNumOrNull(asInput($event)) })"
+                                   placeholder="0" />
+                            <select class="pf-param__input pf-param__select"
+                                    [value]="durationValueOf(p.name).unit"
+                                    (change)="setDurationValue(p.name, { unit: asSelect($event) })">
+                              @for (u of durationUnitsFor(p); track u) {
+                                <option [value]="u" [selected]="durationValueOf(p.name).unit === u">{{ u }}</option>
+                              }
+                            </select>
+                          </div>
+                        }
+                        @case ('size') {
+                          <div class="pf-param__size">
+                            @for (i of sizeIndexesFor(p); track i) {
+                              <input type="number"
+                                     inputmode="decimal"
+                                     class="pf-param__input pf-param__input--num"
+                                     [value]="sizeValueOf(p.name).values[i] ?? ''"
+                                     (focus)="setActive(p.name)"
+                                     (input)="setSizeValueAt(p.name, i, toNumOrNull(asInput($event)))"
+                                     placeholder="—"/>
+                            }
+                            <select class="pf-param__input pf-param__select pf-param__size-unit"
+                                    [value]="sizeValueOf(p.name).unit"
+                                    (change)="setSizeUnit(p.name, asSelect($event))">
+                              @for (u of sizeUnits; track u) {
+                                <option [value]="u" [selected]="sizeValueOf(p.name).unit === u">{{ u }}</option>
+                              }
+                            </select>
+                          </div>
+                        }
+                        @case ('measure') {
+                          <div class="pf-param__measure">
+                            <input type="range"
+                                   class="pf-param__range"
+                                   [attr.min]="measureBounds(p).min"
+                                   [attr.max]="measureBounds(p).max"
+                                   [attr.step]="measureBounds(p).step"
+                                   [value]="measureValueOf(p.name).value ?? measureBounds(p).min"
+                                   (input)="setMeasureValue(p.name, toNum(asInput($event)))"/>
+                            <span class="pf-param__measure-readout">
+                              {{ measureValueOf(p.name).value ?? '—' }}
+                              <span class="pf-param__measure-unit">{{ measureValueOf(p.name).unit || p.unit || '' }}</span>
+                            </span>
+                          </div>
+                        }
+                        @case ('image-select') {
+                          <div class="pf-param__image-grid">
+                            @for (opt of p.options ?? []; track opt) {
+                              <button type="button"
+                                      class="pf-image-tile"
+                                      [class.pf-image-tile--on]="valueOf(p.name) === opt"
+                                      (click)="setValue(p.name, opt)">
+                                <span class="pf-image-tile__frame">
+                                  <!-- Options are stored as strings in legacy TestParameter.
+                                       When an image URL is provided by the field's options[],
+                                       it renders; otherwise the tile shows just the label. -->
+                                  <span class="pf-image-tile__label">{{ opt }}</span>
+                                </span>
+                              </button>
+                            }
+                          </div>
+                        }
+                        @case ('voice-text') {
+                          <div class="pf-param__voice">
+                            <textarea class="pf-param__input pf-param__textarea"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (focus)="setActive(p.name)"
+                                      (input)="setValue(p.name, asArea($event))"
+                                      rows="3"
+                                      placeholder="Speak or type…"></textarea>
+                            @if (voiceSupported) {
+                              <button type="button"
+                                      class="pf-param__voice-mic"
+                                      [class.pf-param__voice-mic--on]="voiceActiveFor() === p.name"
+                                      (click)="toggleVoiceCapture(p.name)"
+                                      [attr.aria-label]="voiceActiveFor() === p.name ? 'Stop voice capture' : 'Start voice capture'">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                  <path d="M12 19v3"/>
+                                </svg>
+                              </button>
+                            }
+                          </div>
+                        }
+                        @case ('file') {
+                          <div class="pf-param__file">
+                            <label class="pf-param__filebtn press">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <path d="M17 8l-5-5-5 5"/>
+                                <path d="M12 3v12"/>
+                              </svg>
+                              {{ fileEntryFor(p.name) ? 'Replace' : 'Choose file' }}
+                              <input type="file"
+                                     hidden
+                                     (change)="onSingleFile(p.name, $any($event.target).files)"/>
+                            </label>
+                            @if (fileEntryFor(p.name); as f) {
+                              <span class="pf-param__filename">{{ f.name }}</span>
+                              <button type="button" class="pf-param__file-clear" (click)="clearFile(p.name)">×</button>
+                            }
+                          </div>
+                        }
+                        @case ('image-gallery') {
+                          <div class="pf-param__gallery">
+                            <label class="pf-param__filebtn press">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                <circle cx="9" cy="11" r="2"/>
+                                <path d="m21 15-4-4-7 7"/>
+                              </svg>
+                              Add images
+                              <input type="file"
+                                     multiple accept="image/*"
+                                     hidden
+                                     (change)="onGalleryFiles(p.name, $any($event.target).files)"/>
+                            </label>
+                            @if (galleryOf(p.name).length > 0) {
+                              <div class="pf-param__thumbs">
+                                @for (src of galleryOf(p.name); track src; let i = $index) {
+                                  <span class="pf-thumb">
+                                    <img [src]="src" alt="" />
+                                    <button type="button" class="pf-thumb__x" (click)="removeGalleryItem(p.name, i)">×</button>
+                                  </span>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                        @case ('canvas') {
+                          <div class="pf-param__canvas-wrap">
+                            <canvas #pad
+                                    class="pf-param__canvas"
+                                    [attr.data-param]="p.name"
+                                    [attr.width]="canvasWidthFor(p)"
+                                    [attr.height]="canvasHeightFor(p)"
+                                    (pointerdown)="canvasDown($event, p.name, pad)"
+                                    (pointermove)="canvasMove($event, p.name, pad)"
+                                    (pointerup)="canvasUp($event, p.name, pad)"
+                                    (pointerleave)="canvasUp($event, p.name, pad)"></canvas>
+                            <div class="pf-param__canvas-actions">
+                              <button type="button" class="pf-param__canvas-clear" (click)="clearCanvas(p.name, pad)">Clear</button>
+                            </div>
+                          </div>
+                        }
+                        @case ('stub') {
+                          <div class="pf-param__stub">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                            </svg>
+                            Preview only — interactive editor coming in a future release.
                           </div>
                         }
                         @case ('text') {
@@ -967,6 +1190,198 @@ type InputKind =
       color: var(--text-tertiary);
       font-style: italic;
       line-height: 1.5;
+    }
+
+    /* ── Duration / size / measure compound inputs ──────────── */
+    .pf-param__duration { display: flex; gap: 8px; }
+    .pf-param__duration .pf-param__input { flex: 1 1 auto; min-width: 0; }
+    .pf-param__duration .pf-param__select { flex: 0 0 120px; }
+
+    .pf-param__size { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pf-param__size .pf-param__input { width: 80px; }
+    .pf-param__size-unit { flex: 0 0 110px; }
+
+    .pf-param__measure {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pf-param__range {
+      flex: 1 1 200px;
+      min-width: 120px;
+      accent-color: #a855f7;
+    }
+    .pf-param__measure-readout {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      min-width: 70px;
+      text-align: right;
+    }
+    .pf-param__measure-unit {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    /* ── Image-select grid ──────────────────────────────────── */
+    .pf-param__image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+      gap: 8px;
+    }
+    .pf-image-tile {
+      padding: 0;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .pf-image-tile__frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px;
+      height: 72px;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-image-tile--on .pf-image-tile__frame {
+      border-color: #a855f7;
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+    }
+    .pf-image-tile__label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: 4px 6px;
+      text-align: center;
+    }
+
+    /* ── Voice-text textarea with mic overlay ───────────────── */
+    .pf-param__voice { position: relative; }
+    .pf-param__voice-mic {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .pf-param__voice-mic:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-param__voice-mic--on {
+      background: var(--gradient-primary);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2);
+    }
+
+    /* ── File + image gallery ───────────────────────────────── */
+    .pf-param__file, .pf-param__gallery { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .pf-param__filebtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .pf-param__filebtn:hover { background: var(--glass-bg-hover); }
+    .pf-param__filename { font-size: 12px; color: var(--text-secondary); }
+    .pf-param__file-clear {
+      width: 24px;
+      height: 24px;
+      border-radius: 9999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .pf-param__file-clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .pf-param__thumbs {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      gap: 6px;
+      width: 100%;
+    }
+    .pf-thumb {
+      position: relative;
+      display: inline-flex;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 1;
+      background: var(--bg-card-solid);
+    }
+    .pf-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .pf-thumb__x {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      border: none;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    /* ── Canvas (signature / scribblePad) ───────────────────── */
+    .pf-param__canvas-wrap { display: inline-flex; flex-direction: column; gap: 6px; }
+    .pf-param__canvas {
+      border: 1px dashed var(--glass-border);
+      border-radius: 10px;
+      background: var(--bg-card-solid);
+      touch-action: none;
+      cursor: crosshair;
+      width: 100%;
+      max-width: 320px;
+    }
+    .pf-param__canvas-actions { display: flex; gap: 8px; }
+    .pf-param__canvas-clear {
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* ── Stub tile for complex-widget previews ──────────────── */
+    .pf-param__stub {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px dashed var(--border-muted);
+      background: var(--glass-bg);
+      color: var(--text-tertiary);
+      font-size: 12.5px;
+      font-style: italic;
     }
 
     /* ── Inline validation error ─────────────────────────────── */
@@ -1777,11 +2192,24 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   });
 
   // Layout-only kinds don't participate in required/filled accounting.
+  // 'stub' joins them so admins can drop Tier 3 complex widgets into a
+  // schema without them blocking canSubmit (the widgets don't render
+  // interactive UI yet, so users couldn't fill them even if required).
   private isLayoutKind(k: InputKind): boolean {
-    return k === 'section-header' || k === 'info-text';
+    return k === 'section-header' || k === 'info-text' || k === 'stub';
   }
   private hasValue(v: unknown, kind: InputKind): boolean {
     if (kind === 'checkbox' || kind === 'toggle') return typeof v === 'boolean';
+    // Composed shapes — duration { value, unit }, size { values[], unit },
+    // measure { value, unit } — count as filled when the primary field
+    // carries a number.
+    if (kind === 'duration' || kind === 'measure') {
+      return !!v && typeof (v as { value?: unknown }).value === 'number';
+    }
+    if (kind === 'size') {
+      const vals = (v as { values?: unknown[] } | null)?.values;
+      return Array.isArray(vals) && vals.some(x => typeof x === 'number' && !Number.isNaN(x));
+    }
     if (Array.isArray(v)) return v.length > 0;
     return v !== undefined && v !== null && v !== '';
   }
@@ -1911,30 +2339,43 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return this.parameters().find(p => p.name === name) ?? null;
   });
 
-  // Rail is a simpler UI than the main param cell — it only understands
-  // a handful of input surfaces. Map richer kinds to the closest rail
-  // affordance (dropdown/chips-multi/buttonSelect all reuse the 'choice'
-  // option-list layout; toggle/checkbox collapse to yesno; layout-only
-  // kinds hide the rail entirely).
+  // Rail is a simpler UI than the main param cell — it only understands a
+  // handful of input surfaces. Map richer kinds to the closest rail
+  // affordance ('choice' = single-select list, 'choice-multi' = toggle
+  // list, 'yesno' = on/off, 'text' = keyboard hint, 'idle' = hide the rail).
   readonly railKind = computed<'numeric' | 'choice' | 'choice-multi' | 'radio' | 'yesno' | 'text' | 'idle'>(() => {
     const p = this.activeParamDef();
     if (!p) return 'idle';
     const k = this.inputKindFor(p);
     switch (k) {
-      case 'numeric':        return 'numeric';
+      case 'numeric':
+      case 'measure':          return 'numeric';
       case 'textarea':
       case 'text':
-      case 'date':           return 'text';
+      case 'voice-text':
+      case 'phone':
+      case 'email':
+      case 'date':
+      case 'time':
+      case 'datetime':
+      case 'duration':
+      case 'size':             return 'text';
       case 'dropdown':
-      case 'buttonSelect':   return 'choice';
-      case 'chips-multi':    return 'choice-multi';
-      case 'radio':          return 'radio';
+      case 'buttonSelect':
+      case 'image-select':     return 'choice';
+      case 'chips-multi':      return 'choice-multi';
+      case 'radio':            return 'radio';
       case 'yesno':
+      case 'yesnona':
       case 'toggle':
-      case 'checkbox':       return 'yesno';
+      case 'checkbox':         return 'yesno';
       case 'section-header':
-      case 'info-text':      return 'idle';
-      default:               return 'idle';
+      case 'info-text':
+      case 'stub':
+      case 'file':
+      case 'image-gallery':
+      case 'canvas':           return 'idle';
+      default:                 return 'idle';
     }
   });
 
@@ -1979,31 +2420,54 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   // Unified render-kind enum. When the test carries new-format `fields[]`,
   // we route off FormField.type (richer vocabulary); otherwise fall back to
-  // the legacy TestParameter.type. Single-vs-multi behavior (select vs
-  // multiselect) lives at this layer so the template can branch cleanly.
+  // the legacy TestParameter.type. Every FormFieldType must land on a known
+  // InputKind here — silent fall-through would hide data-entry bugs.
   inputKindFor(p: TestParameter): InputKind {
     const field = this._fieldByName().get(p.name);
     const t = field?.type ?? p.type;
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':
-      case 'number':
-        return 'numeric';
-      case 'text':          return 'text';
-      case 'textarea':      return 'textarea';
-      case 'select':        return 'dropdown';
-      case 'multiselect':   return 'chips-multi';
+      case 'number':          return 'numeric';
+      case 'text':            return 'text';
+      case 'textarea':        return 'textarea';
+      case 'voice-text':      return 'voice-text';
+      case 'phone':           return 'phone';
+      case 'email':           return 'email';
+      case 'date':            return 'date';
+      case 'time':            return 'time';
+      case 'datetime':        return 'datetime';
+      case 'select':          return 'dropdown';
+      case 'multiselect':     return 'chips-multi';
       case 'buttonSelect':
-      case 'button_select': return 'buttonSelect';
-      case 'radio':         return 'radio';
-      case 'yesno':
-      case 'yesNoNa':       return 'yesno';
-      case 'toggle':        return 'toggle';
-      case 'checkbox':      return 'checkbox';
-      case 'date':          return 'date';
-      case 'section-header':return 'section-header';
-      case 'info-text':     return 'info-text';
-      default:              return 'text';
+      case 'button_select':   return 'buttonSelect';
+      case 'imageSelect':     return 'image-select';
+      case 'radio':           return 'radio';
+      case 'yesno':           return 'yesno';
+      case 'yesNoNa':         return 'yesnona';
+      case 'toggle':          return 'toggle';
+      case 'checkbox':        return 'checkbox';
+      case 'duration':
+      case 'duration-time':   return 'duration';
+      // duration-period reuses the buttonSelect case — we inject the
+      // morning/afternoon/evening/night options when the field has none.
+      case 'duration-period': return 'buttonSelect';
+      case 'size':            return 'size';
+      case 'measure':         return 'measure';
+      case 'file-upload':     return 'file';
+      case 'imageGallery':    return 'image-gallery';
+      case 'signature':
+      case 'scribblePad':     return 'canvas';
+      case 'section-header':  return 'section-header';
+      case 'info-text':       return 'info-text';
+      // Tier 3 — complex widgets render as a neutral preview tile so the
+      // admin can still configure them; interactive render lands later.
+      case 'imageInfo':
+      case 'multiTextbox':
+      case 'table':
+      case 'recursive':
+      case 'recursivePages':  return 'stub';
+      default:                return 'text';
     }
   }
 
@@ -2078,6 +2542,269 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
   // <select> change handler — emits the chosen option value.
   asSelect(ev: Event): string { return (ev.target as HTMLSelectElement).value; }
+
+  // Number coercers used by composed-shape renderers. Keeps the '0 is a
+  // valid value' distinction: `toNumOrNull` returns null for empty strings
+  // but 0 for a typed zero, so signal updates distinguish "not set" from
+  // "set to 0".
+  toNumOrNull(v: string): number | null {
+    const trimmed = (v ?? '').trim();
+    if (trimmed === '') return null;
+    const n = Number(trimmed);
+    return Number.isNaN(n) ? null : n;
+  }
+  toNum(v: string): number { return Number(v || 0); }
+
+  // ── Duration compound input ───────────────────────────
+  // Stored shape: { value: number | null, unit: string }. Units list
+  // depends on whether the field is 'duration' (long-form) or
+  // 'duration-time' (short-form).
+  protected readonly durationLongUnits = DURATION_UNITS_LONG as unknown as readonly string[];
+  protected readonly durationTimeUnits = DURATION_UNITS_TIME as unknown as readonly string[];
+  durationUnitsFor(p: TestParameter): readonly string[] {
+    const t = this._fieldByName().get(p.name)?.type ?? p.type;
+    return t === 'duration-time' ? this.durationTimeUnits : this.durationLongUnits;
+  }
+  durationValueOf(name: string): { value: number | null; unit: string } {
+    const v = this._values()[name];
+    if (v && typeof v === 'object' && 'value' in (v as object)) {
+      const obj = v as { value: number | null; unit: string };
+      return { value: obj.value ?? null, unit: obj.unit || 'days' };
+    }
+    return { value: null, unit: 'days' };
+  }
+  setDurationValue(name: string, patch: Partial<{ value: number | null; unit: string }>) {
+    const current = this.durationValueOf(name);
+    const next = { ...current, ...patch };
+    this._values.update(s => ({ ...s, [name]: next }));
+  }
+
+  // ── Size compound input ───────────────────────────────
+  // Stored as { values: (number|null)[], unit: string }. boxCount comes
+  // from field.sizeConfig when present; falls back to 2 for legacy fields.
+  protected readonly sizeUnits = SIZE_UNITS as unknown as readonly string[];
+  sizeIndexesFor(p: TestParameter): number[] {
+    const field = this._fieldByName().get(p.name);
+    const n = field?.sizeConfig?.boxCount ?? 2;
+    return Array.from({ length: Math.max(1, Math.min(5, n)) }, (_, i) => i);
+  }
+  sizeValueOf(name: string): { values: (number | null)[]; unit: string } {
+    const v = this._values()[name];
+    if (v && typeof v === 'object' && 'values' in (v as object)) {
+      const obj = v as { values: (number | null)[]; unit: string };
+      return { values: Array.isArray(obj.values) ? obj.values : [], unit: obj.unit || 'cm' };
+    }
+    return { values: [], unit: 'cm' };
+  }
+  setSizeValueAt(name: string, index: number, value: number | null) {
+    const current = this.sizeValueOf(name);
+    const values = [...current.values];
+    while (values.length <= index) values.push(null);
+    values[index] = value;
+    this._values.update(s => ({ ...s, [name]: { ...current, values } }));
+  }
+  setSizeUnit(name: string, unit: string) {
+    const current = this.sizeValueOf(name);
+    this._values.update(s => ({ ...s, [name]: { ...current, unit } }));
+  }
+
+  // ── Measure slider ────────────────────────────────────
+  // Stored as { value: number, unit: string }. Bounds come from
+  // field.measureConfig; defaults chosen so the slider is usable even
+  // when the field is unconfigured.
+  measureBounds(p: TestParameter): { min: number; max: number; step: number } {
+    const cfg = this._fieldByName().get(p.name)?.measureConfig;
+    return {
+      min: cfg?.min ?? 0,
+      max: cfg?.max ?? 100,
+      step: cfg?.step ?? 1
+    };
+  }
+  measureValueOf(name: string): { value: number | null; unit: string } {
+    const v = this._values()[name];
+    if (v && typeof v === 'object' && 'value' in (v as object)) {
+      const obj = v as { value: number | null; unit: string };
+      return { value: obj.value ?? null, unit: obj.unit || '' };
+    }
+    const unit = this._fieldByName().get(name)?.measureConfig?.defaultUnit || '';
+    return { value: null, unit };
+  }
+  setMeasureValue(name: string, value: number) {
+    const current = this.measureValueOf(name);
+    this._values.update(s => ({ ...s, [name]: { ...current, value } }));
+  }
+
+  // ── File-upload + image-gallery ───────────────────────
+  // Stored as a data URL string for single-file, or data URL array for
+  // gallery. Same base64 pattern as the tenant logo uploader so results
+  // survive a JSON round-trip.
+  fileEntryFor(name: string): { name: string; dataUrl: string } | null {
+    const v = this._values()[name];
+    if (v && typeof v === 'object' && 'dataUrl' in (v as object)) {
+      return v as { name: string; dataUrl: string };
+    }
+    return null;
+  }
+  onSingleFile(name: string, files: FileList | null) {
+    const f = files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      this._values.update(s => ({
+        ...s,
+        [name]: { name: f.name, dataUrl: String(reader.result ?? '') }
+      }));
+    };
+    reader.readAsDataURL(f);
+  }
+  clearFile(name: string) {
+    this._values.update(s => ({ ...s, [name]: '' }));
+  }
+  galleryOf(name: string): string[] {
+    const v = this._values()[name];
+    return Array.isArray(v) ? (v as unknown[]).map(String) : [];
+  }
+  onGalleryFiles(name: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const existing = this.galleryOf(name);
+    const readers = Array.from(files).map(f => new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result ?? ''));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(f);
+    }));
+    Promise.all(readers).then(urls => {
+      this._values.update(s => ({ ...s, [name]: [...existing, ...urls] }));
+    });
+  }
+  removeGalleryItem(name: string, index: number) {
+    const list = this.galleryOf(name).filter((_, i) => i !== index);
+    this._values.update(s => ({ ...s, [name]: list }));
+  }
+
+  // ── Voice-text ────────────────────────────────────────
+  // Chrome/Edge ship webkitSpeechRecognition. Other browsers get the
+  // plain textarea fallback (mic button hidden via [voiceSupported]).
+  readonly voiceSupported: boolean = typeof (globalThis as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition !== 'undefined'
+                                  || typeof (globalThis as unknown as { SpeechRecognition?: unknown }).SpeechRecognition !== 'undefined';
+  private readonly _voiceActive = signal<string | null>(null);
+  private _voiceRecognition: { stop(): void } | null = null;
+  voiceActiveFor() { return this._voiceActive(); }
+  toggleVoiceCapture(name: string) {
+    if (this._voiceActive() === name) {
+      this.stopVoiceCapture();
+      return;
+    }
+    this.stopVoiceCapture();
+    const Ctor = (globalThis as unknown as { webkitSpeechRecognition?: new () => unknown; SpeechRecognition?: new () => unknown }).webkitSpeechRecognition
+              ?? (globalThis as unknown as { SpeechRecognition?: new () => unknown }).SpeechRecognition;
+    if (!Ctor) return;
+    const rec = new Ctor() as {
+      lang: string; continuous: boolean; interimResults: boolean;
+      start(): void; stop(): void;
+      onresult: (ev: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>; resultIndex: number }) => void;
+      onend: () => void;
+      onerror: () => void;
+    };
+    rec.lang = 'en-IN';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = ev => {
+      let transcript = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const result = ev.results[i];
+        if (result.isFinal) transcript += result[0].transcript + ' ';
+      }
+      if (transcript) {
+        const existing = this.valueOf(name) ?? '';
+        this.setValue(name, `${existing}${existing && !existing.endsWith(' ') ? ' ' : ''}${transcript.trim()}`);
+      }
+    };
+    rec.onend = () => { this._voiceActive.set(null); this._voiceRecognition = null; };
+    rec.onerror = () => { this._voiceActive.set(null); this._voiceRecognition = null; };
+    rec.start();
+    this._voiceRecognition = rec;
+    this._voiceActive.set(name);
+  }
+  private stopVoiceCapture() {
+    this._voiceRecognition?.stop();
+    this._voiceRecognition = null;
+    this._voiceActive.set(null);
+  }
+
+  // ── Canvas (signature + scribblePad) ──────────────────
+  // Minimal pointer-event drawing; persists the rendered bitmap as a
+  // data URL on pointerup. scribblePadConfig drives dimensions/stroke
+  // when the field carries one.
+  private _canvasCtx = new Map<string, CanvasRenderingContext2D>();
+  private _canvasDrawing = new Map<string, boolean>();
+  canvasWidthFor(p: TestParameter): number {
+    return this._fieldByName().get(p.name)?.scribblePadConfig?.width ?? 320;
+  }
+  canvasHeightFor(p: TestParameter): number {
+    return this._fieldByName().get(p.name)?.scribblePadConfig?.height ?? 140;
+  }
+  private ensureCanvasCtx(name: string, el: HTMLCanvasElement): CanvasRenderingContext2D | null {
+    let ctx = this._canvasCtx.get(name);
+    if (!ctx) {
+      ctx = el.getContext('2d') ?? undefined;
+      if (!ctx) return null;
+      const cfg = this._fieldByName().get(name)?.scribblePadConfig;
+      ctx.strokeStyle = cfg?.strokeColor ?? '#a855f7';
+      ctx.lineWidth = cfg?.strokeWidth ?? 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const bg = cfg?.backgroundColor;
+      if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, el.width, el.height); }
+      // Restore any existing bitmap stored for this field.
+      const existing = this.valueOf(name);
+      if (existing && typeof existing === 'string' && existing.startsWith('data:')) {
+        const img = new Image();
+        img.onload = () => ctx!.drawImage(img, 0, 0);
+        img.src = existing;
+      }
+      this._canvasCtx.set(name, ctx);
+    }
+    return ctx;
+  }
+  private canvasPoint(ev: PointerEvent, el: HTMLCanvasElement): { x: number; y: number } {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: ((ev.clientX - rect.left) / rect.width) * el.width,
+      y: ((ev.clientY - rect.top) / rect.height) * el.height
+    };
+  }
+  canvasDown(ev: PointerEvent, name: string, el: HTMLCanvasElement) {
+    ev.preventDefault();
+    const ctx = this.ensureCanvasCtx(name, el);
+    if (!ctx) return;
+    this._canvasDrawing.set(name, true);
+    const p = this.canvasPoint(ev, el);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    el.setPointerCapture(ev.pointerId);
+  }
+  canvasMove(ev: PointerEvent, name: string, el: HTMLCanvasElement) {
+    if (!this._canvasDrawing.get(name)) return;
+    const ctx = this._canvasCtx.get(name);
+    if (!ctx) return;
+    const p = this.canvasPoint(ev, el);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+  canvasUp(_ev: PointerEvent, name: string, el: HTMLCanvasElement) {
+    if (!this._canvasDrawing.get(name)) return;
+    this._canvasDrawing.set(name, false);
+    try { el.releasePointerCapture(_ev.pointerId); } catch { /* ignore */ }
+    // Persist bitmap as data URL so it survives route changes / saves.
+    this.setValue(name, el.toDataURL('image/png'));
+  }
+  clearCanvas(name: string, el: HTMLCanvasElement) {
+    const ctx = this._canvasCtx.get(name) ?? el.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, el.width, el.height);
+    this.setValue(name, '');
+  }
 
   setValue(name: string, value: string) {
     this._values.update(s => ({ ...s, [name]: value }));

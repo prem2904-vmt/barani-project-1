@@ -27,7 +27,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
     <section class="px-4 md:px-8 pt-6 pb-10">
 
       <pf-screen-header
-        eyebrow="Reception · Registration"
+        eyebrow="Frontdesk · Registration"
         title="Register patient"
         subtitle="Standard fields save to dedicated columns; custom fields into the attributes JSON.">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
@@ -103,7 +103,7 @@ export class PatientRegisterComponent implements OnInit {
     });
   }
 
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 
   onComplete(values: WorkflowFormValues) {
     const cfg = this._config();
@@ -127,7 +127,7 @@ export class PatientRegisterComponent implements OnInit {
         this.toasts.success(`Registered ${patient.name}`);
         this.values.set({});
         // After registration: navigate to the new patient's profile page.
-        this.router.navigate(['/reception/patients', patient.id]);
+        this.router.navigate(['/frontdesk/patients', patient.id]);
       },
       error: e => {
         this._saving.set(false);

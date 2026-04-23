@@ -368,11 +368,11 @@ function newFieldId(): string {
     }
     .pf-param-footer {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 8px;
-      align-items: flex-start;
+      align-items: stretch;
     }
-    .pf-param-footer > * { flex: 0 0 auto; }
+    .pf-param-footer > * { width: 100%; }
   `]
 })
 export class TestEditorComponent implements OnInit {

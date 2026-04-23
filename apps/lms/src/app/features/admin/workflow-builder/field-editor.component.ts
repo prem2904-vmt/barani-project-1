@@ -15,6 +15,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { FieldTypePickerComponent, getFieldType, hasOptions as registryHasOptions } from '../../../shared/forms';
 import { ConditionBuilderComponent } from './condition-builder.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
 
@@ -56,6 +57,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
   imports: [
     FormsModule,
     ConditionBuilderComponent,
+    FieldTypePickerComponent,
     ScreenHeaderComponent,
     SelectComponent,
     TileComponent,
@@ -105,11 +107,14 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">Type <span class="text-red-500">*</span></label>
-              <pf-select
-                [options]="typeSelectOptions"
-                [value]="draft().type"
+              <!-- Shared field-type picker: lists the full 27-type taxonomy
+                   grouped by Input / Choice / Layout / Media / Advanced.
+                   Types flipped off in field-registry.ts are filtered out. -->
+              <pf-field-type-picker
+                [value]="$any(draft().type)"
                 [disabled]="!isCustom()"
-                (valueChange)="setType($any($event))"></pf-select>
+                (valueChange)="setType($any($event))">
+              </pf-field-type-picker>
             </div>
             <div>
               <label class="pf-label">Width</label>
@@ -448,17 +453,30 @@ export class FieldEditorComponent implements OnInit {
 
   setType(type: FieldType): void {
     const patch: Partial<WorkflowField> = { type };
-    const category = TYPE_META.find(m => m.type === type)?.category;
-    if (category === 'options' && !this._draft().options) {
+
+    // Prefer the shared registry's category when the type is one of the
+    // FormFieldType literals it knows about; otherwise fall back to the
+    // legacy TYPE_META (covers workflow-only types like numeric_with_range).
+    const registryEntry = getFieldType(type as never);
+    const legacyCategory = TYPE_META.find(m => m.type === type)?.category;
+    const needsOptions =
+      registryHasOptions(type as never) || legacyCategory === 'options';
+
+    if (needsOptions && !this._draft().options) {
       patch.options = [{ value: 'Option 1', label: 'Option 1' }];
     }
-    if (category === 'boolean' && !this._draft().options) {
+    // Boolean-style fields still get the Yes/No seed so their default
+    // choices match user expectations.
+    if ((legacyCategory === 'boolean' || type === 'yesno' || type === 'yesNoNa' || type === 'toggle' || type === 'checkbox')
+        && !this._draft().options) {
       patch.options = [
         { value: 'Yes', label: 'Yes' },
         { value: 'No',  label: 'No'  }
       ];
     }
-    if (category === 'numeric' && !this._draft().referenceRanges) {
+    const isNumeric = legacyCategory === 'numeric'
+                   || registryEntry?.category === 'input' && type === 'number';
+    if (isNumeric && !this._draft().referenceRanges) {
       patch.referenceRanges = [{ segment: 'normal', min: undefined, max: undefined }];
     }
     this.patch(patch);

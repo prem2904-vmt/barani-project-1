@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
@@ -40,7 +41,7 @@ type Priority = 'Normal' | 'Urgent';
         <!-- LEFT COLUMN -->
         <div class="pf-col space-y-4">
 
-          <!-- Patient -->
+          <!-- Patient — pick one first, then the order cart activates. -->
           @if (patient(); as p) {
             <div class="pf-patient">
               <pf-avatar [name]="p.name" [size]="40"></pf-avatar>
@@ -59,7 +60,24 @@ type Priority = 'Normal' | 'Urgent';
               </button>
             </div>
           } @else {
-            <p class="pf-empty-patient">Open order-create from a patient profile to attach them here.</p>
+            <!-- Canonical flow starts at Frontdesk Home: pick a patient there,
+                 open their history, then tap "New order". Route here with
+                 ?patientId=. If someone lands on Orders without a patient
+                 selected, bounce them back to Home via this prompt. -->
+            <div class="pf-no-patient">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="pf-no-patient__icon">
+                <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+              </svg>
+              <div class="min-w-0 flex-1">
+                <p class="pf-no-patient__title">No patient attached</p>
+                <p class="pf-no-patient__sub">
+                  Start at Frontdesk Home — search or register a patient, open their history, then tap <b>New order</b>.
+                </p>
+              </div>
+              <button type="button" class="pf-no-patient__go press" (click)="goHome()">
+                Go to Home
+              </button>
+            </div>
           }
 
           <!-- Search + Priority on one row (wraps on narrow) -->
@@ -435,6 +453,138 @@ type Priority = 'Normal' | 'Urgent';
     }
     .pf-patient__change:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
     .pf-empty-patient { margin: 0; font-size: 13px; color: var(--text-tertiary); padding: 8px 4px; }
+
+    .pf-no-patient {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 14px;
+      background: var(--glass-bg);
+      border: 1px dashed rgba(168, 85, 247, 0.4);
+    }
+    .pf-no-patient__icon { color: #a855f7; flex-shrink: 0; }
+    .pf-no-patient__title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .pf-no-patient__sub {
+      margin: 4px 0 0;
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+      line-height: 1.5;
+    }
+    .pf-no-patient__go {
+      padding: 8px 16px;
+      border-radius: 9999px;
+      background: var(--gradient-primary);
+      color: #fff;
+      font-size: 12.5px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+      flex-shrink: 0;
+    }
+    .pf-no-patient__go:hover { box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45); }
+
+    /* Inline patient picker — shown until a patient is attached. */
+    .pf-patient-picker {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--glass-bg);
+      border: 1px dashed var(--glass-border);
+    }
+    .pf-patient-picker__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .pf-patient-picker__title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .pf-patient-picker__register {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: #c4b5fd;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .pf-patient-picker__register:hover { background: rgba(168, 85, 247, 0.2); }
+    .pf-patient-picker__search {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .pf-patient-picker__icon {
+      position: absolute;
+      left: 12px;
+      color: var(--text-muted);
+    }
+    .pf-patient-picker__input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      border-radius: 10px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--border-muted);
+      color: var(--text-primary);
+      font-size: 13.5px;
+    }
+    .pf-patient-picker__input:focus {
+      outline: none;
+      border-color: rgba(168, 85, 247, 0.6);
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+    }
+    .pf-patient-picker__list {
+      list-style: none;
+      margin: 10px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .pf-patient-picker__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .pf-patient-picker__item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-muted);
+    }
+    .pf-patient-picker__name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0; }
+    .pf-patient-picker__meta { font-size: 12px; color: var(--text-tertiary); margin: 2px 0 0; }
+    .pf-patient-picker__empty {
+      margin: 10px 0 0;
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+      font-style: italic;
+    }
 
     /* ── Search + Priority share a row ─────────────────────── */
     .pf-search-row {
@@ -877,6 +1027,7 @@ export class OrderCreateComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly settings = inject(FrontdeskSettingsService);
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _tests = signal<Test[]>([]);
@@ -921,14 +1072,15 @@ export class OrderCreateComponent implements OnInit {
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
     });
 
+    // Deep-link support — if the route carries ?patientId= (e.g. coming
+    // from a patient profile), pre-attach. Otherwise the inline picker
+    // handles selection in-page.
     const pid = this.route.snapshot.queryParamMap.get('patientId');
     if (pid) {
       this.api.get<{ patient: Patient; history: unknown[] }>(`/api/patients/${pid}`).subscribe({
         next: res => this._patient.set(res.patient),
         error: () => this.toasts.error('Could not load patient')
       });
-    } else {
-      this.toasts.warning('Open order create from a patient profile');
     }
   }
 
@@ -960,9 +1112,11 @@ export class OrderCreateComponent implements OnInit {
     return t.name.replace(/\s+/g, '').slice(0, 4).toUpperCase();
   }
 
-  changePatient() {
-    this.router.navigateByUrl('/reception');
-  }
+  // Canonical flow: Home → patient history → New order (lands here with
+  // ?patientId=). "Change" on the attached patient tile bounces back to
+  // Home so the user can pick a different one from their records.
+  changePatient() { this.goHome(); }
+  goHome() { this.router.navigateByUrl('/frontdesk'); }
 
   submit() {
     const p = this._patient();
@@ -978,12 +1132,24 @@ export class OrderCreateComponent implements OnInit {
     }).subscribe({
       next: order => {
         this._saving.set(false);
-        this.toasts.success('Order created');
-        this.router.navigate(['/reception/billing'], { queryParams: { orderId: order.id } });
+        // Admin-controlled fork: if frontdesk collects payment, jump into
+        // the Billing tab with the new order preselected; otherwise raise
+        // a billing request and reset for the next patient/order.
+        if (this.settings.collectsBilling()) {
+          this.toasts.success('Order created — enter billing');
+          this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: order.id } });
+        } else {
+          // Admin set "Frontdesk does not collect" — raise billing as a
+          // separate request and return to Home for the next patient.
+          this.toasts.success('Order created — billing request raised');
+          this._selected.set([]);
+          this._patient.set(null);
+          this.router.navigateByUrl('/frontdesk');
+        }
       },
       error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Order failed'); }
     });
   }
 
-  back() { this.router.navigateByUrl('/reception'); }
+  back() { this.router.navigateByUrl('/frontdesk'); }
 }

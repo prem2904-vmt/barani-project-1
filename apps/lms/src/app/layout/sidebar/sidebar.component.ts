@@ -62,9 +62,9 @@ export class SidebarComponent {
     {
       title: 'Reception',
       links: [
-        { label: 'Reception',         href: '/reception',                icon: '🧑‍💼' },
-        { label: 'Create Order',      href: '/reception/order-create',   icon: '➕' },
-        { label: 'Billing',           href: '/reception/billing',        icon: '🧾' }
+        { label: 'Reception',         href: '/frontdesk',                icon: '🧑‍💼' },
+        { label: 'Create Order',      href: '/frontdesk/order',   icon: '➕' },
+        { label: 'Billing',           href: '/frontdesk/billing',        icon: '🧾' }
       ]
     },
     {

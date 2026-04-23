@@ -1,24 +1,34 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom, Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
-import { Branch, Department, SubBranch, Tenant } from '../../../shared/models/tenant.model';
+import { Branch, Department, SubBranch, Tenant, TenantBrandingMode } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+
+const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
+const BRANDING_NAME_MAX = 10;
+
+interface BrandingDraft {
+  logoUrl: string;          // base64 data URL or '' for none
+  brandingName: string;     // ≤10 chars
+  brandingMode: TenantBrandingMode;
+}
 
 interface OrgDraft {
   name: string;
   type: string;
   vendorCode: string;
   gstNumber: string;
-  logoUrl: string;
 }
 
 interface SubBranchDraft {
@@ -52,6 +62,7 @@ interface DepartmentDraft {
     BarcodeDisplayComponent,
     ChipComponent,
     ScreenHeaderComponent,
+    SegmentedComponent,
     SelectComponent,
     TileComponent,
     ToggleComponent,
@@ -120,21 +131,12 @@ interface DepartmentDraft {
                          placeholder="AP" />
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="pf-label">GST number
-                    <span class="text-[11px] font-normal" style="color: var(--text-muted);">(optional)</span>
-                  </label>
-                  <input type="text" class="pf-input"
-                         [ngModel]="org().gstNumber" (ngModelChange)="updateOrg({ gstNumber: $event })" />
-                </div>
-                <div>
-                  <label class="pf-label">Logo URL
-                    <span class="text-[11px] font-normal" style="color: var(--text-muted);">(optional)</span>
-                  </label>
-                  <input type="text" class="pf-input"
-                         [ngModel]="org().logoUrl" (ngModelChange)="updateOrg({ logoUrl: $event })" />
-                </div>
+              <div>
+                <label class="pf-label">GST number
+                  <span class="text-[11px] font-normal" style="color: var(--text-muted);">(optional)</span>
+                </label>
+                <input type="text" class="pf-input"
+                       [ngModel]="org().gstNumber" (ngModelChange)="updateOrg({ gstNumber: $event })" />
               </div>
             </div>
           </pf-tile>
@@ -152,8 +154,110 @@ interface DepartmentDraft {
         </div>
       }
 
-      <!-- Step 1: Branches -->
+      <!-- Step 1: Branding (logo + short name + mode, all optional) -->
       @if (step() === 1) {
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <pf-tile tone="default" padding="lg" class="lg:col-span-2 block">
+            <h2 class="section-title">Top-navigation branding</h2>
+            <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
+              What appears in the header pill next to your user avatar. All three fields are optional —
+              you can skip this and add them later.
+            </p>
+
+            <div class="mt-5">
+              <label class="pf-label">What to show</label>
+              <pf-segmented size="md"
+                             [options]="brandingModeOptions"
+                             [value]="branding().brandingMode"
+                             (valueChange)="updateBranding({ brandingMode: $event })">
+              </pf-segmented>
+            </div>
+
+            @if (branding().brandingMode !== 'name') {
+              <div class="mt-5">
+                <label class="pf-label">Logo</label>
+                <div class="brand-upload"
+                     [class.brand-upload--dragging]="draggingLogo()"
+                     (dragenter)="onLogoDrag($event, true)"
+                     (dragover)="onLogoDrag($event, true)"
+                     (dragleave)="onLogoDrag($event, false)"
+                     (drop)="onLogoDrop($event)">
+                  @if (branding().logoUrl) {
+                    <img [src]="branding().logoUrl" alt="Logo preview" class="brand-upload__preview" />
+                    <div class="brand-upload__actions">
+                      <button type="button" class="brand-upload__btn" (click)="openLogoPicker()">Replace</button>
+                      <button type="button" class="brand-upload__btn brand-upload__btn--danger" (click)="clearLogo()">Remove</button>
+                    </div>
+                  } @else {
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="brand-upload__icon">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <path d="M17 8l-5-5-5 5"/>
+                      <path d="M12 3v12"/>
+                    </svg>
+                    <p class="brand-upload__hint">
+                      Drop an image, or
+                      <button type="button" class="brand-upload__link" (click)="openLogoPicker()">browse</button>
+                    </p>
+                    <p class="brand-upload__meta">PNG / SVG / JPG / WebP, up to 100 KB</p>
+                  }
+                  <input #logoInput type="file"
+                         accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                         hidden
+                         (change)="onLogoSelected($any($event.target).files)" />
+                </div>
+                @if (logoError()) {
+                  <p class="brand-error">{{ logoError() }}</p>
+                }
+              </div>
+            }
+
+            @if (branding().brandingMode !== 'logo') {
+              <div class="mt-5">
+                <label class="pf-label">
+                  Short name
+                  <span class="text-[11px] font-mono ml-2" style="color: var(--text-muted);">
+                    {{ branding().brandingName.length }}/{{ nameMax }}
+                  </span>
+                </label>
+                <input #nameIn type="text"
+                       class="pf-input"
+                       [attr.value]="branding().brandingName"
+                       [attr.maxlength]="nameMax"
+                       placeholder="e.g. APOLLO"
+                       (input)="updateBranding({ brandingName: nameIn.value.slice(0, nameMax) })" />
+                <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+                  Hard-capped at {{ nameMax }} characters so the header stays tidy.
+                </p>
+              </div>
+            }
+          </pf-tile>
+
+          <pf-tile tone="violet" padding="lg" class="block">
+            <h3 class="section-title">Preview</h3>
+            <p class="text-[11.5px] font-mono mt-2" style="color: var(--text-tertiary);">
+              How your brand appears in the top strip.
+            </p>
+
+            <div class="brand-preview">
+              <div class="brand-preview__slot"
+                   [class.brand-preview__slot--empty]="!hasBrand()">
+                @if (showLogoPreview()) {
+                  <img [src]="branding().logoUrl" alt="" class="brand-preview__logo" />
+                }
+                @if (showNamePreview()) {
+                  <span class="brand-preview__name">{{ branding().brandingName }}</span>
+                }
+                @if (!hasBrand()) {
+                  <span class="brand-preview__name brand-preview__name--placeholder">YOUR LOGO</span>
+                }
+              </div>
+            </div>
+          </pf-tile>
+        </div>
+      }
+
+      <!-- Step 2: Branches -->
+      @if (step() === 2) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex items-center justify-between mb-3">
             <h2 class="section-title">Branches</h2>
@@ -270,8 +374,8 @@ interface DepartmentDraft {
         </pf-tile>
       }
 
-      <!-- Step 2: Departments -->
-      @if (step() === 2) {
+      <!-- Step 3: Departments -->
+      @if (step() === 3) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex items-center justify-between mb-3">
             <h2 class="section-title">Departments</h2>
@@ -490,14 +594,112 @@ interface DepartmentDraft {
       padding: 4px 0;
     }
     .add-sub-link:hover { text-decoration: underline; }
+
+    /* ── Branding step ─────────────────────────────────────── */
+    .brand-upload {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 22px;
+      border-radius: 14px;
+      border: 2px dashed rgba(168, 85, 247, 0.35);
+      background: rgba(168, 85, 247, 0.04);
+      min-height: 140px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .brand-upload--dragging {
+      background: rgba(168, 85, 247, 0.12);
+      border-color: #a855f7;
+    }
+    .brand-upload__icon { color: var(--text-muted); }
+    .brand-upload__hint { font-size: 13px; color: var(--text-secondary); margin: 0; }
+    .brand-upload__meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin: 0;
+    }
+    .brand-upload__link {
+      background: none;
+      border: none;
+      color: #c4b5fd;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 2px;
+      text-decoration: underline;
+    }
+    .brand-upload__link:hover { color: #a855f7; }
+    .brand-upload__preview { max-height: 80px; max-width: 240px; object-fit: contain; }
+    .brand-upload__actions { display: flex; gap: 8px; margin-top: 4px; }
+    .brand-upload__btn {
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      color: var(--text-primary);
+    }
+    .brand-upload__btn:hover { background: var(--glass-bg-hover); }
+    .brand-upload__btn--danger {
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .brand-upload__btn--danger:hover { background: rgba(239, 68, 68, 0.16); }
+
+    .brand-error {
+      font-size: 12px;
+      color: #f87171;
+      margin: 6px 0 0;
+    }
+
+    .brand-preview { margin-top: 14px; }
+    .brand-preview__slot {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      min-height: 44px;
+    }
+    .brand-preview__slot--empty {
+      border-style: dashed;
+      border-color: rgba(236, 72, 153, 0.55);
+      background: rgba(236, 72, 153, 0.06);
+    }
+    .brand-preview__logo { max-height: 24px; max-width: 80px; object-fit: contain; }
+    .brand-preview__name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--text-primary);
+      text-transform: uppercase;
+    }
+    .brand-preview__name--placeholder { color: #ec4899; letter-spacing: 0.14em; }
   `]
 })
 export class SetupWizardComponent {
   private readonly api = inject(ApiService);
+  private readonly tenantState = inject(TenantStateService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
 
-  readonly stepLabels = ['Organization', 'Branches', 'Departments'];
+  @ViewChild('logoInput') logoInput?: ElementRef<HTMLInputElement>;
+
+  readonly stepLabels = ['Organization', 'Branding', 'Branches', 'Departments'];
+  readonly brandingModeOptions: SegmentedOption<TenantBrandingMode>[] = [
+    { value: 'both', label: 'Both' },
+    { value: 'logo', label: 'Logo only' },
+    { value: 'name', label: 'Name only' }
+  ];
+  readonly nameMax = BRANDING_NAME_MAX;
   readonly quickDepts = [
     { name: 'Haematology',   code: 'HAEM' },
     { name: 'Biochemistry',  code: 'BIO' },
@@ -515,16 +717,33 @@ export class SetupWizardComponent {
   readonly year = new Date().getFullYear();
 
   private readonly _step = signal(0);
-  private readonly _org = signal<OrgDraft>({ name: '', type: 'independent', vendorCode: '', gstNumber: '', logoUrl: '' });
+  private readonly _org = signal<OrgDraft>({ name: '', type: 'independent', vendorCode: '', gstNumber: '' });
+  private readonly _branding = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
+  private readonly _draggingLogo = signal(false);
+  private readonly _logoError = signal<string | null>(null);
   private readonly _branches = signal<BranchDraft[]>([{ name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false, subBranches: [] }]);
   private readonly _departments = signal<DepartmentDraft[]>([]);
   private readonly _saving = signal(false);
 
   readonly step = this._step.asReadonly();
   readonly org = this._org.asReadonly();
+  readonly branding = this._branding.asReadonly();
+  readonly draggingLogo = this._draggingLogo.asReadonly();
+  readonly logoError = this._logoError.asReadonly();
   readonly branches = this._branches.asReadonly();
   readonly departments = this._departments.asReadonly();
   readonly saving = this._saving.asReadonly();
+
+  // Preview helpers — what the navbar pill will actually render.
+  readonly showLogoPreview = computed(() => {
+    const b = this._branding();
+    return (b.brandingMode === 'logo' || b.brandingMode === 'both') && !!b.logoUrl;
+  });
+  readonly showNamePreview = computed(() => {
+    const b = this._branding();
+    return (b.brandingMode === 'name' || b.brandingMode === 'both') && !!b.brandingName;
+  });
+  readonly hasBrand = computed(() => this.showLogoPreview() || this.showNamePreview());
 
   readonly barcodePreview = computed(() => {
     const vc = this._org().vendorCode || '??';
@@ -537,7 +756,10 @@ export class SetupWizardComponent {
       const o = this._org();
       return o.name.trim().length > 0 && o.vendorCode.trim().length >= 2;
     }
-    if (s === 1) {
+    // Step 1 (Branding) is entirely optional — admins can skip straight through
+    // and come back to branding later.
+    if (s === 1) return true;
+    if (s === 2) {
       const branches = this._branches();
       if (branches.length === 0) return false;
       return branches.every(b =>
@@ -545,7 +767,7 @@ export class SetupWizardComponent {
         b.subBranches.every(sb => sb.name.trim() && sb.code.trim())
       );
     }
-    if (s === 2) {
+    if (s === 3) {
       return this._departments().every(d => d.name.trim() && d.code.trim()) && this._departments().length > 0;
     }
     return false;
@@ -553,6 +775,46 @@ export class SetupWizardComponent {
 
   updateOrg(patch: Partial<OrgDraft>) { this._org.update(o => ({ ...o, ...patch })); }
   updateVendorCode(v: string) { this.updateOrg({ vendorCode: (v ?? '').toUpperCase().slice(0, 4) }); }
+
+  // ── Branding (step 1) ──────────────────────────────
+  updateBranding(patch: Partial<BrandingDraft>) {
+    this._branding.update(b => ({ ...b, ...patch }));
+  }
+  openLogoPicker() { this.logoInput?.nativeElement?.click(); }
+  onLogoSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    this.ingestLogo(files[0]);
+    if (this.logoInput?.nativeElement) this.logoInput.nativeElement.value = '';
+  }
+  onLogoDrag(ev: DragEvent, entering: boolean) {
+    ev.preventDefault(); ev.stopPropagation();
+    this._draggingLogo.set(entering);
+  }
+  onLogoDrop(ev: DragEvent) {
+    ev.preventDefault(); ev.stopPropagation();
+    this._draggingLogo.set(false);
+    const f = ev.dataTransfer?.files?.[0];
+    if (f) this.ingestLogo(f);
+  }
+  clearLogo() {
+    this.updateBranding({ logoUrl: '' });
+    this._logoError.set(null);
+  }
+  private ingestLogo(file: File) {
+    this._logoError.set(null);
+    if (!file.type.startsWith('image/')) {
+      this._logoError.set('Only image files are allowed.');
+      return;
+    }
+    if (file.size > BRANDING_LOGO_MAX_BYTES) {
+      this._logoError.set(`File is ${Math.round(file.size / 1024)} KB. Keep it under ${Math.round(BRANDING_LOGO_MAX_BYTES / 1024)} KB.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => this.updateBranding({ logoUrl: String(reader.result ?? '') });
+    reader.onerror = () => this._logoError.set('Could not read the file.');
+    reader.readAsDataURL(file);
+  }
 
   addBranch() {
     this._branches.update(list => [...list, { name: '', code: '', type: 'lab', city: '', state: '', pincode: '', hasPfBox: false, subBranches: [] }]);
@@ -613,10 +875,24 @@ export class SetupWizardComponent {
     this._saving.set(true);
     try {
       const o = this._org();
+      const br = this._branding();
       await firstValueOfApi(this.api.post<Tenant>('/api/tenants/setup', {
         name: o.name, type: o.type, vendorCode: o.vendorCode,
-        gstNumber: o.gstNumber || undefined, logoUrl: o.logoUrl || undefined
+        gstNumber: o.gstNumber || undefined,
+        logoUrl: br.logoUrl || undefined
       }));
+
+      // Apply branding fields via the dedicated tenant update endpoint so
+      // the navbar picks them up through the TenantStateService cache +
+      // cross-tab BroadcastChannel.
+      if (br.brandingName || br.brandingMode !== 'both' || br.logoUrl) {
+        const updated = await firstValueOfApi(this.api.patch<Tenant>('/api/tenants/current', {
+          brandingName: br.brandingName || null,
+          brandingMode: br.brandingMode,
+          logoUrl: br.logoUrl || ''
+        }));
+        this.tenantState.update(updated);
+      }
 
       const createdBranches: Branch[] = [];
       for (const b of this._branches()) {

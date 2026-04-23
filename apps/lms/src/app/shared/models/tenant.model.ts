@@ -1,3 +1,5 @@
+export type TenantBrandingMode = 'logo' | 'name' | 'both';
+
 export interface Tenant {
   id: string;
   name: string;
@@ -9,6 +11,10 @@ export interface Tenant {
   gstNumber?: string;
   registrationNo?: string;
   logoUrl?: string;
+  /** Short (≤10 chars) label rendered next to the logo in the top strip. */
+  brandingName?: string;
+  /** Which parts to render in the top strip. Defaults to 'both'. */
+  brandingMode?: TenantBrandingMode;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;

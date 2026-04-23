@@ -1,20 +1,49 @@
+/**
+ * Workflow field types. Superset of the shared FormFieldType so the workflow
+ * field-editor can use the shared field-type picker directly. Legacy names
+ * (button_select, numeric_with_range) are retained for round-trip stability
+ * with previously saved workflow configs.
+ */
 export type FieldType =
+  // ── Shared FormFieldType literals ──
   | 'text'
   | 'number'
   | 'textarea'
+  | 'voice-text'
   | 'select'
   | 'multiselect'
-  | 'radio'
   | 'checkbox'
+  | 'radio'
+  | 'duration'
+  | 'duration-time'
+  | 'duration-period'
   | 'date'
+  | 'time'
+  | 'datetime'
+  | 'buttonSelect'
+  | 'imageSelect'
+  | 'yesno'
+  | 'yesNoNa'
+  | 'toggle'
   | 'phone'
   | 'email'
-  | 'toggle'
-  | 'yesno'
+  | 'multiTextbox'
+  | 'imageGallery'
+  | 'scribblePad'
+  | 'imageInfo'
+  | 'signature'
+  | 'file-upload'
+  | 'section-header'
+  | 'info-text'
+  | 'size'
+  | 'measure'
+  | 'table'
+  | 'recursive'
+  | 'recursivePages'
+  // ── Legacy workflow-only literals kept for backward compatibility ──
   | 'button_select'
   | 'multi_button_select'
   | 'file'
-  | 'signature'
   | 'numeric_with_range'
   | 'critical_numeric'
   /** Runtime-only: expanded by WorkflowRenderer from resources.testParameters. */

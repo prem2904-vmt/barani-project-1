@@ -15,23 +15,12 @@ export const PRIMARY_NAV: NavItem[] = [
     iconPath: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z'
   },
   {
-    id: 'reception',
-    label: 'Reception',
-    href: '/reception',
-    exact: true,
+    id: 'frontdesk',
+    label: 'Frontdesk',
+    href: '/frontdesk',
+    // Orders + Appointments + Billing are tabs *inside* the Frontdesk
+    // shell, so they no longer live in the primary nav.
     iconPath: 'M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
-  },
-  {
-    id: 'order',
-    label: 'Order',
-    href: '/reception/order-create',
-    iconPath: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5'
-  },
-  {
-    id: 'billing',
-    label: 'Billing',
-    href: '/reception/billing',
-    iconPath: 'M3 5h18v14H3zM3 10h18M7 15h3'
   },
   {
     id: 'lab',
