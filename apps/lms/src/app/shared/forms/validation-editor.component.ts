@@ -52,15 +52,19 @@ export interface ValidationPatch {
             <div class="pf-val-row">
               <div class="pf-val-cell">
                 <label class="pf-val-label">{{ boundsLabel() }} min</label>
-                <input type="number" class="pf-input text-sm" step="any"
-                       [value]="validationValue()?.min ?? ''"
-                       (input)="patch({ min: toNum($any($event.target).value) })" />
+                <!-- [attr.value] writes the HTML attribute, which seeds .defaultValue
+                     and (only on a fresh, undirtied input) .value too. Once the user
+                     has typed, subsequent attribute writes don't touch .value, so
+                     parent re-renders can't clobber in-progress edits. -->
+                <input #minIn type="number" class="pf-input text-sm" step="any"
+                       [attr.value]="validationValue()?.min ?? null"
+                       (input)="patch({ min: toNum(minIn.value) })" />
               </div>
               <div class="pf-val-cell">
                 <label class="pf-val-label">{{ boundsLabel() }} max</label>
-                <input type="number" class="pf-input text-sm" step="any"
-                       [value]="validationValue()?.max ?? ''"
-                       (input)="patch({ max: toNum($any($event.target).value) })" />
+                <input #maxIn type="number" class="pf-input text-sm" step="any"
+                       [attr.value]="validationValue()?.max ?? null"
+                       (input)="patch({ max: toNum(maxIn.value) })" />
               </div>
             </div>
           }
@@ -69,15 +73,15 @@ export interface ValidationPatch {
             <div class="pf-val-row">
               <div class="pf-val-cell">
                 <label class="pf-val-label">Min length</label>
-                <input type="number" class="pf-input text-sm" min="0" step="1"
-                       [value]="validationValue()?.minLength ?? ''"
-                       (input)="patch({ minLength: toNum($any($event.target).value) })" />
+                <input #minLenIn type="number" class="pf-input text-sm" min="0" step="1"
+                       [attr.value]="validationValue()?.minLength ?? null"
+                       (input)="patch({ minLength: toNum(minLenIn.value) })" />
               </div>
               <div class="pf-val-cell">
                 <label class="pf-val-label">Max length</label>
-                <input type="number" class="pf-input text-sm" min="0" step="1"
-                       [value]="validationValue()?.maxLength ?? ''"
-                       (input)="patch({ maxLength: toNum($any($event.target).value) })" />
+                <input #maxLenIn type="number" class="pf-input text-sm" min="0" step="1"
+                       [attr.value]="validationValue()?.maxLength ?? null"
+                       (input)="patch({ maxLength: toNum(maxLenIn.value) })" />
               </div>
             </div>
           }
@@ -85,18 +89,18 @@ export interface ValidationPatch {
           @if (patternBounds()) {
             <div class="pf-val-cell">
               <label class="pf-val-label">Pattern (regex)</label>
-              <input type="text" class="pf-input text-sm"
-                     [value]="validationValue()?.pattern ?? ''"
-                     (input)="patch({ pattern: $any($event.target).value || null })"
+              <input #patIn type="text" class="pf-input text-sm"
+                     [attr.value]="validationValue()?.pattern ?? null"
+                     (input)="patch({ pattern: patIn.value || null })"
                      placeholder="e.g. ^[A-Z0-9-]+$" />
             </div>
           }
 
           <div class="pf-val-cell">
             <label class="pf-val-label">Error message (optional)</label>
-            <input type="text" class="pf-input text-sm"
-                   [value]="validationValue()?.errorMessage ?? ''"
-                   (input)="patch({ errorMessage: $any($event.target).value || null })"
+            <input #errIn type="text" class="pf-input text-sm"
+                   [attr.value]="validationValue()?.errorMessage ?? null"
+                   (input)="patch({ errorMessage: errIn.value || null })"
                    placeholder="Shown in place of the default message" />
           </div>
 
