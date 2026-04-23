@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
@@ -62,6 +63,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
   selector: 'pf-result-entry',
   standalone: true,
   imports: [
+    BarcodeScannerModalComponent,
     TatIndicatorComponent,
     AvatarComponent,
     ChipComponent,
@@ -750,6 +752,15 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
         }
       </button>
     </section>
+
+    @if (!verified() && orderTest()) {
+      <pf-barcode-scanner-modal
+        title="Scan vial to open result entry"
+        [expectedBarcode]="expectedScanBarcode()"
+        (matched)="onResumeScanMatched($event)"
+        (cancelled)="onResumeScanCancelled()">
+      </pf-barcode-scanner-modal>
+    }
   `,
   styles: [`
     /* ── Patient bar (compact one-row banner) ─────────────────── */
@@ -2396,6 +2407,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
+
+    // Re-scan gate: the result-entry screen is only unlocked when the
+    // tech has the vial in hand. If they arrived here directly from a
+    // fresh claim-by-scan in my-work, the navigation state carries
+    // `justScanned: true` so we skip the modal this once. Otherwise —
+    // revisit after save, reload, deep link — the modal blocks editing
+    // until the vial barcode is scanned again.
+    const nav = this.router.getCurrentNavigation();
+    const justScanned = (nav?.extras?.state as { justScanned?: boolean } | undefined)?.justScanned === true;
+    this._verified.set(justScanned);
+
     this.api.get<OrderTest>(`/api/results/${id}`).subscribe({
       next: t => {
         this._ot.set(t);
@@ -2414,6 +2436,24 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       error: () => this.toasts.error('Could not load result entry')
     });
     setInterval(() => this._now.set(Date.now()), 10_000);
+  }
+
+  // ── Re-scan gate ──────────────────────────────────────
+  private readonly _verified = signal(false);
+  readonly verified = this._verified.asReadonly();
+  readonly expectedScanBarcode = computed(() => this._ot()?.subOrder?.barcode ?? '');
+
+  onResumeScanMatched(code: string) {
+    // Double-check the code matches before dropping the gate. Modal enforces
+    // this already, but belt-and-braces keeps the signal honest.
+    const expected = this.expectedScanBarcode();
+    if (expected && expected.toLowerCase() !== code.trim().toLowerCase()) return;
+    this._verified.set(true);
+  }
+  onResumeScanCancelled() {
+    // Cancel bounces back to the queue — no peeking at half-entered
+    // results without proving you have the vial.
+    this.back();
   }
 
   ngAfterViewInit() { /* no-op — numInputs are ready for advance() */ }

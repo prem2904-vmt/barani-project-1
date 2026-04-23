@@ -48,6 +48,10 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
+        path: 'admin/lab-settings',
+        loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
+      },
+      {
         path: 'admin/billing',
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },

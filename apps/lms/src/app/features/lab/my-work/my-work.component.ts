@@ -3,7 +3,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
+import { DelegateModalComponent } from './delegate-modal.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
@@ -35,7 +37,7 @@ const COUNTERS: CounterSpec[] = [
   selector: 'pf-my-work',
   standalone: true,
   imports: [
-    DatePipe, TatIndicatorComponent,
+    DatePipe, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonComponent, TileComponent, TouchButtonComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,6 +72,19 @@ const COUNTERS: CounterSpec[] = [
                  (keydown.enter)="scanSubmit()"
                  placeholder="Scan barcode or type PF-XXXX-XXXXX…"
                  class="pf-scan__input"/>
+          <!-- Opens the camera viewfinder. Whatever it decodes is dropped
+               into the scan input and submitted — hits the same
+               claim-by-scan gate as keyboard/HID entry. -->
+          <button type="button"
+                  class="pf-scan__camera press"
+                  (click)="openBarSearchScanner()"
+                  aria-label="Scan with camera">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="7" width="18" height="13" rx="2"/>
+              <path d="M8 7 10 4h4l2 3"/>
+              <circle cx="12" cy="13" r="3.5"/>
+            </svg>
+          </button>
           <span class="pf-scan__live">
             <span class="pf-scan__dot"></span>
             SCANNER · READY
@@ -161,13 +176,32 @@ const COUNTERS: CounterSpec[] = [
                     <div class="mt-4 flex justify-end">
                       @switch (tab()) {
                         @case ('service_queue') {
-                          <pf-touch-btn variant="secondary" size="sm" (pressed)="pickUp(t)">Pick up</pf-touch-btn>
+                          <!-- Pool rows: click opens the scanner. Modal won't
+                               accept the scan unless the decoded code matches
+                               this row's barcode. Backend also re-verifies the
+                               user is the assignee — so wrong-row clicks
+                               still get rejected. -->
+                          <button type="button" class="pf-scan-hint pf-scan-hint--btn press"
+                                  (click)="startPick(t)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="3" y="5" width="18" height="14" rx="2"/>
+                              <path d="M7 9v6M11 9v6M15 9v6"/>
+                            </svg>
+                            Scan vial to pick
+                          </button>
+                          <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">
+                            Delegate…
+                          </button>
                         }
                         @case ('rejected') {
-                          <pf-touch-btn variant="primary" size="sm" (pressed)="enter(t)">Re-enter</pf-touch-btn>
+                          <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
                         }
                         @default {
-                          <pf-touch-btn variant="primary" size="sm" (pressed)="enter(t)">Enter result</pf-touch-btn>
+                          @if (t.status === 'pending') {
+                            <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick up · scan</pf-touch-btn>
+                          } @else {
+                            <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
+                          }
                         }
                       }
                     </div>
@@ -185,8 +219,77 @@ const COUNTERS: CounterSpec[] = [
         </pf-tile>
       }
     </section>
+
+    @if (scanTarget(); as t) {
+      <pf-barcode-scanner-modal
+        title="Scan vial to claim"
+        [expectedBarcode]="scanExpected()"
+        (matched)="onScanMatched($event)"
+        (cancelled)="cancelScan()">
+      </pf-barcode-scanner-modal>
+    }
+
+    @if (barScannerOpen()) {
+      <!-- Search-bar camera mode: no expected code, any scan drops into
+           the input and routes through the same claim-by-scan gate. -->
+      <pf-barcode-scanner-modal
+        title="Scan any vial barcode"
+        (matched)="onBarSearchMatched($event)"
+        (cancelled)="closeBarSearchScanner()">
+      </pf-barcode-scanner-modal>
+    }
+
+    @if (delegateTarget(); as t) {
+      <pf-delegate-modal
+        [testName]="t.test?.name ?? 'Test'"
+        (chose)="onDelegate($event)"
+        (cancelled)="cancelDelegate()">
+      </pf-delegate-modal>
+    }
   `,
   styles: [`
+    /* Delegate link on pool rows — supervisor action. */
+    .pf-delegate-btn {
+      margin-left: 8px;
+      padding: 5px 10px;
+      border-radius: 9999px;
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .pf-delegate-btn:hover {
+      background: var(--glass-bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* Scan-to-pick chip on pool rows. Opens the scanner modal; modal
+     * still requires the decoded code to equal the row's barcode, so a
+     * click here can't claim a wrong vial. */
+    .pf-scan-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      background: rgba(236, 72, 153, 0.08);
+      border: 1px dashed rgba(236, 72, 153, 0.35);
+      color: #f472b6;
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+    .pf-scan-hint--btn {
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+    }
+    .pf-scan-hint--btn:hover {
+      background: rgba(236, 72, 153, 0.16);
+      border-color: rgba(236, 72, 153, 0.55);
+    }
+    .pf-scan-hint--btn:active { transform: scale(0.98); }
+
     /* Scan bar */
     .pf-scan-row {
       display: flex;
@@ -226,6 +329,36 @@ const COUNTERS: CounterSpec[] = [
       border-color: rgba(168, 85, 247, 0.55);
       box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
     }
+    /* Camera button inside the scan bar — sits next to the live-status
+     * chip. Tap opens the scanner modal in no-expected-code mode. */
+    .pf-scan__camera {
+      position: absolute;
+      right: 140px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 80ms ease;
+    }
+    .pf-scan__camera:hover {
+      background: var(--glass-bg-hover);
+      color: #c4b5fd;
+      border-color: rgba(168, 85, 247, 0.55);
+    }
+    .pf-scan__camera:active { transform: translateY(-50%) scale(0.95); }
+    @media (max-width: 640px) {
+      .pf-scan__camera { right: 14px; }
+      .pf-scan__live { display: none; }
+    }
+
     .pf-scan__live {
       position: absolute;
       right: 14px;
@@ -434,24 +567,98 @@ export class MyWorkComponent implements OnInit {
   scanSubmit() {
     const q = this._scan().trim();
     if (!q) return;
-    // Straight match against loaded rows first (covers both id and barcode).
+    // Look for a row whose barcode/id matches the scan. We route through
+    // /claim-by-scan so the backend enforces (a) this user is the
+    // assignee and (b) the scanned code actually matches the sample —
+    // the scan bar is just a faster path to the same gate the modal uses.
     const hit = this._rows().find(r =>
-      r.id === q ||
       r.subOrder?.barcode === q ||
+      r.id === q ||
       r.subOrder?.id === q
     );
-    if (hit) { this.enter(hit); return; }
-    // Otherwise try a direct fetch by id.
-    this.api.get<OrderTest>(`/api/results/${q}`).subscribe({
-      next: t => { if (t) this.enter(t); else this.toasts.warning('No match for scan'); },
-      error: () => this.toasts.warning('No match for scan')
+    if (!hit) {
+      this.toasts.warning('No match for scan');
+      return;
+    }
+    const scannedBarcode = hit.subOrder?.barcode ?? q;
+    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
+      next: () => { this._scan.set(''); this.enterJustScanned(hit); },
+      error: e => this.toasts.error(e.message ?? 'Scan rejected')
     });
   }
 
-  pickUp(t: OrderTest) {
-    this.api.post<OrderTest>(`/api/results/${t.id}/assign`, {}).subscribe({
-      next: () => { this.toasts.success('Assigned to you'); this.enter(t); }
+  // ── Scan-gated pickup ─────────────────────────────────
+  // Clicking the queue action opens the scanner modal with the row's
+  // expected barcode. The modal only emits (matched) when the scanned
+  // code equals the expected one. Backend /claim-by-scan then verifies
+  // the user is actually the assignee (auto-assigned or delegated) —
+  // which prevents cross-tech scanning.
+  private readonly _scanTarget = signal<OrderTest | null>(null);
+  readonly scanTarget = this._scanTarget.asReadonly();
+  readonly scanExpected = computed(() => this._scanTarget()?.subOrder?.barcode ?? '');
+
+  startPick(t: OrderTest) {
+    if (!t.subOrder?.barcode) {
+      this.toasts.warning('This sample has no barcode — ask supervisor to reprint.');
+      return;
+    }
+    this._scanTarget.set(t);
+  }
+
+  cancelScan() { this._scanTarget.set(null); }
+
+  // Top-bar camera mode: no expected code, relays decoded value into the
+  // scan input and submits via scanSubmit → same claim-by-scan gate.
+  private readonly _barScannerOpen = signal(false);
+  readonly barScannerOpen = this._barScannerOpen.asReadonly();
+  openBarSearchScanner() { this._barScannerOpen.set(true); }
+  closeBarSearchScanner() { this._barScannerOpen.set(false); }
+  onBarSearchMatched(code: string) {
+    this._barScannerOpen.set(false);
+    this._scan.set(code);
+    this.scanSubmit();
+  }
+
+  onScanMatched(code: string) {
+    const t = this._scanTarget();
+    if (!t) return;
+    this.api.post<OrderTest>(`/api/results/${t.id}/claim-by-scan`, { barcode: code }).subscribe({
+      next: () => {
+        this._scanTarget.set(null);
+        this.enterJustScanned(t);
+      },
+      error: e => this.toasts.error(e.message ?? 'Scan rejected')
     });
   }
+
   enter(t: OrderTest) { this.router.navigate(['/lab/result', t.id]); }
+
+  // Navigation variant that tells result-entry "don't prompt the re-scan
+  // modal this time — the user literally just scanned two seconds ago".
+  private enterJustScanned(t: OrderTest) {
+    this.router.navigate(['/lab/result', t.id], { state: { justScanned: true } });
+  }
+
+  // ── Supervisor delegation ─────────────────────────────
+  // Thin wrapper over POST /api/results/:id/delegate. The UI gate (who
+  // sees the button) is visual-only for now; the backend endpoint is
+  // open. Add role-based gating once permission infra lands.
+  private readonly _delegateTarget = signal<OrderTest | null>(null);
+  readonly delegateTarget = this._delegateTarget.asReadonly();
+
+  openDelegate(t: OrderTest) { this._delegateTarget.set(t); }
+  cancelDelegate() { this._delegateTarget.set(null); }
+
+  onDelegate(toUserId: string) {
+    const t = this._delegateTarget();
+    if (!t) return;
+    this.api.post(`/api/results/${t.id}/delegate`, { toUserId }).subscribe({
+      next: () => {
+        this._delegateTarget.set(null);
+        this.toasts.success('Delegated — the new assignee must scan to pick up.');
+        this.refresh();
+      },
+      error: e => this.toasts.error(e.message ?? 'Delegate failed')
+    });
+  }
 }

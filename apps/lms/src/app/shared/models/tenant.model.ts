@@ -15,6 +15,9 @@ export interface Tenant {
   brandingName?: string;
   /** Which parts to render in the top strip. Defaults to 'both'. */
   brandingMode?: TenantBrandingMode;
+  /** Admin-toggled: if true, supervisors can claim a sample without a
+   * physical scan (broken barcode workaround, audit-logged). Default false. */
+  allowNoScanClaim?: boolean;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;
