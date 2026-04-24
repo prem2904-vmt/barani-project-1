@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
 import { Department, Tenant } from '../../../shared/models/tenant.model';
 import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -29,6 +31,32 @@ interface AutoAssignConfig {
         title="Lab settings"
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
+
+      <!-- Sample Collection (branch-scoped) -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Sample Collection</h3>
+        <p class="pf-ls__hint">
+          Choose who collects samples for this branch. Front Desk lets the receptionist
+          collect inline after billing. Dedicated Counter sends billed orders to a queue
+          for a Sample Collector role — a separate sidebar screen is unlocked for them.
+        </p>
+        <div class="pf-ls__radio-row">
+          <label class="pf-ls__radio" [class.pf-ls__radio--on]="collectionMode() === 'front_desk'">
+            <input type="radio" name="collection-mode" value="front_desk"
+                   [checked]="collectionMode() === 'front_desk'"
+                   (change)="setCollectionMode('front_desk')" />
+            <span class="pf-ls__radio-title">Front Desk</span>
+            <span class="pf-ls__radio-sub">Reception collects after payment.</span>
+          </label>
+          <label class="pf-ls__radio" [class.pf-ls__radio--on]="collectionMode() === 'dedicated_counter'">
+            <input type="radio" name="collection-mode" value="dedicated_counter"
+                   [checked]="collectionMode() === 'dedicated_counter'"
+                   (change)="setCollectionMode('dedicated_counter')" />
+            <span class="pf-ls__radio-title">Dedicated Counter</span>
+            <span class="pf-ls__radio-sub">A Sample Collector works a queue.</span>
+          </label>
+        </div>
+      </pf-tile>
 
       <!-- No-scan override (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
@@ -133,6 +161,30 @@ interface AutoAssignConfig {
     .pf-ls__dept-head {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
     }
+    .pf-ls__radio-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pf-ls__radio {
+      cursor: pointer;
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .pf-ls__radio:hover { border-color: rgba(168, 85, 247, 0.35); }
+    .pf-ls__radio--on {
+      border-color: rgba(45, 212, 191, 0.55);
+      background: rgba(45, 212, 191, 0.08);
+    }
+    .pf-ls__radio input { position: absolute; opacity: 0; pointer-events: none; }
+    .pf-ls__radio-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-ls__radio-sub { font-size: 11.5px; color: var(--text-tertiary); }
+
     .pf-ls__dept-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__dept-code { margin: 2px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
     .pf-ls__label {
@@ -146,6 +198,7 @@ export class LabSettingsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly labCfg = inject(BranchLabConfigService);
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
@@ -153,6 +206,7 @@ export class LabSettingsComponent implements OnInit {
   readonly departments = this._departments.asReadonly();
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
+  readonly collectionMode = this.labCfg.collectionMode;
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '', label: '— none —' },
@@ -161,6 +215,7 @@ export class LabSettingsComponent implements OnInit {
 
   ngOnInit() {
     this.tenantState.ensureLoaded();
+    this.labCfg.ensureLoaded();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
@@ -209,6 +264,13 @@ export class LabSettingsComponent implements OnInit {
   setAllowNoScan(v: boolean) {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
       next: t => this.tenantState.update(t),
+      error: e => this.toasts.error(e?.message ?? 'Could not save')
+    });
+  }
+
+  setCollectionMode(mode: CollectionMode) {
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { collectionMode: mode }).subscribe({
+      next: cfg => this.labCfg.update(cfg),
       error: e => this.toasts.error(e?.message ?? 'Could not save')
     });
   }

@@ -3,7 +3,9 @@ import {
   EventEmitter, HostListener, Input, OnDestroy, Output,
   ViewChild, computed, signal
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { NumPadComponent } from '../../primitives/num-pad.component';
 
 // Reusable barcode scanner modal. Two input channels:
 //  1. Camera via @zxing/browser → live viewfinder + continuous decode
@@ -21,6 +23,7 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 @Component({
   selector: 'pf-barcode-scanner-modal',
   standalone: true,
+  imports: [FormsModule, NumPadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-sc" role="dialog" aria-modal="true" [attr.aria-label]="title">
@@ -45,7 +48,7 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
           </button>
         </header>
 
-        <div class="pf-sc__viewport">
+        <div class="pf-sc__viewport" [hidden]="manualMode()">
           <video #video autoplay muted playsinline class="pf-sc__video"></video>
           <div class="pf-sc__frame" aria-hidden="true"></div>
           @if (!cameraReady()) {
@@ -60,6 +63,49 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
           }
         </div>
 
+        @if (manualMode()) {
+          <div class="pf-sc__manual">
+            @if (parsedExpected(); as p) {
+              <p class="pf-sc__manual-hint">Type the 5-digit sequence on the vial. Other parts are locked to the expected barcode.</p>
+              <div class="pf-sc__seg">
+                <span class="pf-sc__seg-part pf-sc__seg-part--locked">PF</span>
+                <span class="pf-sc__seg-sep">·</span>
+                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.vendor }}</span>
+                <span class="pf-sc__seg-sep">·</span>
+                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.year }}</span>
+                <span class="pf-sc__seg-sep">·</span>
+                <input class="pf-sc__seg-part pf-sc__seg-input"
+                       inputmode="numeric"
+                       pattern="[0-9]*"
+                       maxlength="5"
+                       placeholder="00000"
+                       [ngModel]="manualSeq()"
+                       (ngModelChange)="onManualSeqChange($event)" />
+                <span class="pf-sc__seg-sep">·</span>
+                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.dept }}</span>
+              </div>
+              @if (isTouch()) {
+                <div class="pf-sc__numpad">
+                  <pf-num-pad
+                    [value]="manualSeq()"
+                    [allowDecimal]="false"
+                    [allowNegative]="false"
+                    [maxLength]="5"
+                    (valueChange)="onManualSeqChange($event)"></pf-num-pad>
+                </div>
+              }
+              <button type="button"
+                      class="pf-sc__manual-confirm press"
+                      [disabled]="manualSeq().length !== 5"
+                      (click)="submitManual()">
+                Confirm
+              </button>
+            } @else {
+              <p class="pf-sc__manual-hint">Manual entry isn't available without an expected barcode. Use the search bar's manual option instead.</p>
+            }
+          </div>
+        }
+
         @if (lastMismatch(); as code) {
           <div class="pf-sc__mismatch" role="alert">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -70,11 +116,20 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
         }
 
         <footer class="pf-sc__foot">
-          <div class="pf-sc__hid">
-            <span class="pf-sc__hid-label">HID scanner input</span>
-            <code class="pf-sc__hid-buffer">{{ hidBuffer() || '—' }}</code>
+          @if (!manualMode()) {
+            <div class="pf-sc__hid">
+              <span class="pf-sc__hid-label">HID scanner input</span>
+              <code class="pf-sc__hid-buffer">{{ hidBuffer() || '—' }}</code>
+            </div>
+          } @else {
+            <div></div>
+          }
+          <div class="pf-sc__foot-actions">
+            <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
+              {{ manualMode() ? 'Use camera' : 'Enter manually' }}
+            </button>
+            <button type="button" class="pf-sc__cancel press" (click)="cancel()">Cancel</button>
           </div>
-          <button type="button" class="pf-sc__cancel press" (click)="cancel()">Cancel</button>
         </footer>
       </div>
     </div>
@@ -211,6 +266,55 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
       cursor: pointer;
     }
     .pf-sc__cancel:hover { background: var(--glass-bg-hover); }
+
+    .pf-sc__foot-actions { display: flex; gap: 8px; align-items: center; }
+    .pf-sc__manual-toggle {
+      padding: 8px 14px; border-radius: 9999px;
+      background: transparent; border: 1px solid var(--glass-border);
+      color: var(--text-secondary); font-size: 12.5px; font-weight: 500; cursor: pointer;
+    }
+    .pf-sc__manual-toggle:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+
+    /* Manual entry — replaces the camera viewport when active */
+    .pf-sc__manual { padding: 16px; }
+    .pf-sc__manual-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px; }
+    .pf-sc__seg {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 14px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 17px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .pf-sc__seg-part { color: var(--text-primary); }
+    .pf-sc__seg-sep { color: var(--text-muted); }
+    .pf-sc__seg-part--locked { opacity: 0.7; }
+    .pf-sc__seg-input {
+      flex: 1 0 110px; min-width: 110px; max-width: 180px;
+      background: rgba(168, 85, 247, 0.10); border: 1px solid rgba(168, 85, 247, 0.45);
+      border-radius: 10px; padding: 6px 10px; outline: none;
+      font: inherit; color: var(--text-primary); text-align: center; letter-spacing: 0.18em;
+    }
+    .pf-sc__seg-input:focus {
+      border-color: rgba(168, 85, 247, 0.85);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
+    }
+    .pf-sc__seg-input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
+
+    .pf-sc__numpad { margin-top: 14px; max-width: 320px; }
+
+    .pf-sc__manual-confirm {
+      margin-top: 14px; width: 100%;
+      padding: 12px 16px; border-radius: 14px; border: 0;
+      background: var(--gradient-primary); color: #fff;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
+      transition: transform 80ms ease, box-shadow 0.25s ease, filter 80ms ease;
+    }
+    .pf-sc__manual-confirm:hover:not(:disabled) {
+      box-shadow: 0 14px 32px rgba(124, 58, 237, 0.45);
+      transform: translateY(-1px);
+    }
+    .pf-sc__manual-confirm:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.08); }
+    .pf-sc__manual-confirm:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
   `]
 })
 export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
@@ -235,6 +339,25 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   private _hidBuffer = '';
   private _hidLastKeyAt = 0;
   protected readonly hidBuffer = signal<string>('');
+
+  // Manual entry: only available when expectedBarcode is set so we can
+  // lock vendor/year/dept and just collect the 5-digit sequence. The
+  // submit path runs through handleScan, so the existing match-or-flash
+  // logic still protects against wrong vials.
+  protected readonly manualMode = signal(false);
+  protected readonly manualSeq = signal('');
+  protected readonly isTouch = signal<boolean>(
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  );
+
+  protected readonly parsedExpected = computed<{ vendor: string; year: string; seq: string; dept: string } | null>(() => {
+    const ex = (this.expectedBarcode ?? '').trim();
+    if (!ex) return null;
+    // Format: PF-{vendor}-{year}-{seq}-{dept}
+    const m = ex.match(/^PF-([A-Za-z0-9]+)-(\d{4})-(\d+)-([A-Za-z0-9]+)$/);
+    if (!m) return null;
+    return { vendor: m[1].toUpperCase(), year: m[2], seq: m[3], dept: m[4].toUpperCase() };
+  });
 
   async ngAfterViewInit() {
     try {
@@ -307,6 +430,52 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   cancel() {
     try { this.controls?.stop(); } catch { /* ignore */ }
     this.cancelled.emit();
+  }
+
+  toggleManual() {
+    const next = !this.manualMode();
+    this.manualMode.set(next);
+    // Pause the camera while the manual panel is in front, resume on close.
+    if (next) {
+      try { this.controls?.stop(); } catch { /* ignore */ }
+      this.cameraReady.set(false);
+    } else {
+      // Reattach the camera if the user goes back to scanning.
+      this.restartCamera();
+    }
+  }
+
+  onManualSeqChange(v: string) {
+    this.manualSeq.set((v ?? '').replace(/\D/g, '').slice(0, 5));
+  }
+
+  submitManual() {
+    const p = this.parsedExpected();
+    if (!p) return;
+    if (this.manualSeq().length !== 5) return;
+    const assembled = `PF-${p.vendor}-${p.year}-${this.manualSeq().padStart(5, '0')}-${p.dept}`;
+    // Same path as scan/HID — the mismatch-flash logic still applies if
+    // the typed seq doesn't match the expected one, so we never claim the
+    // wrong vial by typo.
+    this.handleScan(assembled);
+  }
+
+  private async restartCamera() {
+    if (!this.reader || !this.videoEl?.nativeElement) return;
+    try {
+      this.controls = await this.reader.decodeFromVideoDevice(
+        undefined,
+        this.videoEl.nativeElement,
+        (result, _err, controls) => {
+          if (!result) return;
+          this.cameraReady.set(true);
+          this.handleScan(result.getText(), controls);
+        }
+      );
+      this.videoEl.nativeElement.onloadedmetadata = () => this.cameraReady.set(true);
+    } catch (err) {
+      this.cameraError.set(this.friendlyError(err));
+    }
   }
 
   private friendlyError(err: unknown): string {

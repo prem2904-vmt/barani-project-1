@@ -44,9 +44,9 @@ type Priority = 'Normal' | 'Urgent';
           <!-- Patient — pick one first, then the order cart activates. -->
           @if (patient(); as p) {
             <div class="pf-patient">
-              <pf-avatar [name]="p.name" [size]="40"></pf-avatar>
+              <pf-avatar [name]="p.displayName" [size]="40"></pf-avatar>
               <div class="min-w-0 flex-1">
-                <p class="pf-patient__name">{{ p.name }}</p>
+                <p class="pf-patient__name">{{ p.displayName }}</p>
                 <p class="pf-patient__meta">
                   {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
                   @if (p.phone) { · {{ p.phone }} }

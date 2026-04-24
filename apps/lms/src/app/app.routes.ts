@@ -1,86 +1,117 @@
 import { Route } from '@angular/router';
-// import { authGuard } from './core/auth/auth.guard';
+import { authGuard } from './core/auth/auth.guard';
+import { landingGuard } from './core/auth/landing.guard';
+import { permissionGuard } from './core/auth/permission.guard';
 import { ShellComponent } from './layout/shell/shell.component';
+
+const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
+const adminGuard = permissionGuard(ADMIN_PERMS);
 
 export const appRoutes: Route[] = [
   {
+    path: 'login',
+    loadComponent: () => import('./features/login/login.component').then(m => m.LoginComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
-    // canActivate: [authGuard], // bypassed — see core/auth/mock-user.ts
+    canActivate: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'admin' },
+      // Landing guard routes to /admin, /frontdesk, /lab/my-work, or /pathologist
+      // based on the user's permissions — so a receptionist hitting '/' goes
+      // to /frontdesk, not /admin (which would then 403).
+      { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
 
-      // Admin
+      // Admin — gated: hidden from nav + blocked at route level if the user
+      // doesn't hold any admin permission (manage_tests/users/workflows/branches).
       {
         path: 'admin',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       },
       {
         path: 'admin/users',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
       },
       {
         path: 'admin/users/invite',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
       },
       {
         path: 'admin/roles/new',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
       },
       {
         path: 'admin/roles/:id/edit',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
       },
       {
         path: 'admin/tests',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
       },
       {
         path: 'admin/tests/new',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/tests/:id/edit',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/branches',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
         path: 'admin/lab-settings',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
         path: 'admin/billing',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },
       {
         path: 'admin/reports',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
       },
       {
         path: 'admin/notifications',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)
       },
       {
         path: 'admin/workflows',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
         path: 'admin/workflows/:screen',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
         path: 'admin/workflows/:screen/steps/:stepId/fields/new',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       {
         path: 'admin/workflows/:screen/steps/:stepId/fields/:fieldId/edit',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       {
         path: 'setup',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
       },
 
@@ -146,6 +177,14 @@ export const appRoutes: Route[] = [
         path: 'lab/collect',
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
+      // Dedicated-counter landing. Same component as /lab/collect — the
+      // separate route exists so we can gate it on `collect_sample` and show
+      // it in the top-level sidebar when collection_mode is dedicated_counter.
+      {
+        path: 'sample-collection',
+        canActivate: [permissionGuard('collect_sample')],
+        loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
+      },
       {
         path: 'lab/receive',
         loadComponent: () => import('./features/lab/receive-samples/receive-samples.component').then(m => m.ReceiveSamplesComponent)
@@ -178,6 +217,7 @@ export const appRoutes: Route[] = [
       // Ops
       {
         path: 'dashboard',
+        canActivate: [permissionGuard(['view_tat_dashboard', 'view_dashboard'])],
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
 
@@ -189,5 +229,5 @@ export const appRoutes: Route[] = [
       }
     ]
   },
-  { path: '**', redirectTo: 'admin' }
+  { path: '**', redirectTo: '' }
 ];

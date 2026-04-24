@@ -42,7 +42,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           @if (order(); as o) {
             <p class="text-[14px] mt-2"
                style="color: var(--text-secondary);">
-              {{ o.patient?.name }} · {{ o.samples.length }} {{ o.samples.length === 1 ? 'sample' : 'samples' }} to collect
+              {{ o.patient?.displayName }} · {{ o.samples.length }} {{ o.samples.length === 1 ? 'sample' : 'samples' }} to collect
             </p>
           }
         </div>

@@ -1,96 +1,1159 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { OrderSample } from '../../../shared/models/order.model';
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+
+/**
+ * What the phlebotomist actually holds. "Kind" drives which illustration we
+ * render (blood vacutainer vs. urine cup vs. generic jar); "color" is the
+ * cap/container colour so labelling matches what's on the rack; "fill" is the
+ * liquid colour used when the sample's drawn.
+ */
+type ContainerKind = 'vacutainer' | 'urine_cup' | 'jar';
+interface Container {
+  kind: ContainerKind;
+  color: string;   // cap / container accent
+  fill: string;    // liquid fill when collected
+  label: string;
+}
+
+// Tube colour conventions for blood vacutainers, keyed by department code.
+const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
+  HAEM:  { color: '#a78bfa', label: 'EDTA · Lavender' },
+  BIO:   { color: '#f59e0b', label: 'SST · Gold' },
+  SERO:  { color: '#ef4444', label: 'Plain · Red' },
+  MICRO: { color: '#10b981', label: 'Sterile tube' },
+  HISTO: { color: '#64748b', label: 'Formalin tube' }
+};
+const BLOOD_FILL = '#b91c1c';
+const URINE_FILL = '#f59e0b';
+
+/**
+ * Picks the container for a sample. Priority: explicit sampleType on the
+ * first test (authoritative — "Urine", "Blood - EDTA", …), then fall back to
+ * the sample's department code for colour.
+ */
+function containerFor(s: OrderSample): Container {
+  const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
+  if (sampleType.includes('urine')) {
+    return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
+  }
+  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')) {
+    return { kind: 'jar', color: '#10b981', fill: '#6b7280', label: 'Sterile container' };
+  }
+  // Blood: vacutainer. Prefer the tube colour spelt out in the sampleType
+  // ("Blood - EDTA"), otherwise use the department's conventional colour.
+  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a78bfa', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
+  if (sampleType.includes('sst') || sampleType.includes('gold')) return { kind: 'vacutainer', color: '#f59e0b', fill: BLOOD_FILL, label: 'SST · Gold' };
+  if (sampleType.includes('fluoride') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#6b7280', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
+  if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
+  if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
+  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  const dept = DEPT_VACUTAINER[s.department?.code ?? ''];
+  return {
+    kind: 'vacutainer',
+    color: dept?.color ?? '#6b7280',
+    fill: BLOOD_FILL,
+    label: dept?.label ?? 'Tube'
+  };
+}
+
+interface OrderGroup {
+  orderId: string;
+  patientName: string;
+  patientMeta: string;
+  createdAt: string;
+  samples: OrderSample[];
+  totalVials: number;
+  collected: number;
+}
 
 @Component({
   selector: 'pf-sample-collection',
   standalone: true,
-  imports: [FormsModule, DatePipe, BarcodeDisplayComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="p-8 max-w-5xl">
-      <header class="flex items-center justify-between mb-4">
-        <div>
-          <h1 class="text-2xl font-semibold">Sample collection</h1>
-          <p class="text-sm text-slate-600">Scan the barcode or pick from pending list, then mark collected.</p>
-        </div>
-        <button class="pf-btn pf-btn-ghost" (click)="refresh()">↻ Refresh</button>
-      </header>
+    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      <pf-screen-header
+        eyebrow="Lab · Collection"
+        title="Sample collection"
+        subtitle="Scan the barcode from reception, or tap a patient to draw vials.">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="refresh()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7"/>
+              <path d="M21 4v6h-6"/>
+            </svg>
+          </span>
+          Refresh
+        </pf-touch-btn>
+      </pf-screen-header>
 
-      <div class="pf-card mb-5">
-        <label class="pf-label">Scan barcode</label>
-        <div class="flex gap-2">
-          <input #scan type="text" class="pf-input font-mono flex-1" placeholder="PF-AP-2026-…"
+      <div class="pf-scan">
+        <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
+                title="Scan with camera" aria-label="Open camera scanner">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
+            <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
+          </svg>
+        </button>
+        <div class="pf-scan__body">
+          <label class="pf-scan__label">Scan or enter barcode</label>
+          <input type="text" class="pf-scan__input" placeholder="PF-AP-2026-00001-HAEM"
                  [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
-                 (keydown.enter)="findByBarcode()" autofocus />
-          <button class="pf-btn pf-btn-primary" [disabled]="!scanValue() || searching()" (click)="findByBarcode()">Find</button>
+                 (keydown.enter)="findByBarcode()" autofocus aria-label="Barcode" />
         </div>
-        @if (scanResult(); as s) {
-          <div class="mt-4 rounded-lg border border-[var(--color-accent)] bg-blue-50 p-4">
-            <div class="flex items-start gap-4">
-              <div class="flex-1">
-                <p class="font-semibold">{{ s.order?.patient?.name ?? 'Patient' }}</p>
-                <p class="text-xs text-slate-600">
-                  {{ s.department?.name }} · Barcode {{ s.barcode }} · Status {{ s.status }}
-                </p>
-                <ul class="mt-2 text-sm space-y-0.5">
-                  @for (t of s.tests; track t.id) { <li>• {{ t.test?.name ?? 'Test' }}</li> }
-                </ul>
-              </div>
-              <button class="pf-btn pf-btn-primary" [disabled]="s.status !== 'pending'" (click)="collect(s.id)">
-                Mark collected
-              </button>
-            </div>
-          </div>
-        }
+        <button class="pf-scan__cam" (click)="openScanner()" title="Scan with camera" aria-label="Open camera scanner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+          <span>Scan</span>
+        </button>
+        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="findByBarcode()">
+          {{ searching() ? 'Searching…' : 'Find' }}
+        </button>
       </div>
 
-      <h3 class="text-xs uppercase tracking-wider text-slate-500 mb-2">
-        Pending collection · {{ pending().length }}
+      @if (scannerOpen()) {
+        <pf-barcode-scanner-modal
+          title="Scan vial barcode"
+          (matched)="onScanMatched($event)"
+          (cancelled)="scannerOpen.set(false)">
+        </pf-barcode-scanner-modal>
+      }
+
+      <h3 class="pf-sc__section">
+        Pending collection · {{ groups().length }} patient<span [class.hidden]="groups().length === 1">s</span>
       </h3>
-      @if (pending().length === 0) {
-        <div class="pf-card text-sm text-slate-500">No samples waiting for collection.</div>
+
+      @if (groups().length === 0) {
+        <div class="pf-sc__empty">No samples waiting for collection.</div>
       } @else {
-        <ul class="space-y-2">
-          @for (s of pending(); track s.id) {
-            <li class="pf-card flex items-center gap-4">
-              <div class="flex-1 min-w-0">
-                <p class="font-medium">{{ s.order?.patient?.name ?? 'Patient' }}</p>
-                <p class="text-xs text-slate-500">
-                  {{ s.department?.name }} · {{ s.tests.length }} tests
-                  · Created {{ s.createdAt | date:'shortTime' }}
-                </p>
-              </div>
-              <pf-barcode-display [code]="s.barcode ?? ''"></pf-barcode-display>
-              <div class="flex gap-2">
-                <button class="pf-btn pf-btn-ghost text-xs" (click)="reject(s)">Reject</button>
-                <button class="pf-btn pf-btn-primary" (click)="collect(s.id)">Collect</button>
-              </div>
+        <ul class="pf-sc__list">
+          @for (g of groups(); track g.orderId) {
+            <li>
+              <button type="button" class="pf-sc__card" (click)="openOrder(g.orderId)">
+                <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                <div class="pf-sc__who">
+                  <p class="pf-sc__who-name">{{ g.patientName }}</p>
+                  <p class="pf-sc__who-meta">{{ g.patientMeta }}</p>
+                </div>
+                <div class="pf-sc__rack" [attr.aria-label]="g.totalVials + ' vials'">
+                  @for (s of g.samples; track s.id) {
+                    <span class="pf-sc__chip"
+                          [style.background]="tube(s).color"
+                          [class.pf-sc__chip--done]="s.status !== 'pending'"
+                          [title]="tube(s).label"></span>
+                  }
+                </div>
+                <div class="pf-sc__card-tail">
+                  @if (g.collected > 0 && g.collected < g.totalVials) {
+                    <span class="pf-sc__count pf-sc__count--progress">{{ g.collected }}/{{ g.totalVials }}</span>
+                  } @else {
+                    <span class="pf-sc__count">{{ g.totalVials }} vial<span [class.hidden]="g.totalVials === 1">s</span></span>
+                  }
+                  <svg class="pf-sc__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </div>
+              </button>
             </li>
           }
         </ul>
       }
     </section>
-  `
+
+    <!-- ─── Collect drawer ────────────────────────────────────────────── -->
+    @if (activeGroup(); as g) {
+      <div #drawerEl class="pf-drawer" role="dialog" aria-modal="true" (click)="close()">
+        <div class="pf-drawer__panel" (click)="$event.stopPropagation()">
+          <header class="pf-drawer__head">
+            <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+            <div class="pf-drawer__who">
+              <p class="pf-drawer__name">{{ g.patientName }}</p>
+              <p class="pf-drawer__meta">{{ g.patientMeta }}</p>
+            </div>
+            <div class="pf-drawer__progress">
+              <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
+              <span class="pf-drawer__progress-lbl">vials drawn</span>
+            </div>
+          </header>
+
+          <div class="pf-drawer__progressbar">
+            <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
+          </div>
+
+          <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
+
+          <div class="pf-drawer__tubes">
+            @for (s of g.samples; track s.id) {
+              <button type="button" class="pf-tube"
+                      [class.pf-tube--done]="s.status !== 'pending'"
+                      [disabled]="pendingToggle() === s.id"
+                      (click)="toggleCollected(s)">
+                @if (container(s).kind === 'urine_cup') {
+                  <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
+                       screw-cap lid, amber fill. -->
+                  <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true"
+                       [style.--tube-color]="container(s).color">
+                    <defs>
+                      <linearGradient [attr.id]="'lid-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'cup-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#fff" stop-opacity="0.08"/>
+                        <stop offset="0.2"  stop-color="#fff" stop-opacity="0.3"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.02"/>
+                        <stop offset="0.85" stop-color="#000" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'urine-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0"    stop-color="#fcd34d"/>
+                        <stop offset="0.35" stop-color="#f59e0b"/>
+                        <stop offset="1"    stop-color="#b45309"/>
+                      </linearGradient>
+                      <clipPath [attr.id]="'cupclip-' + s.id">
+                        <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
+                      </clipPath>
+                    </defs>
+
+                    <!-- Lid: wider than body, with grip ridges -->
+                    <rect x="6" y="30" width="128" height="42" rx="7"
+                          [attr.fill]="container(s).color"/>
+                    <rect x="6" y="30" width="128" height="42" rx="7"
+                          [attr.fill]="'url(#lid-' + s.id + ')'"/>
+                    <!-- Lid grip texture -->
+                    <g stroke="rgba(0,0,0,0.2)" stroke-width="1" stroke-linecap="round">
+                      <line x1="18" y1="42" x2="18" y2="60"/>
+                      <line x1="30" y1="42" x2="30" y2="60"/>
+                      <line x1="42" y1="42" x2="42" y2="60"/>
+                      <line x1="54" y1="42" x2="54" y2="60"/>
+                      <line x1="66" y1="42" x2="66" y2="60"/>
+                      <line x1="78" y1="42" x2="78" y2="60"/>
+                      <line x1="90" y1="42" x2="90" y2="60"/>
+                      <line x1="102" y1="42" x2="102" y2="60"/>
+                      <line x1="114" y1="42" x2="114" y2="60"/>
+                      <line x1="122" y1="42" x2="122" y2="60"/>
+                    </g>
+                    <!-- Rim shadow under lid -->
+                    <rect x="14" y="64" width="112" height="6" rx="2" fill="#000" opacity="0.25"/>
+
+                    <!-- Cup outline (tapered slightly from rim to base) -->
+                    <path class="pf-vial__outline"
+                          d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
+
+                    <!-- Urine fill clipped to cup shape -->
+                    <g [attr.clip-path]="'url(#cupclip-' + s.id + ')'">
+                      <rect class="pf-vial__blood"
+                            x="14"
+                            [attr.y]="s.status !== 'pending' ? 110 : 220"
+                            width="112"
+                            height="120"
+                            [attr.fill]="'url(#urine-' + s.id + ')'"/>
+                      @if (s.status !== 'pending') {
+                        <ellipse cx="70" cy="110" rx="53" ry="4" fill="#fde68a" opacity="0.6"/>
+                        <ellipse cx="70" cy="112" rx="50" ry="2" fill="#fef3c7" opacity="0.35"/>
+                      }
+                    </g>
+
+                    <!-- Cup reflection highlight -->
+                    <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"
+                          [attr.fill]="'url(#cup-' + s.id + ')'"/>
+
+                    <!-- Volume tick marks on the right (50 / 100 mL) -->
+                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round" font-family="ui-monospace, monospace">
+                      <line x1="116" y1="110" x2="122" y2="110"/>
+                      <line x1="116" y1="150" x2="122" y2="150"/>
+                      <line x1="116" y1="190" x2="122" y2="190"/>
+                    </g>
+
+                    <!-- Tick badge when collected -->
+                    @if (s.status !== 'pending') {
+                      <g class="pf-vial__tick">
+                        <circle cx="118" cy="58" r="18" fill="#10b981"/>
+                        <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                        <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                      </g>
+                    }
+                  </svg>
+                } @else {
+                <!-- Vacutainer — proportioned ~ 13×75 mm (1:5.8), with
+                     colored rubber stopper, glass body, hemispherical base,
+                     realistic highlights and a blood fill that rises on tap. -->
+                <svg class="pf-vial" viewBox="0 0 80 320" aria-hidden="true"
+                     [style.--tube-color]="container(s).color">
+                  <defs>
+                    <!-- Stopper (cap) shading -->
+                    <linearGradient [attr.id]="'cap-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                      <stop offset="0.35" stop-color="#fff" stop-opacity="0.25"/>
+                      <stop offset="0.65" stop-color="#fff" stop-opacity="0"/>
+                      <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                    </linearGradient>
+                    <!-- Glass reflections -->
+                    <linearGradient [attr.id]="'glass-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0"    stop-color="#fff" stop-opacity="0.1"/>
+                      <stop offset="0.18" stop-color="#fff" stop-opacity="0.28"/>
+                      <stop offset="0.32" stop-color="#fff" stop-opacity="0.02"/>
+                      <stop offset="0.68" stop-color="#fff" stop-opacity="0.02"/>
+                      <stop offset="0.82" stop-color="#000" stop-opacity="0.25"/>
+                      <stop offset="1"    stop-color="#000" stop-opacity="0.45"/>
+                    </linearGradient>
+                    <!-- Blood -->
+                    <linearGradient [attr.id]="'blood-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0"    stop-color="#dc2626"/>
+                      <stop offset="0.25" stop-color="#b91c1c"/>
+                      <stop offset="1"    stop-color="#5b1010"/>
+                    </linearGradient>
+                    <!-- Clip to the inside of the glass body so blood never
+                         bleeds outside the tube outline. -->
+                    <clipPath [attr.id]="'clip-' + s.id">
+                      <path d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
+                               L60 282 Q60 310 40 310 Q20 310 20 282 Z"/>
+                    </clipPath>
+                  </defs>
+
+                  <!-- Stopper (cap) -->
+                  <g>
+                    <rect x="16" y="22" width="48" height="46" rx="6"
+                          [attr.fill]="tube(s).color"/>
+                    <rect x="16" y="22" width="48" height="46" rx="6"
+                          [attr.fill]="'url(#cap-' + s.id + ')'"/>
+                    <!-- Rim groove where cap meets glass -->
+                    <rect x="14" y="58" width="52" height="10" rx="3"
+                          [attr.fill]="tube(s).color" opacity="0.7"/>
+                    <rect x="14" y="58" width="52" height="10" rx="3"
+                          fill="#000" opacity="0.25"/>
+                    <rect x="14" y="58" width="52" height="3" rx="1.5"
+                          fill="#fff" opacity="0.14"/>
+                  </g>
+
+                  <!-- Glass outline (drawn first, behind blood) -->
+                  <path class="pf-vial__outline"
+                        d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
+                           L60 282 Q60 310 40 310 Q20 310 20 282 Z"/>
+
+                  <!-- Blood fill (clipped to tube shape). Before collection:
+                       level starts below bottom (invisible). After: rises. -->
+                  <g [attr.clip-path]="'url(#clip-' + s.id + ')'">
+                    <rect class="pf-vial__blood"
+                          x="14"
+                          [attr.y]="s.status !== 'pending' ? 130 : 320"
+                          width="52"
+                          height="200"
+                          [attr.fill]="'url(#blood-' + s.id + ')'"/>
+                    @if (s.status !== 'pending') {
+                      <!-- Meniscus curve at liquid surface -->
+                      <path d="M20 130 Q40 124 60 130 L60 134 Q40 128 20 134 Z"
+                            fill="#ef4444" opacity="0.75"/>
+                      <ellipse cx="40" cy="131" rx="18" ry="2.5" fill="#fecaca" opacity="0.35"/>
+                    }
+                  </g>
+
+                  <!-- Glass highlights / reflections on top of blood -->
+                  <path d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
+                           L60 282 Q60 310 40 310 Q20 310 20 282 Z"
+                        [attr.fill]="'url(#glass-' + s.id + ')'"/>
+
+                  <!-- Thin vertical highlight streak -->
+                  <rect x="25" y="74" width="4" height="220" rx="2"
+                        fill="#fff" opacity="0.18"/>
+                  <!-- Subtle right shadow -->
+                  <rect x="54" y="74" width="3" height="220" rx="1.5"
+                        fill="#000" opacity="0.25"/>
+
+                  <!-- Volume ticks -->
+                  <g opacity="0.35" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" stroke-linecap="round">
+                    <line x1="60" y1="120" x2="64" y2="120"/>
+                    <line x1="60" y1="170" x2="64" y2="170"/>
+                    <line x1="60" y1="220" x2="64" y2="220"/>
+                    <line x1="60" y1="270" x2="64" y2="270"/>
+                  </g>
+
+                  <!-- Tick badge when collected -->
+                  @if (s.status !== 'pending') {
+                    <g class="pf-vial__tick">
+                      <circle cx="62" cy="46" r="16" fill="#10b981"/>
+                      <circle cx="62" cy="46" r="16" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                      <path d="M55 46 l5 5 l10 -10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </g>
+                  }
+                </svg>
+                }
+
+                <div class="pf-tube__body">
+                  <p class="pf-tube__label">{{ tube(s).label }}</p>
+                  <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
+
+                  @if (s.tests.length > 0) {
+                    <p class="pf-tube__tests" [title]="testList(s)">
+                      {{ s.tests[0].test?.name ?? 'Test' }}<!--
+                      -->@if (s.tests.length > 1) { <span class="pf-tube__tests-more"> +{{ s.tests.length - 1 }}</span> }
+                    </p>
+                  }
+
+                  <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
+
+                  @if (s.status !== 'pending') {
+                    <span class="pf-tube__stamp">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 4 4L19 6"/>
+                      </svg>
+                      {{ s.collectedAt | date:'shortTime' }}
+                    </span>
+                  } @else {
+                    <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
+                  }
+                </div>
+              </button>
+            }
+          </div>
+
+          <footer class="pf-drawer__foot">
+            <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)">Can't collect</button>
+            @if (g.collected === g.totalVials) {
+              <span class="pf-drawer__done-stamp">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m5 12 4 4L19 6"/>
+                </svg>
+                All vials collected
+              </span>
+            } @else {
+              <span class="pf-drawer__remaining">{{ g.totalVials - g.collected }} remaining</span>
+            }
+            <button type="button" class="pf-btn pf-btn-primary" (click)="close()"
+                    [disabled]="g.collected < g.totalVials">
+              {{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    /* ─── Scan strip ─────────────────────────────────────────
+     * Designed as the primary action: big icon, bold label, wide input.
+     * A real vacutainer scanner just types the code into the focused field,
+     * so autofocus + (keydown.enter) = Find.  */
+    .pf-scan {
+      display: flex; align-items: stretch; gap: 14px;
+      padding: 14px 16px;
+      background: linear-gradient(180deg, rgba(45, 212, 191, 0.06), rgba(168, 85, 247, 0.04));
+      border: 1px solid rgba(45, 212, 191, 0.25);
+      border-radius: 18px;
+      margin: 0 0 24px;
+      box-shadow: 0 8px 24px rgba(45, 212, 191, 0.06);
+    }
+    .pf-scan__icon-btn {
+      all: unset;
+      cursor: pointer;
+      width: 54px; height: 54px; border-radius: 14px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, rgba(45,212,191,0.22), rgba(20,184,166,0.08));
+      color: #14b8a6;
+      flex-shrink: 0; align-self: center;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .pf-scan__icon-btn:hover { background: linear-gradient(135deg, rgba(45,212,191,0.3), rgba(20,184,166,0.15)); }
+    .pf-scan__icon-btn:active { transform: scale(0.96); }
+    .pf-scan__icon-btn:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+    .pf-scan__body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-scan__label {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .pf-scan__input {
+      height: 32px; padding: 0;
+      background: transparent;
+      border: 0;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 16px; font-weight: 600; letter-spacing: 0.02em;
+      outline: none;
+    }
+    .pf-scan__input::placeholder { color: var(--text-muted); font-weight: 400; letter-spacing: 0.06em; }
+    .pf-scan__cam {
+      align-self: center;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(45, 212, 191, 0.08);
+      color: #2dd4bf;
+      font-weight: 600; font-size: 12.5px;
+      padding: 0 14px; height: 42px;
+      border: 1px solid rgba(45, 212, 191, 0.35);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .pf-scan__cam:hover { background: rgba(45, 212, 191, 0.15); }
+    .pf-scan__cam:active { transform: scale(0.98); }
+    .pf-scan__cam:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+
+    .pf-scan__btn {
+      align-self: center;
+      background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+      color: #04221e;
+      font-weight: 700; font-size: 13.5px;
+      padding: 0 22px; height: 42px; min-width: 96px;
+      border: 0; border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(45, 212, 191, 0.35);
+      transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.15s ease;
+    }
+    .pf-scan__btn:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 10px 24px rgba(45, 212, 191, 0.45); }
+    .pf-scan__btn:active:not(:disabled) { transform: scale(0.98); }
+    .pf-scan__btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .pf-sc__section { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted);
+      margin: 18px 2px 10px;
+    }
+    .pf-sc__empty {
+      padding: 28px; text-align: center;
+      background: var(--glass-bg); border: 1px dashed var(--glass-border);
+      border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
+    }
+
+    /* Responsive grid: 1 / 2 / 3 columns depending on width. Matches the
+     * auto-flow pattern used by other pages in the app — fills the whole
+     * viewport with responsive padding coming from Tailwind. */
+    .pf-sc__list {
+      list-style: none; padding: 0; margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 12px;
+    }
+    .pf-sc__list > li { min-width: 0; }
+    /* Card row: Avatar · Name/meta · Rack of chips · Count · Chevron.
+     * position: relative + overflow: hidden keep inner content (hover
+     * translates, long patient names, large racks) from bleeding into the
+     * card's neighbour in the grid. */
+    .pf-sc__card {
+      all: unset;
+      cursor: pointer;
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      column-gap: 12px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .pf-sc__card:hover {
+      border-color: rgba(168, 85, 247, 0.45);
+      background: rgba(168, 85, 247, 0.04);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+    }
+    .pf-sc__card:active { transform: scale(0.998); }
+    .pf-sc__card:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.7); outline-offset: 2px; }
+
+    .pf-sc__who { min-width: 0; }
+    .pf-sc__who-name {
+      margin: 0; font-weight: 600; font-size: 14.5px;
+      color: var(--text-primary); text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-sc__who-meta {
+      margin: 2px 0 0; font-size: 11px; color: var(--text-tertiary);
+      text-align: left;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.03em;
+    }
+
+    /* Tube rack: colored chips shaped like little vials inside a holder.
+     * max-width + overflow keep unusually-large orders (>8 vials) from
+     * pushing the count/chevron off the card edge. */
+    .pf-sc__rack {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 5px 7px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid var(--glass-border);
+      max-width: 120px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .pf-sc__chip {
+      display: inline-block;
+      width: 5px; height: 18px; border-radius: 2px;
+      flex-shrink: 0;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .pf-sc__chip--done { opacity: 0.3; }
+
+    .pf-sc__card-tail { display: inline-flex; align-items: center; gap: 8px; }
+    .pf-sc__count {
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      padding: 4px 9px; border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14); color: #c4b5fd;
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .pf-sc__count--progress {
+      background: rgba(245, 158, 11, 0.14); color: #fcd34d;
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .pf-sc__chev {
+      color: var(--text-muted); opacity: 0.55; flex-shrink: 0;
+      transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    }
+    .pf-sc__card:hover .pf-sc__chev { color: var(--text-primary); opacity: 1; }
+
+    /* ─── Full-screen stage ──────────────────────────────────── */
+    /* z-index 1000 covers the top nav (top-strip ~50, toasts ~100) so the
+     * collection drawer genuinely takes over the viewport; the backdrop is
+     * opaque so the pending queue behind never peeks through. */
+    .pf-drawer {
+      position: fixed; inset: 0; z-index: 1000;
+      background:
+        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.22) 0%, transparent 55%),
+        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.18) 0%, transparent 55%),
+        #04061a;
+      display: flex; flex-direction: column;
+      animation: pf-drawer-fade 0.22s ease both;
+    }
+    @keyframes pf-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+    .pf-drawer__panel {
+      width: 100%;
+      flex: 1 1 auto;
+      display: flex; flex-direction: column;
+      animation: pf-drawer-zoom 0.28s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+      min-height: 0;
+    }
+    @keyframes pf-drawer-zoom { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+    .pf-drawer__head {
+      display: flex; align-items: center; gap: 16px;
+      padding: 28px 48px 20px;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .pf-drawer__close {
+      all: unset; cursor: pointer;
+      width: 40px; height: 40px; border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-secondary);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .pf-drawer__close:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); border-color: rgba(255,255,255,0.18); }
+
+    .pf-drawer__who { flex: 1; min-width: 0; }
+    .pf-drawer__name {
+      margin: 0; font-weight: 700; font-size: 28px; letter-spacing: -0.02em;
+      color: var(--text-primary);
+      background: linear-gradient(180deg, var(--text-primary), rgba(255,255,255,0.6));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .pf-drawer__meta { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
+
+    .pf-drawer__progress {
+      text-align: right;
+      padding: 10px 18px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      min-width: 120px;
+    }
+    .pf-drawer__progress-num { display: block; font-size: 30px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; line-height: 1; }
+    .pf-drawer__progress-lbl { display: block; margin-top: 4px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.18em; font-weight: 600; }
+
+    .pf-drawer__progressbar {
+      margin: 0 auto;
+      max-width: calc(1280px - 96px);
+      width: calc(100% - 96px);
+      height: 4px; border-radius: 999px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .pf-drawer__progressbar > span {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #a78bfa, #22d3ee);
+      box-shadow: 0 0 14px rgba(45, 212, 191, 0.5);
+      transition: width 0.45s cubic-bezier(0.2, 0.85, 0.3, 1);
+    }
+
+    .pf-drawer__hint {
+      margin: 16px auto 0;
+      max-width: calc(1280px - 96px);
+      padding: 0 48px;
+      font-size: 13px; color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* Tubes sit in a centred track. For 1-4 vials we use flex so they
+     * genuinely centre across the screen instead of hugging the left column
+     * of an auto-fill grid. 5+ wraps naturally. */
+    .pf-drawer__tubes {
+      flex: 1 1 auto; overflow-y: auto;
+      padding: 28px 48px 32px;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: flex-start;
+      gap: 18px;
+    }
+    .pf-tube { width: min(320px, 100%); }
+
+    .pf-tube {
+      all: unset;
+      position: relative;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      padding: 24px 18px 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      transition: border-color 0.2s ease, transform 0.15s ease, background 0.25s ease, box-shadow 0.25s ease;
+      overflow: hidden;
+    }
+    .pf-tube::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(80% 60% at 50% 0%, var(--tube-color), transparent 70%);
+      opacity: 0.08;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .pf-tube:hover:not([disabled]) {
+      border-color: rgba(45, 212, 191, 0.55);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(45, 212, 191, 0.15);
+      transform: translateY(-2px);
+    }
+    .pf-tube:hover:not([disabled])::before { opacity: 0.14; }
+    .pf-tube:active:not([disabled]) { transform: translateY(0) scale(0.99); }
+    .pf-tube:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+    .pf-tube[disabled] { cursor: wait; opacity: 0.75; }
+    .pf-tube--done {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.02));
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.18);
+    }
+    .pf-tube--done::before {
+      background: radial-gradient(80% 60% at 50% 0%, #10b981, transparent 70%);
+      opacity: 0.12;
+    }
+
+    /* ─── Vial illustration ────────────────────────────────── */
+    .pf-vial {
+      width: 88px; height: 280px;
+      flex-shrink: 0;
+      filter: drop-shadow(0 22px 28px rgba(0,0,0,0.55));
+    }
+    /* Urine cup is short and wide — swap the vial's portrait box for a more
+     * squat one so it doesn't get squeezed into a tall-narrow slot. */
+    .pf-vial--cup { width: 150px; height: 236px; }
+    .pf-vial__outline {
+      fill: rgba(255,255,255,0.03);
+      stroke: rgba(255,255,255,0.22);
+      stroke-width: 1.2;
+    }
+    .pf-vial__blood { transition: y 0.75s cubic-bezier(0.25, 0.9, 0.25, 1); }
+    .pf-vial__tick { animation: pf-tick-pop 0.35s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 62px 46px; }
+    @keyframes pf-tick-pop {
+      0%   { transform: scale(0.2); opacity: 0; }
+      60%  { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pf-vial__cap { fill: var(--tube-color); }
+    .pf-vial__cap-rim { fill: rgba(0,0,0,0.22); }
+    .pf-vial__glass {
+      fill: rgba(255,255,255,0.05);
+      stroke: rgba(255,255,255,0.2);
+      stroke-width: 0.8;
+    }
+    .pf-vial__blood {
+      transition: y 0.6s cubic-bezier(0.2, 0.85, 0.3, 1);
+    }
+    .pf-vial__tick { animation: pf-tick-pop 0.3s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 44px 48px; }
+    @keyframes pf-tick-pop {
+      from { transform: scale(0.3); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .pf-tube__body {
+      width: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 3px;
+      min-width: 0;
+      position: relative;
+    }
+    .pf-tube__label {
+      margin: 0;
+      font-weight: 600; font-size: 15px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      text-align: center;
+    }
+    .pf-tube__dept {
+      margin: 0;
+      font-size: 9.5px;
+      color: var(--tube-color, var(--text-tertiary));
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
+      opacity: 0.85;
+    }
+    .pf-tube__tests {
+      margin: 10px 0 0;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      text-align: center;
+      max-width: 100%;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .pf-tube__tests-more {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .pf-tube__code {
+      margin: 4px 0 0;
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+    .pf-tube__stamp {
+      margin-top: 10px;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 600;
+      color: #6ee7b7;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.06em;
+    }
+    .pf-tube__stamp--pending {
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      border-color: var(--glass-border);
+    }
+
+    .pf-drawer__foot {
+      display: flex; align-items: center; gap: 12px;
+      padding: 18px 48px 28px;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      border-top: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
+    }
+    .pf-drawer__foot .pf-btn-primary { margin-left: auto; min-width: 140px; }
+    .pf-drawer__remaining {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-left: auto; margin-right: 8px;
+    }
+    .pf-drawer__done-stamp {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600;
+      color: #6ee7b7;
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      margin-left: auto; margin-right: 8px;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 640px) {
+      .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
+      .pf-drawer__progressbar { margin: 0 20px; }
+      .pf-drawer__hint { margin: 12px 20px 0; }
+      .pf-drawer__tubes { padding: 18px 20px 24px; grid-template-columns: 1fr; }
+      .pf-drawer__foot { padding: 14px 20px 20px; flex-wrap: wrap; }
+      .pf-drawer__name { font-size: 22px; }
+      .pf-vial { width: 72px; height: 220px; }
+    }
+
+    /* ─── Light mode overrides ──────────────────────────────
+     * Dark mode is tuned for deep navy; light mode needs
+     * inverted reflections, softer shadows, and a brighter
+     * backdrop so the vials don't float on a muddy wash. */
+    :host-context([data-theme="light"]) .pf-sc__card {
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    :host-context([data-theme="light"]) .pf-sc__card:hover {
+      background: #fdf5ff;
+      box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
+    }
+    :host-context([data-theme="light"]) .pf-sc__rack {
+      background: rgba(15, 23, 42, 0.05);
+    }
+    :host-context([data-theme="light"]) .pf-sc__chip {
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,0.5);
+    }
+    :host-context([data-theme="light"]) .pf-sc__count {
+      background: rgba(124, 58, 237, 0.1);
+      color: #6d28d9;
+      border-color: rgba(124, 58, 237, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-sc__count--progress {
+      background: rgba(245, 158, 11, 0.14);
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    :host-context([data-theme="light"]) .pf-scan {
+      background: linear-gradient(180deg, rgba(45, 212, 191, 0.08), rgba(168, 85, 247, 0.05));
+      border-color: rgba(20, 184, 166, 0.45);
+      box-shadow: 0 8px 24px rgba(45, 212, 191, 0.08);
+    }
+    :host-context([data-theme="light"]) .pf-scan__btn {
+      color: #042f2e;
+    }
+
+    :host-context([data-theme="light"]) .pf-drawer {
+      background:
+        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.12) 0%, transparent 55%),
+        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.1) 0%, transparent 55%),
+        #f5f7fb;
+    }
+    :host-context([data-theme="light"]) .pf-drawer__close {
+      background: rgba(15, 23, 42, 0.03);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__close:hover {
+      background: rgba(15, 23, 42, 0.07);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__name {
+      background: linear-gradient(180deg, var(--text-primary), rgba(15, 23, 42, 0.55));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progress {
+      background: rgba(15, 23, 42, 0.03);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progressbar {
+      background: rgba(15, 23, 42, 0.06);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progressbar > span {
+      box-shadow: 0 0 10px rgba(45, 212, 191, 0.4);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__foot {
+      background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04));
+    }
+
+    :host-context([data-theme="light"]) .pf-tube {
+      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55));
+    }
+    :host-context([data-theme="light"]) .pf-tube::before { opacity: 0.1; }
+    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled]) {
+      box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(45, 212, 191, 0.2);
+    }
+    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled])::before { opacity: 0.16; }
+    :host-context([data-theme="light"]) .pf-tube--done {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255,255,255,0.7));
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14);
+    }
+
+    /* Vial glass + streak for light mode. Real vacutainers on a white
+     * counter read as darker outlines with lighter internal reflections,
+     * not white ghosts. */
+    :host-context([data-theme="light"]) .pf-vial {
+      filter: drop-shadow(0 14px 22px rgba(15, 23, 42, 0.22));
+    }
+    :host-context([data-theme="light"]) .pf-vial__outline {
+      fill: rgba(255, 255, 255, 0.7);
+      stroke: rgba(15, 23, 42, 0.22);
+    }
+    :host-context([data-theme="light"]) .pf-vial rect[fill*="glass-"],
+    :host-context([data-theme="light"]) .pf-vial path[fill*="glass-"] {
+      opacity: 0.7;
+    }
+
+    :host-context([data-theme="light"]) .pf-tube__stamp--pending {
+      color: #64748b;
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__code {
+      color: #64748b;
+    }
+    :host-context([data-theme="light"]) .pf-tube__tests-more {
+      background: rgba(15, 23, 42, 0.05);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+
+    :host-context([data-theme="light"]) .pf-drawer__done-stamp {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__vial {
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__scan {
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    :host-context([data-theme="light"]) .pf-sc__scan-input {
+      background: #fff;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    :host-context([data-theme="light"]) .pf-sc__scan-input:focus {
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2), inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__match {
+      background: rgba(45, 212, 191, 0.1);
+      border-color: rgba(20, 184, 166, 0.5);
+    }
+    :host-context([data-theme="light"]) .pf-sc__vials {
+      background: rgba(15, 23, 42, 0.04);
+    }
+  `]
 })
-export class SampleCollectionComponent implements OnInit {
+export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly route = inject(ActivatedRoute);
 
-  private readonly _pending = signal<OrderSample[]>([]);
-  private readonly _scanResult = signal<OrderSample | null>(null);
+  @ViewChild('drawerEl') private drawerRef?: ElementRef<HTMLElement>;
+  private teleportedEl: HTMLElement | null = null;
+
+  constructor() {
+    // The shell component forms a stacking context (z-index: 1) and the
+    // top-strip inside it sits at z-index: 40 — as a sibling of the router
+    // outlet, that top-strip paints above anything nested inside the outlet,
+    // regardless of its own z-index. So we move the drawer element to
+    // <body> whenever it opens; that escapes the stacking context and lets
+    // the full-screen overlay actually cover the nav.
+    effect(() => {
+      const hasDrawer = !!this.activeGroup();
+      if (!hasDrawer) {
+        this.detachTeleport();
+        return;
+      }
+      // Wait a frame for @if to render the element before reparenting.
+      queueMicrotask(() => {
+        const el = this.drawerRef?.nativeElement;
+        if (el && el.parentNode !== document.body) {
+          document.body.appendChild(el);
+          this.teleportedEl = el;
+        }
+      });
+    });
+  }
+
+  ngOnDestroy() { this.detachTeleport(); }
+
+  private detachTeleport() {
+    if (this.teleportedEl && this.teleportedEl.parentNode === document.body) {
+      document.body.removeChild(this.teleportedEl);
+    }
+    this.teleportedEl = null;
+  }
+
   protected readonly scanValue = signal('');
   protected readonly searching = signal(false);
-  readonly pending = this._pending.asReadonly();
-  readonly scanResult = this._scanResult.asReadonly();
+  protected readonly scannerOpen = signal(false);
+  private readonly _pending = signal<OrderSample[]>([]);
+  private readonly _openOrderId = signal<string | null>(null);
+  // Tube id currently PATCH-ing, so we can lock the button during the round-trip.
+  protected readonly pendingToggle = signal<string | null>(null);
 
-  ngOnInit() { this.refresh(); }
+  readonly pending = this._pending.asReadonly();
+  readonly openOrderId = this._openOrderId.asReadonly();
+
+  readonly groups = computed<OrderGroup[]>(() => {
+    const byOrder = new Map<string, OrderGroup>();
+    for (const s of this._pending()) {
+      let g = byOrder.get(s.orderId);
+      if (!g) {
+        const p = s.order?.patient;
+        const meta = [
+          p?.sex,
+          p?.age != null ? `${p.age}y` : null,
+          `#${s.orderId.slice(0, 8)}`
+        ].filter(Boolean).join(' · ');
+        g = {
+          orderId: s.orderId,
+          patientName: p?.displayName ?? 'Patient',
+          patientMeta: meta,
+          createdAt: s.createdAt,
+          samples: [],
+          totalVials: 0,
+          collected: 0
+        };
+        byOrder.set(s.orderId, g);
+      }
+      g.samples.push(s);
+      g.totalVials++;
+      if (s.status !== 'pending') g.collected++;
+    }
+    return Array.from(byOrder.values())
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  });
+
+  // The group currently shown in the drawer, kept in sync with live refreshes.
+  readonly activeGroup = computed<OrderGroup | null>(() => {
+    const id = this._openOrderId();
+    if (!id) return null;
+    return this.groups().find(g => g.orderId === id) ?? null;
+  });
+
+  ngOnInit() {
+    this.refresh();
+    const oid = this.route.snapshot.queryParamMap.get('orderId');
+    if (oid) this._openOrderId.set(oid);
+  }
+
+  tube(s: OrderSample) { return containerFor(s); }
+  container(s: OrderSample) { return containerFor(s); }
+  testList(s: OrderSample): string {
+    return s.tests.map(t => t.test?.name ?? 'Test').join(', ');
+  }
+
+  openOrder(id: string) { this._openOrderId.set(id); }
+  close() {
+    this._openOrderId.set(null);
+    // Refresh once the drawer is gone so the pending queue outside drops any
+    // orders that are now fully collected. While the drawer is open we never
+    // re-fetch from the server — pending-collection omits drawn samples, and
+    // reading that list would make just-tapped vials vanish mid-flow.
+    this.refresh();
+  }
 
   refresh() {
     this.api.get<OrderSample[]>('/api/samples/pending-collection').subscribe({
@@ -98,40 +1161,101 @@ export class SampleCollectionComponent implements OnInit {
     });
   }
 
+  openScanner() { this.scannerOpen.set(true); }
+  onScanMatched(code: string) {
+    this.scannerOpen.set(false);
+    this.scanValue.set(code);
+    this.findByBarcode();
+  }
+
   findByBarcode() {
     const code = this.scanValue().trim();
     if (!code) return;
     this.searching.set(true);
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
-      next: s => { this._scanResult.set(s); this.searching.set(false); },
-      error: () => { this._scanResult.set(null); this.searching.set(false); this.toasts.error('No sample with that barcode'); }
-    });
-  }
-
-  collect(id: string) {
-    this.api.patch<OrderSample>(`/api/samples/${id}/collect`).subscribe({
-      next: () => {
-        this.toasts.success('Collected');
-        this._scanResult.set(null);
-        this.scanValue.set('');
-        this.refresh();
+      next: s => {
+        this.searching.set(false);
+        if (s) {
+          this._openOrderId.set(s.orderId);
+          this.scanValue.set('');
+        }
+      },
+      error: () => {
+        this.searching.set(false);
+        this.toasts.error('No sample with that barcode');
       }
     });
   }
 
-  async reject(s: OrderSample) {
+  /**
+   * Tap toggles the vial: pending → collected, or collected → pending when
+   * the tube hasn't moved past the counter yet. Refusals (rejected/in_transit
+   * /received) are no-ops. While the drawer is open we never re-fetch from
+   * /api/samples/pending-collection, since that endpoint strips drawn vials
+   * and would make the one just tapped vanish mid-animation.
+   */
+  toggleCollected(s: OrderSample) {
+    if (this.pendingToggle()) return;
+    if (s.status === 'pending') this.markCollected(s);
+    else if (s.status === 'collected') this.markPending(s);
+    // any other downstream status is locked — user can't undo from here.
+  }
+
+  private markCollected(s: OrderSample) {
+    this.pendingToggle.set(s.id);
+    const now = new Date().toISOString();
+    this._pending.update(list => list.map(x => x.id === s.id
+      ? { ...x, status: 'collected', collectedAt: now }
+      : x));
+
+    this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
+      next: () => { this.pendingToggle.set(null); },
+      error: () => {
+        this._pending.update(list => list.map(x => x.id === s.id
+          ? { ...x, status: 'pending', collectedAt: undefined }
+          : x));
+        this.pendingToggle.set(null);
+        this.toasts.error('Could not mark collected — try again');
+      }
+    });
+  }
+
+  private markPending(s: OrderSample) {
+    this.pendingToggle.set(s.id);
+    const prev = { status: s.status, collectedAt: s.collectedAt };
+    this._pending.update(list => list.map(x => x.id === s.id
+      ? { ...x, status: 'pending', collectedAt: undefined }
+      : x));
+
+    this.api.patch<OrderSample>(`/api/samples/${s.id}/uncollect`).subscribe({
+      next: () => this.pendingToggle.set(null),
+      error: e => {
+        // Roll back on failure so the UI matches the server.
+        this._pending.update(list => list.map(x => x.id === s.id ? { ...x, ...prev } : x));
+        this.pendingToggle.set(null);
+        this.toasts.error(e?.message ?? 'Could not undo — tube may have moved to the lab');
+      }
+    });
+  }
+
+  async rejectOrder(g: OrderGroup) {
+    const pending = g.samples.filter(s => s.status === 'pending');
+    if (pending.length === 0) return;
     const reason = await this.dialog.prompt({
-      title: 'Reject this sample?',
-      message: `Barcode ${s.barcode}. The sample will be flagged for re-collection.`,
-      placeholder: 'Reason for rejection…',
+      title: `Can't collect for ${g.patientName}?`,
+      message: `Flags ${pending.length} pending vial${pending.length === 1 ? '' : 's'} for re-collection.`,
+      placeholder: 'Patient refused, vein not found, wrong tube, …',
       multiline: true,
       required: true,
       tone: 'danger',
-      confirmLabel: 'Reject sample'
+      confirmLabel: 'Reject vials'
     });
     if (!reason) return;
-    this.api.patch(`/api/samples/${s.id}/reject`, { reason }).subscribe({
-      next: () => { this.toasts.success('Sample rejected'); this.refresh(); }
-    });
+    await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    ));
+    this.toasts.success('Marked for re-collection');
+    this._openOrderId.set(null);
+    this.refresh();
   }
 }

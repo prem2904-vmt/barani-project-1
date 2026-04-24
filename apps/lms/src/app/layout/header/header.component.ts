@@ -34,9 +34,15 @@ export class HeaderComponent {
   private readonly auth = inject(AuthService);
   readonly tenantName = () => this.auth.user()?.tenantName ?? '—';
   readonly branchName = () => this.auth.user()?.branchName ?? '—';
-  readonly userName   = () => this.auth.user()?.name ?? 'User';
+  readonly userName   = () => this.auth.user()?.displayName || 'User';
   readonly initials   = () => {
-    const n = this.auth.user()?.name ?? 'U';
-    return n.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+    const u = this.auth.user();
+    const first = (u?.firstName || '').trim();
+    const fathers = (u?.fathersName || '').trim();
+    if (first || fathers) {
+      return ((first[0] || '') + (fathers[0] || '')).toUpperCase() || 'U';
+    }
+    const n = (u?.displayName || '').trim();
+    return n.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || 'U';
   };
 }

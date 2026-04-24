@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
-import { Patient } from '../../models/patient.model';
+import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
@@ -82,9 +82,9 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
                             [class.row-active]="i === _highlight()"
                             (mouseenter)="_highlight.set(i)"
                             (mousedown)="pick(p); $event.preventDefault()">
-                      <pf-avatar [name]="p.name" [size]="36"></pf-avatar>
+                      <pf-avatar [name]="name(p)" [size]="36"></pf-avatar>
                       <div class="row-text">
-                        <p class="row-name">{{ p.name }}</p>
+                        <p class="row-name">{{ name(p) }}</p>
                         <p class="row-meta">
                           @if (p.phone) { {{ p.phone }} · }
                           {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
@@ -312,6 +312,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 })
 export class PatientSearchComponent {
   private readonly api = inject(ApiService);
+  protected readonly name = patientDisplayName;
 
   @Input() placeholder = 'Search patient by name, phone, or ABHA';
   @Output() picked = new EventEmitter<Patient>();
@@ -392,7 +393,7 @@ export class PatientSearchComponent {
   }
 
   pick(p: Patient) {
-    this.query.set(p.name);
+    this.query.set(patientDisplayName(p));
     this._results.set([]);
     this._focused.set(false);
     this.picked.emit(p);

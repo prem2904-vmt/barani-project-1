@@ -34,11 +34,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           </span>
           Back
         </pf-touch-btn>
-        @if (!editing()?.isPreSeeded) {
-          <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
-            {{ saving() ? 'Saving…' : 'Save' }}
-          </pf-touch-btn>
-        }
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </pf-touch-btn>
       </pf-screen-header>
 
       @if (!editing()?.id) {
@@ -53,7 +51,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           <div class="flex items-center gap-2 flex-wrap">
             <pf-chip tone="violet" size="sm">Pre-seeded</pf-chip>
             <p class="text-[13px]" style="color: var(--text-secondary);">
-              Permissions are locked for this role.
+              System role — name is locked, but you can edit the permissions.
             </p>
           </div>
         </pf-tile>
@@ -72,10 +70,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                   style="color: var(--text-muted);">{{ group.module }}</h4>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 @for (p of group.items; track p.id) {
-                  <label class="perm-row" [class.locked]="editing()?.isPreSeeded">
+                  <label class="perm-row">
                     <input type="checkbox"
                            [checked]="isGranted(p.id)"
-                           [disabled]="editing()?.isPreSeeded ?? false"
                            (change)="toggle(p.id, $event)" />
                     <span>
                       <span class="font-medium" style="color: var(--text-primary);">{{ p.name }}</span>
@@ -142,9 +139,7 @@ export class RoleEditorComponent implements OnInit {
   readonly subtitle = computed(() => {
     const r = this._editing();
     if (!r) return 'Pick a name and toggle the permissions this role should grant.';
-    return r.isPreSeeded
-      ? 'Pre-seeded roles are read-only.'
-      : 'Toggle the capabilities for this role. Changes take effect immediately on save.';
+    return 'Toggle the capabilities for this role. Changes take effect immediately on save.';
   });
 
   readonly permissionGroups = computed(() => {

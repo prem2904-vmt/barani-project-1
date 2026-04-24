@@ -181,7 +181,7 @@ export class AdminDashboardComponent implements OnInit {
   private readonly _stats = signal<DashboardStats | null>(null);
 
   readonly today = new Date();
-  readonly userName = () => this.auth.user()?.name ?? 'there';
+  readonly userName = () => this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
   readonly tenantName = () => this.auth.user()?.tenantName ?? '';
   readonly branchName = () => this.auth.user()?.branchName ?? '';
   readonly summary = this._summary.asReadonly();

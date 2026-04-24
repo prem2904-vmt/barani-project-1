@@ -10,13 +10,18 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
+type InviteMethod = 'email' | 'password';
+
 interface InviteForm {
-  name: string;
+  firstName: string;
+  fathersName: string;
   email: string;
   phone: string;
   roleId: string;
   branchId: string;
   subBranchId: string;
+  method: InviteMethod;
+  password: string;
 }
 
 @Component({
@@ -51,10 +56,17 @@ interface InviteForm {
 
       <pf-tile tone="default" padding="lg" class="block">
         <div class="space-y-3">
-          <div>
-            <label class="pf-label">Name</label>
-            <input type="text" class="pf-input"
-                   [ngModel]="form().name" (ngModelChange)="patch({ name: $event })" />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label class="pf-label">First name</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Father's name</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+            </div>
           </div>
           <div>
             <label class="pf-label">Email</label>
@@ -83,10 +95,42 @@ interface InviteForm {
               </p>
             </div>
           </div>
+
+          <div class="pf-method">
+            <label class="pf-label">Access method</label>
+            <div class="pf-method-choices">
+              <label class="pf-radio">
+                <input type="radio" name="method" value="email"
+                       [checked]="form().method === 'email'"
+                       (change)="patch({ method: 'email', password: '' })" />
+                <span>Send Supabase invite email (user sets their own password)</span>
+              </label>
+              <label class="pf-radio">
+                <input type="radio" name="method" value="password"
+                       [checked]="form().method === 'password'"
+                       (change)="patch({ method: 'password' })" />
+                <span>Set password now (I'll share it with them)</span>
+              </label>
+            </div>
+            @if (form().method === 'password') {
+              <input type="text" class="pf-input" autocomplete="off"
+                     placeholder="Minimum 6 characters"
+                     [ngModel]="form().password" (ngModelChange)="patch({ password: $event })" />
+              <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+                Copy this before submitting — it won't be shown again.
+              </p>
+            }
+          </div>
         </div>
       </pf-tile>
     </section>
-  `
+  `,
+  styles: [`
+    .pf-method { margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--glass-border); }
+    .pf-method-choices { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+    .pf-radio { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+    .pf-radio input { cursor: pointer; }
+  `]
 })
 export class UserInviteComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -95,7 +139,11 @@ export class UserInviteComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<InviteForm>({ name: '', email: '', phone: '', roleId: '', branchId: '', subBranchId: '' });
+  private readonly _form = signal<InviteForm>({
+    firstName: '', fathersName: '', email: '', phone: '',
+    roleId: '', branchId: '', subBranchId: '',
+    method: 'email', password: ''
+  });
   private readonly _saving = signal(false);
 
   readonly form = this._form.asReadonly();
@@ -126,7 +174,10 @@ export class UserInviteComponent implements OnInit {
 
   readonly canInvite = computed(() => {
     const i = this._form();
-    return i.name.trim().length > 0 && i.email.trim().length > 0 && !!i.roleId;
+    if (i.firstName.trim().length === 0 || i.fathersName.trim().length === 0) return false;
+    if (i.email.trim().length === 0 || !i.roleId) return false;
+    if (i.method === 'password' && i.password.length < 6) return false;
+    return true;
   });
 
   ngOnInit() {
@@ -154,14 +205,21 @@ export class UserInviteComponent implements OnInit {
     const i = this._form();
     this._saving.set(true);
     this.api.post<User>('/api/users/invite', {
-      name: i.name, email: i.email, phone: i.phone || undefined,
+      firstName: i.firstName,
+      fathersName: i.fathersName,
+      email: i.email,
+      phone: i.phone || undefined,
       roleIds: [i.roleId],
       branchId: i.branchId || undefined,
-      subBranchId: i.subBranchId || undefined
+      subBranchId: i.subBranchId || undefined,
+      password: i.method === 'password' ? i.password : undefined
     }).subscribe({
       next: u => {
         this._saving.set(false);
-        this.toasts.success(`Invited ${u.name}`);
+        const msg = i.method === 'password'
+          ? `${u.displayName} created. Share the password with them securely.`
+          : `Invite sent to ${u.email}`;
+        this.toasts.success(msg);
         this.back();
       },
       error: e => {

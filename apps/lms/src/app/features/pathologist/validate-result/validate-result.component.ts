@@ -78,9 +78,9 @@ interface ValueRow {
 
           <!-- Patient + context strip -->
           <div class="pf-ctx">
-            <pf-avatar [name]="t.subOrder?.order?.patient?.name ?? '—'" [size]="44"></pf-avatar>
+            <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
             <div class="pf-ctx__id">
-              <p class="pf-ctx__name">{{ t.subOrder?.order?.patient?.name ?? '—' }}</p>
+              <p class="pf-ctx__name">{{ t.subOrder?.order?.patient?.displayName ?? '—' }}</p>
               <p class="pf-ctx__meta">
                 {{ t.subOrder?.order?.patient?.sex ?? '—' }} ·
                 {{ t.subOrder?.order?.patient?.age ?? '—' }}y ·
@@ -1085,7 +1085,7 @@ export class ValidateResultComponent implements OnInit {
   readonly subtitleText = computed(() => {
     const t = this._selected();
     if (!t) return 'Review the entered result.';
-    const name = t.subOrder?.order?.patient?.name ?? '—';
+    const name = t.subOrder?.order?.patient?.displayName ?? '—';
     const dept = t.test?.department?.name ?? '—';
     return `${name} · ${dept} · review and sign off`;
   });

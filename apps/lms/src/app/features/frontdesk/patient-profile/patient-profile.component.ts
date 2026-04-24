@@ -1,9 +1,9 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
-import { Patient } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -34,7 +34,7 @@ interface ProfilePayload {
 
       <pf-screen-header
         eyebrow="Frontdesk · Patient profile"
-        [title]="patient()?.name ?? 'Patient profile'"
+        [title]="displayName() || 'Patient profile'"
         subtitle="Contact details, identifiers, and past visits.">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
@@ -51,10 +51,10 @@ interface ProfilePayload {
           <!-- Hero card -->
           <pf-tile tone="violet" padding="lg" class="block">
             <div class="flex items-center gap-4">
-              <pf-avatar [name]="p.name" [size]="64"></pf-avatar>
+              <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
               <div class="min-w-0 flex-1">
                 <p class="text-[20px] font-semibold leading-tight truncate"
-                   style="color: var(--text-primary);">{{ p.name }}</p>
+                   style="color: var(--text-primary);">{{ displayName() }}</p>
                 <p class="text-[12.5px] font-mono mt-1"
                    style="color: var(--text-tertiary);">
                   {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
@@ -197,6 +197,7 @@ export class PatientProfileComponent implements OnInit {
   readonly patient = this._patient.asReadonly();
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
+  readonly displayName = computed(() => patientDisplayName(this._patient()));
 
   ngOnInit() {
     this.route.paramMap.subscribe(map => {

@@ -124,7 +124,7 @@ export class PatientRegisterComponent implements OnInit {
     this.api.post<Patient>('/api/patients/', body).subscribe({
       next: patient => {
         this._saving.set(false);
-        this.toasts.success(`Registered ${patient.name}`);
+        this.toasts.success(`Registered ${patient.displayName}`);
         this.values.set({});
         // After registration: navigate to the new patient's profile page.
         this.router.navigate(['/frontdesk/patients', patient.id]);

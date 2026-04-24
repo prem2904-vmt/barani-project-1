@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
-import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
+import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 
 @Component({
   selector: 'pf-top-strip',
@@ -53,7 +54,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
              Absolute-centered so it stays in the middle regardless of left/right
              cluster widths. -->
         <nav class="pf-topnav-center hidden xl:flex">
-          @for (n of primary; track n.id) {
+          @for (n of primary(); track n.id) {
             <a [routerLink]="n.href"
                routerLinkActive="pf-topnav-active"
                [routerLinkActiveOptions]="{ exact: !!n.exact }"
@@ -67,7 +68,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
           }
 
           <!-- More popover (desktop) -->
-          <div class="relative">
+          <div class="relative" [class.hidden]="more().length === 0">
             <button type="button"
                     class="pf-topnav-btn press"
                     [class.pf-topnav-active]="moreOpen()"
@@ -84,7 +85,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
               <div #moreRef class="pf-more-pop">
                 <span class="pf-more-accent" aria-hidden="true"></span>
                 <div class="grid grid-cols-3 gap-1.5 p-3">
-                  @for (n of more; track n.id) {
+                  @for (n of more(); track n.id) {
                     <a [routerLink]="n.href"
                        routerLinkActive="pf-more-pop-active"
                        (click)="closeMore()"
@@ -775,13 +776,22 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly labCfg = inject(BranchLabConfigService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly moduleLabel = 'LMS';
   readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
-  readonly primary = PRIMARY_NAV;
-  readonly more = MORE_NAV;
+  private readonly visible = (items: NavItem[]): NavItem[] => {
+    const mode = this.labCfg.collectionMode();
+    return items.filter(i => {
+      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
+      if (i.collectionModes && !i.collectionModes.includes(mode)) return false;
+      return true;
+    });
+  };
+  readonly primary = computed(() => this.visible(PRIMARY_NAV));
+  readonly more = computed(() => this.visible(MORE_NAV));
 
   protected readonly branch = signal<string>('Chennai Main');
   protected readonly branchOpen = signal(false);
@@ -794,7 +804,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   readonly tenantLoaded = computed(() => this.tenantState.status() === 'loaded');
 
   readonly isDark = computed(() => this.themeService.isDark());
-  readonly userName = () => this.auth.user()?.name ?? 'User';
+  readonly userName = () => this.auth.user()?.displayName || 'User';
   readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
   readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
 
@@ -828,14 +838,21 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return `${this.tenantName()} — branding`;
   });
   readonly initials = () => {
-    const n = this.auth.user()?.name ?? 'U';
-    return n.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+    const u = this.auth.user();
+    const first = (u?.firstName || '').trim();
+    const fathers = (u?.fathersName || '').trim();
+    if (first || fathers) {
+      return ((first[0] || '') + (fathers[0] || '')).toUpperCase() || 'U';
+    }
+    const n = (u?.displayName || '').trim();
+    return n.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || 'U';
   };
 
   ngOnInit() {
     const u = this.auth.user();
     if (u?.branchName) this.branch.set(u.branchName);
     this.tenantState.ensureLoaded();
+    this.labCfg.ensureLoaded();
   }
   ngOnDestroy() { /* no-op */ }
 
@@ -862,7 +879,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   async logout() {
     this.profileOpen.set(false);
-    await this.auth.logout();
+    await this.auth.signOut();
     this.router.navigateByUrl('/login');
   }
 

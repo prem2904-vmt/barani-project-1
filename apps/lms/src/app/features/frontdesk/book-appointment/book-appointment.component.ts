@@ -8,7 +8,7 @@ import {
   splitByStep
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 import { Appointment } from '../../../shared/models/appointment.model';
-import { Patient } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -53,10 +53,10 @@ import {
       @if (prefillPatient(); as p) {
         <pf-tile tone="violet" padding="md" class="block mb-4">
           <div class="flex items-center gap-3">
-            <pf-avatar [name]="p.name" [size]="44"></pf-avatar>
+            <pf-avatar [name]="p.displayName" [size]="44"></pf-avatar>
             <div class="min-w-0 flex-1">
               <p class="text-[14px] font-semibold truncate"
-                 style="color: var(--text-primary);">{{ p.name }}</p>
+                 style="color: var(--text-primary);">{{ p.displayName }}</p>
               <p class="text-[11.5px] font-mono mt-0.5"
                  style="color: var(--text-tertiary);">
                 {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
@@ -126,7 +126,7 @@ export class BookAppointmentComponent implements OnInit {
     return {
       dataSources: {
         tests: this._tests().map(t => ({ value: t.id, label: `${t.name} — ₹${t.price}` })),
-        patients: p ? [{ value: p.id, label: p.name }] : [],
+        patients: p ? [{ value: p.id, label: p.displayName ?? "" }] : [],
         doctors: [] as Array<{ value: string; label: string }>,
         available_slots: ['09:00','09:30','10:00','10:30','11:00','11:30','12:00'].map(s => ({ value: s, label: s }))
       }
@@ -182,7 +182,7 @@ export class BookAppointmentComponent implements OnInit {
     this.api.post<Appointment>('/api/appointments/', body).subscribe({
       next: () => {
         this._saving.set(false);
-        this.toasts.success(`Booked for ${this._prefillPatient()?.name ?? 'patient'}`);
+        this.toasts.success(`Booked for ${patientDisplayName(this._prefillPatient()) || 'patient'}`);
         this.router.navigateByUrl('/frontdesk');
       },
       error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Booking failed'); }

@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
+import { AuthService } from '../../core/auth/auth.service';
+import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 
 @Component({
   selector: 'pf-bottom-nav',
@@ -15,7 +17,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
          style="bottom: max(1rem, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
       <div class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto"
            [class]="pillClasses">
-        @for (n of primary; track n.id) {
+        @for (n of primary(); track n.id) {
           <a [routerLink]="n.href"
              routerLinkActive="pf-nav-active"
              [routerLinkActiveOptions]="{ exact: !!n.exact }"
@@ -29,20 +31,22 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
           </a>
         }
 
-        <div class="w-px h-8 sm:h-10 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
+        @if (more().length > 0) {
+          <div class="w-px h-8 sm:h-10 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
 
-        <button type="button"
-                (click)="toggleMore()"
-                class="pf-nav-btn press rounded-full flex flex-col items-center justify-center gap-0.5
-                       shrink-0 w-10 h-10 sm:w-16 sm:h-14 text-[10px] font-semibold leading-none transition-colors"
-                [class.pf-nav-active]="moreOpen()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="5"  cy="12" r="1.8"/>
-            <circle cx="12" cy="12" r="1.8"/>
-            <circle cx="19" cy="12" r="1.8"/>
-          </svg>
-          <span class="hidden sm:inline">More</span>
-        </button>
+          <button type="button"
+                  (click)="toggleMore()"
+                  class="pf-nav-btn press rounded-full flex flex-col items-center justify-center gap-0.5
+                         shrink-0 w-10 h-10 sm:w-16 sm:h-14 text-[10px] font-semibold leading-none transition-colors"
+                  [class.pf-nav-active]="moreOpen()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5"  cy="12" r="1.8"/>
+              <circle cx="12" cy="12" r="1.8"/>
+              <circle cx="19" cy="12" r="1.8"/>
+            </svg>
+            <span class="hidden sm:inline">More</span>
+          </button>
+        }
       </div>
     </nav>
 
@@ -52,7 +56,7 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
            (click)="closeMore()">
         <div class="m-4 mb-28 p-4 rounded-[28px] min-w-[320px] max-w-[520px] w-[calc(100%-2rem)] slide-up glass-card-elevated grid grid-cols-3 sm:grid-cols-4 gap-2"
              (click)="$event.stopPropagation()">
-          @for (n of more; track n.id) {
+          @for (n of more(); track n.id) {
             <a [routerLink]="n.href"
                routerLinkActive="pf-more-active"
                (click)="closeMore()"
@@ -107,8 +111,22 @@ import { MORE_NAV, PRIMARY_NAV } from '../nav-items';
   `]
 })
 export class BottomNavComponent {
-  readonly primary = PRIMARY_NAV;
-  readonly more = MORE_NAV;
+  private readonly auth = inject(AuthService);
+  private readonly labCfg = inject(BranchLabConfigService);
+
+  constructor() { this.labCfg.ensureLoaded(); }
+
+  private readonly visible = (items: NavItem[]): NavItem[] => {
+    const mode = this.labCfg.collectionMode();
+    return items.filter(i => {
+      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
+      if (i.collectionModes && !i.collectionModes.includes(mode)) return false;
+      return true;
+    });
+  };
+
+  readonly primary = computed(() => this.visible(PRIMARY_NAV));
+  readonly more = computed(() => this.visible(MORE_NAV));
 
   protected readonly moreOpen = signal(false);
 

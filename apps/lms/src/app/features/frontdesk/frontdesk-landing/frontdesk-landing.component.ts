@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -10,7 +11,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { Appointment } from '../../../shared/models/appointment.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
-import { Patient } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
 type Tab = 'appointments' | 'orders' | 'ready' | 'walkins' | 'payments';
@@ -126,8 +127,8 @@ interface StaffMember {
             <ul class="pf-stat-row__list">
               @for (item of statItems(); track item.id) {
                 <li class="pf-stat-chip press" (click)="openOrder(item)">
-                  <pf-avatar [name]="item.patient?.name ?? 'Patient'" [size]="24"></pf-avatar>
-                  <span class="pf-stat-chip__name">{{ item.patient?.name ?? 'Patient' }}</span>
+                  <pf-avatar [name]="item.patient?.displayName ?? 'Patient'" [size]="24"></pf-avatar>
+                  <span class="pf-stat-chip__name">{{ item.patient?.displayName ?? 'Patient' }}</span>
                   <span class="pf-stat-chip__sub">· {{ item.samples?.length ?? 0 }} samples</span>
                 </li>
               }
@@ -203,9 +204,9 @@ interface StaffMember {
                             <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
                             <p class="pf-card__date">{{ a.appointmentDate | date:'MMM d' }}</p>
                           </div>
-                          <pf-avatar [name]="a.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
-                            <p class="pf-card__name">{{ a.patient?.name ?? 'Patient' }}</p>
+                            <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">
                               {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y
                               @if (a.patient?.phone) { · {{ a.patient?.phone }} }
@@ -259,10 +260,10 @@ interface StaffMember {
                               </svg>
                             }
                           </button>
-                          <pf-avatar [name]="o.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
                             <p class="pf-card__name">
-                              {{ o.patient?.name ?? 'Patient' }}
+                              {{ o.patient?.displayName ?? 'Patient' }}
                               @if (o.priority !== 'Normal') {
                                 <span class="pf-card__prio" [attr.data-prio]="o.priority">{{ o.priority }}</span>
                               }
@@ -279,6 +280,9 @@ interface StaffMember {
                           </div>
                           <pf-chip [tone]="orderTone(o)" size="sm">{{ o.status }}</pf-chip>
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                            @if (showCollectOn(o)) {
+                              <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect Sample</button>
+                            }
                             <button type="button" class="pf-ghostbtn press" (click)="quickBook(o)">Repeat</button>
                           </div>
                         </div>
@@ -295,9 +299,9 @@ interface StaffMember {
                     @for (o of readyForPickup(); track o.id) {
                       <li>
                         <div class="pf-card pf-card--ready" (click)="openOrder(o)">
-                          <pf-avatar [name]="o.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
-                            <p class="pf-card__name">{{ o.patient?.name ?? 'Patient' }}</p>
+                            <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">Report ready · waiting {{ reportAge(o) }}</p>
                           </div>
                           <pf-chip tone="emerald" size="sm">ready</pf-chip>
@@ -324,9 +328,9 @@ interface StaffMember {
                             <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
                             <p class="pf-card__date pf-card__date--walkin">walk-in</p>
                           </div>
-                          <pf-avatar [name]="a.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
-                            <p class="pf-card__name">{{ a.patient?.name ?? 'Patient' }}</p>
+                            <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">
                               {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y · waiting
                             </p>
@@ -353,9 +357,9 @@ interface StaffMember {
                             <p class="pf-card__time pf-card__time--bill">{{ b.balance | inr }}</p>
                             <p class="pf-card__date">due</p>
                           </div>
-                          <pf-avatar [name]="patientFor(b.patientId)?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                          <pf-avatar [name]="patientName(b.patientId)" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
-                            <p class="pf-card__name">{{ patientFor(b.patientId)?.name ?? 'Patient' }}</p>
+                            <p class="pf-card__name">{{ patientName(b.patientId) }}</p>
                             <p class="pf-card__meta">Bill #{{ b.id.slice(0, 8) }} · {{ b.createdAt | date:'MMM d' }}</p>
                           </div>
                           <pf-chip tone="rose" size="sm">unpaid</pf-chip>
@@ -439,12 +443,12 @@ interface StaffMember {
         <aside class="pf-drawer" role="dialog" aria-modal="true">
           <header class="pf-drawer__hdr">
             <div class="flex items-center gap-3 flex-1 min-w-0">
-              <pf-avatar [name]="so.patient?.name ?? 'Patient'" [size]="44"></pf-avatar>
+              <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
               <div class="min-w-0 flex-1">
                 <p class="text-[10.5px] font-mono uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Order · #{{ so.id.slice(0, 8) }}</p>
                 <p class="text-[17px] font-semibold truncate"
-                   style="color: var(--text-primary);">{{ so.patient?.name ?? 'Patient' }}</p>
+                   style="color: var(--text-primary);">{{ so.patient?.displayName ?? 'Patient' }}</p>
               </div>
               <pf-chip [tone]="orderTone(so)" size="sm">{{ so.status }}</pf-chip>
             </div>
@@ -1248,6 +1252,7 @@ export class FrontdeskLandingComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly labCfg = inject(BranchLabConfigService);
 
   readonly tabOptions: Array<{ id: Tab; label: string; tone?: 'rose' | 'amber' | 'emerald' }> = [
     { id: 'appointments', label: 'Appointments' },
@@ -1296,7 +1301,7 @@ export class FrontdeskLandingComponent implements OnInit {
   readonly bills = this._bills.asReadonly();
   readonly selectedOrder = this._selectedOrder.asReadonly();
 
-  readonly firstName = computed(() => (this.auth.user()?.name ?? 'there').split(' ')[0]);
+  readonly firstName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'there');
 
   readonly statusHint = computed(() => {
     const a = this._appointments().length;
@@ -1365,7 +1370,7 @@ export class FrontdeskLandingComponent implements OnInit {
         items.push({
           id: 'm-' + a.id,
           kind: 'missed',
-          title: a.patient?.name ?? 'Patient',
+          title: a.patient?.displayName ?? 'Patient',
           sub: a.slotTime || 'no slot',
           age: this.ago(when),
           patientId: a.patientId,
@@ -1380,7 +1385,7 @@ export class FrontdeskLandingComponent implements OnInit {
           items.push({
             id: 'u-' + o.id,
             kind: 'uncollected',
-            title: o.patient?.name ?? 'Patient',
+            title: o.patient?.displayName ?? 'Patient',
             sub: `#${o.id.slice(0, 8)}`,
             age: this.ago(when),
             patientId: o.patientId,
@@ -1397,7 +1402,7 @@ export class FrontdeskLandingComponent implements OnInit {
           items.push({
             id: 'p-' + b.id,
             kind: 'unpaid',
-            title: this.patientFor(b.patientId)?.name ?? 'Patient',
+            title: this.patientName(b.patientId),
             sub: `Bill #${b.id.slice(0, 8)}`,
             age: this.ago(when),
             patientId: b.patientId,
@@ -1456,7 +1461,7 @@ export class FrontdeskLandingComponent implements OnInit {
   });
   readonly topTestsMax = computed(() => Math.max(1, ...this.topTests().map(t => t.count)));
 
-  ngOnInit() { this.refresh(); }
+  ngOnInit() { this.labCfg.ensureLoaded(); this.refresh(); }
 
   refresh() {
     this.api.get<Appointment[]>('/api/appointments/today').subscribe({
@@ -1479,6 +1484,19 @@ export class FrontdeskLandingComponent implements OnInit {
     if (a.patientId) this.router.navigate(['/frontdesk/patients', a.patientId]);
   }
   openOrder(o: Order) { this._selectedOrder.set(o); }
+
+  // Only show the inline "Collect Sample" action when reception owns collection
+  // at this branch (dedicated_counter mode routes to a separate queue) and the
+  // order has actually been billed (status=billed). Deep-links into /lab/collect
+  // so the existing scan/pick flow handles everything downstream.
+  showCollectOn(o: Order): boolean {
+    return this.labCfg.collectionMode() === 'front_desk'
+        && o.status === 'billed'
+        && this.auth.hasPermission('collect_sample');
+  }
+  collectSample(o: Order) {
+    this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
+  }
   closeOrder() { this._selectedOrder.set(null); }
   openStraggler(s: StragglerItem) {
     if (s.orderId) this.router.navigate(['/frontdesk/patients', s.patientId]);
@@ -1519,6 +1537,9 @@ export class FrontdeskLandingComponent implements OnInit {
   patientFor(id: string): Patient | undefined {
     return this._orders().find(o => o.patientId === id)?.patient
         ?? this._appointments().find(a => a.patientId === id)?.patient;
+  }
+  patientName(id: string): string {
+    return patientDisplayName(this.patientFor(id)) || 'Patient';
   }
   hasOutstanding(pid?: string): boolean {
     if (!pid) return false;

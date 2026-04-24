@@ -203,11 +203,11 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   </span>
                 </label>
 
-                <pf-avatar [name]="s.order?.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                <pf-avatar [name]="s.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
 
                 <div class="flex-1 min-w-0">
                   <p class="font-semibold text-[14.5px] truncate"
-                     style="color: var(--text-primary);">{{ s.order?.patient?.name ?? 'Patient' }}</p>
+                     style="color: var(--text-primary);">{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
                      style="color: var(--text-tertiary);">
                     {{ s.department?.name }} · {{ s.barcode }}

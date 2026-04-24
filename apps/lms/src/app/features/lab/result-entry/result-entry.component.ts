@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
+import { patientDisplayName } from '../../../shared/models/patient.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -2296,7 +2297,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return Math.max(0, Math.min(100, (this.tatElapsedMin() / b) * 100));
   });
 
-  readonly patientName = computed(() => this._ot()?.subOrder?.order?.patient?.name ?? '—');
+  readonly patientName = computed(() => patientDisplayName(this._ot()?.subOrder?.order?.patient) || '—');
   readonly patientSex  = computed(() => this._ot()?.subOrder?.order?.patient?.sex ?? '—');
   readonly patientAge  = computed(() => this._ot()?.subOrder?.order?.patient?.age ?? '—');
 
@@ -2414,8 +2415,15 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     // `justScanned: true` so we skip the modal this once. Otherwise —
     // revisit after save, reload, deep link — the modal blocks editing
     // until the vial barcode is scanned again.
+    //
+    // We check both router.getCurrentNavigation() (populated during the
+    // navigation transition) and history.state (the persisted snapshot)
+    // because the former returns null once the route has settled, which
+    // makes the bypass flaky depending on micro-task timing.
     const nav = this.router.getCurrentNavigation();
-    const justScanned = (nav?.extras?.state as { justScanned?: boolean } | undefined)?.justScanned === true;
+    const navState = (nav?.extras?.state as { justScanned?: boolean } | undefined);
+    const histState = (typeof history !== 'undefined' ? history.state : null) as { justScanned?: boolean } | null;
+    const justScanned = navState?.justScanned === true || histState?.justScanned === true;
     this._verified.set(justScanned);
 
     this.api.get<OrderTest>(`/api/results/${id}`).subscribe({

@@ -1,18 +1,26 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
+
+const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
 type Tab = 'my_work' | 'service_queue' | 'rejected';
 type Level = 'urgent' | 'high' | 'normal';
@@ -37,8 +45,8 @@ const COUNTERS: CounterSpec[] = [
   selector: 'pf-my-work',
   standalone: true,
   imports: [
-    DatePipe, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonComponent, TileComponent, TouchButtonComponent
+    DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
+    AvatarComponent, NumPadComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -100,6 +108,82 @@ const COUNTERS: CounterSpec[] = [
         </pf-touch-btn>
       </div>
 
+      <!-- Manual entry toggle + panel -->
+      <div class="manual-toggle">
+        <button type="button" class="manual-link" (click)="toggleManual()">
+          @if (manualMode()) { ✕ Close manual entry } @else { Or enter barcode manually → }
+        </button>
+      </div>
+
+      @if (manualMode()) {
+        <pf-tile tone="default" padding="lg" class="block mb-5">
+          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 block"
+                 style="color: var(--text-muted);">Manual barcode entry</label>
+
+          <div class="seg-row">
+            <span class="seg seg--locked">PF</span>
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked">{{ vendorCode() || '??' }}</span>
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked">{{ currentYear }}</span>
+            <span class="seg-sep">·</span>
+            <input class="seg seg--input"
+                   inputmode="numeric"
+                   pattern="[0-9]*"
+                   maxlength="5"
+                   placeholder="00000"
+                   [ngModel]="seqValue()"
+                   (ngModelChange)="onSeqChange($event)" />
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked seg--dept">{{ selectedDeptCode() || '—' }}</span>
+          </div>
+
+          <div class="manual-meta">
+            <div class="dept-picker">
+              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
+                     style="color: var(--text-muted);">Department</label>
+              <pf-select
+                [options]="deptOptions()"
+                [value]="selectedDeptCode()"
+                placeholder="Select department"
+                (valueChange)="onDeptChange($event)"></pf-select>
+            </div>
+            <div class="preview">
+              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
+                     style="color: var(--text-muted);">Preview</label>
+              <div class="preview-code">{{ fullManualBarcode() }}</div>
+            </div>
+          </div>
+
+          @if (isTouch()) {
+            <div class="numpad-wrap">
+              <pf-num-pad
+                [value]="seqValue()"
+                [allowDecimal]="false"
+                [allowNegative]="false"
+                [maxLength]="5"
+                (valueChange)="onSeqChange($event)"></pf-num-pad>
+            </div>
+          }
+
+          <div class="manual-actions">
+            @if (seqValue().length > 0 && seqValue().length < 5) {
+              <span class="seq-hint">{{ 5 - seqValue().length }} more digit{{ seqValue().length === 4 ? '' : 's' }}</span>
+            }
+            <pf-touch-btn size="md" variant="primary"
+                          [disabled]="!canManualConfirm()"
+                          (pressed)="submitManual()">
+              Open
+              <span icon-right aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                </svg>
+              </span>
+            </pf-touch-btn>
+          </div>
+        </pf-tile>
+      }
+
       <!-- Counter tiles -->
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         @for (c of counters; track c.id) {
@@ -158,7 +242,7 @@ const COUNTERS: CounterSpec[] = [
                 <li>
                   <pf-tile [tone]="toneFor(bucket.level)" padding="md">
                     <div class="flex items-start gap-3">
-                      <pf-avatar [name]="t.subOrder?.order?.patient?.name ?? 'Patient'" [size]="40"></pf-avatar>
+                      <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
                           <p class="text-[15px] font-semibold truncate"
@@ -167,7 +251,7 @@ const COUNTERS: CounterSpec[] = [
                         </div>
                         <p class="text-[12px] font-mono mt-0.5"
                            style="color: var(--text-tertiary);">
-                          {{ t.subOrder?.order?.patient?.name ?? '—' }}
+                          {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
                           · {{ t.test?.department?.name ?? '—' }}
                           · rec'd {{ t.subOrder?.receivedAtLab ? (t.subOrder?.receivedAtLab | date:'shortTime') : '—' }}
                         </p>
@@ -289,6 +373,58 @@ const COUNTERS: CounterSpec[] = [
       border-color: rgba(236, 72, 153, 0.55);
     }
     .pf-scan-hint--btn:active { transform: scale(0.98); }
+
+    /* Manual entry */
+    .manual-toggle { margin: -8px 0 16px; display: flex; justify-content: flex-end; }
+    .manual-link {
+      background: transparent; border: 0; padding: 4px 8px;
+      color: var(--text-secondary); font-size: 12.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.02em; cursor: pointer; transition: color 0.15s ease;
+    }
+    .manual-link:hover { color: var(--text-primary); }
+
+    .seg-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 18px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .seg { color: var(--text-primary); }
+    .seg-sep { color: var(--text-muted); }
+    .seg--locked { opacity: 0.7; }
+    .seg--dept { min-width: 48px; text-align: center; }
+    .seg--input {
+      flex: 1 0 110px; min-width: 110px; max-width: 180px;
+      background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.45);
+      border-radius: 10px; padding: 6px 10px; outline: none;
+      font: inherit; color: var(--text-primary); text-align: center;
+      letter-spacing: 0.18em;
+    }
+    .seg--input:focus {
+      border-color: rgba(45, 212, 191, 0.85);
+      box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.15);
+    }
+    .seg--input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
+
+    .manual-meta {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px;
+    }
+    @media (max-width: 640px) { .manual-meta { grid-template-columns: 1fr; } }
+    .preview-code {
+      padding: 9px 12px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13.5px; color: var(--text-secondary); letter-spacing: 0.02em;
+      overflow-x: auto; white-space: nowrap;
+    }
+    .numpad-wrap { margin-top: 16px; max-width: 320px; }
+    .manual-actions {
+      display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 16px;
+    }
+    .seq-hint {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
 
     /* Scan bar */
     .pf-scan-row {
@@ -466,6 +602,80 @@ export class MyWorkComponent implements OnInit {
   readonly scan = this._scan.asReadonly();
   setScan(v: string) { this._scan.set(v); }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
+
+  // ── Manual barcode entry ─────────────────────────────────────────────
+  private readonly auth = inject(AuthService);
+  private readonly tenantState = inject(TenantStateService);
+
+  protected readonly manualMode = signal(false);
+  protected readonly seqValue = signal('');
+  protected readonly departments = signal<Department[]>([]);
+  protected readonly selectedDeptCode = signal<string>('');
+  protected readonly isTouch = signal<boolean>(
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  );
+  readonly currentYear = new Date().getFullYear();
+
+  readonly vendorCode = computed(() => this.tenantState.tenant()?.vendorCode ?? '');
+
+  readonly deptOptions = computed<PfSelectOption<string>[]>(() =>
+    this.departments().map(d => ({ value: d.code, label: `${d.code} · ${d.name}` }))
+  );
+
+  readonly fullManualBarcode = computed(() => {
+    const v = this.vendorCode() || '??';
+    const seq = (this.seqValue() || '').padStart(5, '0');
+    const d = this.selectedDeptCode() || '——';
+    return `PF-${v}-${this.currentYear}-${seq}-${d}`;
+  });
+
+  readonly canManualConfirm = computed(() =>
+    this.seqValue().length === 5 &&
+    !!this.selectedDeptCode() &&
+    !!this.vendorCode()
+  );
+
+  toggleManual() {
+    const next = !this.manualMode();
+    this.manualMode.set(next);
+    if (next) {
+      this.tenantState.ensureLoaded();
+      if (this.departments().length === 0) this.loadDepartments();
+    }
+  }
+
+  onSeqChange(v: string) {
+    this.seqValue.set((v ?? '').replace(/\D/g, '').slice(0, 5));
+  }
+
+  onDeptChange(code: string) {
+    this.selectedDeptCode.set(code);
+    try { localStorage.setItem(LAST_DEPT_KEY, code); } catch { /* ignore */ }
+  }
+
+  submitManual() {
+    if (!this.canManualConfirm()) return;
+    const code = this.fullManualBarcode();
+    this.setScan(code);
+    this.scanSubmit();
+    this.seqValue.set('');
+  }
+
+  private loadDepartments() {
+    const branchId = this.auth.user()?.branchId;
+    if (!branchId) return;
+    this.api.get<Department[]>(`/api/tenants/departments?branchId=${branchId}`).subscribe({
+      next: list => {
+        const arr = list ?? [];
+        this.departments.set(arr);
+        let last = '';
+        try { last = localStorage.getItem(LAST_DEPT_KEY) ?? ''; } catch { /* ignore */ }
+        const match = arr.find(d => d.code === last);
+        if (match) this.selectedDeptCode.set(match.code);
+        else if (arr.length > 0) this.selectedDeptCode.set(arr[0].code);
+      }
+    });
+  }
 
   private readonly _rows = signal<OrderTest[]>([]);
   readonly rows = this._rows.asReadonly();

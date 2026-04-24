@@ -691,7 +691,7 @@ export class BillingComponent implements OnInit {
   readonly subtitle = computed(() => {
     const p = this._order()?.patient;
     if (!p) return 'Choose a payment mode and confirm the total.';
-    return `${p.name} · ${p.phone ?? ''}`.trim();
+    return `${p.displayName} · ${p.phone ?? ''}`.trim();
   });
 
   readonly invoiceNumber = computed(() => {

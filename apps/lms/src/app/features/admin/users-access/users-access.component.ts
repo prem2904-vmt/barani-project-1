@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Role, User } from '../../../shared/models/user.model';
+import { Role, User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -81,10 +81,10 @@ type Tab = 'users' | 'roles';
             @for (u of filteredUsers(); track u.id) {
               <pf-tile [tone]="u.isActive ? 'default' : 'default'" padding="md">
                 <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                  <pf-avatar [name]="u.name" [size]="44"></pf-avatar>
+                  <pf-avatar [name]="u.displayName" [size]="44"></pf-avatar>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ u.name }}</p>
+                      <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ u.displayName }}</p>
                       @if (u.isActive) {
                         <pf-chip tone="emerald" size="sm">Active</pf-chip>
                       } @else {
@@ -184,7 +184,7 @@ export class UsersAccessComponent implements OnInit {
   readonly filteredUsers = computed(() => {
     const s = this._search().toLowerCase();
     return s
-      ? this._users().filter(u => u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
+      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
       : this._users();
   });
 

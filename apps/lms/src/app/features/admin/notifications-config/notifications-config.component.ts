@@ -216,20 +216,24 @@ export class NotificationsConfigComponent implements OnInit {
 
   alertLabel(k: string): string {
     return {
-      critical_value:    'Critical value alert',
-      sample_rejection:  'Sample rejection',
-      report_ready:      'Report ready',
-      tat_breach:        'TAT breach',
-      result_rejected:   'Result rejected by pathologist'
+      critical_value:           'Critical value alert',
+      sample_rejection:         'Sample rejection',
+      report_ready:             'Report ready',
+      tat_breach:               'TAT breach',
+      result_rejected:          'Result rejected by pathologist',
+      sample_ready_collection:  'Sample ready for collection'
     }[k] ?? k;
   }
 
   private readonly _alerts = signal<AlertCfg[]>([
-    { eventType: 'critical_value',   inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'sample_rejection', inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'report_ready',     inAppEnabled: true,  whatsappEnabled: true,  emailEnabled: false },
-    { eventType: 'tat_breach',       inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'result_rejected',  inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false }
+    { eventType: 'critical_value',          inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
+    { eventType: 'sample_rejection',        inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
+    { eventType: 'report_ready',            inAppEnabled: true,  whatsappEnabled: true,  emailEnabled: false },
+    { eventType: 'tat_breach',              inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
+    { eventType: 'result_rejected',         inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
+    // Fires when a new billed order hits the collection queue in
+    // dedicated_counter mode. Notifies every Sample Collector in the branch.
+    { eventType: 'sample_ready_collection', inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false }
   ]);
   readonly alerts = this._alerts.asReadonly();
   patchAlert(i: number, p: Partial<AlertCfg>) {

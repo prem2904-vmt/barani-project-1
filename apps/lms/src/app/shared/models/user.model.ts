@@ -1,12 +1,23 @@
 export interface User {
   id: string;
   tenantId: string;
-  name: string;
+  firstName: string;
+  fathersName: string;
+  /** Server computes this. Falls back to `firstName + ' ' + fathersName`. */
+  displayName?: string;
   email: string;
   phone?: string;
   authId?: string;
   isActive: boolean;
   createdAt: string;
+}
+
+export function userDisplayName(
+  u: Pick<User, 'firstName' | 'fathersName' | 'displayName'> | null | undefined
+): string {
+  if (!u) return '';
+  if (u.displayName) return u.displayName;
+  return [u.firstName, u.fathersName].filter(Boolean).join(' ');
 }
 
 export interface Role {

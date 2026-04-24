@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
-import { User } from '../../../shared/models/user.model';
+import { User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 
 // Lightweight supervisor delegation picker. Lists active users in the
@@ -40,9 +40,9 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
           @for (u of filtered(); track u.id) {
             <li>
               <button type="button" class="pf-dl__item press" (click)="chose.emit(u.id)">
-                <pf-avatar [name]="u.name" [size]="36"></pf-avatar>
+                <pf-avatar [name]="u.displayName" [size]="36"></pf-avatar>
                 <div class="min-w-0 flex-1 text-left">
-                  <p class="pf-dl__name">{{ u.name }}</p>
+                  <p class="pf-dl__name">{{ u.displayName }}</p>
                   <p class="pf-dl__meta">{{ u.email }}</p>
                 </div>
               </button>
@@ -129,7 +129,7 @@ export class DelegateModalComponent implements OnInit {
     const q = this._query().trim().toLowerCase();
     const list = this._users().filter(u => u.isActive);
     if (!q) return list;
-    return list.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+    return list.filter(u => userDisplayName(u).toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   };
 
   ngOnInit() {

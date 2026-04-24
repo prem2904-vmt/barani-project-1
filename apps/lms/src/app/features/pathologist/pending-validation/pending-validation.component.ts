@@ -105,7 +105,7 @@ interface ResultSnapshot {
               @for (t of bucket.items; track t.id) {
                 <pf-tile [tone]="rowTone(bucket.level)" padding="md">
                   <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                    <pf-avatar [name]="t.subOrder?.order?.patient?.name ?? '—'" [size]="44"></pf-avatar>
+                    <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
 
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
@@ -117,7 +117,7 @@ interface ResultSnapshot {
                       </div>
                       <p class="text-[12px] mt-0.5 truncate"
                          style="color: var(--text-tertiary);">
-                        {{ t.subOrder?.order?.patient?.name ?? '—' }}
+                        {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
                         · entered {{ t.resultedAt ? (t.resultedAt | date:'shortTime') : '—' }}
                       </p>
                     </div>
