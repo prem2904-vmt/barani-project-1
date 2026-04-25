@@ -314,10 +314,12 @@ interface StaffMember {
                               }
                             }
                             <!-- post-dispatch lifecycle: read-only badges -->
-                            @else if (o.status === 'dispatched' || o.status === 'in_transit') {
+                            @else if (o.status === 'dispatched') {
                               <span class="pf-tag pf-tag--ok">🚗 Dispatched</span>
+                            } @else if (o.status === 'in_transit') {
+                              <span class="pf-tag pf-tag--ok">📦 Arrived at lab</span>
                             } @else if (o.status === 'received_in_lab' || o.status === 'received' || o.status === 'processing') {
-                              <span class="pf-tag pf-tag--ok">🔬 In Lab</span>
+                              <span class="pf-tag pf-tag--ok">🔬 In Lab · TAT running</span>
                             } @else if (o.status === 'resulted') {
                               <span class="pf-tag pf-tag--ok">⏳ Awaiting Validation</span>
                             } @else if (o.status === 'validated') {
@@ -1706,7 +1708,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       billed:            'Billed',
       sample_collected:  'Sample Collected',
       dispatched:        'Dispatched',
-      in_transit:        'In Transit',
+      in_transit:        'Arrived at Lab',
       received_in_lab:   'In Lab',
       received:          'In Lab',
       processing:        'Processing',

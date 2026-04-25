@@ -9,6 +9,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
+import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -22,7 +23,7 @@ import { OrderTest } from '../../../shared/models/order.model';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
-type Tab = 'my_work' | 'service_queue' | 'rejected';
+type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected';
 type Level = 'urgent' | 'high' | 'normal';
 type Bucket = { level: Level; items: Enriched[] };
 type Enriched = OrderTest & { _level: Level; _remainingMin: number };
@@ -46,7 +47,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent
+    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -198,15 +199,25 @@ const COUNTERS: CounterSpec[] = [
         }
       </div>
 
-      <!-- Secondary filter: my work / service queue / rejected -->
+      <!-- Secondary filter: lab intake / my work / service queue / rejected -->
       <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
         <pf-segmented [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"/>
-        <p class="text-[11px] font-mono uppercase tracking-[0.14em]"
-           style="color: var(--text-muted);">
-          {{ rows().length }} items · {{ countFor('my_work') }} mine · {{ countFor('service_queue') }} pool · {{ countFor('rejected') }} rejected
-        </p>
+        @if (tab() !== 'intake') {
+          <p class="text-[11px] font-mono uppercase tracking-[0.14em]"
+             style="color: var(--text-muted);">
+            {{ rows().length }} items · {{ countFor('my_work') }} mine · {{ countFor('service_queue') }} pool · {{ countFor('rejected') }} rejected
+          </p>
+        }
       </div>
 
+      @if (tab() === 'intake') {
+        <!-- Lab intake: dispatched orders awaiting "Mark Arrived" + arrived
+             tubes awaiting bench-tech pickup. The standalone /lab/receive
+             route renders the same component; this tab embeds it inline so
+             techs flip between intake and their bench work without leaving
+             the workbench. -->
+        <pf-receive-samples [embedded]="true"></pf-receive-samples>
+      } @else {
       @if (loading() && rows().length === 0) {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           @for (i of [0,1,2,3]; track i) {
@@ -367,6 +378,7 @@ const COUNTERS: CounterSpec[] = [
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
       }
+      } <!-- end @else for non-intake tab -->
     </section>
 
     @if (scanTarget(); as t) {
@@ -667,6 +679,7 @@ export class MyWorkComponent implements OnInit {
   private readonly router = inject(Router);
 
   readonly tabOptions = [
+    { value: 'intake'        as Tab, label: 'Lab Intake' },
     { value: 'my_work'       as Tab, label: 'My Work' },
     { value: 'service_queue' as Tab, label: 'Service Queue' },
     { value: 'rejected'      as Tab, label: 'Rejected' }
@@ -766,7 +779,7 @@ export class MyWorkComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
-  private readonly _counts = signal<Record<Tab, number>>({ my_work: 0, service_queue: 0, rejected: 0 });
+  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0 });
   countFor(t: Tab): number { return this._counts()[t]; }
 
   readonly buckets = computed<Bucket[]>(() => {
@@ -870,6 +883,9 @@ export class MyWorkComponent implements OnInit {
   ngOnInit() { this.refresh(); this.refreshAllCounts(); }
 
   refresh() {
+    // Intake tab embeds the ReceiveSamplesComponent which manages its own
+    // data; nothing to fetch here.
+    if (this._tab() === 'intake') { this._loading.set(false); return; }
     const url = this.endpointFor(this._tab());
     this._loading.set(true);
     this.api.get<OrderTest[]>(url).subscribe({

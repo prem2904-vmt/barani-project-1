@@ -158,8 +158,10 @@ export class SidebarComponent {
     {
       title: 'Lab',
       links: [
-        { label: 'My Work',           href: '/lab/my-work',          icon: '🎯', perms: ['enter_result', 'edit_result'] },
-        { label: 'Receive Samples',   href: '/lab/receive',          icon: '📥', perms: ['receive_sample'] },
+        // Lab intake (Receive Samples) is now a tab inside My Work — no
+        // separate sidebar link to avoid duplicating the entry. The route
+        // /lab/receive still works for direct navigation / bookmarks.
+        { label: 'My Work',           href: '/lab/my-work',          icon: '🎯', perms: ['enter_result', 'edit_result', 'receive_sample'] },
         // Inline lab collection point — only when collection is owned by lab
         // (front_desk mode); dedicated counter mode uses /sample-collection.
         { label: 'Sample Collection', href: '/lab/collect',          icon: '🧫',

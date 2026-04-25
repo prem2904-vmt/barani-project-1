@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
@@ -10,6 +12,7 @@ import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 interface AutoAssignConfig {
   id?: string;
@@ -19,10 +22,12 @@ interface AutoAssignConfig {
   autoAssignRoleId?: string | null;
 }
 
+interface WipeResult { patients: number; orders: number; bills: number; reports: number; appointments: number; }
+
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
@@ -148,11 +153,47 @@ interface AutoAssignConfig {
           </div>
         }
       </pf-tile>
+
+      <!-- ─── Danger zone ────────────────────────────────────────
+       * Dev-testing tool: wipe every patient + order + bill + report
+       * + appointment + notification while leaving tenant config /
+       * users / roles / test catalog / workflows intact. Gated on
+       * manage_tenant — the same perm that lets you save tenant config.
+       * Hidden if the user lacks the perm. -->
+      @if (canWipe()) {
+        <pf-tile tone="rose" padding="lg" class="block mt-6">
+          <div class="pf-ls__danger">
+            <div class="flex-1 min-w-0">
+              <p class="pf-ls__title pf-ls__danger-title">Danger zone · dev testing</p>
+              <p class="pf-ls__hint">
+                Wipes every patient, order, sample, bill, payment, report, and appointment from
+                the database. Tenant config, branches, departments, users, roles, the test catalog,
+                and workflows are kept. Use this to reset the system to a clean state during
+                dev testing. <span style="color: #fca5a5;">Cannot be undone.</span>
+              </p>
+              @if (lastWiped(); as w) {
+                <p class="pf-ls__warn">Last wipe: cleared {{ w.patients }} patients · {{ w.orders }} orders · {{ w.bills }} bills · {{ w.reports }} reports.</p>
+              }
+            </div>
+            <pf-touch-btn variant="danger" size="md"
+                          [disabled]="wiping()"
+                          (pressed)="wipePatientData()">
+              {{ wiping() ? 'Wiping…' : '🗑 Wipe Patient Data' }}
+            </pf-touch-btn>
+          </div>
+        </pf-tile>
+      }
     </section>
   `,
   styles: [`
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-ls__danger {
+      display: flex; gap: 16px; align-items: center;
+      flex-wrap: wrap;
+    }
+    .pf-ls__danger-title { color: #fca5a5 !important; }
+    .pf-ls__danger > pf-touch-btn { flex-shrink: 0; }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
     .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: #fbbf24; font-style: italic; }
 
@@ -225,11 +266,20 @@ export class LabSettingsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly auth = inject(AuthService);
+  private readonly dialog = inject(DialogService);
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
   private readonly _configs = signal<AutoAssignConfig[]>([]);
   readonly departments = this._departments.asReadonly();
+
+  // ── Danger-zone state ──
+  protected readonly wiping = signal(false);
+  protected readonly lastWiped = signal<WipeResult | null>(null);
+  /** Mirrors the backend gate. Hide the danger-zone tile if the user
+   *  doesn't hold manage_tenant — they'd 403 on click anyway. */
+  readonly canWipe = computed(() => this.auth.hasPermission('manage_tenant'));
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
   readonly collectionMode = this.labCfg.collectionMode;
@@ -306,6 +356,49 @@ export class LabSettingsComponent implements OnInit {
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { billingMode: mode }).subscribe({
       next: cfg => this.labCfg.update(cfg),
       error: e => this.toasts.error(e?.message ?? 'Could not save')
+    });
+  }
+
+  /**
+   * Dev-testing wipe — confirm via DialogService, POST to the admin
+   * endpoint, surface the cleared counts in the toast and on the tile so
+   * the user can see the action took effect.
+   */
+  async wipePatientData() {
+    if (this.wiping()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Wipe all patient data?',
+      message: 'This deletes every patient, order, sample, bill, payment, report, and appointment. Tenant config, branches, departments, users, roles, the test catalog, and workflows are kept. Cannot be undone.',
+      confirmLabel: '🗑 Yes, wipe everything',
+      cancelLabel: 'Cancel',
+      tone: 'danger'
+    });
+    if (!ok) return;
+
+    this.wiping.set(true);
+    this.api.post<{ wiped: boolean; before: { patientsBefore: number; ordersBefore: number; billsBefore: number; reportsBefore: number; appointmentsBefore: number } }>(
+      '/api/admin/wipe-patient-data', {}
+    ).subscribe({
+      next: r => {
+        this.wiping.set(false);
+        const b = r?.before;
+        if (b) {
+          this.lastWiped.set({
+            patients: b.patientsBefore,
+            orders: b.ordersBefore,
+            bills: b.billsBefore,
+            reports: b.reportsBefore,
+            appointments: b.appointmentsBefore
+          });
+          this.toasts.success(`Cleared ${b.patientsBefore} patients · ${b.ordersBefore} orders · ${b.billsBefore} bills · ${b.reportsBefore} reports`);
+        } else {
+          this.toasts.success('Patient data wiped');
+        }
+      },
+      error: e => {
+        this.wiping.set(false);
+        this.toasts.error(e?.message ?? 'Could not wipe data');
+      }
     });
   }
 }

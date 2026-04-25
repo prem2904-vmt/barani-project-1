@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -32,24 +32,26 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded">
 
-      <pf-screen-header
-        eyebrow="Lab intake"
-        title="Receive samples"
-        subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
-        <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
-          <span icon-left aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
-              <path d="M3 21v-5h5"/>
-            </svg>
-          </span>
-          Refresh
-        </pf-touch-btn>
-      </pf-screen-header>
+      @if (!embedded) {
+        <pf-screen-header
+          eyebrow="Lab intake"
+          title="Receive samples"
+          subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+            <span icon-left aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+            </span>
+            Refresh
+          </pf-touch-btn>
+        </pf-screen-header>
+      }
 
       <!-- Scan hero -->
       <pf-tile tone="violet" padding="lg" class="block mb-6">
@@ -160,14 +162,17 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </pf-tile>
       }
 
-      <!-- ─── Dispatched orders (FD has handed off, awaiting lab intake) ─── -->
+      <!-- ─── Dispatched orders (FD has handed off, awaiting arrival) ─── -->
       @if (dispatchedOrders().length > 0) {
         <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
           <div class="flex items-center gap-2">
             <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                  style="color: var(--text-secondary);">Dispatched · awaiting receipt</span>
+                  style="color: var(--text-secondary);">Dispatched · awaiting arrival</span>
             <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
           </div>
+          <p class="text-[10.5px] font-mono" style="color: var(--text-muted);">
+            Counter staff: log incoming batches as Arrived. Bench tech picks tubes off the arrived queue below.
+          </p>
         </div>
         <div class="space-y-2.5 mb-6">
           @for (g of dispatchedOrders(); track g.orderId) {
@@ -195,15 +200,15 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 </div>
                 @switch (g.state) {
                   @case ('ready') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)"
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
                                   class="w-full sm:w-auto">
-                      Receive · TAT starts
+                      Mark Arrived
                     </pf-touch-btn>
                   }
                   @case ('partial') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)"
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
                                   class="w-full sm:w-auto">
-                      Receive remaining {{ g.tubeCount }}
+                      Mark Arrived ({{ g.tubeCount }})
                     </pf-touch-btn>
                   }
                   @case ('awaiting') {
@@ -220,13 +225,13 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </div>
       }
 
-      <!-- In-transit header + batch actions -->
+      <!-- ─── Arrived at lab counter, awaiting bench tech pickup ─── -->
       <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
         <div class="flex items-center gap-2">
           <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                style="color: var(--text-secondary);">In transit (legacy)</span>
+                style="color: var(--text-secondary);">Arrived · ready for pickup</span>
           <span class="text-[11px] font-mono"
-                style="color: var(--text-muted);">· {{ inTransit().length }}</span>
+                style="color: var(--text-muted);">· {{ inTransit().length }} tubes</span>
         </div>
         <div class="flex gap-2">
           <pf-touch-btn size="sm" variant="ghost"
@@ -237,7 +242,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           <pf-touch-btn size="sm" variant="primary"
                         [disabled]="selectedIds().size === 0 || busy()"
                         (pressed)="receiveSelected()">
-            Receive {{ selectedIds().size || 0 }}
+            Pick up {{ selectedIds().size || 0 }} · TAT starts
           </pf-touch-btn>
         </div>
       </div>
@@ -245,7 +250,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       @if (inTransit().length === 0) {
         <pf-tile tone="default" padding="xl">
           <p class="text-center text-[14px]" style="color: var(--text-secondary);">
-            Nothing in transit. Everything has been received.
+            Nothing waiting for pickup. Mark a dispatched batch as Arrived above to populate the queue.
           </p>
         </pf-tile>
       } @else {
@@ -272,12 +277,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
                      style="color: var(--text-tertiary);">
                     {{ s.department?.name }} · {{ s.barcode }}
-                    · Picked {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
+                    · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
                   </p>
                 </div>
 
-                <pf-touch-btn size="sm" variant="secondary" (pressed)="receiveOne(s.id)">
-                  Receive
+                <pf-touch-btn size="sm" variant="primary" (pressed)="receiveOne(s.id)">
+                  Pick up · TAT starts
                 </pf-touch-btn>
               </div>
             </pf-tile>
@@ -410,6 +415,14 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   `]
 })
 export class ReceiveSamplesComponent implements OnInit {
+  /**
+   * When the component is embedded as a tab inside another screen
+   * (currently the "Lab Intake" tab on /lab/my-work), the host already
+   * supplies the page chrome (screen header, outer padding). Setting
+   * embedded=true suppresses our own header + outer section padding so
+   * we don't render two stacked headers.
+   */
+  @Input() embedded = false;
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -505,7 +518,33 @@ export class ReceiveSamplesComponent implements OnInit {
     });
   }
 
-  /** Receive every dispatched tube on the order in one call — TAT starts. */
+  /**
+   * Lab counter staff click "Mark Arrived" — flips every dispatched tube on
+   * the order to in_transit (i.e. arrived at the lab counter, awaiting
+   * bench-tech pickup). TAT does NOT start here; it starts when a tech
+   * picks up an individual tube and marks it received below.
+   */
+  markArrived(orderId: string) {
+    const order = this._dispatched().find(o => o.id === orderId);
+    if (!order) return;
+    this.busy.set(true);
+    this.api.patch<{ arrived: number }>(`/api/orders/${orderId}/arrive`, {}).subscribe({
+      next: r => {
+        this.busy.set(false);
+        const n = r?.arrived ?? 0;
+        this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${n} tube${n === 1 ? '' : 's'} arrived — ready for pickup`);
+        this.refresh();
+      },
+      error: e => {
+        this.busy.set(false);
+        this.toasts.error(e?.message ?? 'Could not mark arrived');
+      }
+    });
+  }
+
+  /** Legacy fast-path: receive every dispatched tube directly (skips the
+   *  arrived queue). Kept for one-stage labs that don't want the formal
+   *  arrival step. */
   receiveOrder(orderId: string) {
     const order = this._dispatched().find(o => o.id === orderId);
     if (!order) return;

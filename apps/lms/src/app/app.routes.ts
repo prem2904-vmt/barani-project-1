@@ -173,7 +173,10 @@ export const appRoutes: Route[] = [
       // Lab — every route gated by the relevant lab perm.
       {
         path: 'lab/my-work',
-        canActivate: [permissionGuard('enter_result')],
+        // enter_result for the result-entry tabs; receive_sample so lab
+        // counter / intake-only staff can land on the page and use the
+        // embedded "Lab Intake" tab.
+        canActivate: [permissionGuard(['enter_result', 'receive_sample'])],
         loadComponent: () => import('./features/lab/my-work/my-work.component').then(m => m.MyWorkComponent)
       },
       {
