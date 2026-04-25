@@ -173,37 +173,41 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           @for (g of dispatchedOrders(); track g.orderId) {
             <pf-tile [tone]="g.state === 'awaiting' ? 'amber' : 'violet'" padding="md" class="block"
                      [class.opacity-60]="g.state === 'awaiting'">
-              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
-                <div class="flex-1 min-w-0">
-                  <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
-                  <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
-                    #{{ g.orderId.slice(0,8) }}
-                    @if (g.tubeCount > 0) {
-                      <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
-                    }
-                    @if (g.receivedCount > 0) {
-                      <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
-                    }
-                    @if (g.notReadyCount > 0) {
-                      <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
-                    }
-                    @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
-                  </p>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                    <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                      #{{ g.orderId.slice(0,8) }}
+                      @if (g.tubeCount > 0) {
+                        <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
+                      }
+                      @if (g.receivedCount > 0) {
+                        <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
+                      }
+                      @if (g.notReadyCount > 0) {
+                        <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                      }
+                      @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                    </p>
+                  </div>
                 </div>
                 @switch (g.state) {
                   @case ('ready') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)"
+                                  class="w-full sm:w-auto">
                       Receive · TAT starts
                     </pf-touch-btn>
                   }
                   @case ('partial') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)"
+                                  class="w-full sm:w-auto">
                       Receive remaining {{ g.tubeCount }}
                     </pf-touch-btn>
                   }
                   @case ('awaiting') {
-                    <span class="px-3 py-1.5 text-[12px] font-medium rounded-md"
+                    <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
                           style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
                           title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
                       ⚠ Not dispatched yet

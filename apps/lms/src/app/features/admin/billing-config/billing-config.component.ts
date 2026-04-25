@@ -111,20 +111,20 @@ interface GstRow {
             } @else {
               <div class="space-y-2">
                 @for (b of branches(); track b.id) {
-                  <div class="grid grid-cols-12 gap-2 items-center pf-gst-row">
-                    <div class="col-span-4 min-w-0">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2 items-stretch md:items-center pf-gst-row">
+                    <div class="md:col-span-4 min-w-0">
                       <p class="text-[14px] font-medium truncate" style="color: var(--text-primary);">{{ b.name }}</p>
                       <p class="text-[11px] font-mono" style="color: var(--text-muted);">{{ b.code }}</p>
                     </div>
-                    <div class="col-span-4">
-                      <input type="text" class="pf-input" placeholder="GSTIN"
+                    <div class="md:col-span-4">
+                      <input type="text" class="pf-input w-full" placeholder="GSTIN"
                              [ngModel]="gstinFor(b.id)" (ngModelChange)="setGstin(b.id, $event)" />
                     </div>
-                    <div class="col-span-3">
-                      <input type="text" class="pf-input" placeholder="State code"
+                    <div class="md:col-span-3">
+                      <input type="text" class="pf-input w-full" placeholder="State code"
                              [ngModel]="stateCodeFor(b.id)" (ngModelChange)="setStateCode(b.id, $event)" />
                     </div>
-                    <div class="col-span-1 text-right">
+                    <div class="md:col-span-1 md:text-right">
                       <pf-touch-btn size="sm" variant="ghost"
                                      [disabled]="!hasGstinFor(b.id)"
                                      (pressed)="saveGstin(b.id)">Save</pf-touch-btn>

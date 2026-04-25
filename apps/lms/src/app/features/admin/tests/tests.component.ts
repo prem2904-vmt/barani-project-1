@@ -54,11 +54,11 @@ type Tab = 'individual' | 'package';
         </pf-segmented>
       </div>
 
-      <div class="flex flex-wrap gap-2 items-center mb-4">
-        <input type="text" class="pf-input max-w-xs" placeholder="Search test name…"
+      <div class="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center mb-4">
+        <input type="text" class="pf-input w-full sm:max-w-xs" placeholder="Search test name…"
                [ngModel]="search()" (ngModelChange)="onSearch($event)" />
         @if (tab() === 'individual') {
-          <div class="max-w-xs w-full sm:w-60">
+          <div class="w-full sm:max-w-xs sm:w-60">
             <pf-select
               [options]="deptOptions()"
               [value]="deptFilter()"
@@ -67,7 +67,7 @@ type Tab = 'individual' | 'package';
               (valueChange)="deptFilter.set($any($event))"></pf-select>
           </div>
         }
-        <p class="text-[12px] font-mono ml-auto" style="color: var(--text-muted);">
+        <p class="text-[12px] font-mono sm:ml-auto" style="color: var(--text-muted);">
           {{ visible().length }} / {{ allForTab().length }}
         </p>
       </div>

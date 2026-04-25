@@ -124,7 +124,10 @@ interface HistoryRow {
                         (pressed)="publish()">{{ saving() ? 'Publishing…' : 'Publish' }}</pf-touch-btn>
         </pf-screen-header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
+        <!-- md (iPad Mini, 768px): introduce a narrower 200px steps rail so
+             the field editor on the right has breathing room. lg (1024px+)
+             goes back to the full 280px panel. Below md the layout stacks. -->
+        <div class="grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[280px_1fr] gap-5">
 
           <!-- ──────── Steps panel ──────── -->
           <pf-tile tone="default" padding="none" class="block h-fit">
@@ -149,7 +152,7 @@ interface HistoryRow {
                     </svg>
                   </span>
                   <div class="flex-1 min-w-0">
-                    <p class="text-[13px] font-medium truncate" style="color: var(--text-primary);">{{ s.title }}</p>
+                    <p class="text-[13px] font-medium truncate" [attr.title]="s.title" style="color: var(--text-primary);">{{ s.title }}</p>
                     <p class="text-[11px] font-mono" style="color: var(--text-muted);">{{ s.type }} · {{ s.fields.length }} fields</p>
                   </div>
                   @if (s.isStandard) {

@@ -903,7 +903,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       align-items: stretch;  /* symmetric — every card in a row matches the tallest's height */
     }
     @media (min-width: 640px) {
-      .pf-params { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+      /* min(300px, 100%) protects narrow tablets where the docked rail
+         leaves <300px of content width — without it the auto-fill would
+         force horizontal overflow on column 1. */
+      .pf-params { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
     }
     .pf-param {
       display: flex;

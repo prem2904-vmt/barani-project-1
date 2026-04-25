@@ -68,7 +68,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       </pf-screen-header>
 
       @if (bill(); as b) {
-        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-5 items-start">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
           <!-- LEFT: invoice preview -->
           <div class="space-y-5">
@@ -127,7 +127,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
             <!-- Payment mode grid -->
             <div>
               <p class="pf-eyebrow mb-3 px-1">Payment mode</p>
-              <div class="grid grid-cols-3 gap-2">
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 @for (m of modes; track m.id) {
                   <button type="button"
                           (click)="setMode(m.id)"
@@ -200,7 +200,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       </div>
                     </div>
 
-                    <div class="grid grid-cols-4 gap-2 mb-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                       @for (d of quickAdd; track d) {
                         <button type="button" (click)="addCash(d)" class="pf-cash-btn press">+{{ d }}</button>
                       }
@@ -372,7 +372,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       gap: 8px;
     }
     .pf-discount__input {
-      width: 140px;
+      width: 100%;
+      max-width: 140px;
       height: 40px;
       padding: 0 30px 0 12px;
       border-radius: 12px;
@@ -505,8 +506,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
 
     /* UPI QR */
     .pf-qr {
-      width: 224px;
-      height: 224px;
+      width: 100%;
+      max-width: 224px;
+      aspect-ratio: 1 / 1;
       padding: 20px;
       border-radius: 24px;
       background: #ffffff;
@@ -550,8 +552,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* Card mockup */
     .pf-card-mock {
       position: relative;
-      width: 260px;
-      height: 160px;
+      width: 100%;
+      max-width: 260px;
+      aspect-ratio: 13 / 8;
+      height: auto;
       border-radius: 20px;
       background: linear-gradient(135deg, #7c3aed, #ec4899);
       box-shadow: 0 20px 60px rgba(124, 58, 237, 0.45);
@@ -622,7 +626,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       color: var(--text-muted);
     }
     .pf-ref-input {
-      width: 260px;
+      width: 100%;
+      max-width: 260px;
       height: 44px;
       padding: 0 14px;
       border-radius: 12px;

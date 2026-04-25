@@ -458,13 +458,20 @@ const COUNTERS: CounterSpec[] = [
     .seg { color: var(--text-primary); }
     .seg-sep { color: var(--text-muted); }
     .seg--locked { opacity: 0.7; }
-    .seg--dept { min-width: 48px; text-align: center; }
+    .seg--dept { min-width: 0; text-align: center; }
     .seg--input {
-      flex: 1 0 110px; min-width: 110px; max-width: 180px;
+      /* min-width:0 + flex-1 lets the input shrink below 110px on iPhone
+         SE (375px) and iPhone 14 (390px) so the barcode segments don't
+         overflow the row. The 180px cap still applies on tablets+. */
+      flex: 1 1 auto; min-width: 0; max-width: 180px;
       background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.45);
       border-radius: 10px; padding: 6px 10px; outline: none;
       font: inherit; color: var(--text-primary); text-align: center;
       letter-spacing: 0.18em;
+    }
+    @media (min-width: 480px) {
+      .seg--dept { min-width: 48px; }
+      .seg--input { flex: 1 0 110px; min-width: 110px; }
     }
     .seg--input:focus {
       border-color: rgba(45, 212, 191, 0.85);

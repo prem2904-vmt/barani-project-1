@@ -27,7 +27,10 @@ export type PfSelectSize = 'sm' | 'md';
         <option value="" disabled selected>{{ placeholder }}</option>
       }
       @for (opt of options; track opt.value) {
-        <option [value]="opt.value" [disabled]="opt.disabled ?? false">{{ opt.label }}</option>
+        <!-- title=label so the full string is hoverable when the option
+             text gets clipped on narrow viewports (e.g. hierarchical
+             branch / sub-branch names with leading "→" indents). -->
+        <option [value]="opt.value" [disabled]="opt.disabled ?? false" [attr.title]="opt.label">{{ opt.label }}</option>
       }
     </select>
   `,
@@ -47,6 +50,13 @@ export type PfSelectSize = 'sm' | 'md';
       font-size: 0.9375rem;
       cursor: pointer;
       appearance: none;
+      /* Long option labels (hierarchical scope names) get clipped with an
+         ellipsis on narrow widths instead of expanding the trigger past
+         the row. Native option lists in the open dropdown still wrap, so
+         the user can still read the full label. */
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
       -webkit-appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat;

@@ -121,11 +121,17 @@ import { TouchButtonComponent } from '../../shared/primitives/touch-button.compo
     .pf-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
     .pf-row {
       all: unset; cursor: pointer;
-      display: flex; align-items: center; gap: 14px;
+      /* Mobile: stack the order summary and the Process button so the
+         button is full-width and tappable. Tablet+ goes back to the
+         single inline row layout. */
+      display: flex; flex-direction: column; align-items: stretch; gap: 10px;
       width: 100%; padding: 12px 16px;
       background: var(--glass-bg); border: 1px solid var(--glass-border);
       border-radius: 14px;
       transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    @media (min-width: 640px) {
+      .pf-row { flex-direction: row; align-items: center; gap: 14px; }
     }
     .pf-row:hover { border-color: rgba(168, 85, 247, 0.45); background: rgba(168, 85, 247, 0.04); }
     .pf-row__id {

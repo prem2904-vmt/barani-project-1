@@ -535,6 +535,7 @@ interface OrderGroup {
       text-transform: uppercase; color: var(--text-muted);
     }
     .pf-scan__input {
+      width: 100%; min-width: 0;
       height: 32px; padding: 0;
       background: transparent;
       border: 0;
@@ -1006,10 +1007,96 @@ interface OrderGroup {
       .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
       .pf-drawer__progressbar { margin: 0 20px; }
       .pf-drawer__hint { margin: 12px 20px 0; }
-      .pf-drawer__tubes { padding: 18px 20px 24px; grid-template-columns: 1fr; }
       .pf-drawer__foot { padding: 14px 20px 20px; flex-wrap: wrap; }
       .pf-drawer__name { font-size: 22px; }
-      .pf-vial { width: 72px; height: 220px; }
+
+      /* ── Compact mobile tiles ──
+       * One tile per row, row-layout inside: a small vial glyph on the
+       * left so the cap colour stays recognisable at a glance, label /
+       * dept / tests in the middle, and a teal "Tap when drawn" pill on
+       * the right that reads as an action target. Each tile is ~96px
+       * tall so a typical 2-3 tube order fits on a single iPhone screen
+       * with no horizontal swipe. iPad / desktop unchanged. */
+      .pf-drawer__tubes {
+        padding: 14px 16px 22px;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .pf-tube {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        /* Right padding sized to fit the stamp + a comfortable gutter so
+           the body text never bleeds underneath the absolutely-positioned
+           stamp. */
+        padding: 12px 92px 12px 14px;
+        width: 100%;
+      }
+      .pf-vial {
+        /* Compact glance icon — cap colour + fill stay readable, but the
+           row height stays thumb-friendly. */
+        width: 40px; height: 120px;
+        flex-shrink: 0;
+      }
+      .pf-vial--cup { width: 70px; height: 100px; }
+
+      .pf-tube__body {
+        flex: 1 1 auto;
+        min-width: 0;          /* allow the body to shrink below its content */
+        align-items: flex-start;
+        gap: 2px;
+        text-align: left;
+      }
+      .pf-tube__label  { font-size: 14px; text-align: left; line-height: 1.2; }
+      .pf-tube__dept   { font-size: 9px; }
+      .pf-tube__tests  {
+        margin: 3px 0 0;
+        font-size: 11.5px;
+        text-align: left;
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      /* Barcode is decorative on the compact card — the cap colour and
+         label already disambiguate. Hide it to give the action stamp
+         room and keep each tile under ~90px tall. */
+      .pf-tube__code { display: none; }
+
+      /* Action stamp: small teal pill pinned to the right edge. Compact
+         so it fits inside the 92px right-padding allotment without
+         overrunning the body text. The whole tile is still the click
+         target — the pill just telegraphs the action. */
+      .pf-tube__stamp {
+        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        margin-top: 0;
+        padding: 6px 10px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+        letter-spacing: 0.04em;
+      }
+      .pf-tube__stamp--pending {
+        background: rgba(45, 212, 191, 0.14);
+        border-color: rgba(45, 212, 191, 0.45);
+        color: #5eead4;
+      }
+    }
+    /* iPhone SE / iPhone 14 — even tighter padding so the patient name
+       and progress chip both fit in the header without wrapping into a
+       column. The rack max-width also shrinks so 4+ tube chips don't
+       overflow the order card. */
+    @media (max-width: 400px) {
+      .pf-drawer__head { padding: 14px 12px 10px; gap: 10px; }
+      .pf-drawer__progressbar { margin: 0 12px; }
+      .pf-drawer__hint { margin: 10px 12px 0; }
+      .pf-drawer__tubes { padding: 14px 12px 20px; }
+      .pf-drawer__foot { padding: 12px 12px 16px; }
+      .pf-drawer__name { font-size: 19px; }
+      .pf-drawer__progress { padding: 8px 12px; min-width: 0; }
+      .pf-drawer__progress-num { font-size: 22px; }
+      .pf-sc__rack { max-width: 96px; }
     }
 
     /* ─── Light mode overrides ──────────────────────────────

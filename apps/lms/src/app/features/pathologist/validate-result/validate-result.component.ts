@@ -762,11 +762,18 @@ interface ValueRow {
       border-radius: 14px;
       border: 1px solid var(--glass-border);
       background: var(--glass-bg);
+      /* Horizontal scroll fallback below the mobile-area layout breakpoint
+         (767px) so the table stays readable even on the narrowest devices
+         before grid-areas kicks in. */
+      overflow-x: auto;
       overflow: hidden;
     }
     .pf-table__head, .pf-table__row {
       display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(100px, 1.4fr) 130px;
+      /* Flag column min-content (was hard 130px) so the cell shrinks to
+         the chip's intrinsic size on narrow tablets and we don't force
+         horizontal scroll on iPad Mini (768px). */
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(100px, 1.4fr) min-content;
       gap: 12px;
       padding: 10px 14px;
       align-items: center;

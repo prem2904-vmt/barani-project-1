@@ -594,8 +594,11 @@ type Priority = 'Normal' | 'Urgent';
       flex-wrap: wrap;
     }
     .pf-search-row .pf-search {
-      flex: 1;
-      min-width: 260px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    @media (min-width: 480px) {
+      .pf-search-row .pf-search { min-width: 260px; }
     }
     .pf-search-row .pf-priority__toggle {
       flex-shrink: 0;
