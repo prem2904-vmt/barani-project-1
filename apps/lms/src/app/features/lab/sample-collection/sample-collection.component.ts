@@ -108,10 +108,11 @@ interface OrderGroup {
           </svg>
         </button>
         <div class="pf-scan__body">
-          <label class="pf-scan__label">Scan or enter barcode</label>
-          <input type="text" class="pf-scan__input" placeholder="PF-AP-2026-00001-HAEM"
-                 [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
-                 (keydown.enter)="findByBarcode()" autofocus aria-label="Barcode" />
+          <label class="pf-scan__label">Find patient or scan</label>
+          <input type="text" class="pf-scan__input"
+                 placeholder="Name · phone · order # · barcode"
+                 [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
+                 (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
         <button class="pf-scan__cam" (click)="openScanner()" title="Scan with camera" aria-label="Open camera scanner">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -120,7 +121,7 @@ interface OrderGroup {
           </svg>
           <span>Scan</span>
         </button>
-        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="findByBarcode()">
+        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="runSearch()">
           {{ searching() ? 'Searching…' : 'Find' }}
         </button>
       </div>
@@ -134,14 +135,14 @@ interface OrderGroup {
       }
 
       <h3 class="pf-sc__section">
-        Pending collection · {{ groups().length }} patient<span [class.hidden]="groups().length === 1">s</span>
+        Pending collection · {{ filteredGroups().length }} patient<span [class.hidden]="filteredGroups().length === 1">s</span>
       </h3>
 
-      @if (groups().length === 0) {
+      @if (filteredGroups().length === 0) {
         <div class="pf-sc__empty">No samples waiting for collection.</div>
       } @else {
         <ul class="pf-sc__list">
-          @for (g of groups(); track g.orderId) {
+          @for (g of filteredGroups(); track g.orderId) {
             <li>
               <button type="button" class="pf-sc__card" (click)="openOrder(g.orderId)">
                 <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
@@ -441,6 +442,48 @@ interface OrderGroup {
             <button type="button" class="pf-btn pf-btn-primary" (click)="close()"
                     [disabled]="g.collected < g.totalVials">
               {{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    }
+
+    <!-- ─── Reject-with-reason modal ─────────────────────────────────────
+         Structured reason picker. Opens when the user taps "Can't collect".
+         Reasons: refused, fainted, no_vein, insufficient, wrong_tube, other. -->
+    @if (_rejectModal(); as r) {
+      <div class="pf-rej" role="dialog" aria-modal="true" (click)="cancelReject()">
+        <div class="pf-rej__panel" (click)="$event.stopPropagation()">
+          <header class="pf-rej__head">
+            <h2 class="pf-rej__title">Can't collect for {{ r.group.patientName }}</h2>
+            <p class="pf-rej__sub">Pick a reason — flagged tubes go back into the queue for re-collection.</p>
+          </header>
+          <div class="pf-rej__chips">
+            @for (opt of REJECT_REASONS; track opt.code) {
+              <button type="button" class="pf-rej__chip"
+                      [class.pf-rej__chip--on]="r.reason === opt.code"
+                      (click)="setRejectReason(opt.code)">
+                {{ opt.label }}
+              </button>
+            }
+          </div>
+          @if (r.reason === 'other') {
+            <label class="pf-rej__label">Reason</label>
+            <textarea class="pf-input pf-rej__note" rows="2"
+                      placeholder="Describe what happened…"
+                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
+          } @else if (r.reason) {
+            <label class="pf-rej__label">Notes (optional)</label>
+            <textarea class="pf-input pf-rej__note" rows="2"
+                      placeholder="Anything the lab should know…"
+                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
+          }
+          <footer class="pf-rej__foot">
+            <button type="button" class="pf-btn pf-btn-ghost" (click)="cancelReject()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn-danger"
+                    [disabled]="!canSubmitReject()"
+                    (click)="submitReject()">
+              Reject {{ pendingCount(r.group) }} tube<span [class.hidden]="pendingCount(r.group) === 1">s</span>
             </button>
           </footer>
         </div>
@@ -890,6 +933,63 @@ interface OrderGroup {
 
     .hidden { display: none; }
 
+    /* ─── Reject-with-reason modal ─────────────────────────── */
+    .pf-rej {
+      position: fixed; inset: 0; z-index: 1100;
+      background: rgba(4, 6, 18, 0.78);
+      backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      animation: pf-drawer-fade 0.2s ease both;
+    }
+    .pf-rej__panel {
+      width: min(540px, 100%);
+      background: var(--bg-primary, #0a0f1f);
+      border: 1px solid var(--glass-border);
+      border-radius: 22px;
+      padding: 22px 24px 20px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+      animation: pf-drawer-zoom 0.22s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+    }
+    .pf-rej__title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+    .pf-rej__sub { margin: 4px 0 14px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-rej__chips {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+    .pf-rej__chip {
+      all: unset; cursor: pointer;
+      padding: 9px 14px; border-radius: 999px;
+      font-size: 12.5px; font-weight: 600;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .pf-rej__chip:hover { border-color: rgba(244, 114, 182, 0.45); }
+    .pf-rej__chip--on {
+      background: rgba(244, 63, 94, 0.18);
+      border-color: rgba(244, 63, 94, 0.55);
+      color: #fda4af;
+    }
+    .pf-rej__label {
+      display: block; margin: 8px 0 4px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .pf-rej__note { width: 100%; resize: vertical; min-height: 48px; }
+    .pf-rej__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+    :host-context([data-theme="light"]) .pf-rej {
+      background: rgba(15, 23, 42, 0.55);
+    }
+    :host-context([data-theme="light"]) .pf-rej__panel {
+      background: #ffffff;
+    }
+    :host-context([data-theme="light"]) .pf-rej__chip--on {
+      background: rgba(244, 63, 94, 0.1);
+      color: #be123c;
+    }
+
     @media (max-width: 640px) {
       .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
       .pf-drawer__progressbar { margin: 0 20px; }
@@ -1092,6 +1192,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly _openOrderId = signal<string | null>(null);
   // Tube id currently PATCH-ing, so we can lock the button during the round-trip.
   protected readonly pendingToggle = signal<string | null>(null);
+  protected readonly REJECT_REASONS: ReadonlyArray<{ code: string; label: string }> = [
+    { code: 'refused',      label: 'Patient refused' },
+    { code: 'fainted',      label: 'Patient fainted' },
+    { code: 'no_vein',      label: 'Vein not found' },
+    { code: 'insufficient', label: 'Insufficient sample' },
+    { code: 'wrong_tube',   label: 'Wrong tube' },
+    { code: 'other',        label: 'Other' }
+  ];
+  protected readonly _rejectModal = signal<{ group: OrderGroup; reason: string; note: string } | null>(null);
 
   readonly pending = this._pending.asReadonly();
   readonly openOrderId = this._openOrderId.asReadonly();
@@ -1124,6 +1233,20 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
     return Array.from(byOrder.values())
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  });
+
+  /** Same as groups() but filtered by the live search box. Empty input shows all. */
+  readonly filteredGroups = computed<OrderGroup[]>(() => {
+    const q = this.scanValue().trim().toLowerCase();
+    if (!q) return this.groups();
+    return this.groups().filter(g => {
+      if (g.patientName.toLowerCase().includes(q)) return true;
+      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
+      return g.samples.some(s =>
+        (s.barcode ?? '').toLowerCase().includes(q) ||
+        (s.order?.patient?.phone ?? '').includes(this.scanValue().trim())
+      );
+    });
   });
 
   // The group currently shown in the drawer, kept in sync with live refreshes.
@@ -1165,7 +1288,58 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   onScanMatched(code: string) {
     this.scannerOpen.set(false);
     this.scanValue.set(code);
-    this.findByBarcode();
+    this.runSearch();
+  }
+
+  /**
+   * Free-text search: live-filters the local pending list while typing,
+   * then on Enter (or Find click) does an exact-barcode lookup if the input
+   * looks like a code (e.g. starts with "PF-"). Patient name / phone / order
+   * id matches are handled in-memory against `groups()` since the backend
+   * already streams every pending order to this screen.
+   */
+  onSearchInput(v: string) { this.scanValue.set(v); }
+
+  runSearch() {
+    const raw = this.scanValue().trim();
+    if (!raw) return;
+
+    // Filter the visible queue — works for name, phone, order-id prefix.
+    const matches = this.matchGroups(raw);
+    if (matches.length === 1) {
+      // Single hit → open it.
+      this._openOrderId.set(matches[0].orderId);
+      this.scanValue.set('');
+      return;
+    }
+
+    // No in-list match — try exact barcode lookup as a fallback.
+    if (matches.length === 0 && this.looksLikeBarcode(raw)) {
+      this.findByBarcode();
+      return;
+    }
+
+    if (matches.length === 0) {
+      this.toasts.warning('No matching patient or barcode in the queue.');
+    }
+    // Multiple in-list matches → user keeps typing; the live filter is
+    // surfaced via filteredGroups() in the template.
+  }
+
+  private looksLikeBarcode(s: string): boolean {
+    return /^PF-/i.test(s) || /^[0-9]{6,}$/.test(s);
+  }
+
+  private matchGroups(query: string): OrderGroup[] {
+    const q = query.toLowerCase();
+    return this.groups().filter(g => {
+      if (g.patientName.toLowerCase().includes(q)) return true;
+      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
+      return g.samples.some(s =>
+        (s.barcode ?? '').toLowerCase().includes(q) ||
+        (s.order?.patient?.phone ?? '').includes(query)
+      );
+    });
   }
 
   findByBarcode() {
@@ -1238,7 +1412,47 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
   }
 
-  async rejectOrder(g: OrderGroup) {
+  /** Open the structured rejection picker for the active order. */
+  rejectOrder(g: OrderGroup) {
+    const pending = g.samples.filter(s => s.status === 'pending');
+    if (pending.length === 0) return;
+    this._rejectModal.set({ group: g, reason: '', note: '' });
+  }
+
+  setRejectReason(code: string) {
+    this._rejectModal.update(m => m ? { ...m, reason: code } : m);
+  }
+  setRejectNote(v: string) {
+    this._rejectModal.update(m => m ? { ...m, note: v } : m);
+  }
+  cancelReject() { this._rejectModal.set(null); }
+  pendingCount(g: OrderGroup): number {
+    return g.samples.filter(s => s.status === 'pending').length;
+  }
+  canSubmitReject(): boolean {
+    const m = this._rejectModal();
+    if (!m || !m.reason) return false;
+    if (m.reason === 'other' && m.note.trim().length === 0) return false;
+    return true;
+  }
+
+  async submitReject() {
+    const m = this._rejectModal();
+    if (!m || !this.canSubmitReject()) return;
+    const label = this.REJECT_REASONS.find(r => r.code === m.reason)?.label ?? m.reason;
+    const reason = m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
+    const pending = m.group.samples.filter(s => s.status === 'pending');
+    await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    ));
+    this.toasts.success(`${pending.length} tube${pending.length === 1 ? '' : 's'} flagged for re-collection`);
+    this._rejectModal.set(null);
+    this._openOrderId.set(null);
+    this.refresh();
+  }
+
+  // Original free-text dialog kept as fallback for any other call sites.
+  async legacyRejectOrder(g: OrderGroup) {
     const pending = g.samples.filter(s => s.status === 'pending');
     if (pending.length === 0) return;
     const reason = await this.dialog.prompt({

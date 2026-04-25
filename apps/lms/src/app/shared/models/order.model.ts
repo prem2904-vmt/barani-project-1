@@ -28,6 +28,8 @@ export interface OrderSample {
   qrCode?: string;
   collectedAt?: string;
   collectedBy?: string;
+  dispatchedAt?: string;
+  dispatchedBy?: string;
   pickedUpAt?: string;
   pickedUpBy?: string;
   receivedAtLab?: string;

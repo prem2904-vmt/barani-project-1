@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
@@ -52,6 +52,10 @@ interface StaffMember {
           <p class="pf-head__sub">{{ statusHint() }}</p>
 
           <div class="pf-head__actions">
+            <span class="pf-live" [title]="'Auto-refresh every 30s'">
+              <span class="pf-live__dot"></span>
+              {{ lastUpdatedLabel() }}
+            </span>
             <span class="pf-collection" [class.pf-collection--idle]="collectedToday() === 0"
                   [title]="'Collected today'">
               <span class="pf-collection__dot"></span>
@@ -282,6 +286,12 @@ interface StaffMember {
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
                             @if (showCollectOn(o)) {
                               <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect Sample</button>
+                            }
+                            @if (showDispatchOn(o)) {
+                              <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Mark Dispatched</button>
+                            }
+                            @if (isDispatched(o)) {
+                              <span class="pf-tag pf-tag--ok">✈ Dispatched</span>
                             }
                             <button type="button" class="pf-ghostbtn press" (click)="quickBook(o)">Repeat</button>
                           </div>
@@ -1004,6 +1014,48 @@ interface StaffMember {
       display: inline-flex; align-items: center; gap: 4px;
     }
     .pf-ghostbtn:hover { background: var(--gradient-primary); color: #ffffff; border-color: transparent; }
+    .pf-ghostbtn--accent {
+      background: rgba(45, 212, 191, 0.12);
+      color: #5eead4;
+      border-color: rgba(45, 212, 191, 0.4);
+    }
+    .pf-ghostbtn--accent:hover {
+      background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+      color: #04221e;
+      border-color: transparent;
+    }
+    .pf-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.04em;
+    }
+    .pf-live {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      color: #5eead4;
+      background: rgba(45, 212, 191, 0.1);
+      border: 1px solid rgba(45, 212, 191, 0.3);
+    }
+    .pf-live__dot {
+      width: 6px; height: 6px; border-radius: 999px;
+      background: #2dd4bf;
+      box-shadow: 0 0 8px rgba(45, 212, 191, 0.7);
+      animation: pf-live-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pf-live-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.85); }
+    }
+    .pf-tag--ok {
+      color: #5eead4;
+      background: rgba(45, 212, 191, 0.12);
+      border: 1px solid rgba(45, 212, 191, 0.35);
+    }
 
     /* Card at narrow widths — collapse actions */
     @media (max-width: 640px) {
@@ -1247,7 +1299,7 @@ interface StaffMember {
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   `]
 })
-export class FrontdeskLandingComponent implements OnInit {
+export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
@@ -1461,14 +1513,47 @@ export class FrontdeskLandingComponent implements OnInit {
   });
   readonly topTestsMax = computed(() => Math.max(1, ...this.topTests().map(t => t.count)));
 
-  ngOnInit() { this.labCfg.ensureLoaded(); this.refresh(); }
+  // Live polling: 30s tick keeps Today's Orders fresh so reception sees
+  // status changes (collected → dispatched → received → validated) without
+  // a manual refresh. Stopped on destroy + when the tab is hidden so we
+  // don't burn requests on a backgrounded laptop.
+  private pollHandle: ReturnType<typeof setInterval> | null = null;
+  protected readonly lastUpdated = signal<number>(Date.now());
+  // Recomputes every second so the "Updated Xs ago" badge ticks visibly.
+  private nowTick: ReturnType<typeof setInterval> | null = null;
+  protected readonly nowMs = signal<number>(Date.now());
+  readonly lastUpdatedLabel = computed(() => {
+    const sec = Math.max(0, Math.floor((this.nowMs() - this.lastUpdated()) / 1000));
+    if (sec < 5)  return 'Updated just now';
+    if (sec < 60) return `Updated ${sec}s ago`;
+    return `Updated ${Math.floor(sec / 60)}m ago`;
+  });
+
+  ngOnInit() {
+    this.labCfg.ensureLoaded();
+    this.refresh();
+    this.pollHandle = setInterval(() => {
+      // Skip polls while the tab is hidden — saves bandwidth on inactive
+      // tabs without changing perceived freshness once focus returns.
+      if (typeof document !== 'undefined' && document.hidden) return;
+      this.refresh();
+    }, 30_000);
+    this.nowTick = setInterval(() => this.nowMs.set(Date.now()), 1000);
+  }
+  ngOnDestroy() {
+    if (this.pollHandle) clearInterval(this.pollHandle);
+    if (this.nowTick) clearInterval(this.nowTick);
+  }
 
   refresh() {
     this.api.get<Appointment[]>('/api/appointments/today').subscribe({
       next: l => this._appointments.set(l ?? []),
     });
     this.api.get<Order[]>('/api/orders/today').subscribe({
-      next: l => this._orders.set(l ?? []),
+      next: l => {
+        this._orders.set(l ?? []);
+        this.lastUpdated.set(Date.now());
+      },
     });
     this.api.get<Bill[]>('/api/billing/').subscribe({
       next: l => this._bills.set(l ?? []),
@@ -1496,6 +1581,37 @@ export class FrontdeskLandingComponent implements OnInit {
   }
   collectSample(o: Order) {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
+  }
+
+  // Dispatch button: visible when every tube on the order has been
+  // collected but none has left for the lab yet. The FD/courier desk taps
+  // it to mark all collected tubes 'dispatched' in one go.
+  showDispatchOn(o: Order): boolean {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    const samples = o.samples ?? [];
+    if (samples.length === 0) return false;
+    const allCollected = samples.every(s => s.status === 'collected');
+    return allCollected;
+  }
+  isDispatched(o: Order): boolean {
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.every(s =>
+      s.status === 'dispatched' || s.status === 'in_transit'
+        || s.status === 'received' || s.status === 'processing');
+  }
+  markDispatched(o: Order) {
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+      next: r => {
+        this.toasts.success(`${r.dispatched} tube${r.dispatched === 1 ? '' : 's'} dispatched to lab`);
+        // Optimistic local update so the badge flips immediately.
+        this._orders.update(list => list.map(x => x.id === o.id
+          ? { ...x, samples: x.samples.map(s => s.status === 'collected'
+              ? { ...s, status: 'dispatched', dispatchedAt: new Date().toISOString() }
+              : s) }
+          : x));
+      },
+      error: e => this.toasts.error(e?.message ?? 'Could not mark dispatched')
+    });
   }
   closeOrder() { this._selectedOrder.set(null); }
   openStraggler(s: StragglerItem) {
@@ -1578,16 +1694,19 @@ export class FrontdeskLandingComponent implements OnInit {
   }
 
   pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {
-    const billDone  = o.status !== 'draft';
-    const collected = o.samples.some(s => s.status && s.status !== 'pending');
-    const received  = o.samples.some(s => s.status === 'received' || s.status === 'processing');
-    const completed = o.status === 'completed';
-    const anyResult = (o.samples[0]?.tests ?? []).some(t => t.status === 'validated' || t.status === 'entered');
+    const billDone   = o.status !== 'draft' && o.status !== 'created';
+    const collected  = o.samples.some(s => s.status && s.status !== 'pending');
+    const dispatched = o.samples.some(s => s.status === 'dispatched' || s.status === 'in_transit'
+                                         || s.status === 'received' || s.status === 'processing');
+    const received   = o.samples.some(s => s.status === 'received' || s.status === 'processing');
+    const completed  = o.status === 'completed';
+    const anyResult  = (o.samples[0]?.tests ?? []).some(t => t.status === 'validated' || t.status === 'entered');
     return [
-      { label: 'Billing', state: billDone ? 'done' : 'active' },
-      { label: 'Sample',  state: received ? 'done' : collected ? 'active' : 'pending' },
-      { label: 'Result',  state: anyResult ? 'done' : received ? 'active' : 'pending' },
-      { label: 'Report',  state: completed ? 'done' : anyResult ? 'active' : 'pending' }
+      { label: 'Billing',  state: billDone ? 'done' : 'active' },
+      { label: 'Sample',   state: collected ? 'done' : billDone ? 'active' : 'pending' },
+      { label: 'Dispatch', state: received ? 'done' : dispatched ? 'done' : collected ? 'active' : 'pending' },
+      { label: 'Result',   state: anyResult ? 'done' : received ? 'active' : 'pending' },
+      { label: 'Report',   state: completed ? 'done' : anyResult ? 'active' : 'pending' }
     ];
   }
   stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {

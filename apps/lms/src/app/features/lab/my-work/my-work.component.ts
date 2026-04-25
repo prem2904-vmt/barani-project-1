@@ -237,7 +237,65 @@ const COUNTERS: CounterSpec[] = [
               </h3>
             </div>
 
-            <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            <!-- Group by patient/order so a single patient with 3 tests is one
+                 expandable card, not 3 floating cards across columns. -->
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              @for (g of patientGroups(bucket.items); track g.orderId) {
+                <li>
+                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                    <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
+                            (click)="toggleExpand(g.orderId)">
+                      <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                          <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
+                          <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                        </div>
+                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                          #{{ g.orderId.slice(0,8) }}
+                          @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                        </p>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                           [style.transform]="expanded(g.orderId) ? 'rotate(90deg)' : 'none'"
+                           style="transition: transform 0.15s ease; color: var(--text-muted);">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </button>
+                    @if (expanded(g.orderId)) {
+                      <ul class="mt-3 space-y-2 pl-12">
+                        @for (t of g.items; track t.id) {
+                          <li class="flex items-center gap-2 py-1.5 px-2 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                            <span class="text-[13px] font-medium truncate flex-1" style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</span>
+                            <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ t.test?.department?.name ?? '' }}</span>
+                            @switch (tab()) {
+                              @case ('service_queue') {
+                                <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="startPick(t)">Pick · scan</button>
+                                <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">Delegate</button>
+                              }
+                              @case ('rejected') {
+                                <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
+                              }
+                              @default {
+                                @if (t.status === 'pending') {
+                                  <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick · scan</pf-touch-btn>
+                                } @else {
+                                  <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
+                                }
+                              }
+                            }
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </pf-tile>
+                </li>
+              }
+            </ul>
+            <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
+            <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
                 <li>
                   <pf-tile [tone]="toneFor(bucket.level)" padding="md">
@@ -567,6 +625,17 @@ const COUNTERS: CounterSpec[] = [
     .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.6); }
 
     /* Urgency dot (kept from prior) */
+    .pf-grp-count {
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14);
+      color: #c4b5fd;
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      flex-shrink: 0;
+    }
+    .hidden { display: none; }
     .pf-dot {
       width: 10px;
       height: 10px;
@@ -735,6 +804,49 @@ export class MyWorkComponent implements OnInit {
       const snap = JSON.parse(t.currentResult) as { flags?: { critical?: boolean } };
       return snap.flags?.critical === true;
     } catch { return false; }
+  }
+
+  /**
+   * Group bucket items by orderId so the queue shows one card per patient
+   * with all their tests nested inside instead of one floating card per
+   * test. The card's TAT level is the worst (most-urgent) of any test in
+   * the order so a patient with one breached test isn't buried.
+   */
+  patientGroups(items: Enriched[]): Array<{
+    orderId: string;
+    patientName: string;
+    items: Enriched[];
+    testNames: string[];
+    level: Level;
+    remainingMin: number;
+  }> {
+    const byOrder = new Map<string, Enriched[]>();
+    for (const t of items) {
+      const oid = t.subOrder?.order?.id ?? t.id;
+      if (!byOrder.has(oid)) byOrder.set(oid, []);
+      byOrder.get(oid)!.push(t);
+    }
+    const levelRank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
+    return Array.from(byOrder.entries()).map(([orderId, group]) => {
+      const worst = [...group].sort((a, b) => levelRank[a._level] - levelRank[b._level])[0];
+      return {
+        orderId,
+        patientName: worst.subOrder?.order?.patient?.displayName ?? 'Patient',
+        items: group,
+        testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
+        level: worst._level,
+        remainingMin: Math.min(...group.map(t => t._remainingMin))
+      };
+    });
+  }
+
+  // Expand/collapse state per order id within My Work.
+  private readonly _expanded = signal<Set<string>>(new Set());
+  expanded(id: string): boolean { return this._expanded().has(id); }
+  toggleExpand(id: string): void {
+    const next = new Set(this._expanded());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    this._expanded.set(next);
   }
 
   toneFor(level: Level): TileTone {

@@ -102,34 +102,48 @@ interface ResultSnapshot {
             </div>
 
             <div class="space-y-2.5">
-              @for (t of bucket.items; track t.id) {
-                <pf-tile [tone]="rowTone(bucket.level)" padding="md">
-                  <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                    <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
-
+              @for (g of patientGroups(bucket.items); track g.orderId) {
+                <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block">
+                  <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
+                          (click)="toggleExpand(g.orderId)">
+                    <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <p class="font-semibold text-[15px] truncate"
-                           style="color: var(--text-primary);">{{ t.test?.name }}</p>
-                        @if (isCritical(t)) {
-                          <pf-chip tone="rose" size="sm">CRITICAL</pf-chip>
-                        }
+                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <span class="pv-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                        @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                       </div>
-                      <p class="text-[12px] mt-0.5 truncate"
-                         style="color: var(--text-tertiary);">
-                        {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
-                        · entered {{ t.resultedAt ? (t.resultedAt | date:'shortTime') : '—' }}
+                      <p class="text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
+                        #{{ g.orderId.slice(0,8) }}
+                        @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                       </p>
                     </div>
-
-                    <pf-tat-indicator [tatLevel]="t._level" [remainingMinutes]="t._remainingMin"></pf-tat-indicator>
-
-                    <div class="flex items-center gap-1.5 ml-auto">
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="openReject(t)">Reject</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="secondary" (pressed)="reassign(t)">Reassign</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="primary" (pressed)="openValidate(t)">Validate</pf-touch-btn>
-                    </div>
-                  </div>
+                    <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                         [style.transform]="expanded(g.orderId) ? 'rotate(90deg)' : 'none'"
+                         style="transition: transform 0.15s ease; color: var(--text-muted);">
+                      <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                  </button>
+                  @if (expanded(g.orderId)) {
+                    <ul class="mt-3 space-y-2 pl-12">
+                      @for (t of g.items; track t.id) {
+                        <li class="flex items-center gap-2 py-2 px-3 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                          <span class="text-[13.5px] font-medium flex-1 truncate" style="color: var(--text-primary);">
+                            {{ t.test?.name }}
+                            @if (isCritical(t)) { <span class="text-[10px] ml-1" style="color:#fb7185;">CRITICAL</span> }
+                          </span>
+                          <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">
+                            entered {{ t.resultedAt ? (t.resultedAt | date:'shortTime') : '—' }}
+                          </span>
+                          <pf-touch-btn size="sm" variant="ghost" (pressed)="openReject(t)">Reject</pf-touch-btn>
+                          <pf-touch-btn size="sm" variant="secondary" (pressed)="reassign(t)">Reassign</pf-touch-btn>
+                          <pf-touch-btn size="sm" variant="primary" (pressed)="openValidate(t)">Validate</pf-touch-btn>
+                        </li>
+                      }
+                    </ul>
+                  }
                 </pf-tile>
               }
             </div>
@@ -150,6 +164,17 @@ interface ResultSnapshot {
 
   `,
   styles: [`
+    .pv-grp-count {
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14);
+      color: #c4b5fd;
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      flex-shrink: 0;
+    }
+    .hidden { display: none; }
     .pf-urg-dot {
       width: 8px;
       height: 8px;
@@ -187,6 +212,50 @@ export class PendingValidationComponent implements OnInit {
 
   rowTone(level: Level): TileTone {
     return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  }
+
+  /**
+   * Group bucket items by orderId so the doctor reads "Patient X — N tests"
+   * with all results expandable inline rather than per-result floating rows.
+   * The card's TAT level is the most-urgent across all the tests in that
+   * order so a single critical test pulls the whole group up.
+   */
+  patientGroups(items: Enriched[]): Array<{
+    orderId: string;
+    patientName: string;
+    items: Enriched[];
+    testNames: string[];
+    level: Level;
+    remainingMin: number;
+    anyCritical: boolean;
+  }> {
+    const byOrder = new Map<string, Enriched[]>();
+    for (const t of items) {
+      const oid = t.subOrder?.order?.id ?? t.id;
+      if (!byOrder.has(oid)) byOrder.set(oid, []);
+      byOrder.get(oid)!.push(t);
+    }
+    const rank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
+    return Array.from(byOrder.entries()).map(([orderId, group]) => {
+      const worst = [...group].sort((a, b) => rank[a._level] - rank[b._level])[0];
+      return {
+        orderId,
+        patientName: worst.subOrder?.order?.patient?.displayName ?? '—',
+        items: group,
+        testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
+        level: worst._level,
+        remainingMin: Math.min(...group.map(t => t._remainingMin)),
+        anyCritical: group.some(t => this.isCritical(t))
+      };
+    });
+  }
+
+  private readonly _expanded = signal<Set<string>>(new Set());
+  expanded(id: string): boolean { return this._expanded().has(id); }
+  toggleExpand(id: string): void {
+    const next = new Set(this._expanded());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    this._expanded.set(next);
   }
 
   private readonly _rows = signal<OrderTest[]>([]);

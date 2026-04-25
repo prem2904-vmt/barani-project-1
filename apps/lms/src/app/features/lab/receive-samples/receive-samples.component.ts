@@ -5,7 +5,8 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { OrderSample } from '../../../shared/models/order.model';
+import { Order, OrderSample } from '../../../shared/models/order.model';
+import { patientDisplayName } from '../../../shared/models/patient.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
@@ -159,11 +160,41 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </pf-tile>
       }
 
+      <!-- ─── Dispatched orders (FD has handed off, awaiting lab intake) ─── -->
+      @if (dispatchedOrders().length > 0) {
+        <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                  style="color: var(--text-secondary);">Dispatched · awaiting receipt</span>
+            <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
+          </div>
+        </div>
+        <div class="space-y-2.5 mb-6">
+          @for (g of dispatchedOrders(); track g.orderId) {
+            <pf-tile tone="violet" padding="md" class="block">
+              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
+                <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                  <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                    #{{ g.orderId.slice(0,8) }} · {{ g.tubeCount }} tube<span [class.hidden]="g.tubeCount === 1">s</span>
+                    @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                  </p>
+                </div>
+                <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
+                  Receive · TAT starts
+                </pf-touch-btn>
+              </div>
+            </pf-tile>
+          }
+        </div>
+      }
+
       <!-- In-transit header + batch actions -->
       <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
         <div class="flex items-center gap-2">
           <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                style="color: var(--text-secondary);">In transit</span>
+                style="color: var(--text-secondary);">In transit (legacy)</span>
           <span class="text-[11px] font-mono"
                 style="color: var(--text-muted);">· {{ inTransit().length }}</span>
         </div>
@@ -355,6 +386,18 @@ export class ReceiveSamplesComponent implements OnInit {
   private readonly tenantState = inject(TenantStateService);
 
   private readonly _inTransit = signal<OrderSample[]>([]);
+  private readonly _dispatched = signal<Order[]>([]);
+  /**
+   * Order-level groups for the new dispatched queue. Lab tech reads this as
+   * "patient X — N tubes — list of tests" instead of per-tube rows so they
+   * can scan/click once to mark the whole order received and start TAT.
+   */
+  readonly dispatchedOrders = computed(() => this._dispatched().map(o => ({
+    orderId: o.id,
+    patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+    tubeCount: (o.samples ?? []).filter(s => s.status === 'dispatched').length,
+    testLabels: this.uniqueTestNames(o)
+  })).filter(g => g.tubeCount > 0));
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
   protected readonly busy = signal(false);
@@ -406,6 +449,43 @@ export class ReceiveSamplesComponent implements OnInit {
         this._selectedIds.set(new Set());
       }
     });
+    this.api.get<Order[]>('/api/orders/dispatched').subscribe({
+      next: l => this._dispatched.set(l ?? [])
+    });
+  }
+
+  /** Receive every dispatched tube on the order in one call — TAT starts. */
+  receiveOrder(orderId: string) {
+    const order = this._dispatched().find(o => o.id === orderId);
+    if (!order) return;
+    const ids = (order.samples ?? [])
+      .filter(s => s.status === 'dispatched')
+      .map(s => s.id);
+    if (ids.length === 0) return;
+    this.busy.set(true);
+    this.api.post<OrderSample[]>('/api/samples/receive-batch', { sampleIds: ids }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${ids.length} tube${ids.length === 1 ? '' : 's'} received — TAT started`);
+        this.refresh();
+      },
+      error: e => {
+        this.busy.set(false);
+        this.toasts.error(e.message ?? 'Receive failed');
+      }
+    });
+  }
+
+  /** Dedup test names across all the order's samples for the meta line. */
+  private uniqueTestNames(o: Order): string[] {
+    const names = new Set<string>();
+    for (const s of o.samples ?? []) {
+      for (const t of s.tests ?? []) {
+        const n = t.test?.name;
+        if (n) names.add(n);
+      }
+    }
+    return Array.from(names).slice(0, 4);
   }
 
   isSelected(id: string): boolean { return this._selectedIds().has(id); }
