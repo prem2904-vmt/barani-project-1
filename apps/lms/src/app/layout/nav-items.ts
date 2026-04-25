@@ -15,6 +15,12 @@ export interface NavItem {
    * these. Undefined = always eligible regardless of mode.
    */
   collectionModes?: Array<'front_desk' | 'dedicated_counter'>;
+  /**
+   * Only render when the current branch's billing_mode matches one of these.
+   * Used by the Billing Counter nav item which only exists when billing
+   * happens at a separate counter.
+   */
+  billingModes?: Array<'front_desk' | 'separate_counter'>;
 }
 
 export const PRIMARY_NAV: NavItem[] = [
@@ -49,6 +55,14 @@ export const PRIMARY_NAV: NavItem[] = [
     iconPath: 'M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4',
     permissions: ['collect_sample'],
     collectionModes: ['dedicated_counter']
+  },
+  {
+    id: 'billing-counter',
+    label: 'Billing',
+    href: '/billing-counter',
+    iconPath: 'M3 5h18v14H3zM3 10h18M7 15h3',
+    permissions: ['create_bill', 'collect_payment'],
+    billingModes: ['separate_counter']
   },
   {
     id: 'results',

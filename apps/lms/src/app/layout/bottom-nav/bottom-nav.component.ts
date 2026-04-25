@@ -117,10 +117,12 @@ export class BottomNavComponent {
   constructor() { this.labCfg.ensureLoaded(); }
 
   private readonly visible = (items: NavItem[]): NavItem[] => {
-    const mode = this.labCfg.collectionMode();
+    const cMode = this.labCfg.collectionMode();
+    const bMode = this.labCfg.billingMode();
     return items.filter(i => {
       if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
-      if (i.collectionModes && !i.collectionModes.includes(mode)) return false;
+      if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
+      if (i.billingModes && !i.billingModes.includes(bMode)) return false;
       return true;
     });
   };

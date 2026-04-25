@@ -116,14 +116,14 @@ export const appRoutes: Route[] = [
       },
 
       // Frontdesk — orders / appointments / billing under one sticky
-      // shell. Children swap inside the shell's <router-outlet>.
+      // shell. Children swap inside the shell's <router-outlet>. Parent is
+      // gated; child routes inherit auth + add per-action perms.
       {
         path: 'frontdesk',
+        canActivate: [permissionGuard(['register_patient', 'create_order', 'view_patient'])],
         loadComponent: () => import('./features/frontdesk/frontdesk-shell.component').then(m => m.FrontdeskShellComponent),
         children: [
-          // Default = insights landing (greeting, KPIs, stragglers, patient
-          // search). Picking a patient from the search navigates to
-          // patients/:id (history), from which "New order" jumps to /order.
+          // Default = insights landing.
           {
             path: '',
             pathMatch: 'full',
@@ -131,26 +131,32 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'order',
+            canActivate: [permissionGuard('create_order')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
           {
             path: 'billing',
+            canActivate: [permissionGuard(['create_bill', 'collect_payment'])],
             loadComponent: () => import('./features/frontdesk/billing/billing.component').then(m => m.BillingComponent)
           },
           {
             path: 'appointments/new',
+            canActivate: [permissionGuard(['register_patient', 'create_order'])],
             loadComponent: () => import('./features/frontdesk/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
           },
           {
             path: 'patients/new',
+            canActivate: [permissionGuard('register_patient')],
             loadComponent: () => import('./features/frontdesk/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
           },
           {
             path: 'patients/:id',
+            canActivate: [permissionGuard(['view_patient', 'register_patient'])],
             loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
           },
           {
             path: 'post-payment',
+            canActivate: [permissionGuard(['collect_payment', 'create_bill'])],
             loadComponent: () => import('./features/frontdesk/post-payment/post-payment.component').then(m => m.PostPaymentComponent)
           }
         ]
@@ -164,9 +170,10 @@ export const appRoutes: Route[] = [
       { path: 'reception/patients/:id',     redirectTo: 'frontdesk/patients/:id' },
       { path: 'reception/post-payment',     redirectTo: 'frontdesk/post-payment' },
 
-      // Lab
+      // Lab — every route gated by the relevant lab perm.
       {
         path: 'lab/my-work',
+        canActivate: [permissionGuard('enter_result')],
         loadComponent: () => import('./features/lab/my-work/my-work.component').then(m => m.MyWorkComponent)
       },
       {
@@ -175,6 +182,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/collect',
+        canActivate: [permissionGuard('collect_sample')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       // Dedicated-counter landing. Same component as /lab/collect — the
@@ -187,31 +195,44 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/receive',
+        canActivate: [permissionGuard('receive_sample')],
         loadComponent: () => import('./features/lab/receive-samples/receive-samples.component').then(m => m.ReceiveSamplesComponent)
       },
       {
         path: 'lab/result/:id',
+        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
         loadComponent: () => import('./features/lab/result-entry/result-entry.component').then(m => m.ResultEntryComponent)
       },
 
-      // Pathologist
+      // Pathologist — only doctors with validate_result.
       {
         path: 'pathologist',
+        canActivate: [permissionGuard('validate_result')],
         loadComponent: () => import('./features/pathologist/pending-validation/pending-validation.component').then(m => m.PendingValidationComponent)
       },
       {
         path: 'pathologist/validate/:id',
+        canActivate: [permissionGuard('validate_result')],
         loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 
-      // Reports
+      // Reports — viewers and deliverers.
       {
         path: 'reports',
+        canActivate: [permissionGuard(['view_report', 'deliver_report'])],
         loadComponent: () => import('./features/reports/report-queue/report-queue.component').then(m => m.ReportQueueComponent)
       },
       {
         path: 'reports/view/:id',
+        canActivate: [permissionGuard(['view_report', 'deliver_report'])],
         loadComponent: () => import('./features/reports/report-viewer/report-viewer.component').then(m => m.ReportViewerComponent)
+      },
+
+      // Billing counter (separate-counter mode).
+      {
+        path: 'billing-counter',
+        canActivate: [permissionGuard(['create_bill', 'collect_payment'])],
+        loadComponent: () => import('./features/billing-counter/billing-counter.component').then(m => m.BillingCounterComponent)
       },
 
       // Ops

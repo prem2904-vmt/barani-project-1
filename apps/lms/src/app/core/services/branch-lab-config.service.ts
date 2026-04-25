@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { BranchLabConfig, CollectionMode } from '../../shared/models/branch-lab-config.model';
+import { BillingMode, BranchLabConfig, CollectionMode } from '../../shared/models/branch-lab-config.model';
 import { ApiService } from './api.service';
 
 /**
@@ -19,6 +19,9 @@ export class BranchLabConfigService {
   readonly loaded = this._loaded.asReadonly();
   readonly collectionMode = computed<CollectionMode>(
     () => this._config()?.collectionMode ?? 'front_desk'
+  );
+  readonly billingMode = computed<BillingMode>(
+    () => this._config()?.billingMode ?? 'front_desk'
   );
 
   ensureLoaded(): void {

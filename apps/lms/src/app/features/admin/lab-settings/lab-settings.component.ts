@@ -4,7 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
+import { BillingMode, BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
 import { Department, Tenant } from '../../../shared/models/tenant.model';
 import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -31,6 +31,32 @@ interface AutoAssignConfig {
         title="Lab settings"
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
+
+      <!-- Billing (branch-scoped) -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Billing</h3>
+        <p class="pf-ls__hint">
+          Front Desk bills the order at the same desk that creates it. Separate Counter
+          unlocks a /billing-counter screen for billing-only staff to pick up unbilled
+          orders by name / phone / order ID and process payment.
+        </p>
+        <div class="pf-ls__radio-row">
+          <label class="pf-ls__radio" [class.pf-ls__radio--on]="billingMode() === 'front_desk'">
+            <input type="radio" name="billing-mode" value="front_desk"
+                   [checked]="billingMode() === 'front_desk'"
+                   (change)="setBillingMode('front_desk')" />
+            <span class="pf-ls__radio-title">Front Desk</span>
+            <span class="pf-ls__radio-sub">Reception bills inline.</span>
+          </label>
+          <label class="pf-ls__radio" [class.pf-ls__radio--on]="billingMode() === 'separate_counter'">
+            <input type="radio" name="billing-mode" value="separate_counter"
+                   [checked]="billingMode() === 'separate_counter'"
+                   (change)="setBillingMode('separate_counter')" />
+            <span class="pf-ls__radio-title">Separate Counter</span>
+            <span class="pf-ls__radio-sub">A billing-only staff member processes payments.</span>
+          </label>
+        </div>
+      </pf-tile>
 
       <!-- Sample Collection (branch-scoped) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
@@ -207,6 +233,7 @@ export class LabSettingsComponent implements OnInit {
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
   readonly collectionMode = this.labCfg.collectionMode;
+  readonly billingMode = this.labCfg.billingMode;
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '', label: '— none —' },
@@ -270,6 +297,13 @@ export class LabSettingsComponent implements OnInit {
 
   setCollectionMode(mode: CollectionMode) {
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { collectionMode: mode }).subscribe({
+      next: cfg => this.labCfg.update(cfg),
+      error: e => this.toasts.error(e?.message ?? 'Could not save')
+    });
+  }
+
+  setBillingMode(mode: BillingMode) {
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { billingMode: mode }).subscribe({
       next: cfg => this.labCfg.update(cfg),
       error: e => this.toasts.error(e?.message ?? 'Could not save')
     });

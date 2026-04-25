@@ -1,4 +1,5 @@
 export type CollectionMode = 'front_desk' | 'dedicated_counter';
+export type BillingMode    = 'front_desk' | 'separate_counter';
 
 export interface BranchLabConfig {
   id: string;
@@ -8,6 +9,7 @@ export interface BranchLabConfig {
   autoAssignBy: string;
   allowManualOverride: boolean;
   collectionMode: CollectionMode;
+  billingMode: BillingMode;
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;
