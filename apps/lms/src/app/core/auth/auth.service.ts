@@ -1,6 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
+import { BranchLabConfigService } from '../services/branch-lab-config.service';
 import { CurrentUser } from './mock-user';
 import { supabase } from './supabase.client';
 
@@ -22,6 +23,8 @@ interface MeResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private readonly labCfg = inject(BranchLabConfigService);
+
   private readonly _session = signal<Session | null>(null);
   private readonly _user = signal<CurrentUser | null>(null);
   private readonly _isReady = signal<boolean>(false);
@@ -81,6 +84,32 @@ export class AuthService {
     const perms = this._user()?.permissions ?? [];
     if (perms.includes('*')) return true;
     return codes.some(c => perms.includes(c));
+  }
+
+  /**
+   * Permission check with mode-aware suppression. Same as hasPermission for
+   * everything except `collect_sample` in dedicated-counter mode: the
+   * Receptionist role keeps the seeded perm so an admin can flip the branch
+   * back to front-desk collection without a re-seed, but in dedicated mode
+   * the FD counter doesn't draw samples — only the dedicated counter does.
+   * Users who hold collect_sample via Sample Collector / Lab Tech / Lab Admin
+   * roles still pass.
+   */
+  hasEffectivePermission(code: string): boolean {
+    if (code === 'collect_sample' && this.labCfg.collectionMode() === 'dedicated_counter') {
+      const roles = this._user()?.roles ?? [];
+      const otherCollectorRole =
+        roles.includes('Sample Collector') ||
+        roles.includes('Lab Technician')   ||
+        roles.includes('Lab Admin');
+      if (roles.includes('Receptionist') && !otherCollectorRole) return false;
+    }
+    return this.hasPermission(code);
+  }
+
+  hasAnyEffectivePermission(codes: string[]): boolean {
+    if (this.permissions().includes('*')) return true;
+    return codes.some(c => this.hasEffectivePermission(c));
   }
 
   async signIn(email: string, password: string): Promise<void> {

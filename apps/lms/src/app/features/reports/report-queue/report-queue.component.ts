@@ -187,7 +187,9 @@ export class ReportQueueComponent implements OnInit {
     { value: 'failed',    label: 'Failed' }
   ];
 
-  private readonly _filter = signal<Filter>('all');
+  // Default to 'pending' — the queue's primary purpose is showing what
+  // needs delivery now. The 'All' filter remains for auditing past work.
+  private readonly _filter = signal<Filter>('pending');
   readonly filter = this._filter.asReadonly();
   setFilter(f: Filter) { this._filter.set(f); }
 

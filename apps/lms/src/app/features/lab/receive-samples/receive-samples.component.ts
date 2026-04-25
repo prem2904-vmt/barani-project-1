@@ -171,19 +171,45 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </div>
         <div class="space-y-2.5 mb-6">
           @for (g of dispatchedOrders(); track g.orderId) {
-            <pf-tile tone="violet" padding="md" class="block">
+            <pf-tile [tone]="g.state === 'awaiting' ? 'amber' : 'violet'" padding="md" class="block"
+                     [class.opacity-60]="g.state === 'awaiting'">
               <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
                 <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                 <div class="flex-1 min-w-0">
                   <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
-                    #{{ g.orderId.slice(0,8) }} · {{ g.tubeCount }} tube<span [class.hidden]="g.tubeCount === 1">s</span>
+                    #{{ g.orderId.slice(0,8) }}
+                    @if (g.tubeCount > 0) {
+                      <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
+                    }
+                    @if (g.receivedCount > 0) {
+                      <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
+                    }
+                    @if (g.notReadyCount > 0) {
+                      <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                    }
                     @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                   </p>
                 </div>
-                <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
-                  Receive · TAT starts
-                </pf-touch-btn>
+                @switch (g.state) {
+                  @case ('ready') {
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
+                      Receive · TAT starts
+                    </pf-touch-btn>
+                  }
+                  @case ('partial') {
+                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="receiveOrder(g.orderId)">
+                      Receive remaining {{ g.tubeCount }}
+                    </pf-touch-btn>
+                  }
+                  @case ('awaiting') {
+                    <span class="px-3 py-1.5 text-[12px] font-medium rounded-md"
+                          style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
+                          title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
+                      ⚠ Not dispatched yet
+                    </span>
+                  }
+                }
               </div>
             </pf-tile>
           }
@@ -392,12 +418,33 @@ export class ReceiveSamplesComponent implements OnInit {
    * "patient X — N tubes — list of tests" instead of per-tube rows so they
    * can scan/click once to mark the whole order received and start TAT.
    */
-  readonly dispatchedOrders = computed(() => this._dispatched().map(o => ({
-    orderId: o.id,
-    patientName: patientDisplayName(o.patient ?? null) || 'Patient',
-    tubeCount: (o.samples ?? []).filter(s => s.status === 'dispatched').length,
-    testLabels: this.uniqueTestNames(o)
-  })).filter(g => g.tubeCount > 0));
+  readonly dispatchedOrders = computed(() => this._dispatched().map(o => {
+    const samples = o.samples ?? [];
+    const dispatched = samples.filter(s => s.status === 'dispatched').length;
+    const received = samples.filter(s => s.status === 'received' || s.status === 'processing').length;
+    const notReady = samples.filter(s => s.status === 'pending' || s.status === 'collected').length;
+    const total = samples.length;
+    // State drives the action button + the row badge:
+    //  • 'ready'         — at least one dispatched tube → enable Receive
+    //  • 'partial'       — some dispatched, some already received → enable Receive (intake the rest)
+    //  • 'awaiting'      — every tube still at the counter → disable, show warning
+    //  • 'received'      — every tube already received → hidden (out of queue)
+    let state: 'ready' | 'partial' | 'awaiting' | 'received';
+    if (dispatched === 0 && received === total && total > 0) state = 'received';
+    else if (dispatched === 0 && notReady > 0) state = 'awaiting';
+    else if (received > 0) state = 'partial';
+    else state = 'ready';
+    return {
+      orderId: o.id,
+      patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+      tubeCount: dispatched,
+      receivedCount: received,
+      notReadyCount: notReady,
+      totalTubes: total,
+      state,
+      testLabels: this.uniqueTestNames(o)
+    };
+  }).filter(g => g.state !== 'received'));
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
   protected readonly busy = signal(false);

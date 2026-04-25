@@ -31,82 +31,82 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/users',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
       },
       {
         path: 'admin/users/invite',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
       },
       {
         path: 'admin/roles/new',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
       },
       {
         path: 'admin/roles/:id/edit',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
       },
       {
         path: 'admin/tests',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_tests')],
         loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
       },
       {
         path: 'admin/tests/new',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_tests')],
         loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/tests/:id/edit',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_tests')],
         loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/branches',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_branches')],
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
         path: 'admin/lab-settings',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
         path: 'admin/billing',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },
       {
         path: 'admin/reports',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard(['manage_tenant', 'manage_tests'])],
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
       },
       {
         path: 'admin/notifications',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)
       },
       {
         path: 'admin/workflows',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
         path: 'admin/workflows/:screen',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
         path: 'admin/workflows/:screen/steps/:stepId/fields/new',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       {
         path: 'admin/workflows/:screen/steps/:stepId/fields/:fieldId/edit',
-        canActivate: [adminGuard],
+        canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       {
@@ -189,8 +189,11 @@ export const appRoutes: Route[] = [
       // separate route exists so we can gate it on `collect_sample` and show
       // it in the top-level sidebar when collection_mode is dedicated_counter.
       {
+        // Dedicated-counter route. `effective: true` honours mode-aware
+        // suppression so a Receptionist (whose seeded role still includes
+        // collect_sample) is bounced when collection_mode = dedicated_counter.
         path: 'sample-collection',
-        canActivate: [permissionGuard('collect_sample')],
+        canActivate: [permissionGuard('collect_sample', { effective: true })],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       {
@@ -216,15 +219,18 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 
-      // Reports — viewers and deliverers.
+      // Reports — only roles that actively deliver reports land here. Lab
+      // techs hold view_report (so they can read a finalized result) but
+      // shouldn't see the delivery queue. The viewer route stays slightly
+      // looser since pathologists / admins reasonably preview reports.
       {
         path: 'reports',
-        canActivate: [permissionGuard(['view_report', 'deliver_report'])],
+        canActivate: [permissionGuard('deliver_report')],
         loadComponent: () => import('./features/reports/report-queue/report-queue.component').then(m => m.ReportQueueComponent)
       },
       {
         path: 'reports/view/:id',
-        canActivate: [permissionGuard(['view_report', 'deliver_report'])],
+        canActivate: [permissionGuard(['deliver_report', 'validate_result'])],
         loadComponent: () => import('./features/reports/report-viewer/report-viewer.component').then(m => m.ReportViewerComponent)
       },
 

@@ -1047,3 +1047,92 @@ pf-shell main>router-outlet+* {
   color: #475569 !important;
   border-color: #e2e8f0 !important;
 }
+
+/* ─── Sample Collection drawer (teleported overlay) ──────────────────
+   The .pf-drawer element is appendChild'd to document.body at open time
+   (escapes the shell's stacking context so the overlay covers the top
+   nav). Once teleported it's no longer a descendant of its host
+   component, which means component-scoped `:host-context(...)` rules
+   can't reach it. These overrides live in the global stylesheet so the
+   light-theme treatment lands regardless of where the drawer sits in
+   the DOM. */
+html[data-theme="light"] .pf-drawer {
+  background:
+    radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.10) 0%, transparent 55%),
+    radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.08) 0%, transparent 55%),
+    #f5f7fb !important;
+}
+html[data-theme="light"] .pf-drawer__close {
+  background: rgba(15, 23, 42, 0.04) !important;
+  color: #475569 !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+html[data-theme="light"] .pf-drawer__close:hover {
+  background: rgba(15, 23, 42, 0.08) !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.22) !important;
+}
+html[data-theme="light"] .pf-drawer__name {
+  background: linear-gradient(180deg, #0f172a, rgba(15, 23, 42, 0.55)) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+html[data-theme="light"] .pf-drawer__meta { color: #64748b !important; }
+html[data-theme="light"] .pf-drawer__progress {
+  background: rgba(15, 23, 42, 0.04) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+html[data-theme="light"] .pf-drawer__progress-num { color: #0f172a !important; }
+html[data-theme="light"] .pf-drawer__progress-lbl { color: #64748b !important; }
+html[data-theme="light"] .pf-drawer__progressbar {
+  background: rgba(15, 23, 42, 0.07) !important;
+}
+html[data-theme="light"] .pf-drawer__progressbar > span {
+  box-shadow: 0 0 10px rgba(45, 212, 191, 0.4) !important;
+}
+html[data-theme="light"] .pf-drawer__hint { color: #64748b !important; }
+html[data-theme="light"] .pf-drawer__foot {
+  background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04)) !important;
+  border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .pf-drawer__remaining { color: #64748b !important; }
+html[data-theme="light"] .pf-drawer__done-stamp {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.10) !important;
+  border-color: rgba(16, 185, 129, 0.32) !important;
+}
+/* Tubes inside the teleported drawer */
+html[data-theme="light"] .pf-tube {
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.7)) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+html[data-theme="light"] .pf-tube--done {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255,255,255,0.78)) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14) !important;
+}
+html[data-theme="light"] .pf-tube__label { color: #0f172a !important; }
+html[data-theme="light"] .pf-tube__dept,
+html[data-theme="light"] .pf-tube__tests,
+html[data-theme="light"] .pf-tube__tests-more,
+html[data-theme="light"] .pf-tube__code { color: #64748b !important; }
+html[data-theme="light"] .pf-tube__stamp {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.10) !important;
+  border-color: rgba(16, 185, 129, 0.30) !important;
+}
+html[data-theme="light"] .pf-tube__stamp--pending {
+  color: #64748b !important;
+  background: rgba(15, 23, 42, 0.03) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+/* Vial illustration: real glass on a white counter reads as a darker
+   outline with lighter internal reflections, not a pale ghost. */
+html[data-theme="light"] .pf-vial {
+  filter: drop-shadow(0 14px 22px rgba(15, 23, 42, 0.22)) !important;
+}
+html[data-theme="light"] .pf-vial__outline {
+  fill: rgba(255, 255, 255, 0.7) !important;
+  stroke: rgba(15, 23, 42, 0.22) !important;
+}

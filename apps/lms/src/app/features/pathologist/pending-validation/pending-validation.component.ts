@@ -294,7 +294,13 @@ export class PendingValidationComponent implements OnInit {
     const mine = this._tab() === 'mine';
     this._loading.set(true);
     this.api.get<OrderTest[]>(`/api/validation/queue?mine=${mine}`).subscribe({
-      next: l => { this._rows.set(l ?? []); this._loading.set(false); },
+      next: l => {
+        // Defence against the backend leaking past-state rows: only 'entered'
+        // tests are awaiting validation. Filtering here keeps Reject / Validate
+        // / Reassign from firing on already-validated or re-entry rows.
+        this._rows.set((l ?? []).filter(t => t.status === 'entered'));
+        this._loading.set(false);
+      },
       error: () => this._loading.set(false)
     });
   }

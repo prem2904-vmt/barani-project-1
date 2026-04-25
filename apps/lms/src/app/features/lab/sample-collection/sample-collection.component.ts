@@ -1,12 +1,12 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { OrderSample } from '../../../shared/models/order.model';
+import { Order, OrderSample } from '../../../shared/models/order.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -324,35 +324,25 @@ interface OrderGroup {
                       <stop offset="1"    stop-color="#5b1010"/>
                     </linearGradient>
                     <!-- Clip to the inside of the glass body so blood never
-                         bleeds outside the tube outline. -->
+                         bleeds outside the tube outline. Tube top extends
+                         to y=50 (under where the cap will sit) so the cap
+                         drawn last cleanly overlaps it. -->
                     <clipPath [attr.id]="'clip-' + s.id">
-                      <path d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
-                               L60 282 Q60 310 40 310 Q20 310 20 282 Z"/>
+                      <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
                     </clipPath>
                   </defs>
 
-                  <!-- Stopper (cap) -->
-                  <g>
-                    <rect x="16" y="22" width="48" height="46" rx="6"
-                          [attr.fill]="tube(s).color"/>
-                    <rect x="16" y="22" width="48" height="46" rx="6"
-                          [attr.fill]="'url(#cap-' + s.id + ')'"/>
-                    <!-- Rim groove where cap meets glass -->
-                    <rect x="14" y="58" width="52" height="10" rx="3"
-                          [attr.fill]="tube(s).color" opacity="0.7"/>
-                    <rect x="14" y="58" width="52" height="10" rx="3"
-                          fill="#000" opacity="0.25"/>
-                    <rect x="14" y="58" width="52" height="3" rx="1.5"
-                          fill="#fff" opacity="0.14"/>
-                  </g>
-
-                  <!-- Glass outline (drawn first, behind blood) -->
+                  <!-- ─── Layer 1: Glass tube (drawn first, behind everything) ───
+                       Real vacutainer shape: flat top to meet the cap, then
+                       a long cylinder, then a hemispherical bottom where
+                       the draw collects. The top extends INTO the cap area
+                       (y=50) so the cap drawn later cleanly overlaps and
+                       hides the glass top — same way a rubber stopper sits
+                       on a real tube. -->
                   <path class="pf-vial__outline"
-                        d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
-                           L60 282 Q60 310 40 310 Q20 310 20 282 Z"/>
+                        d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
 
-                  <!-- Blood fill (clipped to tube shape). Before collection:
-                       level starts below bottom (invisible). After: rises. -->
+                  <!-- ─── Layer 2: Blood fill (clipped to tube shape) ─── -->
                   <g [attr.clip-path]="'url(#clip-' + s.id + ')'">
                     <rect class="pf-vial__blood"
                           x="14"
@@ -368,9 +358,8 @@ interface OrderGroup {
                     }
                   </g>
 
-                  <!-- Glass highlights / reflections on top of blood -->
-                  <path d="M20 66 Q20 60 26 60 L54 60 Q60 60 60 66
-                           L60 282 Q60 310 40 310 Q20 310 20 282 Z"
+                  <!-- ─── Layer 3: Glass highlights / reflections ─── -->
+                  <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"
                         [attr.fill]="'url(#glass-' + s.id + ')'"/>
 
                   <!-- Thin vertical highlight streak -->
@@ -388,7 +377,30 @@ interface OrderGroup {
                     <line x1="60" y1="270" x2="64" y2="270"/>
                   </g>
 
-                  <!-- Tick badge when collected -->
+                  <!-- ─── Layer 4: Stopper (cap) — drawn LAST so it sits ON TOP
+                       of the glass, the same way a real rubber stopper
+                       wraps over the open end of a vacutainer. The cap is
+                       slightly wider than the glass body so it visibly
+                       overhangs on each side. -->
+                  <g>
+                    <!-- Cap body (rounded rectangle a touch wider than the glass tube) -->
+                    <rect x="14" y="20" width="52" height="48" rx="8"
+                          [attr.fill]="tube(s).color"/>
+                    <rect x="14" y="20" width="52" height="48" rx="8"
+                          [attr.fill]="'url(#cap-' + s.id + ')'"/>
+                    <!-- Top dome highlight — fakes a soft dome on the rubber. -->
+                    <ellipse cx="40" cy="26" rx="20" ry="3.5" fill="#fff" opacity="0.22"/>
+                    <!-- Rim shadow at the cap's bottom edge sells the
+                         "cap-on-top-of-tube" silhouette. -->
+                    <rect x="14" y="62" width="52" height="6" rx="2"
+                          fill="#000" opacity="0.32"/>
+                    <!-- Subtle highlight ring on the rim -->
+                    <rect x="14" y="60" width="52" height="2" rx="1"
+                          fill="#fff" opacity="0.18"/>
+                  </g>
+
+                  <!-- Tick badge when collected — drawn last so it pops
+                       above both the cap and the tube body. -->
                   @if (s.status !== 'pending') {
                     <g class="pf-vial__tick">
                       <circle cx="62" cy="46" r="16" fill="#10b981"/>
@@ -1148,6 +1160,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  // Set when the user lands here from another screen via ?orderId=… (e.g. FD's
+  // "Collect Sample" button). On close, we send them back to that origin
+  // instead of leaving them stranded on the queue.
+  private _returnTo: string | null = null;
 
   @ViewChild('drawerEl') private drawerRef?: ElementRef<HTMLElement>;
   private teleportedEl: HTMLElement | null = null;
@@ -1256,10 +1273,40 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return this.groups().find(g => g.orderId === id) ?? null;
   });
 
-  ngOnInit() {
-    this.refresh();
+  async ngOnInit() {
     const oid = this.route.snapshot.queryParamMap.get('orderId');
-    if (oid) this._openOrderId.set(oid);
+    if (oid) {
+      this._openOrderId.set(oid);
+      // Honour an explicit ?from=… if the caller passes one (e.g. lab dispatch
+      // counter), otherwise default deep-links back to /frontdesk since that's
+      // the only screen that links here today.
+      const from = this.route.snapshot.queryParamMap.get('from');
+      this._returnTo = from && from.startsWith('/') ? from : '/frontdesk';
+    }
+
+    // /pending-collection only returns samples currently in pending status.
+    // When deep-linked from FD's "Collect Sample" button (?orderId=…), fetch
+    // the order directly and merge any missing samples in so the drawer can
+    // render its tubes regardless of where the order is in the lifecycle.
+    try {
+      const list = await firstValueFrom(this.api.get<OrderSample[]>('/api/samples/pending-collection'));
+      let merged: OrderSample[] = list ?? [];
+      if (oid) {
+        try {
+          const order = await firstValueFrom(this.api.get<Order>(`/api/orders/${oid}`));
+          if (order?.samples?.length) {
+            const have = new Set(merged.map(s => s.id));
+            const extras = order.samples
+              .filter(s => !have.has(s.id))
+              .map(s => ({ ...s, order } as OrderSample));
+            if (extras.length) merged = [...merged, ...extras];
+          }
+        } catch { /* leave list as-is, drawer will be empty */ }
+      }
+      this._pending.set(merged);
+    } catch {
+      this._pending.set([]);
+    }
   }
 
   tube(s: OrderSample) { return containerFor(s); }
@@ -1271,6 +1318,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   openOrder(id: string) { this._openOrderId.set(id); }
   close() {
     this._openOrderId.set(null);
+    // Deep-linked from another screen (FD "Collect Sample") — return there
+    // rather than leaving the user on an unrelated queue.
+    if (this._returnTo) {
+      const target = this._returnTo;
+      this._returnTo = null;
+      this.router.navigateByUrl(target);
+      return;
+    }
     // Refresh once the drawer is gone so the pending queue outside drops any
     // orders that are now fully collected. While the drawer is open we never
     // re-fetch from the server — pending-collection omits drawn samples, and

@@ -1,6 +1,9 @@
 import { DatePipe } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
@@ -282,16 +285,47 @@ interface StaffMember {
                                     [title]="step.label + ' — ' + step.state"></span>
                             }
                           </div>
-                          <pf-chip [tone]="orderTone(o)" size="sm">{{ o.status }}</pf-chip>
+                          <pf-chip [tone]="orderTone(o)" size="sm">{{ statusLabel(o.status) }}</pf-chip>
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                            @if (showCollectOn(o)) {
-                              <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect Sample</button>
+                            <!-- created: bill-side action depends on billing_mode -->
+                            @if (o.status === 'created') {
+                              @if (showCreateBillOn(o)) {
+                                <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="goToBilling(o)">Create Bill</button>
+                              } @else {
+                                <span class="pf-tag pf-tag--warn">⏳ Awaiting Billing</span>
+                              }
                             }
-                            @if (showDispatchOn(o)) {
-                              <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Mark Dispatched</button>
+                            <!-- billed: collection-side action depends on collection_mode -->
+                            @else if (o.status === 'billed') {
+                              @if (showCollectOn(o)) {
+                                <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect Sample</button>
+                              } @else if (isPartiallyCollected(o)) {
+                                <span class="pf-tag pf-tag--ok">◐ Collecting</span>
+                              } @else {
+                                <span class="pf-tag pf-tag--warn">⏳ Awaiting Collection</span>
+                              }
                             }
-                            @if (isDispatched(o)) {
-                              <span class="pf-tag pf-tag--ok">✈ Dispatched</span>
+                            <!-- sample_collected: FD ships it to the lab -->
+                            @else if (o.status === 'sample_collected') {
+                              @if (showDispatchOn(o)) {
+                                <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Mark Dispatched</button>
+                              } @else {
+                                <span class="pf-tag pf-tag--ok">✓ Collected</span>
+                              }
+                            }
+                            <!-- post-dispatch lifecycle: read-only badges -->
+                            @else if (o.status === 'dispatched' || o.status === 'in_transit') {
+                              <span class="pf-tag pf-tag--ok">🚗 Dispatched</span>
+                            } @else if (o.status === 'received_in_lab' || o.status === 'received' || o.status === 'processing') {
+                              <span class="pf-tag pf-tag--ok">🔬 In Lab</span>
+                            } @else if (o.status === 'resulted') {
+                              <span class="pf-tag pf-tag--ok">⏳ Awaiting Validation</span>
+                            } @else if (o.status === 'validated') {
+                              <span class="pf-tag pf-tag--ok">📄 Report Ready</span>
+                            } @else if (o.status === 'delivered') {
+                              <span class="pf-tag pf-tag--ok">✅ Delivered</span>
+                            } @else if (o.status === 'rejected' || o.status === 'partially_rejected') {
+                              <span class="pf-tag pf-tag--warn">❌ Rejected</span>
                             }
                             <button type="button" class="pf-ghostbtn press" (click)="quickBook(o)">Repeat</button>
                           </div>
@@ -1056,6 +1090,11 @@ interface StaffMember {
       background: rgba(45, 212, 191, 0.12);
       border: 1px solid rgba(45, 212, 191, 0.35);
     }
+    .pf-tag--warn {
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
 
     /* Card at narrow widths — collapse actions */
     @media (max-width: 640px) {
@@ -1301,10 +1340,16 @@ interface StaffMember {
 })
 export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
+  // Cached ETag from /api/orders/today; sent as If-None-Match next poll.
+  private _ordersEtag: string | null = null;
+  // Local content signature used as a belt-and-braces no-op detector when an
+  // intermediary strips ETag headers.
+  private _ordersSig: string | null = null;
 
   readonly tabOptions: Array<{ id: Tab; label: string; tone?: 'rose' | 'amber' | 'emerald' }> = [
     { id: 'appointments', label: 'Appointments' },
@@ -1549,16 +1594,70 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.api.get<Appointment[]>('/api/appointments/today').subscribe({
       next: l => this._appointments.set(l ?? []),
     });
-    this.api.get<Order[]>('/api/orders/today').subscribe({
-      next: l => {
-        this._orders.set(l ?? []);
-        this.lastUpdated.set(Date.now());
-      },
-    });
+    // Polled ~ every 30s — bypass ApiService here so we can drive If-None-Match.
+    // Server returns 304 with no body when nothing material has changed,
+    // letting us skip the signal write entirely (and the cascading recompute
+    // through pipeline()/orderTone()/etc. that would otherwise re-render every
+    // card every poll).
+    this.fetchOrdersWithEtag();
     this.api.get<Bill[]>('/api/billing/').subscribe({
       next: l => this._bills.set(l ?? []),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
+  }
+
+  private async fetchOrdersWithEtag() {
+    try {
+      const headers: Record<string, string> = {};
+      if (this._ordersEtag) headers['If-None-Match'] = `"${this._ordersEtag}"`;
+      const token = await this.auth.getAccessToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today`, {
+        headers,
+        observe: 'response',
+        // Tell HttpClient that 304 is a successful (non-error) response — by
+        // default it would route to the error handler.
+        responseType: 'json'
+      }));
+      // 304 → server confirms our cached snapshot is still current. Bump
+      // lastUpdated so the user sees "Updated just now" but skip the data
+      // write so Angular has nothing to re-render.
+      if (resp.status === 304) { this.lastUpdated.set(Date.now()); return; }
+      const newEtag = resp.headers.get('ETag')?.replace(/"/g, '') ?? null;
+      const body = resp.body as { success?: boolean; data?: Order[] } | null;
+      const list = body?.data ?? [];
+      // Defence in depth: even if the server didn't 304, do a local content
+      // check to suppress no-op signal updates (e.g. ETag header stripped by
+      // a proxy). Cheap signature over the same fields the server hashes.
+      const incomingSig = this.computeOrdersSignature(list);
+      if (incomingSig === this._ordersSig) {
+        this._ordersEtag = newEtag;
+        this.lastUpdated.set(Date.now());
+        return;
+      }
+      this._orders.set(list);
+      this._ordersSig = incomingSig;
+      this._ordersEtag = newEtag;
+      this.lastUpdated.set(Date.now());
+    } catch {
+      /* network blip — leave the existing list intact */
+    }
+  }
+
+  /** Signature shape mirrors backend ETag input. Stable per (id, status). */
+  private computeOrdersSignature(orders: Order[]): string {
+    return orders
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(o => `${o.id}:${o.status}:` + (o.samples ?? [])
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(s => `${s.id}=${s.status}#` + (s.tests ?? [])
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map(t => `${t.id}=${t.status}`).join(';'))
+        .join(','))
+      .join('|');
   }
 
   // ── Navigation & actions ──────────────────────────────────
@@ -1574,10 +1673,72 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // at this branch (dedicated_counter mode routes to a separate queue) and the
   // order has actually been billed (status=billed). Deep-links into /lab/collect
   // so the existing scan/pick flow handles everything downstream.
+  // Critical: hide the action once ANY sample has moved past 'pending'. The
+  // order status alone (often still 'billed' until every tube is drawn) is
+  // not enough — re-prompting collection on a partially or fully collected
+  // order would let users overwrite drawn tubes.
   showCollectOn(o: Order): boolean {
-    return this.labCfg.collectionMode() === 'front_desk'
-        && o.status === 'billed'
-        && this.auth.hasPermission('collect_sample');
+    if (this.labCfg.collectionMode() !== 'front_desk') return false;
+    if (!this.auth.hasPermission('collect_sample')) return false;
+    if (o.status !== 'billed') return false;
+    const samples = o.samples ?? [];
+    if (samples.length === 0) return false;
+    return samples.every(s => !s.status || s.status === 'pending');
+  }
+  /**
+   * "Create Bill" button only renders when this branch bills at the front
+   * desk AND the user actually holds create_bill. Separate-counter mode
+   * shows the "Awaiting Billing" badge instead so reception understands
+   * who owns the next step.
+   */
+  showCreateBillOn(o: Order): boolean {
+    if (this.labCfg.billingMode() !== 'front_desk') return false;
+    return this.auth.hasPermission('create_bill') && o.status === 'created';
+  }
+  /** Reception jumps into the billing screen for this order. */
+  goToBilling(o: Order) {
+    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: o.id } });
+  }
+  /** Friendly label for the status chip. snake_case statuses → Title Case. */
+  statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      created:           'Created',
+      billed:            'Billed',
+      sample_collected:  'Sample Collected',
+      dispatched:        'Dispatched',
+      in_transit:        'In Transit',
+      received_in_lab:   'In Lab',
+      received:          'In Lab',
+      processing:        'Processing',
+      resulted:          'Resulted',
+      validated:         'Validated',
+      delivered:         'Delivered',
+      rejected:          'Rejected',
+      partially_rejected:'Partially Rejected',
+      cancelled:         'Cancelled',
+      in_progress:       'In Progress',
+      completed:         'Completed'
+    };
+    return map[status] ?? status;
+  }
+  /** All tubes drawn but none has left for the lab yet — read-only badge. */
+  isFullyCollected(o: Order): boolean {
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
+  }
+  /** Some tubes drawn, others still pending — partial-progress badge. */
+  isPartiallyCollected(o: Order): boolean {
+    const samples = o.samples ?? [];
+    if (samples.length === 0) return false;
+    const anyDrawn = samples.some(s => s.status && s.status !== 'pending');
+    const anyPending = samples.some(s => !s.status || s.status === 'pending');
+    return anyDrawn && anyPending;
+  }
+  /** Lab tech has marked at least one tube received — TAT clock has started. */
+  isAtLab(o: Order): boolean {
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.some(s =>
+      s.status === 'received' || s.status === 'processing');
   }
   collectSample(o: Order) {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
@@ -1686,9 +1847,21 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   orderTone(o: Order): ChipTone {
     switch (o.status) {
-      case 'completed': return 'emerald';
-      case 'cancelled': return 'rose';
-      case 'in_progress': return 'violet';
+      case 'completed':
+      case 'validated':
+      case 'delivered': return 'emerald';
+      case 'cancelled':
+      case 'rejected':  return 'rose';
+      case 'in_progress':
+      case 'received':
+      case 'processing':
+      case 'resulted':  return 'violet';
+      case 'collected':
+      case 'dispatched':
+      case 'in_transit': return 'teal';
+      case 'billed':    return 'emerald';
+      case 'created':
+      case 'draft':     return 'amber';
       default:          return 'amber';
     }
   }

@@ -281,6 +281,13 @@ const COUNTERS: CounterSpec[] = [
                               @default {
                                 @if (t.status === 'pending') {
                                   <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick · scan</pf-touch-btn>
+                                } @else if (t.status === 'validated') {
+                                  <span class="px-2 py-0.5 text-[11px] font-medium rounded"
+                                        style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ Validated</span>
+                                } @else if (t.status === 'entered') {
+                                  <span class="px-2 py-0.5 text-[11px] font-medium rounded"
+                                        style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳ Awaiting validation</span>
+                                  <pf-touch-btn variant="ghost" size="sm" (pressed)="startPick(t)">View</pf-touch-btn>
                                 } @else {
                                   <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
                                 }
