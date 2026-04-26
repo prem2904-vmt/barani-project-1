@@ -5,6 +5,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { Exception, Result } from '@zxing/library';
 import { NumPadComponent } from '../../primitives/num-pad.component';
 
 // Reusable barcode scanner modal. Two input channels:
@@ -366,7 +367,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       this.controls = await this.reader.decodeFromVideoDevice(
         undefined,
         this.videoEl.nativeElement,
-        (result, _err, controls) => {
+        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
           if (!result) return;
           this.cameraReady.set(true);
           const text = result.getText();
@@ -466,7 +467,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       this.controls = await this.reader.decodeFromVideoDevice(
         undefined,
         this.videoEl.nativeElement,
-        (result, _err, controls) => {
+        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
           if (!result) return;
           this.cameraReady.set(true);
           this.handleScan(result.getText(), controls);

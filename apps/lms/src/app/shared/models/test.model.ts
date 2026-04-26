@@ -4,6 +4,7 @@ export interface Test {
   branchId?: string;
   departmentId?: string;
   name: string;
+  code?: string;
   description?: string;
   type: 'individual' | 'package';
   flow: 'direct' | 'approval';

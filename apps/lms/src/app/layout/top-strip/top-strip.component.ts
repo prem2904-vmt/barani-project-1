@@ -13,7 +13,7 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
   imports: [RouterLink, RouterLinkActive, NotificationBellComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="sticky top-0 z-40 safe-area-top px-3 sm:px-4 pt-3 sm:pt-4">
+    <header class="sticky top-0 z-40 safe-area-top mt-2 px-3 sm:px-4 pt-3 sm:pt-4">
       <div class="pf-topstrip-bar relative flex items-center gap-2 rounded-full backdrop-blur-2xl border"
            style="background: var(--header-bg); border-color: var(--header-border);">
 
@@ -409,6 +409,7 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
      * there's room alongside the centered desktop nav (xl+). */
     @media (min-width: 768px) {
       .pf-brand-pulse { display: block; }
+      .pf-brand-text { display: flex; }
     }
     @media (min-width: 1280px) {
       .pf-brand-text { display: flex; }

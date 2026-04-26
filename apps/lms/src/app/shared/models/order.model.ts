@@ -15,6 +15,7 @@ export interface Order {
   customFields?: string;
   createdBy?: string;
   createdAt: string;
+  totalAmount?: number;
   patient?: Patient;
   samples: OrderSample[];
 }
