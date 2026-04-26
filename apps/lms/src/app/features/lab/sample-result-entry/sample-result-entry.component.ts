@@ -645,8 +645,17 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting()) return;
     this._submitting.set(true);
     const all = this._values();
+    // Skip tests that the backend will refuse:
+    //   - 'validated' is signed off (must be rejected before re-entry)
+    //   - 'entered' is awaiting validation (re-saving overwrites the
+    //     submitted value, which the backend blocks too)
+    // The form pre-fills values for these from currentResult so they
+    // can be SEEN, but submitting them would 409 the whole batch.
+    const writable = (s.tests ?? []).filter(t =>
+      t.status !== 'validated' && t.status !== 'entered'
+    );
     const payload = {
-      results: (s.tests ?? [])
+      results: writable
         .filter(t => all[t.id] && Object.keys(all[t.id]).length > 0)
         .map(t => ({
           orderTestId: t.id,
@@ -655,7 +664,10 @@ export class SampleResultEntryComponent {
         }))
     };
     if (payload.results.length === 0) {
-      this.toasts.warning('Enter at least one value before submitting');
+      const allDone = (s.tests ?? []).length > 0 && writable.length === 0;
+      this.toasts.warning(allDone
+        ? 'Every test on this tube is already submitted or validated.'
+        : 'Enter at least one value before submitting');
       this._submitting.set(false);
       return;
     }
