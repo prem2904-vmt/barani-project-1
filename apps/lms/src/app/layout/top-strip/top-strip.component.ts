@@ -105,8 +105,6 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 
         <!-- Right cluster -->
 
-        <pf-notification-bell></pf-notification-bell>
-
         <div class="w-px h-6 mx-1 hidden sm:block" style="background: var(--border-muted);"></div>
 
         <!-- Tenant brand pill doubles as branch switcher. Click the
@@ -162,6 +160,8 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
           }
         </div>
         }
+
+        <pf-notification-bell></pf-notification-bell>
 
         <!-- Profile avatar — click to open name / role / logout -->
         <div class="relative">
@@ -737,7 +737,7 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
       /* Sized to fit 10 characters of wide uppercase glyphs (e.g. "WWWWWWWWWW")
        * with the current font + letter-spacing. Anything shorter fits with
        * room to spare; anything longer still ellipses. */
-      max-width: 140px;
+      max-width: 300px;
     }
     .pf-vendor-logo-empty .pf-vendor-logo-text {
       color: #ec4899;

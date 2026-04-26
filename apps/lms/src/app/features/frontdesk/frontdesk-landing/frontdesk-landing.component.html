@@ -218,7 +218,7 @@
         <li class="pf-stat-chip press" (click)="openOrder(item)">
           <pf-avatar [name]="item.patient?.displayName ?? 'Patient'" [size]="24"></pf-avatar>
           <span class="pf-stat-chip__name">{{ item.patient?.displayName ?? 'Patient' }}</span>
-          <span class="pf-stat-chip__sub">· {{ item.samples?.length ?? 0 }} samples</span>
+          <span class="pf-stat-chip__sub">· {{ item.samples.length }} samples</span>
         </li>
         }
       </ul>
