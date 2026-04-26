@@ -209,6 +209,14 @@ export const appRoutes: Route[] = [
         canActivate: [permissionGuard(['enter_result', 'edit_result'])],
         loadComponent: () => import('./features/lab/result-entry/result-entry.component').then(m => m.ResultEntryComponent)
       },
+      {
+        // Sample-level result entry: ONE barcode scan loads ALL tests in
+        // the tube. Replaces the old per-test scan-then-enter-then-scan
+        // flow for labs that prefer the tube as the unit of work.
+        path: 'lab/sample/:sampleId',
+        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
+        loadComponent: () => import('./features/lab/sample-result-entry/sample-result-entry.component').then(m => m.SampleResultEntryComponent)
+      },
 
       // Pathologist — only doctors with validate_result.
       {

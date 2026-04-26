@@ -17,7 +17,6 @@ import { Order } from '../../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
-type Tab = 'appointments' | 'orders' | 'ready' | 'walkins' | 'payments';
 type DateRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 
 interface StragglerItem {
@@ -54,20 +53,110 @@ interface StaffMember {
           <p class="pf-head__sub">{{ statusHint() }}</p>
 
           <div class="pf-head__actions">
-            <span class="pf-collection" [class.pf-collection--idle]="collectedToday() === 0"
-                  [title]="'Collected today'">
-              <span class="pf-collection__dot"></span>
-              {{ collectedToday() | inr }} <span class="pf-collection__sep">·</span>
-              <span class="pf-collection__due">{{ dueToday() | inr }} due</span>
-            </span>
-            <span class="pf-toptest-pill" [class.pf-toptest-pill--idle]="!topTest()"
-                  [title]="'Most ordered test today'">
-              <span class="pf-toptest-pill__label">Top</span>
-              <span class="pf-toptest-pill__name">{{ topTest()?.name ?? '—' }}</span>
-              @if (topTest()) {
-                <span class="pf-toptest-pill__count">×{{ topTest()!.count }}</span>
+            <!-- Today's cash flow: pill button → popover with mode breakdown
+                 + recent collections. Mirrors the staff dropdown pattern. -->
+            <div class="pf-pop-anchor">
+              <button type="button"
+                      class="pf-collection"
+                      [class.pf-collection--idle]="collectedToday() === 0"
+                      [class.pf-collection--on]="collectionPopoverOpen()"
+                      (click)="toggleCollectionPopover($event)"
+                      aria-haspopup="dialog"
+                      [attr.aria-expanded]="collectionPopoverOpen()"
+                      [title]="'Today\\'s cash flow'">
+                <span class="pf-collection__dot"></span>
+                Cash flow
+              </button>
+              @if (collectionPopoverOpen()) {
+                <div class="pf-pop-bd" (click)="closeCollectionPopover()"></div>
+                <div class="pf-pop pf-pop--collection" role="dialog" aria-label="Today's cash flow"
+                     (click)="$event.stopPropagation()">
+                  <header class="pf-pop__hdr">
+                    <span class="pf-pop__dot pf-pop__dot--cash" aria-hidden="true"></span>
+                    <h2 class="pf-pop__title">Cash flow · today</h2>
+                    <span class="pf-pop__count">{{ billsToday().length }} bill{{ billsToday().length === 1 ? '' : 's' }}</span>
+                  </header>
+                  <div class="pf-cash-summary">
+                    <div class="pf-cash-summary__row">
+                      <span class="pf-cash-summary__label">Collected</span>
+                      <span class="pf-cash-summary__amt pf-cash-summary__amt--in">{{ collectedToday() | inr }}</span>
+                    </div>
+                    <div class="pf-cash-summary__row">
+                      <span class="pf-cash-summary__label">Outstanding</span>
+                      <span class="pf-cash-summary__amt pf-cash-summary__amt--out">{{ dueToday() | inr }}</span>
+                    </div>
+                  </div>
+                  @if (paymentsByMode().length > 0) {
+                    <h3 class="pf-pop__sub">By mode</h3>
+                    <ul class="pf-cash-modes">
+                      @for (m of paymentsByMode(); track m.mode) {
+                        <li class="pf-cash-modes__row">
+                          <span class="pf-cash-modes__chip" [attr.data-mode]="m.mode">{{ m.mode }}</span>
+                          <span class="pf-cash-modes__amt">{{ m.amount | inr }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (recentCollections().length > 0) {
+                    <h3 class="pf-pop__sub">Recent collections</h3>
+                    <ul class="pf-cash-recent">
+                      @for (r of recentCollections(); track r.id) {
+                        <li class="pf-cash-recent__row">
+                          <span class="pf-cash-recent__time">{{ r.paidAt | date:'shortTime' }}</span>
+                          <span class="pf-cash-recent__name">{{ r.patient }}</span>
+                          <span class="pf-cash-recent__mode">{{ r.mode }}</span>
+                          <span class="pf-cash-recent__amt">{{ r.amount | inr }}</span>
+                        </li>
+                      }
+                    </ul>
+                  } @else if (collectedToday() === 0) {
+                    <p class="pf-pop__empty">No collections yet today.</p>
+                  }
+                </div>
               }
-            </span>
+            </div>
+
+            <!-- Top tests today: pill button → popover with full top-5 list. -->
+            <div class="pf-pop-anchor">
+              <button type="button"
+                      class="pf-toptest-pill"
+                      [class.pf-toptest-pill--idle]="!topTest()"
+                      [class.pf-toptest-pill--on]="topTestPopoverOpen()"
+                      (click)="toggleTopTestPopover($event)"
+                      aria-haspopup="dialog"
+                      [attr.aria-expanded]="topTestPopoverOpen()"
+                      [title]="'Top tests today'">
+                <span class="pf-toptest-pill__label">Top</span>
+                <span class="pf-toptest-pill__name">{{ topTest()?.name ?? '—' }}</span>
+                @if (topTest()) {
+                  <span class="pf-toptest-pill__count">×{{ topTest()!.count }}</span>
+                }
+              </button>
+              @if (topTestPopoverOpen()) {
+                <div class="pf-pop-bd" (click)="closeTopTestPopover()"></div>
+                <div class="pf-pop pf-pop--toptest" role="dialog" aria-label="Top tests today"
+                     (click)="$event.stopPropagation()">
+                  <header class="pf-pop__hdr">
+                    <span class="pf-pop__dot pf-pop__dot--toptest" aria-hidden="true"></span>
+                    <h2 class="pf-pop__title">Top tests · today</h2>
+                    <span class="pf-pop__count">{{ topTests().length }}</span>
+                  </header>
+                  @if (topTests().length === 0) {
+                    <p class="pf-pop__empty">No tests ordered yet today.</p>
+                  } @else {
+                    <ol class="pf-toptest-list">
+                      @for (t of topTests(); track t.name; let i = $index) {
+                        <li class="pf-toptest-list__row">
+                          <span class="pf-toptest-list__rank">{{ i + 1 }}</span>
+                          <span class="pf-toptest-list__name">{{ t.name }}</span>
+                          <span class="pf-toptest-list__count">×{{ t.count }}</span>
+                        </li>
+                      }
+                    </ol>
+                  }
+                </div>
+              }
+            </div>
             <button type="button" class="pf-head__btn pf-head__btn--secondary press"
                     (click)="searchFocus()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -81,7 +170,7 @@ interface StaffMember {
                  a glance-able status indicator without taking up its own
                  row of screen real estate. Tap → popover anchored under
                  the button (desktop/tablet) or full-width sheet (mobile). -->
-            <div class="pf-staff-anchor">
+            <div class="pf-pop-anchor">
               <button type="button"
                       class="pf-head__btn pf-head__btn--secondary press"
                       [class.pf-head__btn--on]="staffPopoverOpen()"
@@ -100,13 +189,13 @@ interface StaffMember {
               </button>
 
               @if (staffPopoverOpen()) {
-                <div class="pf-staff-pop-bd" (click)="closeStaffPopover()"></div>
-                <div class="pf-staff-pop" role="dialog" aria-label="Staff on duty"
+                <div class="pf-pop-bd" (click)="closeStaffPopover()"></div>
+                <div class="pf-pop pf-pop--staff" role="dialog" aria-label="Staff on duty"
                      (click)="$event.stopPropagation()">
-                  <header class="pf-staff-pop__hdr">
-                    <span class="pf-staff-pop__dot" aria-hidden="true"></span>
-                    <h2 class="pf-staff-pop__title">Staff on duty</h2>
-                    <span class="pf-staff-pop__count">{{ onDutyCount() }}/{{ staff.length }}</span>
+                  <header class="pf-pop__hdr">
+                    <span class="pf-pop__dot pf-pop__dot--staff" aria-hidden="true"></span>
+                    <h2 class="pf-pop__title">Staff on duty</h2>
+                    <span class="pf-pop__count">{{ onDutyCount() }}/{{ staff.length }}</span>
                   </header>
                   <ul class="pf-staff">
                     @for (s of staff; track s.id) {
@@ -285,262 +374,179 @@ interface StaffMember {
               </div>
             </div>
 
-            <!-- Two-panel layout: left menu (tablet+) / horizontal strip
-                 (mobile) on the left, list on the right. The menu and list
-                 are siblings inside .pf-twopanel; the same .pf-tp-item
-                 buttons reflow between layouts via media queries. -->
-            <div class="pf-twopanel">
-              <nav class="pf-twopanel__menu" role="tablist" aria-label="Frontdesk queue">
-                @for (t of tabOptions; track t.id) {
+            <!-- Exception-queue chips: only render when there's work to do.
+                 Tap → slides in a right-side drawer (or bottom sheet on
+                 mobile) with the queue's items + actions. Keeps the page
+                 calm by default and grabs attention when something needs
+                 the frontdesk's eyes. -->
+            @if (counts().ready + counts().payments > 0) {
+              <div class="pf-alerts" aria-label="Exception queues">
+                @if (counts().ready > 0) {
                   <button type="button"
-                          class="pf-tp-item press"
-                          [class.pf-tp-item--on]="tab() === t.id"
-                          (click)="setTab(t.id)"
-                          role="tab"
-                          [attr.aria-selected]="tab() === t.id">
-                    <span class="pf-tp-item__label">{{ t.label }}</span>
-                    <span class="pf-tp-item__count" [attr.data-tone]="t.tone">
-                      {{ counts()[t.id] }}
-                    </span>
+                          class="pf-alert pf-alert--ready press"
+                          (click)="openQueueDrawer('ready')"
+                          aria-haspopup="dialog">
+                    <span class="pf-alert__dot"></span>
+                    <span class="pf-alert__count">{{ counts().ready }}</span>
+                    <span class="pf-alert__label">ready for pickup</span>
                   </button>
                 }
-              </nav>
+                @if (counts().payments > 0) {
+                  <button type="button"
+                          class="pf-alert pf-alert--payments press"
+                          (click)="openQueueDrawer('payments')"
+                          aria-haspopup="dialog">
+                    <span class="pf-alert__dot"></span>
+                    <span class="pf-alert__count">{{ counts().payments }}</span>
+                    <span class="pf-alert__label">payment{{ counts().payments === 1 ? '' : 's' }} due</span>
+                  </button>
+                }
+              </div>
+            }
 
-            <!-- List container -->
+            <!-- Default content: always-visible Appointments | In progress
+                 two-panel. The other queues live in the chip drawer above. -->
             <div class="pf-list-wrap">
-              @switch (tab()) {
-                @case ('appointments') {
-                  @if (visibleAppointments().length === 0) {
-                    <p class="pf-empty">No appointments for this date range.</p>
-                  }
-                  <ul class="pf-cards">
-                    @for (a of visibleAppointments(); track a.id) {
-                      <li>
-                        <div class="pf-card"
-                             [attr.data-priority]="apptPriority(a)"
-                             [class.pf-card--selected]="selectedIds().has(a.id)"
-                             (click)="openAppointment(a)">
-                          <button type="button" class="pf-card__sel"
-                                  (click)="$event.stopPropagation(); toggleSelect(a.id)"
-                                  [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
-                            @if (selectedIds().has(a.id)) {
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m5 12 4 4L19 6"/>
-                              </svg>
-                            }
-                          </button>
-                          <div class="pf-card__slot">
-                            <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
-                            <p class="pf-card__date">{{ a.appointmentDate | date:'MMM d' }}</p>
-                          </div>
-                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
-                          <div class="pf-card__body">
-                            <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
-                            <p class="pf-card__meta">
-                              {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y
-                              @if (a.patient?.phone) { · {{ a.patient?.phone }} }
-                              @if (hasOutstanding(a.patient?.id)) {
-                                <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
-                                  ● ₹ owed
-                                </span>
-                              }
-                            </p>
-                          </div>
-                          <pf-chip [tone]="apptTone(a)" size="sm">{{ a.status }}</pf-chip>
-                          <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                            @if (a.patient?.phone) {
-                              <a [href]="'tel:' + a.patient!.phone" class="pf-iconbtn press" title="Call">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2A20 20 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.5 2.5a2 2 0 0 1-.5 2.1L7.9 9.5a16 16 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.2 1.6.4 2.5.5A2 2 0 0 1 22 16.9z"/>
-                                </svg>
-                              </a>
-                              <a [href]="'https://wa.me/' + cleanPhone(a.patient!.phone!)" target="_blank" class="pf-iconbtn press" title="WhatsApp">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z"/>
-                                </svg>
-                              </a>
-                            }
-                            @if (a.status === 'booked') {
-                              <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Check-in</button>
-                            }
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
+                  <!-- Two-panel split: appointments on the left, in-progress
+                       orders on the right. On narrow screens the panels stack
+                       vertically (see .pf-appt-split media queries). -->
+                  <div class="pf-appt-split">
+                    <section class="pf-appt-split__pane">
+                      <header class="pf-appt-split__hdr">
+                        <span class="pf-appt-split__title">Appointments</span>
+                        <span class="pf-appt-split__count">{{ visibleAppointments().length }}</span>
+                      </header>
+                      @if (visibleAppointments().length === 0) {
+                        <p class="pf-empty">No appointments for this date range.</p>
+                      }
+                      <ul class="pf-cards">
+                        @for (a of visibleAppointments(); track a.id) {
+                          <li>
+                            <div class="pf-card"
+                                 [attr.data-priority]="apptPriority(a)"
+                                 [class.pf-card--selected]="selectedIds().has(a.id)"
+                                 (click)="openAppointment(a)">
+                              <button type="button" class="pf-card__sel"
+                                      (click)="$event.stopPropagation(); toggleSelect(a.id)"
+                                      [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
+                                @if (selectedIds().has(a.id)) {
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m5 12 4 4L19 6"/>
+                                  </svg>
+                                }
+                              </button>
+                              <div class="pf-card__slot">
+                                <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
+                                <p class="pf-card__date">{{ a.appointmentDate | date:'MMM d' }}</p>
+                              </div>
+                              <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                              <div class="pf-card__body">
+                                <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
+                                <p class="pf-card__meta">
+                                  {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y
+                                  @if (a.patient?.phone) { · {{ a.patient?.phone }} }
+                                  @if (hasOutstanding(a.patient?.id)) {
+                                    <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
+                                      ● ₹ owed
+                                    </span>
+                                  }
+                                </p>
+                              </div>
+                              <pf-chip [tone]="apptTone(a)" size="sm">{{ a.status }}</pf-chip>
+                              <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                                @if (a.patient?.phone) {
+                                  <a [href]="'tel:' + a.patient!.phone" class="pf-iconbtn press" title="Call">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2A20 20 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.5 2.5a2 2 0 0 1-.5 2.1L7.9 9.5a16 16 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.2 1.6.4 2.5.5A2 2 0 0 1 22 16.9z"/>
+                                    </svg>
+                                  </a>
+                                  <a [href]="'https://wa.me/' + cleanPhone(a.patient!.phone!)" target="_blank" class="pf-iconbtn press" title="WhatsApp">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                      <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z"/>
+                                    </svg>
+                                  </a>
+                                }
+                                @if (a.status === 'booked') {
+                                  <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Check-in</button>
+                                }
+                              </div>
+                            </div>
+                          </li>
+                        }
+                      </ul>
+                    </section>
 
-                @case ('orders') {
-                  @if (visibleOrders().length === 0) {
-                    <p class="pf-empty">No orders for this date range.</p>
-                  }
-                  <ul class="pf-cards">
-                    @for (o of visibleOrders(); track o.id) {
-                      <li>
-                        <div class="pf-card pf-card--order"
-                             [attr.data-priority]="o.priority"
-                             [class.pf-card--selected]="selectedIds().has(o.id)"
-                             (click)="openOrder(o)">
-                          <button type="button" class="pf-card__sel"
-                                  (click)="$event.stopPropagation(); toggleSelect(o.id)">
-                            @if (selectedIds().has(o.id)) {
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m5 12 4 4L19 6"/>
-                              </svg>
-                            }
-                          </button>
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
-                          <div class="pf-card__body">
-                            <p class="pf-card__name">
-                              {{ o.patient?.displayName ?? 'Patient' }}
-                              @if (o.priority !== 'Normal') {
-                                <span class="pf-card__prio" [attr.data-prio]="o.priority">{{ o.priority }}</span>
-                              }
-                            </p>
-                            <p class="pf-card__meta">
-                              #{{ o.id.slice(0, 8) }} · {{ o.samples.length }} samples · {{ o.createdAt | date:'shortTime' }}
-                            </p>
-                          </div>
-                          <div class="pf-pipeline">
-                            @for (step of pipeline(o); track step.label) {
-                              <span class="pf-pipeline__node" [attr.data-state]="step.state"
-                                    [title]="step.label + ' — ' + step.state"></span>
-                            }
-                          </div>
-                          <pf-chip [tone]="orderTone(o)" size="sm">{{ statusLabel(o.status) }}</pf-chip>
-                          <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                            <!-- created: bill-side action depends on billing_mode -->
-                            @if (o.status === 'created') {
-                              @if (showCreateBillOn(o)) {
-                                <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="goToBilling(o)">Create Bill</button>
-                              } @else {
-                                <span class="pf-tag pf-tag--warn">⏳ Awaiting Billing</span>
-                              }
-                            }
-                            <!-- billed: collection-side action depends on collection_mode -->
-                            @else if (o.status === 'billed') {
-                              @if (showCollectOn(o)) {
-                                <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect Sample</button>
-                              } @else if (isPartiallyCollected(o)) {
-                                <span class="pf-tag pf-tag--ok">◐ Collecting</span>
-                              } @else {
-                                <span class="pf-tag pf-tag--warn">⏳ Awaiting Collection</span>
-                              }
-                            }
-                            <!-- sample_collected: FD ships it to the lab -->
-                            @else if (o.status === 'sample_collected') {
-                              @if (showDispatchOn(o)) {
-                                <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Mark Dispatched</button>
-                              } @else {
-                                <span class="pf-tag pf-tag--ok">✓ Collected</span>
-                              }
-                            }
-                            <!-- post-dispatch lifecycle: read-only badges -->
-                            @else if (o.status === 'dispatched') {
-                              <span class="pf-tag pf-tag--ok">🚗 Dispatched</span>
-                            } @else if (o.status === 'in_transit') {
-                              <span class="pf-tag pf-tag--ok">📦 Arrived at lab</span>
-                            } @else if (o.status === 'received_in_lab' || o.status === 'received' || o.status === 'processing') {
-                              <span class="pf-tag pf-tag--ok">🔬 In Lab · TAT running</span>
-                            } @else if (o.status === 'resulted') {
-                              <span class="pf-tag pf-tag--ok">⏳ Awaiting Validation</span>
-                            } @else if (o.status === 'validated') {
-                              <span class="pf-tag pf-tag--ok">📄 Report Ready</span>
-                            } @else if (o.status === 'delivered') {
-                              <span class="pf-tag pf-tag--ok">✅ Delivered</span>
-                            } @else if (o.status === 'rejected' || o.status === 'partially_rejected') {
-                              <span class="pf-tag pf-tag--warn">❌ Rejected</span>
-                            }
-                            <button type="button" class="pf-ghostbtn press" (click)="quickBook(o)">Repeat</button>
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-
-                @case ('ready') {
-                  @if (readyForPickup().length === 0) {
-                    <p class="pf-empty">No reports waiting for pickup.</p>
-                  }
-                  <ul class="pf-cards">
-                    @for (o of readyForPickup(); track o.id) {
-                      <li>
-                        <div class="pf-card pf-card--ready" (click)="openOrder(o)">
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
-                          <div class="pf-card__body">
-                            <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
-                            <p class="pf-card__meta">Report ready · waiting {{ reportAge(o) }}</p>
-                          </div>
-                          <pf-chip tone="emerald" size="sm">ready</pf-chip>
-                          <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                            @if (o.patient?.phone) {
-                              <a [href]="'https://wa.me/' + cleanPhone(o.patient!.phone!)" target="_blank" class="pf-ghostbtn press">Nudge</a>
-                            }
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-
-                @case ('walkins') {
-                  @if (walkins().length === 0) {
-                    <p class="pf-empty">No walk-ins waiting.</p>
-                  }
-                  <ul class="pf-cards">
-                    @for (a of walkins(); track a.id) {
-                      <li>
-                        <div class="pf-card pf-card--walkin" (click)="openAppointment(a)">
-                          <div class="pf-card__slot">
-                            <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
-                            <p class="pf-card__date pf-card__date--walkin">walk-in</p>
-                          </div>
-                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
-                          <div class="pf-card__body">
-                            <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
-                            <p class="pf-card__meta">
-                              {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y · waiting
-                            </p>
-                          </div>
-                          <pf-chip tone="amber" size="sm">waiting</pf-chip>
-                          <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                            <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Register</button>
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-
-                @case ('payments') {
-                  @if (paymentsDue().length === 0) {
-                    <p class="pf-empty">No unpaid bills.</p>
-                  }
-                  <ul class="pf-cards">
-                    @for (b of paymentsDue(); track b.id) {
-                      <li>
-                        <div class="pf-card pf-card--unpaid">
-                          <div class="pf-card__slot">
-                            <p class="pf-card__time pf-card__time--bill">{{ b.balance | inr }}</p>
-                            <p class="pf-card__date">due</p>
-                          </div>
-                          <pf-avatar [name]="patientName(b.patientId)" [size]="40"></pf-avatar>
-                          <div class="pf-card__body">
-                            <p class="pf-card__name">{{ patientName(b.patientId) }}</p>
-                            <p class="pf-card__meta">Bill #{{ b.id.slice(0, 8) }} · {{ b.createdAt | date:'MMM d' }}</p>
-                          </div>
-                          <pf-chip tone="rose" size="sm">unpaid</pf-chip>
-                          <div class="pf-card__actions">
-                            <button type="button" class="pf-ghostbtn press" (click)="collectPayment(b)">Collect</button>
-                          </div>
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-              }
-            </div>
+                    <section class="pf-appt-split__pane pf-appt-split__pane--ip">
+                      <header class="pf-appt-split__hdr">
+                        <span class="pf-appt-split__title">In progress</span>
+                        <span class="pf-appt-split__count" data-tone="active">{{ visibleOrders().length }}</span>
+                      </header>
+                      @if (visibleOrders().length === 0) {
+                        <p class="pf-empty">No orders in progress.</p>
+                      }
+                      <ul class="pf-cards">
+                        @for (o of visibleOrders(); track o.id) {
+                          <li>
+                            <div class="pf-card pf-card--ip"
+                                 [attr.data-priority]="o.priority"
+                                 (click)="openOrder(o)">
+                              <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                              <div class="pf-card__body">
+                                <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+                                <p class="pf-card__meta">
+                                  #{{ o.id.slice(0, 8) }} · {{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }} · {{ o.createdAt | date:'shortTime' }}
+                                </p>
+                                <!-- Per-tube status pills — always show real
+                                     sample state independent of order.status
+                                     so a partially-collected order doesn't
+                                     look idle while waiting on the next tube. -->
+                                @if (o.samples.length > 0) {
+                                  <div class="pf-card__depts">
+                                    @for (s of o.samples; track s.id) {
+                                      <span class="pf-card__dept"
+                                            [class.pf-card__dept--done]="s.status !== 'pending' && s.status !== 'rejected'"
+                                            [class.pf-card__dept--validated]="isSampleValidated(s)"
+                                            [title]="(s.department?.name ?? '') + ' — ' + (isSampleValidated(s) ? 'validated' : s.status)">
+                                        {{ s.department?.code ?? '?' }} {{ tubeGlyph(s) }}
+                                      </span>
+                                    }
+                                    @if (hasPartialReady(o)) {
+                                      <span class="pf-card__partial" title="One or more departments fully validated; others still pending">
+                                        ✓ Partial ready · {{ partialReadyLabel(o) }}
+                                      </span>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                              <div class="pf-pipeline">
+                                @for (step of pipeline(o); track step.label) {
+                                  <span class="pf-pipeline__node" [attr.data-state]="step.state"
+                                        [title]="step.label + ' — ' + step.state"></span>
+                                }
+                              </div>
+                              <pf-chip [tone]="orderTone(o)" size="sm">{{ statusLabel(o.status) }}</pf-chip>
+                              <!-- Single context-aware action — if there's
+                                   nothing the FD can do right now, leave it
+                                   blank rather than show a stale button.
+                                   Gated on the finer-grained sampleStatus()
+                                   so the dispatch button appears the moment
+                                   the last tube is collected (no waiting on
+                                   the order.status recompute polling). -->
+                              <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                                @if (o.status === 'created' && showCreateBillOn(o)) {
+                                  <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="goToBilling(o)">Bill</button>
+                                } @else if (sampleStatus(o) === 'partially_collected' || (o.status === 'billed' && showCollectOn(o))) {
+                                  <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
+                                } @else if (showDispatchOn(o)) {
+                                  <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Dispatch</button>
+                                }
+                              </div>
+                            </div>
+                          </li>
+                        }
+                      </ul>
+                    </section>
+                  </div>
             </div>
           </div>
 
@@ -598,6 +604,58 @@ interface StaffMember {
               <div><dt>Doctor</dt><dd>{{ so.refDoctorName || '—' }}</dd></div>
             </dl>
 
+            <!-- Preliminary report — only when at least one whole
+                 sample (department) is signed off. Reads each
+                 validated tube's tests + parameter values directly
+                 from currentResult JSON; no PDF yet (per-dept PDFs
+                 deferred to v2 per the design call). Reference
+                 ranges + flag pills give the doctor everything they
+                 need to release the partial result on screen. -->
+            @if (validatedSamples(so).length > 0) {
+              <section class="pf-prelim">
+                <header class="pf-prelim__hdr">
+                  <span class="pf-prelim__icon" aria-hidden="true">✓</span>
+                  <p class="pf-drawer__eyebrow pf-prelim__eyebrow">Preliminary report</p>
+                  <span class="pf-prelim__count">{{ validatedSamples(so).length }} dept{{ validatedSamples(so).length === 1 ? '' : 's' }} ready</span>
+                </header>
+                @for (vs of validatedSamples(so); track vs.id) {
+                  <div class="pf-prelim__sample">
+                    <header class="pf-prelim__sample-hdr">
+                      <span class="pf-prelim__sample-dept">{{ vs.deptCode || vs.deptName }}</span>
+                      <span class="pf-prelim__sample-name">{{ vs.deptName }}</span>
+                    </header>
+                    @for (t of vs.tests; track t.id) {
+                      <div class="pf-prelim__test">
+                        <p class="pf-prelim__test-name">{{ t.name }}</p>
+                        @if (t.values.length === 0) {
+                          <p class="pf-prelim__no-values">No parameter values recorded.</p>
+                        } @else {
+                          <ul class="pf-prelim__values">
+                            @for (v of t.values; track v.name) {
+                              <li class="pf-prelim__row" [attr.data-flag]="v.flag">
+                                <span class="pf-prelim__row-name">{{ v.title }}</span>
+                                <span class="pf-prelim__row-value">
+                                  {{ v.value }}@if (v.unit) {<span class="pf-prelim__row-unit"> {{ v.unit }}</span>}
+                                </span>
+                                <span class="pf-prelim__row-range">{{ v.range || '—' }}</span>
+                                <span class="pf-prelim__row-flag" [attr.data-flag]="v.flag">
+                                  @switch (v.flag) {
+                                    @case ('critical') { ⚠ Critical }
+                                    @case ('abnormal') { ⚑ Abnormal }
+                                    @default { ✓ Normal }
+                                  }
+                                </span>
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </section>
+            }
+
             <section>
               <p class="pf-drawer__eyebrow">Timeline</p>
               <ol class="pf-vtl">
@@ -618,6 +676,86 @@ interface StaffMember {
                 }
               </ol>
             </section>
+          </div>
+        </aside>
+      }
+
+      <!-- Exception-queue drawer: opens when an alert chip is tapped.
+           Right-side slide-in on tablet+, bottom sheet on mobile (CSS).
+           Renders Ready / Payments lists with their actions. -->
+      @if (openQueue(); as q) {
+        <div class="pf-q-bd" (click)="closeQueueDrawer()"></div>
+        <aside class="pf-q-drawer" role="dialog" aria-modal="true"
+               [attr.aria-label]="queueTitle(q)">
+          <header class="pf-q-drawer__hdr">
+            <h2 class="pf-q-drawer__title">{{ queueTitle(q) }}</h2>
+            <span class="pf-q-drawer__count">
+              @switch (q) {
+                @case ('ready')    { {{ readyForPickup().length }} }
+                @case ('payments') { {{ paymentsDue().length }} }
+              }
+            </span>
+            <button type="button" class="pf-q-drawer__x press" (click)="closeQueueDrawer()" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 6l12 12M18 6 6 18"/>
+              </svg>
+            </button>
+          </header>
+
+          <div class="pf-q-drawer__body">
+            @switch (q) {
+              @case ('ready') {
+                @if (readyForPickup().length === 0) {
+                  <p class="pf-empty">No reports waiting for pickup.</p>
+                }
+                <ul class="pf-cards">
+                  @for (o of readyForPickup(); track o.id) {
+                    <li>
+                      <div class="pf-card pf-card--ready" (click)="openOrder(o)">
+                        <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                        <div class="pf-card__body">
+                          <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+                          <p class="pf-card__meta">Report ready · waiting {{ reportAge(o) }}</p>
+                        </div>
+                        <pf-chip tone="emerald" size="sm">ready</pf-chip>
+                        <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                          @if (o.patient?.phone) {
+                            <a [href]="'https://wa.me/' + cleanPhone(o.patient!.phone!)" target="_blank" class="pf-ghostbtn press">Nudge</a>
+                          }
+                        </div>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+              @case ('payments') {
+                @if (paymentsDue().length === 0) {
+                  <p class="pf-empty">No unpaid bills.</p>
+                }
+                <ul class="pf-cards">
+                  @for (b of paymentsDue(); track b.id) {
+                    <li>
+                      <div class="pf-card pf-card--unpaid">
+                        <div class="pf-card__slot">
+                          <p class="pf-card__time pf-card__time--bill">{{ b.balance | inr }}</p>
+                          <p class="pf-card__date">due</p>
+                        </div>
+                        <pf-avatar [name]="patientName(b.patientId)" [size]="40"></pf-avatar>
+                        <div class="pf-card__body">
+                          <p class="pf-card__name">{{ patientName(b.patientId) }}</p>
+                          <p class="pf-card__meta">Bill #{{ b.id.slice(0, 8) }} · {{ b.createdAt | date:'MMM d' }}</p>
+                        </div>
+                        <pf-chip tone="rose" size="sm">unpaid</pf-chip>
+                        <div class="pf-card__actions">
+                          <button type="button" class="pf-ghostbtn press" (click)="collectPayment(b)">Collect</button>
+                        </div>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+            }
           </div>
         </aside>
       }
@@ -1245,7 +1383,6 @@ interface StaffMember {
       text-transform: uppercase;
       color: var(--text-muted);
     }
-    .pf-card__date--walkin { color: #fbbf24; }
 
     .pf-card__body { min-width: 0; }
     .pf-card__name {
@@ -1596,7 +1733,9 @@ interface StaffMember {
     }
     .pf-drawer {
       position: fixed;
-      right: 0; top: 0; bottom: 0;
+      right: 0;
+      top: var(--navbar-height, 4rem);
+      bottom: 0;
       width: min(100%, 480px);
       background: var(--bg-card-solid);
       border-left: 1px solid var(--glass-border);
@@ -1653,6 +1792,119 @@ interface StaffMember {
       margin: 0 0 10px;
     }
 
+    /* ── Preliminary report (partially_validated orders) ─────────── */
+    .pf-prelim {
+      margin: 14px 0 18px;
+      padding: 14px 16px 4px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.06), rgba(16, 185, 129, 0.04));
+      border: 1px solid rgba(34, 211, 238, 0.34);
+    }
+    .pf-prelim__hdr {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .pf-prelim__icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 9999px;
+      background: rgba(34, 211, 238, 0.22);
+      color: #67e8f9;
+      font-size: 12px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pf-prelim__eyebrow {
+      flex: 1; min-width: 0; margin: 0;
+      color: #67e8f9;
+    }
+    .pf-prelim__count {
+      font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-tertiary);
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+    }
+
+    .pf-prelim__sample {
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-prelim__sample-hdr {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .pf-prelim__sample-dept {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 2px 6px; border-radius: 4px;
+      background: rgba(34, 211, 238, 0.16);
+      color: #67e8f9;
+    }
+    .pf-prelim__sample-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+    .pf-prelim__test { margin-bottom: 8px; }
+    .pf-prelim__test:last-child { margin-bottom: 0; }
+    .pf-prelim__test-name {
+      margin: 0 0 4px;
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .pf-prelim__no-values {
+      margin: 0; padding: 6px 0;
+      font-size: 11.5px; color: var(--text-tertiary); font-style: italic;
+    }
+    .pf-prelim__values { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-prelim__row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .pf-prelim__row[data-flag='abnormal'] { background: rgba(245, 158, 11, 0.08); }
+    .pf-prelim__row[data-flag='critical'] { background: rgba(239, 68, 68, 0.10); }
+    .pf-prelim__row-name { color: var(--text-primary); font-weight: 500; }
+    .pf-prelim__row-value {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-prelim__row-unit { font-weight: 400; color: var(--text-tertiary); font-size: 11px; }
+    .pf-prelim__row-range {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; color: var(--text-tertiary);
+    }
+    .pf-prelim__row-flag {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 2px 6px; border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.16); color: #6ee7b7;
+    }
+    .pf-prelim__row-flag[data-flag='abnormal'] { background: rgba(245, 158, 11, 0.20); color: #fbbf24; }
+    .pf-prelim__row-flag[data-flag='critical'] { background: rgba(239, 68, 68, 0.20); color: #fca5a5; }
+    @media (max-width: 639px) {
+      .pf-prelim__row {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: 'name flag' 'value flag' 'range flag';
+        gap: 2px 12px;
+      }
+      .pf-prelim__row-name  { grid-area: name; }
+      .pf-prelim__row-value { grid-area: value; }
+      .pf-prelim__row-range { grid-area: range; }
+      .pf-prelim__row-flag  { grid-area: flag; align-self: center; }
+    }
+
     .pf-vtl {
       list-style: none; padding: 0; margin: 0;
       position: relative;
@@ -1695,6 +1947,436 @@ interface StaffMember {
     }
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── Header dropdown popovers (cash flow, top tests, staff) ─────────
+       Shared base + per-variant accents. Anchored under the trigger
+       button via .pf-pop-anchor (relative parent), with a full-screen
+       backdrop and click-outside dismissal handled by the bd element. */
+    .pf-pop-anchor { position: relative; display: inline-flex; }
+    .pf-pop-bd {
+      position: fixed; inset: 0; z-index: 70;
+      background: transparent;
+    }
+    .pf-pop {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      z-index: 80;
+      width: 320px;
+      max-width: calc(100vw - 32px);
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--bg-card-solid, rgba(20, 22, 30, 0.96));
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      animation: pf-pop-in 0.16s ease-out;
+    }
+    @keyframes pf-pop-in {
+      from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .pf-pop__hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .pf-pop__dot {
+      width: 8px; height: 8px; border-radius: 9999px;
+      flex-shrink: 0;
+    }
+    .pf-pop__dot--cash    { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.7); }
+    .pf-pop__dot--toptest { background: #c4b5fd; box-shadow: 0 0 8px rgba(196, 181, 253, 0.7); }
+    .pf-pop__dot--staff   { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.7); }
+    .pf-pop__title {
+      flex: 1; min-width: 0;
+      margin: 0;
+      font-size: 13px; font-weight: 600; color: var(--text-primary);
+    }
+    .pf-pop__count {
+      font-size: 11px; font-weight: 600;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-tertiary);
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-pop__sub {
+      margin: 12px 0 6px;
+      font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-tertiary);
+    }
+    .pf-pop__empty {
+      margin: 8px 0 0; padding: 10px 0;
+      text-align: center;
+      color: var(--text-tertiary); font-size: 12.5px;
+    }
+
+    /* Cash-flow popover */
+    .pf-collection { cursor: pointer; border: 1px solid rgba(16, 185, 129, 0.28); }
+    .pf-collection:hover { background: rgba(16, 185, 129, 0.18); }
+    .pf-collection--on { background: rgba(16, 185, 129, 0.22); border-color: rgba(16, 185, 129, 0.5); }
+    .pf-cash-summary {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--glass-bg);
+    }
+    .pf-cash-summary__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .pf-cash-summary__label { font-size: 12px; color: var(--text-secondary); }
+    .pf-cash-summary__amt {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .pf-cash-summary__amt--in  { color: #34d399; }
+    .pf-cash-summary__amt--out { color: #fca5a5; }
+    .pf-cash-modes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-cash-modes__row { display: flex; align-items: center; gap: 8px; }
+    .pf-cash-modes__chip {
+      flex-shrink: 0;
+      font-size: 10.5px; font-weight: 600;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.16);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.32);
+    }
+    .pf-cash-modes__chip[data-mode='cash'] { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
+    .pf-cash-modes__chip[data-mode='upi']  { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.34); }
+    .pf-cash-modes__chip[data-mode='card'] { background: rgba(244, 114, 182, 0.18); color: #f9a8d4; border-color: rgba(244, 114, 182, 0.34); }
+    .pf-cash-modes__chip[data-mode='netbanking'],
+    .pf-cash-modes__chip[data-mode='other'] { background: var(--glass-bg); color: var(--text-secondary); border-color: var(--glass-border); }
+    .pf-cash-modes__amt {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+    .pf-cash-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-cash-recent__row {
+      display: grid;
+      grid-template-columns: 56px 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .pf-cash-recent__time {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; color: var(--text-tertiary);
+    }
+    .pf-cash-recent__name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-cash-recent__mode {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .pf-cash-recent__amt {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+      color: #34d399;
+    }
+
+    /* Top-test popover */
+    .pf-toptest-pill { cursor: pointer; }
+    .pf-toptest-pill:hover { background: rgba(139, 92, 246, 0.18); }
+    .pf-toptest-pill--on { background: rgba(139, 92, 246, 0.22); border-color: rgba(139, 92, 246, 0.5); }
+    .pf-toptest-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; counter-reset: ttl; }
+    .pf-toptest-list__row {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .pf-toptest-list__row:hover { background: var(--glass-bg); }
+    .pf-toptest-list__rank {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 700;
+      width: 22px; height: 22px;
+      border-radius: 9999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(139, 92, 246, 0.18);
+      color: #c4b5fd;
+    }
+    .pf-toptest-list__row:first-child .pf-toptest-list__rank {
+      background: linear-gradient(135deg, #c4b5fd, #8b5cf6);
+      color: #fff;
+    }
+    .pf-toptest-list__name {
+      font-size: 13px; font-weight: 500;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-toptest-list__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px; font-weight: 700; color: var(--text-secondary);
+    }
+
+    /* Staff popover (re-uses .pf-pop base) */
+    .pf-head__btn--on {
+      background: rgba(139, 92, 246, 0.22);
+      border-color: rgba(139, 92, 246, 0.5);
+      color: var(--text-primary);
+    }
+    .pf-head__btn-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px;
+      padding: 0 5px;
+      margin-left: 2px;
+      border-radius: 9999px;
+      background: rgba(52, 211, 153, 0.22);
+      color: #6ee7b7;
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* ── Two-panel Appointments + In Progress layout ──────────────────── */
+    .pf-appt-split {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 1024px) {
+      .pf-appt-split { grid-template-columns: 1fr 1fr; }
+    }
+    .pf-appt-split__pane {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .pf-appt-split__pane--ip {
+      padding-left: 0;
+    }
+    @media (min-width: 1024px) {
+      .pf-appt-split__pane--ip {
+        border-left: 1px solid var(--glass-border);
+        padding-left: 16px;
+      }
+    }
+    .pf-appt-split__hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 2px 8px;
+    }
+    .pf-appt-split__title {
+      font-size: 11.5px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pf-appt-split__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+    }
+    .pf-appt-split__count[data-tone='active'] {
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.34);
+      color: #fbbf24;
+    }
+    /* Slim in-progress card variant — no checkbox, no slot col, single-action */
+    .pf-card--ip {
+      grid-template-columns: auto 1fr auto auto auto;
+      gap: 10px;
+      padding: 10px 12px;
+    }
+    .pf-card--ip .pf-card__actions { gap: 4px; }
+
+    /* Per-tube dept pills inside the slim in-progress card */
+    .pf-card__depts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .pf-card__dept {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-tertiary);
+    }
+    .pf-card__dept--done {
+      background: rgba(16, 185, 129, 0.14);
+      border-color: rgba(16, 185, 129, 0.32);
+      color: #6ee7b7;
+    }
+    /* Dept-validated pill — bolder than "done" so the user can tell at
+       a glance which tubes are *actually signed off* vs just collected. */
+    .pf-card__dept--validated {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.30), rgba(34, 211, 238, 0.18));
+      border-color: rgba(16, 185, 129, 0.6);
+      color: #ecfdf5;
+      font-weight: 700;
+    }
+    /* "Partial ready" badge — appears next to the dept pills when at
+       least one whole sample is validated but not all. Pulsing dot
+       cues the user there's something they can release. */
+    .pf-card__partial {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(16, 185, 129, 0.18));
+      border: 1px solid rgba(34, 211, 238, 0.45);
+      color: #67e8f9;
+    }
+
+    /* ── Exception alert chips (walk-ins / ready / payments) ────────────
+       Render only when count > 0. Animate in with pulse so they're never
+       silently hidden — when one appears, the user notices. */
+    .pf-alerts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .pf-alert {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 9999px;
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-primary);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+      animation: pf-alert-in 0.4s ease-out;
+    }
+    .pf-alert:hover { transform: translateY(-1px); }
+    .pf-alert__dot {
+      width: 8px; height: 8px; border-radius: 9999px;
+      flex-shrink: 0;
+      animation: pf-alert-pulse 1.8s ease-in-out infinite;
+    }
+    .pf-alert__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-alert__label { color: var(--text-secondary); font-weight: 500; }
+    .pf-alert--ready {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.34);
+    }
+    .pf-alert--ready .pf-alert__dot { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.7); }
+    .pf-alert--ready .pf-alert__count { color: #34d399; }
+    .pf-alert--payments {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.34);
+    }
+    .pf-alert--payments .pf-alert__dot { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.7); }
+    .pf-alert--payments .pf-alert__count { color: #fca5a5; }
+    @keyframes pf-alert-in {
+      0%   { opacity: 0; transform: translateY(-6px) scale(0.95); }
+      60%  { transform: translateY(0) scale(1.04); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes pf-alert-pulse {
+      0%, 100% { box-shadow: 0 0 8px currentColor; opacity: 1; }
+      50%      { box-shadow: 0 0 14px currentColor; opacity: 0.7; }
+    }
+
+    /* ── Queue drawer (overlay slide-in) ────────────────────────────── */
+    .pf-q-bd {
+      position: fixed; inset: 0; z-index: 90;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(2px);
+      animation: pf-fade 0.18s ease-out;
+    }
+    .pf-q-drawer {
+      position: fixed;
+      top: var(--navbar-height, 4rem);
+      right: 0;
+      bottom: 0;
+      z-index: 95;
+      width: min(440px, 100vw);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
+      border-left: 1px solid var(--glass-border);
+      box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
+      animation: pf-q-drawer-in 0.22s ease-out;
+    }
+    @keyframes pf-q-drawer-in {
+      from { transform: translateX(100%); }
+      to   { transform: translateX(0); }
+    }
+    @media (max-width: 640px) {
+      .pf-q-drawer {
+        top: auto; left: 0; right: 0; bottom: 0;
+        width: 100vw;
+        max-height: 80vh;
+        border-left: none;
+        border-top: 1px solid var(--glass-border);
+        border-radius: 16px 16px 0 0;
+        animation: pf-q-drawer-in-mobile 0.22s ease-out;
+      }
+      @keyframes pf-q-drawer-in-mobile {
+        from { transform: translateY(100%); }
+        to   { transform: translateY(0); }
+      }
+    }
+    .pf-q-drawer__hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--glass-border);
+      flex-shrink: 0;
+    }
+    .pf-q-drawer__title {
+      flex: 1; min-width: 0;
+      margin: 0;
+      font-size: 15px; font-weight: 700;
+      color: var(--text-primary);
+    }
+    .pf-q-drawer__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+    }
+    .pf-q-drawer__x {
+      width: 30px; height: 30px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .pf-q-drawer__x:hover { color: var(--text-primary); background: var(--glass-bg-hover); }
+    .pf-q-drawer__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px 24px;
+    }
   `]
 })
 export class FrontdeskLandingComponent implements OnInit, OnDestroy {
@@ -1709,14 +2391,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Local content signature used as a belt-and-braces no-op detector when an
   // intermediary strips ETag headers.
   private _ordersSig: string | null = null;
-
-  readonly tabOptions: Array<{ id: Tab; label: string; tone?: 'rose' | 'amber' | 'emerald' }> = [
-    { id: 'appointments', label: 'Appointments' },
-    { id: 'orders',       label: 'In progress' },
-    { id: 'ready',        label: 'Ready for pickup', tone: 'emerald' },
-    { id: 'walkins',      label: 'Walk-ins',         tone: 'amber' },
-    { id: 'payments',     label: 'Payments due',     tone: 'rose' },
-  ];
 
   readonly dateOptions: Array<{ id: DateRange; label: string }> = [
     { id: 'today',  label: 'Today' },
@@ -1733,9 +2407,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { id: '3', name: 'Dr. Arjun Mehta', role: 'Pathologist',    status: 'busy' },
     { id: '4', name: 'Kavita Reddy',   role: 'Lab technician',  status: 'on_break' },
   ];
-
-  private readonly _tab = signal<Tab>('appointments');
-  readonly tab = this._tab.asReadonly();
 
   private readonly _dateRange = signal<DateRange>('today');
   readonly dateRange = this._dateRange.asReadonly();
@@ -1767,6 +2438,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // narrow widths via CSS.
   private readonly _staffPopoverOpen = signal<boolean>(false);
   readonly staffPopoverOpen = this._staffPopoverOpen.asReadonly();
+  private readonly _collectionPopoverOpen = signal<boolean>(false);
+  readonly collectionPopoverOpen = this._collectionPopoverOpen.asReadonly();
+  private readonly _topTestPopoverOpen = signal<boolean>(false);
+  readonly topTestPopoverOpen = this._topTestPopoverOpen.asReadonly();
+
+  /** Which exception-queue drawer is open (null = none). Walk-ins / Ready /
+      Payments-due used to be tabs; they're now alert chips that open this
+      drawer so the default page stays calm. */
+  private readonly _openQueue = signal<'ready' | 'payments' | null>(null);
+  readonly openQueue = this._openQueue.asReadonly();
 
   private readonly _appointments = signal<Appointment[]>([]);
   private readonly _orders = signal<Order[]>([]);
@@ -1842,13 +2523,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly readyForPickup = computed(() =>
     this._orders().filter(o => o.status === 'completed')
   );
-  readonly walkins = computed(() =>
-    this._appointments().filter(a =>
-      this.inRange(a.appointmentDate) &&
-      (a.type === 'walkin' || a.collectionType === 'walkin') &&
-      (a.status === 'booked' || a.status === 'checked_in')
-    )
-  );
   readonly paymentsDue = computed(() =>
     this._bills().filter(b => b.balance > 0)
   );
@@ -1918,7 +2592,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     appointments: this.visibleAppointments().length,
     orders: this.visibleOrders().length,
     ready: this.readyForPickup().length,
-    walkins: this.walkins().length,
     payments: this.paymentsDue().length,
   }));
 
@@ -1934,6 +2607,38 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return this._bills()
       .filter(b => new Date(b.createdAt).getTime() >= todayStart.getTime())
       .reduce((sum, b) => sum + b.balance, 0);
+  });
+  readonly billsToday = computed(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    return this._bills().filter(b => new Date(b.createdAt).getTime() >= todayStart.getTime());
+  });
+  readonly paymentsByMode = computed(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const totals = new Map<string, number>();
+    for (const b of this._bills()) {
+      for (const p of b.payments ?? []) {
+        if (new Date(p.paidAt).getTime() < todayStart.getTime()) continue;
+        const mode = (p.mode || 'other').toLowerCase();
+        totals.set(mode, (totals.get(mode) ?? 0) + p.amount);
+      }
+    }
+    return [...totals.entries()]
+      .map(([mode, amount]) => ({ mode, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  });
+  readonly recentCollections = computed(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const rows: Array<{ id: string; mode: string; amount: number; paidAt: string; patient: string }> = [];
+    for (const b of this._bills()) {
+      const patient = this.patientName(b.patientId);
+      for (const p of b.payments ?? []) {
+        if (new Date(p.paidAt).getTime() < todayStart.getTime()) continue;
+        rows.push({ id: p.id, mode: p.mode || 'other', amount: p.amount, paidAt: p.paidAt, patient });
+      }
+    }
+    return rows
+      .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())
+      .slice(0, 6);
   });
 
   // Top tests today — derive from today's orders. Drops entries whose Test
@@ -2138,6 +2843,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       processing:        'Processing',
       resulted:          'Resulted',
       validated:         'Validated',
+      partially_validated:'Partial Ready',
       delivered:         'Delivered',
       rejected:          'Rejected',
       partially_rejected:'Partially Rejected',
@@ -2180,6 +2886,130 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const allCollected = samples.every(s => s.status === 'collected');
     return allCollected;
   }
+
+  /** Per-tube status in 5 buckets — finer than order.status. Drives the
+      FD slim card's per-dept badge + the action button gating. */
+  sampleStatus(o: Order): 'pending' | 'partially_collected' | 'fully_collected' | 'dispatched' | 'received' {
+    const samples = o.samples ?? [];
+    if (samples.length === 0) return 'pending';
+    const isAtOrPast = (s: string, target: string) => {
+      const order = ['pending', 'collected', 'dispatched', 'in_transit', 'received', 'processing'];
+      return order.indexOf(s) >= order.indexOf(target);
+    };
+    if (samples.every(s => s.status === 'received' || s.status === 'processing')) return 'received';
+    if (samples.every(s => isAtOrPast(s.status, 'dispatched'))) return 'dispatched';
+    if (samples.every(s => isAtOrPast(s.status, 'collected'))) return 'fully_collected';
+    if (samples.some(s => s.status !== 'pending' && s.status !== 'rejected')) return 'partially_collected';
+    return 'pending';
+  }
+  /** Single-glyph status per tube (used in the FD slim card per-dept pill).
+      Includes the new "validated" state — when EVERY test on the sample
+      is validated, the tube is dept-validated and ready for partial
+      release. */
+  sampleGlyph(status: string): string {
+    switch (status) {
+      case 'collected':       return '✅';
+      case 'dispatched':      return '🚗';
+      case 'in_transit':      return '📦';
+      case 'received':
+      case 'processing':      return '🔬';
+      case 'validated':       return '✓';
+      case 'rejected':        return '❌';
+      default:                return '⏳';
+    }
+  }
+  /** A sample (tube) is dept-validated when every OrderTest inside it
+      has Status === 'validated'. Used by the FD card to show ✓ pills
+      and to count how many depts are ready in a partial state. */
+  isSampleValidated(s: { tests?: Array<{ status: string }> | null }): boolean {
+    const tests = s.tests ?? [];
+    return tests.length > 0 && tests.every(t => t.status === 'validated');
+  }
+  /** Glyph for a tube — uses isSampleValidated to upgrade ✓ when the
+      whole tube is dept-validated, otherwise falls back to status-glyph. */
+  tubeGlyph(s: { status: string; tests?: Array<{ status: string }> | null }): string {
+    if (this.isSampleValidated(s)) return '✓';
+    return this.sampleGlyph(s.status);
+  }
+  /** True when at least one whole sample is validated and others
+      aren't — independent of o.status so the badge surfaces even if
+      the backend hasn't yet recomputed the order's status under the
+      new partially_validated rules. */
+  hasPartialReady(o: Order): boolean {
+    const samples = (o.samples ?? []).filter(s => s.status !== 'rejected');
+    if (samples.length === 0) return false;
+    const validated = samples.filter(s => this.isSampleValidated(s)).length;
+    return validated > 0 && validated < samples.length;
+  }
+  /** Returns N/M of validated depts. Always derived from samples,
+      not from o.status. Returns empty string when nothing's
+      validated. */
+  partialReadyLabel(o: Order): string {
+    const samples = (o.samples ?? []).filter(s => s.status !== 'rejected');
+    if (samples.length === 0) return '';
+    const validated = samples.filter(s => this.isSampleValidated(s)).length;
+    if (validated === 0) return '';
+    return `${validated}/${samples.length}`;
+  }
+  /** All validated samples on the order — feeds the Preliminary report
+      panel in the order drawer. */
+  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal'|'abnormal'|'critical' }> }> }> {
+    const out: Array<any> = [];
+    for (const s of (o.samples ?? [])) {
+      if (!this.isSampleValidated(s)) continue;
+      const sampleRow = {
+        id: s.id,
+        deptName: s.department?.name ?? '',
+        deptCode: s.department?.code ?? '',
+        tests: [] as Array<any>
+      };
+      for (const t of (s.tests ?? [])) {
+        if (t.status !== 'validated') continue;
+        sampleRow.tests.push({
+          id: t.id,
+          name: t.test?.name ?? 'Test',
+          values: this.extractValuesFor(t)
+        });
+      }
+      out.push(sampleRow);
+    }
+    return out;
+  }
+  /** Parse the OrderTest's currentResult JSON into per-parameter rows
+      with reference range + flag. Mirrors what validate-result does. */
+  private extractValuesFor(t: { currentResult?: string; test?: { parameters?: string } }):
+    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal'|'abnormal'|'critical' }> {
+    if (!t.currentResult || !t.test?.parameters) return [];
+    let snap: { values?: Record<string, unknown> };
+    try { snap = JSON.parse(t.currentResult); } catch { return []; }
+    if (!snap.values) return [];
+    let params: Array<{ name: string; title: string; unit?: string;
+                        criticalLow?: number; criticalHigh?: number;
+                        referenceRanges?: Array<{ min: number; max: number }> }> = [];
+    try {
+      const blob = JSON.parse(t.test.parameters) as { parameters?: any[] };
+      params = blob.parameters ?? [];
+    } catch { return []; }
+    return params.map(p => {
+      const v = snap.values![p.name];
+      const n = Number(v);
+      const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
+      const r = (p.referenceRanges ?? [])[0];
+      let flag: 'normal'|'abnormal'|'critical' = 'normal';
+      if (isNum) {
+        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
+        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
+      }
+      return {
+        name: p.name,
+        title: p.title || p.name,
+        value: v ?? '—',
+        unit: p.unit,
+        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
+        flag
+      };
+    });
+  }
   isDispatched(o: Order): boolean {
     const samples = o.samples ?? [];
     return samples.length > 0 && samples.every(s =>
@@ -2196,6 +3026,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
               ? { ...s, status: 'dispatched', dispatchedAt: new Date().toISOString() }
               : s) }
           : x));
+        // Immediate server sync — don't make the FD wait for the next 30s
+        // poll to confirm the order's overall status flipped.
+        this.fetchOrdersWithEtag();
       },
       error: e => this.toasts.error(e?.message ?? 'Could not mark dispatched')
     });
@@ -2218,7 +3051,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   // ── UI state ──────────────────────────────────────────────
-  setTab(t: Tab) { this._tab.set(t); }
   setDateRange(d: DateRange) {
     // Selecting a non-custom pill closes the calendar and clears any draft
     // custom range so re-opening starts fresh.
@@ -2318,9 +3150,34 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // close it via the backdrop click handler.
   toggleStaffPopover(ev: MouseEvent) {
     ev.stopPropagation();
+    this._collectionPopoverOpen.set(false);
+    this._topTestPopoverOpen.set(false);
     this._staffPopoverOpen.update(v => !v);
   }
   closeStaffPopover() { this._staffPopoverOpen.set(false); }
+  toggleCollectionPopover(ev: MouseEvent) {
+    ev.stopPropagation();
+    this._staffPopoverOpen.set(false);
+    this._topTestPopoverOpen.set(false);
+    this._collectionPopoverOpen.update(v => !v);
+  }
+  closeCollectionPopover() { this._collectionPopoverOpen.set(false); }
+  toggleTopTestPopover(ev: MouseEvent) {
+    ev.stopPropagation();
+    this._staffPopoverOpen.set(false);
+    this._collectionPopoverOpen.set(false);
+    this._topTestPopoverOpen.update(v => !v);
+  }
+  closeTopTestPopover() { this._topTestPopoverOpen.set(false); }
+  openQueueDrawer(q: 'ready' | 'payments') { this._openQueue.set(q); }
+  closeQueueDrawer() { this._openQueue.set(null); }
+  queueTitle(q: 'ready' | 'payments' | null): string {
+    switch (q) {
+      case 'ready':    return 'Ready for pickup';
+      case 'payments': return 'Payments due';
+      default:         return '';
+    }
+  }
   /** Count of staff with status === 'on_duty' for the button badge. */
   onDutyCount(): number { return this.staff.filter(s => s.status === 'on_duty').length; }
   toggleSelect(id: string) {

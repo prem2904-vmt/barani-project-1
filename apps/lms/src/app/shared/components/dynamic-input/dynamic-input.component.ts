@@ -176,39 +176,33 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         }
 
         @case ('button_select') {
-          <div class="flex flex-wrap gap-2">
+          <div class="pf-bsel">
             @for (o of norm; track o.value) {
               <button type="button"
-                      class="rounded-lg border px-3 py-1.5 text-sm transition"
-                      [class.bg-[var(--color-primary)]]="value === o.value"
-                      [class.text-white]="value === o.value"
-                      [class.border-slate-300]="value !== o.value"
+                      class="pf-bsel__item"
+                      [class.pf-bsel__item--on]="value === o.value"
                       (click)="emit(o.value)">{{ o.label }}</button>
             }
           </div>
         }
 
         @case ('multi_button_select') {
-          <div class="flex flex-wrap gap-2">
+          <div class="pf-bsel">
             @for (o of norm; track o.value) {
               <button type="button"
-                      class="rounded-lg border px-3 py-1.5 text-sm transition"
-                      [class.bg-[var(--color-primary)]]="isSelected(o.value)"
-                      [class.text-white]="isSelected(o.value)"
-                      [class.border-slate-300]="!isSelected(o.value)"
+                      class="pf-bsel__item"
+                      [class.pf-bsel__item--on]="isSelected(o.value)"
                       (click)="toggleMulti(o.value)">{{ o.label }}</button>
             }
           </div>
         }
 
         @case ('image_select') {
-          <div class="flex flex-wrap gap-2">
+          <div class="pf-bsel">
             @for (o of norm; track o.value) {
               <button type="button"
-                      class="rounded-lg border px-3 py-1.5 text-sm transition"
-                      [class.bg-[var(--color-primary)]]="value === o.value"
-                      [class.text-white]="value === o.value"
-                      [class.border-slate-300]="value !== o.value"
+                      class="pf-bsel__item"
+                      [class.pf-bsel__item--on]="value === o.value"
                       (click)="emit(o.value)">{{ o.label }}</button>
             }
           </div>
@@ -452,6 +446,58 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
       color: var(--text-secondary);
       cursor: pointer;
       user-select: none;
+      width: fit-content;       /* never stretch — even if a flex parent tries */
+      max-width: 100%;
+    }
+
+    /* Button-select / multi / image-select: pill items must NEVER stretch
+       to fill the row (that's where they go oval). Container wraps; items
+       size to content within a min/max range. On mobile we cap to 2 per
+       row so labels read at a glance instead of becoming long pills. */
+    .pf-bsel {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+    }
+    .pf-bsel__item {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: auto;
+      min-width: 80px;
+      max-width: 220px;
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+      background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+      color: var(--text-primary, #e5e7eb);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+    .pf-bsel__item:hover {
+      background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
+      border-color: var(--text-secondary, rgba(255, 255, 255, 0.24));
+    }
+    .pf-bsel__item--on {
+      background: var(--color-primary, #a855f7);
+      border-color: var(--color-primary, #a855f7);
+      color: #fff;
+    }
+    .pf-bsel__item--on:hover {
+      background: var(--color-primary, #a855f7);
+      border-color: var(--color-primary, #a855f7);
+    }
+    @media (max-width: 640px) {
+      /* Mobile: exactly 2 per row, never a single oval pill spanning the screen. */
+      .pf-bsel__item {
+        flex-basis: calc(50% - 4px);
+        min-width: 0;
+        max-width: calc(50% - 4px);
+      }
     }
     .pf-radio {
       appearance: none;

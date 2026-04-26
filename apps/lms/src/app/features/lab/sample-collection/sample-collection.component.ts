@@ -683,7 +683,12 @@ interface OrderGroup {
      * collection drawer genuinely takes over the viewport; the backdrop is
      * opaque so the pending queue behind never peeks through. */
     .pf-drawer {
-      position: fixed; inset: 0; z-index: 1000;
+      position: fixed;
+      top: var(--navbar-height, 4rem);
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 1000;
       background:
         radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.22) 0%, transparent 55%),
         radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.18) 0%, transparent 55%),
@@ -1240,6 +1245,7 @@ interface OrderGroup {
     :host-context([data-theme="light"]) .pf-sc__vials {
       background: rgba(15, 23, 42, 0.04);
     }
+
   `]
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {

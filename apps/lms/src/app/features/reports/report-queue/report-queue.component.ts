@@ -1,10 +1,11 @@
-import { DatePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report } from '../../../shared/models/report.model';
+import { Order, OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -12,12 +13,32 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
-type Filter = 'all' | 'pending' | 'delivered' | 'failed';
+type Filter = 'all' | 'partial' | 'pending' | 'delivered' | 'failed';
+
+interface PrelimRow {
+  name: string;
+  title: string;
+  value: unknown;
+  unit?: string;
+  range?: string;
+  flag: 'normal' | 'abnormal' | 'critical';
+}
+interface PrelimTest { id: string; name: string; values: PrelimRow[] }
+interface PrelimSample { id: string; deptName: string; deptCode: string; tests: PrelimTest[] }
+interface PrelimOrder {
+  id: string;
+  patientName: string;
+  patientMeta: string;
+  totalSamples: number;
+  validatedSamples: PrelimSample[];
+  pendingSampleNames: string[];
+}
 
 @Component({
   selector: 'pf-report-queue',
   standalone: true,
   imports: [
+    CommonModule,
     DatePipe,
     ChipComponent,
     ScreenHeaderComponent,
@@ -55,7 +76,7 @@ type Filter = 'all' | 'pending' | 'delivered' | 'failed';
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         <pf-tile tone="violet" padding="md">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Total</p>
           <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ items().length }}</p>
@@ -63,6 +84,10 @@ type Filter = 'all' | 'pending' | 'delivered' | 'failed';
         <pf-tile tone="amber" padding="md">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Pending</p>
           <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().pending }}</p>
+        </pf-tile>
+        <pf-tile tone="sky" padding="md">
+          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Partial</p>
+          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ partialOrders().length }}</p>
         </pf-tile>
         <pf-tile tone="emerald" padding="md">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Delivered</p>
@@ -98,6 +123,101 @@ type Filter = 'all' | 'pending' | 'delivered' | 'failed';
             </pf-tile>
           }
         </div>
+      } @else if (filter() === 'partial') {
+        <!-- Partial tab content — orders with at least one whole
+             sample (department) validated. Cards expand inline to
+             show parameter values; "Generate partial PDF" releases
+             a preliminary report (per-dept signed) for urgent
+             handover, latest-supersedes-previous. -->
+        @if (partialOrders().length === 0) {
+          <pf-tile tone="default" padding="xl">
+            <div class="text-center py-6">
+              <p class="text-[14px]" style="color: var(--text-secondary);">
+                No partial reports right now. They show up here as soon as one
+                department finishes validation.
+              </p>
+            </div>
+          </pf-tile>
+        } @else {
+          <div class="pf-prelim-list">
+            @for (po of partialOrders(); track po.id) {
+              <div class="pf-prelim-card"
+                   [class.pf-prelim-card--open]="expanded() === po.id">
+                <button type="button" class="pf-prelim-card__head" (click)="toggle(po.id)">
+                  <div class="flex-1 min-w-0">
+                    <p class="pf-prelim-card__name">{{ po.patientName }}</p>
+                    <p class="pf-prelim-card__meta">{{ po.patientMeta }}</p>
+                  </div>
+                  <span class="pf-prelim-card__count">
+                    {{ po.validatedSamples.length }}/{{ po.totalSamples }} depts
+                  </span>
+                  <svg class="pf-prelim-card__chev" width="18" height="18" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </button>
+                @if (expanded() === po.id) {
+                  <div class="pf-prelim-card__body">
+                    @for (vs of po.validatedSamples; track vs.id) {
+                      <div class="pf-prelim-card__sample">
+                        <header class="pf-prelim-card__sample-hdr">
+                          <span class="pf-prelim-card__sample-dept">{{ vs.deptCode || vs.deptName }}</span>
+                          <span class="pf-prelim-card__sample-name">{{ vs.deptName }}</span>
+                        </header>
+                        @for (t of vs.tests; track t.id) {
+                          <div class="pf-prelim-card__test">
+                            <p class="pf-prelim-card__test-name">{{ t.name }}</p>
+                            @if (t.values.length === 0) {
+                              <p class="pf-prelim-card__no-values">No parameter values recorded.</p>
+                            } @else {
+                              <ul class="pf-prelim-card__values">
+                                @for (v of t.values; track v.name) {
+                                  <li class="pf-prelim-card__row" [attr.data-flag]="v.flag">
+                                    <span class="pf-prelim-card__row-name">{{ v.title }}</span>
+                                    <span class="pf-prelim-card__row-value">
+                                      {{ v.value }}@if (v.unit) {<span class="pf-prelim-card__row-unit"> {{ v.unit }}</span>}
+                                    </span>
+                                    <span class="pf-prelim-card__row-range">{{ v.range || '—' }}</span>
+                                    <span class="pf-prelim-card__row-flag" [attr.data-flag]="v.flag">
+                                      @switch (v.flag) {
+                                        @case ('critical') { ⚠ Critical }
+                                        @case ('abnormal') { ⚑ Abnormal }
+                                        @default { ✓ Normal }
+                                      }
+                                    </span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                    @if (po.pendingSampleNames.length > 0) {
+                      <p class="pf-prelim-card__pending">
+                        ⏳ Still pending: {{ po.pendingSampleNames.join(', ') }}
+                      </p>
+                    }
+                    <div class="pf-prelim-card__actions">
+                      <pf-touch-btn
+                        size="md"
+                        variant="primary"
+                        [disabled]="generating() === po.id"
+                        (pressed)="generatePartial(po)">
+                        @if (generating() === po.id) {
+                          Generating…
+                        } @else {
+                          Generate partial PDF
+                        }
+                      </pf-touch-btn>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
       } @else if (visible().length === 0) {
         <pf-tile tone="default" padding="xl">
           <div class="text-center py-6">
@@ -172,6 +292,148 @@ type Filter = 'all' | 'pending' | 'delivered' | 'failed';
       color: #fca5a5;
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
+
+    /* Cards list — the Partial tab renders this directly under the
+       segmented filter, same vertical rhythm as the PDF list. No
+       highlighted wrapper any more; the cards stand on their own. */
+    .pf-prelim-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .pf-prelim-card {
+      border-radius: 12px;
+      background: var(--bg-card-solid, rgba(20, 22, 30, 0.6));
+      border: 1px solid var(--glass-border);
+      overflow: hidden;
+      transition: border-color 0.18s;
+    }
+    .pf-prelim-card--open { border-color: rgba(34, 211, 238, 0.45); }
+
+    .pf-prelim-card__head {
+      width: 100%;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      cursor: pointer;
+      text-align: left;
+    }
+    .pf-prelim-card__head:hover { background: var(--glass-bg); }
+    .pf-prelim-card__name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-prelim-card__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-prelim-card__count {
+      flex-shrink: 0;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 9999px;
+      background: rgba(34, 211, 238, 0.16);
+      color: #67e8f9;
+      border: 1px solid rgba(34, 211, 238, 0.34);
+    }
+    .pf-prelim-card__chev {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      transition: transform 0.18s;
+    }
+    .pf-prelim-card--open .pf-prelim-card__chev { transform: rotate(180deg); }
+
+    .pf-prelim-card__body {
+      padding: 4px 14px 14px;
+      border-top: 1px solid var(--glass-border);
+    }
+    .pf-prelim-card__sample {
+      padding: 10px 12px;
+      margin-top: 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-prelim-card__sample-hdr {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .pf-prelim-card__sample-dept {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 2px 6px; border-radius: 4px;
+      background: rgba(34, 211, 238, 0.16); color: #67e8f9;
+    }
+    .pf-prelim-card__sample-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-prelim-card__test { margin-bottom: 8px; }
+    .pf-prelim-card__test:last-child { margin-bottom: 0; }
+    .pf-prelim-card__test-name {
+      margin: 0 0 4px;
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .pf-prelim-card__no-values { margin: 0; padding: 6px 0; font-size: 11.5px; color: var(--text-tertiary); font-style: italic; }
+    .pf-prelim-card__values { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-prelim-card__row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .pf-prelim-card__row[data-flag='abnormal'] { background: rgba(245, 158, 11, 0.08); }
+    .pf-prelim-card__row[data-flag='critical'] { background: rgba(239, 68, 68, 0.10); }
+    .pf-prelim-card__row-name { color: var(--text-primary); font-weight: 500; }
+    .pf-prelim-card__row-value {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700; color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-prelim-card__row-unit { font-weight: 400; color: var(--text-tertiary); font-size: 11px; }
+    .pf-prelim-card__row-range {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; color: var(--text-tertiary);
+    }
+    .pf-prelim-card__row-flag {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 2px 6px; border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.16); color: #6ee7b7;
+    }
+    .pf-prelim-card__row-flag[data-flag='abnormal'] { background: rgba(245, 158, 11, 0.20); color: #fbbf24; }
+    .pf-prelim-card__row-flag[data-flag='critical'] { background: rgba(239, 68, 68, 0.20); color: #fca5a5; }
+
+    .pf-prelim-card__pending {
+      margin: 12px 0 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(245, 158, 11, 0.08);
+      border-left: 3px solid #f59e0b;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .pf-prelim-card__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--glass-border);
+    }
+    @media (max-width: 639px) {
+      .pf-prelim-card__actions { justify-content: stretch; }
+      .pf-prelim-card__actions > * { flex: 1; }
+    }
+
+    @media (max-width: 639px) {
+      .pf-prelim-card__row {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: 'name flag' 'value flag' 'range flag';
+        gap: 2px 12px;
+      }
+      .pf-prelim-card__row-name  { grid-area: name; }
+      .pf-prelim-card__row-value { grid-area: value; }
+      .pf-prelim-card__row-range { grid-area: range; }
+      .pf-prelim-card__row-flag  { grid-area: flag; align-self: center; }
+    }
   `]
 })
 export class ReportQueueComponent implements OnInit {
@@ -183,6 +445,7 @@ export class ReportQueueComponent implements OnInit {
   readonly filterOptions: SegmentedOption<Filter>[] = [
     { value: 'all',       label: 'All' },
     { value: 'pending',   label: 'Pending' },
+    { value: 'partial',   label: 'Partial' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'failed',    label: 'Failed' }
   ];
@@ -228,6 +491,127 @@ export class ReportQueueComponent implements OnInit {
     return 'default';
   }
 
+  // ── Preliminary report state ────────────────────────────────────
+  // Loaded from /api/orders/today and filtered to orders with at
+  // least one whole sample (department) validated. No PDF here —
+  // values are read straight from each OrderTest.currentResult.
+  private readonly _todayOrders = signal<Order[]>([]);
+  private readonly _expanded = signal<string | null>(null);
+  readonly expanded = this._expanded.asReadonly();
+  toggle(id: string) { this._expanded.set(this._expanded() === id ? null : id); }
+
+  // Single-flight guard while the partial PDF is being generated;
+  // the value is the order ID currently being submitted (so we can
+  // disable just that card's button, not all of them).
+  private readonly _generating = signal<string | null>(null);
+  readonly generating = this._generating.asReadonly();
+
+  generatePartial(po: PrelimOrder) {
+    if (this._generating()) return;
+    this._generating.set(po.id);
+    const sampleIds = po.validatedSamples.map(s => s.id);
+    this.api.post<Report>('/api/reports/generate/partial', { orderId: po.id, sampleIds }).subscribe({
+      next: r => {
+        this._generating.set(null);
+        if (r?.id) {
+          this.toasts.success('Partial PDF generated');
+          this.router.navigate(['/reports/view', r.id]);
+        } else {
+          this.toasts.warning('Could not generate — check that all selected tubes are validated.');
+        }
+      },
+      error: e => {
+        this._generating.set(null);
+        this.toasts.error(e?.message ?? 'Could not generate the partial PDF');
+      }
+    });
+  }
+
+  /** Build PrelimOrder rows for any order with ≥1 validated sample.
+   *  validate-result already used the same projection — we replicate
+   *  it locally so this screen has no dependency on FD landing's
+   *  helpers. */
+  readonly partialOrders = computed<PrelimOrder[]>(() => {
+    const out: PrelimOrder[] = [];
+    for (const o of this._todayOrders()) {
+      const samples = (o.samples ?? []).filter(s => s.status !== 'rejected');
+      if (samples.length === 0) continue;
+      const validated: PrelimSample[] = [];
+      const pendingNames: string[] = [];
+      for (const s of samples) {
+        const tests = s.tests ?? [];
+        const allDone = tests.length > 0 && tests.every(t => t.status === 'validated');
+        if (allDone) {
+          validated.push({
+            id: s.id,
+            deptName: s.department?.name ?? '',
+            deptCode: s.department?.code ?? '',
+            tests: tests.map(t => ({
+              id: t.id,
+              name: t.test?.name ?? 'Test',
+              values: this.extractValues(t)
+            }))
+          });
+        } else {
+          pendingNames.push(s.department?.code || s.department?.name || 'Tube');
+        }
+      }
+      // Skip orders with no validated samples (nothing to show) and
+      // orders with EVERYTHING validated (those go through the regular
+      // PDF queue, not here).
+      if (validated.length === 0 || validated.length === samples.length) continue;
+      out.push({
+        id: o.id,
+        patientName: o.patient?.displayName ?? 'Patient',
+        patientMeta: `#${o.id.slice(0, 8)} · created ${this.formatTime(o.createdAt)}`,
+        totalSamples: samples.length,
+        validatedSamples: validated,
+        pendingSampleNames: pendingNames
+      });
+    }
+    return out;
+  });
+
+  private extractValues(t: OrderTest): PrelimRow[] {
+    if (!t.currentResult || !t.test?.parameters) return [];
+    let snap: { values?: Record<string, unknown> };
+    try { snap = JSON.parse(t.currentResult); } catch { return []; }
+    if (!snap.values) return [];
+    let params: Array<{ name: string; title: string; unit?: string;
+                        criticalLow?: number; criticalHigh?: number;
+                        referenceRanges?: Array<{ min: number; max: number }> }> = [];
+    try {
+      const blob = JSON.parse(t.test.parameters) as { parameters?: any[] };
+      params = blob.parameters ?? [];
+    } catch { return []; }
+    return params.map(p => {
+      const v = snap.values![p.name];
+      const n = Number(v);
+      const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
+      const r = (p.referenceRanges ?? [])[0];
+      let flag: 'normal'|'abnormal'|'critical' = 'normal';
+      if (isNum) {
+        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
+        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
+      }
+      return {
+        name: p.name,
+        title: p.title || p.name,
+        value: v ?? '—',
+        unit: p.unit,
+        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
+        flag
+      };
+    });
+  }
+
+  private formatTime(iso: string): string {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch { return ''; }
+  }
+
   ngOnInit() { this.refresh(); }
 
   refresh() {
@@ -235,6 +619,13 @@ export class ReportQueueComponent implements OnInit {
     this.api.get<Report[]>('/api/reports/queue').subscribe({
       next: l => { this._items.set(l ?? []); this._loading.set(false); },
       error: () => this._loading.set(false)
+    });
+    // Independent fetch — partial reports come from /api/orders/today
+    // (the report queue endpoint only knows about generated PDFs). A
+    // failure here doesn't block the main queue load.
+    this.api.get<Order[]>('/api/orders/today').subscribe({
+      next: l => this._todayOrders.set(l ?? []),
+      error: () => { /* non-fatal */ }
     });
   }
 

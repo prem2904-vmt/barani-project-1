@@ -6,8 +6,11 @@ export interface Appointment {
   patientId: string;
   branchId: string;
   departmentId?: string;
-  type: 'appointment' | 'walkin' | 'emergency' | 'followup';
-  collectionType: 'walkin' | 'home_collection';
+  // 'walkin' is no longer a UI choice — silently defaulted server-side for
+  // backwards compatibility. Keep the union loose so the backend's value
+  // (e.g. legacy 'walkin' rows) still type-checks.
+  type: 'appointment' | 'emergency' | 'followup' | string;
+  collectionType: 'home_collection' | string;
   appointmentDate: string;
   slotTime?: string;
   tokenNumber?: string;

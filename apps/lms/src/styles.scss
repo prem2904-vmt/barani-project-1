@@ -1136,3 +1136,84 @@ html[data-theme="light"] .pf-vial__outline {
   fill: rgba(255, 255, 255, 0.7) !important;
   stroke: rgba(15, 23, 42, 0.22) !important;
 }
+
+/* ── Print rules ────────────────────────────────────────────────────
+   Hitting Print on a report / QR / public view should produce a clean
+   A4 page with only the report content — no navbar, sidebar, ambient
+   background, or buttons.
+
+   Mechanism:
+     - Shell chrome (pf-ambient-bg, pf-top-strip, pf-bottom-nav,
+       pf-dialog-host) is hidden globally.
+     - Background flips to white + ink to dark slate so reports
+       fax/print cleanly and don't burn toner on dark gradients.
+     - Components opt INTO printing by carrying `pf-printable` on
+       their paper root. Inside that root, anything tagged
+       `pf-no-print` (action buttons, segmented filters, scan inputs)
+       is hidden so only the artefact reaches paper.
+   --------------------------------------------------------------- */
+@media print {
+  /* Hard reset: white page, dark ink, kill animations + shadows. */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    color: #0f172a !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* App shell — completely off the page. */
+  pf-ambient-bg,
+  pf-top-strip,
+  pf-bottom-nav,
+  pf-navbar,
+  pf-sidebar,
+  pf-dialog-host,
+  pf-toast-host {
+    display: none !important;
+  }
+
+  pf-shell { display: block !important; background: #ffffff !important; }
+
+  /* Hide interactive chrome inside printable content. */
+  .pf-no-print,
+  pf-screen-header,
+  pf-segmented {
+    display: none !important;
+  }
+
+  /* The actual paper — components add this class to their report
+     root. A4-friendly, no fancy borders. */
+  .pf-printable {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 18mm 14mm !important;
+    width: 100% !important;
+    max-width: none !important;
+    page-break-inside: auto;
+  }
+  .pf-printable :is(table, tr, td, th, ul, ol, li) {
+    page-break-inside: avoid;
+  }
+  .pf-printable svg { color: #0f172a !important; }
+  .pf-printable img { max-width: 100% !important; }
+
+  /* A4 portrait by default; the print dialog can override. */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}

@@ -276,34 +276,86 @@ const COUNTERS: CounterSpec[] = [
                       </svg>
                     </button>
                     @if (expanded(g.orderId)) {
-                      <ul class="mt-3 space-y-2 pl-12">
-                        @for (t of g.items; track t.id) {
-                          <li class="flex items-center gap-2 py-1.5 px-2 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
-                            <span class="text-[13px] font-medium truncate flex-1" style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</span>
-                            <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ t.test?.department?.name ?? '' }}</span>
-                            @switch (tab()) {
-                              @case ('service_queue') {
-                                <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="startPick(t)">Pick · scan</button>
-                                <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">Delegate</button>
+                      <!-- Sub-group the patient's tests by their tube
+                           (OrderSample). One row per tube; the row lists
+                           the tests inside it. Action button per tube
+                           opens the scanner expecting THAT tube's
+                           barcode — one scan loads every test in the
+                           tube for combined entry (Fix 6 contract). -->
+                      <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
+                        @for (tube of tubesIn(g.items); track tube.sampleId) {
+                          <li class="rounded-lg p-2.5"
+                              [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
+                              style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                            <div class="flex items-center gap-2 mb-1.5">
+                              <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
+                                {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                              </span>
+                              @if (tube.barcode) {
+                                <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ tube.barcode }}</span>
                               }
-                              @case ('rejected') {
-                                <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
+                            </div>
+
+                            <!-- Rejection reason banner — only when one or
+                                 more tests in this tube were sent back by
+                                 the pathologist. Surfaces the WHY so the
+                                 tech doesn't have to dig into each test
+                                 individually. -->
+                            @if (tube.rejections.length > 0) {
+                              <div class="pf-tube-reject mb-2">
+                                <div class="pf-tube-reject__head">
+                                  <span class="pf-tube-reject__icon" aria-hidden="true">↻</span>
+                                  <span class="pf-tube-reject__title">
+                                    Sent back for re-entry
+                                    @if (tube.rejections.length > 1) { · {{ tube.rejections.length }} tests }
+                                  </span>
+                                </div>
+                                <ul class="pf-tube-reject__list">
+                                  @for (r of tube.rejections; track r.testName) {
+                                    <li class="pf-tube-reject__item">
+                                      <span class="pf-tube-reject__test">{{ r.testName }}</span>
+                                      <span class="pf-tube-reject__reason">{{ r.reason }}</span>
+                                    </li>
+                                  }
+                                </ul>
+                              </div>
+                            }
+
+                            <ul class="space-y-0.5 mb-2 pl-1">
+                              @for (t of tube.tests; track t.id) {
+                                <li class="flex items-center gap-2 text-[12.5px]">
+                                  <span class="flex-1 truncate" style="color: var(--text-primary);">→ {{ t.test?.name ?? 'Test' }}</span>
+                                  @if (t.status === 'validated') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓</span>
+                                  } @else if (t.status === 'entered') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳</span>
+                                  } @else if (t.status === 're_entry') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">↻</span>
+                                  }
+                                </li>
                               }
-                              @default {
-                                @if (t.status === 'pending') {
-                                  <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick · scan</pf-touch-btn>
-                                } @else if (t.status === 'validated') {
-                                  <span class="px-2 py-0.5 text-[11px] font-medium rounded"
-                                        style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ Validated</span>
-                                } @else if (t.status === 'entered') {
-                                  <span class="px-2 py-0.5 text-[11px] font-medium rounded"
-                                        style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳ Awaiting validation</span>
-                                  <pf-touch-btn variant="ghost" size="sm" (pressed)="startPick(t)">View</pf-touch-btn>
-                                } @else {
-                                  <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
+                            </ul>
+                            <div class="flex justify-end gap-2">
+                              @switch (tab()) {
+                                @case ('service_queue') {
+                                  <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="pickTube(tube)">Pick · scan tube</button>
+                                  <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests[0])">Delegate</button>
+                                }
+                                @default {
+                                  @if (tube.rejections.length > 0) {
+                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
+                                  } @else if (tube.allDone) {
+                                    <span class="px-2 py-0.5 text-[11px] font-medium rounded"
+                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ All entered</span>
+                                  } @else {
+                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
+                                  }
                                 }
                               }
-                            }
+                            </div>
                           </li>
                         }
                       </ul>
@@ -671,6 +723,88 @@ const COUNTERS: CounterSpec[] = [
     .pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
     .pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
     .pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+
+    /* Tube tile gets a soft red wash when any of its tests are in
+       re_entry — pulls the eye to it without screaming. */
+    .pf-tube-tile--rejected {
+      border-color: rgba(239, 68, 68, 0.34) !important;
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.02)) !important;
+    }
+
+    .pf-tube-reject {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(239, 68, 68, 0.10);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+    }
+    .pf-tube-reject__head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .pf-tube-reject__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pf-tube-reject__title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fca5a5;
+    }
+    .pf-tube-reject__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pf-tube-reject__item {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .pf-tube-reject__test {
+      font-weight: 600;
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    .pf-tube-reject__test::after { content: ':'; }
+    .pf-tube-reject__reason {
+      color: var(--text-secondary);
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Phones (<640px): tube tile actions stack so Pick + Delegate
+       don't squeeze each other; rejection items wrap label-on-top. */
+    @media (max-width: 639px) {
+      /* Patient card: drop the pl-12 indent so tube rows can use
+         full mobile width. */
+      .pf-tube-reject {
+        padding: 8px 10px;
+      }
+      .pf-tube-reject__item {
+        flex-direction: column;
+        gap: 0;
+        align-items: flex-start;
+      }
+      .pf-tube-reject__test::after { content: ''; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -678,11 +812,13 @@ export class MyWorkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
 
+  // Rejected tab dropped — re-entry rows now show inline in My Work
+  // with their rejection reason in the tube tile, so the tech sees WHY
+  // the pathologist sent it back without switching tabs.
   readonly tabOptions = [
     { value: 'intake'        as Tab, label: 'Lab Intake' },
     { value: 'my_work'       as Tab, label: 'My Work' },
-    { value: 'service_queue' as Tab, label: 'Service Queue' },
-    { value: 'rejected'      as Tab, label: 'Rejected' }
+    { value: 'service_queue' as Tab, label: 'Service Queue' }
   ];
   readonly counters = COUNTERS;
 
@@ -910,8 +1046,14 @@ export class MyWorkComponent implements OnInit {
     return '/api/results/my-work';
   }
   private matchesTab(t: OrderTest, tab: Tab): boolean {
+    // Rejected tab: focused view, only re_entry rows.
     if (tab === 'rejected') return t.status === 're_entry';
-    if (tab === 'my_work')  return t.status !== 're_entry';
+    // My Work tab: every row assigned to the tech that still needs
+    // their hands on it — pending (not yet started), in_progress
+    // (mid-entry), AND re_entry (pathologist sent it back). Without the
+    // re_entry inclusion the original submitter doesn't see their own
+    // rejected work in the default landing tab.
+    if (tab === 'my_work')  return t.status === 'pending' || t.status === 'in_progress' || t.status === 're_entry';
     return true;
   }
 
@@ -983,12 +1125,76 @@ export class MyWorkComponent implements OnInit {
     });
   }
 
-  enter(t: OrderTest) { this.router.navigate(['/lab/result', t.id]); }
+  // Sample-level entry (Fix 6 — the tube IS the unit of work). One scan,
+  // all tests in the tube on one screen. Falls back to per-test entry only
+  // when the row has no sample link (legacy data).
+  enter(t: OrderTest) {
+    const sid = t.subOrder?.id;
+    if (sid) this.router.navigate(['/lab/sample', sid]);
+    else this.router.navigate(['/lab/result', t.id]);
+  }
 
-  // Navigation variant that tells result-entry "don't prompt the re-scan
-  // modal this time — the user literally just scanned two seconds ago".
+  /**
+   * Sub-group a patient's OrderTests by their tube (OrderSample). Each
+   * tube row carries the sample id, dept name, barcode (for the scan
+   * gate), the tests inside, and a pre-computed allDone flag so the UI
+   * can render a status pill instead of an Open button when the whole
+   * tube is already entered/validated.
+   */
+  tubesIn(items: Enriched[]): Array<{
+    sampleId: string;
+    deptName: string;
+    barcode: string;
+    tests: Enriched[];
+    allDone: boolean;
+    rejections: Array<{ testName: string; reason: string }>;
+  }> {
+    const bySample = new Map<string, Enriched[]>();
+    for (const t of items) {
+      const sid = t.subOrder?.id ?? t.id; // fall back so legacy tests still render
+      if (!bySample.has(sid)) bySample.set(sid, []);
+      bySample.get(sid)!.push(t);
+    }
+    return Array.from(bySample.entries()).map(([sampleId, tests]) => {
+      const first = tests[0];
+      const deptName = first.subOrder?.department?.name ?? first.test?.department?.name ?? '';
+      const barcode = first.subOrder?.barcode ?? '';
+      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      // Surface every rejected test's reason so the tile can show a
+      // banner explaining WHY the pathologist sent it back. Without this
+      // the tech sees only the ↻ icon and has to dig into the test to
+      // find out what to fix.
+      const rejections = tests
+        .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
+        .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
+      return { sampleId, deptName, barcode, tests, allDone, rejections };
+    });
+  }
+
+  /**
+   * Pick action on a tube row. Uses the existing scan-gated startPick on
+   * the first test (so the modal demands the tube barcode) — once the
+   * scanner emits matched, onScanMatched ends up calling enterJustScanned
+   * which navigates to /lab/sample/:sampleId (Fix 6 sample-level entry).
+   * One scan → all tests in the tube open together.
+   */
+  pickTube(tube: { sampleId: string; barcode: string; tests: Enriched[] }) {
+    const probe = tube.tests[0];
+    if (!probe) return;
+    if (!tube.barcode) {
+      // Fall back to direct nav when there's no barcode to gate on
+      // (e.g. samples created by the realignment seeder without a printed
+      // label). The user will still see all tests in the tube together.
+      this.router.navigate(['/lab/sample', tube.sampleId]);
+      return;
+    }
+    this.startPick(probe);
+  }
+
   private enterJustScanned(t: OrderTest) {
-    this.router.navigate(['/lab/result', t.id], { state: { justScanned: true } });
+    const sid = t.subOrder?.id;
+    if (sid) this.router.navigate(['/lab/sample', sid], { state: { justScanned: true } });
+    else this.router.navigate(['/lab/result', t.id], { state: { justScanned: true } });
   }
 
   // ── Supervisor delegation ─────────────────────────────

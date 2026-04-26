@@ -6,8 +6,11 @@ import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
+import { OrderTestComment } from '../../../shared/models/comment.model';
+import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { firstValueFrom } from 'rxjs';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -47,7 +50,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -92,6 +95,21 @@ interface ValueRow {
               <pf-chip tone="rose" size="sm">CRITICAL</pf-chip>
             }
           </div>
+
+          <!-- Validator ↔ tech overall conversation. Bidirectional —
+               tech can post observations ("patient was nervous, two
+               attempts"); validator posts corrections ("recheck
+               platelet count"). Per-parameter comments live below
+               each row in the table view. -->
+          <section class="pf-overall-comments">
+            <p class="pf-eyebrow">Overall conversation</p>
+            <pf-comment-thread
+              [comments]="commentsFor(null)"
+              currentRole="validator"
+              (add)="addOverallComment($event.body, $event.type)"
+              (reply)="replyToOverall($event.parentId, $event.body)">
+            </pf-comment-thread>
+          </section>
 
           <!-- Summary strip: param counts with color-coded cells -->
           @if (valueRows().length > 0) {
@@ -217,9 +235,15 @@ interface ValueRow {
                 @for (r of valueRows(); track r.name) {
                   <button type="button"
                           class="pf-table__row press"
+                          [class.pf-table__row--has-comments]="hasOpenComment(r.name)"
                           [attr.data-flag]="r.flag"
-                          (click)="openDetail(r)">
-                    <span class="pf-table__name">{{ r.title }}</span>
+                          (click)="toggleParamComment(r.name); $event.stopPropagation()">
+                    <span class="pf-table__name">
+                      {{ r.title }}
+                      @if (hasOpenComment(r.name)) {
+                        <span class="pf-table__comment-flag" title="Open comment">💬</span>
+                      }
+                    </span>
                     <span class="pf-table__value">
                       {{ r.value ?? '—' }} @if (r.unit) { <em class="pf-table__unit">{{ r.unit }}</em> }
                     </span>
@@ -247,6 +271,18 @@ interface ValueRow {
                       </span>
                     </span>
                   </button>
+                  @if (openParamComment() === r.name) {
+                    <div class="pf-table__row-comments" (click)="$event.stopPropagation()">
+                      <p class="pf-eyebrow pf-table__row-comments-label">{{ r.title }} · conversation</p>
+                      <pf-comment-thread
+                        [comments]="commentsFor(r.name)"
+                        currentRole="validator"
+                        [composeLabel]="'Comment on this parameter'"
+                        (add)="addParameterComment(r.name, $event.body, $event.type)"
+                        (reply)="replyToParameter(r.name, $event.parentId, $event.body)">
+                      </pf-comment-thread>
+                    </div>
+                  }
                 }
               </div>
             }
@@ -957,7 +993,9 @@ interface ValueRow {
     }
     .pf-drawer {
       position: fixed;
-      right: 0; top: 0; bottom: 0;
+      right: 0;
+      top: var(--navbar-height, 4rem);
+      bottom: 0;
       width: min(100%, 520px);
       background: var(--bg-card-solid);
       border-left: 1px solid var(--glass-border);
@@ -1061,6 +1099,43 @@ interface ValueRow {
 
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── Validator ↔ tech conversation surfaces ─────────────────── */
+    .pf-overall-comments {
+      margin: 16px 0 20px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-overall-comments .pf-eyebrow { margin-bottom: 8px; }
+
+    /* Per-row inline comment thread (table view). Sits between the
+       tapped row and the next, indented + soft-bordered so the
+       conversation visually belongs to that row. */
+    .pf-table__row--has-comments .pf-table__name { color: #fca5a5; font-weight: 600; }
+    .pf-table__comment-flag { margin-left: 6px; font-size: 12px; }
+    .pf-table__row-comments {
+      grid-column: 1 / -1;
+      padding: 12px 16px 14px 32px;
+      background: rgba(96, 165, 250, 0.04);
+      border-top: 1px solid var(--glass-border);
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .pf-table__row-comments-label { margin: 0 0 8px; }
+
+    /* Phones (<640px): tighten the new comment surfaces and the
+       overall section so they don't dominate the screen. */
+    @media (max-width: 639px) {
+      .pf-overall-comments {
+        margin: 12px 0 16px;
+        padding: 12px 14px;
+      }
+      .pf-table__row-comments {
+        padding: 10px 14px 12px 14px;
+      }
+      .pf-table__comment-flag { font-size: 11px; }
+    }
   `]
 })
 export class ValidateResultComponent implements OnInit {
@@ -1071,6 +1146,71 @@ export class ValidateResultComponent implements OnInit {
   private readonly router = inject(Router);
 
   private readonly _id = signal<string | null>(null);
+  // Validator ↔ tech conversation. Loaded whenever a new OrderTest
+  // is selected; passed into <pf-comment-thread> instances at the top
+  // of the screen (overall) and inside each parameter row (per-param).
+  private readonly _comments = signal<OrderTestComment[]>([]);
+  readonly comments = this._comments.asReadonly();
+  // Which parameter row currently has its comment thread open (only
+  // one at a time so the table stays compact).
+  private readonly _openParamComment = signal<string | null>(null);
+  readonly openParamComment = this._openParamComment.asReadonly();
+  toggleParamComment(name: string) {
+    this._openParamComment.set(this._openParamComment() === name ? null : name);
+  }
+
+  commentsFor(parameterName: string | null = null): OrderTestComment[] {
+    return this._comments().filter(c =>
+      (parameterName === null && !c.parameterName) || c.parameterName === parameterName
+    );
+  }
+  hasOpenComment(parameterName: string): boolean {
+    return this._comments().some(c =>
+      c.parameterName === parameterName && !c.isResolved
+    );
+  }
+
+  private async loadComments() {
+    const t = this._selected();
+    if (!t) return;
+    try {
+      const list = await firstValueFrom(this.api.get<OrderTestComment[]>(`/api/results/${t.id}/comments`));
+      this._comments.set(list ?? []);
+    } catch { /* non-fatal */ }
+  }
+
+  async addOverallComment(body: string, type: 'observation' | 'correction') {
+    await this.postComment(null, null, body, type);
+  }
+  async replyToOverall(parentId: string, body: string) {
+    await this.postComment(null, parentId, body, 'correction');
+  }
+  async addParameterComment(paramName: string, body: string, type: 'observation' | 'correction') {
+    await this.postComment(paramName, null, body, type);
+  }
+  async replyToParameter(paramName: string, parentId: string, body: string) {
+    await this.postComment(paramName, parentId, body, 'correction');
+  }
+
+  private async postComment(
+    parameterName: string | null,
+    parentId: string | null,
+    body: string,
+    commentType: 'observation' | 'correction'
+  ) {
+    const t = this._selected();
+    if (!t) return;
+    try {
+      await firstValueFrom(this.api.post<OrderTestComment>(
+        `/api/results/${t.id}/comments`,
+        { parameterName, parentId, commentType, body }
+      ));
+      await this.loadComments();
+    } catch (e) {
+      this.toasts.error('Could not post comment');
+    }
+  }
+
   private readonly _selected = signal<OrderTest | null>(null);
   private readonly _comment = signal('');
   private readonly _loading = signal(false);
@@ -1229,6 +1369,7 @@ export class ValidateResultComponent implements OnInit {
         this._loading.set(false);
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
+        if (match) void this.loadComments();
       },
       error: () => this._loading.set(false)
     });

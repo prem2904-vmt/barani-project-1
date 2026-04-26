@@ -32,7 +32,9 @@ import QRCode from 'qrcode';
           <p class="pf-code-card__caption">QR</p>
         </div>
       </div>
-      <p class="pf-code-card__value">{{ code }}</p>
+      @if (showValue) {
+        <p class="pf-code-card__value">{{ code }}</p>
+      }
     </div>
   `,
   styles: [`
@@ -90,6 +92,11 @@ import QRCode from 'qrcode';
 })
 export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
   @Input() code = '';
+  /** Show the raw code/URL underneath the codes. Useful for sample
+   *  tube barcodes (PF-AP-2024-...-HAEM) where the human-readable
+   *  value matters; turn OFF for report verification QRs where the
+   *  code is just an opaque token URL nobody needs to read. */
+  @Input() showValue = true;
 
   @ViewChild('barcode', { static: true }) barcodeEl!: ElementRef<SVGSVGElement>;
   @ViewChild('qr', { static: true }) qrEl!: ElementRef<HTMLCanvasElement>;

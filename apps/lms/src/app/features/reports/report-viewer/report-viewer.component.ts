@@ -13,6 +13,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
   order?: { id?: string; createdAt?: string; priority?: string; refDoctorName?: string };
+  type?: string;
+  isPartial?: boolean;
+  pendingDepts?: string[];
   tests?: Array<{
     testId: string;
     name?: string;
@@ -91,8 +94,29 @@ interface ReportData {
           </p>
         </div>
 
-        <!-- The printable paper. White background kept so print output is clean. -->
-        <article class="pf-paper" aria-label="Report body">
+        <!-- The printable paper. The pf-printable class opts in to
+             the global print rules in styles.scss so the app shell
+             vanishes and only the paper hits the page. -->
+        <article class="pf-paper pf-printable" aria-label="Report body">
+          @if (data()?.isPartial) {
+            <!-- Preliminary banner — non-negotiable on a partial PDF
+                 so a clinician reading it understands they're not
+                 looking at the final canonical report. -->
+            <div class="pf-paper__prelim">
+              <span class="pf-paper__prelim-icon" aria-hidden="true">⚠</span>
+              <div>
+                <p class="pf-paper__prelim-title">PRELIMINARY REPORT</p>
+                <p class="pf-paper__prelim-sub">
+                  Departments shown are signed off and final.
+                  @if (data()?.pendingDepts?.length) {
+                    Other departments still pending: {{ data()?.pendingDepts?.join(', ') }}.
+                  } @else {
+                    Other departments still pending.
+                  }
+                </p>
+              </div>
+            </div>
+          }
           <div class="pf-paper__masthead" [style.border-color]="tpl()?.primaryColor ?? '#1B3A6B'">
             <div class="flex items-center gap-3">
               @if (tpl()?.logoUrl && tpl()?.logoUrl !== '/logo.svg') {
@@ -204,7 +228,7 @@ interface ReportData {
 
             @if (tpl()?.showQrCode !== false && r.qrToken) {
               <div class="pf-paper__qr">
-                <pf-barcode-display [code]="verifyCode(r.qrToken)"></pf-barcode-display>
+                <pf-barcode-display [code]="verifyCode(r.qrToken)" [showValue]="false"></pf-barcode-display>
                 <p class="pf-paper__qr-caption">Scan to verify online</p>
               </div>
             }
@@ -248,6 +272,45 @@ interface ReportData {
       border-radius: 14px;
       color: var(--text-tertiary);
       font-size: 13px;
+    }
+
+    /* Preliminary banner — only shown on partial reports. Drops into
+       the paper before the masthead so any clinician reading it
+       knows immediately this isn't the canonical final. */
+    .pf-paper__prelim {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      border: 2px solid #b45309;
+      background: #fef3c7;
+      color: #78350f;
+      border-radius: 8px;
+    }
+    .pf-paper__prelim-icon {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #f59e0b;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .pf-paper__prelim-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: #78350f;
+    }
+    .pf-paper__prelim-sub {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: #92400e;
     }
 
     /* The printable "paper". Kept static black-on-white so output prints cleanly. */

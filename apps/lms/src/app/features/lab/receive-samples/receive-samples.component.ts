@@ -225,35 +225,38 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </div>
       }
 
-      <!-- ─── Arrived at lab counter, awaiting bench tech pickup ─── -->
-      <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
-        <div class="flex items-center gap-2">
-          <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                style="color: var(--text-secondary);">Arrived · ready for pickup</span>
-          <span class="text-[11px] font-mono"
-                style="color: var(--text-muted);">· {{ inTransit().length }} tubes</span>
+      <!-- ─── Legacy "arrived → pickup" queue ──────────────────────────
+           The intermediate in_transit step was dropped (Mark Arrived
+           now goes straight to received + TAT-start). This block is
+           only rendered if legacy in_transit rows still exist from
+           pre-cutover orders so techs can drain them. New orders skip
+           it entirely. -->
+      @if (inTransit().length > 0) {
+        <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                  style="color: var(--text-secondary);">Legacy queue · awaiting pickup</span>
+            <span class="text-[11px] font-mono"
+                  style="color: var(--text-muted);">· {{ inTransit().length }} tubes</span>
+          </div>
+          <div class="flex gap-2">
+            <pf-touch-btn size="sm" variant="ghost"
+                          [disabled]="inTransit().length === 0"
+                          (pressed)="toggleAll()">
+              {{ allSelected() ? 'Deselect all' : 'Select all' }}
+            </pf-touch-btn>
+            <pf-touch-btn size="sm" variant="primary"
+                          [disabled]="selectedIds().size === 0 || busy()"
+                          (pressed)="receiveSelected()">
+              Pick up {{ selectedIds().size || 0 }} · TAT starts
+            </pf-touch-btn>
+          </div>
         </div>
-        <div class="flex gap-2">
-          <pf-touch-btn size="sm" variant="ghost"
-                        [disabled]="inTransit().length === 0"
-                        (pressed)="toggleAll()">
-            {{ allSelected() ? 'Deselect all' : 'Select all' }}
-          </pf-touch-btn>
-          <pf-touch-btn size="sm" variant="primary"
-                        [disabled]="selectedIds().size === 0 || busy()"
-                        (pressed)="receiveSelected()">
-            Pick up {{ selectedIds().size || 0 }} · TAT starts
-          </pf-touch-btn>
-        </div>
-      </div>
-
-      @if (inTransit().length === 0) {
-        <pf-tile tone="default" padding="xl">
-          <p class="text-center text-[14px]" style="color: var(--text-secondary);">
-            Nothing waiting for pickup. Mark a dispatched batch as Arrived above to populate the queue.
-          </p>
-        </pf-tile>
       } @else {
+        <!-- intentionally empty — no in-transit queue any more. -->
+      }
+
+      @if (inTransit().length > 0) {
         <div class="space-y-2.5">
           @for (s of inTransit(); track s.id) {
             <pf-tile [tone]="isSelected(s.id) ? 'violet' : 'default'" padding="md">
@@ -532,7 +535,9 @@ export class ReceiveSamplesComponent implements OnInit {
       next: r => {
         this.busy.set(false);
         const n = r?.arrived ?? 0;
-        this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${n} tube${n === 1 ? '' : 's'} arrived — ready for pickup`);
+        // Backend now flips dispatched → received in one step (no
+        // intermediate in_transit). TAT starts at this moment.
+        this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${n} tube${n === 1 ? '' : 's'} received — TAT clock started`);
         this.refresh();
       },
       error: e => {
