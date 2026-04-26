@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "build": "NX_DAEMON=false nx build lms && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
+    "build": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
     "start": "nx serve lms"
   },
   "engines": {
