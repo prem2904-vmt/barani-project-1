@@ -128,10 +128,10 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         @case ('radio') {
           <div class="flex flex-col gap-1.5">
             @for (o of norm; track o.value) {
-              <label class="inline-flex items-center gap-2 text-sm">
-                <input type="radio" [name]="field.name" [value]="o.value"
+              <label class="pf-radio-row">
+                <input type="radio" class="pf-radio" [name]="field.name" [value]="o.value"
                        [ngModel]="value" (ngModelChange)="emit($event)" />
-                <span>{{ o.label }}</span>
+                <span class="pf-radio-label">{{ o.label }}</span>
               </label>
             }
           </div>
@@ -307,7 +307,7 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
 
         @case ('measure') {
           <div class="flex items-center gap-3">
-            <input type="range" class="flex-1" min="0" max="100" step="1"
+            <input type="range" class="pf-range flex-1" min="0" max="100" step="1"
                    [ngModel]="measureVal()"
                    (ngModelChange)="setMeasure($event)" />
             <span class="text-sm font-mono min-w-[3rem] text-right">{{ measureVal() ?? '—' }}</span>
@@ -437,7 +437,80 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         Preview only — interactive editor coming in a future release.
       </div>
     </ng-template>
-  `
+  `,
+  styles: [`
+    /* Custom radio + range thumb. Native browser controls deform on
+       narrow viewports (radios get squashed into ovals when a flex parent
+       scales them, range thumbs render flat-oval on Android Chrome). We
+       use appearance:none + explicit, square dimensions so the circles
+       stay perfect regardless of viewport. */
+    .pf-radio-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .pf-radio {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;       /* never let flex squash it into an oval */
+      margin: 0;
+      border: 2px solid var(--border-muted, #475569);
+      border-radius: 9999px;
+      background: transparent;
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease;
+    }
+    .pf-radio:hover { border-color: var(--text-secondary, #cbd5e1); }
+    .pf-radio:checked {
+      border-color: #a855f7;
+      background: radial-gradient(circle, #a855f7 45%, transparent 47%);
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+    }
+    .pf-radio:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.35);
+    }
+    .pf-radio-label { color: var(--text-primary, #e5e7eb); }
+
+    /* Range slider — flatten the track, lock the thumb to a circle. */
+    .pf-range {
+      appearance: none;
+      -webkit-appearance: none;
+      height: 4px;
+      background: var(--glass-bg, rgba(255,255,255,0.08));
+      border-radius: 9999px;
+      outline: none;
+    }
+    .pf-range::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: var(--gradient-primary, #a855f7);
+      box-shadow: 0 4px 10px rgba(124, 58, 237, 0.45);
+      cursor: pointer;
+      border: none;
+    }
+    .pf-range::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: #a855f7;
+      box-shadow: 0 4px 10px rgba(124, 58, 237, 0.45);
+      cursor: pointer;
+      border: none;
+    }
+  `]
 })
 export class DynamicInputComponent {
   private readonly _field = signal<DynamicFieldConfig | null>(null);

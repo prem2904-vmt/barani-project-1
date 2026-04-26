@@ -48,22 +48,25 @@ interface StaffMember {
       <!-- ── Compact header ─────────────────────────────────────── -->
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
-          <span class="pf-head__eyebrow">Frontdesk · Front desk</span>
           <h1 class="pf-head__title">
             Good day, <span class="pf-head__name">{{ firstName() }}</span>
           </h1>
           <p class="pf-head__sub">{{ statusHint() }}</p>
 
           <div class="pf-head__actions">
-            <span class="pf-live" [title]="'Auto-refresh every 30s'">
-              <span class="pf-live__dot"></span>
-              {{ lastUpdatedLabel() }}
-            </span>
             <span class="pf-collection" [class.pf-collection--idle]="collectedToday() === 0"
                   [title]="'Collected today'">
               <span class="pf-collection__dot"></span>
               {{ collectedToday() | inr }} <span class="pf-collection__sep">·</span>
               <span class="pf-collection__due">{{ dueToday() | inr }} due</span>
+            </span>
+            <span class="pf-toptest-pill" [class.pf-toptest-pill--idle]="!topTest()"
+                  [title]="'Most ordered test today'">
+              <span class="pf-toptest-pill__label">Top</span>
+              <span class="pf-toptest-pill__name">{{ topTest()?.name ?? '—' }}</span>
+              @if (topTest()) {
+                <span class="pf-toptest-pill__count">×{{ topTest()!.count }}</span>
+              }
             </span>
             <button type="button" class="pf-head__btn pf-head__btn--secondary press"
                     (click)="searchFocus()">
@@ -72,6 +75,53 @@ interface StaffMember {
               </svg>
               Scan QR
             </button>
+
+            <!-- Staff on duty: secondary button next to Scan QR. The on-
+                 duty count rides on the button as a badge, so it's still
+                 a glance-able status indicator without taking up its own
+                 row of screen real estate. Tap → popover anchored under
+                 the button (desktop/tablet) or full-width sheet (mobile). -->
+            <div class="pf-staff-anchor">
+              <button type="button"
+                      class="pf-head__btn pf-head__btn--secondary press"
+                      [class.pf-head__btn--on]="staffPopoverOpen()"
+                      (click)="toggleStaffPopover($event)"
+                      aria-haspopup="dialog"
+                      [attr.aria-expanded]="staffPopoverOpen()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                Staff
+                <span class="pf-head__btn-badge">{{ onDutyCount() }}</span>
+              </button>
+
+              @if (staffPopoverOpen()) {
+                <div class="pf-staff-pop-bd" (click)="closeStaffPopover()"></div>
+                <div class="pf-staff-pop" role="dialog" aria-label="Staff on duty"
+                     (click)="$event.stopPropagation()">
+                  <header class="pf-staff-pop__hdr">
+                    <span class="pf-staff-pop__dot" aria-hidden="true"></span>
+                    <h2 class="pf-staff-pop__title">Staff on duty</h2>
+                    <span class="pf-staff-pop__count">{{ onDutyCount() }}/{{ staff.length }}</span>
+                  </header>
+                  <ul class="pf-staff">
+                    @for (s of staff; track s.id) {
+                      <li class="pf-staff__row">
+                        <pf-avatar [name]="s.name" [size]="24"></pf-avatar>
+                        <span class="pf-staff__name">{{ s.name }}</span>
+                        <span class="pf-staff__role">{{ s.role }}</span>
+                        <span class="pf-staff__dot" [attr.data-state]="s.status"></span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+            </div>
+
             <button type="button" class="pf-head__btn pf-head__btn--primary press"
                     (click)="openRegister()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -143,10 +193,9 @@ interface StaffMember {
           </div>
         }
 
-        <!-- Layout: main + optional right sidebar on xl+ -->
-        <div class="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-5 items-start">
-
-          <!-- MAIN COLUMN -->
+        <!-- Single-column layout — staff lives in the header now, so no
+             right-side aside. -->
+        <div class="grid grid-cols-1 gap-5 items-start">
           <div class="min-w-0">
 
             <!-- Filter row: search + date pills -->
@@ -155,34 +204,107 @@ interface StaffMember {
                 <pf-patient-search placeholder="Search patient · name, phone, ABHA, UHID…"
                                    (picked)="openProfile($event)"></pf-patient-search>
               </div>
-              <div class="pf-date-pills" role="tablist" aria-label="Date range">
+              <div class="pf-date-pills relative" role="tablist" aria-label="Date range">
                 @for (d of dateOptions; track d.id) {
-                  <button type="button"
-                          class="pf-date-pill press"
-                          [class.pf-date-pill--on]="dateRange() === d.id"
-                          (click)="setDateRange(d.id)">
-                    {{ d.label }}
-                  </button>
+                  @if (d.id === 'custom') {
+                    <button type="button"
+                            class="pf-date-pill press pf-date-pill--custom"
+                            [class.pf-date-pill--on]="dateRange() === 'custom'"
+                            (click)="toggleCalendar()"
+                            [attr.aria-expanded]="calendarOpen()">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/>
+                        <path d="M16 2v4M8 2v4M3 10h18"/>
+                      </svg>
+                      {{ customRangeLabel() }}
+                    </button>
+                  } @else {
+                    <button type="button"
+                            class="pf-date-pill press"
+                            [class.pf-date-pill--on]="dateRange() === d.id"
+                            (click)="setDateRange(d.id)">
+                      {{ d.label }}
+                    </button>
+                  }
+                }
+
+                <!-- Calendar popover — anchored to the Custom pill. Click
+                     a day for a single-day range; click another day to
+                     extend it into a range. -->
+                @if (calendarOpen()) {
+                  <div class="pf-calbd" (click)="closeCalendar()"></div>
+                  <div class="pf-cal" role="dialog" aria-label="Pick date range"
+                       (click)="$event.stopPropagation()">
+                    <header class="pf-cal__hdr">
+                      <button type="button" class="pf-cal__nav press" (click)="prevMonth()" aria-label="Previous month">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="m15 18-6-6 6-6"/>
+                        </svg>
+                      </button>
+                      <span class="pf-cal__title">{{ calMonth() | date:'MMMM y' }}</span>
+                      <button type="button" class="pf-cal__nav press" (click)="nextMonth()" aria-label="Next month">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="m9 18 6-6-6-6"/>
+                        </svg>
+                      </button>
+                    </header>
+                    <div class="pf-cal__dows">
+                      @for (d of dows; track d) { <span>{{ d }}</span> }
+                    </div>
+                    <div class="pf-cal__grid">
+                      @for (cell of calCells(); track cell.iso) {
+                        <button type="button"
+                                class="pf-cal__cell press"
+                                [class.pf-cal__cell--out]="cell.outside"
+                                [class.pf-cal__cell--today]="cell.today"
+                                [class.pf-cal__cell--start]="cell.isStart"
+                                [class.pf-cal__cell--end]="cell.isEnd"
+                                [class.pf-cal__cell--in]="cell.inRange"
+                                [disabled]="cell.future"
+                                (click)="pickDay(cell.iso)">
+                          {{ cell.day }}
+                        </button>
+                      }
+                    </div>
+                    <footer class="pf-cal__foot">
+                      <span class="pf-cal__hint">{{ customRangeHint() }}</span>
+                      <button type="button" class="pf-cal__btn pf-cal__btn--ghost press"
+                              (click)="clearCustom()" [disabled]="!customStart()">
+                        Clear
+                      </button>
+                      <button type="button" class="pf-cal__btn pf-cal__btn--apply press"
+                              (click)="applyCustom()" [disabled]="!customStart()">
+                        Apply
+                      </button>
+                    </footer>
+                  </div>
                 }
               </div>
             </div>
 
-            <!-- Tabs -->
-            <div class="pf-tabs" role="tablist">
-              @for (t of tabOptions; track t.id) {
-                <button type="button"
-                        class="pf-tab press"
-                        [class.pf-tab--on]="tab() === t.id"
-                        (click)="setTab(t.id)"
-                        role="tab"
-                        [attr.aria-selected]="tab() === t.id">
-                  <span>{{ t.label }}</span>
-                  <span class="pf-tab__count" [attr.data-tone]="t.tone">
-                    {{ counts()[t.id] }}
-                  </span>
-                </button>
-              }
-            </div>
+            <!-- Two-panel layout: left menu (tablet+) / horizontal strip
+                 (mobile) on the left, list on the right. The menu and list
+                 are siblings inside .pf-twopanel; the same .pf-tp-item
+                 buttons reflow between layouts via media queries. -->
+            <div class="pf-twopanel">
+              <nav class="pf-twopanel__menu" role="tablist" aria-label="Frontdesk queue">
+                @for (t of tabOptions; track t.id) {
+                  <button type="button"
+                          class="pf-tp-item press"
+                          [class.pf-tp-item--on]="tab() === t.id"
+                          (click)="setTab(t.id)"
+                          role="tab"
+                          [attr.aria-selected]="tab() === t.id">
+                    <span class="pf-tp-item__label">{{ t.label }}</span>
+                    <span class="pf-tp-item__count" [attr.data-tone]="t.tone">
+                      {{ counts()[t.id] }}
+                    </span>
+                  </button>
+                }
+              </nav>
 
             <!-- List container -->
             <div class="pf-list-wrap">
@@ -419,45 +541,8 @@ interface StaffMember {
                 }
               }
             </div>
+            </div>
           </div>
-
-          <!-- RIGHT SIDEBAR (xl+ only) -->
-          <aside class="pf-aside hidden xl:block">
-            <!-- Staff on duty -->
-            <div class="pf-widget">
-              <p class="pf-widget__eyebrow">Staff on duty</p>
-              <ul class="pf-staff">
-                @for (s of staff; track s.id) {
-                  <li class="pf-staff__row">
-                    <pf-avatar [name]="s.name" [size]="28"></pf-avatar>
-                    <span class="pf-staff__name">{{ s.name }}</span>
-                    <span class="pf-staff__role">{{ s.role }}</span>
-                    <span class="pf-staff__dot" [attr.data-state]="s.status"></span>
-                  </li>
-                }
-              </ul>
-            </div>
-
-            <!-- Top tests today -->
-            <div class="pf-widget">
-              <p class="pf-widget__eyebrow">Top tests · today</p>
-              @if (topTests().length === 0) {
-                <p class="pf-widget__empty">No orders yet.</p>
-              }
-              <ul class="pf-toptests">
-                @for (t of topTests(); track t.name; let i = $index) {
-                  <li class="pf-toptests__row">
-                    <span class="pf-toptests__rank">{{ i + 1 }}</span>
-                    <span class="pf-toptests__name">{{ t.name }}</span>
-                    <span class="pf-toptests__count">{{ t.count }}</span>
-                    <div class="pf-toptests__bar">
-                      <div class="pf-toptests__fill" [style.width.%]="(t.count / topTestsMax()) * 100"></div>
-                    </div>
-                  </li>
-                }
-              </ul>
-            </div>
-          </aside>
 
         </div>
 
@@ -549,7 +634,6 @@ interface StaffMember {
       display: grid;
       grid-template-columns: 1fr auto;
       grid-template-areas:
-        "eyebrow actions"
         "title actions"
         "sub actions";
       gap: 2px 16px;
@@ -559,18 +643,10 @@ interface StaffMember {
     @media (max-width: 767px) {
       .pf-head {
         grid-template-columns: 1fr;
-        grid-template-areas: "eyebrow" "title" "sub" "actions";
+        grid-template-areas: "title" "sub" "actions";
         gap: 4px;
       }
       .pf-head__actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 8px; }
-    }
-    .pf-head__eyebrow {
-      grid-area: eyebrow;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
     }
     .pf-head__title {
       grid-area: title;
@@ -813,47 +889,240 @@ interface StaffMember {
       color: #ffffff;
       box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
     }
-
-    /* ── Tabs ──────────────────────────────────────────────── */
-    .pf-tabs {
-      display: flex;
-      gap: 2px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border-muted);
-      overflow-x: auto;
-      scrollbar-width: none;
+    .pf-date-pill--custom {
+      display: inline-flex; align-items: center; gap: 6px;
     }
-    .pf-tabs::-webkit-scrollbar { display: none; }
-    .pf-tab {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 14px;
-      border: none;
+
+    /* Calendar popover — anchored to the Custom pill. */
+    .pf-calbd {
+      position: fixed; inset: 0;
+      z-index: 38;
       background: transparent;
-      color: var(--text-secondary);
+    }
+    .pf-cal {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      width: 286px;
+      padding: 12px;
+      border-radius: 16px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      animation: pf-cal-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    @keyframes pf-cal-in {
+      from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (max-width: 480px) {
+      /* On narrow viewports anchor full-width below the pills row. */
+      .pf-cal { right: auto; left: 0; right: 0; width: auto; }
+    }
+    .pf-cal__hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .pf-cal__title {
       font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+    }
+    .pf-cal__nav {
+      width: 28px; height: 28px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .pf-cal__nav:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-cal__dows {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 4px;
+    }
+    .pf-cal__dows span {
+      text-align: center;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 4px 0;
+    }
+    .pf-cal__grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .pf-cal__cell {
+      aspect-ratio: 1 / 1;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+    .pf-cal__cell:hover:not(:disabled) {
+      background: var(--glass-bg-hover);
+      color: var(--text-primary);
+    }
+    .pf-cal__cell:disabled { opacity: 0.32; cursor: not-allowed; }
+    .pf-cal__cell--out { color: var(--text-muted); }
+    .pf-cal__cell--today {
+      border-color: rgba(168, 85, 247, 0.5);
+      color: #c4b5fd;
+    }
+    .pf-cal__cell--in {
+      background: rgba(168, 85, 247, 0.16);
+      color: var(--text-primary);
+    }
+    .pf-cal__cell--start,
+    .pf-cal__cell--end {
+      background: var(--gradient-primary) !important;
+      color: #ffffff !important;
+      border-color: transparent !important;
+      box-shadow: 0 6px 14px rgba(124, 58, 237, 0.45);
+    }
+    .pf-cal__foot {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-muted);
+    }
+    .pf-cal__hint {
+      flex: 1; min-width: 0;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pf-cal__btn {
+      height: 28px;
+      padding: 0 12px;
+      border-radius: 9999px;
+      font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-      transition: color 0.2s;
+      border: 1px solid transparent;
     }
-    .pf-tab:hover { color: var(--text-primary); }
-    .pf-tab--on { color: var(--text-primary); }
-    .pf-tab--on::after {
-      content: '';
-      position: absolute;
-      left: 12px; right: 12px; bottom: -1px;
-      height: 3px;
+    .pf-cal__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pf-cal__btn--ghost {
+      background: var(--glass-bg);
+      color: var(--text-secondary);
+      border-color: var(--glass-border);
+    }
+    .pf-cal__btn--ghost:hover:not(:disabled) { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-cal__btn--apply {
       background: var(--gradient-primary);
-      border-radius: 3px;
-      box-shadow: 0 0 12px rgba(168, 85, 247, 0.55);
-      animation: pf-tab-in 0.25s ease both;
+      color: #ffffff;
     }
-    @keyframes pf-tab-in { from { transform: scaleX(0.4); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
-    .pf-tab__count {
+    .pf-cal__btn--apply:hover:not(:disabled) { box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45); }
+
+    /* ── Two-panel layout ─────────────────────────────────────
+     * Same buttons reflow between layouts via media queries. On mobile
+     * the menu becomes a horizontal scrollable strip with an underline
+     * indicator; on tablet+ it becomes a sticky vertical menu.
+     */
+    .pf-twopanel { display: grid; }
+
+    @media (max-width: 767px) {
+      .pf-twopanel {
+        grid-template-rows: auto 1fr;
+        gap: 12px;
+      }
+      .pf-twopanel__menu {
+        display: flex;
+        gap: 2px;
+        border-bottom: 1px solid var(--border-muted);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .pf-twopanel__menu::-webkit-scrollbar { display: none; }
+      .pf-tp-item {
+        position: relative;
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: color 0.2s;
+      }
+      .pf-tp-item:hover { color: var(--text-primary); }
+      .pf-tp-item--on { color: var(--text-primary); }
+      .pf-tp-item--on::after {
+        content: '';
+        position: absolute;
+        left: 12px; right: 12px; bottom: -1px;
+        height: 3px;
+        background: var(--gradient-primary);
+        border-radius: 3px;
+        box-shadow: 0 0 12px rgba(168, 85, 247, 0.55);
+        animation: pf-tp-in 0.25s ease both;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .pf-twopanel {
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .pf-twopanel__menu {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        border-radius: 14px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        position: sticky;
+        top: 12px;
+      }
+      .pf-tp-item {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+        text-align: left;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+      }
+      .pf-tp-item:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+      .pf-tp-item--on {
+        background: var(--gradient-primary);
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+      }
+      .pf-tp-item--on:hover { background: var(--gradient-primary); color: #ffffff; }
+    }
+
+    @keyframes pf-tp-in { from { transform: scaleX(0.4); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+
+    .pf-tp-item__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-tp-item__count {
       min-width: 22px;
       padding: 2px 7px;
       border-radius: 9999px;
@@ -864,16 +1133,21 @@ interface StaffMember {
       font-variant-numeric: tabular-nums;
       color: var(--text-tertiary);
       text-align: center;
+      flex-shrink: 0;
     }
-    .pf-tab--on .pf-tab__count {
-      background: var(--gradient-primary);
+    .pf-tp-item--on .pf-tp-item__count {
+      background: rgba(255, 255, 255, 0.22);
       color: #ffffff;
       border-color: transparent;
     }
-    .pf-tab__count[data-tone='rose']    { color: #fca5a5; background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.3); }
-    .pf-tab__count[data-tone='amber']   { color: #fbbf24; background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.3); }
-    .pf-tab__count[data-tone='emerald'] { color: #34d399; background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.3); }
-    .pf-tab--on .pf-tab__count[data-tone] { background: var(--gradient-primary); color: #ffffff; border-color: transparent; }
+    .pf-tp-item__count[data-tone='rose']    { color: #fca5a5; background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.3); }
+    .pf-tp-item__count[data-tone='amber']   { color: #fbbf24; background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.3); }
+    .pf-tp-item__count[data-tone='emerald'] { color: #34d399; background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.3); }
+    .pf-tp-item--on .pf-tp-item__count[data-tone] {
+      background: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      border-color: transparent;
+    }
 
     /* ── Cards list ────────────────────────────────────────── */
     .pf-empty {
@@ -1067,25 +1341,45 @@ interface StaffMember {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.04em;
     }
-    .pf-live {
+    /* Top test today — compact stat pill in the header. */
+    .pf-toptest-pill {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 11px; border-radius: 999px;
-      font-size: 11px; font-weight: 600;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      font-size: 12px;
+      font-weight: 600;
+      max-width: 220px;
+    }
+    .pf-toptest-pill--idle {
+      background: var(--glass-bg);
+      border-color: var(--glass-border);
+    }
+    .pf-toptest-pill__label {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.04em;
-      color: #5eead4;
-      background: rgba(45, 212, 191, 0.1);
-      border: 1px solid rgba(45, 212, 191, 0.3);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #c4b5fd;
+      flex-shrink: 0;
     }
-    .pf-live__dot {
-      width: 6px; height: 6px; border-radius: 999px;
-      background: #2dd4bf;
-      box-shadow: 0 0 8px rgba(45, 212, 191, 0.7);
-      animation: pf-live-pulse 1.6s ease-in-out infinite;
+    .pf-toptest-pill--idle .pf-toptest-pill__label { color: var(--text-muted); }
+    .pf-toptest-pill__name {
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
     }
-    @keyframes pf-live-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.85); }
+    .pf-toptest-pill--idle .pf-toptest-pill__name { color: var(--text-tertiary); }
+    .pf-toptest-pill__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px;
+      color: #a78bfa;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
     }
     .pf-tag--ok {
       color: #5eead4;
@@ -1116,21 +1410,44 @@ interface StaffMember {
       flex-direction: column;
       gap: 12px;
     }
-    .pf-widget {
-      padding: 14px;
-      border-radius: 16px;
-      background: var(--bg-card-solid);
+    .pf-staff-card {
+      border-radius: 14px;
+      background: var(--glass-bg);
       border: 1px solid var(--glass-border);
+      overflow: hidden;
     }
-    .pf-widget__eyebrow {
-      margin: 0 0 10px;
-      font-size: 10.5px;
+    .pf-staff-card[open] { background: var(--bg-card-solid); }
+    .pf-staff-card__hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+    .pf-staff-card__hdr::-webkit-details-marker { display: none; }
+    .pf-staff-card__dot {
+      width: 8px; height: 8px; border-radius: 9999px;
+      background: #34d399;
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+      flex-shrink: 0;
+    }
+    .pf-staff-card__title { font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; }
+    .pf-staff-card__count {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+      font-size: 10.5px;
       color: var(--text-muted);
+      letter-spacing: 0.06em;
     }
-    .pf-widget__empty { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+    .pf-staff-card__chev { color: var(--text-secondary); transition: transform 0.2s; flex-shrink: 0; }
+    .pf-staff-card[open] .pf-staff-card__chev { transform: rotate(180deg); }
+    .pf-staff-card .pf-staff {
+      padding: 0 12px 12px;
+      border-top: 1px solid var(--border-muted);
+      padding-top: 10px;
+    }
 
     .pf-staff { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .pf-staff__row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
@@ -1141,44 +1458,84 @@ interface StaffMember {
     .pf-staff__dot[data-state='on_break'] { background: #fbbf24; box-shadow: 0 0 6px rgba(251, 191, 36, 0.7); }
     .pf-staff__dot[data-state='busy']     { background: #f87171; box-shadow: 0 0 6px rgba(248, 113, 113, 0.7); }
 
-    .pf-toptests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .pf-toptests__row {
-      display: grid;
-      grid-template-columns: 18px 1fr auto;
-      gap: 8px;
-      align-items: center;
-      font-size: 12.5px;
-    }
-    .pf-toptests__rank {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px;
-      color: var(--text-muted);
-      text-align: center;
-    }
-    .pf-toptests__name {
-      font-weight: 600;
-      color: var(--text-primary);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .pf-toptests__count {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11px;
-      font-weight: 700;
+    /* ── Mobile staff chip + bottom sheet ─────────────────────
+     * The chip sits floating just above the bulkbar/ bottom-nav so it's
+     * always reachable but never crowds the main column. Tap → slide-up
+     * sheet with the full staff list. */
+    .pf-staff-fab {
+      position: fixed;
+      right: 16px;
+      bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      z-index: 25;
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 9999px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border);
       color: var(--text-secondary);
+      font-size: 11.5px;
+      font-weight: 600;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
     }
-    .pf-toptests__bar {
-      grid-column: 2 / -1;
-      height: 4px;
+    .pf-staff-fab:hover { color: var(--text-primary); background: var(--glass-bg-hover); }
+    .pf-staff-fab__dot {
+      width: 6px; height: 6px; border-radius: 9999px;
+      background: #34d399;
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+    }
+    .pf-staff-sheet-bd {
+      position: fixed; inset: 0;
+      z-index: 46;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      animation: pf-fade 0.2s ease both;
+    }
+    .pf-staff-sheet {
+      position: fixed;
+      left: 8px; right: 8px;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+      z-index: 47;
+      max-height: 70vh;
+      padding: 10px 14px 16px;
+      border-radius: 22px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
+      animation: pf-sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .pf-staff-sheet__handle {
+      width: 36px; height: 4px;
+      margin: 4px auto 12px;
       border-radius: 2px;
-      background: var(--glass-bg);
-      overflow: hidden;
+      background: var(--border-muted);
     }
-    .pf-toptests__fill {
-      height: 100%;
-      background: var(--gradient-primary);
-      box-shadow: 0 0 8px rgba(168, 85, 247, 0.5);
+    .pf-staff-sheet__hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .pf-staff-sheet__title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .pf-staff-sheet__x {
+      width: 28px; height: 28px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    @keyframes pf-sheet-up {
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0)   ; opacity: 1; }
     }
 
     /* ── Bulk action bar ────────────────────────────────────── */
@@ -1362,11 +1719,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   ];
 
   readonly dateOptions: Array<{ id: DateRange; label: string }> = [
-    { id: 'today',     label: 'Today' },
-    { id: 'yesterday', label: 'Yesterday' },
-    { id: '7d',        label: 'Last 7 days' },
-    { id: 'month',     label: 'This month' },
+    { id: 'today',  label: 'Today' },
+    { id: '7d',     label: 'Last 7 days' },
+    { id: 'custom', label: 'Custom' },
   ];
+
+  readonly dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   /** Mocked staff — backend doesn't track duty status yet. */
   readonly staff: StaffMember[] = [
@@ -1382,6 +1740,20 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _dateRange = signal<DateRange>('today');
   readonly dateRange = this._dateRange.asReadonly();
 
+  // Custom date range — stored as ISO yyyy-MM-dd strings so signal equality
+  // works with primitives. _customEnd is null until the user picks a second
+  // day (single-day picks set start, leave end null and we treat end=start).
+  private readonly _customStart = signal<string | null>(null);
+  private readonly _customEnd = signal<string | null>(null);
+  readonly customStart = this._customStart.asReadonly();
+  readonly customEnd = this._customEnd.asReadonly();
+  // Calendar popover open state + the month currently being viewed (1st of
+  // month, so day-grid math doesn't drift across DST boundaries).
+  private readonly _calendarOpen = signal(false);
+  readonly calendarOpen = this._calendarOpen.asReadonly();
+  private readonly _calMonth = signal<Date>(this.firstOfThisMonth());
+  readonly calMonth = this._calMonth.asReadonly();
+
   private readonly _selectedIds = signal<Set<string>>(new Set());
   readonly selectedIds = this._selectedIds.asReadonly();
 
@@ -1389,6 +1761,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly stragglersOpen = this._stragglersOpen.asReadonly();
   private readonly _stragglersDismissed = signal<boolean>(false);
   readonly stragglersDismissed = this._stragglersDismissed.asReadonly();
+
+  // Staff popover anchored to the header button. Single state across all
+  // viewports — popover positioning falls back to a centred sheet on
+  // narrow widths via CSS.
+  private readonly _staffPopoverOpen = signal<boolean>(false);
+  readonly staffPopoverOpen = this._staffPopoverOpen.asReadonly();
 
   private readonly _appointments = signal<Appointment[]>([]);
   private readonly _orders = signal<Order[]>([]);
@@ -1413,7 +1791,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private inRange(d: Date | string | undefined): boolean {
     if (!d) return false;
     const when = new Date(d).getTime();
-    const now = Date.now();
     const start = this.rangeStart();
     const end = this.rangeEnd();
     return when >= start && when < end;
@@ -1426,6 +1803,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'yesterday': return now.getTime() - 86_400_000;
       case '7d':        return now.getTime() - 7 * 86_400_000;
       case 'month':     return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      case 'custom': {
+        const s = this._customStart();
+        return s ? this.dayStart(s).getTime() : now.getTime();
+      }
       default:          return now.getTime();
     }
   }
@@ -1433,7 +1814,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const r = this._dateRange();
     const now = new Date(); now.setHours(0, 0, 0, 0);
     if (r === 'yesterday') return now.getTime();
+    if (r === 'custom') {
+      // End is exclusive; use end-of-day + 1ms so the picked day is included.
+      const e = this._customEnd() ?? this._customStart();
+      if (e) return this.dayStart(e).getTime() + 86_400_000;
+      return Date.now();
+    }
     return Date.now();
+  }
+  private dayStart(iso: string): Date {
+    const d = new Date(iso); d.setHours(0, 0, 0, 0); return d;
+  }
+  private toIsoDay(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   // Filtered lists -------------------------------------------
@@ -1540,7 +1936,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .reduce((sum, b) => sum + b.balance, 0);
   });
 
-  // Top tests today — derive from today's orders
+  // Top tests today — derive from today's orders. Drops entries whose Test
+  // relation didn't load (so we never show a useless "Unknown" pill); the
+  // header surfaces only the single top test as a compact metric.
   readonly topTests = computed(() => {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
     const counts = new Map<string, number>();
@@ -1548,7 +1946,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (new Date(o.createdAt).getTime() < todayStart.getTime()) continue;
       for (const s of o.samples) {
         for (const t of s.tests ?? []) {
-          const name = t.test?.name ?? 'Unknown';
+          const name = t.test?.name?.trim();
+          if (!name) continue;
           counts.set(name, (counts.get(name) ?? 0) + 1);
         }
       }
@@ -1558,7 +1957,43 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
   });
-  readonly topTestsMax = computed(() => Math.max(1, ...this.topTests().map(t => t.count)));
+  readonly topTest = computed(() => this.topTests()[0] ?? null);
+
+  // Calendar grid: 6 weeks × 7 days, anchored on the visible month. Each
+  // cell is fully self-describing so the template stays declarative.
+  readonly calCells = computed<Array<{
+    iso: string; day: number; outside: boolean; today: boolean;
+    isStart: boolean; isEnd: boolean; inRange: boolean; future: boolean;
+  }>>(() => {
+    const month = this._calMonth();
+    const year = month.getFullYear();
+    const m = month.getMonth();
+    const todayIso = this.toIsoDay(new Date());
+    const todayMs = this.dayStart(todayIso).getTime();
+    const start = this._customStart();
+    const end = this._customEnd() ?? start;
+    // Grid origin: the Sunday on/before the 1st of the month.
+    const first = new Date(year, m, 1);
+    const origin = new Date(year, m, 1 - first.getDay());
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() + i);
+      const iso = this.toIsoDay(d);
+      const ms = d.getTime();
+      cells.push({
+        iso,
+        day: d.getDate(),
+        outside: d.getMonth() !== m,
+        today: iso === todayIso,
+        isStart: !!start && iso === start,
+        isEnd: !!end && !!start && end !== start && iso === end,
+        inRange: !!start && !!end && ms >= this.dayStart(start).getTime()
+                 && ms <= this.dayStart(end).getTime(),
+        future: ms > todayMs,
+      });
+    }
+    return cells;
+  });
 
   // Live polling: 30s tick keeps Today's Orders fresh so reception sees
   // status changes (collected → dispatched → received → validated) without
@@ -1566,15 +2001,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // don't burn requests on a backgrounded laptop.
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   protected readonly lastUpdated = signal<number>(Date.now());
-  // Recomputes every second so the "Updated Xs ago" badge ticks visibly.
-  private nowTick: ReturnType<typeof setInterval> | null = null;
-  protected readonly nowMs = signal<number>(Date.now());
-  readonly lastUpdatedLabel = computed(() => {
-    const sec = Math.max(0, Math.floor((this.nowMs() - this.lastUpdated()) / 1000));
-    if (sec < 5)  return 'Updated just now';
-    if (sec < 60) return `Updated ${sec}s ago`;
-    return `Updated ${Math.floor(sec / 60)}m ago`;
-  });
 
   ngOnInit() {
     this.labCfg.ensureLoaded();
@@ -1585,11 +2011,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (typeof document !== 'undefined' && document.hidden) return;
       this.refresh();
     }, 30_000);
-    this.nowTick = setInterval(() => this.nowMs.set(Date.now()), 1000);
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
-    if (this.nowTick) clearInterval(this.nowTick);
   }
 
   refresh() {
@@ -1795,9 +2219,110 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   // ── UI state ──────────────────────────────────────────────
   setTab(t: Tab) { this._tab.set(t); }
-  setDateRange(d: DateRange) { this._dateRange.set(d); }
+  setDateRange(d: DateRange) {
+    // Selecting a non-custom pill closes the calendar and clears any draft
+    // custom range so re-opening starts fresh.
+    if (d !== 'custom') {
+      this._calendarOpen.set(false);
+      this._customStart.set(null);
+      this._customEnd.set(null);
+    }
+    this._dateRange.set(d);
+  }
+
+  // ── Custom date range / calendar ─────────────────────────
+  private firstOfThisMonth(): Date {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1);
+  }
+  toggleCalendar() {
+    this._calendarOpen.update(v => !v);
+    if (this._calendarOpen()) {
+      // Anchor view to whichever month already holds the active selection
+      // (or this month otherwise) so the user lands on familiar ground.
+      const anchor = this._customStart() ?? this.toIsoDay(new Date());
+      this._calMonth.set(this.firstOfMonth(new Date(anchor)));
+    }
+  }
+  closeCalendar() { this._calendarOpen.set(false); }
+  prevMonth() { this._calMonth.update(d => new Date(d.getFullYear(), d.getMonth() - 1, 1)); }
+  nextMonth() {
+    // Don't let the user page past the current month — future-dated visits
+    // aren't a thing in this product.
+    const n = new Date();
+    this._calMonth.update(d => {
+      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const cap = new Date(n.getFullYear(), n.getMonth(), 1);
+      return next > cap ? d : next;
+    });
+  }
+  pickDay(iso: string) {
+    const start = this._customStart();
+    const end = this._customEnd();
+    if (!start || (start && end)) {
+      // Fresh pick (or restarting after a complete range) — set start, clear end.
+      this._customStart.set(iso);
+      this._customEnd.set(null);
+      return;
+    }
+    // We already have a start, no end yet — the second pick closes the range.
+    if (iso < start) {
+      // Picked an earlier day; swap so start always precedes end.
+      this._customEnd.set(start);
+      this._customStart.set(iso);
+    } else if (iso === start) {
+      // Same day — keep as a single-day range, no end needed.
+      this._customEnd.set(null);
+    } else {
+      this._customEnd.set(iso);
+    }
+  }
+  applyCustom() {
+    if (!this._customStart()) return;
+    this._dateRange.set('custom');
+    this._calendarOpen.set(false);
+  }
+  clearCustom() {
+    this._customStart.set(null);
+    this._customEnd.set(null);
+    if (this._dateRange() === 'custom') this._dateRange.set('today');
+  }
+  /** Pill label for the Custom button — shows the active range when set. */
+  customRangeLabel(): string {
+    const s = this._customStart();
+    const e = this._customEnd();
+    if (!s) return 'Custom';
+    const sDate = new Date(s);
+    if (!e || e === s) {
+      return sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+    const eDate = new Date(e);
+    const sLabel = sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const eLabel = eDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${sLabel} – ${eLabel}`;
+  }
+  /** Footer hint inside the popover — guides the click-once / click-twice flow. */
+  customRangeHint(): string {
+    const s = this._customStart();
+    const e = this._customEnd();
+    if (!s) return 'Pick a start day';
+    if (s && !e) return 'Pick an end day, or Apply for just this day';
+    return 'Range selected';
+  }
+  private firstOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
   toggleStragglers() { this._stragglersOpen.update(v => !v); }
   dismissStragglers() { this._stragglersDismissed.set(true); }
+
+  // Staff popover — toggles open from the header button. Stop propagation
+  // on the click so the same event doesn't immediately bubble up and
+  // close it via the backdrop click handler.
+  toggleStaffPopover(ev: MouseEvent) {
+    ev.stopPropagation();
+    this._staffPopoverOpen.update(v => !v);
+  }
+  closeStaffPopover() { this._staffPopoverOpen.set(false); }
+  /** Count of staff with status === 'on_duty' for the button badge. */
+  onDutyCount(): number { return this.staff.filter(s => s.status === 'on_duty').length; }
   toggleSelect(id: string) {
     this._selectedIds.update(cur => {
       const n = new Set(cur);

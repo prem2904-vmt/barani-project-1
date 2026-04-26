@@ -29,14 +29,33 @@ interface ProfilePayload {
     TouchButtonComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    /* Profile scrolls inside its own host (shell-main is overflow:hidden),
+       and reserves vertical space at the top so the sticky top-strip + the
+       big screen-header title don't crowd the action buttons below them. */
+    :host {
+      display: block;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .pf-profile-back {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+  `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="px-4 md:px-8 pt-4 md:pt-6 pb-10">
 
-      <pf-screen-header
-        eyebrow="Frontdesk · Patient profile"
-        [title]="displayName() || 'Patient profile'"
-        subtitle="Contact details, identifiers, and past visits.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+      <!-- Back lives above the title on its own row so it never collides
+           with the screen-header's action area on narrow viewports. -->
+      <div class="pf-profile-back">
+        <pf-touch-btn size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m15 18-6-6 6-6"/>
@@ -44,6 +63,11 @@ interface ProfilePayload {
           </span>
           Back
         </pf-touch-btn>
+      </div>
+
+      <pf-screen-header
+        [title]="displayName() || 'Patient profile'"
+        subtitle="Contact details, identifiers, and past visits.">
       </pf-screen-header>
 
       @if (patient(); as p) {
