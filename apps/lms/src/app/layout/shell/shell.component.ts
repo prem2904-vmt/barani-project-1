@@ -95,9 +95,18 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
      * the rail's 56px so the top-strip starts to the right of it
      * and the seam at the top-left corner reads as a continuous L,
      * not a + intersection. */
+    /* Desktop: rail auto-hides by default (translateX off the left
+     * edge), so content owns the full width — no padding-left.
+     * When the user pins the rail, the html gets .is-rail-pinned
+     * and we reserve 56px so the page reflows next to the now-
+     * permanent rail. The transition makes the reflow feel smooth
+     * when toggling pin. */
     @media (min-width: 1280px) {
-      .shell-stack { padding-left: 56px; }
+      .shell-stack {
+        transition: padding-left 220ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
       .shell-main { padding-bottom: 0; }
+      :host-context(.is-rail-pinned) .shell-stack { padding-left: 56px; }
     }
 
     /* Toast */

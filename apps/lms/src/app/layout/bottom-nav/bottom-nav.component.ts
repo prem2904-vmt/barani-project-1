@@ -17,12 +17,23 @@ const DRAG_THRESHOLD_PX = 4;
   imports: [RouterLink, RouterLinkActive],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Desktop-only edge-trigger zone. Invisible 12px strip pinned
+         to the left of the viewport; hovering it reveals the rail.
+         Hidden on mobile + tablet where the bottom pill handles
+         everything. -->
+    <div class="pf-rail-trigger hidden xl:block"
+         (mouseenter)="showRail()"
+         aria-hidden="true"></div>
+
     <!-- Universal nav surface across web, tablet, and mobile.
          Mobile + tablet: floating pill (centered, ~16px above the bottom).
-         Desktop (xl+): docks flush to the bottom as a full-width bar so
-         the floating pill doesn't shadow over content / steal clicks. -->
+         Desktop (xl+): auto-hide vertical rail revealed by the trigger
+         zone above; floats over content (shell padding stays at 0). -->
     <nav class="pf-bottom-nav fixed left-1/2 -translate-x-1/2 z-30 safe-area-bottom
                 xl:left-0 xl:right-0 xl:translate-x-0"
+         [class.pf-rail-visible]="railVisible()"
+         (mouseenter)="showRail()"
+         (mouseleave)="scheduleHideRail()"
          style="bottom: max(1rem, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
       <div #pill
            class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto
@@ -35,6 +46,24 @@ const DRAG_THRESHOLD_PX = 4;
            (pointercancel)="onPillPointerUp($event)"
            (mousemove)="onRailMouseMove($event)"
            (mouseleave)="onRailMouseLeave()">
+        <!-- Desktop-only pin toggle. Pinned = rail stays visible
+             permanently and the page reserves 56px of left padding
+             so content reflows. Unpinned = auto-hide; rail slides
+             off until the user hovers the left-edge trigger zone. -->
+        <button type="button"
+                class="pf-rail-pin hidden xl:flex"
+                (click)="togglePin()"
+                [attr.aria-label]="pinned() ? 'Unpin (auto-hide sidebar)' : 'Pin sidebar open'"
+                [attr.aria-pressed]="pinned()"
+                [title]="pinned() ? 'Unpin · auto-hide' : 'Pin sidebar'">
+          <svg width="18" height="18" viewBox="0 0 24 24"
+               [attr.fill]="pinned() ? 'currentColor' : 'none'"
+               stroke="currentColor" stroke-width="1.7"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 17v5"/>
+            <path d="M9 10.76V6a3 3 0 0 1 6 0v4.76l3 4.24H6Z"/>
+          </svg>
+        </button>
 
         <!-- Sliding gradient indicator. One element shared across all
              tabs — its position + width is driven by the active button's
@@ -149,24 +178,59 @@ const DRAG_THRESHOLD_PX = 4;
      * one L-shaped chrome panel; light/dark theme follows the page
      * automatically. */
     @media (min-width: 1280px) {
+      /* Edge-trigger zone — invisible 12px strip pinned to the
+       * left of the viewport. Sits above content so it can catch
+       * mouseenter, but pointer-events are otherwise transparent
+       * to scrolling / clicking through it. */
+      .pf-rail-trigger {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 12px;
+        z-index: 34;
+        background: transparent;
+        cursor: default;
+      }
+
       .pf-bottom-nav {
-        top: 0 !important;
+        /* Start below the top-strip so the rail's pin button isn't
+         * overlapped by the brand pill. The top-strip is ~64px high
+         * with ~12px outer top padding ≈ 76px. Bottom 0 keeps the
+         * rail full-height down to the viewport floor. */
+        top: 76px !important;
         bottom: 0 !important;
         left: 0 !important;
         right: auto !important;
-        transform: none !important;
         max-width: none !important;
         width: 56px;
         z-index: 35;
         overflow: visible;
-        transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+        /* Start off-screen; the .pf-rail-visible class flips this
+         * to translateX(0) when the user hovers the trigger zone
+         * or the rail itself. */
+        transform: translateX(-100%) !important;
+        transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .pf-bottom-nav.pf-rail-visible {
+        transform: translateX(0) !important;
+      }
+      /* Hidden rail shouldn't catch stray clicks. Buttons stay
+       * accessible via Tab key (transform hides them visually). */
+      .pf-bottom-nav:not(.pf-rail-visible) {
+        pointer-events: none;
+      }
+      .pf-bottom-nav.pf-rail-visible {
+        pointer-events: auto;
       }
       .pf-bottom-nav .pf-pill {
         position: relative;
         flex-direction: column;
         width: 56px;
         height: 100%;
-        padding: 12px 0 !important;
+        /* Top padding reserves room for the pin button (36px tall
+         * with 10px gutter above + 8px below). */
+        padding: 56px 0 12px !important;
         gap: 4px !important;
         border-radius: 0 !important;
         border: none !important;
@@ -280,6 +344,52 @@ const DRAG_THRESHOLD_PX = 4;
       /* The horizontal-row JS slider isn't meaningful in a vertical
        * column. The CSS active state above does the highlighting. */
       .pf-bottom-nav .pf-nav-indicator {
+        display: none !important;
+      }
+
+      /* Pin toggle — floats absolute at the rail's top, centered.
+       * Sized to feel like a first-class touch target (36×36) so
+       * it's easy to find and grab. Subtle by default, brightens
+       * on hover; brand-coloured + slight glow when pinned. */
+      .pf-rail-pin {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 36px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        z-index: 5;
+        transition: color 140ms ease, background 140ms ease,
+                    border-color 140ms ease, box-shadow 140ms ease;
+      }
+      .pf-rail-pin:hover {
+        color: var(--text-primary);
+        background: rgba(168, 85, 247, 0.12);
+        border-color: rgba(168, 85, 247, 0.22);
+      }
+      .pf-rail-pin[aria-pressed="true"] {
+        color: #a855f7;
+        background: rgba(168, 85, 247, 0.14);
+        border-color: rgba(168, 85, 247, 0.30);
+        box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+      }
+
+      /* Pinned: rail forced visible, trigger zone hidden. The page's
+       * 56px shell padding (set in shell.component.ts via
+       * :host-context(.is-rail-pinned)) makes room so content reflows
+       * around it. */
+      :root.is-rail-pinned .pf-bottom-nav {
+        transform: translateX(0) !important;
+        pointer-events: auto !important;
+      }
+      :root.is-rail-pinned .pf-rail-trigger {
         display: none !important;
       }
     }
@@ -466,6 +576,61 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly moreOpen = signal(false);
 
   /**
+   * Desktop-only auto-hide. The rail starts off-screen (translateX
+   * -100%) and slides in when the user hovers the left-edge trigger
+   * zone or the rail itself. Slides back out 180ms after the cursor
+   * leaves both — short enough to feel instant, long enough that
+   * moving the cursor between the trigger zone and the rail
+   * doesn't flicker. Suppressed entirely when the rail is pinned.
+   */
+  protected readonly railVisible = signal(false);
+  private hideRailTimer: number | null = null;
+
+  /**
+   * Pin override — when true, auto-hide is disabled and the page
+   * reserves 56px of left padding so content reflows next to the
+   * always-visible rail. Persisted to localStorage; mirrored onto
+   * <html class="is-rail-pinned"> so global layout CSS can react.
+   *
+   * Defaults to PINNED on first visit (no key set) so users see the
+   * navigation immediately. Only flips off when they explicitly
+   * unpin — the explicit '0' value is preserved across reloads.
+   */
+  protected readonly pinned = signal<boolean>(
+    typeof localStorage === 'undefined' ||
+    localStorage.getItem('pf-rail-pinned') !== '0'
+  );
+
+  togglePin(): void {
+    const next = !this.pinned();
+    this.pinned.set(next);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('pf-rail-pinned', next ? '1' : '0');
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('is-rail-pinned', next);
+    }
+  }
+
+  protected showRail(): void {
+    if (this.hideRailTimer !== null) {
+      clearTimeout(this.hideRailTimer);
+      this.hideRailTimer = null;
+    }
+    if (!this.railVisible()) this.railVisible.set(true);
+  }
+
+  protected scheduleHideRail(): void {
+    // Pinned rail never auto-hides.
+    if (this.pinned()) return;
+    if (this.hideRailTimer !== null) clearTimeout(this.hideRailTimer);
+    this.hideRailTimer = window.setTimeout(() => {
+      this.railVisible.set(false);
+      this.hideRailTimer = null;
+    }, 180);
+  }
+
+  /**
    * Mac-dock magnification on the desktop rail. Scales each button
    * based on cursor distance: 1.0 at ≥80px, 1.4× directly under
    * the cursor. Origin = left center so the icons "pop out" toward
@@ -569,6 +734,12 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.labCfg.ensureLoaded();
+
+    // Apply persisted pin state on first paint so the page doesn't
+    // flash full-width before reflowing into the pinned-rail layout.
+    if (typeof document !== 'undefined' && this.pinned()) {
+      document.documentElement.classList.add('is-rail-pinned');
+    }
 
     // Re-measure whenever the visible nav set changes (perm reload, mode
     // toggle, etc) so the indicator stays glued to the active button.
