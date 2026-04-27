@@ -82,14 +82,21 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
     }
 
     /* main holds the routed feature; it does NOT scroll — the feature host does.
-     * Bottom padding leaves room for the floating bottom-nav pill on mobile + tablet. */
+     * Mobile + tablet reserve the floating-pill height; desktop reserves
+     * the docked footer bar's exact height so there's no dead gap. */
     .shell-main {
       flex: 1;
       min-height: 0;
       overflow: hidden;
-      padding-bottom: var(--tab-nav-total-height, 0px);
+      padding-bottom: var(--tab-nav-total-height, 96px);
     }
+    /* Desktop: rail + top-strip share the same surface (--header-bg)
+     * and form a single L-shaped chrome panel. Inset the stack by
+     * the rail's 56px so the top-strip starts to the right of it
+     * and the seam at the top-left corner reads as a continuous L,
+     * not a + intersection. */
     @media (min-width: 1280px) {
+      .shell-stack { padding-left: 56px; }
       .shell-main { padding-bottom: 0; }
     }
 

@@ -561,13 +561,6 @@ pf-shell main>router-outlet+* {
   padding-bottom: var(--tab-nav-total-height) !important;
 }
 
-/* Bottom nav now surfaces up to xl (1280px); desktop uses the top center-nav. */
-@media (min-width: 1280px) {
-  .pb-tab-nav {
-    padding-bottom: 2rem !important;
-  }
-}
-
 /* Copy protection on mobile/tablet (static text), inputs remain selectable */
 @media (max-width: 1023px) {
   body {
