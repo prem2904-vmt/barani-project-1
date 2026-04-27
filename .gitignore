@@ -52,3 +52,18 @@ Thumbs.db
 __screenshots__/
 
 test-output
+
+# Stale Angular prerender artifact (build script writes /public/index.html;
+# /index.html at repo root sometimes lands here from a partial run).
+/index.html
+
+# Capacitor-generated iOS — keep the Xcode project, ignore Pods + per-user state
+ios/App/Pods/
+ios/App/build/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+ios/DerivedData/
+
+# Electron build output
+dist/electron/

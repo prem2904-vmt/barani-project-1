@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
@@ -13,6 +14,16 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
   imports: [RouterLink, RouterLinkActive, NotificationBellComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Offline banner — only renders on Capacitor (or any host whose
+         CapacitorService.isOnline signal flips). Sits above the top
+         strip so it's the first thing the user sees and doesn't push
+         the rest of the chrome around when it appears. -->
+    @if (capacitor.initialised() && !capacitor.isOnline()) {
+      <div class="pf-offline-banner" role="status" aria-live="polite">
+        <span class="pf-offline-banner__dot" aria-hidden="true"></span>
+        <span class="pf-offline-banner__msg">No internet — some features may not work</span>
+      </div>
+    }
     <header class="sticky top-0 z-40 safe-area-top px-3 sm:px-4 pt-3 sm:pt-4">
       <div class="pf-topstrip-bar relative flex items-center gap-2 rounded-full backdrop-blur-2xl border"
            style="background: var(--header-bg); border-color: var(--header-border);">
@@ -240,6 +251,11 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
     @media (max-width: 639px) {
       .pf-topstrip-bar { padding: 8px 12px; min-height: 60px; }
     }
+
+    /* macOS Electron — close/min/max traffic lights now live in the
+     * dedicated 38px titlebar band rendered by app.ts above this strip,
+     * so no left-padding hack is needed. The titlebar itself is the
+     * drag region; this strip stays interactive everywhere. */
 
     /* Brand lockup — PF glyph + ECG pulse + PREFRONTAL + branch switcher */
     .pf-brand-lockup {
@@ -770,10 +786,43 @@ import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
       .pf-more-pop, .pf-profile-pop { animation: none; }
       .pf-avatar-ring { animation: none; }
     }
+
+    /* Offline banner — full-width amber strip above the top strip,
+       only shown on Capacitor when network drops. Pulsing dot draws
+       the eye without blocking interaction. */
+    .pf-offline-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(245, 158, 11, 0.18);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pf-offline-banner__dot {
+      width: 8px; height: 8px;
+      border-radius: 9999px;
+      background: #f59e0b;
+      box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+      animation: pf-offline-pulse 1.6s ease-in-out infinite;
+    }
+    .pf-offline-banner__msg { line-height: 1; }
+    @keyframes pf-offline-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+      50%      { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    }
   `]
 })
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
+  // Public so the template can read isOnline / initialised signals.
+  protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
