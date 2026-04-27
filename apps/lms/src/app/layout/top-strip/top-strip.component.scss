@@ -477,8 +477,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  // background: var(--header-bg);
+  // border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 3px;
   flex-shrink: 0;
@@ -535,7 +535,7 @@
 .pf-tenant-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -590,7 +590,7 @@
 .pf-branch-value {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 .pf-branch-chev {
   color: var(--text-muted);
