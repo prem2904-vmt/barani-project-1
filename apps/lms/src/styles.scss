@@ -200,6 +200,12 @@ html {
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
+  /* Safe-area insets — iPhone notch / Dynamic Island, gesture
+     handle on iPad, keyboard rim on Android. Horizontal sides
+     were already covered; top + bottom added for Capacitor
+     iOS so the top strip and bottom nav clear the system UI. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   touch-action: manipulation;

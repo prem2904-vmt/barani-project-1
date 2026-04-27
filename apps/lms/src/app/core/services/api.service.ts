@@ -1,13 +1,16 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, map, throwError } from 'rxjs';
-import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../../shared/models/api-response.model';
+import { PlatformService } from './platform.service';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   protected readonly http = inject(HttpClient);
-  protected readonly baseUrl = environment.apiUrl;
+  // Resolve the base URL through PlatformService so Capacitor/Electron
+  // builds use the right host. PlatformService also warns if a mobile
+  // build is misconfigured to point at localhost.
+  protected readonly baseUrl = inject(PlatformService).getApiUrl();
 
   private readonly _isLoading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
