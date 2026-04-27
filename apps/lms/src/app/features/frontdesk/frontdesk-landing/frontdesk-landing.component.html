@@ -1,0 +1,688 @@
+<section class="pf-page">
+
+  <!-- ── Compact header ─────────────────────────────────────── -->
+  <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
+    <div class="pf-head">
+      <h1 class="pf-head__title">
+        Good day, <span class="pf-head__name">{{ firstName() }}</span>
+      </h1>
+      <p class="pf-head__sub">{{ statusHint() }}</p>
+
+      <div class="pf-head__actions">
+        <!-- Today's cash flow: pill button → popover with mode breakdown
+             + recent collections. Mirrors the staff dropdown pattern. -->
+        @if(isAdmin){
+        <div class="pf-pop-anchor">
+          <button type="button" class="pf-collection" [class.pf-collection--idle]="collectedToday() === 0"
+            [class.pf-collection--on]="collectionPopoverOpen()" (click)="toggleCollectionPopover($event)"
+            aria-haspopup="dialog" [attr.aria-expanded]="collectionPopoverOpen()" [title]="'Today\'s cash flow'">
+            <span class="pf-collection__dot"></span>
+            Cash flow
+          </button>
+          @if (collectionPopoverOpen()) {
+          <div class="pf-pop-bd" (click)="closeCollectionPopover()"></div>
+          <div class="pf-pop pf-pop--collection" role="dialog" aria-label="Today's cash flow"
+            (click)="$event.stopPropagation()">
+            <header class="pf-pop__hdr">
+              <span class="pf-pop__dot pf-pop__dot--cash" aria-hidden="true"></span>
+              <h2 class="pf-pop__title">Cash flow · today</h2>
+              <span class="pf-pop__count">{{ billsToday().length }} bill{{ billsToday().length === 1 ? '' : 's'
+                }}</span>
+            </header>
+            <div class="pf-cash-summary">
+              <div class="pf-cash-summary__row">
+                <span class="pf-cash-summary__label">Collected</span>
+                <span class="pf-cash-summary__amt pf-cash-summary__amt--in">{{ collectedToday() | inr }}</span>
+              </div>
+              <div class="pf-cash-summary__row">
+                <span class="pf-cash-summary__label">Outstanding</span>
+                <span class="pf-cash-summary__amt pf-cash-summary__amt--out">{{ dueToday() | inr }}</span>
+              </div>
+            </div>
+            @if (paymentsByMode().length > 0) {
+            <h3 class="pf-pop__sub">By mode</h3>
+            <ul class="pf-cash-modes">
+              @for (m of paymentsByMode(); track m.mode) {
+              <li class="pf-cash-modes__row">
+                <span class="pf-cash-modes__chip" [attr.data-mode]="m.mode">{{ m.mode }}</span>
+                <span class="pf-cash-modes__amt">{{ m.amount | inr }}</span>
+              </li>
+              }
+            </ul>
+            }
+            @if (recentCollections().length > 0) {
+            <h3 class="pf-pop__sub">Recent collections</h3>
+            <ul class="pf-cash-recent">
+              @for (r of recentCollections(); track r.id) {
+              <li class="pf-cash-recent__row">
+                <span class="pf-cash-recent__time">{{ r.paidAt | date:'shortTime' }}</span>
+                <span class="pf-cash-recent__name">{{ r.patient }}</span>
+                <span class="pf-cash-recent__mode">{{ r.mode }}</span>
+                <span class="pf-cash-recent__amt">{{ r.amount | inr }}</span>
+              </li>
+              }
+            </ul>
+            } @else if (collectedToday() === 0) {
+            <p class="pf-pop__empty">No collections yet today.</p>
+            }
+          </div>
+          }
+        </div>
+
+        <!-- Top tests today: pill button → popover with full top-5 list. -->
+        <div class="pf-pop-anchor">
+          <button type="button" class="pf-toptest-pill" [class.pf-toptest-pill--idle]="!topTest()"
+            [class.pf-toptest-pill--on]="topTestPopoverOpen()" (click)="toggleTopTestPopover($event)"
+            aria-haspopup="dialog" [attr.aria-expanded]="topTestPopoverOpen()" [title]="'Top tests today'">
+            <span class="pf-toptest-pill__label">Top</span>
+            <span class="pf-toptest-pill__name">{{ topTest().name}}</span>
+            @if (topTest()) {
+            <span class="pf-toptest-pill__count">×{{ topTest()!.count }}</span>
+            }
+          </button>
+          @if (topTestPopoverOpen()) {
+          <div class="pf-pop-bd" (click)="closeTopTestPopover()"></div>
+          <div class="pf-pop pf-pop--toptest" role="dialog" aria-label="Top tests today"
+            (click)="$event.stopPropagation()">
+            <header class="pf-pop__hdr">
+              <span class="pf-pop__dot pf-pop__dot--toptest" aria-hidden="true"></span>
+              <h2 class="pf-pop__title">Top tests · today</h2>
+              <span class="pf-pop__count">{{ topTests().length }}</span>
+            </header>
+            @if (topTests().length === 0) {
+            <p class="pf-pop__empty">No tests ordered yet today.</p>
+            } @else {
+            <ol class="pf-toptest-list">
+              @for (t of topTests(); track t.name; let i = $index) {
+              <li class="pf-toptest-list__row">
+                <span class="pf-toptest-list__rank">{{ i + 1 }}</span>
+                <span class="pf-toptest-list__name">{{ t.name }}</span>
+                <span class="pf-toptest-list__count">×{{ t.count }}</span>
+              </li>
+              }
+            </ol>
+            }
+          </div>
+          }
+        </div>
+        }
+        <button type="button" class="pf-head__btn pf-head__btn--secondary press" (click)="searchFocus()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 10h10M7 14h6" />
+          </svg>
+          Scan QR
+        </button>
+
+        <!-- Staff on duty: secondary button next to Scan QR. -->
+        <div class="pf-pop-anchor">
+          <button type="button" class="pf-head__btn pf-head__btn--secondary press"
+            [class.pf-head__btn--on]="staffPopoverOpen()" (click)="toggleStaffPopover($event)" aria-haspopup="dialog"
+            [attr.aria-expanded]="staffPopoverOpen()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Staff
+            <span class="pf-head__btn-badge">{{ onDutyCount() }}</span>
+          </button>
+
+          @if (staffPopoverOpen()) {
+          <div class="pf-pop-bd" (click)="closeStaffPopover()"></div>
+          <div class="pf-pop pf-pop--staff" role="dialog" aria-label="Staff on duty" (click)="$event.stopPropagation()">
+            <header class="pf-pop__hdr">
+              <span class="pf-pop__dot pf-pop__dot--staff" aria-hidden="true"></span>
+              <h2 class="pf-pop__title">Staff on duty</h2>
+              <span class="pf-pop__count">{{ onDutyCount() }}/{{ staff.length }}</span>
+            </header>
+            <ul class="pf-staff">
+              @for (s of staff; track s.id) {
+              <li class="pf-staff__row">
+                <pf-avatar [name]="s.name" [size]="24"></pf-avatar>
+                <span class="pf-staff__name">{{ s.name }}</span>
+                <span class="pf-staff__role">{{ s.role }}</span>
+                <span class="pf-staff__dot" [attr.data-state]="s.status"></span>
+              </li>
+              }
+            </ul>
+          </div>
+          }
+        </div>
+
+        <button type="button" class="pf-head__btn pf-head__btn--primary press" (click)="openRegister()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          New patient
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-6">
+
+    <!-- Stragglers banner — yesterday's missed / uncollected / unpaid -->
+    @if (stragglers().length > 0 && !stragglersDismissed()) {
+    <div class="pf-stragglers" [class.pf-stragglers--open]="stragglersOpen()">
+      <header class="pf-stragglers__hdr" (click)="toggleStragglers()">
+        <span class="pf-stragglers__dot pulse-dot"></span>
+        <span class="pf-stragglers__label">
+          {{ stragglers().length }} need follow-up
+          <span class="pf-stragglers__sub">
+            · {{ countBy('missed') }} missed · {{ countBy('uncollected') }} uncollected · {{ countBy('unpaid') }} unpaid
+          </span>
+        </span>
+        <button type="button" class="pf-stragglers__x press" (click)="$event.stopPropagation(); dismissStragglers()"
+          aria-label="Dismiss">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <svg class="pf-stragglers__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </header>
+      @if (stragglersOpen()) {
+      <ul class="pf-stragglers__list">
+        @for (s of stragglers(); track s.id) {
+        <li class="pf-stragglers__item" [attr.data-kind]="s.kind">
+          <span class="pf-stragglers__kind">{{ kindLabel(s.kind) }}</span>
+          <span class="pf-stragglers__title">{{ s.title }}</span>
+          <span class="pf-stragglers__meta">{{ s.sub }} · {{ s.age }}</span>
+          <button type="button" class="pf-stragglers__cta press" (click)="openStraggler(s)">
+            Open →
+          </button>
+        </li>
+        }
+      </ul>
+      }
+    </div>
+    }
+
+    <!-- STAT / critical pinned row — always visible when items exist -->
+    @if (statItems().length > 0) {
+    <div class="pf-stat-row">
+      <span class="pf-stat-row__flag">
+        <span class="pf-stat-row__flag-dot pulse-dot"></span>
+        STAT · {{ statItems().length }}
+      </span>
+      <ul class="pf-stat-row__list">
+        @for (item of statItems(); track item.id) {
+        <li class="pf-stat-chip press" (click)="openOrder(item)">
+          <pf-avatar [name]="item.patient?.displayName ?? 'Patient'" [size]="24"></pf-avatar>
+          <span class="pf-stat-chip__name">{{ item.patient?.displayName ?? 'Patient' }}</span>
+          <span class="pf-stat-chip__sub">· {{ item.samples.length }} samples</span>
+        </li>
+        }
+      </ul>
+    </div>
+    }
+
+    <div class="grid grid-cols-1 gap-5 items-start">
+      <div class="min-w-0">
+
+        <!-- Filter row: search + date pills -->
+        <div class="pf-filter-row">
+          <div class="pf-search-wrap">
+            <pf-patient-search placeholder="Search patient · name, phone, ABHA, UHID…"
+              (picked)="openProfile($event)"></pf-patient-search>
+          </div>
+          <div class="pf-date-pills relative" role="tablist" aria-label="Date range">
+            @for (d of dateOptions; track d.id) {
+            @if (d.id === 'custom') {
+            <button type="button" class="pf-date-pill press pf-date-pill--custom"
+              [class.pf-date-pill--on]="dateRange() === 'custom'" (click)="toggleCalendar()"
+              [attr.aria-expanded]="calendarOpen()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+              {{ customRangeLabel() }}
+            </button>
+            } @else {
+            <button type="button" class="pf-date-pill press" [class.pf-date-pill--on]="dateRange() === d.id"
+              (click)="setDateRange(d.id)">
+              {{ d.label }}
+            </button>
+            }
+            }
+
+            @if (calendarOpen()) {
+            <div class="pf-calbd" (click)="closeCalendar()"></div>
+            <div class="pf-cal" role="dialog" aria-label="Pick date range" (click)="$event.stopPropagation()">
+              <header class="pf-cal__hdr">
+                <button type="button" class="pf-cal__nav press" (click)="prevMonth()" aria-label="Previous month">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <span class="pf-cal__title">{{ calMonth() | date:'MMMM y' }}</span>
+                <button type="button" class="pf-cal__nav press" (click)="nextMonth()" aria-label="Next month">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </header>
+              <div class="pf-cal__dows">
+                @for (d of dows; track d) { <span>{{ d }}</span> }
+              </div>
+              <div class="pf-cal__grid">
+                @for (cell of calCells(); track cell.iso) {
+                <button type="button" class="pf-cal__cell press" [class.pf-cal__cell--out]="cell.outside"
+                  [class.pf-cal__cell--today]="cell.today" [class.pf-cal__cell--start]="cell.isStart"
+                  [class.pf-cal__cell--end]="cell.isEnd" [class.pf-cal__cell--in]="cell.inRange"
+                  [disabled]="cell.future" (click)="pickDay(cell.iso)">
+                  {{ cell.day }}
+                </button>
+                }
+              </div>
+              <footer class="pf-cal__foot">
+                <span class="pf-cal__hint">{{ customRangeHint() }}</span>
+                <button type="button" class="pf-cal__btn pf-cal__btn--ghost press" (click)="clearCustom()"
+                  [disabled]="!customStart()">
+                  Clear
+                </button>
+                <button type="button" class="pf-cal__btn pf-cal__btn--apply press" (click)="applyCustom()"
+                  [disabled]="!customStart()">
+                  Apply
+                </button>
+              </footer>
+            </div>
+            }
+          </div>
+        </div>
+
+        @if (counts().ready + counts().payments > 0) {
+        <div class="pf-alerts" aria-label="Exception queues">
+          @if (counts().ready > 0) {
+          <button type="button" class="pf-alert pf-alert--ready press" (click)="openQueueDrawer('ready')"
+            aria-haspopup="dialog">
+            <span class="pf-alert__dot"></span>
+            <span class="pf-alert__count">{{ counts().ready }}</span>
+            <span class="pf-alert__label">ready for pickup</span>
+          </button>
+          }
+          @if (counts().payments > 0) {
+          <button type="button" class="pf-alert pf-alert--payments press" (click)="openQueueDrawer('payments')"
+            aria-haspopup="dialog">
+            <span class="pf-alert__dot"></span>
+            <span class="pf-alert__count">{{ counts().payments }}</span>
+            <span class="pf-alert__label">payment{{ counts().payments === 1 ? '' : 's' }} due</span>
+          </button>
+          }
+        </div>
+        }
+
+        <div class="pf-list-wrap">
+          <div class="pf-appt-split">
+            <section class="pf-appt-split__pane">
+              <header class="pf-appt-split__hdr">
+                <span class="pf-appt-split__title">Appointments</span>
+                <span class="pf-appt-split__count">{{ visibleAppointments().length }}</span>
+              </header>
+              @if (visibleAppointments().length === 0) {
+              <p class="pf-empty">No appointments for this date range.</p>
+              }
+              <ul class="pf-cards">
+                @for (a of visibleAppointments(); track a.id) {
+                <li>
+                  <div class="pf-card" [attr.data-priority]="apptPriority(a)"
+                    [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openAppointment(a)">
+                    <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(a.id)"
+                      [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
+                      @if (selectedIds().has(a.id)) {
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                      }
+                    </button>
+                    <div class="pf-card__slot">
+                      <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
+                      <p class="pf-card__date">{{ a.appointmentDate | date:'MMM d' }}</p>
+                    </div>
+                    <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                    <div class="pf-card__body">
+                      <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
+                      <p class="pf-card__meta">
+                        {{ a.patient?.sex ?? '—' }} · {{ a.patient?.age ?? '—' }}y
+                        @if (a.patient?.phone) { · {{ a.patient?.phone }} }
+                        @if (hasOutstanding(a.patient?.id)) {
+                        <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
+                          ● ₹ owed
+                        </span>
+                        }
+                      </p>
+                    </div>
+                    <!-- <pf-chip [tone]="apptTone(a)" size="sm">{{ a.status }}</pf-chip> -->
+                    <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                      @if (a.patient?.phone) {
+                      <a [href]="'tel:' + a.patient!.phone" class="pf-iconbtn press" title="Call">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path
+                            d="M22 16.9v3a2 2 0 0 1-2.2 2A20 20 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.5 2.5a2 2 0 0 1-.5 2.1L7.9 9.5a16 16 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.2 1.6.4 2.5.5A2 2 0 0 1 22 16.9z" />
+                        </svg>
+                      </a>
+                      <a [href]="'https://wa.me/' + cleanPhone(a.patient!.phone!)" target="_blank"
+                        class="pf-iconbtn press" title="WhatsApp">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z" />
+                        </svg>
+                      </a>
+                      }
+                      @if (a.status === 'booked') {
+                      <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Check-in</button>
+                      }
+                    </div>
+                  </div>
+                </li>
+                }
+              </ul>
+            </section>
+
+            <section class="pf-appt-split__pane pf-appt-split__pane--ip">
+              <header class="pf-appt-split__hdr">
+                <span class="pf-appt-split__title">In progress</span>
+                <span class="pf-appt-split__count" data-tone="active">{{ visibleOrders().length }}</span>
+              </header>
+              @if (visibleOrders().length === 0) {
+              <p class="pf-empty">No orders in progress.</p>
+              }
+              <ul class="pf-cards">
+                @for (o of visibleOrders(); track o.id) {
+                <li>
+                  <div class="pf-card pf-card--ip" [attr.data-priority]="o.priority"
+                    [class.pf-card--selected]="selectedIds().has(o.id)" (click)="openOrder(o)">
+                    <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(o.id)"
+                      [attr.aria-label]="selectedIds().has(o.id) ? 'Deselect' : 'Select'">
+                      @if (selectedIds().has(o.id)) {
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                      }
+                    </button>
+                    <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                    <div class="pf-card__body">
+                      <div class="pf-card__name-row">
+                        <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+                        <span class="pf-card__mrn">#{{ o.id.slice(0, 8) }}</span>
+                        <span class="pf-card__meta-inline">{{ o.samples.length }} sample{{ o.samples.length === 1 ? '' :
+                          's' }} · {{ o.createdAt | date:'shortTime' }}</span>
+                      </div>
+                      @if (o.samples.length > 0) {
+                      <div class="pf-card__depts">
+                        @for (s of o.samples; track s.id) {
+                        <span class="pf-card__dept"
+                          [class.pf-card__dept--done]="s.status !== 'pending' && s.status !== 'rejected'"
+                          [class.pf-card__dept--validated]="isSampleValidated(s)"
+                          [title]="(s.department?.name ?? '') + ' — ' + (isSampleValidated(s) ? 'validated' : s.status)">
+                          {{ s.department?.code ?? '?' }}
+                          <span class="pf-card__dot"
+                            [class.pf-card__dot--done]="s.status !== 'pending' && s.status !== 'rejected'"
+                            [class.pf-card__dot--validated]="isSampleValidated(s)">●</span>
+                        </span>
+                        }
+                        @if (hasPartialReady(o)) {
+                        <span class="pf-card__partial"
+                          title="One or more departments fully validated; others still pending">
+                          ✓ Partial ready · {{ partialReadyLabel(o) }}
+                        </span>
+                        }
+                      </div>
+                      }
+                    </div>
+                    <pf-chip [tone]="orderTone(o)" size="sm">{{ statusLabel(o.status) }}</pf-chip>
+                    <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                      @if (o.status === 'created' && showCreateBillOn(o)) {
+                      <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
+                        (click)="goToBilling(o)">Bill</button>
+                      } @else if (sampleStatus(o) === 'partially_collected' || (o.status === 'billed' &&
+                      showCollectOn(o))) {
+                      <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
+                      } @else if (showDispatchOn(o)) {
+                      <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
+                        (click)="markDispatched(o)">Dispatch</button>
+                      }
+                    </div>
+                  </div>
+                </li>
+                }
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bulk actions — appears when 1+ selected -->
+    @if (selectedIds().size > 0) {
+    <div class="pf-bulkbar">
+      <span class="pf-bulkbar__count">{{ selectedIds().size }} selected</span>
+      <div class="flex-1"></div>
+      <button type="button" class="pf-bulkbar__btn press" (click)="bulkSms()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        SMS
+      </button>
+      <button type="button" class="pf-bulkbar__btn press" (click)="bulkWhatsapp()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z" />
+        </svg>
+        WhatsApp
+      </button>
+      <button type="button" class="pf-bulkbar__btn pf-bulkbar__btn--ghost press"
+        (click)="clearSelection()">Clear</button>
+    </div>
+    }
+  </div>
+
+  <!-- Order drawer (detail view) -->
+  @if (selectedOrder(); as so) {
+  <div class="pf-drawer-bd" (click)="closeOrder()"></div>
+  <aside class="pf-drawer" role="dialog" aria-modal="true">
+    <header class="pf-drawer__hdr">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
+        <div class="min-w-0 flex-1">
+          <p class="text-[10.5px] font-mono uppercase tracking-[0.16em]" style="color: var(--text-muted);">Order · #{{
+            so.id.slice(0, 8) }}</p>
+          <p class="text-[17px] font-semibold truncate" style="color: var(--text-primary);">{{ so.patient?.displayName
+            ?? 'Patient' }}</p>
+        </div>
+        <pf-chip [tone]="orderTone(so)" size="sm">{{ so.status }}</pf-chip>
+      </div>
+      <button type="button" class="pf-drawer__close" (click)="closeOrder()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="pf-drawer__body">
+      <dl class="pf-drawer__meta">
+        <div>
+          <dt>Created</dt>
+          <dd>{{ so.createdAt | date:'MMM d, h:mm a' }}</dd>
+        </div>
+        <div>
+          <dt>Priority</dt>
+          <dd>{{ so.priority }}</dd>
+        </div>
+        <div>
+          <dt>Samples</dt>
+          <dd>{{ so.samples.length }}</dd>
+        </div>
+        <div>
+          <dt>Doctor</dt>
+          <dd>{{ so.refDoctorName || '—' }}</dd>
+        </div>
+      </dl>
+
+      @if (validatedSamples(so).length > 0) {
+      <section class="pf-prelim">
+        <header class="pf-prelim__hdr">
+          <span class="pf-prelim__icon" aria-hidden="true">✓</span>
+          <p class="pf-drawer__eyebrow pf-prelim__eyebrow">Preliminary report</p>
+          <span class="pf-prelim__count">{{ validatedSamples(so).length }} dept{{ validatedSamples(so).length === 1 ? ''
+            : 's' }} ready</span>
+        </header>
+        @for (vs of validatedSamples(so); track vs.id) {
+        <div class="pf-prelim__sample">
+          <header class="pf-prelim__sample-hdr">
+            <span class="pf-prelim__sample-dept">{{ vs.deptCode || vs.deptName }}</span>
+            <span class="pf-prelim__sample-name">{{ vs.deptName }}</span>
+          </header>
+          @for (t of vs.tests; track t.id) {
+          <div class="pf-prelim__test">
+            <p class="pf-prelim__test-name">{{ t.name }}</p>
+            @if (t.values.length === 0) {
+            <p class="pf-prelim__no-values">No parameter values recorded.</p>
+            } @else {
+            <ul class="pf-prelim__values">
+              @for (v of t.values; track v.name) {
+              <li class="pf-prelim__row" [attr.data-flag]="v.flag">
+                <span class="pf-prelim__row-name">{{ v.title }}</span>
+                <span class="pf-prelim__row-value">
+                  {{ v.value }}@if (v.unit) {<span class="pf-prelim__row-unit"> {{ v.unit }}</span>}
+                </span>
+                <span class="pf-prelim__row-range">{{ v.range || '—' }}</span>
+                <span class="pf-prelim__row-flag" [attr.data-flag]="v.flag">
+                  @switch (v.flag) {
+                  @case ('critical') { ⚠ Critical }
+                  @case ('abnormal') { ⚑ Abnormal }
+                  @default { ✓ Normal }
+                  }
+                </span>
+              </li>
+              }
+            </ul>
+            }
+          </div>
+          }
+        </div>
+        }
+      </section>
+      }
+
+      <section>
+        <p class="pf-drawer__eyebrow">Timeline</p>
+        <ol class="pf-vtl">
+          @for (step of pipeline(so); track step.label) {
+          <li class="pf-vtl__row" [attr.data-state]="step.state">
+            <span class="pf-vtl__node">
+              @if (step.state === 'done') {
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="2 6 5 9 10 3" />
+              </svg>
+              }
+            </span>
+            <div class="flex-1 min-w-0">
+              <p class="pf-vtl__label">{{ step.label }}</p>
+              <p class="pf-vtl__status">{{ stepCaption(so, step) }}</p>
+            </div>
+          </li>
+          }
+        </ol>
+      </section>
+    </div>
+  </aside>
+  }
+
+  <!-- Exception-queue drawer -->
+  @if (openQueue(); as q) {
+  <div class="pf-q-bd" (click)="closeQueueDrawer()"></div>
+  <aside class="pf-q-drawer" role="dialog" aria-modal="true" [attr.aria-label]="queueTitle(q)">
+    <header class="pf-q-drawer__hdr">
+      <h2 class="pf-q-drawer__title">{{ queueTitle(q) }}</h2>
+      <span class="pf-q-drawer__count">
+        @switch (q) {
+        @case ('ready') { {{ readyForPickup().length }} }
+        @case ('payments') { {{ paymentsDue().length }} }
+        }
+      </span>
+      <button type="button" class="pf-q-drawer__x press" (click)="closeQueueDrawer()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="pf-q-drawer__body">
+      @switch (q) {
+      @case ('ready') {
+      @if (readyForPickup().length === 0) {
+      <p class="pf-empty">No reports waiting for pickup.</p>
+      }
+      <ul class="pf-cards">
+        @for (o of readyForPickup(); track o.id) {
+        <li>
+          <div class="pf-card pf-card--ready" (click)="openOrder(o)">
+            <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+            <div class="pf-card__body">
+              <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+              <p class="pf-card__meta">Report ready · waiting {{ reportAge(o) }}</p>
+            </div>
+            <pf-chip tone="emerald" size="sm">ready</pf-chip>
+            <div class="pf-card__actions" (click)="$event.stopPropagation()">
+              @if (o.patient?.phone) {
+              <a [href]="'https://wa.me/' + cleanPhone(o.patient!.phone!)" target="_blank"
+                class="pf-ghostbtn press">Nudge</a>
+              }
+            </div>
+          </div>
+        </li>
+        }
+      </ul>
+      }
+      @case ('payments') {
+      @if (paymentsDue().length === 0) {
+      <p class="pf-empty">No unpaid bills.</p>
+      }
+      <ul class="pf-cards">
+        @for (b of paymentsDue(); track b.id) {
+        <li>
+          <div class="pf-card pf-card--unpaid">
+            <div class="pf-card__slot">
+              <p class="pf-card__time pf-card__time--bill">{{ b.balance | inr }}</p>
+              <p class="pf-card__date">due</p>
+            </div>
+            <pf-avatar [name]="patientName(b.patientId)" [size]="40"></pf-avatar>
+            <div class="pf-card__body">
+              <p class="pf-card__name">{{ patientName(b.patientId) }}</p>
+              <p class="pf-card__meta">Bill #{{ b.id.slice(0, 8) }} · {{ b.createdAt | date:'MMM d' }}</p>
+            </div>
+            <pf-chip tone="rose" size="sm">unpaid</pf-chip>
+            <div class="pf-card__actions">
+              <button type="button" class="pf-ghostbtn press" (click)="collectPayment(b)">Collect</button>
+            </div>
+          </div>
+        </li>
+        }
+      </ul>
+      }
+      }
+    </div>
+  </aside>
+  }
+</section>

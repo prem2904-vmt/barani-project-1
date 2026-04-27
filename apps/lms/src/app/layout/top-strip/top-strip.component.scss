@@ -1,0 +1,609 @@
+/* Top strip bar — fixed 64px+ height so every interactive element
+ * inside it can adopt a consistent vertical rhythm. Padding + children
+ * (44px pills) = 64px exact. */
+.pf-topstrip-bar {
+  min-height: 64px;
+  padding: 10px 16px 10px 12px;
+  gap: 8px;
+}
+@media (max-width: 639px) {
+  /* On mobile, reduce padding and gap so brand + tenant + bell + avatar
+   * all fit without overflow on 360px+ screens. */
+  .pf-topstrip-bar { padding: 8px 10px; min-height: 58px; gap: 4px; }
+}
+
+/* Brand lockup — PF glyph + ECG pulse + PREFRONTAL + branch switcher */
+.pf-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 10px 4px 4px;
+  border-radius: 9999px;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s ease, opacity 0.2s ease;
+}
+@media (max-width: 639px) {
+  .pf-brand-lockup { gap: 4px; padding: 4px 6px 4px 2px; }
+}
+.pf-brand-lockup:hover { background: var(--bg-hover); opacity: 0.96; }
+.pf-brand-lockup--open { background: var(--bg-hover); }
+
+.pf-brand-chev {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.pf-brand-lockup--open .pf-brand-chev { transform: rotate(180deg); color: var(--text-primary); }
+
+.pf-brand-branch-icon {
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: #a855f7;
+}
+
+.pf-brand-glyph {
+  width: 30px;
+  height: auto;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.35));
+}
+@media (max-width: 639px) {
+  .pf-brand-glyph { width: 24px; }
+}
+
+.pf-brand-pulse {
+  width: 42px;
+  height: 20px;
+  overflow: visible;
+  display: none;
+  flex-shrink: 0;
+}
+.pf-brand-pulse-path {
+  fill: none;
+  stroke: #a855f7;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation:
+    pf-brand-pd   2.5s ease-in-out infinite,
+    pf-brand-glow 2.5s ease-in-out infinite;
+}
+:root.light .pf-brand-pulse-path {
+  stroke: #7c3aed;
+  animation:
+    pf-brand-pd         2.5s ease-in-out infinite,
+    pf-brand-glow-light 2.5s ease-in-out infinite;
+}
+
+/* Brand wordmark — always visible so mobile shows PREFRONTAL + LMS. */
+.pf-brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+  gap: 3px;
+  margin-left: -2px;
+}
+.pf-brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: pf-brand-name-beat 2.5s ease-in-out infinite;
+}
+@media (min-width: 640px) {
+  .pf-brand-name { font-size: 15px; }
+}
+.pf-brand-sub {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+@media (min-width: 640px) {
+  .pf-brand-sub { font-size: 10px; }
+}
+:root.light .pf-brand-sub { color: #7c3aed; }
+
+/* Branch popover hanging off the brand lockup ------------- */
+.pf-brand-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  z-index: 40;
+  overflow: hidden;
+  animation: pf-pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-brand-pop__head { padding: 10px 12px 6px; }
+.pf-brand-pop__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-brand-pop__current {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pf-brand-pop__divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-muted);
+}
+.pf-brand-pop__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  text-align: left;
+}
+.pf-brand-pop__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pf-brand-pop__item--active {
+  background: var(--gradient-primary);
+  color: #ffffff;
+}
+.pf-brand-pop__item--active:hover {
+  background: var(--gradient-primary);
+  color: #ffffff;
+}
+
+/* ECG pulse appears at sm+ — keeps mobile bar compact. */
+@media (min-width: 640px) {
+  .pf-brand-pulse { display: block; }
+}
+
+@keyframes pf-brand-pd {
+  0%           { stroke-dashoffset:  100; opacity: 0.3; }
+  40%, 60%     { stroke-dashoffset:    0; opacity: 1; }
+  100%         { stroke-dashoffset: -100; opacity: 0.3; }
+}
+@keyframes pf-brand-glow {
+  0%, 35%, 100% { filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.3)); stroke-width: 1.6; stroke: #a855f7; }
+  45%           { filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.9)); stroke-width: 2.2; stroke: #ec4899; }
+  55%           { filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.4));  stroke-width: 1.6; stroke: #a855f7; }
+}
+@keyframes pf-brand-glow-light {
+  0%, 35%, 100% { filter: drop-shadow(0 0 2px rgba(124, 58, 237, 0.3)); stroke-width: 1.6; stroke: #7c3aed; }
+  45%           { filter: drop-shadow(0 0 8px rgba(219, 39, 119, 0.8));  stroke-width: 2.2; stroke: #db2777; }
+  55%           { filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.3));  stroke-width: 1.6; stroke: #7c3aed; }
+}
+@keyframes pf-brand-name-beat {
+  0%, 35%, 100% { opacity: 0.9; transform: scale(1);    filter: none; }
+  45%           { opacity: 1;   transform: scale(1.03); filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.55)); }
+  55%           { opacity: 1;   transform: scale(1.01); filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.35)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-brand-pulse-path, .pf-brand-name { animation: none; }
+  .pf-brand-pulse-path { stroke-dashoffset: 0; opacity: 1; }
+}
+
+.pf-strip-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.pf-strip-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pf-strip-chip {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  transition: all 0.15s ease;
+}
+.pf-strip-chip:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+
+.pf-branch-item  { color: var(--text-secondary); }
+.pf-branch-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.pf-branch-active {
+  background: var(--gradient-primary);
+  color: #ffffff;
+}
+
+/* Desktop inline nav — display controlled by Tailwind hidden/xl:flex.
+ * Do NOT add display: flex here — it would override Tailwind hidden. */
+.pf-topnav-center {
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.pf-topnav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2.75rem;
+  padding: 0 14px;
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-topnav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pf-topnav-active {
+  background: var(--gradient-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+.pf-topnav-active svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25)); }
+
+/* More popover -------------------------------------------- */
+.pf-more-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  border-radius: 18px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  z-index: 40;
+  overflow: hidden;
+  animation: pf-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-more-accent {
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(168, 85, 247, 0.7) 50%, transparent 100%);
+}
+.pf-more-pop-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 6px;
+  border-radius: 14px;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+.pf-more-pop-item:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+.pf-more-pop-item:active { transform: scale(0.97); }
+.pf-more-pop-active {
+  background: var(--gradient-primary) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+
+@keyframes pf-pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Profile avatar + popover ------------------------------- */
+.pf-avatar-btn {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .pf-avatar-btn { width: 2.75rem; height: 2.75rem; }
+}
+.pf-avatar-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+@media (min-width: 640px) {
+  .pf-avatar-circle { width: 2.4rem; height: 2.4rem; font-size: 12px; }
+}
+.pf-avatar-btn:hover .pf-avatar-circle { transform: scale(1.05); box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45); }
+.pf-avatar-btn:active .pf-avatar-circle { transform: scale(0.96); }
+
+/* Gradient ring that appears while the popover is open. */
+.pf-avatar-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  z-index: -1;
+  filter: blur(4px);
+  opacity: 0.55;
+  animation: pf-avatar-ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pf-avatar-ring-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 0.7;  transform: scale(1.08); }
+}
+
+.pf-profile-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 260px;
+  border-radius: 18px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  z-index: 40;
+  overflow: hidden;
+  padding: 6px;
+  animation: pf-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-profile-accent {
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(168, 85, 247, 0.75) 50%, transparent 100%);
+}
+
+.pf-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px 12px;
+}
+.pf-profile-bigcircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.38);
+  flex-shrink: 0;
+}
+
+.pf-profile-divider {
+  height: 1px;
+  margin: 4px 8px 6px;
+  background: var(--border-muted);
+}
+
+.pf-profile-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  text-align: left;
+}
+.pf-profile-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pf-profile-item svg { flex-shrink: 0; }
+
+.pf-profile-danger { color: #fca5a5; }
+.pf-profile-danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+/* Split tenant cluster: [icon+name] | [Branch · Main ▼] ---------- */
+.pf-tenant-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  // background: var(--header-bg);
+  // border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 3px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .pf-tenant-cluster { border-radius: 10px; padding: 2px; }
+}
+
+/* Tenant identity: icon + name */
+.pf-tenant-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2rem;
+  padding: 0 8px 0 3px;
+  border-radius: 8px;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.pf-tenant-id:hover { background: var(--bg-hover); }
+.pf-tenant-id--empty .pf-tenant-icon {
+  background: rgba(236, 72, 153, 0.15);
+  border: 1px dashed rgba(236, 72, 153, 0.6);
+  color: #ec4899;
+}
+
+/* Squared icon — shows logo or first letter of tenant name */
+.pf-tenant-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+.pf-tenant-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Tenant name — hidden on small mobile to save space */
+.pf-tenant-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+  display: none;
+}
+@media (min-width: 480px) {
+  .pf-tenant-name { display: block; max-width: 100px; }
+}
+@media (min-width: 640px) {
+  .pf-tenant-name { max-width: 440px; }
+}
+
+/* Separator between tenant identity and branch picker */
+.pf-tenant-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-muted);
+  flex-shrink: 0;
+  margin: 0 1px;
+}
+
+/* Branch picker button */
+.pf-branch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 2rem;
+  padding: 0 6px 0 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pf-branch-btn:hover { background: var(--bg-hover); }
+.pf-branch-btn--open { background: var(--bg-hover); }
+
+.pf-branch-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  display: none;
+}
+@media (min-width: 640px) {
+  .pf-branch-label { display: inline; }
+  .pf-branch-btn { gap: 5px; padding: 0 8px 0 10px; }
+}
+
+.pf-branch-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pf-branch-chev {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.pf-branch-btn--open .pf-branch-chev {
+  transform: rotate(180deg);
+  color: var(--text-primary);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-more-pop, .pf-profile-pop { animation: none; }
+  .pf-avatar-ring { animation: none; }
+}

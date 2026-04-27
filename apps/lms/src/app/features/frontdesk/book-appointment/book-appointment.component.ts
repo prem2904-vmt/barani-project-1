@@ -128,7 +128,7 @@ export class BookAppointmentComponent implements OnInit {
         tests: this._tests().map(t => ({ value: t.id, label: `${t.name} — ₹${t.price}` })),
         patients: p ? [{ value: p.id, label: p.displayName ?? "" }] : [],
         doctors: [] as Array<{ value: string; label: string }>,
-        available_slots: ['09:00','09:30','10:00','10:30','11:00','11:30','12:00'].map(s => ({ value: s, label: s }))
+        available_slots: ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00'].map(s => ({ value: s, label: s }))
       }
     };
   });
@@ -145,7 +145,13 @@ export class BookAppointmentComponent implements OnInit {
   ngOnInit() {
     this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
     this.api.get<WorkflowConfigRecord>('/api/workflows/appointment_booking').subscribe({
-      next: r => { this._record.set(r); try { this._config.set(JSON.parse(r.configJson)); } catch { /* ignore */ } }
+      next: r => {
+        this._record.set(r);
+         try { 
+          this._config.set(JSON.parse(r.configJson)); 
+        } 
+        catch { /* ignore */ }
+      }
     });
 
     // Prefill patient from ?patientId= query param.

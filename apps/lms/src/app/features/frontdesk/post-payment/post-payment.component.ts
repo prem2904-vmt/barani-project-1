@@ -4,7 +4,6 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Order } from '../../../shared/models/order.model';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -14,7 +13,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
   standalone: true,
   imports: [
     BarcodeDisplayComponent,
-    ScreenHeaderComponent,
     SkeletonComponent,
     TileComponent,
     TouchButtonComponent

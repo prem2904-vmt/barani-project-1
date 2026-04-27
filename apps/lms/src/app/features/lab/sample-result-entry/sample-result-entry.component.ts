@@ -48,7 +48,7 @@ interface BulkSubmitResponse {
           <div class="pf-sre__hdr-title">
             <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.barcode || '—' }}</p>
             <h1 class="pf-sre__title">{{ s.order?.patient?.displayName ?? 'Patient' }}</h1>
-            <p class="pf-sre__sub">{{ s.tests?.length ?? 0 }} test{{ (s.tests?.length ?? 0) === 1 ? '' : 's' }} on this tube</p>
+            <p class="pf-sre__sub">{{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
           </div>
         }
       </header>
@@ -81,7 +81,7 @@ interface BulkSubmitResponse {
           </div>
         }
 
-        @for (t of sample()!.tests ?? []; track t.id) {
+        @for (t of sample()!.tests; track t.id) {
           <section class="pf-sre__test"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">

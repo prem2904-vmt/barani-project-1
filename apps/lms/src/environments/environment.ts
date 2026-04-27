@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:5270',
+  apiUrl: 'https://lab-fetch.prefrontal.health',
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',
