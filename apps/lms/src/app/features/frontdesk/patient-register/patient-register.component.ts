@@ -54,9 +54,9 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
         }
       </pf-tile>
 
-      <p class="text-[11px] font-mono mt-3 px-1" style="color: var(--text-muted);">
+      <!-- <p class="text-[11px] font-mono mt-3 px-1" style="color: var(--text-muted);">
         Config: patient_registration v{{ record()?.version ?? '—' }}
-      </p>
+      </p> -->
     </section>
   `
 })
@@ -96,6 +96,7 @@ export class PatientRegisterComponent implements OnInit {
     this.api.get<WorkflowConfigRecord>('/api/workflows/patient_registration').subscribe({
       next: r => {
         this._record.set(r);
+        console.log('Parsing workflow config Patient', r.configJson);
         try { this._config.set(JSON.parse(r.configJson)); }
         catch { this.toasts.error('Could not parse workflow'); }
       },

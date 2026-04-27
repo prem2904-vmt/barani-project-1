@@ -85,8 +85,8 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     /* Button matches the top-strip .pf-strip-btn slot exactly. */
     .pf-bell-btn {
       position: relative;
-      width: 2.75rem;
-      height: 2.75rem;
+      width: 2.25rem;
+      height: 2.25rem;
       border-radius: 9999px;
       display: inline-flex;
       align-items: center;
@@ -96,6 +96,10 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
       color: var(--text-secondary);
       cursor: pointer;
       transition: background 0.15s ease, color 0.15s ease;
+      flex-shrink: 0;
+    }
+    @media (min-width: 640px) {
+      .pf-bell-btn { width: 2.75rem; height: 2.75rem; }
     }
     .pf-bell-btn:hover {
       background: var(--bg-hover);

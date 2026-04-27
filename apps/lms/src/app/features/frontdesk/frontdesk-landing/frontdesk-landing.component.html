@@ -364,7 +364,7 @@
                         }
                       </p>
                     </div>
-                    <pf-chip [tone]="apptTone(a)" size="sm">{{ a.status }}</pf-chip>
+                    <!-- <pf-chip [tone]="apptTone(a)" size="sm">{{ a.status }}</pf-chip> -->
                     <div class="pf-card__actions" (click)="$event.stopPropagation()">
                       @if (a.patient?.phone) {
                       <a [href]="'tel:' + a.patient!.phone" class="pf-iconbtn press" title="Call">
@@ -451,7 +451,7 @@
                         (click)="goToBilling(o)">Bill</button>
                       } @else if (sampleStatus(o) === 'partially_collected' || (o.status === 'billed' &&
                       showCollectOn(o))) {
-                      <button type="button" class="pf-btn press" (click)="collectSample(o)">Collect</button>
+                      <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
                       } @else if (showDispatchOn(o)) {
                       <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
                         (click)="markDispatched(o)">Dispatch</button>
