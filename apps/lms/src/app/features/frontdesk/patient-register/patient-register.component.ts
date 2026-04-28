@@ -28,8 +28,8 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
 
       <pf-screen-header
         eyebrow="Frontdesk · Registration"
-        title="Register patient"
-        subtitle="Standard fields save to dedicated columns; custom fields into the attributes JSON.">
+        title="Register Patient"
+        subtitle="Capture the patient's details — name, contact, ID, and any extras you collect.">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

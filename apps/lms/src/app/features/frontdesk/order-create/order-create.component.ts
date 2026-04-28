@@ -127,7 +127,16 @@ type Priority = 'Normal' | 'Urgent';
               <p class="pf-eyebrow mb-2 px-1">Quick packages</p>
               <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 @for (pkg of packages(); track pkg.id) {
-                  <button type="button" (click)="addPackage(pkg)" class="pf-pkg press">
+                  <button type="button" (click)="togglePackage(pkg)"
+                          class="pf-pkg press"
+                          [class.pf-pkg--on]="isSelected(pkg.id)">
+                    @if (isSelected(pkg.id)) {
+                      <span class="pf-pkg__check" aria-hidden="true">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="m5 12 4 4L19 6"/>
+                        </svg>
+                      </span>
+                    }
                     <div class="min-w-0 flex-1 text-left">
                       <p class="pf-pkg__name">{{ pkg.name }}</p>
                       <p class="pf-pkg__meta">package · TAT {{ pkg.tatHours }}h</p>
@@ -166,7 +175,10 @@ type Priority = 'Normal' | 'Urgent';
                   <div class="flex-1 min-w-0 text-left">
                     <p class="pf-test__name">{{ t.name }}</p>
                     <p class="pf-test__meta">
-                      {{ t.department?.name ?? '—' }} · TAT {{ t.tatHours }}h
+                      @if (t.department?.name) {
+                        {{ t.department?.name }} ·
+                      }
+                      TAT {{ t.tatHours }}h
                     </p>
                   </div>
                   <span class="pf-test__price">{{ t.price | inr }}</span>
@@ -244,7 +256,9 @@ type Priority = 'Normal' | 'Urgent';
               <li class="pf-cart-row">
                 <div class="min-w-0 flex-1">
                   <p class="pf-cart-name">{{ t.name }}</p>
-                  <p class="pf-cart-meta">{{ t.department?.name ?? '—' }}</p>
+                  @if (t.department?.name) {
+                    <p class="pf-cart-meta">{{ t.department?.name }}</p>
+                  }
                 </div>
                 <span class="pf-cart-amount">{{ t.price | inr }}</span>
                 <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
@@ -283,7 +297,14 @@ type Priority = 'Normal' | 'Urgent';
         </button>
 
         @if (priority() !== 'Normal') {
-          <p class="pf-cart-badge pf-cart-badge--urgent">· {{ priority() }} priority ·</p>
+          <div class="pf-cart-badge-wrap">
+            <span class="pf-cart-badge pf-cart-badge--urgent">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2L2 22h20L12 2zM12 9v5M12 18h.01"/>
+              </svg>
+              {{ priority() }} priority
+            </span>
+          </div>
         }
       </ng-template>
     </section>
@@ -767,6 +788,23 @@ type Priority = 'Normal' | 'Urgent';
       box-shadow: 0 8px 22px rgba(124, 58, 237, 0.22);
     }
     .pf-pkg:active { transform: scale(0.98); }
+    .pf-pkg--on {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.42), rgba(236, 72, 153, 0.22));
+      border-color: rgba(168, 85, 247, 0.85);
+      box-shadow: 0 10px 28px rgba(124, 58, 237, 0.3);
+    }
+    .pf-pkg__check {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: var(--gradient-primary);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.45);
+    }
     .pf-pkg__name { margin: 0; font-size: 14px; font-weight: 600; }
     .pf-pkg__meta {
       margin: 2px 0 0;
@@ -1016,13 +1054,23 @@ type Priority = 'Normal' | 'Urgent';
     .pf-proceed:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
     .pf-cart-badge {
-      margin: 8px 0 0;
-      text-align: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 10px auto 0;
+      padding: 4px 10px;
+      border-radius: 9999px;
       font-size: 11px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
+      font-weight: 600;
     }
-    .pf-cart-badge--urgent { color: #fcd34d; }
+    .pf-cart-badge-wrap { display: flex; justify-content: center; }
+    .pf-cart-badge--urgent {
+      color: #f97316;
+      background: rgba(249, 115, 22, 0.14);
+      border: 1px solid rgba(249, 115, 22, 0.4);
+    }
   `]
 })
 export class OrderCreateComponent implements OnInit {
@@ -1102,9 +1150,13 @@ export class OrderCreateComponent implements OnInit {
   }
   clearCart() { this._selected.set([]); }
 
-  addPackage(pkg: Test) {
-    this._selected.update(cur => cur.includes(pkg.id) ? cur : [...cur, pkg.id]);
-    this.toasts.success(`${pkg.name} added`);
+  /** Click toggles a quick-package: add if missing, remove if already in cart.
+   * Quietly mutates selection without flooding the toast stack — the cart
+   * sidebar is the source of truth and visually reflects the change. */
+  togglePackage(pkg: Test) {
+    this._selected.update(cur =>
+      cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
+    );
   }
 
   toggleCart() { this._cartOpen.update(v => !v); }

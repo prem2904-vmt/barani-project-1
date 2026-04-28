@@ -6,6 +6,11 @@ import { ApiService } from '../../../core/services/api.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
+import {
+  cityOptionsForState,
+  OTHER_CITY_VALUE,
+  stateOptions
+} from '../../../shared/data/india-locations';
 import { Branch, Department, SubBranch, Tenant, TenantBrandingMode } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -293,20 +298,41 @@ interface DepartmentDraft {
                              (ngModelChange)="updateBranch(i, { code: $event.toUpperCase() })"
                              placeholder="MAIN" />
                     </div>
+                    <!-- State first so City can filter to its cities. -->
+                    <div class="col-span-6 md:col-span-2">
+                      <label class="pf-label">State</label>
+                      <pf-select size="md"
+                                 [options]="stateSelectOptions"
+                                 [value]="b.state"
+                                 placeholder="Select state…"
+                                 (valueChange)="onBranchStateChange(i, $event)">
+                      </pf-select>
+                    </div>
                     <div class="col-span-6 md:col-span-2">
                       <label class="pf-label">City</label>
-                      <input type="text" class="pf-input" [ngModel]="b.city"
-                             (ngModelChange)="updateBranch(i, { city: $event })" />
-                    </div>
-                    <div class="col-span-4 md:col-span-2">
-                      <label class="pf-label">State</label>
-                      <input type="text" class="pf-input" [ngModel]="b.state"
-                             (ngModelChange)="updateBranch(i, { state: $event })" />
+                      @if (b.state) {
+                        <pf-select size="md"
+                                   [options]="cityOptionsFor(b.state, b.city)"
+                                   [value]="cityValueFor(b.city, b.state)"
+                                   placeholder="Select city…"
+                                   (valueChange)="onBranchCityChange(i, $event)">
+                        </pf-select>
+                        @if (isCityCustom(b.city, b.state)) {
+                          <input type="text" class="pf-input mt-1.5" placeholder="Type city name"
+                                 [ngModel]="b.city"
+                                 (ngModelChange)="updateBranch(i, { city: $event })" />
+                        }
+                      } @else {
+                        <input type="text" class="pf-input" disabled
+                               placeholder="Pick a state first" />
+                      }
                     </div>
                     <div class="col-span-4 md:col-span-2">
                       <label class="pf-label">Pincode</label>
-                      <input type="text" class="pf-input" [ngModel]="b.pincode"
-                             (ngModelChange)="updateBranch(i, { pincode: $event })" />
+                      <input type="text" class="pf-input" inputmode="numeric"
+                             maxlength="6" [ngModel]="b.pincode"
+                             (ngModelChange)="updateBranch(i, { pincode: $event.replace(/\D/g, '').slice(0, 6) })"
+                             placeholder="6 digits" />
                     </div>
                     <div class="col-span-4 md:col-span-1 flex items-end justify-end">
                       <button type="button" class="row-remove"
@@ -338,7 +364,6 @@ interface DepartmentDraft {
                       <div class="space-y-1.5 mb-2">
                         @for (sb of b.subBranches; let sbi = $index; track sbi) {
                           <div class="sub-branch-row">
-                            <span class="sub-branch-arrow">→</span>
                             <input type="text" class="pf-input flex-1 min-w-0" placeholder="Sub-branch name"
                                    [ngModel]="sb.name"
                                    (ngModelChange)="updateSubBranch(i, sbi, { name: $event })" />
@@ -405,7 +430,8 @@ interface DepartmentDraft {
           } @else {
             <div class="space-y-2">
               @for (d of departments(); let i = $index; track i) {
-                <div class="grid grid-cols-12 gap-2">
+                <div class="grid grid-cols-12 gap-2"
+                     [class.dept-row-dup]="duplicateDeptIndices().has(i)">
                   <div class="col-span-7 md:col-span-7">
                     <input type="text" class="pf-input" [ngModel]="d.name"
                            (ngModelChange)="updateDept(i, { name: $event })"
@@ -425,6 +451,11 @@ interface DepartmentDraft {
                       </svg>
                     </button>
                   </div>
+                  @if (duplicateDeptIndices().has(i)) {
+                    <p class="col-span-12 text-[11.5px] mt-0.5 ml-1" style="color: #f87171;">
+                      Duplicate name or code — each department must be unique.
+                    </p>
+                  }
                 </div>
               }
             </div>
@@ -571,18 +602,11 @@ interface DepartmentDraft {
       margin-top: 14px;
       padding-top: 12px;
       border-top: 1px dashed var(--border-muted);
-      padding-left: 18px;
     }
     .sub-branch-row {
       display: flex;
       align-items: center;
       gap: 6px;
-    }
-    .sub-branch-arrow {
-      color: #ec4899;
-      font-weight: 600;
-      font-size: 14px;
-      margin-right: 2px;
     }
     .add-sub-link {
       background: none;
@@ -594,6 +618,13 @@ interface DepartmentDraft {
       padding: 4px 0;
     }
     .add-sub-link:hover { text-decoration: underline; }
+
+    /* Duplicate department row — soft red ring on the inputs so the user
+     * sees which row to fix instead of just a disabled Next button. */
+    .dept-row-dup .pf-input {
+      border-color: rgba(239, 68, 68, 0.55);
+      background: rgba(239, 68, 68, 0.04);
+    }
 
     /* ── Branding step ─────────────────────────────────────── */
     .brand-upload {
@@ -713,6 +744,41 @@ export class SetupWizardComponent {
     { value: 'hospital',          label: 'Hospital' },
     { value: 'diagnostic_center', label: 'Diagnostic center' }
   ];
+  // India address dropdowns — see shared/data/india-locations.ts
+  readonly stateSelectOptions: PfSelectOption<string>[] = stateOptions();
+  cityOptionsFor(state: string, currentCity: string): PfSelectOption<string>[] {
+    const opts = cityOptionsForState(state);
+    // If the saved city isn't in the canonical list, surface it as a value
+    // so the select reflects the existing data instead of going blank.
+    if (currentCity && !opts.some(o => o.value === currentCity) && currentCity !== OTHER_CITY_VALUE) {
+      return [{ value: currentCity, label: currentCity }, ...opts];
+    }
+    return opts;
+  }
+  cityValueFor(currentCity: string, state: string): string {
+    if (!currentCity) return '';
+    const known = cityOptionsForState(state).some(o => o.value === currentCity);
+    return known ? currentCity : OTHER_CITY_VALUE;
+  }
+  isCityCustom(currentCity: string, state: string): boolean {
+    if (!currentCity) return false;
+    const known = cityOptionsForState(state).some(o => o.value === currentCity);
+    return !known;
+  }
+  onBranchStateChange(i: number, state: string) {
+    // Switching state invalidates the city if it doesn't belong to the new state.
+    const current = this._branches()[i];
+    const stillValid = cityOptionsForState(state).some(o => o.value === current.city);
+    this.updateBranch(i, { state, city: stillValid ? current.city : '' });
+  }
+  onBranchCityChange(i: number, value: string) {
+    if (value === OTHER_CITY_VALUE) {
+      // Clear the city; the inline text input shows up so the user types one.
+      this.updateBranch(i, { city: '' });
+    } else {
+      this.updateBranch(i, { city: value });
+    }
+  }
 
   readonly year = new Date().getFullYear();
 
@@ -764,13 +830,53 @@ export class SetupWizardComponent {
       if (branches.length === 0) return false;
       return branches.every(b =>
         b.name.trim() && b.code.trim() &&
-        b.subBranches.every(sb => sb.name.trim() && sb.code.trim())
+        // Sub-branch rows that are completely empty are ignored; if the user
+        // typed anything (name OR code), both must be filled before advancing.
+        b.subBranches.every(sb => {
+          const touched = sb.name.trim() || sb.code.trim();
+          if (!touched) return true;
+          return sb.name.trim() && sb.code.trim();
+        })
       );
     }
     if (s === 3) {
-      return this._departments().every(d => d.name.trim() && d.code.trim()) && this._departments().length > 0;
+      const depts = this._departments();
+      if (depts.length === 0) return false;
+      if (!depts.every(d => d.name.trim() && d.code.trim())) return false;
+      // Block on duplicate name or code (case-insensitive).
+      const names = new Set<string>();
+      const codes = new Set<string>();
+      for (const d of depts) {
+        const n = d.name.trim().toLowerCase();
+        const c = d.code.trim().toUpperCase();
+        if (names.has(n) || codes.has(c)) return false;
+        names.add(n); codes.add(c);
+      }
+      return true;
     }
     return false;
+  });
+
+  // Per-row duplicate flags so the UI can highlight offending rows
+  // and the user can see *why* Next is disabled.
+  readonly duplicateDeptIndices = computed(() => {
+    const depts = this._departments();
+    const dupSet = new Set<number>();
+    for (let i = 0; i < depts.length; i++) {
+      const ni = depts[i].name.trim().toLowerCase();
+      const ci = depts[i].code.trim().toUpperCase();
+      if (!ni && !ci) continue;
+      for (let j = 0; j < depts.length; j++) {
+        if (i === j) continue;
+        const nj = depts[j].name.trim().toLowerCase();
+        const cj = depts[j].code.trim().toUpperCase();
+        if ((ni && ni === nj) || (ci && ci === cj)) {
+          dupSet.add(i);
+          break;
+        }
+      }
+    }
+    return dupSet;
   });
 
   updateOrg(patch: Partial<OrgDraft>) { this._org.update(o => ({ ...o, ...patch })); }
@@ -900,6 +1006,7 @@ export class SetupWizardComponent {
         const saved = await firstValueOfApi(this.api.post<Branch>('/api/tenants/branches', branchBody));
         createdBranches.push(saved);
         for (const sb of subBranches) {
+          if (!sb.name.trim() || !sb.code.trim()) continue;
           await firstValueOfApi(this.api.post<SubBranch>(
             `/api/tenants/branches/${saved.id}/sub-branches`,
             { name: sb.name, code: sb.code, type: sb.type }

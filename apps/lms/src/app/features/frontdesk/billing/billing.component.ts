@@ -51,11 +51,19 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
         <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
              after save and raises a billing request instead. Flag is
              persisted in localStorage via FrontdeskSettingsService. -->
-        <label actions class="pf-collect-toggle" title="Frontdesk collects payment">
+        <label actions class="pf-collect-toggle"
+               title="When ON, payment is collected at the front desk after each order. When OFF, a separate billing request is raised and the front desk skips this screen.">
           <input type="checkbox"
                  [checked]="collectsBilling()"
                  (change)="setCollectsBilling($any($event.target).checked)" />
-          <span>Frontdesk collects</span>
+          <span>Front desk collects payment</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               class="pf-collect-toggle__hint" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
+            <path d="M12 17h.01"/>
+          </svg>
         </label>
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
@@ -108,10 +116,14 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 <div class="pf-bill-line pf-bill-line--discount">
                   <span>Discount</span>
                   <div class="pf-discount">
-                    <input type="text"
+                    <input type="number"
                            inputmode="numeric"
+                           min="0"
+                           step="1"
+                           [attr.max]="b.subTotal + b.totalTax"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
+                           (keydown)="blockDiscountChars($event)"
                            class="pf-discount__input"
                            placeholder="0"/>
                     <span class="pf-discount__rupee">₹</span>
@@ -291,6 +303,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       height: 14px;
       accent-color: #a855f7;
     }
+    .pf-collect-toggle__hint {
+      color: var(--text-muted);
+      cursor: help;
+    }
+    .pf-collect-toggle:hover .pf-collect-toggle__hint { color: var(--text-secondary); }
 
     .pf-eyebrow {
       margin: 0;
@@ -319,9 +336,14 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       list-style: none;
       padding: 0;
       margin: 0 0 16px;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr;
       gap: 6px;
+    }
+    /* On wider viewports show two test rows side-by-side so the invoice
+     * doesn't tower vertically when there are >5 tests. */
+    @media (min-width: 1100px) {
+      .pf-bill-items { grid-template-columns: 1fr 1fr; }
     }
     .pf-bill-row {
       display: grid;
@@ -730,7 +752,20 @@ export class BillingComponent implements OnInit {
   clearCash() { this._cash.set(''); }
 
   setDiscount(v: string) {
-    this._discount.set(v.replace(/[^\d]/g, ''));
+    // Strip anything non-numeric (negatives, decimals, letters), then cap
+    // at the bill's pre-discount total so the discount can't exceed payable.
+    const digits = (v ?? '').replace(/[^\d]/g, '');
+    const b = this._bill();
+    const cap = b ? b.subTotal + b.totalTax : Number.POSITIVE_INFINITY;
+    const n = digits === '' ? 0 : Math.min(parseInt(digits, 10), cap);
+    this._discount.set(n === 0 && digits === '' ? '' : String(n));
+  }
+  /** Block obviously bad keystrokes at source — minus, plus, e/E exponent,
+   *  and decimal point. Keeps Tab/Backspace/arrows/etc. flowing. */
+  blockDiscountChars(ev: KeyboardEvent) {
+    if (['-', '+', 'e', 'E', '.', ','].includes(ev.key)) {
+      ev.preventDefault();
+    }
   }
   setReferenceNo(v: string) { this._referenceNo.set(v); }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }

@@ -284,8 +284,9 @@ const COUNTERS: CounterSpec[] = [
                            tube for combined entry (Fix 6 contract). -->
                       <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
                         @for (tube of tubesIn(g.items); track tube.sampleId) {
-                          <li class="rounded-lg p-2.5"
+                          <li class="rounded-lg p-2.5 pf-tube-tile"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
+                              [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
                               style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                             <div class="flex items-center gap-2 mb-1.5">
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
@@ -681,12 +682,21 @@ const COUNTERS: CounterSpec[] = [
     .pf-counter[data-tone='default'] { background: var(--glass-bg); border-color: var(--glass-border); }
 
     .pf-counter__label {
-      font-size: 10.5px;
+      font-size: 11px;
+      font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       text-transform: uppercase;
       letter-spacing: 0.14em;
-      color: var(--text-muted);
+      color: var(--text-secondary);
     }
+    /* Per-tone label tint — keeps the label readable AND coded to the
+     * counter's color, so PENDING/CRITICAL/IN PROGRESS/DONE read at a
+     * glance instead of fading into the background. */
+    .pf-counter[data-tone='amber']   .pf-counter__label { color: #d97706; }
+    .pf-counter[data-tone='rose']    .pf-counter__label { color: #e11d48; }
+    .pf-counter[data-tone='violet']  .pf-counter__label { color: #7c3aed; }
+    .pf-counter[data-tone='emerald'] .pf-counter__label { color: #059669; }
+    .pf-counter[data-tone='default'] .pf-counter__label { color: var(--text-secondary); }
     .pf-counter__value {
       font-size: 30px;
       font-weight: 700;
@@ -700,7 +710,7 @@ const COUNTERS: CounterSpec[] = [
       color: #0f172a !important;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
     }
-    .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.6); }
+    .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.75) !important; }
 
     /* Urgency dot (kept from prior) */
     .pf-grp-count {
@@ -729,6 +739,44 @@ const COUNTERS: CounterSpec[] = [
     .pf-tube-tile--rejected {
       border-color: rgba(239, 68, 68, 0.34) !important;
       background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.02)) !important;
+    }
+
+    /* Hover/active feedback on tube tiles — without it, clicking the
+     * action button gives no in-tile signal that the tube was picked.
+     * Adds a violet glow on hover and a quick "fill" animation on click
+     * so the tech sees a clear pick before the route swap. */
+    .pf-tube-tile {
+      position: relative;
+      transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.22s ease;
+      overflow: hidden;
+    }
+    .pf-tube-tile:hover {
+      border-color: rgba(168, 85, 247, 0.45) !important;
+      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
+    }
+    .pf-tube-tile.pf-tube-tile--picking {
+      animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+      border-color: rgba(124, 58, 237, 0.65) !important;
+    }
+    .pf-tube-tile.pf-tube-tile--picking::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(124, 58, 237, 0.08) 60%,
+        rgba(168, 85, 247, 0.18) 100%);
+      animation: pf-tube-fill 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+      pointer-events: none;
+    }
+    @keyframes pf-tube-pick {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(0.985); }
+      100% { transform: scale(1); }
+    }
+    @keyframes pf-tube-fill {
+      0%   { opacity: 0; transform: translateY(100%); }
+      100% { opacity: 1; transform: translateY(0); }
     }
 
     .pf-tube-reject {
@@ -1181,6 +1229,12 @@ export class MyWorkComponent implements OnInit {
   pickTube(tube: { sampleId: string; barcode: string; tests: Enriched[] }) {
     const probe = tube.tests[0];
     if (!probe) return;
+    // Brief tube-fill animation on the tile so the tech sees a clear
+    // "picked" cue before the route swaps. ~280ms is long enough to feel
+    // intentional but short enough not to block the workflow.
+    this._pickingTubeId.set(tube.sampleId);
+    setTimeout(() => this._pickingTubeId.set(null), 600);
+
     if (!tube.barcode) {
       // Fall back to direct nav when there's no barcode to gate on
       // (e.g. samples created by the realignment seeder without a printed
@@ -1190,6 +1244,8 @@ export class MyWorkComponent implements OnInit {
     }
     this.startPick(probe);
   }
+  private readonly _pickingTubeId = signal<string | null>(null);
+  readonly pickingTubeId = this._pickingTubeId.asReadonly();
 
   private enterJustScanned(t: OrderTest) {
     const sid = t.subOrder?.id;

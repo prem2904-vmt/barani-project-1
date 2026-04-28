@@ -128,7 +128,10 @@
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             Staff
-            <span class="pf-head__btn-badge">{{ onDutyCount() }}</span>
+            <span class="pf-head__btn-badge"
+                  [attr.aria-label]="onDutyCount() + ' on duty'">{{
+              onDutyCount() > 99 ? '99+' : onDutyCount()
+            }}</span>
           </button>
 
           @if (staffPopoverOpen()) {

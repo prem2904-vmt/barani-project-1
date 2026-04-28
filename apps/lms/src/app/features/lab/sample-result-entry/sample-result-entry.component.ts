@@ -691,7 +691,12 @@ export class SampleResultEntryComponent {
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
       await this.loadComments();
-      this.toasts.success(`Submitted ${resp?.submitted ?? 0} test${(resp?.submitted ?? 0) === 1 ? '' : 's'}`);
+      const n = resp?.submitted ?? 0;
+      this.toasts.success(`Submitted ${n} test${n === 1 ? '' : 's'} — back to your queue`);
+      // Hand the tech back to /lab/my-work so they can pick the next
+      // tube. Without this nav, submitAll only ever showed a toast and
+      // the user was stuck on the now-empty entry page.
+      setTimeout(() => this.router.navigate(['/lab/my-work']), 700);
     } catch (e) {
       this.toasts.error('Could not submit — try again');
     } finally {
