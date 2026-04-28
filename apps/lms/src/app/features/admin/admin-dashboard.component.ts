@@ -52,9 +52,6 @@ interface Tile {
             style="color: var(--text-primary);">
           Good day, <span class="text-gradient">{{ userName() }}</span>.
         </h1>
-        <p class="mt-1 text-sm" style="color: var(--text-secondary);">
-          {{ tenantName() }} · {{ branchName() }}
-        </p>
       </header>
 
       <!-- KPI row -->
@@ -182,8 +179,6 @@ export class AdminDashboardComponent implements OnInit {
 
   readonly today = new Date();
   readonly userName = () => this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
-  readonly tenantName = () => this.auth.user()?.tenantName ?? '';
-  readonly branchName = () => this.auth.user()?.branchName ?? '';
   readonly summary = this._summary.asReadonly();
   readonly stats = this._stats.asReadonly();
 

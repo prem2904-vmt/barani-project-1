@@ -256,14 +256,15 @@ app-root > router-outlet + * {
   height: 100%;
 }
 
-/* The routed feature is the ONE scroll container per page. Angular inserts
- * the active component as a sibling after <router-outlet>; we promote that
- * host to a block-level fixed-height scroller so pages can't bleed over. */
+/* Routed feature host. Parent <main> is the scroll container so the
+ * tenant-strip scrolls with the page; the feature itself flows naturally.
+ * `min-height: 100%` keeps short pages filling the viewport visually
+ * (so the ambient bg + bottom-nav padding still feel right). Pages that
+ * need internal scroll regions (validate-result, sample-result-entry,
+ * result-entry) override this from their own :host. */
 pf-shell main > router-outlet + * {
   display: block;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: 100%;
 }
 
 /*

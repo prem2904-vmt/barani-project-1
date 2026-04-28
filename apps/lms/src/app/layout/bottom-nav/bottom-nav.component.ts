@@ -17,54 +17,19 @@ const DRAG_THRESHOLD_PX = 4;
   imports: [RouterLink, RouterLinkActive],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Desktop-only edge-trigger zone. Invisible 12px strip pinned
-         to the left of the viewport; hovering it reveals the rail.
-         Hidden on mobile + tablet where the bottom pill handles
-         everything. -->
-    <div class="pf-rail-trigger hidden xl:block"
-         (mouseenter)="showRail()"
-         aria-hidden="true"></div>
-
-    <!-- Universal nav surface across web, tablet, and mobile.
-         Mobile + tablet: floating pill (centered, ~16px above the bottom).
-         Desktop (xl+): auto-hide vertical rail revealed by the trigger
-         zone above; floats over content (shell padding stays at 0). -->
-    <nav class="pf-bottom-nav fixed left-1/2 -translate-x-1/2 z-30 safe-area-bottom
-                xl:left-0 xl:right-0 xl:translate-x-0"
-         [class.pf-rail-visible]="railVisible()"
-         (mouseenter)="showRail()"
-         (mouseleave)="scheduleHideRail()"
+    <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
+         Scrolls horizontally on narrow viewports so all nav items stay reachable
+         without overflowing off-screen. -->
+    <nav class="pf-bottom-nav xl:hidden fixed left-1/2 -translate-x-1/2 z-30 safe-area-bottom"
          style="bottom: max(1rem, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
       <div #pill
-           class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto
-                  xl:rounded-none xl:shadow-none xl:p-2 xl:justify-center xl:gap-2"
+           class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto"
            [class]="pillClasses"
            [class.pf-pill--dragging]="dragging()"
            (pointerdown)="onPillPointerDown($event)"
            (pointermove)="onPillPointerMove($event)"
            (pointerup)="onPillPointerUp($event)"
-           (pointercancel)="onPillPointerUp($event)"
-           (mousemove)="onRailMouseMove($event)"
-           (mouseleave)="onRailMouseLeave()">
-        <!-- Desktop-only pin toggle. Pinned = rail stays visible
-             permanently and the page reserves 56px of left padding
-             so content reflows. Unpinned = auto-hide; rail slides
-             off until the user hovers the left-edge trigger zone. -->
-        <button type="button"
-                class="pf-rail-pin hidden xl:flex"
-                (click)="togglePin()"
-                [attr.aria-label]="pinned() ? 'Unpin (auto-hide sidebar)' : 'Pin sidebar open'"
-                [attr.aria-pressed]="pinned()"
-                [title]="pinned() ? 'Unpin · auto-hide' : 'Pin sidebar'">
-          <svg width="18" height="18" viewBox="0 0 24 24"
-               [attr.fill]="pinned() ? 'currentColor' : 'none'"
-               stroke="currentColor" stroke-width="1.7"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 17v5"/>
-            <path d="M9 10.76V6a3 3 0 0 1 6 0v4.76l3 4.24H6Z"/>
-          </svg>
-        </button>
-
+           (pointercancel)="onPillPointerUp($event)">
         <!-- Sliding gradient indicator. One element shared across all
              tabs — its position + width is driven by the active button's
              offsetLeft / offsetWidth so it glides between tabs. During a
@@ -99,14 +64,11 @@ const DRAG_THRESHOLD_PX = 4;
         }
 
         @if (more().length > 0) {
-          <!-- Mobile + tablet only: divider + More button.
-               Desktop renders all More items inline (block below). -->
-          <div class="pf-rail-mobile-only w-px h-8 sm:h-10 mx-0.5 shrink-0"
-               style="background: var(--border-muted);"></div>
+          <div class="w-px h-8 sm:h-10 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
 
           <button #navBtn type="button"
                   (click)="onMoreClick($event)"
-                  class="pf-nav-btn pf-rail-mobile-only press rounded-full flex flex-col items-center justify-center gap-0.5
+                  class="pf-nav-btn press rounded-full flex flex-col items-center justify-center gap-0.5
                          shrink-0 w-11 h-11 sm:w-16 sm:h-16 text-[10px] font-semibold leading-none transition-colors"
                   [class.pf-nav-btn--active]="moreActive()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -117,30 +79,10 @@ const DRAG_THRESHOLD_PX = 4;
             <span class="hidden sm:inline">More</span>
           </button>
         }
-
-        <!-- Desktop-only: render every More item inline in the rail
-             (we have the vertical room). Hidden at < xl via CSS;
-             the mobile/tablet sheet below handles those breakpoints. -->
-        @for (n of more(); track n.id) {
-          <a #navBtn
-             [routerLink]="n.href"
-             routerLinkActive="pf-nav-btn--active"
-             class="pf-nav-btn pf-rail-more-item press rounded-full flex flex-col items-center justify-center gap-0.5
-                    shrink-0 w-11 h-11 sm:w-16 sm:h-16 text-[10px] font-semibold leading-none transition-colors">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              @for (path of n.iconPath; track $index) {
-                <path [attr.d]="path"/>
-              }
-            </svg>
-            <span class="hidden sm:inline">{{ n.label }}</span>
-          </a>
-        }
       </div>
     </nav>
 
-    <!-- Mobile / tablet More sheet — hidden on desktop where the
-         rail expands inline above. -->
+    <!-- More sheet — mobile only. -->
     @if (moreOpen()) {
       <div class="xl:hidden fixed inset-0 z-40 flex items-end justify-center glass-modal-backdrop fade-in"
            (click)="closeMore()">
@@ -164,236 +106,6 @@ const DRAG_THRESHOLD_PX = 4;
   `,
   styles: [`
     .pf-bottom-nav {}
-
-    /* Inline More items render in the rail at xl; hide them on
-     * mobile + tablet (where the bottom-sheet handles the same
-     * group). The sheet itself is xl:hidden in the template. */
-    .pf-rail-more-item { display: none; }
-
-    /* ─── Desktop (≥1280px) — slim icon-only rail ───────────────
-     * Linear / Cursor pattern. 56px wide, every nav item (primary
-     * + the entire More group) renders inline as an icon button.
-     * Labels appear as floating tooltips on hover so the layout
-     * stays stable. Surface = top-strip's --header-bg so they form
-     * one L-shaped chrome panel; light/dark theme follows the page
-     * automatically. */
-    @media (min-width: 1280px) {
-      /* Edge-trigger zone — invisible 12px strip pinned to the
-       * left of the viewport. Sits above content so it can catch
-       * mouseenter, but pointer-events are otherwise transparent
-       * to scrolling / clicking through it. */
-      .pf-rail-trigger {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        width: 12px;
-        z-index: 34;
-        background: transparent;
-        cursor: default;
-      }
-
-      .pf-bottom-nav {
-        /* Start below the top-strip so the rail's pin button isn't
-         * overlapped by the brand pill. The top-strip is ~64px high
-         * with ~12px outer top padding ≈ 76px. Bottom 0 keeps the
-         * rail full-height down to the viewport floor. */
-        top: 76px !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: auto !important;
-        max-width: none !important;
-        width: 56px;
-        z-index: 35;
-        overflow: visible;
-        /* Start off-screen; the .pf-rail-visible class flips this
-         * to translateX(0) when the user hovers the trigger zone
-         * or the rail itself. */
-        transform: translateX(-100%) !important;
-        transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      .pf-bottom-nav.pf-rail-visible {
-        transform: translateX(0) !important;
-      }
-      /* Hidden rail shouldn't catch stray clicks. Buttons stay
-       * accessible via Tab key (transform hides them visually). */
-      .pf-bottom-nav:not(.pf-rail-visible) {
-        pointer-events: none;
-      }
-      .pf-bottom-nav.pf-rail-visible {
-        pointer-events: auto;
-      }
-      .pf-bottom-nav .pf-pill {
-        position: relative;
-        flex-direction: column;
-        width: 56px;
-        height: 100%;
-        /* Top padding reserves room for the pin button (36px tall
-         * with 10px gutter above + 8px below). */
-        padding: 56px 0 12px !important;
-        gap: 4px !important;
-        border-radius: 0 !important;
-        border: none !important;
-        background: var(--header-bg) !important;
-        box-shadow: none !important;
-        backdrop-filter: saturate(180%) blur(20px);
-        -webkit-backdrop-filter: saturate(180%) blur(20px);
-        transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1),
-                    padding 220ms cubic-bezier(0.4, 0, 0.2, 1);
-        /* IMPORTANT: must be visible (no overflow:auto) so floating
-         * tooltips on the bottom buttons aren't clipped by the
-         * scroll container. With ≤12 nav items at 44px each the
-         * cluster fits inside any reasonable viewport. */
-        overflow: visible !important;
-        align-items: center;
-        /* Center the cluster vertically — feels balanced for the
-         * usual handful of nav items. */
-        justify-content: center;
-      }
-
-
-      /* Icon-only tile. Label is hidden inline; reposition as a
-       * tooltip on hover (block below). The --mag CSS variable is
-       * driven by onRailMouseMove for Mac-dock-style magnification;
-       * defaults to 1 when the cursor is far away or on touch. */
-      .pf-bottom-nav .pf-nav-btn {
-        position: relative;
-        width: 40px !important;
-        height: 40px !important;
-        gap: 0 !important;
-        padding: 0;
-        border-radius: 10px !important;
-        color: var(--text-tertiary);
-        transform: scale(var(--mag, 1));
-        transform-origin: left center;
-        transition: color 160ms ease,
-                    background 160ms ease,
-                    transform 80ms cubic-bezier(0.4, 0, 0.2, 1);
-        will-change: transform;
-      }
-      .pf-bottom-nav .pf-nav-btn svg {
-        width: 20px;
-        height: 20px;
-        stroke-width: 1.7;
-      }
-
-      /* Tooltip: take the inline label, anchor it to the right of
-       * the button on hover. Layout never shifts. */
-      .pf-bottom-nav .pf-nav-btn span {
-        display: inline !important;
-        position: absolute;
-        left: calc(100% + 12px);
-        top: 50%;
-        transform: translateY(-50%) translateX(-4px);
-        padding: 5px 10px;
-        border-radius: 8px;
-        background: var(--bg-card-solid);
-        border: 1px solid var(--glass-border);
-        color: var(--text-primary);
-        font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0;
-        text-transform: none;
-        line-height: 1;
-        white-space: nowrap;
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-        transition: opacity 140ms ease, transform 140ms ease, visibility 0s linear 140ms;
-        z-index: 100;
-      }
-
-      @media (hover: hover) and (pointer: fine) {
-        .pf-bottom-nav .pf-nav-btn:hover {
-          background: rgba(168, 85, 247, 0.06);
-          color: var(--text-primary);
-        }
-        .pf-bottom-nav .pf-nav-btn:hover span {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(-50%) translateX(0);
-          transition: opacity 140ms ease, transform 140ms ease, visibility 0s linear 0s;
-        }
-      }
-
-      /* Active state — subtle violet pill, brand-coloured icon. */
-      .pf-bottom-nav .pf-nav-btn--active {
-        background: rgba(168, 85, 247, 0.14) !important;
-        color: var(--text-primary) !important;
-      }
-      .pf-bottom-nav .pf-nav-btn--active svg {
-        color: #a855f7;
-        filter: none;
-        animation: none;
-      }
-
-      /* Show every More item inline at xl (rail-more-item is hidden
-       * by default — that default exists only so they don't render
-       * in the mobile pill where the bottom-sheet handles them). */
-      .pf-bottom-nav .pf-rail-more-item {
-        display: flex !important;
-      }
-
-      /* Hide the mobile-only divider + More button — at xl the More
-       * group lives inline, no popover needed. */
-      .pf-bottom-nav .pf-rail-mobile-only {
-        display: none !important;
-      }
-
-      /* The horizontal-row JS slider isn't meaningful in a vertical
-       * column. The CSS active state above does the highlighting. */
-      .pf-bottom-nav .pf-nav-indicator {
-        display: none !important;
-      }
-
-      /* Pin toggle — floats absolute at the rail's top, centered.
-       * Sized to feel like a first-class touch target (36×36) so
-       * it's easy to find and grab. Subtle by default, brightens
-       * on hover; brand-coloured + slight glow when pinned. */
-      .pf-rail-pin {
-        position: absolute;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 36px;
-        height: 36px;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        background: transparent;
-        border: 1px solid transparent;
-        color: var(--text-secondary);
-        cursor: pointer;
-        z-index: 5;
-        transition: color 140ms ease, background 140ms ease,
-                    border-color 140ms ease, box-shadow 140ms ease;
-      }
-      .pf-rail-pin:hover {
-        color: var(--text-primary);
-        background: rgba(168, 85, 247, 0.12);
-        border-color: rgba(168, 85, 247, 0.22);
-      }
-      .pf-rail-pin[aria-pressed="true"] {
-        color: #a855f7;
-        background: rgba(168, 85, 247, 0.14);
-        border-color: rgba(168, 85, 247, 0.30);
-        box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
-      }
-
-      /* Pinned: rail forced visible, trigger zone hidden. The page's
-       * 56px shell padding (set in shell.component.ts via
-       * :host-context(.is-rail-pinned)) makes room so content reflows
-       * around it. */
-      :root.is-rail-pinned .pf-bottom-nav {
-        transform: translateX(0) !important;
-        pointer-events: auto !important;
-      }
-      :root.is-rail-pinned .pf-rail-trigger {
-        display: none !important;
-      }
-    }
-
 
     /* The pill is the positioning context for the indicator + the
        pointer-event surface for the drag gesture. touch-action: pan-y
@@ -575,89 +287,6 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   protected readonly moreOpen = signal(false);
 
-  /**
-   * Desktop-only auto-hide. The rail starts off-screen (translateX
-   * -100%) and slides in when the user hovers the left-edge trigger
-   * zone or the rail itself. Slides back out 180ms after the cursor
-   * leaves both — short enough to feel instant, long enough that
-   * moving the cursor between the trigger zone and the rail
-   * doesn't flicker. Suppressed entirely when the rail is pinned.
-   */
-  protected readonly railVisible = signal(false);
-  private hideRailTimer: number | null = null;
-
-  /**
-   * Pin override — when true, auto-hide is disabled and the page
-   * reserves 56px of left padding so content reflows next to the
-   * always-visible rail. Persisted to localStorage; mirrored onto
-   * <html class="is-rail-pinned"> so global layout CSS can react.
-   *
-   * Defaults to PINNED on first visit (no key set) so users see the
-   * navigation immediately. Only flips off when they explicitly
-   * unpin — the explicit '0' value is preserved across reloads.
-   */
-  protected readonly pinned = signal<boolean>(
-    typeof localStorage === 'undefined' ||
-    localStorage.getItem('pf-rail-pinned') !== '0'
-  );
-
-  togglePin(): void {
-    const next = !this.pinned();
-    this.pinned.set(next);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('pf-rail-pinned', next ? '1' : '0');
-    }
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('is-rail-pinned', next);
-    }
-  }
-
-  protected showRail(): void {
-    if (this.hideRailTimer !== null) {
-      clearTimeout(this.hideRailTimer);
-      this.hideRailTimer = null;
-    }
-    if (!this.railVisible()) this.railVisible.set(true);
-  }
-
-  protected scheduleHideRail(): void {
-    // Pinned rail never auto-hides.
-    if (this.pinned()) return;
-    if (this.hideRailTimer !== null) clearTimeout(this.hideRailTimer);
-    this.hideRailTimer = window.setTimeout(() => {
-      this.railVisible.set(false);
-      this.hideRailTimer = null;
-    }, 180);
-  }
-
-  /**
-   * Mac-dock magnification on the desktop rail. Scales each button
-   * based on cursor distance: 1.0 at ≥80px, 1.4× directly under
-   * the cursor. Origin = left center so the icons "pop out" toward
-   * the content area instead of crowding the rail.
-   */
-  protected onRailMouseMove(ev: MouseEvent): void {
-    if (typeof window === 'undefined') return;
-    if (!window.matchMedia('(min-width: 1280px)').matches) return;
-    const FALLOFF = 80;
-    const PEAK = 1.4;
-    for (const ref of this.btns()) {
-      const el = ref.nativeElement;
-      const rect = el.getBoundingClientRect();
-      const center = rect.top + rect.height / 2;
-      const distance = Math.abs(ev.clientY - center);
-      const t = Math.max(0, 1 - distance / FALLOFF);
-      const scale = 1 + (PEAK - 1) * t;
-      el.style.setProperty('--mag', scale.toFixed(3));
-    }
-  }
-
-  protected onRailMouseLeave(): void {
-    for (const ref of this.btns()) {
-      ref.nativeElement.style.removeProperty('--mag');
-    }
-  }
-
   // ─── Active state ────────────────────────────────────────────────
   protected readonly activeIdx = signal<number>(0);
   protected readonly moreActive = computed(() => this.activeIdx() === this.primary().length);
@@ -735,12 +364,6 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   constructor() {
     this.labCfg.ensureLoaded();
 
-    // Apply persisted pin state on first paint so the page doesn't
-    // flash full-width before reflowing into the pinned-rail layout.
-    if (typeof document !== 'undefined' && this.pinned()) {
-      document.documentElement.classList.add('is-rail-pinned');
-    }
-
     // Re-measure whenever the visible nav set changes (perm reload, mode
     // toggle, etc) so the indicator stays glued to the active button.
     effect(() => {
@@ -815,12 +438,6 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   onPillPointerDown(ev: PointerEvent): void {
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
-    // Skip the drag-to-slide gesture on the desktop vertical rail.
-    // Capturing the pointer here would re-target click events to the
-    // pill, swallowing nav clicks on each button. The vertical rail
-    // doesn't use horizontal drag anyway, so just bail.
-    if (typeof window !== 'undefined' &&
-        window.matchMedia('(min-width: 1280px)').matches) return;
     this.dragPointerId = ev.pointerId;
     this.dragStartClientX = ev.clientX;
     this.dragStartIndicatorW = this.indicator().w;

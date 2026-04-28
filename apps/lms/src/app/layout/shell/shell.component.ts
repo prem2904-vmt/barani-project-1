@@ -4,12 +4,13 @@ import { ToastService } from '../../core/services/toast.service';
 import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
+import { TenantStripComponent } from '../tenant-strip/tenant-strip.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
 
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent],
+  imports: [RouterOutlet, TopStripComponent, TenantStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -20,6 +21,10 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
       <pf-top-strip></pf-top-strip>
 
       <main class="shell-main relative">
+        <!-- Per-screen tenant + branch header — same component
+             across every route so the lab name + active branch
+             always sit above the page content. -->
+        <pf-tenant-strip></pf-tenant-strip>
         <router-outlet></router-outlet>
       </main>
 
@@ -28,8 +33,10 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
       <!-- Themed prompt / confirm overlay (replaces window.prompt/confirm). -->
       <pf-dialog-host></pf-dialog-host>
 
-      <!-- Toasts -->
-      <div class="pointer-events-none fixed bottom-24 right-4 flex flex-col gap-3 z-[60] sm:bottom-28">
+      <!-- Toasts — anchored top-right so they don't fight the floating
+           bottom-nav pill or sit on top of action buttons (Next, Submit)
+           which usually live at the bottom of the page. -->
+      <div class="pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24">
         @for (t of toasts.toasts(); track t.id) {
           <div class="pointer-events-auto toast-item flex items-center w-full max-w-xs p-4 rounded-lg shadow-lg"
                role="alert">
@@ -81,32 +88,18 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
       overflow: hidden;
     }
 
-    /* main holds the routed feature; it does NOT scroll — the feature host does.
-     * Mobile + tablet reserve the floating-pill height; desktop reserves
-     * the docked footer bar's exact height so there's no dead gap. */
+    /* main is the page scroll container — tenant-strip sits inside it
+     * so it scrolls away with the routed content instead of staying locked.
+     * Bottom padding leaves room for the floating bottom-nav pill on mobile + tablet. */
     .shell-main {
       flex: 1;
       min-height: 0;
-      overflow: hidden;
-      padding-bottom: var(--tab-nav-total-height, 96px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: var(--tab-nav-total-height, 0px);
     }
-    /* Desktop: rail + top-strip share the same surface (--header-bg)
-     * and form a single L-shaped chrome panel. Inset the stack by
-     * the rail's 56px so the top-strip starts to the right of it
-     * and the seam at the top-left corner reads as a continuous L,
-     * not a + intersection. */
-    /* Desktop: rail auto-hides by default (translateX off the left
-     * edge), so content owns the full width — no padding-left.
-     * When the user pins the rail, the html gets .is-rail-pinned
-     * and we reserve 56px so the page reflows next to the now-
-     * permanent rail. The transition makes the reflow feel smooth
-     * when toggling pin. */
     @media (min-width: 1280px) {
-      .shell-stack {
-        transition: padding-left 220ms cubic-bezier(0.4, 0, 0.2, 1);
-      }
       .shell-main { padding-bottom: 0; }
-      :host-context(.is-rail-pinned) .shell-stack { padding-left: 56px; }
     }
 
     /* Toast */
