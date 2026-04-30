@@ -848,6 +848,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return '';
     }
   }
+  // ── KPI cards ─────────────────────────────────────────────
+  private readonly _activeKpi = signal<'appointments' | 'orders' | 'payments' | null>(null);
+  readonly activeKpi = this._activeKpi.asReadonly();
+
+  setKpi(id: 'appointments' | 'orders' | 'payments') {
+    const wasActive = this._activeKpi() === id;
+    this._activeKpi.set(wasActive ? null : id);
+    if (id === 'payments') this._openQueue.set(wasActive ? null : 'payments');
+  }
+
   /** Count of staff with status === 'on_duty' for the button badge. */
   onDutyCount(): number { return this.staff.filter(s => s.status === 'on_duty').length; }
   toggleSelect(id: string) {

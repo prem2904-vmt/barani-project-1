@@ -1,0 +1,455 @@
+/* Delegate link on pool rows — supervisor action. */
+.pf-delegate-btn {
+  margin-left: 8px;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pf-delegate-btn:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+/* Scan-to-pick chip on pool rows. Opens the scanner modal; modal
+ * still requires the decoded code to equal the row's barcode, so a
+ * click here can't claim a wrong vial. */
+.pf-scan-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: rgba(236, 72, 153, 0.08);
+  border: 1px dashed rgba(236, 72, 153, 0.35);
+  color: #f472b6;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.pf-scan-hint--btn {
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+.pf-scan-hint--btn:hover {
+  background: rgba(236, 72, 153, 0.16);
+  border-color: rgba(236, 72, 153, 0.55);
+}
+.pf-scan-hint--btn:active { transform: scale(0.98); }
+
+/* Manual entry */
+.manual-toggle { margin: -8px 0 16px; display: flex; justify-content: flex-end; }
+.manual-link {
+  background: transparent; border: 0; padding: 4px 8px;
+  color: var(--text-secondary); font-size: 12.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.02em; cursor: pointer; transition: color 0.15s ease;
+}
+.manual-link:hover { color: var(--text-primary); }
+
+.seg-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 18px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 18px; font-weight: 600; letter-spacing: 0.02em;
+}
+.seg { color: var(--text-primary); }
+.seg-sep { color: var(--text-muted); }
+.seg--locked { opacity: 0.7; }
+.seg--dept { min-width: 0; text-align: center; }
+.seg--input {
+  /* min-width:0 + flex-1 lets the input shrink below 110px on iPhone
+     SE (375px) and iPhone 14 (390px) so the barcode segments don't
+     overflow the row. The 180px cap still applies on tablets+. */
+  flex: 1 1 auto; min-width: 0; max-width: 180px;
+  background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.45);
+  border-radius: 10px; padding: 6px 10px; outline: none;
+  font: inherit; color: var(--text-primary); text-align: center;
+  letter-spacing: 0.18em;
+}
+@media (min-width: 480px) {
+  .seg--dept { min-width: 48px; }
+  .seg--input { flex: 1 0 110px; min-width: 110px; }
+}
+.seg--input:focus {
+  border-color: rgba(45, 212, 191, 0.85);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.15);
+}
+.seg--input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
+
+.manual-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px;
+}
+@media (max-width: 640px) { .manual-meta { grid-template-columns: 1fr; } }
+.preview-code {
+  padding: 9px 12px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13.5px; color: var(--text-secondary); letter-spacing: 0.02em;
+  overflow-x: auto; white-space: nowrap;
+}
+.numpad-wrap { margin-top: 16px; max-width: 320px; }
+.manual-actions {
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 16px;
+}
+.seq-hint {
+  font-size: 12px; color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Scan bar */
+.pf-scan-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.pf-scan {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+.pf-scan__icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-violet-400, #a78bfa);
+}
+.pf-scan__input {
+  width: 100%;
+  height: 64px;
+  padding: 0 180px 0 58px;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+}
+.pf-scan__input::placeholder { color: var(--text-muted); }
+.pf-scan__input:focus {
+  background: var(--glass-bg-hover);
+  border-color: rgba(168, 85, 247, 0.55);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+}
+/* Camera button inside the scan bar — sits next to the live-status
+ * chip. Tap opens the scanner modal in no-expected-code mode. */
+.pf-scan__camera {
+  position: absolute;
+  right: 140px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 80ms ease;
+}
+.pf-scan__camera:hover {
+  background: var(--glass-bg-hover);
+  color: #c4b5fd;
+  border-color: rgba(168, 85, 247, 0.55);
+}
+.pf-scan__camera:active { transform: translateY(-50%) scale(0.95); }
+@media (max-width: 640px) {
+  .pf-scan__camera { right: 14px; }
+  .pf-scan__live { display: none; }
+}
+
+.pf-scan__live {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.pf-scan__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #34d399;
+  animation: pf-scan-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pf-scan-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.3); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
+}
+
+/* KPI Metrics Grid */
+.pf-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .pf-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+@media (max-width: 480px) {
+  .pf-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* KPI Card */
+.pf-kpi-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.pf-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e5e7eb;
+  transition: all 0.2s ease;
+}
+.pf-kpi-card:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+.pf-kpi-card:active {
+  transform: scale(0.98);
+}
+
+/* Tone variants - colored accent bar only */
+.pf-kpi-card[data-tone='amber']::before   { background: #f59e0b; }
+.pf-kpi-card[data-tone='rose']::before    { background: #ef4444; }
+.pf-kpi-card[data-tone='violet']::before  { background: #8b5cf6; }
+.pf-kpi-card[data-tone='emerald']::before { background: #10b981; }
+.pf-kpi-card[data-tone='default']::before { background: #9ca3af; }
+
+.pf-kpi-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pf-kpi-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6b7280;
+}
+.pf-kpi-card[data-tone='amber'] .pf-kpi-card__label   { color: #d97706; }
+.pf-kpi-card[data-tone='rose'] .pf-kpi-card__label    { color: #dc2626; }
+.pf-kpi-card[data-tone='violet'] .pf-kpi-card__label  { color: #7c3aed; }
+.pf-kpi-card[data-tone='emerald'] .pf-kpi-card__label { color: #059669; }
+
+.pf-kpi-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pf-kpi-card__value {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.pf-kpi-card__subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Active state */
+.pf-kpi-card--active {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.pf-kpi-card--active .pf-kpi-card__label {
+  color: #374151 !important;
+}
+.pf-kpi-card--active .pf-kpi-card__value {
+  color: #111827;
+}
+.pf-kpi-card--active .pf-kpi-card__subtitle {
+  color: #6b7280 !important;
+}
+
+/* Urgency dot (kept from prior) */
+.pf-grp-count {
+  font-size: 10.5px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(168, 85, 247, 0.14);
+  color: #c4b5fd;
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  flex-shrink: 0;
+}
+.hidden { display: none; }
+.pf-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
+.pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
+.pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+
+/* Tube tile gets a soft red wash when any of its tests are in
+   re_entry — pulls the eye to it without screaming. */
+.pf-tube-tile--rejected {
+  border-color: rgba(239, 68, 68, 0.34) !important;
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.02)) !important;
+}
+
+/* Hover/active feedback on tube tiles — without it, clicking the
+ * action button gives no in-tile signal that the tube was picked.
+ * Adds a violet glow on hover and a quick "fill" animation on click
+ * so the tech sees a clear pick before the route swap. */
+.pf-tube-tile {
+  position: relative;
+  transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.22s ease;
+  overflow: hidden;
+}
+.pf-tube-tile:hover {
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
+}
+.pf-tube-tile.pf-tube-tile--picking {
+  animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  border-color: rgba(124, 58, 237, 0.65) !important;
+}
+.pf-tube-tile.pf-tube-tile--picking::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(124, 58, 237, 0.08) 60%,
+    rgba(168, 85, 247, 0.18) 100%);
+  animation: pf-tube-fill 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+@keyframes pf-tube-pick {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+@keyframes pf-tube-fill {
+  0%   { opacity: 0; transform: translateY(100%); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.pf-tube-reject {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+.pf-tube-reject__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.pf-tube-reject__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.pf-tube-reject__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fca5a5;
+}
+.pf-tube-reject__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pf-tube-reject__item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.pf-tube-reject__test {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.pf-tube-reject__test::after { content: ':'; }
+.pf-tube-reject__reason {
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Phones (<640px): tube tile actions stack so Pick + Delegate
+   don't squeeze each other; rejection items wrap label-on-top. */
+@media (max-width: 639px) {
+  /* Patient card: drop the pl-12 indent so tube rows can use
+     full mobile width. */
+  .pf-tube-reject {
+    padding: 8px 10px;
+  }
+  .pf-tube-reject__item {
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-start;
+  }
+  .pf-tube-reject__test::after { content: ''; }
+}

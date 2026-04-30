@@ -2459,6 +2459,115 @@
   color: #67e8f9;
 }
 
+/* ── KPI Metrics Grid ───────────────────────────────────── */
+.pf-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .pf-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+@media (max-width: 480px) {
+  .pf-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.pf-kpi-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.pf-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e5e7eb;
+  transition: all 0.2s ease;
+}
+.pf-kpi-card:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+.pf-kpi-card:active {
+  transform: scale(0.98);
+}
+
+.pf-kpi-card[data-tone='amber']::before   { background: #f59e0b; }
+.pf-kpi-card[data-tone='rose']::before    { background: #ef4444; }
+.pf-kpi-card[data-tone='violet']::before  { background: #8b5cf6; }
+.pf-kpi-card[data-tone='emerald']::before { background: #10b981; }
+.pf-kpi-card[data-tone='default']::before { background: #9ca3af; }
+
+.pf-kpi-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pf-kpi-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6b7280;
+}
+.pf-kpi-card[data-tone='amber'] .pf-kpi-card__label   { color: #d97706; }
+.pf-kpi-card[data-tone='rose'] .pf-kpi-card__label    { color: #dc2626; }
+.pf-kpi-card[data-tone='violet'] .pf-kpi-card__label  { color: #7c3aed; }
+.pf-kpi-card[data-tone='emerald'] .pf-kpi-card__label { color: #059669; }
+
+.pf-kpi-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pf-kpi-card__value {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.pf-kpi-card__subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.pf-kpi-card--active {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.pf-kpi-card--active .pf-kpi-card__label  { color: #374151 !important; }
+.pf-kpi-card--active .pf-kpi-card__value  { color: #111827; }
+.pf-kpi-card--active .pf-kpi-card__subtitle { color: #6b7280 !important; }
+
 /* ── Exception alert chips ───────────────────────────────── */
 .pf-alerts {
   display: flex;

@@ -183,6 +183,11 @@ export class AuthService {
           "Can't reach Supabase auth — a browser extension, ad blocker, or corporate proxy is probably blocking *.supabase.co. Try an Incognito window to confirm."
         );
       }
+      if((e as Error).message.includes('invalid_credentials')) {
+        throw new Error(
+          "Invalid email or password"
+        );
+      }
       throw e;
     } finally {
       clearTimeout(killer);
