@@ -106,10 +106,18 @@
           }
         </div>
         }
+        <button type="button" class="pf-head__btn pf-head__btn--secondary press" (click)="searchFocus()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 10h10M7 14h6" />
+          </svg>
+          Scan QR
+        </button>
 
         <!-- Staff on duty: secondary button next to Scan QR. -->
         <div class="pf-pop-anchor">
-          <button type="button" class="pf-head__btn pf-head__btn--secondary press mr-2"
+          <button type="button" class="pf-head__btn pf-head__btn--secondary press"
             [class.pf-head__btn--on]="staffPopoverOpen()" (click)="toggleStaffPopover($event)" aria-haspopup="dialog"
             [attr.aria-expanded]="staffPopoverOpen()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -120,18 +128,10 @@
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             Staff
-            <span class="pf-head__btn-badge" [attr.aria-label]="onDutyCount() + ' on duty'">{{
+            <span class="pf-head__btn-badge"
+                  [attr.aria-label]="onDutyCount() + ' on duty'">{{
               onDutyCount() > 99 ? '99+' : onDutyCount()
-              }}</span>
-          </button>
-
-          <button type="button" class="pf-head__btn pf-head__btn--secondary press" (click)="searchFocus()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="5" width="18" height="14" rx="2" />
-              <path d="M7 10h10M7 14h6" />
-            </svg>
-            Scan QR
+            }}</span>
           </button>
 
           @if (staffPopoverOpen()) {
@@ -303,46 +303,6 @@
             </div>
             }
           </div>
-        </div>
-
-        <!-- KPI Metrics -->
-        <div class="pf-kpi-grid mb-5">
-          <button type="button" class="pf-kpi-card"
-                  [class.pf-kpi-card--active]="activeKpi() === 'appointments'"
-                  data-tone="violet"
-                  (click)="setKpi('appointments')">
-            <div class="pf-kpi-card__header">
-              <span class="pf-kpi-card__label">Appointments</span>
-            </div>
-            <div class="pf-kpi-card__body">
-              <span class="pf-kpi-card__value">{{ visibleAppointments().length }}</span>
-              <span class="pf-kpi-card__subtitle">Scheduled</span>
-            </div>
-          </button>
-          <button type="button" class="pf-kpi-card"
-                  [class.pf-kpi-card--active]="activeKpi() === 'orders'"
-                  data-tone="amber"
-                  (click)="setKpi('orders')">
-            <div class="pf-kpi-card__header">
-              <span class="pf-kpi-card__label">Orders</span>
-            </div>
-            <div class="pf-kpi-card__body">
-              <span class="pf-kpi-card__value">{{ visibleOrders().length }}</span>
-              <span class="pf-kpi-card__subtitle">In progress</span>
-            </div>
-          </button>
-          <button type="button" class="pf-kpi-card"
-                  [class.pf-kpi-card--active]="activeKpi() === 'payments'"
-                  data-tone="rose"
-                  (click)="setKpi('payments')">
-            <div class="pf-kpi-card__header">
-              <span class="pf-kpi-card__label">Payments due</span>
-            </div>
-            <div class="pf-kpi-card__body">
-              <span class="pf-kpi-card__value">{{ paymentsDue().length }}</span>
-              <span class="pf-kpi-card__subtitle">Pending collection</span>
-            </div>
-          </button>
         </div>
 
         @if (counts().ready + counts().payments > 0) {

@@ -32,15 +32,14 @@ interface CounterSpec {
   id: 'pending' | 'critical' | 'in_progress' | 'done' | 'all';
   label: string;
   tone: 'amber' | 'rose' | 'violet' | 'emerald' | 'default';
-  subtitle?: string;
 }
 
 const COUNTERS: CounterSpec[] = [
-  { id: 'pending', label: 'Pending', tone: 'amber', subtitle: 'Awaiting intake' },
-  { id: 'critical', label: 'Critical', tone: 'rose', subtitle: 'Urgent priority' },
-  { id: 'in_progress', label: 'In progress', tone: 'violet', subtitle: 'Currently running' },
-  { id: 'done', label: 'Done today', tone: 'emerald', subtitle: 'Completed' },
-  { id: 'all', label: 'All', tone: 'default', subtitle: 'Total items' }
+  { id: 'pending',     label: 'Pending',     tone: 'amber' },
+  { id: 'critical',    label: 'Critical',    tone: 'rose' },
+  { id: 'in_progress', label: 'In progress', tone: 'violet' },
+  { id: 'done',        label: 'Done today',  tone: 'emerald' },
+  { id: 'all',         label: 'All',         tone: 'default' }
 ];
 
 @Component({
@@ -51,8 +50,810 @@ const COUNTERS: CounterSpec[] = [
     AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './my-work.component.html',
-  styleUrls: ['./my-work.component.scss']
+  template: `
+    <section class="px-5 md:px-8 lg:px-10 pt-5 pb-10">
+
+      <pf-screen-header eyebrow="Lab workbench"
+                        subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
+        Lab <span class="text-gradient">my work</span>
+        <div actions>
+          <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+              <path d="M3 21v-5h5"/>
+            </svg>
+            Refresh
+          </pf-touch-btn>
+        </div>
+      </pf-screen-header>
+
+      <!-- Big scan bar -->
+      <div class="pf-scan-row">
+        <div class="pf-scan">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
+            <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
+          </svg>
+          <input type="text"
+                 [value]="scan()"
+                 (input)="setScan(asInput($event))"
+                 (keydown.enter)="scanSubmit()"
+                 placeholder="Scan barcode or type PF-XXXX-XXXXX…"
+                 class="pf-scan__input"/>
+          <!-- Opens the camera viewfinder. Whatever it decodes is dropped
+               into the scan input and submitted — hits the same
+               claim-by-scan gate as keyboard/HID entry. -->
+          <button type="button"
+                  class="pf-scan__camera press"
+                  (click)="openBarSearchScanner()"
+                  aria-label="Scan with camera">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="7" width="18" height="13" rx="2"/>
+              <path d="M8 7 10 4h4l2 3"/>
+              <circle cx="12" cy="13" r="3.5"/>
+            </svg>
+          </button>
+          <span class="pf-scan__live">
+            <span class="pf-scan__dot"></span>
+            SCANNER · READY
+          </span>
+        </div>
+        <pf-touch-btn variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+          Open
+          <span icon-right>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14m-5-6 6 6-6 6"/>
+            </svg>
+          </span>
+        </pf-touch-btn>
+      </div>
+
+      <!-- Manual entry toggle + panel -->
+      <div class="manual-toggle">
+        <button type="button" class="manual-link" (click)="toggleManual()">
+          @if (manualMode()) { ✕ Close manual entry } @else { Or enter barcode manually → }
+        </button>
+      </div>
+
+      @if (manualMode()) {
+        <pf-tile tone="default" padding="lg" class="block mb-5">
+          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 block"
+                 style="color: var(--text-muted);">Manual barcode entry</label>
+
+          <div class="seg-row">
+            <span class="seg seg--locked">PF</span>
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked">{{ vendorCode() || '??' }}</span>
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked">{{ currentYear }}</span>
+            <span class="seg-sep">·</span>
+            <input class="seg seg--input"
+                   inputmode="numeric"
+                   pattern="[0-9]*"
+                   maxlength="5"
+                   placeholder="00000"
+                   [ngModel]="seqValue()"
+                   (ngModelChange)="onSeqChange($event)" />
+            <span class="seg-sep">·</span>
+            <span class="seg seg--locked seg--dept">{{ selectedDeptCode() || '—' }}</span>
+          </div>
+
+          <div class="manual-meta">
+            <div class="dept-picker">
+              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
+                     style="color: var(--text-muted);">Department</label>
+              <pf-select
+                [options]="deptOptions()"
+                [value]="selectedDeptCode()"
+                placeholder="Select department"
+                (valueChange)="onDeptChange($event)"></pf-select>
+            </div>
+            <div class="preview">
+              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
+                     style="color: var(--text-muted);">Preview</label>
+              <div class="preview-code">{{ fullManualBarcode() }}</div>
+            </div>
+          </div>
+
+          @if (isTouch()) {
+            <div class="numpad-wrap">
+              <pf-num-pad
+                [value]="seqValue()"
+                [allowDecimal]="false"
+                [allowNegative]="false"
+                [maxLength]="5"
+                (valueChange)="onSeqChange($event)"></pf-num-pad>
+            </div>
+          }
+
+          <div class="manual-actions">
+            @if (seqValue().length > 0 && seqValue().length < 5) {
+              <span class="seq-hint">{{ 5 - seqValue().length }} more digit{{ seqValue().length === 4 ? '' : 's' }}</span>
+            }
+            <pf-touch-btn size="md" variant="primary"
+                          [disabled]="!canManualConfirm()"
+                          (pressed)="submitManual()">
+              Open
+              <span icon-right aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                </svg>
+              </span>
+            </pf-touch-btn>
+          </div>
+        </pf-tile>
+      }
+
+      <!-- Counter tiles -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+        @for (c of counters; track c.id) {
+          <button type="button"
+                  class="pf-counter"
+                  [class.pf-counter--on]="counter() === c.id"
+                  [attr.data-tone]="c.tone"
+                  (click)="setCounter(c.id)">
+            <span class="pf-counter__label">{{ c.label }}</span>
+            <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Secondary filter: lab intake / my work / service queue / rejected -->
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <pf-segmented [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"/>
+        @if (tab() !== 'intake') {
+          <p class="text-[11px] font-mono uppercase tracking-[0.14em]"
+             style="color: var(--text-muted);">
+            {{ rows().length }} items · {{ countFor('my_work') }} mine · {{ countFor('service_queue') }} pool · {{ countFor('rejected') }} rejected
+          </p>
+        }
+      </div>
+
+      @if (tab() === 'intake') {
+        <!-- Lab intake: dispatched orders awaiting "Mark Arrived" + arrived
+             tubes awaiting bench-tech pickup. The standalone /lab/receive
+             route renders the same component; this tab embeds it inline so
+             techs flip between intake and their bench work without leaving
+             the workbench. -->
+        <pf-receive-samples [embedded]="true"></pf-receive-samples>
+      } @else {
+      @if (loading() && rows().length === 0) {
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+          @for (i of [0,1,2,3]; track i) {
+            <pf-tile tone="default" padding="md">
+              <div class="flex items-start gap-3">
+                <pf-skeleton variant="circle" width="40px" height="40px"></pf-skeleton>
+                <div class="flex-1 space-y-2">
+                  <pf-skeleton variant="line" width="60%"></pf-skeleton>
+                  <pf-skeleton variant="line" width="85%" height="10px"></pf-skeleton>
+                </div>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <pf-skeleton variant="line" width="96px" height="28px"></pf-skeleton>
+              </div>
+            </pf-tile>
+          }
+        </div>
+      }
+
+      @for (bucket of buckets(); track bucket.level) {
+        @if (bucket.items.length > 0) {
+          <div class="mb-6">
+            <div class="flex items-center gap-3 mb-3 px-1">
+              <span class="pf-dot" [attr.data-level]="bucket.level"></span>
+              <h3 class="text-[11px] font-mono uppercase tracking-[0.18em]"
+                  style="color: var(--text-secondary);">
+                {{ bucket.level }} · {{ bucket.items.length }}
+              </h3>
+            </div>
+
+            <!-- Group by patient/order so a single patient with 3 tests is one
+                 expandable card, not 3 floating cards across columns. -->
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              @for (g of patientGroups(bucket.items); track g.orderId) {
+                <li>
+                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                    <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
+                            (click)="toggleExpand(g.orderId)">
+                      <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                          <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
+                          <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                        </div>
+                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                          #{{ g.orderId.slice(0,8) }}
+                          @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                        </p>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                           [style.transform]="expanded(g.orderId) ? 'rotate(90deg)' : 'none'"
+                           style="transition: transform 0.15s ease; color: var(--text-muted);">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </button>
+                    @if (expanded(g.orderId)) {
+                      <!-- Sub-group the patient's tests by their tube
+                           (OrderSample). One row per tube; the row lists
+                           the tests inside it. Action button per tube
+                           opens the scanner expecting THAT tube's
+                           barcode — one scan loads every test in the
+                           tube for combined entry (Fix 6 contract). -->
+                      <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
+                        @for (tube of tubesIn(g.items); track tube.sampleId) {
+                          <li class="rounded-lg p-2.5 pf-tube-tile"
+                              [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
+                              [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                              style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                            <div class="flex items-center gap-2 mb-1.5">
+                              <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
+                                {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                              </span>
+                              @if (tube.barcode) {
+                                <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ tube.barcode }}</span>
+                              }
+                            </div>
+
+                            <!-- Rejection reason banner — only when one or
+                                 more tests in this tube were sent back by
+                                 the pathologist. Surfaces the WHY so the
+                                 tech doesn't have to dig into each test
+                                 individually. -->
+                            @if (tube.rejections.length > 0) {
+                              <div class="pf-tube-reject mb-2">
+                                <div class="pf-tube-reject__head">
+                                  <span class="pf-tube-reject__icon" aria-hidden="true">↻</span>
+                                  <span class="pf-tube-reject__title">
+                                    Sent back for re-entry
+                                    @if (tube.rejections.length > 1) { · {{ tube.rejections.length }} tests }
+                                  </span>
+                                </div>
+                                <ul class="pf-tube-reject__list">
+                                  @for (r of tube.rejections; track r.testName) {
+                                    <li class="pf-tube-reject__item">
+                                      <span class="pf-tube-reject__test">{{ r.testName }}</span>
+                                      <span class="pf-tube-reject__reason">{{ r.reason }}</span>
+                                    </li>
+                                  }
+                                </ul>
+                              </div>
+                            }
+
+                            <ul class="space-y-0.5 mb-2 pl-1">
+                              @for (t of tube.tests; track t.id) {
+                                <li class="flex items-center gap-2 text-[12.5px]">
+                                  <span class="flex-1 truncate" style="color: var(--text-primary);">→ {{ t.test?.name ?? 'Test' }}</span>
+                                  @if (t.status === 'validated') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓</span>
+                                  } @else if (t.status === 'entered') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳</span>
+                                  } @else if (t.status === 're_entry') {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                          style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">↻</span>
+                                  }
+                                </li>
+                              }
+                            </ul>
+                            <div class="flex justify-end gap-2">
+                              @switch (tab()) {
+                                @case ('service_queue') {
+                                  <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="pickTube(tube)">Pick · scan tube</button>
+                                  <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests[0])">Delegate</button>
+                                }
+                                @default {
+                                  @if (tube.rejections.length > 0) {
+                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
+                                  } @else if (tube.allDone) {
+                                    <span class="px-2 py-0.5 text-[11px] font-medium rounded"
+                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ All entered</span>
+                                  } @else {
+                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
+                                  }
+                                }
+                              }
+                            </div>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </pf-tile>
+                </li>
+              }
+            </ul>
+            <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
+            <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              @for (t of bucket.items; track t.id) {
+                <li>
+                  <pf-tile [tone]="toneFor(bucket.level)" padding="md">
+                    <div class="flex items-start gap-3">
+                      <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <p class="text-[15px] font-semibold truncate"
+                             style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</p>
+                          <pf-tat-indicator [tatLevel]="t._level" [remainingMinutes]="t._remainingMin"/>
+                        </div>
+                        <p class="text-[12px] font-mono mt-0.5"
+                           style="color: var(--text-tertiary);">
+                          {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
+                          · {{ t.test?.department?.name ?? '—' }}
+                          · rec'd {{ t.subOrder?.receivedAtLab ? (t.subOrder?.receivedAtLab | date:'shortTime') : '—' }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                      @switch (tab()) {
+                        @case ('service_queue') {
+                          <!-- Pool rows: click opens the scanner. Modal won't
+                               accept the scan unless the decoded code matches
+                               this row's barcode. Backend also re-verifies the
+                               user is the assignee — so wrong-row clicks
+                               still get rejected. -->
+                          <button type="button" class="pf-scan-hint pf-scan-hint--btn press"
+                                  (click)="startPick(t)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="3" y="5" width="18" height="14" rx="2"/>
+                              <path d="M7 9v6M11 9v6M15 9v6"/>
+                            </svg>
+                            Scan vial to pick
+                          </button>
+                          <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">
+                            Delegate…
+                          </button>
+                        }
+                        @case ('rejected') {
+                          <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
+                        }
+                        @default {
+                          @if (t.status === 'pending') {
+                            <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick up · scan</pf-touch-btn>
+                          } @else {
+                            <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
+                          }
+                        }
+                      }
+                    </div>
+                  </pf-tile>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      }
+
+      @if (!loading() && rows().length === 0) {
+        <pf-tile tone="default" padding="xl">
+          <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
+        </pf-tile>
+      }
+      } <!-- end @else for non-intake tab -->
+    </section>
+
+    @if (scanTarget(); as t) {
+      <pf-barcode-scanner-modal
+        title="Scan vial to claim"
+        [expectedBarcode]="scanExpected()"
+        (matched)="onScanMatched($event)"
+        (cancelled)="cancelScan()">
+      </pf-barcode-scanner-modal>
+    }
+
+    @if (barScannerOpen()) {
+      <!-- Search-bar camera mode: no expected code, any scan drops into
+           the input and routes through the same claim-by-scan gate. -->
+      <pf-barcode-scanner-modal
+        title="Scan any vial barcode"
+        (matched)="onBarSearchMatched($event)"
+        (cancelled)="closeBarSearchScanner()">
+      </pf-barcode-scanner-modal>
+    }
+
+    @if (delegateTarget(); as t) {
+      <pf-delegate-modal
+        [testName]="t.test?.name ?? 'Test'"
+        (chose)="onDelegate($event)"
+        (cancelled)="cancelDelegate()">
+      </pf-delegate-modal>
+    }
+  `,
+  styles: [`
+    /* Delegate link on pool rows — supervisor action. */
+    .pf-delegate-btn {
+      margin-left: 8px;
+      padding: 5px 10px;
+      border-radius: 9999px;
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .pf-delegate-btn:hover {
+      background: var(--glass-bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* Scan-to-pick chip on pool rows. Opens the scanner modal; modal
+     * still requires the decoded code to equal the row's barcode, so a
+     * click here can't claim a wrong vial. */
+    .pf-scan-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      background: rgba(236, 72, 153, 0.08);
+      border: 1px dashed rgba(236, 72, 153, 0.35);
+      color: #f472b6;
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+    .pf-scan-hint--btn {
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+    }
+    .pf-scan-hint--btn:hover {
+      background: rgba(236, 72, 153, 0.16);
+      border-color: rgba(236, 72, 153, 0.55);
+    }
+    .pf-scan-hint--btn:active { transform: scale(0.98); }
+
+    /* Manual entry */
+    .manual-toggle { margin: -8px 0 16px; display: flex; justify-content: flex-end; }
+    .manual-link {
+      background: transparent; border: 0; padding: 4px 8px;
+      color: var(--text-secondary); font-size: 12.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.02em; cursor: pointer; transition: color 0.15s ease;
+    }
+    .manual-link:hover { color: var(--text-primary); }
+
+    .seg-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 18px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .seg { color: var(--text-primary); }
+    .seg-sep { color: var(--text-muted); }
+    .seg--locked { opacity: 0.7; }
+    .seg--dept { min-width: 0; text-align: center; }
+    .seg--input {
+      /* min-width:0 + flex-1 lets the input shrink below 110px on iPhone
+         SE (375px) and iPhone 14 (390px) so the barcode segments don't
+         overflow the row. The 180px cap still applies on tablets+. */
+      flex: 1 1 auto; min-width: 0; max-width: 180px;
+      background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.45);
+      border-radius: 10px; padding: 6px 10px; outline: none;
+      font: inherit; color: var(--text-primary); text-align: center;
+      letter-spacing: 0.18em;
+    }
+    @media (min-width: 480px) {
+      .seg--dept { min-width: 48px; }
+      .seg--input { flex: 1 0 110px; min-width: 110px; }
+    }
+    .seg--input:focus {
+      border-color: rgba(45, 212, 191, 0.85);
+      box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.15);
+    }
+    .seg--input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
+
+    .manual-meta {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px;
+    }
+    @media (max-width: 640px) { .manual-meta { grid-template-columns: 1fr; } }
+    .preview-code {
+      padding: 9px 12px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13.5px; color: var(--text-secondary); letter-spacing: 0.02em;
+      overflow-x: auto; white-space: nowrap;
+    }
+    .numpad-wrap { margin-top: 16px; max-width: 320px; }
+    .manual-actions {
+      display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 16px;
+    }
+    .seq-hint {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* Scan bar */
+    .pf-scan-row {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .pf-scan {
+      position: relative;
+      flex: 1;
+      min-width: 280px;
+    }
+    .pf-scan__icon {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--color-violet-400, #a78bfa);
+    }
+    .pf-scan__input {
+      width: 100%;
+      height: 64px;
+      padding: 0 180px 0 58px;
+      border-radius: 20px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      font-size: 16px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      outline: none;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+    }
+    .pf-scan__input::placeholder { color: var(--text-muted); }
+    .pf-scan__input:focus {
+      background: var(--glass-bg-hover);
+      border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+    }
+    /* Camera button inside the scan bar — sits next to the live-status
+     * chip. Tap opens the scanner modal in no-expected-code mode. */
+    .pf-scan__camera {
+      position: absolute;
+      right: 140px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 80ms ease;
+    }
+    .pf-scan__camera:hover {
+      background: var(--glass-bg-hover);
+      color: #c4b5fd;
+      border-color: rgba(168, 85, 247, 0.55);
+    }
+    .pf-scan__camera:active { transform: translateY(-50%) scale(0.95); }
+    @media (max-width: 640px) {
+      .pf-scan__camera { right: 14px; }
+      .pf-scan__live { display: none; }
+    }
+
+    .pf-scan__live {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .pf-scan__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: #34d399;
+      animation: pf-scan-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pf-scan-pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%      { opacity: 1;   transform: scale(1.3); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
+    }
+
+    /* Counter tiles */
+    .pf-counter {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
+    }
+    .pf-counter:hover { background: var(--glass-bg-hover); }
+    .pf-counter:active { transform: scale(0.98); }
+    .pf-counter[data-tone='amber']   { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
+    .pf-counter[data-tone='rose']    { background: rgba(239, 68, 68, 0.1);  border-color: rgba(239, 68, 68, 0.25); }
+    .pf-counter[data-tone='violet']  { background: rgba(124, 58, 237, 0.1); border-color: rgba(168, 85, 247, 0.28); }
+    .pf-counter[data-tone='emerald'] { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); }
+    .pf-counter[data-tone='default'] { background: var(--glass-bg); border-color: var(--glass-border); }
+
+    .pf-counter__label {
+      font-size: 11px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-secondary);
+    }
+    /* Per-tone label tint — keeps the label readable AND coded to the
+     * counter's color, so PENDING/CRITICAL/IN PROGRESS/DONE read at a
+     * glance instead of fading into the background. */
+    .pf-counter[data-tone='amber']   .pf-counter__label { color: #d97706; }
+    .pf-counter[data-tone='rose']    .pf-counter__label { color: #e11d48; }
+    .pf-counter[data-tone='violet']  .pf-counter__label { color: #7c3aed; }
+    .pf-counter[data-tone='emerald'] .pf-counter__label { color: #059669; }
+    .pf-counter[data-tone='default'] .pf-counter__label { color: var(--text-secondary); }
+    .pf-counter__value {
+      font-size: 30px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+      margin-top: 2px;
+    }
+    .pf-counter--on {
+      background: #ffffff !important;
+      border-color: #ffffff !important;
+      color: #0f172a !important;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    }
+    .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.75) !important; }
+
+    /* Urgency dot (kept from prior) */
+    .pf-grp-count {
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.04em;
+      padding: 3px 9px; border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14);
+      color: #c4b5fd;
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      flex-shrink: 0;
+    }
+    .hidden { display: none; }
+    .pf-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 9999px;
+      flex-shrink: 0;
+    }
+    .pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
+    .pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
+    .pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+
+    /* Tube tile gets a soft red wash when any of its tests are in
+       re_entry — pulls the eye to it without screaming. */
+    .pf-tube-tile--rejected {
+      border-color: rgba(239, 68, 68, 0.34) !important;
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.02)) !important;
+    }
+
+    /* Hover/active feedback on tube tiles — without it, clicking the
+     * action button gives no in-tile signal that the tube was picked.
+     * Adds a violet glow on hover and a quick "fill" animation on click
+     * so the tech sees a clear pick before the route swap. */
+    .pf-tube-tile {
+      position: relative;
+      transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.22s ease;
+      overflow: hidden;
+    }
+    .pf-tube-tile:hover {
+      border-color: rgba(168, 85, 247, 0.45) !important;
+      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
+    }
+    .pf-tube-tile.pf-tube-tile--picking {
+      animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+      border-color: rgba(124, 58, 237, 0.65) !important;
+    }
+    .pf-tube-tile.pf-tube-tile--picking::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(124, 58, 237, 0.08) 60%,
+        rgba(168, 85, 247, 0.18) 100%);
+      animation: pf-tube-fill 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+      pointer-events: none;
+    }
+    @keyframes pf-tube-pick {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(0.985); }
+      100% { transform: scale(1); }
+    }
+    @keyframes pf-tube-fill {
+      0%   { opacity: 0; transform: translateY(100%); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .pf-tube-reject {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(239, 68, 68, 0.10);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+    }
+    .pf-tube-reject__head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .pf-tube-reject__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pf-tube-reject__title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fca5a5;
+    }
+    .pf-tube-reject__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pf-tube-reject__item {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .pf-tube-reject__test {
+      font-weight: 600;
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    .pf-tube-reject__test::after { content: ':'; }
+    .pf-tube-reject__reason {
+      color: var(--text-secondary);
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Phones (<640px): tube tile actions stack so Pick + Delegate
+       don't squeeze each other; rejection items wrap label-on-top. */
+    @media (max-width: 639px) {
+      /* Patient card: drop the pl-12 indent so tube rows can use
+         full mobile width. */
+      .pf-tube-reject {
+        padding: 8px 10px;
+      }
+      .pf-tube-reject__item {
+        flex-direction: column;
+        gap: 0;
+        align-items: flex-start;
+      }
+      .pf-tube-reject__test::after { content: ''; }
+    }
+  `]
 })
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -63,8 +864,8 @@ export class MyWorkComponent implements OnInit {
   // with their rejection reason in the tube tile, so the tech sees WHY
   // the pathologist sent it back without switching tabs.
   readonly tabOptions = [
-    { value: 'intake' as Tab, label: 'Lab Intake' },
-    { value: 'my_work' as Tab, label: 'My Work' },
+    { value: 'intake'        as Tab, label: 'Lab Intake' },
+    { value: 'my_work'       as Tab, label: 'My Work' },
     { value: 'service_queue' as Tab, label: 'Service Queue' }
   ];
   readonly counters = COUNTERS;
@@ -170,7 +971,7 @@ export class MyWorkComponent implements OnInit {
     const filtered = this.filterByCounter(enriched);
     return [
       { level: 'urgent' as const, items: filtered.filter(e => e._level === 'urgent') },
-      { level: 'high' as const, items: filtered.filter(e => e._level === 'high') },
+      { level: 'high'   as const, items: filtered.filter(e => e._level === 'high') },
       { level: 'normal' as const, items: filtered.filter(e => e._level === 'normal') }
     ];
   });
@@ -189,22 +990,22 @@ export class MyWorkComponent implements OnInit {
   /** Counter-tile filter runs on top of the segmented tab filter. */
   private filterByCounter(list: Enriched[]): Enriched[] {
     switch (this._counter()) {
-      case 'pending': return list.filter(t => t.status === 'pending' || t.status === 're_entry');
-      case 'critical': return list.filter(t => this.isCritical(t));
+      case 'pending':     return list.filter(t => t.status === 'pending' || t.status === 're_entry');
+      case 'critical':    return list.filter(t => this.isCritical(t));
       case 'in_progress': return list.filter(t => t.status === 'in_progress' || t.status === 'entered');
-      case 'done': return list.filter(t => t.status === 'validated' || t.status === 'signed_off');
-      default: return list;
+      case 'done':        return list.filter(t => t.status === 'validated' || t.status === 'signed_off');
+      default:            return list;
     }
   }
 
   counterValue(id: CounterSpec['id']): number {
     const enriched = this.enrich(this._rows());
     switch (id) {
-      case 'pending': return enriched.filter(t => t.status === 'pending' || t.status === 're_entry').length;
-      case 'critical': return enriched.filter(t => this.isCritical(t)).length;
+      case 'pending':     return enriched.filter(t => t.status === 'pending' || t.status === 're_entry').length;
+      case 'critical':    return enriched.filter(t => this.isCritical(t)).length;
       case 'in_progress': return enriched.filter(t => t.status === 'in_progress' || t.status === 'entered').length;
-      case 'done': return enriched.filter(t => t.status === 'validated' || t.status === 'signed_off').length;
-      default: return enriched.length;
+      case 'done':        return enriched.filter(t => t.status === 'validated' || t.status === 'signed_off').length;
+      default:            return enriched.length;
     }
   }
 
@@ -300,7 +1101,7 @@ export class MyWorkComponent implements OnInit {
     // (mid-entry), AND re_entry (pathologist sent it back). Without the
     // re_entry inclusion the original submitter doesn't see their own
     // rejected work in the default landing tab.
-    if (tab === 'my_work') return t.status === 'pending' || t.status === 'in_progress' || t.status === 're_entry';
+    if (tab === 'my_work')  return t.status === 'pending' || t.status === 'in_progress' || t.status === 're_entry';
     return true;
   }
 
