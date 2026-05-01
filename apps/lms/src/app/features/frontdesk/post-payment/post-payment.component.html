@@ -88,6 +88,23 @@
           </dl>
         </div>
 
+        <!-- Tubes required — tablet only (right sidebar is hidden on tablet) -->
+        <div class="pf-sb-card pf-sb-card--tubes-tablet">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Tubes required</span>
+            <span class="pf-sb-count">{{ o.samples.length }}</span>
+          </div>
+          <ul class="pf-sb-tubes">
+            @for (s of o.samples; track s.id) {
+            <li class="pf-sb-tubes__row">
+              <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
+              <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
+              <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
+            </li>
+            }
+          </ul>
+        </div>
+
       }
     </aside>
 
@@ -231,6 +248,7 @@
             [patient]="o.patient"
             [index]="i"
             [selected]="isSelected(s.id)"
+            [printing]="isPrinting(s.id)"
             (selectToggle)="toggleSelect(s.id)"
             (printRequest)="printOne(s)"
             (copyRequest)="copyBarcode($event)"
@@ -250,6 +268,25 @@
 
     <!-- ══ RIGHT SIDEBAR ═════════════════════════════════════ -->
     <aside class="pf-pp-aside pf-pp-aside--right">
+
+      <!-- Tubes required card -->
+      @if (order(); as o) {
+      <div class="pf-sb-card">
+        <div class="pf-sb-card__hdr">
+          <span class="pf-sb-card__eyebrow">Tubes required</span>
+          <span class="pf-sb-count">{{ o.samples.length }}</span>
+        </div>
+        <ul class="pf-sb-tubes">
+          @for (s of o.samples; track s.id) {
+          <li class="pf-sb-tubes__row">
+            <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
+            <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
+            <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
+          </li>
+          }
+        </ul>
+      </div>
+      }
 
       <!-- Bill summary -->
       @if (bill(); as b) {
@@ -320,25 +357,6 @@
         </ul>
       </div>
       }
-      }
-
-      <!-- Sample tubes quick-ref -->
-      @if (order(); as o) {
-      <div class="pf-sb-card">
-        <div class="pf-sb-card__hdr">
-          <span class="pf-sb-card__eyebrow">Tubes required</span>
-          <span class="pf-sb-count">{{ o.samples.length }}</span>
-        </div>
-        <ul class="pf-sb-tubes">
-          @for (s of o.samples; track s.id; let i = $index) {
-          <li class="pf-sb-tubes__row">
-            <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
-            <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
-            <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
-          </li>
-          }
-        </ul>
-      </div>
       }
 
     </aside>

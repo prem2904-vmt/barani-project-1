@@ -23,10 +23,11 @@ export class PostPaymentComponent implements OnInit {
   private readonly route  = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  private readonly _order    = signal<Order | null>(null);
-  private readonly _bill     = signal<Bill | null>(null);
-  private readonly _selected = signal<Set<string>>(new Set());
-  private readonly _printed  = signal<Set<string>>(new Set());
+  private readonly _order       = signal<Order | null>(null);
+  private readonly _bill        = signal<Bill | null>(null);
+  private readonly _selected    = signal<Set<string>>(new Set());
+  private readonly _printed     = signal<Set<string>>(new Set());
+  private readonly _printingIds = signal<Set<string>>(new Set());
   readonly waSent = signal(false);
 
   readonly order = this._order.asReadonly();
@@ -89,16 +90,22 @@ export class PostPaymentComponent implements OnInit {
 
   clearSelection() { this._selected.set(new Set()); }
 
+  isPrinting(id: string): boolean { return this._printingIds().has(id); }
+
   // ── Print ──────────────────────────────────────────────────
   printOne(s: OrderSample) {
     this._printed.update(p => new Set([...p, s.id]));
-    window.print();
+    this._printingIds.set(new Set([s.id]));
+    window.addEventListener('afterprint', () => this._printingIds.set(new Set()), { once: true });
+    setTimeout(() => window.print(), 50);
   }
 
   printSelected() {
     const ids = [...this._selected()];
     this._printed.update(p => new Set([...p, ...ids]));
-    window.print();
+    this._printingIds.set(new Set(ids));
+    window.addEventListener('afterprint', () => this._printingIds.set(new Set()), { once: true });
+    setTimeout(() => window.print(), 50);
   }
 
   printReceipt() { this.toasts.success('Receipt print · coming soon'); }

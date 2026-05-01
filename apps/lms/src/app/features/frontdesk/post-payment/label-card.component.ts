@@ -49,7 +49,7 @@ export function tubeSpec(s: OrderSample): TubeSpec {
   imports: [UpperCasePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-lc" [class.pf-lc--on]="selected">
+    <div class="pf-lc" [class.pf-lc--on]="selected" [class.pf-lc--printing]="printing">
 
       <!-- Header: checkbox · label number · dept · tube chip -->
       <div class="pf-lc__hdr">
@@ -101,7 +101,7 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       </div>
 
       <!-- Tests in this tube -->
-      <div class="pf-lc__tests-hdr">
+      <!-- <div class="pf-lc__tests-hdr">
         <span class="pf-lc__tests-label">Tests in this tube</span>
         <span class="pf-lc__tube-info" [attr.data-color]="spec.color">
           {{ spec.label | uppercase }} · {{ spec.volume }}
@@ -111,7 +111,7 @@ export function tubeSpec(s: OrderSample): TubeSpec {
         @for (t of sample.tests; track t.id) {
           <span class="pf-lc__chip">{{ t.test?.name ?? 'Test' }}</span>
         }
-      </div>
+      </div> -->
 
       <!-- Footer -->
       <div class="pf-lc__footer">
@@ -151,8 +151,8 @@ export function tubeSpec(s: OrderSample): TubeSpec {
   styles: [`
     .pf-lc {
       border-radius: 16px;
-      background: #ffffff;
-      border: 1.5px solid #e5e7eb;
+      background: var(--surface-elevated);
+      border: 1.5px solid var(--border-primary);
       overflow: hidden;
       transition: border-color 0.18s, box-shadow 0.18s;
     }
@@ -167,14 +167,14 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       align-items: center;
       gap: 10px;
       padding: 12px 14px 10px;
-      border-bottom: 1px solid #f3f4f6;
+      border-bottom: 1px solid var(--border-primary);
     }
     .pf-lc__chk {
       width: 20px;
       height: 20px;
       border-radius: 6px;
-      background: #f3f4f6;
-      border: 1.5px solid #d1d5db;
+      background: var(--glass-bg);
+      border: 1.5px solid var(--border-primary);
       color: #ffffff;
       display: inline-flex;
       align-items: center;
@@ -195,10 +195,10 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #374151;
+      color: var(--text-secondary);
     }
     .pf-lc__dept {
-      color: #6b7280;
+      color: var(--text-tertiary);
       font-weight: 600;
     }
     .pf-lc__tube-chip {
@@ -210,9 +210,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       font-size: 11px;
       font-weight: 600;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      color: #374151;
+      background: var(--glass-bg);
+      border: 1px solid var(--border-primary);
+      color: var(--text-secondary);
       flex-shrink: 0;
     }
     .pf-lc__tube-dot {
@@ -221,18 +221,18 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       border-radius: 9999px;
       flex-shrink: 0;
     }
-    .pf-lc__tube-chip[data-color='lavender'] { background: rgba(196,181,253,0.18); border-color: rgba(196,181,253,0.5); color: #7c3aed; }
+    .pf-lc__tube-chip[data-color='lavender'] { background: rgba(196,181,253,0.18); border-color: rgba(196,181,253,0.5); color: #a78bfa; }
     .pf-lc__tube-chip[data-color='lavender'] .pf-lc__tube-dot { background: #c4b5fd; }
-    .pf-lc__tube-chip[data-color='yellow']   { background: rgba(253,230,138,0.25); border-color: rgba(253,230,138,0.7); color: #92400e; }
+    .pf-lc__tube-chip[data-color='yellow']   { background: rgba(253,230,138,0.18); border-color: rgba(253,230,138,0.6); color: #f59e0b; }
     .pf-lc__tube-chip[data-color='yellow']   .pf-lc__tube-dot { background: #fde68a; border: 1px solid #f59e0b; }
-    .pf-lc__tube-chip[data-color='red']      { background: rgba(252,165,165,0.18); border-color: rgba(252,165,165,0.5); color: #b91c1c; }
+    .pf-lc__tube-chip[data-color='red']      { background: rgba(252,165,165,0.18); border-color: rgba(252,165,165,0.5); color: #f87171; }
     .pf-lc__tube-chip[data-color='red']      .pf-lc__tube-dot { background: #fca5a5; }
-    .pf-lc__tube-chip[data-color='green']    { background: rgba(110,231,183,0.18); border-color: rgba(110,231,183,0.5); color: #065f46; }
+    .pf-lc__tube-chip[data-color='green']    { background: rgba(110,231,183,0.18); border-color: rgba(110,231,183,0.5); color: #34d399; }
     .pf-lc__tube-chip[data-color='green']    .pf-lc__tube-dot { background: #6ee7b7; }
-    .pf-lc__tube-chip[data-color='container'] { background: #f9fafb; border-color: #e5e7eb; color: #6b7280; }
+    .pf-lc__tube-chip[data-color='container'] { background: var(--glass-bg); border-color: var(--border-primary); color: var(--text-tertiary); }
     .pf-lc__tube-chip[data-color='container'] .pf-lc__tube-dot { background: #d1d5db; }
 
-    /* ── White label preview ─────────────────────────────── */
+    /* ── White label preview (always light — represents printed paper label) ── */
     .pf-lc__preview {
       position: relative;
       margin: 10px 14px;
@@ -343,19 +343,19 @@ export function tubeSpec(s: OrderSample): TubeSpec {
     .pf-lc__tests-label {
       font-size: 10.5px;
       font-weight: 600;
-      color: #6b7280;
+      color: var(--text-tertiary);
     }
     .pf-lc__tube-info {
       font-size: 9.5px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-weight: 700;
       letter-spacing: 0.08em;
-      color: #9ca3af;
+      color: var(--text-muted);
     }
-    .pf-lc__tube-info[data-color='lavender'] { color: #7c3aed; }
-    .pf-lc__tube-info[data-color='yellow']   { color: #92400e; }
-    .pf-lc__tube-info[data-color='red']      { color: #b91c1c; }
-    .pf-lc__tube-info[data-color='green']    { color: #065f46; }
+    .pf-lc__tube-info[data-color='lavender'] { color: #a78bfa; }
+    .pf-lc__tube-info[data-color='yellow']   { color: #f59e0b; }
+    .pf-lc__tube-info[data-color='red']      { color: #f87171; }
+    .pf-lc__tube-info[data-color='green']    { color: #34d399; }
 
     .pf-lc__chips {
       display: flex;
@@ -371,9 +371,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       border-radius: 9999px;
       font-size: 11px;
       font-weight: 500;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      color: #374151;
+      background: var(--glass-bg);
+      border: 1px solid var(--border-primary);
+      color: var(--text-secondary);
     }
 
     /* ── Footer ─────────────────────────────────────────── */
@@ -382,14 +382,14 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       align-items: center;
       gap: 10px;
       padding: 8px 14px 12px;
-      border-top: 1px solid #f3f4f6;
+      border-top: 1px solid var(--border-primary);
     }
     .pf-lc__barcode-id {
       flex: 1;
       min-width: 0;
       font-size: 10px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #6b7280;
+      color: var(--text-tertiary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -403,9 +403,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       width: 30px;
       height: 30px;
       border-radius: 8px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      color: #6b7280;
+      background: var(--glass-bg);
+      border: 1px solid var(--border-primary);
+      color: var(--text-tertiary);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -413,8 +413,8 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       transition: background 0.14s, color 0.14s;
     }
     .pf-lc__action-btn:hover {
-      background: #f3f4f6;
-      color: #374151;
+      background: var(--glass-bg-hover);
+      color: var(--text-secondary);
     }
     .pf-lc__print-btn {
       display: inline-flex;
@@ -432,6 +432,22 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       transition: background 0.14s;
     }
     .pf-lc__print-btn:hover { background: #0f766e; }
+
+    /* ── Print ─────────────────────────────────────────────── */
+    @media print {
+      .pf-lc:not(.pf-lc--printing) { display: none !important; }
+      .pf-lc--printing {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+        break-inside: avoid;
+      }
+      .pf-lc--printing .pf-lc__hdr,
+      .pf-lc--printing .pf-lc__footer { display: none !important; }
+      .pf-lc--printing .pf-lc__preview { margin: 0 !important; border-radius: 4px !important; }
+    }
   `],
 })
 export class LabelCardComponent implements AfterViewInit, OnChanges {
@@ -439,6 +455,7 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   @Input() patient: Patient | null | undefined;
   @Input() index = 0;
   @Input() selected = false;
+  @Input() printing = false;
 
   @Output() selectToggle = new EventEmitter<void>();
   @Output() printRequest = new EventEmitter<void>();
