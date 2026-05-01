@@ -435,6 +435,9 @@ type Priority = 'Normal' | 'Urgent';
     @media (prefers-reduced-motion: reduce) {
       .pf-cart-fab { animation: none; }
     }
+    @media (min-width: 1280px) {
+      .pf-cart-fab { display: none; }
+    }
 
     /* ── Patient row ────────────────────────────────────────── */
     .pf-patient {
