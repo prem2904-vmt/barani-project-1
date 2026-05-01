@@ -57,7 +57,9 @@ const DRAG_THRESHOLD_PX = 4;
                   [class.pf-nav-btn--active]="activeIdx() === i">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path [attr.d]="n.iconPath"/>
+                 @for(path of n.iconPath; track path) {
+                  <path [attr.d]="path"/>
+                 }
             </svg>
             <span class="hidden sm:inline">{{ n.label }}</span>
           </button>
@@ -409,7 +411,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleMore() { this.moreOpen.update(v => !v); }
-  closeMore()  { this.moreOpen.set(false); }
+  closeMore() { this.moreOpen.set(false); }
 
   // ─── Click → navigate ────────────────────────────────────────────
   onTabClick(idx: number, ev: MouseEvent): void {

@@ -346,14 +346,15 @@ interface DepartmentDraft {
                     </div>
                   </div>
 
-                  <div class="mt-3 flex items-center justify-between">
-                    <span class="text-[13px]" style="color: var(--text-secondary);">
-                      On-premise PF Box
-                    </span>
+                  <div class="mt-3 flex items-center gap-2">
                     <pf-toggle size="sm"
                                [checked]="b.hasPfBox"
                                (checkedChange)="updateBranch(i, { hasPfBox: $event })">
                     </pf-toggle>
+                    <span class="text-[13px]" style="color: var(--text-secondary);">
+                      On-premise PF Box
+                    </span>
+                    
                   </div>
 
                   <!-- Sub-branches under this branch -->
@@ -364,19 +365,25 @@ interface DepartmentDraft {
                       <div class="space-y-1.5 mb-2">
                         @for (sb of b.subBranches; let sbi = $index; track sbi) {
                           <div class="sub-branch-row">
-                            <input type="text" class="pf-input flex-1 min-w-0" placeholder="Sub-branch name"
-                                   [ngModel]="sb.name"
-                                   (ngModelChange)="updateSubBranch(i, sbi, { name: $event })" />
-                            <input type="text" class="pf-input w-28 uppercase" placeholder="CODE"
-                                   [ngModel]="sb.code"
-                                   (ngModelChange)="updateSubBranch(i, sbi, { code: $event.toUpperCase() })" />
-                            <select class="pf-input w-36"
-                                    [ngModel]="sb.type"
-                                    (ngModelChange)="updateSubBranch(i, sbi, { type: $event })">
-                              <option value="lab">Lab</option>
-                              <option value="collection-center">Collection</option>
-                              <option value="satellite">Satellite</option>
-                            </select>
+                            <div class="sub-branch-name">
+                              <input type="text" class="pf-input" placeholder="Sub-branch name"
+                                     [ngModel]="sb.name"
+                                     (ngModelChange)="updateSubBranch(i, sbi, { name: $event })" />
+                            </div>
+                            <div class="sub-branch-code">
+                              <input type="text" class="pf-input uppercase" placeholder="CODE"
+                                     [ngModel]="sb.code"
+                                     (ngModelChange)="updateSubBranch(i, sbi, { code: $event.toUpperCase() })" />
+                            </div>
+                            <div class="sub-branch-type">
+                              <select class="pf-input"
+                                      [ngModel]="sb.type"
+                                      (ngModelChange)="updateSubBranch(i, sbi, { type: $event })">
+                                <option value="lab">Lab</option>
+                                <option value="collection-center">Collection</option>
+                                <option value="satellite">Satellite</option>
+                              </select>
+                            </div>
                             <button type="button" class="row-remove"
                                     (click)="removeSubBranch(i, sbi)" aria-label="Remove sub-branch">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -607,6 +614,21 @@ interface DepartmentDraft {
       display: flex;
       align-items: center;
       gap: 6px;
+    }
+    .sub-branch-name {
+      flex: 0 0 50%;
+      min-width: 0;
+    }
+    .sub-branch-name .pf-input {
+      width: 100%;
+    }
+    .sub-branch-code {
+      flex: 1 1 0%;
+      min-width: 0;
+    }
+    .sub-branch-type {
+      flex: 1 1 0%;
+      min-width: 0;
     }
     .add-sub-link {
       background: none;
