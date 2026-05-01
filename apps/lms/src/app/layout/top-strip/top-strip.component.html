@@ -15,7 +15,7 @@
     <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
          Goes to /admin landing. Branch switching lives on the tenant
          brand pill (right side). -->
-    <a routerLink="/admin" class="pf-brand-lockup press flex-shrink-0"
+    <a [routerLink]="pickLanding()" class="pf-brand-lockup press flex-shrink-0"
       aria-label="Prefrontal · Lab Management System · Home">
       <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true">

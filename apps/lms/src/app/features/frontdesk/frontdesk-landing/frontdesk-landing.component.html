@@ -457,6 +457,8 @@
                       } @else if (showDispatchOn(o)) {
                       <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
                         (click)="markDispatched(o)">Dispatch</button>
+                      } @else if (o.status === 'billed') {
+                      <button type="button" class="pf-ghostbtn press" (click)="reprintLabels(o)">Reprint Labels</button>
                       }
                     </div>
                   </div>
@@ -500,23 +502,21 @@
   <div class="pf-drawer-bd" (click)="closeOrder()"></div>
   <aside class="pf-drawer" role="dialog" aria-modal="true">
     <header class="pf-drawer__hdr">
-      <div class="flex items-center gap-3 flex-1 min-w-0">
-        <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
-        <div class="min-w-0 flex-1">
-          <p class="text-[10.5px] font-mono uppercase tracking-[0.16em]" style="color: var(--text-muted);">Order · #{{
-            so.id.slice(0, 8) }}</p>
-          <p class="text-[17px] font-semibold truncate" style="color: var(--text-primary);">{{ so.patient?.displayName
-            ?? 'Patient' }}</p>
-        </div>
-        <pf-chip [tone]="orderTone(so)" size="sm">{{ so.status }}</pf-chip>
+      <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="48"></pf-avatar>
+      <div class="pf-drawer__hdr-info">
+        <p class="pf-drawer__hdr-eyebrow">Order · #{{ so.id.slice(0, 8) }}</p>
+        <p class="pf-drawer__hdr-name">{{ so.patient?.displayName ?? 'Patient' }}</p>
       </div>
-      <button type="button" class="pf-drawer__close" (click)="closeOrder()" aria-label="Close">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 6 6 18" />
-          <path d="m6 6 12 12" />
-        </svg>
-      </button>
+      <div class="pf-drawer__hdr-actions">
+        <pf-chip [tone]="orderTone(so)" size="sm">{{ statusLabel(so.status) }}</pf-chip>
+        <button type="button" class="pf-drawer__close" (click)="closeOrder()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div class="pf-drawer__body">
@@ -607,6 +607,19 @@
         </ol>
       </section>
     </div>
+    @if (so.status === 'billed') {
+    <footer class="pf-drawer__footer">
+      <button type="button" class="pf-drawer__reprint-btn press" (click)="reprintLabels(so)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9V2h12v7" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="6" y="14" width="12" height="8" />
+        </svg>
+        Reprint Labels
+      </button>
+    </footer>
+    }
   </aside>
   }
 

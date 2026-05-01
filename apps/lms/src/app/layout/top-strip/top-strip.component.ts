@@ -7,6 +7,7 @@ import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
 import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
+import { LANDINGS } from '../../core/auth/landing.guard';
 
 @Component({
   selector: 'pf-top-strip',
@@ -139,6 +140,16 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.branchOpen.set(false);
     this.moreOpen.set(false);
     this.profileOpen.set(false);
+  }
+
+  pickLanding() {
+    const landingPages = LANDINGS;
+    for (const { perm, path } of landingPages) {
+      if (this.auth.hasPermission(perm)) {
+        return path;
+      }
+    }
+    return '/403';
   }
 
   @HostListener('document:click', ['$event'])
