@@ -495,6 +495,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (this.labCfg.billingMode() !== 'front_desk') return false;
     return this.auth.hasPermission('create_bill') && o.status === 'created';
   }
+  reprintLabels(o: Order) {
+    this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: o.id } });
+  }
   /** Reception jumps into the billing screen for this order. */
   goToBilling(o: Order) {
     this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: o.id } });
