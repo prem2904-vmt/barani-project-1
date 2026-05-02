@@ -207,7 +207,6 @@ interface OrderGroup {
             @for (s of g.samples; track s.id) {
               <button type="button" class="pf-tube"
                       [class.pf-tube--done]="s.status !== 'pending'"
-                      [disabled]="pendingToggle() === s.id"
                       (click)="toggleCollected(s)">
                 @if (container(s).kind === 'urine_cup') {
                   <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
@@ -796,7 +795,14 @@ interface OrderGroup {
       border-radius: 24px;
       transition: border-color 0.2s ease, transform 0.15s ease, background 0.25s ease, box-shadow 0.25s ease;
       overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
+    /* Send every click through to the button itself. Without this, a tap on
+     * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
+     * child element and the parent button only registers the SECOND tap.
+     * Single-tap collection was the whole point of this screen. */
+    .pf-tube > * { pointer-events: none; }
     .pf-tube::before {
       content: '';
       position: absolute; inset: 0;
@@ -935,6 +941,14 @@ interface OrderGroup {
       border-top: 1px solid var(--glass-border);
       background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
     }
+    /* Below the xl breakpoint the floating bottom-nav pill is visible and
+       sits over the drawer footer. Push the footer up so the buttons clear
+       the pill. At ≥1280px the nav is hidden and no extra room is needed. */
+    @media (max-width: 1279px) {
+      .pf-drawer__foot {
+        padding-bottom: calc(28px + var(--tab-nav-total-height, 0px));
+      }
+    }
     .pf-drawer__foot .pf-btn-primary { margin-left: auto; min-width: 140px; }
     .pf-drawer__remaining {
       font-size: 12px; color: var(--text-muted);
@@ -1014,7 +1028,7 @@ interface OrderGroup {
       .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
       .pf-drawer__progressbar { margin: 0 20px; }
       .pf-drawer__hint { margin: 12px 20px 0; }
-      .pf-drawer__foot { padding: 14px 20px 20px; flex-wrap: wrap; }
+      .pf-drawer__foot { padding: 14px 20px calc(20px + var(--tab-nav-total-height, 0px)); flex-wrap: wrap; }
       .pf-drawer__name { font-size: 22px; }
 
       /* ── Compact mobile tiles ──
@@ -1090,6 +1104,56 @@ interface OrderGroup {
         color: #5eead4;
       }
     }
+    /* Tablet (iPad Mini / Air landscape, iPad portrait) and any shorter
+       viewport — collapse the vial tile + paddings so the whole collect
+       drawer fits the viewport in one screen with no internal scroll.
+       Desktop monitors above ~1180px keep the spacious original layout.   */
+    @media (min-width: 641px) and (max-width: 1180px),
+           (min-width: 641px) and (max-height: 820px) {
+      .pf-drawer__head { padding: 14px 28px 10px; }
+      .pf-drawer__name { font-size: 22px; }
+      .pf-drawer__progress { padding: 8px 14px; min-width: 96px; }
+      .pf-drawer__progress-num { font-size: 24px; }
+      .pf-drawer__progressbar { width: calc(100% - 56px); }
+      .pf-drawer__hint { margin: 6px auto 0; padding: 0 28px; font-size: 11.5px; }
+
+      /* Kill the internal scroll. The flex column above already gives this
+         row a finite height; we just need the children to compress. */
+      .pf-drawer__tubes {
+        overflow: hidden;
+        padding: 10px 28px 10px;
+        gap: 12px;
+        align-content: center;
+        flex-wrap: nowrap;
+      }
+
+      .pf-tube {
+        width: min(180px, 100%);
+        flex: 1 1 0;
+        max-width: 220px;
+        padding: 12px 10px 10px;
+        gap: 6px;
+        border-radius: 16px;
+        overflow: visible;          /* let any sub-pixel vial overflow show, no clipping */
+      }
+      /* Heights derived from viewport height so they always fit. The clamp
+         floor stays large enough to read, the ceiling caps growth on tall
+         desktops. Cup is shorter natively so its ceiling is lower. */
+      .pf-vial      { width: 52px;  height: clamp(120px, 24dvh, 180px); }
+      .pf-vial--cup { width: 96px;  height: clamp(110px, 22dvh, 170px); }
+
+      .pf-tube__label { font-size: 12.5px; }
+      .pf-tube__dept  { font-size: 8px; letter-spacing: 0.16em; }
+      .pf-tube__tests { margin: 3px 0 0; font-size: 11px; }
+      .pf-tube__code  { font-size: 9.5px; }
+      .pf-tube__stamp { padding: 4px 9px; font-size: 9.5px; }
+
+      .pf-drawer__foot {
+        padding: 10px 28px calc(12px + var(--tab-nav-total-height, 0px));
+      }
+      .pf-drawer__foot .pf-btn-primary { min-width: 120px; }
+    }
+
     /* iPhone SE / iPhone 14 — even tighter padding so the patient name
        and progress chip both fit in the header without wrapping into a
        column. The rack max-width also shrinks so 4+ tube chips don't
@@ -1099,7 +1163,7 @@ interface OrderGroup {
       .pf-drawer__progressbar { margin: 0 12px; }
       .pf-drawer__hint { margin: 10px 12px 0; }
       .pf-drawer__tubes { padding: 14px 12px 20px; }
-      .pf-drawer__foot { padding: 12px 12px 16px; }
+      .pf-drawer__foot { padding: 12px 12px calc(16px + var(--tab-nav-total-height, 0px)); }
       .pf-drawer__name { font-size: 19px; }
       .pf-drawer__progress { padding: 8px 12px; min-width: 0; }
       .pf-drawer__progress-num { font-size: 22px; }
@@ -1302,8 +1366,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
   private readonly _openOrderId = signal<string | null>(null);
-  // Tube id currently PATCH-ing, so we can lock the button during the round-trip.
-  protected readonly pendingToggle = signal<string | null>(null);
   protected readonly REJECT_REASONS: ReadonlyArray<{ code: string; label: string }> = [
     { code: 'refused',      label: 'Patient refused' },
     { code: 'fainted',      label: 'Patient fainted' },
@@ -1519,44 +1581,46 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    * and would make the one just tapped vanish mid-animation.
    */
   toggleCollected(s: OrderSample) {
-    if (this.pendingToggle()) return;
     if (s.status === 'pending') this.markCollected(s);
     else if (s.status === 'collected') this.markPending(s);
     // any other downstream status is locked — user can't undo from here.
   }
 
   private markCollected(s: OrderSample) {
-    this.pendingToggle.set(s.id);
     const now = new Date().toISOString();
     this._pending.update(list => list.map(x => x.id === s.id
       ? { ...x, status: 'collected', collectedAt: now }
       : x));
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
-      next: () => { this.pendingToggle.set(null); },
       error: () => {
+        // Only roll back if the local state still says 'collected'. If the
+        // user has already toggled away (rapid tap-back), respect their newer
+        // intent — its own PATCH will reconcile against the server.
+        const current = this._pending().find(x => x.id === s.id);
+        if (current?.status !== 'collected') return;
         this._pending.update(list => list.map(x => x.id === s.id
           ? { ...x, status: 'pending', collectedAt: undefined }
           : x));
-        this.pendingToggle.set(null);
         this.toasts.error('Could not mark collected — try again');
       }
     });
   }
 
   private markPending(s: OrderSample) {
-    this.pendingToggle.set(s.id);
     const prev = { status: s.status, collectedAt: s.collectedAt };
     this._pending.update(list => list.map(x => x.id === s.id
       ? { ...x, status: 'pending', collectedAt: undefined }
       : x));
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/uncollect`).subscribe({
-      next: () => this.pendingToggle.set(null),
       error: e => {
-        // Roll back on failure so the UI matches the server.
+        // Same guard as markCollected: only roll back if local state still
+        // matches what we attempted, so a fast re-tap isn't fought by the
+        // first request's late failure.
+        const current = this._pending().find(x => x.id === s.id);
+        if (current?.status !== 'pending') return;
         this._pending.update(list => list.map(x => x.id === s.id ? { ...x, ...prev } : x));
-        this.pendingToggle.set(null);
         this.toasts.error(e?.message ?? 'Could not undo — tube may have moved to the lab');
       }
     });
