@@ -123,6 +123,14 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_workflows']
   },
   {
+    id: 'kpis', label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
+    permissions: ['manage_tenant', 'manage_branches']
+  },
+  {
+    id: 'vendors', label: 'Vendor wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
+    permissions: ['manage_tenant']
+  },
+  {
     id: 'setup', label: 'Setup', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
     permissions: ['manage_branches', 'manage_users']
   }

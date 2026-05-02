@@ -7,6 +7,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 interface TatRow {
   orderTestId: string;
@@ -20,7 +21,6 @@ interface TatRow {
   level: 'urgent' | 'high' | 'normal';
 }
 interface TatSummary { total: number; urgent: number; high: number; normal: number; }
-interface StatsSummary { ordersToday: number; patientsToday: number; pendingValidations: number; reportsDelivered: number; }
 
 @Component({
   selector: 'pf-tat-board',
@@ -32,11 +32,14 @@ interface StatsSummary { ordersToday: number; patientsToday: number; pendingVali
     ChipComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
+
+      <pf-kpi-strip screen="tat_board"></pf-kpi-strip>
 
       <pf-screen-header
         eyebrow="Live dashboard"
@@ -55,29 +58,8 @@ interface StatsSummary { ordersToday: number; patientsToday: number; pendingVali
         </pf-touch-btn>
       </pf-screen-header>
 
-      <!-- KPI strip -->
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <pf-tile tone="violet" padding="md">
-          <p class="kpi-label">In flight</p>
-          <p class="kpi-value">{{ summary()?.total ?? 0 }}</p>
-        </pf-tile>
-        <pf-tile tone="rose" padding="md">
-          <p class="kpi-label">Urgent</p>
-          <p class="kpi-value">{{ summary()?.urgent ?? 0 }}</p>
-        </pf-tile>
-        <pf-tile tone="amber" padding="md">
-          <p class="kpi-label">High</p>
-          <p class="kpi-value">{{ summary()?.high ?? 0 }}</p>
-        </pf-tile>
-        <pf-tile tone="emerald" padding="md">
-          <p class="kpi-label">Normal</p>
-          <p class="kpi-value">{{ summary()?.normal ?? 0 }}</p>
-        </pf-tile>
-        <pf-tile tone="sky" padding="md">
-          <p class="kpi-label">Delivered</p>
-          <p class="kpi-value">{{ stats()?.reportsDelivered ?? 0 }}</p>
-        </pf-tile>
-      </div>
+      <!-- Hard-coded KPI tiles removed — admin-configurable KPIs render
+           via <pf-kpi-strip screen="tat_board"> at the top of the page. -->
 
       @for (level of levels; track level) {
         @let rowsForLevel = rowsFor(level);
@@ -166,10 +148,7 @@ export class TatBoardComponent implements OnInit, OnDestroy {
 
   private readonly _summary = signal<TatSummary | null>(null);
   private readonly _rows = signal<TatRow[]>([]);
-  private readonly _stats = signal<StatsSummary | null>(null);
-  readonly summary = this._summary.asReadonly();
   readonly rows = this._rows.asReadonly();
-  readonly stats = this._stats.asReadonly();
 
   private _interval?: ReturnType<typeof setInterval>;
 
@@ -206,6 +185,5 @@ export class TatBoardComponent implements OnInit, OnDestroy {
     this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat').subscribe({
       next: r => { this._summary.set(r.summary); this._rows.set(r.rows ?? []); }
     });
-    this.api.get<StatsSummary>('/api/dashboard/stats').subscribe({ next: s => this._stats.set(s) });
   }
 }

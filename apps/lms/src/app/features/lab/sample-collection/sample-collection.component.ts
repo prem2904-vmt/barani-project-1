@@ -11,6 +11,7 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -80,10 +81,11 @@ interface OrderGroup {
 @Component({
   selector: 'pf-sample-collection',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, TouchButtonComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Lab · Collection"
         title="Sample collection"

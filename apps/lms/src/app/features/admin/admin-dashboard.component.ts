@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.component';
 
 interface SeedSummary {
   tenants: number;
@@ -12,13 +13,6 @@ interface SeedSummary {
   preSeededRoles: number;
   tests: number;
   workflows: number;
-}
-
-interface DashboardStats {
-  ordersToday: number;
-  patientsToday: number;
-  pendingValidations: number;
-  reportsDelivered: number;
 }
 
 type GradientKey = 'violet' | 'pink' | 'emerald' | 'amber' | 'sky' | 'rose' | 'fuchsia' | 'teal';
@@ -37,10 +31,13 @@ interface Tile {
 @Component({
   selector: 'pf-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, KpiStripComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-5 md:px-8 pt-5 pb-10">
+
+      <!-- Admin-configured KPI strip — silently hides if nothing is assigned. -->
+      <pf-kpi-strip screen="admin"></pf-kpi-strip>
 
       <!-- Eyebrow + greeting -->
       <header class="mb-6">
@@ -54,33 +51,8 @@ interface Tile {
         </h1>
       </header>
 
-      <!-- KPI row -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-        <div class="pf-card">
-          <p class="text-[10.5px] font-mono uppercase tracking-[0.14em]"
-             style="color: var(--text-muted);">Orders today</p>
-          <p class="mt-1 text-[32px] leading-none font-semibold tabular-nums"
-             style="color: var(--text-primary);">{{ stats()?.ordersToday ?? '—' }}</p>
-        </div>
-        <div class="pf-card">
-          <p class="text-[10.5px] font-mono uppercase tracking-[0.14em]"
-             style="color: var(--text-muted);">Patients today</p>
-          <p class="mt-1 text-[32px] leading-none font-semibold tabular-nums"
-             style="color: var(--text-primary);">{{ stats()?.patientsToday ?? '—' }}</p>
-        </div>
-        <div class="pf-card">
-          <p class="text-[10.5px] font-mono uppercase tracking-[0.14em]"
-             style="color: var(--text-muted);">Pending validations</p>
-          <p class="mt-1 text-[32px] leading-none font-semibold tabular-nums"
-             style="color: #f59e0b;">{{ stats()?.pendingValidations ?? '—' }}</p>
-        </div>
-        <div class="pf-card">
-          <p class="text-[10.5px] font-mono uppercase tracking-[0.14em]"
-             style="color: var(--text-muted);">Reports delivered</p>
-          <p class="mt-1 text-[32px] leading-none font-semibold tabular-nums"
-             style="color: #10b981;">{{ stats()?.reportsDelivered ?? '—' }}</p>
-        </div>
-      </div>
+      <!-- KPI row removed — admin-configurable KPIs render via the
+           <pf-kpi-strip screen="admin"> at the top of this section. -->
 
       <!-- Configuration tiles -->
       <h2 class="text-[11px] font-mono uppercase tracking-[0.14em] mb-3"
@@ -175,12 +147,10 @@ export class AdminDashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   private readonly _summary = signal<SeedSummary | null>(null);
-  private readonly _stats = signal<DashboardStats | null>(null);
 
   readonly today = new Date();
   readonly userName = () => this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
   readonly summary = this._summary.asReadonly();
-  readonly stats = this._stats.asReadonly();
 
   readonly tiles: Tile[] = [
     {
@@ -216,6 +186,14 @@ export class AdminDashboardComponent implements OnInit {
       subtitle: () => 'GST, discounts, invoice settings'
     },
     {
+      title: 'Vendor Wallets',
+      href: '/admin/vendors',
+      gradient: 'fuchsia',
+      iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
+      iconExtra: 'M17 14h.01',
+      subtitle: () => 'B2B credit accounts · top-ups & usage history'
+    },
+    {
       title: 'Report Template',
       href: '/admin/reports',
       gradient: 'fuchsia',
@@ -245,15 +223,19 @@ export class AdminDashboardComponent implements OnInit {
       gradient: 'teal',
       iconPath: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
       subtitle: () => 'Live turnaround tracking'
+    },
+    {
+      title: 'KPI cards',
+      href: '/admin/kpis',
+      gradient: 'violet',
+      iconPath: 'M3 12h4l3-9 4 18 3-9h4',
+      subtitle: () => 'Pick which KPIs show on each screen'
     }
   ];
 
   ngOnInit(): void {
     this.api.get<SeedSummary>('/api/_seed/summary').subscribe({
       next: s => this._summary.set(s)
-    });
-    this.api.get<DashboardStats>('/api/dashboard/stats').subscribe({
-      next: s => this._stats.set(s)
     });
   }
 }

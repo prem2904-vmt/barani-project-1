@@ -1,23 +1,58 @@
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
+import { skip } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
+import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
+import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { Appointment } from '../../../shared/models/appointment.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
+import { Report } from '../../../shared/models/report.model';
+
+/** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
+ *  modal on the landing. Mirrors DispatchPackageDto from the backend. */
+interface DispatchPackage {
+  id: string;
+  code: string;
+  branchId: string;
+  createdAt: string;
+  receivedAt?: string | null;
+  orderCount: number;
+  orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
+}
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advanced-patient-search.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 type DateRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
+
+/** Mirrors the AdvancedFilters shape inside the modal — kept in this file
+ *  so we don't pull a heavy import just for typing. */
+interface AdvancedSearchPreset {
+  phone: string;
+  name: string;
+  patientId: string;
+  dateRange: 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
+  dateFrom: string;
+  dateTo: string;
+  branchId: string;
+  testIds: string[];
+  age: string;
+  sex: '' | 'male' | 'female' | 'other';
+}
 
 interface StragglerItem {
   id: string;
@@ -39,7 +74,7 @@ interface StaffMember {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -49,8 +84,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly booking = inject(AppointmentBookingService);
+  private readonly billingEvents = inject(BillingEventsService);
   // Cached ETag from /api/orders/today; sent as If-None-Match next poll.
   private _ordersEtag: string | null = null;
   // Local content signature used as a belt-and-braces no-op detector when an
@@ -108,6 +147,36 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _topTestPopoverOpen = signal<boolean>(false);
   readonly topTestPopoverOpen = this._topTestPopoverOpen.asReadonly();
 
+  /** Two-slider track for the 3-pane layout (Appointments | In Progress | Completed).
+   *  Each slider stores the LEFT EDGE of the slider as a % of the row width.
+   *  • _apptSplitPctA = position of slider 1 (between Appointments & In Progress)
+   *  • _apptSplitPctB = position of slider 2 (between In Progress & Completed)
+   *  Constraints: 15 ≤ A ≤ B−15 ≤ 85, so no pane collapses below 15%.
+   *  Persisted in localStorage as a "A,B" pair so the chosen ratios stick. */
+  private static readonly APPT_SPLIT_KEY = 'pf.lms.frontdesk.apptSplitPct';
+  private static readonly APPT_SPLIT_DEFAULT_A = 33;
+  private static readonly APPT_SPLIT_DEFAULT_B = 66;
+  private static readonly APPT_SPLIT_MIN = 15;
+  private static readonly APPT_SPLIT_MAX = 85;
+  private static readonly APPT_SPLIT_GAP = 15; // min % between A and B
+  private readonly _apptSplitPctA = signal<number>(0);
+  private readonly _apptSplitPctB = signal<number>(0);
+  readonly apptSplitPctA = this._apptSplitPctA.asReadonly();
+  readonly apptSplitPctB = this._apptSplitPctB.asReadonly();
+  /** Back-compat alias — older template references read this. */
+  readonly apptSplitPct = this.apptSplitPctA;
+  private readonly _apptSplitDragging = signal<boolean>(false);
+  readonly apptSplitDragging = this._apptSplitDragging.asReadonly();
+  /** Which slider is currently being dragged: 'a' (left) or 'b' (right). */
+  private _draggingHandle: 'a' | 'b' | null = null;
+  /** ViewChild ref — gives us the container's bounding rect so we can
+   *  translate pointer X into a percentage. */
+  protected readonly apptSplitEl = viewChild<ElementRef<HTMLDivElement>>('apptSplit');
+  /** Live drag handlers, kept on the instance so we can detach them on
+   *  pointerup. Bound in arrow form because the events fire on window. */
+  private _onDragMove?: (ev: MouseEvent | TouchEvent) => void;
+  private _onDragEnd?: () => void;
+
   /** Which exception-queue drawer is open (null = none). Walk-ins / Ready /
       Payments-due used to be tabs; they're now alert chips that open this
       drawer so the default page stays calm. */
@@ -164,9 +233,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       // End is exclusive; use end-of-day + 1ms so the picked day is included.
       const e = this._customEnd() ?? this._customStart();
       if (e) return this.dayStart(e).getTime() + 86_400_000;
-      return Date.now();
+      return now.getTime() + 86_400_000;
     }
-    return Date.now();
+    // For 'today' / '7d' / 'month', include the rest of the current day —
+    // future appointments today must show in the queue, not be filtered out
+    // because they happen after Date.now(). End is the start of tomorrow
+    // (exclusive bound).
+    return now.getTime() + 86_400_000;
   }
   private dayStart(iso: string): Date {
     const d = new Date(iso); d.setHours(0, 0, 0, 0); return d;
@@ -179,14 +252,48 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   // Filtered lists -------------------------------------------
+  // Show only appointments that are still actionable on the desk.
+  // Checked-in patients have moved to In-progress (the order takes over);
+  // cancelled appointments shouldn't clutter the queue. Both stay
+  // visible on the calendar route, just not on the operational landing.
   readonly visibleAppointments = computed(() =>
-    this._appointments().filter(a => this.inRange(a.appointmentDate))
+    this._appointments().filter(a =>
+      this.inRange(a.appointmentDate)
+      && a.status !== 'checked_in'
+      && a.status !== 'cancelled'
+    )
   );
+  /** "In progress" — actively-moving orders. Excludes terminal /
+   *  ready-to-deliver states; those land in completedOrders below so
+   *  the FD board has two clear panes. */
   readonly visibleOrders = computed(() =>
-    this._orders().filter(o => this.inRange(o.createdAt) && o.status !== 'completed')
+    this._orders().filter(o =>
+      this.inRange(o.createdAt)
+      && o.status !== 'completed'
+      && o.status !== 'validated'
+      && o.status !== 'partially_validated'
+      && o.status !== 'delivered'
+      && o.status !== 'cancelled'
+    )
   );
+  /** "Completed" — work the lab has signed off on (validated /
+   *  partially_validated / delivered / completed). Drives the new
+   *  third FD pane next to In Progress so reception can see at a
+   *  glance which patients are ready to hand over. */
+  readonly completedOrders = computed(() =>
+    this._orders().filter(o =>
+      this.inRange(o.createdAt) && (
+        o.status === 'validated' ||
+        o.status === 'partially_validated' ||
+        o.status === 'delivered' ||
+        o.status === 'completed'
+      )
+    )
+  );
+  /** Subset of completedOrders still needing delivery (for the alert
+   *  chip + ready count). */
   readonly readyForPickup = computed(() =>
-    this._orders().filter(o => o.status === 'completed')
+    this.completedOrders().filter(o => o.status !== 'delivered')
   );
   readonly paymentsDue = computed(() =>
     this._bills().filter(b => b.balance > 0)
@@ -373,6 +480,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
 
+  constructor() {
+    // Restore saved 3-pane split positions (Appointments | In Progress | Completed).
+    // Done in the constructor so the first render uses the persisted ratio
+    // and we don't flicker from defaults to user values.
+    const restored = this.readApptSplitFromStorage();
+    this._apptSplitPctA.set(restored.a);
+    this._apptSplitPctB.set(restored.b);
+
+    // One-shot toast + tab-title pulse when new orders flip to
+    // "Ready for delivery" (status 'validated' / 'partially_validated').
+    // Drives the "completed → notify FD" hand-off — every time the
+    // count rises during this session, reception gets a visible cue
+    // that there's something new to hand over.
+    let prevReady = -1; // -1 = first run, suppress initial toast
+    effect(() => {
+      const list = this.readyForPickup();
+      const next = list.length;
+      if (prevReady >= 0 && next > prevReady) {
+        const delta = next - prevReady;
+        this.toasts.success(`${delta} report${delta === 1 ? '' : 's'} ready for delivery`);
+      }
+      prevReady = next;
+    });
+  }
+
     ngOnInit() {
     this.labCfg.ensureLoaded();
     this.refresh();
@@ -385,25 +517,85 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
     const perms = this.auth.user()?.permissions ?? [];
     this.isAdmin = perms.includes('*');
+
+    // Re-open the advanced search modal whenever ?aps=1 appears in the URL.
+    // Subscribing to queryParamMap (not just snapshot) handles browser
+    // back/forward — same component instance, query params change in place.
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.hydrateApsFromUrl());
+
+    // Refresh the queue immediately when a new appointment is booked
+    // (e.g. via the calendar's quick-book modal). Without this, a fresh
+    // booking only shows up at the next 30s poll.
+    toObservable(this.booking.bookedAt)
+      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refresh());
+
+    // Same for billing events — a freshly-marked Pay later or a new
+    // payment should reflect on the landing instantly so reception
+    // sees outstanding balances without waiting for the poll.
+    toObservable(this.billingEvents.paid)
+      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refresh());
+    toObservable(this.billingEvents.payLater)
+      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.refresh();
+        // Surface the alert so reception can't miss it: pop the
+        // payments-due drawer open as soon as the new pay-later lands.
+        this._openQueue.set('payments');
+      });
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
   }
 
   refresh() {
-    this.api.get<Appointment[]>('/api/appointments/today').subscribe({
-      next: l => this._appointments.set(l ?? []),
-    });
-    // Polled ~ every 30s — bypass ApiService here so we can drive If-None-Match.
-    // Server returns 304 with no body when nothing material has changed,
-    // letting us skip the signal write entirely (and the cascading recompute
-    // through pipeline()/orderTone()/etc. that would otherwise re-render every
-    // card every poll).
-    this.fetchOrdersWithEtag();
+    // Date-range scoped fetch: fall back to /today when the active
+    // range is exactly today (keeps the optimised endpoint + ETag
+    // path), otherwise hit the new /range endpoint with from/to.
+    const r = this.dateRangeBounds();
+    if (r.isToday) {
+      this.api.get<Appointment[]>('/api/appointments/today').subscribe({
+        next: l => this._appointments.set(l ?? []),
+      });
+      this.fetchOrdersWithEtag();
+    } else {
+      const params = new URLSearchParams({
+        from: new Date(r.start).toISOString(),
+        to:   new Date(r.end).toISOString()
+      });
+      this.api.get<Appointment[]>(`/api/appointments?${params}`).subscribe({
+        next: l => this._appointments.set(l ?? []),
+        error: () => this._appointments.set([])
+      });
+      this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
+        next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
+        error: () => this._orders.set([])
+      });
+      // Reset ETag so the next /today switch refetches fresh instead
+      // of comparing against a stale signature.
+      this._ordersEtag = null;
+      this._ordersSig = null;
+    }
     this.api.get<Bill[]>('/api/billing/').subscribe({
       next: l => this._bills.set(l ?? []),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
+  }
+
+  /** Read the active date filter into start/end timestamps + a hint
+   *  for whether it's the simple "today" case (so we can keep the
+   *  optimised /today + ETag path for the most common selection). */
+  private dateRangeBounds(): { start: number; end: number; isToday: boolean } {
+    const start = this.rangeStart();
+    const end = this.rangeEnd();
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    const isToday = this._dateRange() === 'today'
+      && start === today0.getTime()
+      && end === today0.getTime() + 86_400_000;
+    return { start, end, isToday };
   }
 
   private async fetchOrdersWithEtag() {
@@ -460,10 +652,271 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .join('|');
   }
 
+  // ── Advanced patient search modal ─────────────────────────
+  // The simple inline search above only handles a single fuzzy term. The
+  // advanced modal layers in mobile / patient ID / branch / date range /
+  // test name / age so reception can fall back to it when the primary
+  // mobile-number lookup fails or is ambiguous. Cmd/Ctrl+K opens it from
+  // anywhere on the landing page; the modal manages its own ESC + backdrop
+  // close. We don't open it on text inputs to avoid hijacking native
+  // browser shortcuts.
+  //
+  // State is mirrored into the URL when a search executes (?aps=1&aps_phone=…)
+  // so the back-button after picking a patient lands the user on the same
+  // filter set + result list. The modal hydrates from the preset Input on
+  // open and runs the search once.
+  private readonly _advancedOpen = signal(false);
+  readonly advancedOpen = this._advancedOpen.asReadonly();
+  private readonly _advancedPreset = signal<AdvancedSearchPreset | null>(null);
+  readonly advancedPreset = this._advancedPreset.asReadonly();
+
+  openAdvancedSearch() {
+    this._advancedPreset.set(null);
+    this._advancedOpen.set(true);
+  }
+  closeAdvancedSearch() {
+    this._advancedOpen.set(false);
+    this._advancedPreset.set(null);
+    // Strip search params from the URL on explicit close (X / ESC / backdrop)
+    // so they don't leak into a fresh open — but only if we're still on
+    // /frontdesk. Picking a patient navigates away first, leaving the
+    // params intact in history for back-button restore.
+    if (this.router.url.startsWith('/frontdesk') && this.hasApsParams()) {
+      this.router.navigate(['/frontdesk'], { queryParams: {}, replaceUrl: true });
+    }
+  }
+
+  /** Persist the active filters into the URL after each successful search.
+   *  Absolute path (not relativeTo+empty) so the URL writes reliably from
+   *  any router state. We push a NEW history entry per search instead of
+   *  using replaceUrl — that way the browser's back button always returns
+   *  here from the patient profile, regardless of how many searches the
+   *  user ran in between. Each refinement adds one back-press, which is
+   *  more predictable than silent in-place URL replacement. */
+  onAdvancedSearchExecuted(filters: AdvancedSearchPreset) {
+    const params = this.serializeAps(filters);
+    console.info('[adv-search] writing URL', params);
+    this.router.navigate(['/frontdesk'], { queryParams: params });
+  }
+
+  private hasApsParams(): boolean {
+    const snap = this.route.snapshot.queryParamMap;
+    return snap.get('aps') === '1';
+  }
+
+  private emptyApsQueryParams(): Record<string, null> {
+    return {
+      aps: null,
+      aps_phone: null, aps_name: null, aps_pid: null,
+      aps_date: null, aps_from: null, aps_to: null,
+      aps_branch: null, aps_tests: null, aps_age: null, aps_sex: null
+    };
+  }
+
+  private serializeAps(f: AdvancedSearchPreset): Record<string, string | null> {
+    return {
+      aps: '1',
+      aps_phone: f.phone || null,
+      aps_name: f.name || null,
+      aps_pid: f.patientId || null,
+      aps_date: f.dateRange === 'any' ? null : f.dateRange,
+      aps_from: f.dateRange === 'custom' && f.dateFrom ? f.dateFrom : null,
+      aps_to:   f.dateRange === 'custom' && f.dateTo ? f.dateTo : null,
+      aps_branch: f.branchId || null,
+      aps_tests: f.testIds.length ? f.testIds.join(',') : null,
+      aps_age: f.age || null,
+      aps_sex: f.sex || null
+    };
+  }
+
+  private hydrateApsFromUrl() {
+    const q = this.route.snapshot.queryParamMap;
+    console.info('[adv-search] hydrate', { url: this.router.url, aps: q.get('aps') });
+    if (q.get('aps') !== '1') {
+      // No advanced-search params in the URL — make sure the modal is shut.
+      // This handles browser-forward navigations away from a previously open
+      // modal as well as fresh visits.
+      if (this._advancedOpen()) {
+        this._advancedOpen.set(false);
+        this._advancedPreset.set(null);
+      }
+      return;
+    }
+    const date = (q.get('aps_date') ?? 'any') as AdvancedSearchPreset['dateRange'];
+    const sex = (q.get('aps_sex') ?? '') as AdvancedSearchPreset['sex'];
+    const preset: AdvancedSearchPreset = {
+      phone:     q.get('aps_phone')  ?? '',
+      name:      q.get('aps_name')   ?? '',
+      patientId: q.get('aps_pid')    ?? '',
+      dateRange: ['any','today','yesterday','7d','month','custom'].includes(date) ? date : 'any',
+      dateFrom:  q.get('aps_from')   ?? '',
+      dateTo:    q.get('aps_to')     ?? '',
+      branchId:  q.get('aps_branch') ?? '',
+      testIds:   (q.get('aps_tests') ?? '').split(',').filter(Boolean),
+      age:       q.get('aps_age')    ?? '',
+      sex:       ['', 'male', 'female', 'other'].includes(sex) ? sex : ''
+    };
+    this._advancedPreset.set(preset);
+    this._advancedOpen.set(true);
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(ev: KeyboardEvent) {
+    if (ev.key !== 'k' && ev.key !== 'K') return;
+    if (!(ev.metaKey || ev.ctrlKey)) return;
+    // Don't intercept the OS shortcut while typing in another input — Ctrl+K
+    // is a legitimate URL clear in some browsers, and we don't want to
+    // surprise users mid-type. The modal's own input is fine to capture.
+    const t = ev.target as HTMLElement | null;
+    const tag = (t?.tagName || '').toLowerCase();
+    if ((tag === 'input' || tag === 'textarea' || t?.isContentEditable) && !this.advancedOpen()) return;
+    ev.preventDefault();
+    this._advancedOpen.update(o => !o);
+  }
+
+  // ── Appointments ↔ In-progress draggable splitter ─────────
+  startApptSplitDrag(ev: MouseEvent | TouchEvent, handle: 'a' | 'b' = 'a') {
+    // Skip the drag flow on viewports below 1024px — the layout stacks
+    // vertically there and the handle isn't even rendered, but this is
+    // belt-and-braces in case CSS/TS get out of sync.
+    if (typeof window === 'undefined' || window.innerWidth < 1024) return;
+    ev.preventDefault();
+
+    this._draggingHandle = handle;
+    this._apptSplitDragging.set(true);
+    this._onDragMove = (e: MouseEvent | TouchEvent) => this.onApptSplitMove(e);
+    this._onDragEnd  = () => this.endApptSplitDrag();
+    window.addEventListener('mousemove', this._onDragMove as EventListener);
+    window.addEventListener('mouseup',   this._onDragEnd!);
+    window.addEventListener('touchmove', this._onDragMove as EventListener, { passive: false });
+    window.addEventListener('touchend',  this._onDragEnd!);
+    window.addEventListener('touchcancel', this._onDragEnd!);
+  }
+
+  private onApptSplitMove(ev: MouseEvent | TouchEvent) {
+    const el = this.apptSplitEl()?.nativeElement;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const clientX = ev instanceof MouseEvent
+      ? ev.clientX
+      : (ev.touches[0]?.clientX ?? rect.left + rect.width / 2);
+    if (ev instanceof TouchEvent && ev.cancelable) ev.preventDefault();
+
+    const raw = ((clientX - rect.left) / rect.width) * 100;
+    if (this._draggingHandle === 'a') {
+      const { a, b } = this.clampSplit(raw, this._apptSplitPctB());
+      this._apptSplitPctA.set(a);
+      this._apptSplitPctB.set(b);
+    } else if (this._draggingHandle === 'b') {
+      const { a, b } = this.clampSplit(this._apptSplitPctA(), raw);
+      this._apptSplitPctA.set(a);
+      this._apptSplitPctB.set(b);
+    }
+  }
+
+  private endApptSplitDrag() {
+    this._apptSplitDragging.set(false);
+    this._draggingHandle = null;
+    if (this._onDragMove) {
+      window.removeEventListener('mousemove', this._onDragMove as EventListener);
+      window.removeEventListener('touchmove', this._onDragMove as EventListener);
+    }
+    if (this._onDragEnd) {
+      window.removeEventListener('mouseup', this._onDragEnd);
+      window.removeEventListener('touchend', this._onDragEnd);
+      window.removeEventListener('touchcancel', this._onDragEnd);
+    }
+    this._onDragMove = undefined;
+    this._onDragEnd = undefined;
+    this.persistApptSplit();
+  }
+
+  /** Keyboard accessibility — left/right arrows nudge the focused
+   *  divider in 2% steps; Home/End jump to the bounds for that
+   *  handle's allowed range. The handle ('a' or 'b') is passed via
+   *  the (keydown) binding on each separator element. */
+  onApptSplitKey(ev: KeyboardEvent, handle: 'a' | 'b' = 'a') {
+    const step =
+      ev.key === 'ArrowLeft'  ? -2 :
+      ev.key === 'ArrowRight' ? +2 :
+      ev.key === 'Home'       ? -100 :
+      ev.key === 'End'        ? +100 : 0;
+    if (!step) return;
+    ev.preventDefault();
+    if (handle === 'a') {
+      const { a, b } = this.clampSplit(this._apptSplitPctA() + step, this._apptSplitPctB());
+      this._apptSplitPctA.set(a);
+      this._apptSplitPctB.set(b);
+    } else {
+      const { a, b } = this.clampSplit(this._apptSplitPctA(), this._apptSplitPctB() + step);
+      this._apptSplitPctA.set(a);
+      this._apptSplitPctB.set(b);
+    }
+    this.persistApptSplit();
+  }
+
+  resetApptSplit() {
+    this._apptSplitPctA.set(FrontdeskLandingComponent.APPT_SPLIT_DEFAULT_A);
+    this._apptSplitPctB.set(FrontdeskLandingComponent.APPT_SPLIT_DEFAULT_B);
+    this.persistApptSplit();
+  }
+
+  /** Persist both slider positions as "A,B". Earlier single-value
+   *  format is silently upgraded on first save. */
+  private persistApptSplit(a: number = this._apptSplitPctA(), b: number = this._apptSplitPctB()) {
+    try { localStorage.setItem(FrontdeskLandingComponent.APPT_SPLIT_KEY, `${a},${b}`); } catch { /* SSR / private mode — ignore */ }
+  }
+
+  /** Read both slider positions from localStorage. Tolerates the
+   *  legacy single-number format (just A) and falls back to defaults
+   *  if anything's malformed. */
+  private readApptSplitFromStorage(): { a: number; b: number } {
+    const fallback = {
+      a: FrontdeskLandingComponent.APPT_SPLIT_DEFAULT_A,
+      b: FrontdeskLandingComponent.APPT_SPLIT_DEFAULT_B
+    };
+    try {
+      const raw = localStorage.getItem(FrontdeskLandingComponent.APPT_SPLIT_KEY);
+      if (!raw) return fallback;
+      const parts = raw.split(',');
+      const a = Number(parts[0]);
+      const b = parts.length > 1 ? Number(parts[1]) : NaN;
+      // Legacy single-value entry: keep A, derive B as A + ~half of remaining.
+      if (Number.isFinite(a) && !Number.isFinite(b)) {
+        const derivedB = Math.min(
+          FrontdeskLandingComponent.APPT_SPLIT_MAX,
+          a + Math.max(FrontdeskLandingComponent.APPT_SPLIT_GAP, (100 - a) / 2)
+        );
+        return this.clampSplit(a, derivedB);
+      }
+      if (Number.isFinite(a) && Number.isFinite(b)) return this.clampSplit(a, b);
+    } catch { /* ignore */ }
+    return fallback;
+  }
+
+  /** Clamp A and B so they respect the min/max bounds and the min
+   *  gap between handles (so neither pane can collapse below 15%). */
+  private clampSplit(a: number, b: number): { a: number; b: number } {
+    const min = FrontdeskLandingComponent.APPT_SPLIT_MIN;
+    const max = FrontdeskLandingComponent.APPT_SPLIT_MAX;
+    const gap = FrontdeskLandingComponent.APPT_SPLIT_GAP;
+    const aClamped = Math.max(min, Math.min(max - gap, a));
+    const bClamped = Math.max(aClamped + gap, Math.min(max, b));
+    return { a: Math.round(aClamped), b: Math.round(bClamped) };
+  }
+
   // ── Navigation & actions ──────────────────────────────────
+  private readonly profileSvc = inject(PatientProfileService);
+
   openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
   searchFocus() { this.toasts.success('QR scanner · coming soon'); }
-  openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
+  openProfile(p: Patient) { this.profileSvc.open(p.id); }
+  newOrderFor(p: Patient) {
+    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
+  }
+  bookAppointmentFor(p: Patient) {
+    this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
+  }
   openAppointment(a: Appointment) {
     if (a.patientId) this.router.navigate(['/frontdesk/patients', a.patientId]);
   }
@@ -718,8 +1171,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: b.orderId } });
   }
   checkIn(a: Appointment) {
-    this.api.patch<Appointment>(`/api/appointments/${a.id}/checkin`).subscribe({
-      next: () => { this.toasts.success('Checked in'); this.refresh(); }
+    // Backend returns { appointment, order, next }:
+    //   • order != null  → tests were pre-booked, an order has been
+    //     spawned automatically. The patient is now in In-Progress on
+    //     this same screen — no navigation needed.
+    //   • order == null  → no tests on the appointment, reception must
+    //     pick tests now. We navigate to the order-create page with
+    //     ?patientId=&appointmentId= so the order links back.
+    this.api.patch<{ appointment: Appointment; order: Order | null; next: string }>(
+      `/api/appointments/${a.id}/checkin`
+    ).subscribe({
+      next: res => {
+        if (res?.order) {
+          this.toasts.success(`${a.patient?.displayName ?? 'Patient'} checked in — order in progress`);
+          this.refresh();
+        } else {
+          // No tests yet → reception needs to add them on the order
+          // page, then the order will appear in In-Progress on return.
+          this.toasts.info(`${a.patient?.displayName ?? 'Patient'} checked in — pick tests to start the order`);
+          this.refresh();
+          this.router.navigate(['/frontdesk/order'], {
+            queryParams: { patientId: a.patientId, appointmentId: a.id }
+          });
+        }
+      },
+      error: () => this.toasts.error('Could not check in')
     });
   }
 
@@ -733,6 +1209,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._customEnd.set(null);
     }
     this._dateRange.set(d);
+    // Pulling a wider window means the FE needs MORE data than the
+    // /today endpoints return — kick off a fresh fetch through the
+    // range-aware refresh path so the panes actually populate.
+    this.refresh();
   }
 
   // ── Custom date range / calendar ─────────────────────────
@@ -786,11 +1266,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (!this._customStart()) return;
     this._dateRange.set('custom');
     this._calendarOpen.set(false);
+    this.refresh();
   }
   clearCustom() {
     this._customStart.set(null);
     this._customEnd.set(null);
     if (this._dateRange() === 'custom') this._dateRange.set('today');
+    this.refresh();
   }
   /** Pill label for the Custom button — shows the active range when set. */
   customRangeLabel(): string {
@@ -846,9 +1328,42 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   closeQueueDrawer() { this._openQueue.set(null); }
   queueTitle(q: 'ready' | 'payments' | null): string {
     switch (q) {
-      case 'ready': return 'Ready for pickup';
+      case 'ready': return 'Ready for delivery';
       case 'payments': return 'Payments due';
       default: return '';
+    }
+  }
+  /** Direct navigation to the Results page when reception clicks the
+   *  "ready for delivery" alert — skips the local drawer in favour of
+   *  the full Results queue with deliver / print actions. */
+  goToResults() { this.router.navigateByUrl('/reports'); }
+
+  /** UI flag for the "Download report" button while we fetch + render. */
+  protected readonly _downloadingReport = signal<boolean>(false);
+  readonly downloadingReport = this._downloadingReport.asReadonly();
+
+  /** Pull the latest final report for the order and render it as a
+   *  client-side PDF. Mirrors the invoice download — no server PDF
+   *  endpoint required, jsPDF builds the document from the snapshot
+   *  the backend already stores on Report.Data. */
+  async downloadReport(o: Order) {
+    if (this._downloadingReport()) return;
+    this._downloadingReport.set(true);
+    try {
+      const report = await firstValueFrom(
+        this.api.get<Report | null>(`/api/reports/by-order/${o.id}`)
+      );
+      if (!report) {
+        this.toasts.warning('No report yet for this order — try again in a moment.');
+        return;
+      }
+      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+      generateReportPdf({ report });
+    } catch (err) {
+      console.error('[fd] download report failed', err);
+      this.toasts.error('Could not download the report');
+    } finally {
+      this._downloadingReport.set(false);
     }
   }
   /** Count of staff with status === 'on_duty' for the button badge. */
@@ -863,6 +1378,79 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   clearSelection() { this._selectedIds.set(new Set()); }
   bulkSms() { this.toasts.success(`SMS queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
   bulkWhatsapp() { this.toasts.success(`WhatsApp queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
+
+  /** Selected IDs that are also valid orders ready to dispatch — i.e.
+   *  intersection of the global selection set with the In-Progress
+   *  orders that have at least one collected (not yet dispatched)
+   *  tube. The bulk action bar uses this count to enable/disable
+   *  the dispatch buttons. */
+  readonly dispatchableSelected = computed<string[]>(() => {
+    const sel = this._selectedIds();
+    return this.visibleOrders()
+      .filter(o => sel.has(o.id) && o.samples.some(s => s.status === 'collected'))
+      .map(o => o.id);
+  });
+
+  /** Plain bulk dispatch — flip every selected order's tubes to
+   *  dispatched, no package wrapper. */
+  bulkDispatch() {
+    const ids = this.dispatchableSelected();
+    if (ids.length === 0) { this.toasts.info('Select orders that have collected tubes ready to dispatch.'); return; }
+    this.api.post<{ ordersTouched: number; samplesDispatched: number }>(
+      '/api/orders/bulk-dispatch', { orderIds: ids }
+    ).subscribe({
+      next: res => {
+        this.toasts.success(`Dispatched ${res.samplesDispatched} sample${res.samplesDispatched === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}`);
+        this.clearSelection();
+        this.refresh();
+      },
+      error: e => this.toasts.error(e?.message ?? 'Bulk dispatch failed')
+    });
+  }
+
+  // ── Dispatch package + QR ─────────────────────────────────
+  /** Active dispatch package — set when reception generates one, used
+   *  by the modal to show the code + QR + manifest. Null = no modal. */
+  private readonly _activePackage = signal<DispatchPackage | null>(null);
+  readonly activePackage = this._activePackage.asReadonly();
+  /** PNG URL for the QR — uses the same external generator as the
+   *  billing UPI QR (same lib, no bundle weight). The QR encodes the
+   *  package code so the lab's "scan to receive" reads it directly. */
+  readonly activePackageQr = computed<string | null>(() => {
+    const p = this._activePackage();
+    if (!p) return null;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(p.code)}`;
+  });
+
+  /** Bundle every selected dispatchable order into a single package,
+   *  show the modal with QR + code so reception can hand the lab
+   *  one scannable token. */
+  createDispatchPackage() {
+    const ids = this.dispatchableSelected();
+    if (ids.length === 0) { this.toasts.info('Pick at least one in-progress order with collected tubes.'); return; }
+    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).subscribe({
+      next: pkg => {
+        this._activePackage.set(pkg);
+        this.toasts.success(`Package ${pkg.code} created with ${pkg.orderCount} order${pkg.orderCount === 1 ? '' : 's'}`);
+        this.clearSelection();
+        this.refresh();
+      },
+      error: e => this.toasts.error(e?.message ?? 'Could not create package')
+    });
+  }
+  closeDispatchPackage() { this._activePackage.set(null); }
+  /** Copy the package code to clipboard so reception can WhatsApp /
+   *  type it to the lab if scanning isn't an option. */
+  async copyPackageCode() {
+    const p = this._activePackage();
+    if (!p) return;
+    try {
+      await navigator.clipboard.writeText(p.code);
+      this.toasts.success(`Code ${p.code} copied`);
+    } catch {
+      this.toasts.warning('Couldn’t copy — read the code from the screen.');
+    }
+  }
 
   // ── Helpers ───────────────────────────────────────────────
   countBy(k: StragglerItem['kind']): number { return this.stragglers().filter(s => s.kind === k).length; }
@@ -929,14 +1517,24 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const dispatched = o.samples.some(s => s.status === 'dispatched' || s.status === 'in_transit'
       || s.status === 'received' || s.status === 'processing');
     const received = o.samples.some(s => s.status === 'received' || s.status === 'processing');
-    const completed = o.status === 'completed';
-    const anyResult = (o.samples[0]?.tests ?? []).some(t => t.status === 'validated' || t.status === 'entered');
+    // "Report" step is done once the order has reached validated /
+    // partially_validated / delivered / completed — those all mean
+    // the lab work is signed off and the report is generated.
+    const reportDone = o.status === 'validated' || o.status === 'partially_validated'
+                    || o.status === 'delivered'  || o.status === 'completed';
+    // "Result" step is done as soon as every test has a value entered
+    // or already validated. Differs from reportDone — entered values
+    // still need a pathologist's signature before the report exists.
+    const allTests = o.samples.flatMap(s => s.tests ?? []);
+    const allTestsResulted = allTests.length > 0
+      && allTests.every(t => t.status === 'validated' || t.status === 'entered');
+    const anyResult = allTests.some(t => t.status === 'validated' || t.status === 'entered');
     return [
       { label: 'Billing', state: billDone ? 'done' : 'active' },
       { label: 'Sample', state: collected ? 'done' : billDone ? 'active' : 'pending' },
       { label: 'Dispatch', state: received ? 'done' : dispatched ? 'done' : collected ? 'active' : 'pending' },
-      { label: 'Result', state: anyResult ? 'done' : received ? 'active' : 'pending' },
-      { label: 'Report', state: completed ? 'done' : anyResult ? 'active' : 'pending' }
+      { label: 'Result', state: allTestsResulted ? 'done' : anyResult ? 'active' : received ? 'active' : 'pending' },
+      { label: 'Report', state: reportDone ? 'done' : anyResult ? 'active' : 'pending' }
     ];
   }
   stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {
@@ -954,7 +1552,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
         return `${validated}/${all.length} tests resulted`;
       }
-      case 'Report': return step.state === 'done' ? 'Report dispatched' : 'Awaiting validation';
+      case 'Report': {
+        if (step.state !== 'done') return 'Awaiting validation';
+        if (o.status === 'delivered') return 'Report delivered';
+        if (o.status === 'partially_validated') return 'Partial ready · awaiting full sign-off';
+        // 'validated' / 'completed' → ready for handover at the desk.
+        return 'Ready for delivery';
+      }
       default: return '';
     }
   }

@@ -6,11 +6,13 @@ import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
 import { TenantStripComponent } from '../tenant-strip/tenant-strip.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
+import { PatientProfileModalComponent } from '../../shared/components/patient-profile-modal/patient-profile-modal.component';
+import { AppointmentBookingModalComponent } from '../../shared/components/appointment-booking-modal/appointment-booking-modal.component';
 
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, TenantStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent],
+  imports: [RouterOutlet, TopStripComponent, TenantStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -32,6 +34,14 @@ import { TopStripComponent } from '../top-strip/top-strip.component';
 
       <!-- Themed prompt / confirm overlay (replaces window.prompt/confirm). -->
       <pf-dialog-host></pf-dialog-host>
+
+      <!-- Patient profile modal — globally available; opens via
+           PatientProfileService.open(patientId) from anywhere. -->
+      <pf-patient-profile-modal></pf-patient-profile-modal>
+
+      <!-- Appointment booking modal — globally available; opens via
+           AppointmentBookingService.open(preset?). -->
+      <pf-appointment-booking-modal></pf-appointment-booking-modal>
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)

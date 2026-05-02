@@ -14,6 +14,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 type Tab = 'mine' | 'all';
 type Level = 'urgent' | 'high' | 'normal';
@@ -38,11 +39,13 @@ interface ResultSnapshot {
     SegmentedComponent,
     SkeletonComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
+      <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Validation queue"
         title="Pending validation"

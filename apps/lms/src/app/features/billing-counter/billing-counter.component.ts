@@ -11,6 +11,7 @@ import { ChipComponent } from '../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.component';
 
 /**
  * Billing counter — for branches in `billing_mode = separate_counter`.
@@ -25,11 +26,12 @@ import { TouchButtonComponent } from '../../shared/primitives/touch-button.compo
   imports: [
     FormsModule, DatePipe,
     AvatarComponent, ChipComponent,
-    ScreenHeaderComponent, TileComponent, TouchButtonComponent
+    ScreenHeaderComponent, TileComponent, TouchButtonComponent, KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      <pf-kpi-strip screen="billing_counter"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Billing · Counter"
         title="Billing counter"

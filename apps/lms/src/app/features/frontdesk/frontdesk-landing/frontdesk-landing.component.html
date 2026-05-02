@@ -168,6 +168,9 @@
 
   <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-6">
 
+    <!-- Admin-configured KPI strip — silently hides when no assignments. -->
+    <pf-kpi-strip screen="frontdesk_landing"></pf-kpi-strip>
+
     <!-- Stragglers banner — yesterday's missed / uncollected / unpaid -->
     @if (stragglers().length > 0 && !stragglersDismissed()) {
     <div class="pf-stragglers" [class.pf-stragglers--open]="stragglersOpen()">
@@ -235,102 +238,89 @@
           <div class="pf-search-wrap">
             <pf-patient-search placeholder="Search patient · name, phone, ABHA, UHID…"
               (picked)="openProfile($event)"></pf-patient-search>
-          </div>
-          <div class="pf-date-pills relative" role="tablist" aria-label="Date range">
-            @for (d of dateOptions; track d.id) {
-            @if (d.id === 'custom') {
-            <button type="button" class="pf-date-pill press pf-date-pill--custom"
-              [class.pf-date-pill--on]="dateRange() === 'custom'" (click)="toggleCalendar()"
-              [attr.aria-expanded]="calendarOpen()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <path d="M16 2v4M8 2v4M3 10h18" />
+            <!-- Advanced search trigger — opens a multi-filter modal for the
+                 cases where mobile-first lookup fails or is ambiguous.
+                 Cmd/Ctrl+K does the same thing from anywhere on the page. -->
+            <button type="button" class="pf-adv-search-btn press"
+                    (click)="openAdvancedSearch()"
+                    [attr.aria-label]="'Open advanced patient search (Cmd+K)'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="7" y1="12" x2="20" y2="12"/>
+                <line x1="10" y1="18" x2="20" y2="18"/>
+                <circle cx="4" cy="12" r="1.4" fill="currentColor"/>
+                <circle cx="7" cy="18" r="1.4" fill="currentColor"/>
               </svg>
-              {{ customRangeLabel() }}
+              <span class="pf-adv-search-btn__label">Advanced</span>
+              <kbd class="pf-adv-search-btn__kbd" aria-hidden="true">⌘K</kbd>
             </button>
-            } @else {
-            <button type="button" class="pf-date-pill press" [class.pf-date-pill--on]="dateRange() === d.id"
-              (click)="setDateRange(d.id)">
-              {{ d.label }}
-            </button>
-            }
-            }
+          </div>
+          <!-- Date-range pills moved into the Advanced Search modal — date
+               filtering for historical lookups belongs there. The dashboard
+               below stays scoped to today's queue, which is what reception
+               works off of by default. -->
+        </div>
 
-            @if (calendarOpen()) {
-            <div class="pf-calbd" (click)="closeCalendar()"></div>
-            <div class="pf-cal" role="dialog" aria-label="Pick date range" (click)="$event.stopPropagation()">
-              <header class="pf-cal__hdr">
-                <button type="button" class="pf-cal__nav press" (click)="prevMonth()" aria-label="Previous month">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
-                </button>
-                <span class="pf-cal__title">{{ calMonth() | date:'MMMM y' }}</span>
-                <button type="button" class="pf-cal__nav press" (click)="nextMonth()" aria-label="Next month">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                </button>
-              </header>
-              <div class="pf-cal__dows">
-                @for (d of dows; track d) { <span>{{ d }}</span> }
-              </div>
-              <div class="pf-cal__grid">
-                @for (cell of calCells(); track cell.iso) {
-                <button type="button" class="pf-cal__cell press" [class.pf-cal__cell--out]="cell.outside"
-                  [class.pf-cal__cell--today]="cell.today" [class.pf-cal__cell--start]="cell.isStart"
-                  [class.pf-cal__cell--end]="cell.isEnd" [class.pf-cal__cell--in]="cell.inRange"
-                  [disabled]="cell.future" (click)="pickDay(cell.iso)">
-                  {{ cell.day }}
-                </button>
-                }
-              </div>
-              <footer class="pf-cal__foot">
-                <span class="pf-cal__hint">{{ customRangeHint() }}</span>
-                <button type="button" class="pf-cal__btn pf-cal__btn--ghost press" (click)="clearCustom()"
-                  [disabled]="!customStart()">
-                  Clear
-                </button>
-                <button type="button" class="pf-cal__btn pf-cal__btn--apply press" (click)="applyCustom()"
-                  [disabled]="!customStart()">
-                  Apply
-                </button>
-              </footer>
-            </div>
+        <!-- Toolbar row: alert chips (left) + date filter (right).
+             Date filter applies to all 3 panes via inRange() in the
+             visibleAppointments / visibleOrders / completedOrders
+             computeds. -->
+        <div class="pf-toolbar-row">
+          <div class="pf-alerts" aria-label="Exception queues">
+            @if (counts().ready > 0) {
+            <button type="button" class="pf-alert pf-alert--ready press" (click)="goToResults()"
+              aria-label="Open results page — reports ready for delivery">
+              <span class="pf-alert__dot"></span>
+              <span class="pf-alert__count">{{ counts().ready }}</span>
+              <span class="pf-alert__label">ready for delivery</span>
+            </button>
+            }
+            @if (counts().payments > 0) {
+            <button type="button" class="pf-alert pf-alert--payments press" (click)="openQueueDrawer('payments')"
+              aria-haspopup="dialog">
+              <span class="pf-alert__dot"></span>
+              <span class="pf-alert__count">{{ counts().payments }}</span>
+              <span class="pf-alert__label">payment{{ counts().payments === 1 ? '' : 's' }} due</span>
+            </button>
+            }
+          </div>
+
+          <div class="pf-date-pills" role="tablist" aria-label="Date range">
+            @for (opt of dateOptions; track opt.id) {
+              <button type="button" role="tab"
+                      class="pf-date-pill"
+                      [class.pf-date-pill--on]="dateRange() === opt.id"
+                      [attr.aria-selected]="dateRange() === opt.id"
+                      (click)="setDateRange(opt.id)">
+                {{ opt.label }}
+              </button>
             }
           </div>
         </div>
-
-        @if (counts().ready + counts().payments > 0) {
-        <div class="pf-alerts" aria-label="Exception queues">
-          @if (counts().ready > 0) {
-          <button type="button" class="pf-alert pf-alert--ready press" (click)="openQueueDrawer('ready')"
-            aria-haspopup="dialog">
-            <span class="pf-alert__dot"></span>
-            <span class="pf-alert__count">{{ counts().ready }}</span>
-            <span class="pf-alert__label">ready for pickup</span>
-          </button>
-          }
-          @if (counts().payments > 0) {
-          <button type="button" class="pf-alert pf-alert--payments press" (click)="openQueueDrawer('payments')"
-            aria-haspopup="dialog">
-            <span class="pf-alert__dot"></span>
-            <span class="pf-alert__count">{{ counts().payments }}</span>
-            <span class="pf-alert__label">payment{{ counts().payments === 1 ? '' : 's' }} due</span>
-          </button>
-          }
-        </div>
-        }
 
         <div class="pf-list-wrap">
-          <div class="pf-appt-split">
+          <!-- Two-pane layout: Appointments on the left, In-progress on the
+               right. The middle handle is mouse + touch draggable on
+               viewports >= 1024px; the resulting split percentage is saved
+               to localStorage so the chosen ratio sticks across sessions. -->
+          <div class="pf-appt-split"
+               #apptSplit
+               [style.--appt-a.%]="apptSplitPctA()"
+               [style.--appt-b.%]="apptSplitPctB()"
+               [class.pf-appt-split--dragging]="apptSplitDragging()">
             <section class="pf-appt-split__pane">
               <header class="pf-appt-split__hdr">
                 <span class="pf-appt-split__title">Appointments</span>
                 <span class="pf-appt-split__count">{{ visibleAppointments().length }}</span>
+                <a routerLink="/frontdesk/appointments" class="pf-appt-split__link" title="Open calendar">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <path d="M16 2v4M8 2v4M3 10h18"/>
+                  </svg>
+                  Calendar
+                </a>
               </header>
               @if (visibleAppointments().length === 0) {
               <p class="pf-empty">No appointments for this date range.</p>
@@ -394,11 +384,48 @@
               </ul>
             </section>
 
+            <div class="pf-appt-split__handle"
+                 role="separator"
+                 aria-orientation="vertical"
+                 aria-label="Resize Appointments / In progress"
+                 [attr.aria-valuenow]="apptSplitPctA()"
+                 aria-valuemin="15"
+                 aria-valuemax="85"
+                 tabindex="0"
+                 (mousedown)="startApptSplitDrag($event, 'a')"
+                 (touchstart)="startApptSplitDrag($event, 'a')"
+                 (keydown)="onApptSplitKey($event, 'a')"
+                 (dblclick)="resetApptSplit()">
+              <span class="pf-appt-split__grip" aria-hidden="true"></span>
+            </div>
+
             <section class="pf-appt-split__pane pf-appt-split__pane--ip">
               <header class="pf-appt-split__hdr">
                 <span class="pf-appt-split__title">In progress</span>
                 <span class="pf-appt-split__count" data-tone="active">{{ visibleOrders().length }}</span>
               </header>
+              @if (dispatchableSelected().length > 0) {
+              <div class="pf-bulk-bar">
+                <span class="pf-bulk-bar__count">
+                  {{ dispatchableSelected().length }} selected
+                </span>
+                <button type="button" class="pf-bulk-bar__btn" (click)="bulkDispatch()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14m-5-6 6 6-6 6"/>
+                  </svg>
+                  Mark dispatched
+                </button>
+                <button type="button" class="pf-bulk-bar__btn pf-bulk-bar__btn--primary" (click)="createDispatchPackage()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 22V13"/>
+                  </svg>
+                  Bundle as package · QR
+                </button>
+                <button type="button" class="pf-bulk-bar__clear" (click)="clearSelection()" aria-label="Clear">×</button>
+              </div>
+              }
               @if (visibleOrders().length === 0) {
               <p class="pf-empty">No orders in progress.</p>
               }
@@ -463,6 +490,64 @@
                     </div>
                   </div>
                 </li>
+                }
+              </ul>
+            </section>
+
+            <div class="pf-appt-split__handle"
+                 role="separator"
+                 aria-orientation="vertical"
+                 aria-label="Resize In progress / Completed"
+                 [attr.aria-valuenow]="apptSplitPctB()"
+                 aria-valuemin="15"
+                 aria-valuemax="85"
+                 tabindex="0"
+                 (mousedown)="startApptSplitDrag($event, 'b')"
+                 (touchstart)="startApptSplitDrag($event, 'b')"
+                 (keydown)="onApptSplitKey($event, 'b')"
+                 (dblclick)="resetApptSplit()">
+              <span class="pf-appt-split__grip" aria-hidden="true"></span>
+            </div>
+
+            <!-- ── Completed (3rd pane) ──────────────────────────
+                 Sits alongside Appointments + In Progress so reception
+                 sees the full lifecycle in one row. Hidden when empty. -->
+            <section class="pf-appt-split__pane pf-appt-split__pane--done">
+              <header class="pf-appt-split__hdr">
+                <span class="pf-appt-split__title">Completed</span>
+                <span class="pf-appt-split__count" data-tone="ok">{{ completedOrders().length }}</span>
+              </header>
+              @if (completedOrders().length === 0) {
+                <p class="pf-empty">Nothing ready for delivery yet.</p>
+              }
+              <ul class="pf-cards">
+                @for (o of completedOrders(); track o.id) {
+                  <li>
+                    <div class="pf-card pf-card--ip pf-card--completed"
+                         [attr.data-priority]="o.priority"
+                         (click)="openOrder(o)">
+                      <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                      <div class="min-w-0 flex-1">
+                        <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+                        <p class="pf-card__meta">
+                          #{{ o.id.slice(0, 8) }} · {{ statusLabel(o.status) }}
+                          · {{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }}
+                        </p>
+                      </div>
+                      <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                        @if (o.status === 'delivered') {
+                          <span class="pf-completed-chip pf-completed-chip--done">Delivered</span>
+                        } @else {
+                          <pf-chip tone="emerald" size="sm">Ready</pf-chip>
+                          <button type="button" class="pf-ghostbtn press"
+                                  [disabled]="downloadingReport()"
+                                  (click)="downloadReport(o)">
+                            @if (downloadingReport()) { Preparing… } @else { Download }
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </li>
                 }
               </ul>
             </section>
@@ -607,6 +692,19 @@
         </ol>
       </section>
     </div>
+    @if (so.status === 'validated' || so.status === 'partially_validated' || so.status === 'delivered' || so.status === 'completed') {
+    <footer class="pf-drawer__footer">
+      <button type="button" class="pf-drawer__reprint-btn press"
+              [disabled]="downloadingReport()"
+              (click)="downloadReport(so)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        {{ downloadingReport() ? 'Preparing PDF…' : 'Download report' }}
+      </button>
+    </footer>
+    }
     @if (so.status === 'billed') {
     <footer class="pf-drawer__footer">
       <button type="button" class="pf-drawer__reprint-btn press" (click)="reprintLabels(so)">
@@ -701,3 +799,70 @@
   </aside>
   }
 </section>
+
+<!-- Advanced patient search modal — rendered at root so it overlays the
+     landing without being clipped by the scroll container. The modal owns
+     its own state for filters and results; we only listen for picks +
+     close. Cmd/Ctrl+K toggles it via the host listener above. -->
+<pf-advanced-patient-search
+  [open]="advancedOpen()"
+  [preset]="advancedPreset()"
+  (closed)="closeAdvancedSearch()"
+  (picked)="openProfile($event)"
+  (newOrder)="newOrderFor($event)"
+  (bookAppointment)="bookAppointmentFor($event)"
+  (searchExecuted)="onAdvancedSearchExecuted($event)"></pf-advanced-patient-search>
+
+<!-- Dispatch package modal — opens after a successful "Bundle as
+     package · QR" action. Shows the code, QR (so the lab can scan it
+     directly off the screen / a print-out), and a manifest of orders
+     inside. The lab's receive screen accepts the code via scan or
+     manual entry. -->
+@if (activePackage(); as pkg) {
+<div class="pf-pkg-modal" role="dialog" aria-modal="true" aria-label="Dispatch package">
+  <div class="pf-pkg-modal__backdrop" (click)="closeDispatchPackage()"></div>
+  <div class="pf-pkg-modal__shell">
+    <header class="pf-pkg-modal__hdr">
+      <div>
+        <p class="pf-eyebrow">Dispatch package</p>
+        <p class="pf-pkg-modal__code">{{ pkg.code }}</p>
+      </div>
+      <button type="button" class="pf-pkg-modal__x" (click)="closeDispatchPackage()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+        </svg>
+      </button>
+    </header>
+    <div class="pf-pkg-modal__body">
+      <div class="pf-pkg-modal__qr">
+        <img [src]="activePackageQr()" width="240" height="240" alt="QR code for package"/>
+      </div>
+      <p class="pf-pkg-modal__hint">Lab scans this QR (or enters the code) to receive every order in one tap.</p>
+      <div class="pf-pkg-modal__actions">
+        <button type="button" class="pf-pkg-modal__btn" (click)="copyPackageCode()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Copy code
+        </button>
+      </div>
+      <div class="pf-pkg-modal__manifest">
+        <p class="pf-eyebrow mb-2">{{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }} inside</p>
+        <ul class="pf-pkg-modal__list">
+          @for (o of pkg.orders; track o.id) {
+            <li class="pf-pkg-modal__row">
+              <span class="pf-pkg-modal__row-name">{{ o.patientName }}</span>
+              <span class="pf-pkg-modal__row-meta">#{{ o.id.slice(0, 8) }} · {{ o.sampleCount }} sample{{ o.sampleCount === 1 ? '' : 's' }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+    <footer class="pf-pkg-modal__foot">
+      <button type="button" class="pf-pkg-modal__btn pf-pkg-modal__btn--primary" (click)="closeDispatchPackage()">Done</button>
+    </footer>
+  </div>
+</div>
+}
