@@ -10,7 +10,7 @@ export const environment = {
   production: true,
   isElectron: false,
   isMobile: true,
-  apiUrl: 'https://api.prefrontal.in',
+  apiUrl: 'https://lab-fetch.prefrontal.health',
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',

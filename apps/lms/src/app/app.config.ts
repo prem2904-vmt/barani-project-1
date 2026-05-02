@@ -3,7 +3,7 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import {
   HashLocationStrategy,
@@ -38,7 +38,14 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideRouter(appRoutes, withComponentInputBinding()),
+    // onSameUrlNavigation: 'reload' fixes the "click Frontdesk twice
+    // to load" bug — when reception is already on /frontdesk and taps
+    // the nav button again, the router re-fires NavigationEnd events
+    // so subscribers (refresh effects, queryParam handlers) re-run
+    // instead of silently no-op'ing.
+    provideRouter(appRoutes,
+      withComponentInputBinding(),
+      withRouterConfig({ onSameUrlNavigation: 'reload' })),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     { provide: APP_BASE_HREF, useValue: '/' },
     {

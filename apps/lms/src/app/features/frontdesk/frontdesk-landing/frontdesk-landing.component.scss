@@ -1,5 +1,9 @@
 :host {
   display: block;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 .pf-page {
@@ -393,6 +397,57 @@
 .pf-search-wrap {
   flex: 1;
   min-width: 260px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  /* Patient-search component owns the rest of the row width; the Advanced
+     button hugs the right edge but stays in normal flow so the wrap can
+     shrink on narrow viewports. */
+  > pf-patient-search { flex: 1; min-width: 0; }
+}
+
+.pf-adv-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 60px;
+  padding: 0 18px;
+  border-radius: 18px;
+  background: var(--glass-bg);
+  border: 1.5px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+.pf-adv-search-btn:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg-hover);
+  border-color: rgba(168, 85, 247, 0.5);
+}
+.pf-adv-search-btn svg { color: #c4b5fd; }
+.pf-adv-search-btn__kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  color: #d8b4fe;
+}
+
+@media (max-width: 720px) {
+  .pf-adv-search-btn { height: 52px; padding: 0 14px; }
+  .pf-adv-search-btn__label { display: none; }
+  .pf-adv-search-btn__kbd { display: none; }
 }
 
 .pf-date-pills {
@@ -1493,7 +1548,11 @@
 .pf-drawer {
   position: fixed;
   right: 0;
-  top: 0;
+  /* Top-strip is sticky-top with mt-2 (8px) + pt-3 (12px) + ~64px pill
+   * = ~84px total footprint on desktop. Start the drawer just below
+   * that so the top-nav (Home/Frontdesk/Lab/…) stays visible and
+   * clickable while an order panel is open. */
+  top: 5.5rem;
   bottom: 0;
   width: min(100%, 440px);
   background: var(--bg-primary);
@@ -1509,6 +1568,17 @@
   animation: pf-drawer-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* At viewports below the desktop breakpoint the floating bottom-nav pill
+ * is visible (top-strip's center nav is hidden there). Lift the drawer so
+ * its bottom edge sits ABOVE the nav pill — without this the drawer
+ * (z=45) covers the nav (z=30) and the user can't switch screens while
+ * an order is open. */
+@media (max-width: 1279px) {
+  .pf-drawer {
+    bottom: calc(var(--tab-nav-total-height, 0px) + 8px);
+  }
+}
+
 @media (max-width: 480px) {
   .pf-drawer {
     border-radius: 20px 0 0 20px;
@@ -1517,11 +1587,15 @@
 }
 
 /* ── Drawer header — matches top-strip glass pill ─────── */
+/* Top padding used to be calc(navbar-height + 28px) because the drawer
+ * started at top:0 and had to push its own content below the page nav.
+ * The drawer now starts at top: 5.5rem so the header just needs normal
+ * vertical breathing room. */
 .pf-drawer__hdr {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: calc(var(--navbar-height, 4rem) + 28px) 18px 22px;
+  padding: 18px 18px 18px;
   background: var(--header-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -2378,6 +2452,10 @@
 }
 
 /* ── Two-panel Appointments + In Progress layout ─────────── */
+/* Mobile/tablet: stacks single-column. Desktop: 3-column grid where the
+ * middle column IS the draggable handle. The left pane width is driven
+ * by the --appt-left CSS variable (set inline by the component, restored
+ * from localStorage). minmax keeps neither side from collapsing.        */
 .pf-appt-split {
   position: relative;
   display: grid;
@@ -2387,20 +2465,30 @@
 
 @media (min-width: 1024px) {
   .pf-appt-split {
-    grid-template-columns: 1fr 1fr;
+    /* Three panes (Appointments · In Progress · Completed) with two
+     * 8px draggable handles between them. Track widths come from the
+     * --appt-a / --appt-b CSS variables (percentages of the row
+     * width). Pane widths are: A | (B − A) | (100 − B). */
+    grid-template-columns:
+      calc(var(--appt-a, 33%) - 4px)
+      8px
+      calc(var(--appt-b, 66%) - var(--appt-a, 33%) - 8px)
+      8px
+      calc(100% - var(--appt-b, 66%) - 4px);
+    gap: 0;
+    /* Cap the row to a viewport-relative height so each pane has
+     * a finite area to scroll inside. The page itself can still
+     * scroll for content above (header) and below (kpi strip). */
+    height: calc(100dvh - 280px);
+    min-height: 420px;
   }
 
-  /* Full-height divider — pseudo-element pinned to the column gap so the
-   * line spans the entire pane row, not just the content of one side. */
-  .pf-appt-split::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: calc(50% - 0.5px);
-    width: 1px;
-    background: var(--glass-border);
-    pointer-events: none;
+  /* Mid-drag: kill text selection + show a column-resize cursor on
+   * the whole grid so the user doesn't lose feedback if their mouse
+   * drifts off the 8px handle. */
+  .pf-appt-split--dragging {
+    cursor: col-resize;
+    user-select: none;
   }
 }
 
@@ -2411,13 +2499,93 @@
   gap: 8px;
 }
 
-.pf-appt-split__pane--ip {
-  padding-left: 0;
+@media (min-width: 1024px) {
+  /* Symmetric padding: every pane has 8px on each inner side, so the
+   * 8px draggable handle sits inside a 24px breathing strip
+   * (8 pane + 8 handle + 8 pane). Outer edges of the first/last pane
+   * hug the row edge so the row uses its full width. */
+  .pf-appt-split__pane            { padding: 0 8px; }
+  .pf-appt-split__pane:first-child { padding-left: 0; }
+  .pf-appt-split__pane--done       { padding-right: 0; }
+
+  /* Each pane is its own scroll container: header stays put, the
+   * cards list flexes to the remaining height and scrolls. */
+  .pf-appt-split__pane {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .pf-appt-split__pane > .pf-appt-split__hdr,
+  .pf-appt-split__pane > .pf-bulk-bar,
+  .pf-appt-split__pane > .pf-empty {
+    flex-shrink: 0;
+  }
+  .pf-appt-split__pane > .pf-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+}
+
+/* ── Handle ───────────────────────────────────────────────────────────
+   * The handle column is 8px wide and centred. A 1px divider spans the
+   * full height; on hover/drag it brightens and a "grip" pill appears
+   * to confirm the affordance. Hidden in mobile/tablet stacks.         */
+.pf-appt-split__handle {
+  display: none;
 }
 
 @media (min-width: 1024px) {
-  .pf-appt-split__pane--ip {
-    padding-left: 16px;
+  .pf-appt-split__handle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: col-resize;
+    /* Bigger hit area than the visual line so dragging is forgiving. */
+    width: 8px;
+    touch-action: none;
+  }
+
+  .pf-appt-split__handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    background: var(--glass-border);
+    transition: background 0.15s ease, width 0.15s ease;
+  }
+
+  .pf-appt-split__handle:hover::before,
+  .pf-appt-split__handle:focus-visible::before,
+  .pf-appt-split--dragging .pf-appt-split__handle::before {
+    background: rgba(168, 85, 247, 0.6);
+    width: 2px;
+  }
+
+  .pf-appt-split__grip {
+    position: relative;
+    width: 4px;
+    height: 32px;
+    border-radius: 9999px;
+    background: var(--glass-border);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+
+  .pf-appt-split__handle:hover .pf-appt-split__grip,
+  .pf-appt-split__handle:focus-visible .pf-appt-split__grip,
+  .pf-appt-split--dragging .pf-appt-split__grip {
+    opacity: 1;
+    background: rgba(168, 85, 247, 0.7);
+  }
+
+  .pf-appt-split__handle:focus-visible {
+    outline: none;
   }
 }
 
@@ -2453,6 +2621,29 @@
   border-color: rgba(217, 119, 6, 0.6);
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);
+}
+
+/* "Calendar" link in the Appointments pane header — pushes to the new
+ * full calendar route. Sits flush right via margin-left:auto. */
+.pf-appt-split__link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.pf-appt-split__link:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: rgba(168, 85, 247, 0.4);
 }
 
 /* In-progress card — checkbox + avatar + body + chip + action */
@@ -2713,7 +2904,8 @@
 
 .pf-q-drawer {
   position: fixed;
-  top: var(--navbar-height, 4rem);
+  /* Same offset as .pf-drawer so the top-nav remains accessible. */
+  top: 5.5rem;
   right: 0;
   bottom: 0;
   z-index: 95;
@@ -2724,6 +2916,11 @@
   border-left: 1px solid var(--glass-border);
   box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
   animation: pf-q-drawer-in 0.22s ease-out;
+}
+
+/* Match the order drawer — leave room for the floating bottom-nav pill. */
+@media (max-width: 1279px) {
+  .pf-q-drawer { bottom: calc(var(--tab-nav-total-height, 0px) + 8px); }
 }
 
 @keyframes pf-q-drawer-in {
@@ -2812,4 +3009,243 @@
   flex: 1;
   overflow-y: auto;
   padding: 14px 18px 24px;
+}
+
+/* ── Toolbar row above the 3-pane split ────────────────────
+ * Left = alert chips ("ready for delivery", "payments due").
+ * Right = date filter pills (Today / 7 days / Custom). The
+ * pills drive _dateRange via setDateRange(); all three panes
+ * filter through inRange() so flipping a pill re-scopes
+ * Appointments + In Progress + Completed in one move. */
+.pf-toolbar-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pf-toolbar-row .pf-alerts {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1 1 auto; min-width: 0;
+}
+.pf-date-pills {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  flex: 0 0 auto;
+}
+.pf-date-pill {
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pf-date-pill:hover { color: var(--text-primary); }
+.pf-date-pill--on {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
+}
+
+/* ── Completed pane card ────────────────────────────────────
+ * Cards inside the Completed split pane (3rd column on lg+).
+ * Compact row with avatar, patient name, and Ready/Download or
+ * Delivered chip. */
+.pf-card--completed {
+  border-left: 3px solid #10b981;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.pf-card--completed:hover { filter: brightness(1.06); }
+.pf-card__name {
+  margin: 0;
+  font-size: 13.5px; font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-card__meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-card__actions {
+  display: flex; align-items: center; gap: 6px;
+  flex: 0 0 auto;
+}
+.pf-completed-chip {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.pf-completed-chip--done {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+/* ── Bulk action bar (in In-Progress pane) ────────────────── */
+.pf-bulk-bar {
+  margin: 8px 0;
+  padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
+  border: 1px solid rgba(168, 85, 247, 0.40);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+.pf-bulk-bar__count {
+  font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: #c4b5fd;
+}
+.pf-bulk-bar__btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  color: var(--text-primary);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.pf-bulk-bar__btn:hover { background: var(--bg-hover); }
+.pf-bulk-bar__btn--primary {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white; border-color: transparent;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+}
+.pf-bulk-bar__btn--primary:hover { filter: brightness(1.08); }
+.pf-bulk-bar__clear {
+  margin-left: auto;
+  width: 24px; height: 24px;
+  background: transparent; border: 0;
+  color: var(--text-secondary); cursor: pointer;
+  font-size: 18px; line-height: 1;
+  border-radius: 50%;
+}
+.pf-bulk-bar__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ── Dispatch package modal ──────────────────────────────── */
+.pf-pkg-modal {
+  position: fixed; inset: 0; z-index: 1100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 5vh 24px 24px;
+}
+.pf-pkg-modal__backdrop {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(900px 600px at 50% 100%, rgba(124, 58, 237, 0.18), transparent 60%),
+    rgba(5, 5, 15, 0.72);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+.pf-pkg-modal__shell {
+  position: relative;
+  width: 100%; max-width: 480px;
+  max-height: 86dvh;
+  display: flex; flex-direction: column;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+.pf-pkg-modal__hdr {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.pf-pkg-modal__code {
+  margin: 4px 0 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 22px; font-weight: 700;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  letter-spacing: 0.04em;
+}
+.pf-pkg-modal__x {
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pf-pkg-modal__x:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--glass-border); }
+
+.pf-pkg-modal__body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 18px 22px 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.pf-pkg-modal__qr {
+  padding: 14px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+.pf-pkg-modal__qr img { display: block; border-radius: 8px; }
+.pf-pkg-modal__hint {
+  margin: 0;
+  font-size: 12.5px; color: var(--text-secondary);
+  text-align: center;
+}
+.pf-pkg-modal__actions {
+  display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+}
+.pf-pkg-modal__btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  color: var(--text-primary);
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.pf-pkg-modal__btn:hover { background: var(--bg-hover); }
+.pf-pkg-modal__btn--primary {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white; border-color: transparent;
+  padding: 10px 18px;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.32);
+}
+.pf-pkg-modal__btn--primary:hover { filter: brightness(1.08); }
+
+.pf-pkg-modal__manifest {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+}
+.pf-pkg-modal__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-pkg-modal__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.pf-pkg-modal__row-name { font-weight: 600; color: var(--text-primary); }
+.pf-pkg-modal__row-meta {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px; color: var(--text-tertiary);
+}
+.pf-pkg-modal__foot {
+  padding: 14px 22px;
+  border-top: 1px solid var(--glass-border);
+  display: flex; justify-content: flex-end;
 }

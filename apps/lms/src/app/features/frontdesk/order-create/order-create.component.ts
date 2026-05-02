@@ -12,6 +12,14 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 
 type Priority = 'Normal' | 'Urgent';
 
+/** Slimmed view of the patient-history row used for repeat-order seeding.
+ *  Mirrors the enriched shape returned by GET /api/patients/{id}. */
+interface HistoryRow {
+  id: string;
+  createdAt: string;
+  samples?: Array<{ tests?: Array<{ testId?: string; test?: { id?: string } }> }>;
+}
+
 @Component({
   selector: 'pf-order-create',
   standalone: true,
@@ -271,6 +279,39 @@ type Priority = 'Normal' | 'Urgent';
           }
         </ul>
 
+        @if (packageSuggestions().length > 0) {
+          <div class="pf-pkg-suggest">
+            <header class="pf-pkg-suggest__hdr">
+              <span class="pf-pkg-suggest__icon" aria-hidden="true">★</span>
+              <span>Save with a package</span>
+            </header>
+            <p class="pf-pkg-suggest__sub">
+              These bundles include everything in your cart at a lower price.
+            </p>
+            <ul class="pf-pkg-suggest__list">
+              @for (s of packageSuggestions(); track s.package.id) {
+                <li class="pf-pkg-suggest__row">
+                  <div class="min-w-0 flex-1">
+                    <p class="pf-pkg-suggest__name">{{ s.package.name }}</p>
+                    <p class="pf-pkg-suggest__meta">
+                      Includes {{ s.memberCount }} test{{ s.memberCount === 1 ? '' : 's' }}
+                      <span class="pf-pkg-suggest__sep">·</span>
+                      <span class="pf-pkg-suggest__strike">{{ s.individualSum | inr }}</span>
+                      <span class="pf-pkg-suggest__price">{{ s.package.price | inr }}</span>
+                    </p>
+                  </div>
+                  @if (s.savings > 0) {
+                    <span class="pf-pkg-suggest__save">Save {{ s.savings | inr }}</span>
+                  }
+                  <button type="button" class="pf-pkg-suggest__apply press" (click)="applyPackage(s)">
+                    Apply
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
         <div class="pf-cart-totals">
           <div class="pf-cart-line">
             <span>Subtotal</span>
@@ -286,6 +327,16 @@ type Priority = 'Normal' | 'Urgent';
           </div>
         </div>
 
+        @if (tatLabel()) {
+          <p class="pf-cart-tat">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+            <span>{{ tatLabel() }}</span>
+          </p>
+        }
+
         <button type="button"
                 class="pf-proceed press"
                 (click)="submit()"
@@ -295,6 +346,24 @@ type Priority = 'Normal' | 'Urgent';
             <path d="M5 12h14m-5-6 6 6-6 6"/>
           </svg>
         </button>
+
+        <div class="pf-cart-draftrow">
+          <button type="button"
+                  class="pf-cart-draft press"
+                  (click)="saveDraft()"
+                  [disabled]="!patient() || selected().length === 0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>
+            </svg>
+            Save as draft
+          </button>
+          @if (hasDraft()) {
+            <button type="button" class="pf-cart-draft pf-cart-draft--ghost press" (click)="discardDraft()">
+              Discard draft
+            </button>
+          }
+        </div>
 
         @if (priority() !== 'Normal') {
           <div class="pf-cart-badge-wrap">
@@ -1008,6 +1077,80 @@ type Priority = 'Normal' | 'Urgent';
     }
     .pf-cart-remove:hover { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
 
+    /* ── Package suggestion banner ─────────────────────────── */
+    .pf-pkg-suggest {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
+      border: 1px solid rgba(168, 85, 247, 0.40);
+    }
+    .pf-pkg-suggest__hdr {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #c4b5fd;
+    }
+    .pf-pkg-suggest__icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white; border-radius: 50%; font-size: 11px;
+    }
+    .pf-pkg-suggest__sub {
+      margin: 4px 0 10px;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+    .pf-pkg-suggest__list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .pf-pkg-suggest__row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+    }
+    .pf-pkg-suggest__name {
+      margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-pkg-suggest__meta {
+      margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);
+      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+    }
+    .pf-pkg-suggest__sep { opacity: 0.6; }
+    .pf-pkg-suggest__strike {
+      text-decoration: line-through; opacity: 0.7;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-pkg-suggest__price {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700; color: var(--text-primary);
+    }
+    .pf-pkg-suggest__save {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      background: rgba(16, 185, 129, 0.18);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      border-radius: 9999px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    }
+    .pf-pkg-suggest__apply {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white;
+      border: 0; border-radius: 9999px;
+      font-size: 11.5px; font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(124, 58, 237, 0.32);
+    }
+    .pf-pkg-suggest__apply:hover { filter: brightness(1.08); }
+
     .pf-cart-totals {
       padding-top: 12px;
       border-top: 1px solid var(--border-muted);
@@ -1074,6 +1217,37 @@ type Priority = 'Normal' | 'Urgent';
       background: rgba(249, 115, 22, 0.14);
       border: 1px solid rgba(249, 115, 22, 0.4);
     }
+
+    /* Estimated time-to-report next to the cart total */
+    .pf-cart-tat {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 10px;
+      padding: 6px 10px;
+      background: rgba(59, 130, 246, 0.10);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: 9999px;
+      color: #93c5fd;
+      font-size: 11.5px; font-weight: 600;
+    }
+
+    /* Save / discard draft action row */
+    .pf-cart-draftrow {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    .pf-cart-draft {
+      flex: 1;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-cart-draft:hover:not([disabled]) { background: var(--bg-hover); }
+    .pf-cart-draft[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .pf-cart-draft--ghost { flex: 0 0 auto; color: var(--text-secondary); }
   `]
 })
 export class OrderCreateComponent implements OnInit {
@@ -1090,6 +1264,16 @@ export class OrderCreateComponent implements OnInit {
   private readonly _priority = signal<Priority>('Normal');
   private readonly _query = signal<string>('');
   private readonly _cartOpen = signal<boolean>(false);
+
+  /** Per-patient localStorage key for draft order carts. We keep one
+   *  draft per patient so reception can resume any half-built order
+   *  on the same browser. Drafts older than 7 days are dropped on
+   *  restore. */
+  private readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
+  private readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  /** UI signal for "draft was just saved" — drives the toast badge. */
+  private readonly _hasDraft = signal<boolean>(false);
+  readonly hasDraft = this._hasDraft.asReadonly();
 
   readonly patient = this._patient.asReadonly();
   readonly saving = this._saving.asReadonly();
@@ -1120,6 +1304,82 @@ export class OrderCreateComponent implements OnInit {
   readonly gst = computed(() => Math.round(this.subtotal() * 0.18));
   readonly total = computed(() => this.subtotal() + this.gst());
 
+  /** Slowest test in the cart drives the report ETA. Packages count as
+   *  the max of their member tests' tatHours. */
+  readonly tatHours = computed<number>(() => {
+    const all = this._tests();
+    const sel = this._selected();
+    let max = 0;
+    for (const id of sel) {
+      const t = all.find(x => x.id === id);
+      if (!t) continue;
+      if (t.type === 'package') {
+        const memberIds = parsePackageMembers(t.parameters);
+        for (const mid of memberIds) {
+          const mt = all.find(x => x.id === mid);
+          if (mt && Number.isFinite(mt.tatHours) && mt.tatHours > max) max = mt.tatHours;
+        }
+      } else if (Number.isFinite(t.tatHours) && t.tatHours > max) {
+        max = t.tatHours;
+      }
+    }
+    return max;
+  });
+  readonly tatLabel = computed<string>(() => {
+    const h = this.tatHours();
+    if (h <= 0) return '';
+    if (h < 24) return `Report ready in ≈ ${h}h`;
+    const d = Math.round(h / 24);
+    return `Report ready in ≈ ${d} day${d === 1 ? '' : 's'}`;
+  });
+
+  /**
+   * Package suggestions — when the cart contains individual tests that
+   * are also bundled inside one or more packages, suggest the package(s)
+   * that COVER ALL the picked individual tests so the patient saves
+   * money. Sorted by package price ascending (cheapest deal first).
+   *
+   * Implementation: each package stores its member test ids inside the
+   * `Parameters` JSON as { items: [{ testId: '...' }] } — same shape the
+   * backend's OrderService.ParsePackageChildIds reads.
+   */
+  readonly packageSuggestions = computed<PackageSuggestion[]>(() => {
+    const sel = new Set(this._selected());
+    if (sel.size === 0) return [];
+    const all = this._tests();
+    const out: PackageSuggestion[] = [];
+    for (const pkg of all) {
+      if (pkg.type !== 'package' || !pkg.isActive) continue;
+      // Skip if the package is already in the cart.
+      if (sel.has(pkg.id)) continue;
+      const memberIds = parsePackageMembers(pkg.parameters);
+      if (memberIds.length === 0) continue;
+      const memberSet = new Set(memberIds);
+      // Only suggest if EVERY selected individual test is inside this
+      // package. Filter out package-typed selections (rare edge case).
+      const covered = [...sel].filter(id => {
+        const t = all.find(x => x.id === id);
+        return t && t.type !== 'package';
+      });
+      if (covered.length === 0) continue;
+      const allCovered = covered.every(id => memberSet.has(id));
+      if (!allCovered) continue;
+      const individualSum = covered
+        .map(id => all.find(t => t.id === id)?.price ?? 0)
+        .reduce((a, b) => a + b, 0);
+      const savings = Math.max(0, individualSum - pkg.price);
+      out.push({
+        package: pkg,
+        coveredIds: covered,
+        memberCount: memberIds.length,
+        individualSum,
+        savings
+      });
+    }
+    // Cheapest-first per the user's preference: low value → high value.
+    return out.sort((a, b) => a.package.price - b.package.price);
+  });
+
   ngOnInit() {
     this.api.get<Test[]>('/api/tests/').subscribe({
       next: l => this._tests.set(l ?? []),
@@ -1130,11 +1390,130 @@ export class OrderCreateComponent implements OnInit {
     // from a patient profile), pre-attach. Otherwise the inline picker
     // handles selection in-page.
     const pid = this.route.snapshot.queryParamMap.get('patientId');
+    const fromOrderId = this.route.snapshot.queryParamMap.get('fromOrderId');
     if (pid) {
-      this.api.get<{ patient: Patient; history: unknown[] }>(`/api/patients/${pid}`).subscribe({
-        next: res => this._patient.set(res.patient),
+      // The /api/patients/{id} response is now an enriched shape with bills
+      // and reports per history row, but for this screen we still only need
+      // the patient object — destructure with `unknown` history to stay
+      // schema-tolerant.
+      this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
+        next: res => {
+          this._patient.set(res.patient);
+          // 1) Try restoring a saved draft for this patient. If found,
+          //    restore the cart + priority from localStorage.
+          // 2) Otherwise, if fromOrderId is set, preselect from the
+          //    prior order (Repeat flow).
+          const restored = this.restoreDraftFor(pid);
+          if (!restored && fromOrderId) {
+            const prior = (res.history ?? []).find(h => h.id === fromOrderId);
+            if (prior) this.preselectFromOrder(prior);
+          }
+        },
         error: () => this.toasts.error('Could not load patient')
       });
+    }
+  }
+
+  /** Save the current cart to localStorage under the patient's id.
+   *  No-op when there's no patient or nothing in the cart. */
+  saveDraft() {
+    const p = this._patient();
+    if (!p) { this.toasts.warning('Pick a patient first'); return; }
+    if (this._selected().length === 0) { this.toasts.info('Cart is empty — nothing to save'); return; }
+    try {
+      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
+        savedAt: Date.now(),
+        priority: this._priority(),
+        testIds: this._selected()
+      }));
+      this._hasDraft.set(true);
+      this.toasts.success('Saved as draft');
+    } catch {
+      this.toasts.error('Could not save draft (storage full?)');
+    }
+  }
+
+  /** Discard a saved draft for the current patient. */
+  discardDraft() {
+    const p = this._patient();
+    if (!p) return;
+    try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
+    this._hasDraft.set(false);
+    this.toasts.info('Draft discarded');
+  }
+
+  /** Restore the saved draft (if any) for the supplied patient id.
+   *  Returns true if a non-stale draft was applied. */
+  private restoreDraftFor(patientId: string): boolean {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + patientId); } catch { return false; }
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as { savedAt?: number; priority?: Priority; testIds?: string[] };
+      if (!parsed?.savedAt || Date.now() - parsed.savedAt > this.DRAFT_TTL_MS) {
+        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId); } catch { /* ignore */ }
+        return false;
+      }
+      const ids = (parsed.testIds ?? []).filter(id => typeof id === 'string');
+      if (ids.length === 0) return false;
+      this._selected.set(ids);
+      if (parsed.priority) this._priority.set(parsed.priority);
+      this._hasDraft.set(true);
+      this.toasts.info('Draft restored');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Repeat-from-prior-order helper. Pulls every test id that appeared on
+   * the prior order's samples, intersects with the current tenant's
+   * active test catalog so we don't preselect a test that's been
+   * deactivated since, then sets the cart. Surfaces a toast summarising
+   * what carried over and what was dropped so the user has a clear
+   * audit trail.
+   */
+  private preselectFromOrder(prior: HistoryRow) {
+    const want = new Set<string>();
+    for (const s of prior.samples ?? []) {
+      for (const t of s.tests ?? []) {
+        const testId = (t as { test?: { id?: string }; testId?: string }).testId
+                    ?? (t as { test?: { id?: string }; testId?: string }).test?.id;
+        if (testId) want.add(testId);
+      }
+    }
+    if (want.size === 0) {
+      this.toasts.warning('Repeated order had no tests');
+      return;
+    }
+    // Intersect with the catalog we just loaded so removed tests don't
+    // ride along. The catalog list arrives async — re-run this once
+    // _tests fills if it isn't there yet.
+    const apply = () => {
+      const ids = Array.from(want).filter(id => this._tests().some(x => x.id === id));
+      this._selected.set(ids);
+      const date = new Date(prior.createdAt);
+      const human = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      const dropped = want.size - ids.length;
+      if (dropped > 0) {
+        this.toasts.warning(`Repeated from ${human}: ${ids.length} carried over, ${dropped} no longer available`);
+      } else {
+        this.toasts.success(`Repeated from ${human}: ${ids.length} test${ids.length === 1 ? '' : 's'} added`);
+      }
+    };
+    if (this._tests().length > 0) {
+      apply();
+    } else {
+      // Re-attempt once tests load. Cheaper than wiring an effect for a
+      // one-shot deep-link.
+      const interval = setInterval(() => {
+        if (this._tests().length > 0) {
+          clearInterval(interval);
+          apply();
+        }
+      }, 150);
+      setTimeout(() => clearInterval(interval), 5000);
     }
   }
 
@@ -1143,6 +1522,18 @@ export class OrderCreateComponent implements OnInit {
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   isSelected(id: string): boolean { return this._selected().includes(id); }
+
+  /** Swap the matching individual tests out of the cart and add the
+   *  package in their place. The receptionist accepted the suggestion. */
+  applyPackage(s: PackageSuggestion) {
+    this._selected.update(cur => {
+      const dropped = new Set(s.coveredIds);
+      const next = cur.filter(id => !dropped.has(id));
+      if (!next.includes(s.package.id)) next.push(s.package.id);
+      return next;
+    });
+    this.toasts.success(`Switched to ${s.package.name} — saving ₹${s.savings}`);
+  }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
   toggleTest(t: Test) {
@@ -1180,16 +1571,26 @@ export class OrderCreateComponent implements OnInit {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
 
+    // If we arrived from an appointment check-in (?appointmentId=…),
+    // tag the order so it traces back. Source flips to 'appointment'
+    // so reports/queries can distinguish post-check-in orders from
+    // pure walk-ins.
+    const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
     this._saving.set(true);
     this.api.post<Order>('/api/orders/', {
       patientId: p.id,
       priority: this._priority(),
-      source: 'walkin',
+      source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
-      testIds: this._selected()
+      testIds: this._selected(),
+      metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
     }).subscribe({
       next: order => {
         this._saving.set(false);
+        // Order persisted — drop any saved draft for this patient.
+        const pid = p.id;
+        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + pid); } catch { /* ignore */ }
+        this._hasDraft.set(false);
         // Admin-controlled fork: if frontdesk collects payment, jump into
         // the Billing tab with the new order preselected; otherwise raise
         // a billing request and reset for the next patient/order.
@@ -1210,4 +1611,36 @@ export class OrderCreateComponent implements OnInit {
   }
 
   back() { this.router.navigateByUrl('/frontdesk'); }
+}
+
+/** Suggestion shown above the cart when picked individual tests are
+ *  available as part of a cheaper package. */
+interface PackageSuggestion {
+  package: Test;
+  /** Selected individual-test ids that this package contains. */
+  coveredIds: string[];
+  /** How many tests the package contains in total (covered + extras). */
+  memberCount: number;
+  /** Sum of the covered individual tests' prices (without GST). */
+  individualSum: number;
+  /** individualSum − package.price, clamped at 0. */
+  savings: number;
+}
+
+/** Parse the package's `Parameters` JSON to extract member test ids.
+ *  Mirrors the backend's OrderService.ParsePackageChildIds shape:
+ *    { items: [{ testId: '<guid>' }, ...] }
+ *  Returns [] for any malformed/missing payload — safe to call on
+ *  every test, package or not. */
+function parsePackageMembers(parametersJson: string | undefined | null): string[] {
+  if (!parametersJson) return [];
+  try {
+    const parsed = JSON.parse(parametersJson) as { items?: Array<{ testId?: string }> };
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    return items
+      .map(it => (it?.testId ?? '').trim())
+      .filter(id => id.length > 0);
+  } catch {
+    return [];
+  }
 }

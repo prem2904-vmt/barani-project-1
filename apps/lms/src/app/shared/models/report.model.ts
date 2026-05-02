@@ -13,6 +13,11 @@ export interface Report {
   deliveryNote?: string;
   generatedBy?: string;
   createdAt: string;
+  /** EF eager-loads Order.Patient on the queue endpoint, so the JSON
+   *  carries a nested patient under order. Typed loosely so we can
+   *  read displayName for the queue search/list without forcing the
+   *  full Patient shape on every consumer of Report. */
+  order?: { id: string; createdAt?: string; patient?: { displayName?: string; phone?: string } | null };
 }
 
 export interface ReportTemplate {

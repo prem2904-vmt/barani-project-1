@@ -1,10 +1,14 @@
+import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
+import { Test } from '../../../shared/models/test.model';
+import { generateInvoicePdf } from './invoice-pdf';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -18,6 +22,23 @@ interface PayModeDef {
   label: string;
   hint: string;
   iconPath: string;
+}
+
+/** Slim shape of /api/vendors used by the billing wallet picker. */
+interface VendorWallet {
+  id: string;
+  name: string;
+  code?: string;
+  totalCredit: number;
+  usedCredit: number;
+  balance: number;
+  isActive: boolean;
+}
+
+/** Slim shape of /api/billing/config used to read the
+ *  FrontdeskCanSeeWalletBalance flag. */
+interface BillingConfigSlice {
+  frontdeskCanSeeWalletBalance: boolean;
 }
 
 const PAY_MODES: PayModeDef[] = [
@@ -65,6 +86,19 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
             <path d="M12 17h.01"/>
           </svg>
         </label>
+        <button actions type="button" class="pf-toolbar-btn pf-no-print"
+                (click)="saveDraft()" [disabled]="paid() || !bill()"
+                title="Save as draft (resume later)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>
+          </svg>
+          Save draft
+        </button>
+        @if (hasDraft()) {
+          <button actions type="button" class="pf-toolbar-btn pf-toolbar-btn--ghost pf-no-print"
+                  (click)="discardDraft()" title="Discard saved draft">Discard</button>
+        }
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -76,19 +110,28 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       </pf-screen-header>
 
       @if (bill(); as b) {
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div class="pf-bill-grid">
 
           <!-- LEFT: invoice preview -->
-          <div class="space-y-5">
-            <pf-tile tone="default" padding="lg" class="block">
+          <div class="pf-bill-col">
+            <pf-tile tone="default" padding="lg" class="pf-bill-tile block">
               <div class="flex items-center justify-between mb-4">
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
                   <p class="pf-bill-no">{{ invoiceNumber() }}</p>
                 </div>
-                <div class="text-right">
-                  <p class="pf-eyebrow">Due</p>
-                  <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
+                <div class="flex items-center gap-3">
+                  <button type="button" class="pf-bill-print-icon pf-no-print"
+                          (click)="printInvoice()" aria-label="Download invoice PDF" title="Download invoice PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
+                    </svg>
+                  </button>
+                  <div class="text-right">
+                    <p class="pf-eyebrow">Due</p>
+                    <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
+                  </div>
                 </div>
               </div>
 
@@ -116,17 +159,27 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 <div class="pf-bill-line pf-bill-line--discount">
                   <span>Discount</span>
                   <div class="pf-discount">
+                    <div class="pf-discount__kind" role="tablist" aria-label="Discount unit">
+                      <button type="button" role="tab"
+                              [class.pf-discount__kind--on]="discountKind() === 'flat'"
+                              (click)="setDiscountKind('flat')">₹</button>
+                      <button type="button" role="tab"
+                              [class.pf-discount__kind--on]="discountKind() === 'percent'"
+                              (click)="setDiscountKind('percent')">%</button>
+                    </div>
                     <input type="number"
                            inputmode="numeric"
                            min="0"
                            step="1"
-                           [attr.max]="b.subTotal + b.totalTax"
+                           [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
                            (keydown)="blockDiscountChars($event)"
                            class="pf-discount__input"
                            placeholder="0"/>
-                    <span class="pf-discount__rupee">₹</span>
+                    @if (discountKind() === 'percent' && discountNum() > 0) {
+                      <span class="pf-discount__resolved">−{{ discountNum() | inr }}</span>
+                    }
                   </div>
                 </div>
                 <div class="pf-bill-line pf-bill-line--total">
@@ -134,44 +187,56 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   <span class="tabular-nums">{{ effectivePayable() | inr }}</span>
                 </div>
               </div>
-            </pf-tile>
 
-            <!-- Payment mode grid -->
-            <div>
-              <p class="pf-eyebrow mb-3 px-1">Payment mode</p>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                @for (m of modes; track m.id) {
-                  <button type="button"
-                          (click)="setMode(m.id)"
-                          class="pf-mode"
-                          [class.pf-mode--on]="mode() === m.id">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path [attr.d]="m.iconPath"/>
-                    </svg>
-                    <span class="pf-mode__label">{{ m.label }}</span>
-                    <span class="pf-mode__hint">{{ m.hint }}</span>
-                  </button>
-                }
-              </div>
-            </div>
+              @if (tatLabel()) {
+                <p class="pf-bill-tat-inline">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                  </svg>
+                  {{ tatLabel() }}
+                </p>
+              }
+            </pf-tile>
           </div>
 
-          <!-- RIGHT: per-mode payment panel -->
-          <div>
-            <pf-tile tone="default" padding="lg" class="block min-h-[540px]">
+          <!-- RIGHT: unified payment tile — mode picker on top, the
+               per-mode panel below, and Confirm at the bottom. One
+               box instead of three. Hidden when printing the invoice.
+               Marked --noscroll so contents must fit; the per-mode
+               panel uses flex / smaller controls to stay inside. -->
+          <div class="pf-bill-col pf-no-print">
+            <pf-tile tone="default" padding="lg" class="pf-bill-tile pf-bill-tile--noscroll block">
+              <div class="pf-pay-modes">
+                <p class="pf-eyebrow mb-2">Payment mode</p>
+                <div class="pf-pay-modes__grid">
+                  @for (m of modes; track m.id) {
+                    <button type="button"
+                            (click)="setMode(m.id)"
+                            class="pf-mode pf-mode--compact"
+                            [class.pf-mode--on]="mode() === m.id">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path [attr.d]="m.iconPath"/>
+                      </svg>
+                      <span class="pf-mode__label">{{ m.label }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+              <div class="pf-pay-divider"></div>
+              <div class="pf-pay-body">
               @switch (mode()) {
                 @case ('upi') {
-                  <div class="flex flex-col items-center text-center py-6">
-                    <p class="pf-eyebrow mb-2">Scan to pay</p>
-                    <p class="pf-big-amount mb-6">{{ effectivePayable() | inr }}</p>
+                  <div class="flex flex-col items-center text-center py-2">
+                    <p class="pf-eyebrow mb-1">Scan to pay</p>
+                    <p class="pf-big-amount mb-2">{{ effectivePayable() | inr }}</p>
                     <div class="pf-qr">
-                      <div class="pf-qr__grid">
-                        @for (i of qrCells; track i) {
-                          <span class="pf-qr__cell" [style.background]="qrFill(i)"></span>
-                        }
-                      </div>
+                      <img class="pf-qr__img" [src]="upiQrUrl()"
+                           width="180" height="180"
+                           alt="Scan to pay via UPI"/>
                     </div>
-                    <p class="pf-qr__hint mt-5">prefrontal&#64;upi · Chennai Main</p>
+                    <p class="pf-qr__hint mt-2">prefrontal&#64;upi · Chennai Main</p>
                     <p class="pf-live">
                       <span class="pf-live__dot"></span>
                       Listening for payment…
@@ -179,9 +244,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </div>
                 }
                 @case ('card') {
-                  <div class="flex flex-col items-center text-center py-6">
-                    <p class="pf-eyebrow mb-2">Tap or insert card</p>
-                    <p class="pf-big-amount mb-10">{{ effectivePayable() | inr }}</p>
+                  <div class="flex flex-col items-center text-center py-2">
+                    <p class="pf-eyebrow mb-1">Tap or insert card</p>
+                    <p class="pf-big-amount mb-3">{{ effectivePayable() | inr }}</p>
                     <div class="pf-card-mock">
                       <span class="pf-card-chip"></span>
                       <span class="pf-card-wave"></span>
@@ -197,11 +262,15 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </div>
                 }
                 @case ('cash') {
-                  <div>
-                    <p class="pf-eyebrow mb-2">Cash tendered</p>
-                    <p class="pf-big-amount mb-4">{{ cashAmountNum() | inr }}</p>
-
-                    <div class="grid grid-cols-2 gap-3 mb-4">
+                  <div class="flex flex-col h-full min-h-0">
+                    <!-- Tendered / Due / Change at the top, then the
+                         numpad fills the rest. Quick-add chips removed
+                         per UX request — reception types the amount. -->
+                    <div class="grid grid-cols-3 gap-2 items-center mb-2">
+                      <div class="pf-cash-chip">
+                        <p class="pf-cash-chip__label">Tendered</p>
+                        <p class="pf-cash-chip__value">{{ cashAmountNum() | inr }}</p>
+                      </div>
                       <div class="pf-cash-chip">
                         <p class="pf-cash-chip__label">Due</p>
                         <p class="pf-cash-chip__value">{{ effectivePayable() | inr }}</p>
@@ -212,19 +281,70 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       </div>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                      @for (d of quickAdd; track d) {
-                        <button type="button" (click)="addCash(d)" class="pf-cash-btn press">+{{ d }}</button>
-                      }
-                      <button type="button" (click)="setCashExact()" class="pf-cash-btn pf-cash-btn--accent press">Exact</button>
-                      <button type="button" (click)="clearCash()" class="pf-cash-btn press">Clear</button>
-                    </div>
-
                     <pf-num-pad
                       [value]="cashAmount()"
                       [allowDecimal]="false"
                       [compact]="true"
                       (valueChange)="setCash($event)"></pf-num-pad>
+                  </div>
+                }
+                @case ('wallet') {
+                  <div class="flex flex-col h-full min-h-0">
+                    @if (selectedVendor(); as v) {
+                      <!-- Selected-vendor card with balance + change link. -->
+                      <div class="pf-wallet-selected">
+                        <div class="min-w-0 flex-1">
+                          <p class="pf-wallet-selected__name">{{ v.name }}</p>
+                          @if (v.code) { <p class="pf-wallet-selected__code">{{ v.code }}</p> }
+                        </div>
+                        @if (showWalletBalance()) {
+                          <div class="text-right">
+                            <p class="pf-eyebrow">Balance</p>
+                            <p class="pf-wallet-selected__bal"
+                               [class.pf-wallet-selected__bal--low]="v.balance < effectivePayable()">
+                              {{ v.balance | inr }}
+                            </p>
+                            @if (v.balance < effectivePayable()) {
+                              <p class="pf-wallet-selected__warn">Insufficient — short by {{ (effectivePayable() - v.balance) | inr }}</p>
+                            }
+                          </div>
+                        }
+                        <button type="button" class="pf-wallet-change" (click)="clearVendor()">Change</button>
+                      </div>
+                    } @else {
+                      <p class="pf-eyebrow mb-2">Choose vendor wallet</p>
+                      <input type="text" class="pf-wallet-search"
+                             [value]="vendorQuery()"
+                             (input)="setVendorQuery(asInput($event))"
+                             placeholder="Search vendor by name or code…"/>
+                      @if (vendors() === null) {
+                        <p class="pf-wallet-empty">Loading vendors…</p>
+                      } @else if (filteredVendors().length === 0) {
+                        <p class="pf-wallet-empty">
+                          @if (vendorQuery().trim()) { No vendors match "{{ vendorQuery() }}". }
+                          @else { No active vendors. Add one in Admin → Vendor wallets. }
+                        </p>
+                      } @else {
+                        <ul class="pf-wallet-list">
+                          @for (v of filteredVendors(); track v.id) {
+                            <li>
+                              <button type="button" class="pf-wallet-row" (click)="selectVendor(v.id)">
+                                <span class="pf-wallet-row__name">
+                                  {{ v.name }}
+                                  @if (v.code) { <span class="pf-wallet-row__code">{{ v.code }}</span> }
+                                </span>
+                                @if (showWalletBalance()) {
+                                  <span class="pf-wallet-row__bal"
+                                        [class.pf-wallet-row__bal--low]="v.balance < effectivePayable()">
+                                    {{ v.balance | inr }}
+                                  </span>
+                                }
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    }
                   </div>
                 }
                 @default {
@@ -237,13 +357,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     <p class="text-[22px] font-semibold" style="color: var(--text-primary);">{{ currentModeDef()?.label }}</p>
                     <p class="text-[13px] mt-2 max-w-[280px]" style="color: var(--text-tertiary);">
                       @switch (mode()) {
-                        @case ('wallet') { Follow the wallet app prompts to complete the payment. }
                         @case ('split')  { Collect each portion on the terminal, then confirm below. }
                         @case ('later')  { Mark as pending. Invoice will be sent on the report. }
                         @default { Follow on-screen prompts to complete the payment. }
                       }
                     </p>
-                    @if (mode() === 'split' || mode() === 'wallet') {
+                    @if (mode() === 'split') {
                       <label class="pf-ref-row mt-6">
                         <span>Reference no.</span>
                         <input type="text"
@@ -256,17 +375,19 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </div>
                 }
               }
+              </div>
 
               <pf-touch-btn size="xl" variant="primary" [full]="true"
                             (pressed)="confirm()"
                             [disabled]="saving() || !canConfirm()"
-                            class="mt-6 block">
+                            class="mt-3 block pf-bill-confirm">
                 <span icon-left>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m5 12 4 4L19 6"/>
                   </svg>
                 </span>
-                @if (mode() === 'later') { Mark as pay-later · {{ effectivePayable() | inr }} }
+                @if (paid()) { Payment received · {{ effectivePayable() | inr }} }
+                @else if (mode() === 'later') { Mark as pay-later · {{ effectivePayable() | inr }} }
                 @else { Confirm payment · {{ effectivePayable() | inr }} }
               </pf-touch-btn>
             </pf-tile>
@@ -279,6 +400,50 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
         </pf-tile>
       }
     </section>
+
+    <!-- ── Post-payment options dialog ─────────────────────────
+         Opens when payment is successfully collected. Reception picks
+         what to do next: print the invoice, send it via WhatsApp, or
+         finish (which routes to the post-payment / sample-collection
+         flow). The pf-no-print class hides it during printing. -->
+    @if (paymentDoneOpen()) {
+      <div class="pf-pay-modal pf-no-print" role="dialog" aria-modal="true" aria-label="Payment collected">
+        <div class="pf-pay-modal__backdrop" (click)="closePaymentDoneDialog()"></div>
+        <div class="pf-pay-modal__shell">
+          <div class="pf-pay-modal__icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12l5 5L20 7"/>
+            </svg>
+          </div>
+          <h2>Payment received</h2>
+          <p class="pf-pay-modal__sub">{{ invoiceNumber() }} · {{ effectivePayable() | inr }}</p>
+
+          <div class="pf-pay-modal__actions">
+            <button type="button" class="pf-pay-modal__btn" (click)="printInvoice()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
+              </svg>
+              Print invoice
+            </button>
+            <button type="button" class="pf-pay-modal__btn" (click)="sendOnWhatsApp()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.95.51 3.85 1.48 5.53L2 22l4.7-1.55a9.93 9.93 0 0 0 5.34 1.55h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.02A9.94 9.94 0 0 0 12.04 2zm5.43 13.99c-.23.65-1.34 1.24-1.86 1.32-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.64-.62-2.89-1.31-4.78-4.43-4.92-4.63-.14-.2-1.18-1.62-1.18-3.08 0-1.46.77-2.18 1.04-2.48.27-.3.59-.37.78-.37.2 0 .39.01.56.01.18 0 .42-.07.66.5.23.59.79 2.05.86 2.2.07.14.12.31.02.51-.1.2-.15.31-.29.49-.14.18-.3.4-.43.54-.14.14-.29.31-.13.6.16.3.72 1.18 1.55 1.92 1.07.95 1.97 1.25 2.27 1.4.3.14.47.12.65-.07.18-.2.74-.86.93-1.16.2-.3.39-.25.66-.15.27.1 1.74.82 2.04.97.3.14.5.22.57.34.07.13.07.74-.16 1.39z"/>
+              </svg>
+              Send on WhatsApp
+            </button>
+            <button type="button" class="pf-pay-modal__btn pf-pay-modal__btn--primary" (click)="finishAfterPayment()">
+              Done
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14m-5-6 6 6-6 6"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     /* Admin flag in the header: "Frontdesk collects" toggles whether the
@@ -420,6 +585,88 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       pointer-events: none;
     }
+    /* ₹ vs % switch */
+    .pf-discount__kind {
+      display: inline-flex;
+      padding: 2px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9px;
+    }
+    .pf-discount__kind button {
+      width: 28px; height: 26px;
+      background: transparent; border: 0;
+      border-radius: 7px;
+      color: var(--text-secondary);
+      font-size: 12px; font-weight: 700;
+      cursor: pointer;
+    }
+    .pf-discount__kind button:hover { color: var(--text-primary); }
+    .pf-discount__kind--on {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white !important;
+    }
+    /* Resolved ₹ value next to a % discount input */
+    .pf-discount__resolved {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px; font-weight: 600;
+      color: #6ee7b7;
+    }
+
+    /* TAT — inline subtle line under the totals (was a chip). */
+    .pf-bill-tat-inline {
+      margin: 14px 0 0;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11.5px; color: var(--text-tertiary);
+      font-style: italic;
+    }
+    .pf-bill-tat-inline svg { color: var(--text-muted); }
+
+    /* Print PDF icon button in invoice header */
+    .pf-bill-print-icon {
+      width: 32px; height: 32px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .pf-bill-print-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* Toolbar action pills (Save draft / Discard) */
+    .pf-toolbar-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9999px;
+      color: var(--text-primary);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-toolbar-btn:hover:not([disabled]) { background: var(--bg-hover); }
+    .pf-toolbar-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .pf-toolbar-btn--ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    /* Unified payment tile sections */
+    .pf-pay-modes { display: flex; flex-direction: column; }
+    .pf-pay-modes__grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    @media (min-width: 640px) {
+      .pf-pay-modes__grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    }
+    .pf-pay-divider {
+      margin: 18px -20px;
+      height: 1px;
+      background: var(--glass-border);
+    }
 
     /* Payment mode tiles */
     .pf-mode {
@@ -462,6 +709,19 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-mode--on svg { color: #ffffff; }
     .pf-mode--on .pf-mode__hint { color: rgba(255, 255, 255, 0.75); }
+
+    /* Compact variant — used inside the unified payment tile so the
+     * mode picker reads as a horizontal strip instead of large stacked
+     * cards. Centres icon + label, drops the hint to keep it tight. */
+    .pf-mode--compact {
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 6px;
+      border-radius: 12px;
+    }
+    .pf-mode--compact svg { margin-bottom: 0; width: 18px; height: 18px; }
+    .pf-mode--compact .pf-mode__label { font-size: 12px; }
 
     /* Big amount display */
     .pf-big-amount {
@@ -536,15 +796,13 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       background: #ffffff;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
     }
-    .pf-qr__grid {
+    .pf-qr__img {
       width: 100%;
       height: 100%;
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      grid-template-rows: repeat(12, 1fr);
-      gap: 1px;
+      display: block;
+      object-fit: contain;
+      border-radius: 8px;
     }
-    .pf-qr__cell { border-radius: 1px; }
     .pf-qr__hint {
       margin: 0;
       font-size: 13px;
@@ -664,6 +922,250 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       border-color: rgba(168, 85, 247, 0.55);
       box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
+
+    /* ── Save / discard draft buttons ──────────────────────── */
+    .pf-bill-draftrow {
+      margin-top: 10px;
+      display: flex; gap: 8px;
+    }
+    .pf-bill-draft {
+      flex: 1;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-bill-draft:hover:not([disabled]) { background: var(--bg-hover); }
+    .pf-bill-draft[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .pf-bill-draft--ghost { flex: 0 0 auto; color: var(--text-secondary); }
+
+    /* ── Post-payment dialog ────────────────────────────────── */
+    .pf-pay-modal {
+      position: fixed; inset: 0; z-index: 1100;
+      display: flex; align-items: center; justify-content: center;
+      padding: 5vh 24px 24px;
+    }
+    .pf-pay-modal__backdrop {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(900px 600px at 50% 100%, rgba(124, 58, 237, 0.18), transparent 60%),
+        rgba(5, 5, 15, 0.72);
+      backdrop-filter: blur(12px) saturate(1.2);
+    }
+    .pf-pay-modal__shell {
+      position: relative;
+      width: 100%; max-width: 420px;
+      padding: 28px 24px 22px;
+      background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      box-shadow: 0 30px 70px rgba(0,0,0,0.55);
+      text-align: center;
+    }
+    .pf-pay-modal__icon {
+      width: 56px; height: 56px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981, #14b8a6);
+      color: white;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
+    }
+    .pf-pay-modal__shell h2 {
+      margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary);
+    }
+    .pf-pay-modal__sub {
+      margin: 4px 0 18px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .pf-pay-modal__actions {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .pf-pay-modal__btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-pay-modal__btn:hover { background: var(--bg-hover); }
+    .pf-pay-modal__btn--primary {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white; border-color: transparent;
+      box-shadow: 0 8px 22px rgba(124, 58, 237, 0.40);
+    }
+    .pf-pay-modal__btn--primary:hover { filter: brightness(1.08); background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+
+    /* ── Equal-height balanced layout ────────────────────────
+     * Two columns stay side-by-side from md (iPad portrait+); both
+     * tiles are capped at the visible viewport so the page itself
+     * never grows. Anything that overflows scrolls inside its tile,
+     * not the page. */
+    .pf-bill-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+    @media (min-width: 768px) {
+      .pf-bill-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    }
+    .pf-bill-col {
+      min-width: 0;          /* lets grid children honour width: 100% */
+      display: flex;
+      /* Cap to visible viewport minus header / toolbar / padding so
+       * the tile body scrolls instead of pushing the page. ~210px
+       * accounts for the screen header + outer padding. */
+      max-height: calc(100dvh - 210px);
+    }
+    .pf-bill-tile {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;       /* the *contents* scroll; the box stays put */
+      overscroll-behavior: contain;
+    }
+    /* Right-hand payment tile: never scroll. Tile is a flex column —
+     * mode picker + divider + body fight for vertical space, Confirm
+     * stays pinned at the bottom (auto-height, no margin collapse). */
+    .pf-bill-tile--noscroll { overflow: hidden; }
+    .pf-bill-tile--noscroll .pf-pay-body {
+      flex: 1;
+      min-height: 0;
+      display: flex; flex-direction: column;
+      gap: 8px;
+    }
+    .pf-bill-tile--noscroll .pf-pay-body > * { min-height: 0; }
+    /* Compact the loud big-amount line on the right tile so cash /
+     * UPI / card panels leave more room for their input controls. */
+    .pf-bill-tile--noscroll .pf-big-amount { font-size: 26px; margin-bottom: 6px; }
+    .pf-bill-tile--noscroll .pf-cash-chip { padding: 8px 10px; }
+    .pf-bill-tile--noscroll .pf-cash-chip__value { font-size: 16px; }
+    /* Numpad inside the no-scroll tile keeps its natural compact key
+     * size (52px). Now that the +100/+200/Exact/Clear strip is gone,
+     * the numpad has enough vertical room without stretching. */
+    .pf-bill-tile--noscroll pf-num-pad { display: block; }
+    /* Confirm button is the last flex child of the tile — never grows,
+     * sits flush below the numpad. */
+    .pf-bill-confirm {
+      margin-top: 10px !important;
+      flex: 0 0 auto;
+    }
+
+    /* ── Wallet vendor picker ──────────────────────────────── */
+    .pf-wallet-search {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--input-text);
+      border-radius: 10px;
+      font-size: 13px;
+      outline: none;
+      margin-bottom: 8px;
+    }
+    .pf-wallet-search:focus {
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+    }
+    .pf-wallet-list {
+      list-style: none; margin: 0; padding: 0;
+      flex: 1; min-height: 0; overflow-y: auto;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+    }
+    .pf-wallet-row {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px;
+      background: transparent; border: 0; cursor: pointer;
+      color: var(--text-primary);
+      font-size: 13px; text-align: left;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .pf-wallet-row:last-child { border-bottom: 0; }
+    .pf-wallet-row:hover { background: rgba(168, 85, 247, 0.10); }
+    .pf-wallet-row__name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-wallet-row__code {
+      margin-left: 6px;
+      padding: 1px 7px;
+      background: rgba(168, 85, 247, 0.15); color: #c4b5fd;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10px; font-weight: 700;
+    }
+    .pf-wallet-row__bal {
+      flex: 0 0 auto;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700; color: #6ee7b7;
+    }
+    .pf-wallet-row__bal--low { color: #fca5a5; }
+    .pf-wallet-empty {
+      padding: 14px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 12.5px;
+    }
+
+    /* Selected vendor card */
+    .pf-wallet-selected {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 12px;
+    }
+    .pf-wallet-selected__name {
+      margin: 0;
+      font-size: 15px; font-weight: 700; color: var(--text-primary);
+    }
+    .pf-wallet-selected__code {
+      margin: 2px 0 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; color: var(--text-secondary);
+      letter-spacing: 0.04em;
+    }
+    .pf-wallet-selected__bal {
+      margin: 2px 0 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 700; font-size: 16px; color: #6ee7b7;
+    }
+    .pf-wallet-selected__bal--low { color: #fca5a5; }
+    .pf-wallet-selected__warn {
+      margin: 4px 0 0;
+      font-size: 11px; color: #fca5a5;
+    }
+    .pf-wallet-change {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9999px;
+      color: var(--text-secondary);
+      font-size: 11.5px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-wallet-change:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ── Print stylesheet ────────────────────────────────────
+     * Print invoice button calls window.print(). Hide non-invoice
+     * UI so the patient's paper / PDF copy is just the invoice. */
+    @media print {
+      :host { display: block; background: white; }
+      .pf-no-print, pf-screen-header, .pf-discount,
+      .pf-bill-actions, .pf-collect-toggle { display: none !important; }
+      .grid { display: block !important; }
+    }
   `]
 })
 export class BillingComponent implements OnInit {
@@ -671,7 +1173,9 @@ export class BillingComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
+  private readonly billingEvents = inject(BillingEventsService);
 
   readonly collectsBilling = this.settings.collectsBilling;
   setCollectsBilling(v: boolean) { this.settings.setCollectsBilling(v); }
@@ -687,7 +1191,40 @@ export class BillingComponent implements OnInit {
   private readonly _mode = signal<PayMode>('upi');
   private readonly _cash = signal<string>('');
   private readonly _discount = signal<string>('');
+  /** 'flat' = ₹ amount, 'percent' = % of subtotal+tax. */
+  private readonly _discountKind = signal<'flat' | 'percent'>('flat');
   private readonly _referenceNo = signal<string>('');
+  /** Test catalogue — used to compute the report TAT estimate from
+   *  bill-item testIds. Loaded once on mount. */
+  private readonly _tests = signal<Test[]>([]);
+  /** Vendor wallets — lazy-loaded the first time the user picks the
+   *  Wallet payment mode. Cached for the rest of the session so the
+   *  picker is instant on subsequent opens. */
+  private readonly _vendors = signal<VendorWallet[] | null>(null);
+  private readonly _vendorQuery = signal<string>('');
+  private readonly _selectedVendorId = signal<string | null>(null);
+  /** Tenant billing config slice — only the wallet-visibility flag is
+   *  consumed here. Defaults to "show" so reception isn't blind during
+   *  the initial render before /api/billing/config returns. */
+  private readonly _showWalletBalance = signal<boolean>(true);
+  /** Open state for the post-payment options dialog. Flips true after a
+   *  successful payment so reception can pick what happens next
+   *  (print, WhatsApp, or just done). */
+  private readonly _paymentDoneOpen = signal<boolean>(false);
+  readonly paymentDoneOpen = this._paymentDoneOpen.asReadonly();
+  /** Locked-in flag: flips true the instant a payment is recorded
+   *  server-side. Disables Confirm permanently so reception can't
+   *  double-charge by clicking again after dismissing the post-payment
+   *  dialog. Resetting only happens on a fresh navigation. */
+  private readonly _paid = signal<boolean>(false);
+  readonly paid = this._paid.asReadonly();
+
+  /** localStorage prefix for in-progress billing screens. Key includes
+   *  the orderId so each order has its own draft. */
+  private readonly DRAFT_KEY_PREFIX = 'pf:billing-draft:';
+  private readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  private readonly _hasDraft = signal<boolean>(false);
+  readonly hasDraft = this._hasDraft.asReadonly();
 
   readonly order = this._order.asReadonly();
   readonly bill = this._bill.asReadonly();
@@ -695,11 +1232,19 @@ export class BillingComponent implements OnInit {
   readonly mode = this._mode.asReadonly();
   readonly cashAmount = this._cash.asReadonly();
   readonly discount = this._discount.asReadonly();
+  readonly discountKind = this._discountKind.asReadonly();
   readonly referenceNo = this._referenceNo.asReadonly();
 
+  /** Resolved ₹ value of the discount: either the entered flat amount,
+   *  or the entered percent applied to the bill's pre-discount total. */
   readonly discountNum = computed(() => {
-    const n = parseInt(this._discount() || '0', 10);
-    return Number.isNaN(n) ? 0 : Math.max(0, n);
+    const raw = parseInt(this._discount() || '0', 10);
+    if (Number.isNaN(raw) || raw <= 0) return 0;
+    if (this._discountKind() === 'flat') return raw;
+    const b = this._bill();
+    if (!b) return 0;
+    const base = b.subTotal + b.totalTax;
+    return Math.max(0, Math.min(base, Math.round((base * raw) / 100)));
   });
   readonly effectivePayable = computed(() => {
     const b = this._bill();
@@ -728,10 +1273,81 @@ export class BillingComponent implements OnInit {
     return `INV-${shortId}`;
   });
 
+  /** Estimated time-to-report = max(tatHours) across the bill items.
+   *  Returns null until the test catalogue has loaded. Reception shows
+   *  this on the invoice so patients know when results land. */
+  readonly tatHoursEstimate = computed<number | null>(() => {
+    const b = this._bill();
+    const tests = this._tests();
+    if (!b || tests.length === 0) return null;
+    let maxH = 0;
+    for (const item of b.items) {
+      const t = tests.find(x => x.id === item.testId);
+      if (t && Number.isFinite(t.tatHours) && t.tatHours > maxH) maxH = t.tatHours;
+    }
+    return maxH || null;
+  });
+  readonly tatLabel = computed<string>(() => {
+    const h = this.tatHoursEstimate();
+    if (h == null) return '';
+    if (h < 24) return `≈ ${h}h to report`;
+    const days = Math.round(h / 24);
+    return `≈ ${days} day${days === 1 ? '' : 's'} to report`;
+  });
+
+  /** UPI deep-link encoded into a real QR (rendered via api.qrserver.com).
+   *  Amount + invoice id are baked in so the patient's UPI app prefills
+   *  everything. payee VPA + name are placeholder constants for now. */
+  readonly upiQrUrl = computed<string>(() => {
+    const amt = this.effectivePayable();
+    const inv = this.invoiceNumber();
+    const params = new URLSearchParams({
+      pa: 'prefrontal@upi',
+      pn: 'Prefrontal Lab',
+      tn: inv,
+      am: String(amt),
+      cu: 'INR'
+    });
+    const upi = `upi://pay?${params.toString()}`;
+    const enc = encodeURIComponent(upi);
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${enc}`;
+  });
+
   readonly canConfirm = computed(() => {
+    if (this._paid()) return false; // already paid — never let it re-fire
     const m = this._mode();
     if (m === 'cash') return this.cashAmountNum() >= this.effectivePayable();
+    if (m === 'wallet') {
+      // Need a selected vendor; if balances are visible, also enforce
+      // sufficient balance up-front so reception doesn't fire a doomed
+      // POST. (Backend re-checks regardless.)
+      const v = this.selectedVendor();
+      if (!v) return false;
+      if (this._showWalletBalance() && v.balance < this.effectivePayable()) return false;
+      return true;
+    }
     return this.effectivePayable() >= 0;
+  });
+
+  readonly vendors = this._vendors.asReadonly();
+  readonly vendorQuery = this._vendorQuery.asReadonly();
+  readonly selectedVendorId = this._selectedVendorId.asReadonly();
+  readonly showWalletBalance = this._showWalletBalance.asReadonly();
+  /** Resolved vendor object for the currently-selected id. */
+  readonly selectedVendor = computed<VendorWallet | null>(() => {
+    const id = this._selectedVendorId();
+    if (!id) return null;
+    return (this._vendors() ?? []).find(v => v.id === id) ?? null;
+  });
+  /** Filter active vendors by name/code substring. */
+  readonly filteredVendors = computed<VendorWallet[]>(() => {
+    const all = (this._vendors() ?? []).filter(v => v.isActive);
+    const q = this._vendorQuery().trim().toLowerCase();
+    if (!q) return all.slice(0, 25);
+    return all.filter(v =>
+      v.name.toLowerCase().includes(q) ||
+      (v.code ?? '').toLowerCase().includes(q)
+    ).slice(0, 25);
   });
 
   ngOnInit() {
@@ -740,25 +1356,141 @@ export class BillingComponent implements OnInit {
 
     this.api.get<Order>(`/api/orders/${orderId}`).subscribe({ next: o => this._order.set(o) });
     this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
-      next: b => this._bill.set(b),
+      next: b => {
+        this._bill.set(b);
+        // Restore any saved draft *after* the bill is loaded so the
+        // discount cap clamping can use the real subTotal+totalTax.
+        this.restoreDraftFor(orderId);
+      },
       error: e => this.toasts.error(e.message ?? 'Could not create bill')
+    });
+    // Tests catalogue — used to derive the report TAT estimate.
+    this.api.get<Test[]>('/api/tests/').subscribe({
+      next: l => this._tests.set(l ?? []),
+      error: () => { /* TAT is non-critical; silently skip if it fails */ }
     });
   }
 
-  setMode(m: PayMode) { this._mode.set(m); }
+  /** Save the in-progress billing inputs (mode, discount, cash entered,
+   *  reference no) to localStorage so reception can step away and come
+   *  back later without losing what they typed. Keyed by orderId. */
+  saveDraft() {
+    const b = this._bill();
+    if (!b) return;
+    if (this._paid()) { this.toasts.info('Already paid — nothing to save'); return; }
+    try {
+      localStorage.setItem(this.DRAFT_KEY_PREFIX + b.orderId, JSON.stringify({
+        savedAt: Date.now(),
+        mode: this._mode(),
+        cash: this._cash(),
+        discount: this._discount(),
+        discountKind: this._discountKind(),
+        referenceNo: this._referenceNo()
+      }));
+      this._hasDraft.set(true);
+      this.toasts.success('Saved as draft');
+    } catch {
+      this.toasts.error('Could not save draft (storage full?)');
+    }
+  }
+
+  discardDraft() {
+    const b = this._bill();
+    if (!b) return;
+    try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + b.orderId); } catch { /* ignore */ }
+    this._hasDraft.set(false);
+    this.toasts.info('Draft discarded');
+  }
+
+  /** Internal version called after a successful payment / pay-later
+   *  commit — clears storage but doesn't toast (the success toast is
+   *  already firing from the caller). */
+  private clearDraft() {
+    const b = this._bill();
+    if (!b) return;
+    try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + b.orderId); } catch { /* ignore */ }
+    this._hasDraft.set(false);
+  }
+
+  private restoreDraftFor(orderId: string) {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + orderId); } catch { return; }
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as {
+        savedAt?: number; mode?: PayMode; cash?: string;
+        discount?: string; discountKind?: 'flat' | 'percent'; referenceNo?: string;
+      };
+      if (!parsed?.savedAt || Date.now() - parsed.savedAt > this.DRAFT_TTL_MS) {
+        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + orderId); } catch { /* ignore */ }
+        return;
+      }
+      if (parsed.discountKind) this._discountKind.set(parsed.discountKind);
+      if (parsed.discount != null) this._discount.set(parsed.discount);
+      if (parsed.mode) this._mode.set(parsed.mode);
+      if (parsed.cash != null) this._cash.set(parsed.cash);
+      if (parsed.referenceNo != null) this._referenceNo.set(parsed.referenceNo);
+      this._hasDraft.set(true);
+      this.toasts.info('Draft restored');
+    } catch { /* ignore parse errors */ }
+  }
+
+  setMode(m: PayMode) {
+    this._mode.set(m);
+    // Lazy-load vendor wallets the first time the user opens the
+    // Wallet panel. We also fetch the visibility flag so the picker
+    // can hide the balance column for tenants that opted out.
+    if (m === 'wallet' && this._vendors() === null) this.loadVendors();
+  }
+  setVendorQuery(q: string) { this._vendorQuery.set(q); }
+  selectVendor(id: string) { this._selectedVendorId.set(id); }
+  clearVendor() { this._selectedVendorId.set(null); }
+
+  private loadVendors() {
+    console.info('[wallet] loadVendors() fired');
+    this.api.get<VendorWallet[]>('/api/vendors').subscribe({
+      next: list => {
+        console.info('[wallet] vendors next', { count: list?.length ?? 0, list });
+        this._vendors.set(list ?? []);
+      },
+      error: err => {
+        console.warn('[wallet] vendors error', err);
+        this._vendors.set([]);
+      }
+    });
+    this.api.get<BillingConfigSlice>('/api/config/billing/visibility').subscribe({
+      next: cfg => this._showWalletBalance.set(cfg?.frontdeskCanSeeWalletBalance ?? true),
+      error: () => { /* leave default true */ }
+    });
+  }
   setCash(v: string) { this._cash.set(v); }
   addCash(n: number) { this._cash.update(cur => String((parseInt(cur || '0', 10) || 0) + n)); }
   setCashExact() { this._cash.set(String(this.effectivePayable())); }
   clearCash() { this._cash.set(''); }
 
   setDiscount(v: string) {
-    // Strip anything non-numeric (negatives, decimals, letters), then cap
-    // at the bill's pre-discount total so the discount can't exceed payable.
+    // Strip anything non-numeric. For 'flat' we cap at the bill's
+    // pre-discount total so the discount can't exceed payable; for
+    // 'percent' we cap at 100. Empty input clears.
     const digits = (v ?? '').replace(/[^\d]/g, '');
+    if (digits === '') { this._discount.set(''); return; }
+    const raw = parseInt(digits, 10);
+    if (this._discountKind() === 'percent') {
+      this._discount.set(String(Math.min(100, Math.max(0, raw))));
+      return;
+    }
     const b = this._bill();
     const cap = b ? b.subTotal + b.totalTax : Number.POSITIVE_INFINITY;
-    const n = digits === '' ? 0 : Math.min(parseInt(digits, 10), cap);
-    this._discount.set(n === 0 && digits === '' ? '' : String(n));
+    const n = Math.min(raw, cap);
+    this._discount.set(n === 0 ? '' : String(n));
+  }
+  setDiscountKind(k: 'flat' | 'percent') {
+    if (k === this._discountKind()) return;
+    this._discountKind.set(k);
+    // Reset the entered value when toggling — different units, different
+    // numbers; clearing avoids surprising clamps (e.g. ₹500 reinterpreted
+    // as 500%).
+    this._discount.set('');
   }
   /** Block obviously bad keystrokes at source — minus, plus, e/E exponent,
    *  and decimal point. Keeps Tab/Backspace/arrows/etc. flowing. */
@@ -784,7 +1516,71 @@ export class BillingComponent implements OnInit {
       return;
     }
 
+    if (this._paid()) return; // hard guard against double-fire
     this._saving.set(true);
+    // 'later' mode skips the payment POST entirely — the bill stays
+    // open with balance == totalPayable, and the FD landing's
+    // payments-due drawer surfaces it.
+    if (this._mode() === 'later') {
+      this._saving.set(false);
+      this._paid.set(true);
+      this.clearDraft();
+      this.toasts.warning('Marked as Pay later — outstanding balance recorded');
+      this.billingEvents.notifyPayLater();
+      this._paymentDoneOpen.set(true);
+      return;
+    }
+    // 'wallet' mode charges the selected vendor's credit BEFORE
+    // recording the payment. If the charge fails (insufficient
+    // balance / inactive wallet), abort without recording payment so
+    // reception can pick a different vendor or mode.
+    if (this._mode() === 'wallet') {
+      const vendor = this.selectedVendor();
+      if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
+      const amount = this.effectivePayable();
+      const applyAndPay = (currentBill: Bill) => {
+        this.api.post<unknown>(`/api/vendors/${vendor.id}/charge`, {
+          amount, billId: currentBill.id,
+          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
+        }).subscribe({
+          next: () => {
+            // Wallet charge succeeded → record the bill payment so the
+            // bill is marked paid and the running totals on the FD
+            // landing pick it up.
+            this.api.post<Bill>(`/api/billing/${currentBill.id}/payment`, {
+              amount, mode: 'wallet',
+              referenceNo: this._referenceNo() || vendor.code || vendor.name
+            }).subscribe({
+              next: () => {
+                this._saving.set(false);
+                this._paid.set(true);
+                this.clearDraft();
+                this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
+                this.billingEvents.notifyPaid();
+                this._paymentDoneOpen.set(true);
+              },
+              error: e => { this._saving.set(false); this.toasts.error(e?.error?.message ?? e?.message ?? 'Payment record failed'); }
+            });
+          },
+          error: e => {
+            this._saving.set(false);
+            const msg = e?.error?.message ?? e?.message ?? 'Wallet charge failed';
+            this.toasts.error(msg);
+          }
+        });
+      };
+      const d = this.discountNum();
+      if (d > 0) {
+        this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: d, reason: 'Reception discount' })
+          .subscribe({
+            next: updated => { this._bill.set(updated); applyAndPay(updated); },
+            error: e => { this._saving.set(false); this.toasts.error(e?.message ?? 'Could not apply discount'); }
+          });
+      } else {
+        applyAndPay(b);
+      }
+      return;
+    }
     const pay = (bill: Bill) => {
       this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
         amount: bill.totalPayable,
@@ -793,8 +1589,15 @@ export class BillingComponent implements OnInit {
       }).subscribe({
         next: () => {
           this._saving.set(false);
+          this._paid.set(true); // lock — Confirm is now disabled forever
+          this.clearDraft();
           this.toasts.success('Payment collected');
-          this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: bill.orderId } });
+          this.billingEvents.notifyPaid();
+          // Open the post-payment options dialog so reception can pick
+          // what happens next: print invoice, WhatsApp it to the
+          // patient, or finish (which falls back to the post-payment
+          // flow that drives sample collection).
+          this._paymentDoneOpen.set(true);
         },
         error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
       });
@@ -815,5 +1618,78 @@ export class BillingComponent implements OnInit {
     }
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  /** Back honours the browser history first — typical entry to billing
+   *  is from the order page, so Location.back() returns there. If
+   *  history is empty (deep-linked tab), fall back to /frontdesk. */
+  back() {
+    if (window.history.length > 1) this.location.back();
+    else this.router.navigateByUrl('/frontdesk');
+  }
+
+  /** Generate a properly-formatted A4 invoice PDF (header, items table,
+   *  totals, footer) and trigger a download. Built client-side with
+   *  jsPDF so we don't need a server round-trip; the structured output
+   *  is sharper and more usable than a window.print() screenshot. */
+  printInvoice() {
+    const b = this._bill();
+    if (!b) { this.toasts.warning('Bill is still loading'); return; }
+    try {
+      generateInvoicePdf({
+        bill: b,
+        order: this._order(),
+        invoiceNumber: this.invoiceNumber(),
+        effectivePayable: this.effectivePayable(),
+        tatLabel: this.tatLabel()
+      });
+    } catch (err) {
+      console.error('[billing] invoice PDF failed', err);
+      this.toasts.error('Could not generate invoice PDF');
+    }
+  }
+
+  /** Post-payment "Send via WhatsApp" — opens wa.me with a pre-filled
+   *  message containing the invoice number, total, and TAT. If we have
+   *  the patient's phone number we deep-link directly; otherwise we
+   *  open the contact-picker variant so reception can paste a number. */
+  sendOnWhatsApp() {
+    const b = this._bill();
+    const p = this._order()?.patient;
+    if (!b) return;
+    const lines = [
+      `Hi ${p?.displayName ?? ''}, your invoice from Prefrontal Lab:`,
+      `${this.invoiceNumber()} — Paid ₹${b.totalPayable}`,
+    ];
+    const tat = this.tatLabel();
+    if (tat) lines.push(tat);
+    lines.push('Thank you for choosing us.');
+    const msg = encodeURIComponent(lines.join('\n'));
+    const phone = (p?.phone ?? '').replace(/[^\d]/g, '');
+    // wa.me strips the leading + and accepts a country-code-prefixed
+    // number. Indian-numbers default to 91 if 10 digits with no prefix.
+    const target = phone
+      ? (phone.length === 10 ? `91${phone}` : phone)
+      : '';
+    const url = target
+      ? `https://wa.me/${target}?text=${msg}`
+      : `https://wa.me/?text=${msg}`;
+    window.open(url, '_blank', 'noopener');
+  }
+
+  /** Close the dialog and return to the FD landing — payment is done,
+   *  the queue takes over. */
+  finishAfterPayment() {
+    this._paymentDoneOpen.set(false);
+    const b = this._bill();
+    if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
+    else this.router.navigateByUrl('/frontdesk');
+  }
+  /** Backdrop / Esc close: payment is already done, so we still route
+   *  forward to the post-payment screen instead of stranding the user
+   *  on a paid-but-still-clickable billing page. */
+  closePaymentDoneDialog() {
+    this._paymentDoneOpen.set(false);
+    const b = this._bill();
+    if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
+    else this.router.navigateByUrl('/frontdesk');
+  }
 }

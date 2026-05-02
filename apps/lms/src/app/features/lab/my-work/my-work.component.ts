@@ -20,6 +20,7 @@ import { TileComponent, TileTone } from '../../../shared/primitives/tile.compone
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
@@ -47,11 +48,13 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent
+    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-5 md:px-8 lg:px-10 pt-5 pb-10">
+
+      <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
 
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">

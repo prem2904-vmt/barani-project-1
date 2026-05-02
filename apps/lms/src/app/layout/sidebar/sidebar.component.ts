@@ -120,7 +120,9 @@ export class SidebarComponent {
         { label: 'Billing Config',    href: '/admin/billing',        icon: '💳', perms: ['manage_branches', 'manage_tenant'] },
         { label: 'Report Template',   href: '/admin/reports',        icon: '📄', perms: ['manage_tests'] },
         { label: 'Notifications',     href: '/admin/notifications',  icon: '🔔', perms: ['manage_tenant', 'manage_branches'] },
-        { label: 'Workflows',         href: '/admin/workflows',      icon: '🔧', perms: ['manage_workflows'] }
+        { label: 'Workflows',         href: '/admin/workflows',      icon: '🔧', perms: ['manage_workflows'] },
+        { label: 'KPI cards',         href: '/admin/kpis',           icon: '📊', perms: ['manage_tenant', 'manage_branches'] },
+        { label: 'Vendor Wallets',    href: '/admin/vendors',        icon: '💼', perms: ['manage_tenant'] }
       ]
     },
     {

@@ -14,6 +14,8 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 
 const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
@@ -28,13 +30,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     ScreenHeaderComponent,
     SelectComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    KpiStripComponent,
+    BarcodeScannerModalComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded">
 
       @if (!embedded) {
+        <pf-kpi-strip screen="receive_samples"></pf-kpi-strip>
         <pf-screen-header
           eyebrow="Lab intake"
           title="Receive samples"
@@ -90,6 +95,88 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
           </button>
         </div>
+      </pf-tile>
+
+      <!-- ─── Package intake (PKG-XXXX) ──────────────────────────────
+           Receive an entire bundle of orders in one tap by scanning /
+           typing the dispatch package code reception generated. -->
+      <pf-tile tone="default" padding="lg" class="block mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-[11px] font-mono uppercase tracking-[0.16em] block"
+                 style="color: var(--text-muted);">Package intake</label>
+          <span class="text-[10.5px] font-mono" style="color: var(--text-tertiary);">
+            Bulk receive · 1 scan handles many orders
+          </span>
+        </div>
+        <div class="flex gap-2">
+          <div class="scan-field">
+            <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <path d="M14 14h3v3h-3zM20 14h1M14 20h3v1h-3zM20 17v4"/>
+            </svg>
+            <input type="text"
+                   placeholder="PKG-7XQ4M2"
+                   [ngModel]="pkgCode()"
+                   (ngModelChange)="pkgCode.set($event); clearPackagePreview()"
+                   (keydown.enter)="previewPackage()"
+                   autocomplete="off"/>
+          </div>
+          <pf-touch-btn size="md" variant="secondary"
+                        (pressed)="openPackageScanner()"
+                        title="Open camera to scan the package QR">
+            <span icon-left aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <path d="M14 14h3v3h-3zM20 14h1M14 20h3v1h-3zM20 17v4"/>
+              </svg>
+            </span>
+            Scan QR
+          </pf-touch-btn>
+          <pf-touch-btn size="md" variant="primary"
+                        [disabled]="!pkgCode() || pkgBusy()"
+                        (pressed)="previewPackage()">
+            Look up
+          </pf-touch-btn>
+        </div>
+        @if (pkgError()) {
+          <p class="text-[12px] mt-3" style="color: #fca5a5;">{{ pkgError() }}</p>
+        }
+        @if (pkgPreview(); as pkg) {
+          <div class="pkg-preview">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p class="pkg-preview__code">{{ pkg.code }}</p>
+                <p class="pkg-preview__sub">
+                  {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }}
+                  @if (pkg.receivedAt) {
+                    · <span style="color: #6ee7b7;">already received</span>
+                  }
+                </p>
+              </div>
+              <pf-touch-btn size="md" variant="primary"
+                            [disabled]="pkgBusy() || !!pkg.receivedAt"
+                            (pressed)="receivePackage()">
+                @if (pkg.receivedAt) { Received } @else { Receive {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }} }
+              </pf-touch-btn>
+            </div>
+            <ul class="pkg-preview__list">
+              @for (o of pkg.orders; track o.id) {
+                <li class="pkg-preview__row">
+                  <span class="pkg-preview__name">{{ o.patientName }}</span>
+                  <span class="pkg-preview__meta">
+                    #{{ o.id.slice(0, 8) }} · {{ o.sampleCount }} sample{{ o.sampleCount === 1 ? '' : 's' }} · {{ o.status }}
+                  </span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
       </pf-tile>
 
       @if (manualMode()) {
@@ -293,6 +380,14 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </div>
       }
     </section>
+
+    @if (pkgScannerOpen()) {
+      <pf-barcode-scanner-modal
+        title="Scan dispatch package QR"
+        (matched)="onPackageScanned($event)"
+        (cancelled)="closePackageScanner()">
+      </pf-barcode-scanner-modal>
+    }
   `,
   styles: [`
     /* Scan field: glass input with icon prefix, matching patient-search look */
@@ -333,6 +428,45 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       height: 18px;
       color: var(--text-muted);
       pointer-events: none;
+    }
+
+    /* Package preview card — manifest of orders inside the package */
+    .pkg-preview {
+      margin-top: 14px;
+      padding: 12px;
+      background: var(--glass-bg);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      border-radius: 12px;
+    }
+    .pkg-preview__code {
+      margin: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 18px; font-weight: 700;
+      letter-spacing: 0.04em;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
+    }
+    .pkg-preview__sub {
+      margin: 2px 0 0;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+    .pkg-preview__list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .pkg-preview__row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .pkg-preview__name { font-weight: 600; color: var(--text-primary); }
+    .pkg-preview__meta {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; color: var(--text-tertiary);
     }
 
     /* Custom checkbox */
@@ -469,6 +603,23 @@ export class ReceiveSamplesComponent implements OnInit {
   protected readonly scanValue = signal('');
   protected readonly busy = signal(false);
 
+  // ── Package intake (bulk receive via PKG-XXXX code) ─────
+  /** Code reception generated when bundling orders. Lab types or
+   *  scans it to bulk-receive every order in the package at once. */
+  protected readonly pkgCode = signal<string>('');
+  protected readonly pkgPreview = signal<{
+    code: string;
+    orderCount: number;
+    orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
+    receivedAt?: string | null;
+  } | null>(null);
+  protected readonly pkgBusy = signal(false);
+  protected readonly pkgError = signal<string | null>(null);
+  /** Camera scanner open state for the package code. The shared
+   *  BarcodeScannerModalComponent handles HID gun input AND camera
+   *  decoding via @zxing/browser, so we get both for free. */
+  protected readonly pkgScannerOpen = signal(false);
+
   // Manual entry state
   protected readonly manualMode = signal(false);
   protected readonly seqValue = signal('');
@@ -527,6 +678,92 @@ export class ReceiveSamplesComponent implements OnInit {
    * bench-tech pickup). TAT does NOT start here; it starts when a tech
    * picks up an individual tube and marks it received below.
    */
+  // ── Package intake actions ──────────────────────────────
+  /** Look up a package by code without committing the receive. Lets
+   *  the lab tech eyeball the manifest (orders + sample counts)
+   *  before they tap the green button. */
+  previewPackage() {
+    const code = this.normalisedPkgCode();
+    if (!code) return;
+    this.pkgBusy.set(true);
+    this.pkgError.set(null);
+    this.pkgPreview.set(null);
+    this.api.get<{
+      code: string; orderCount: number;
+      orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
+      receivedAt?: string | null;
+    }>(`/api/dispatch-packages/${encodeURIComponent(code)}`).subscribe({
+      next: pkg => {
+        this.pkgBusy.set(false);
+        if (!pkg) { this.pkgError.set(`No package found for ${code}`); return; }
+        this.pkgPreview.set(pkg);
+      },
+      error: e => {
+        this.pkgBusy.set(false);
+        this.pkgError.set(e?.error?.message ?? e?.message ?? `Could not look up ${code}`);
+      }
+    });
+  }
+
+  /** Commit the bulk receive — every order in the package flips to
+   *  arrived, TAT starts on each tube, auto-assign fans out per
+   *  sample on the backend. */
+  receivePackage() {
+    const code = this.normalisedPkgCode();
+    if (!code) return;
+    const preview = this.pkgPreview();
+    if (preview?.receivedAt) {
+      this.toasts.info(`Package ${code} was already received.`);
+      return;
+    }
+    this.pkgBusy.set(true);
+    this.api.post<{ ordersTouched: number; arrivedSamples: number; alreadyReceived?: boolean }>(
+      `/api/dispatch-packages/${encodeURIComponent(code)}/receive`, {}
+    ).subscribe({
+      next: res => {
+        this.pkgBusy.set(false);
+        if (res?.alreadyReceived) {
+          this.toasts.info(`Package ${code} was already received.`);
+        } else {
+          this.toasts.success(
+            `${code} received — ${res.arrivedSamples} sample${res.arrivedSamples === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}, TAT clocks started`
+          );
+        }
+        this.pkgCode.set('');
+        this.pkgPreview.set(null);
+        this.refresh();
+      },
+      error: e => {
+        this.pkgBusy.set(false);
+        this.pkgError.set(e?.error?.message ?? e?.message ?? 'Receive failed');
+      }
+    });
+  }
+
+  /** Normalise reception's input — uppercase + trim. Accept the bare
+   *  short suffix (e.g. "7XQ4M2") by prefixing PKG- so scanning a
+   *  printed slip with just the suffix still works. */
+  protected normalisedPkgCode(): string {
+    const v = this.pkgCode().trim().toUpperCase();
+    if (!v) return '';
+    return v.startsWith('PKG-') ? v : `PKG-${v}`;
+  }
+
+  clearPackagePreview() { this.pkgPreview.set(null); this.pkgError.set(null); }
+
+  openPackageScanner() { this.pkgScannerOpen.set(true); }
+  closePackageScanner() { this.pkgScannerOpen.set(false); }
+  /** Camera / HID gun emitted a code → drop it into the input,
+   *  close the scanner, and run preview right away so the lab tech
+   *  sees the manifest without having to tap "Look up". */
+  onPackageScanned(code: string) {
+    this.pkgScannerOpen.set(false);
+    this.pkgCode.set(code.trim().toUpperCase());
+    this.pkgPreview.set(null);
+    this.pkgError.set(null);
+    this.previewPackage();
+  }
+
   markArrived(orderId: string) {
     const order = this._dispatched().find(o => o.id === orderId);
     if (!order) return;

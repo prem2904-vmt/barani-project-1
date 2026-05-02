@@ -12,6 +12,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 type Filter = 'all' | 'partial' | 'pending' | 'delivered' | 'failed';
 
@@ -45,11 +46,13 @@ interface PrelimOrder {
     SegmentedComponent,
     SkeletonComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
+      <pf-kpi-strip screen="report_queue"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Delivery queue"
         title="Report queue"
@@ -82,7 +85,7 @@ interface PrelimOrder {
           <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ items().length }}</p>
         </pf-tile>
         <pf-tile tone="amber" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Pending</p>
+          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Completed</p>
           <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().pending }}</p>
         </pf-tile>
         <pf-tile tone="sky" padding="md">
@@ -97,6 +100,22 @@ interface PrelimOrder {
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Failed</p>
           <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().failed }}</p>
         </pf-tile>
+      </div>
+
+      <div class="mb-4">
+        <div class="pf-results-search">
+          <svg class="pf-results-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input type="text" class="pf-results-search__input"
+                 [value]="query()"
+                 (input)="setQuery(asInput($event))"
+                 placeholder="Search by patient, phone, or order/report id…"/>
+          @if (query()) {
+            <button type="button" class="pf-results-search__clear"
+                    (click)="setQuery('')" aria-label="Clear search">×</button>
+          }
+        </div>
       </div>
 
       <div class="mb-5">
@@ -244,18 +263,20 @@ interface PrelimOrder {
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <p class="font-semibold text-[15px]" style="color: var(--text-primary);">
-                      Report #{{ r.id.slice(0, 8) }}
+                      {{ r.order?.patient?.displayName ?? ('Report #' + r.id.slice(0, 8)) }}
                     </p>
-                    <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ r.deliveryStatus }}</pf-chip>
+                    <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
                   </div>
                   <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
-                    Order {{ r.orderId.slice(0, 8) }}
+                    Order #{{ r.orderId.slice(0, 8) }}
                     · {{ r.type }}
                     · generated {{ r.createdAt | date:'short' }}
+                    @if (r.order?.patient?.phone) { · {{ r.order?.patient?.phone }} }
                   </p>
                 </div>
 
                 <div class="flex items-center gap-1.5 ml-auto">
+                  <pf-touch-btn size="sm" variant="ghost" (pressed)="downloadPdf(r)">Download</pf-touch-btn>
                   <pf-touch-btn size="sm" variant="ghost" (pressed)="view(r)">View</pf-touch-btn>
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="deliver(r, 'whatsapp')">WhatsApp</pf-touch-btn>
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="deliver(r, 'print')">Print</pf-touch-btn>
@@ -268,6 +289,43 @@ interface PrelimOrder {
     </section>
   `,
   styles: [`
+    /* Search bar at top of Results — same visual rhythm as the FD
+     * landing's main search so reception's muscle memory carries over. */
+    .pf-results-search {
+      position: relative;
+      display: flex; align-items: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 0 12px 0 36px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .pf-results-search:focus-within {
+      border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
+    }
+    .pf-results-search__icon {
+      position: absolute; left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-tertiary);
+    }
+    .pf-results-search__input {
+      flex: 1;
+      background: transparent; border: 0; outline: none;
+      padding: 11px 0;
+      color: var(--text-primary);
+      font-size: 13.5px;
+    }
+    .pf-results-search__input::placeholder { color: var(--text-muted); }
+    .pf-results-search__clear {
+      background: transparent; border: 0;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      color: var(--text-secondary); cursor: pointer;
+      font-size: 18px; line-height: 1;
+    }
+    .pf-results-search__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
     .pf-report-icon {
       width: 40px;
       height: 40px;
@@ -442,19 +500,31 @@ export class ReportQueueComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
 
+  // "Completed" = lab work signed off, report generated, awaiting
+  // delivery. Backed by deliveryStatus === 'pending' on the report row
+  // (the technical name stays 'pending' for backwards compatibility;
+  // the user-facing label reflects the semantic — these are completed
+  // work products, not unfinished work).
   readonly filterOptions: SegmentedOption<Filter>[] = [
     { value: 'all',       label: 'All' },
-    { value: 'pending',   label: 'Pending' },
+    { value: 'pending',   label: 'Completed' },
     { value: 'partial',   label: 'Partial' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'failed',    label: 'Failed' }
   ];
 
-  // Default to 'pending' — the queue's primary purpose is showing what
-  // needs delivery now. The 'All' filter remains for auditing past work.
+  // Default to 'pending' (Completed) — the queue's primary purpose is
+  // showing what's done and waiting for handover.
   private readonly _filter = signal<Filter>('pending');
   readonly filter = this._filter.asReadonly();
   setFilter(f: Filter) { this._filter.set(f); }
+
+  /** Free-text search across patient name, phone, order id and report
+   *  id — same vibe as the FD landing's search box. */
+  private readonly _query = signal<string>('');
+  readonly query = this._query.asReadonly();
+  setQuery(q: string) { this._query.set(q); }
+  asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   private readonly _items = signal<Report[]>([]);
   readonly items = this._items.asReadonly();
@@ -473,8 +543,23 @@ export class ReportQueueComponent implements OnInit {
 
   readonly visible = computed(() => {
     const f = this._filter();
-    const l = this._items();
-    return f === 'all' ? l : l.filter(r => r.deliveryStatus === f);
+    const q = this._query().trim().toLowerCase();
+    let l = this._items();
+    if (f !== 'all') l = l.filter(r => r.deliveryStatus === f);
+    if (q) {
+      l = l.filter(r => {
+        const name = (r.order?.patient?.displayName ?? '').toLowerCase();
+        const phone = (r.order?.patient?.phone ?? '').toLowerCase();
+        // Match against patient name, phone, the short order id, and
+        // the short report id — covers every reasonable lookup
+        // reception runs from a paper slip.
+        return name.includes(q)
+          || phone.includes(q)
+          || r.orderId.toLowerCase().includes(q)
+          || r.id.toLowerCase().includes(q);
+      });
+    }
+    return l;
   });
 
   rowTone(status: string): TileTone {
@@ -489,6 +574,16 @@ export class ReportQueueComponent implements OnInit {
     if (status === 'pending') return 'amber';
     if (status === 'delivered') return 'emerald';
     return 'default';
+  }
+
+  /** Map raw deliveryStatus → user-facing label. The DB still stores
+   *  'pending' for "report generated, awaiting handover" but the user
+   *  thinks of these as Completed work, so we relabel at the edge. */
+  statusLabel(status: string): string {
+    if (status === 'pending') return 'Completed';
+    if (status === 'delivered') return 'Delivered';
+    if (status === 'failed') return 'Failed';
+    return status;
   }
 
   // ── Preliminary report state ────────────────────────────────────
@@ -612,7 +707,17 @@ export class ReportQueueComponent implements OnInit {
     } catch { return ''; }
   }
 
-  ngOnInit() { this.refresh(); }
+  ngOnInit() {
+    // Self-healing: ask the backend to generate any missing final
+    // reports for orders that are already 'validated' but have no
+    // report row yet (e.g. validations done before the
+    // auto-report-on-validation hook landed). Idempotent on the
+    // backend; failures are non-fatal — we still load the queue.
+    this.api.post<{ generated: number }>('/api/reports/backfill', {}).subscribe({
+      next: () => this.refresh(),
+      error: () => this.refresh()
+    });
+  }
 
   refresh() {
     this._loading.set(true);
@@ -630,6 +735,17 @@ export class ReportQueueComponent implements OnInit {
   }
 
   view(r: Report) { this.router.navigate(['/reports/view', r.id]); }
+
+  /** Download the report as a PDF (client-side render via jsPDF). */
+  async downloadPdf(r: Report) {
+    try {
+      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+      generateReportPdf({ report: r });
+    } catch (err) {
+      console.error('[reports] download failed', err);
+      this.toasts.error('Could not download report');
+    }
+  }
 
   deliver(r: Report, via: string) {
     this.api.post(`/api/reports/${r.id}/deliver`, { via, note: null }).subscribe({

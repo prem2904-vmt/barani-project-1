@@ -70,6 +70,11 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
+        path: 'admin/vendors',
+        canActivate: [permissionGuard('manage_tenant')],
+        loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)
+      },
+      {
         path: 'admin/lab-settings',
         canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
@@ -114,6 +119,11 @@ export const appRoutes: Route[] = [
         canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
       },
+      {
+        path: 'admin/kpis',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/kpis/kpi-config.component').then(m => m.KpiConfigComponent)
+      },
 
       // Frontdesk — orders / appointments / billing under one sticky
       // shell. Children swap inside the shell's <router-outlet>. Parent is
@@ -138,6 +148,11 @@ export const appRoutes: Route[] = [
             path: 'billing',
             canActivate: [permissionGuard(['create_bill', 'collect_payment'])],
             loadComponent: () => import('./features/frontdesk/billing/billing.component').then(m => m.BillingComponent)
+          },
+          {
+            path: 'appointments',
+            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order'])],
+            loadComponent: () => import('./features/frontdesk/appointments-calendar/appointments-calendar.component').then(m => m.AppointmentsCalendarComponent)
           },
           {
             path: 'appointments/new',
