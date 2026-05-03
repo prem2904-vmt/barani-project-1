@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, runInInjectionContext, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
@@ -86,6 +86,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
@@ -528,24 +529,30 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Refresh the queue immediately when a new appointment is booked
     // (e.g. via the calendar's quick-book modal). Without this, a fresh
     // booking only shows up at the next 30s poll.
-    toObservable(this.booking.bookedAt)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
+    runInInjectionContext(this.injector, () => {
+      toObservable(this.booking.bookedAt)
+        .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.refresh());
+    });
 
     // Same for billing events — a freshly-marked Pay later or a new
     // payment should reflect on the landing instantly so reception
     // sees outstanding balances without waiting for the poll.
-    toObservable(this.billingEvents.paid)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
-    toObservable(this.billingEvents.payLater)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        this.refresh();
-        // Surface the alert so reception can't miss it: pop the
-        // payments-due drawer open as soon as the new pay-later lands.
-        this._openQueue.set('payments');
-      });
+    runInInjectionContext(this.injector, () => {
+      toObservable(this.billingEvents.paid)
+        .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.refresh());
+    });
+    runInInjectionContext(this.injector, () => {
+      toObservable(this.billingEvents.payLater)
+        .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => {
+          this.refresh();
+          // Surface the alert so reception can't miss it: pop the
+          // payments-due drawer open as soon as the new pay-later lands.
+          this._openQueue.set('payments');
+        });
+    });
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
