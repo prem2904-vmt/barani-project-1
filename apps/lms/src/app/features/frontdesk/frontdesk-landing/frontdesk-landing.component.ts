@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import { skip } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
@@ -95,6 +95,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Local content signature used as a belt-and-braces no-op detector when an
   // intermediary strips ETag headers.
   private _ordersSig: string | null = null;
+
+  // Flags to skip initial effect runs (equivalent to skip(1))
+  private bookingSkipped = false;
+  private paidSkipped = false;
+  private payLaterSkipped = false;
 
   readonly dateOptions: Array<{ id: DateRange; label: string }> = [
     { id: 'today', label: 'Today' },
@@ -503,6 +508,41 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       }
       prevReady = next;
     });
+
+    // Refresh the queue immediately when a new appointment is booked
+    // (e.g. via the calendar's quick-book modal). Without this, a fresh
+    // booking only shows up at the next 30s poll.
+    effect(() => {
+      this.booking.bookedAt();
+      if (!this.bookingSkipped) {
+        this.bookingSkipped = true;
+        return;
+      }
+      this.refresh();
+    });
+
+    // Same for billing events — a freshly-marked Pay later or a new
+    // payment should reflect on the landing instantly so reception
+    // sees outstanding balances without waiting for the poll.
+    effect(() => {
+      this.billingEvents.paid();
+      if (!this.paidSkipped) {
+        this.paidSkipped = true;
+        return;
+      }
+      this.refresh();
+    });
+    effect(() => {
+      this.billingEvents.payLater();
+      if (!this.payLaterSkipped) {
+        this.payLaterSkipped = true;
+        return;
+      }
+      this.refresh();
+      // Surface the alert so reception can't miss it: pop the
+      // payments-due drawer open as soon as the new pay-later lands.
+      this._openQueue.set('payments');
+    });
   }
 
     ngOnInit() {
@@ -524,28 +564,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.hydrateApsFromUrl());
-
-    // Refresh the queue immediately when a new appointment is booked
-    // (e.g. via the calendar's quick-book modal). Without this, a fresh
-    // booking only shows up at the next 30s poll.
-    toObservable(this.booking.bookedAt)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
-
-    // Same for billing events — a freshly-marked Pay later or a new
-    // payment should reflect on the landing instantly so reception
-    // sees outstanding balances without waiting for the poll.
-    toObservable(this.billingEvents.paid)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
-    toObservable(this.billingEvents.payLater)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        this.refresh();
-        // Surface the alert so reception can't miss it: pop the
-        // payments-due drawer open as soon as the new pay-later lands.
-        this._openQueue.set('payments');
-      });
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
