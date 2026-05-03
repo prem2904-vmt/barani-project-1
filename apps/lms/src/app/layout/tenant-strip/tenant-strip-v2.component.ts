@@ -31,7 +31,7 @@ import { TenantStateService } from '../../core/services/tenant-state.service';
             <span class="pf-nb__icon" aria-hidden="true">{{ tenantInitial() }}</span>
           }
           @if (showName()) {
-            <span class="pf-nb__name">{{ brandingName() || tenantName() }}</span>
+            <span class="pf-nb__name">{{ tenantName() || brandingName()  }}</span>
           }
         </a>
 

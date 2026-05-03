@@ -405,7 +405,10 @@
   /* Patient-search component owns the rest of the row width; the Advanced
      button hugs the right edge but stays in normal flow so the wrap can
      shrink on narrow viewports. */
-  > pf-patient-search { flex: 1; min-width: 0; }
+  >pf-patient-search {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .pf-adv-search-btn {
@@ -426,12 +429,17 @@
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   flex-shrink: 0;
 }
+
 .pf-adv-search-btn:hover {
   color: var(--text-primary);
   background: var(--glass-bg-hover);
   border-color: rgba(168, 85, 247, 0.5);
 }
-.pf-adv-search-btn svg { color: #c4b5fd; }
+
+.pf-adv-search-btn svg {
+  color: #c4b5fd;
+}
+
 .pf-adv-search-btn__kbd {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
@@ -445,9 +453,18 @@
 }
 
 @media (max-width: 720px) {
-  .pf-adv-search-btn { height: 52px; padding: 0 14px; }
-  .pf-adv-search-btn__label { display: none; }
-  .pf-adv-search-btn__kbd { display: none; }
+  .pf-adv-search-btn {
+    height: 52px;
+    padding: 0 14px;
+  }
+
+  .pf-adv-search-btn__label {
+    display: none;
+  }
+
+  .pf-adv-search-btn__kbd {
+    display: none;
+  }
 }
 
 .pf-date-pills {
@@ -1559,8 +1576,8 @@
   border-left: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: 24px 0 0 24px;
   box-shadow: -28px 0 80px rgba(0, 0, 0, 0.3),
-              -4px 0 24px rgba(139, 92, 246, 0.1),
-              inset 1px 0 0 rgba(139, 92, 246, 0.06);
+    -4px 0 24px rgba(139, 92, 246, 0.1),
+    inset 1px 0 0 rgba(139, 92, 246, 0.06);
   z-index: 45;
   display: flex;
   flex-direction: column;
@@ -2470,11 +2487,7 @@
      * --appt-a / --appt-b CSS variables (percentages of the row
      * width). Pane widths are: A | (B − A) | (100 − B). */
     grid-template-columns:
-      calc(var(--appt-a, 33%) - 4px)
-      8px
-      calc(var(--appt-b, 66%) - var(--appt-a, 33%) - 8px)
-      8px
-      calc(100% - var(--appt-b, 66%) - 4px);
+      calc(var(--appt-a, 33%) - 4px) 8px calc(var(--appt-b, 66%) - var(--appt-a, 33%) - 8px) 8px calc(100% - var(--appt-b, 66%) - 4px);
     gap: 0;
     /* Cap the row to a viewport-relative height so each pane has
      * a finite area to scroll inside. The page itself can still
@@ -2500,13 +2513,22 @@
 }
 
 @media (min-width: 1024px) {
+
   /* Symmetric padding: every pane has 8px on each inner side, so the
    * 8px draggable handle sits inside a 24px breathing strip
    * (8 pane + 8 handle + 8 pane). Outer edges of the first/last pane
    * hug the row edge so the row uses its full width. */
-  .pf-appt-split__pane            { padding: 0 8px; }
-  .pf-appt-split__pane:first-child { padding-left: 0; }
-  .pf-appt-split__pane--done       { padding-right: 0; }
+  .pf-appt-split__pane {
+    padding: 0 8px;
+  }
+
+  .pf-appt-split__pane:first-child {
+    padding-left: 0;
+  }
+
+  .pf-appt-split__pane--done {
+    padding-right: 0;
+  }
 
   /* Each pane is its own scroll container: header stays put, the
    * cards list flexes to the remaining height and scrolls. */
@@ -2514,12 +2536,14 @@
     min-height: 0;
     overflow: hidden;
   }
-  .pf-appt-split__pane > .pf-appt-split__hdr,
-  .pf-appt-split__pane > .pf-bulk-bar,
-  .pf-appt-split__pane > .pf-empty {
+
+  .pf-appt-split__pane>.pf-appt-split__hdr,
+  .pf-appt-split__pane>.pf-bulk-bar,
+  .pf-appt-split__pane>.pf-empty {
     flex-shrink: 0;
   }
-  .pf-appt-split__pane > .pf-cards {
+
+  .pf-appt-split__pane>.pf-cards {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -2640,6 +2664,7 @@
   text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
+
 .pf-appt-split__link:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
@@ -2920,7 +2945,9 @@
 
 /* Match the order drawer — leave room for the floating bottom-nav pill. */
 @media (max-width: 1279px) {
-  .pf-q-drawer { bottom: calc(var(--tab-nav-total-height, 0px) + 8px); }
+  .pf-q-drawer {
+    bottom: calc(var(--tab-nav-total-height, 0px) + 8px);
+  }
 }
 
 @keyframes pf-q-drawer-in {
@@ -3018,15 +3045,22 @@
  * filter through inRange() so flipping a pill re-scopes
  * Appointments + In Progress + Completed in one move. */
 .pf-toolbar-row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  // justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
 .pf-toolbar-row .pf-alerts {
-  display: flex; align-items: center; gap: 8px;
-  flex: 1 1 auto; min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  //flex: 1 1 auto;
+  min-width: 0;
 }
+
 .pf-date-pills {
   display: inline-flex;
   padding: 3px;
@@ -3035,6 +3069,7 @@
   border-radius: 9999px;
   flex: 0 0 auto;
 }
+
 .pf-date-pill {
   padding: 6px 14px;
   background: transparent;
@@ -3047,7 +3082,11 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.pf-date-pill:hover { color: var(--text-primary); }
+
+.pf-date-pill:hover {
+  color: var(--text-primary);
+}
+
 .pf-date-pill--on {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
   color: white;
@@ -3065,30 +3104,47 @@
   gap: 10px;
   padding: 10px 12px;
 }
-.pf-card--completed:hover { filter: brightness(1.06); }
+
+.pf-card--completed:hover {
+  filter: brightness(1.06);
+}
+
 .pf-card__name {
   margin: 0;
-  font-size: 13.5px; font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
 .pf-card__meta {
   margin: 2px 0 0;
   font-size: 11px;
   color: var(--text-tertiary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
+
 .pf-card__actions {
-  display: flex; align-items: center; gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
 }
+
 .pf-completed-chip {
   padding: 3px 9px;
   border-radius: 9999px;
-  font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
+
 .pf-completed-chip--done {
   background: rgba(16, 185, 129, 0.18);
   color: #6ee7b7;
@@ -3099,131 +3155,209 @@
 .pf-bulk-bar {
   margin: 8px 0;
   padding: 8px 10px;
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
   border: 1px solid rgba(168, 85, 247, 0.40);
   border-radius: 12px;
   flex-wrap: wrap;
 }
+
 .pf-bulk-bar__count {
-  font-size: 11.5px; font-weight: 700;
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: #c4b5fd;
 }
+
 .pf-bulk-bar__btn {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 9999px;
   color: var(--text-primary);
-  font-size: 12px; font-weight: 600;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
-.pf-bulk-bar__btn:hover { background: var(--bg-hover); }
+
+.pf-bulk-bar__btn:hover {
+  background: var(--bg-hover);
+}
+
 .pf-bulk-bar__btn--primary {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white; border-color: transparent;
+  color: white;
+  border-color: transparent;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
 }
-.pf-bulk-bar__btn--primary:hover { filter: brightness(1.08); }
+
+.pf-bulk-bar__btn--primary:hover {
+  filter: brightness(1.08);
+}
+
 .pf-bulk-bar__clear {
   margin-left: auto;
-  width: 24px; height: 24px;
-  background: transparent; border: 0;
-  color: var(--text-secondary); cursor: pointer;
-  font-size: 18px; line-height: 1;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
   border-radius: 50%;
 }
-.pf-bulk-bar__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.pf-bulk-bar__clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 
 /* ── Dispatch package modal ──────────────────────────────── */
 .pf-pkg-modal {
-  position: fixed; inset: 0; z-index: 1100;
-  display: flex; align-items: center; justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 5vh 24px 24px;
 }
+
 .pf-pkg-modal__backdrop {
-  position: absolute; inset: 0;
+  position: absolute;
+  inset: 0;
   background:
     radial-gradient(900px 600px at 50% 100%, rgba(124, 58, 237, 0.18), transparent 60%),
     rgba(5, 5, 15, 0.72);
   backdrop-filter: blur(12px) saturate(1.2);
 }
+
 .pf-pkg-modal__shell {
   position: relative;
-  width: 100%; max-width: 480px;
+  width: 100%;
+  max-width: 480px;
   max-height: 86dvh;
-  display: flex; flex-direction: column;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card-solid);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
-  box-shadow: 0 30px 70px rgba(0,0,0,0.55);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
+
 .pf-pkg-modal__hdr {
-  display: flex; align-items: flex-start; justify-content: space-between;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   padding: 18px 22px 14px;
   border-bottom: 1px solid var(--glass-border);
 }
+
 .pf-pkg-modal__code {
   margin: 4px 0 0;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 22px; font-weight: 700;
+  font-size: 22px;
+  font-weight: 700;
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  -webkit-background-clip: text; background-clip: text;
+  -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
   letter-spacing: 0.04em;
 }
+
 .pf-pkg-modal__x {
-  width: 32px; height: 32px;
+  width: 32px;
+  height: 32px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 9px;
   color: var(--text-muted);
   cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.pf-pkg-modal__x:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--glass-border); }
+
+.pf-pkg-modal__x:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--glass-border);
+}
 
 .pf-pkg-modal__body {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px 22px 4px;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
+
 .pf-pkg-modal__qr {
   padding: 14px;
   background: white;
   border-radius: 16px;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
 }
-.pf-pkg-modal__qr img { display: block; border-radius: 8px; }
+
+.pf-pkg-modal__qr img {
+  display: block;
+  border-radius: 8px;
+}
+
 .pf-pkg-modal__hint {
   margin: 0;
-  font-size: 12.5px; color: var(--text-secondary);
+  font-size: 12.5px;
+  color: var(--text-secondary);
   text-align: center;
 }
+
 .pf-pkg-modal__actions {
-  display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
+
 .pf-pkg-modal__btn {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 9999px;
   color: var(--text-primary);
-  font-size: 12.5px; font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 }
-.pf-pkg-modal__btn:hover { background: var(--bg-hover); }
+
+.pf-pkg-modal__btn:hover {
+  background: var(--bg-hover);
+}
+
 .pf-pkg-modal__btn--primary {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white; border-color: transparent;
+  color: white;
+  border-color: transparent;
   padding: 10px 18px;
   box-shadow: 0 6px 18px rgba(124, 58, 237, 0.32);
 }
-.pf-pkg-modal__btn--primary:hover { filter: brightness(1.08); }
+
+.pf-pkg-modal__btn--primary:hover {
+  filter: brightness(1.08);
+}
 
 .pf-pkg-modal__manifest {
   width: 100%;
@@ -3231,21 +3365,41 @@
   padding-top: 12px;
   border-top: 1px solid var(--glass-border);
 }
-.pf-pkg-modal__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.pf-pkg-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .pf-pkg-modal__row {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 6px 8px;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
   font-size: 12px;
 }
-.pf-pkg-modal__row-name { font-weight: 600; color: var(--text-primary); }
+
+.pf-pkg-modal__row-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .pf-pkg-modal__row-meta {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px; color: var(--text-tertiary);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
 }
+
 .pf-pkg-modal__foot {
   padding: 14px 22px;
   border-top: 1px solid var(--glass-border);
-  display: flex; justify-content: flex-end;
+  display: flex;
+  justify-content: flex-end;
 }
