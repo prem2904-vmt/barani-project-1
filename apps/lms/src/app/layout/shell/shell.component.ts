@@ -4,7 +4,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
-import { TenantStripComponent } from '../tenant-strip/tenant-strip.component';
+import { TenantStripV2Component } from '../tenant-strip/tenant-strip-v2.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
 import { PatientProfileModalComponent } from '../../shared/components/patient-profile-modal/patient-profile-modal.component';
 import { AppointmentBookingModalComponent } from '../../shared/components/appointment-booking-modal/appointment-booking-modal.component';
@@ -12,7 +12,7 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, TenantStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
+  imports: [RouterOutlet, TopStripComponent, TenantStripV2Component, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -20,13 +20,17 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 
     <!-- Everything above sits in a stacking context on top of the ambient. -->
     <div class="shell-stack">
-      <pf-top-strip></pf-top-strip>
+      <!-- Unified chrome pill: both navbars live inside one rounded
+           container. The card provides border-radius + background +
+           blur; the inner rows are flat. A hairline divider separates
+           the two rows without breaking the single-card feel. -->
+      <div class="pf-chrome">
+        <pf-top-strip></pf-top-strip>
+        <div class="pf-chrome__divider" aria-hidden="true"></div>
+        <pf-tenant-strip-v2></pf-tenant-strip-v2>
+      </div>
 
       <main class="shell-main relative">
-        <!-- Per-screen tenant + branch header — same component
-             across every route so the lab name + active branch
-             always sit above the page content. -->
-        <pf-tenant-strip></pf-tenant-strip>
         <router-outlet></router-outlet>
       </main>
 
@@ -98,9 +102,33 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
       overflow: hidden;
     }
 
-    /* main is the page scroll container — tenant-strip sits inside it
-     * so it scrolls away with the routed content instead of staying locked.
-     * Bottom padding leaves room for the floating bottom-nav pill on mobile + tablet. */
+    /* Single chrome card — both navbars live inside one floating
+     * rounded container. The card is sticky so it remains at the top
+     * as the page content scrolls below it. */
+    .pf-chrome {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      flex-shrink: 0;
+      margin: 8px 12px 0;
+      border-radius: 24px;
+      background: var(--header-bg);
+      border: 1px solid var(--header-border);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      overflow: hidden;
+    }
+    @media (min-width: 640px) {
+      .pf-chrome { margin: 8px 16px 0; }
+    }
+
+    /* Hairline between the two navbar rows */
+    .pf-chrome__divider {
+      height: 1px;
+      background: var(--header-border);
+      margin: 0 16px;
+    }
+
     .shell-main {
       flex: 1;
       min-height: 0;
