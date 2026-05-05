@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -52,7 +52,7 @@ const COUNTERS: CounterSpec[] = [
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-5 md:px-8 lg:px-10 pt-5 pb-10">
+    <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
       <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
 
@@ -202,25 +202,92 @@ const COUNTERS: CounterSpec[] = [
         }
       </div>
 
-      <!-- Secondary filter: lab intake / my work / service queue / rejected -->
-      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <pf-segmented [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"/>
-        @if (tab() !== 'intake') {
-          <p class="text-[11px] font-mono uppercase tracking-[0.14em]"
-             style="color: var(--text-muted);">
-            {{ rows().length }} items · {{ countFor('my_work') }} mine · {{ countFor('service_queue') }} pool · {{ countFor('rejected') }} rejected
-          </p>
-        }
-      </div>
+      <!-- 2-col layout: Lab Intake on the left, My Work / Queue tabs on
+           the right. Same pattern as the Frontdesk landing splitter so
+           the techs see the intake queue and their bench work side by
+           side without tab-switching. Single drag handle in the middle. -->
+      <div class="pf-mw-split" #mwSplit
+           [class.pf-mw-split--dragging]="mwDragging()">
 
-      @if (tab() === 'intake') {
-        <!-- Lab intake: dispatched orders awaiting "Mark Arrived" + arrived
-             tubes awaiting bench-tech pickup. The standalone /lab/receive
-             route renders the same component; this tab embeds it inline so
-             techs flip between intake and their bench work without leaving
-             the workbench. -->
-        <pf-receive-samples [embedded]="true"></pf-receive-samples>
-      } @else {
+        <!-- LEFT: Lab Intake (always visible) — header hosts an inline
+             scan bar: barcode icon, manual-typing input, camera shortcut,
+             and a Receive button. Hits Enter or clicks Receive to intake.
+             The camera button opens the same scanner the standalone
+             /lab/receive page uses; on match it auto-intakes. -->
+        <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            <span class="pf-mw-pane__title">Lab Intake</span>
+            <div class="pf-mw-scan">
+              <svg class="pf-mw-scan__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
+              </svg>
+              <input type="text" class="pf-mw-scan__input"
+                     placeholder="Scan or type PF-XXXX-XXXXX"
+                     [value]="intakeScanInput()"
+                     (input)="intakeScanInput.set($any($event.target).value)"
+                     (keydown.enter)="intakeReceive()" />
+              <button type="button" class="pf-mw-scan__cam press" (click)="openIntakeScanner()"
+                      title="Scan with camera" aria-label="Scan with camera">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="7" width="18" height="13" rx="2"/>
+                  <path d="M8 7 10 4h4l2 3"/>
+                  <circle cx="12" cy="13" r="3.5"/>
+                </svg>
+              </button>
+              <button type="button" class="pf-mw-scan__btn press"
+                      [disabled]="!intakeScanInput().trim()"
+                      (click)="intakeReceive()">Receive</button>
+            </div>
+          </header>
+          <div class="pf-mw-pane__body">
+            <pf-receive-samples #intakeRef [embedded]="true"></pf-receive-samples>
+          </div>
+        </section>
+
+        <!-- Drag handle -->
+        <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
+             aria-label="Resize Lab Intake / Workbench"
+             [attr.aria-valuenow]="mwSplitPct()" aria-valuemin="20" aria-valuemax="80" tabindex="0"
+             (pointerdown)="onMwSplitPointerDown($event)"
+             (pointermove)="onMwSplitPointerMove($event)"
+             (pointerup)="onMwSplitPointerUp($event)"
+             (pointercancel)="onMwSplitPointerUp($event)"
+             (lostpointercapture)="onMwSplitPointerUp($event)">
+          <span class="pf-mw-handle__grip" aria-hidden="true"></span>
+        </div>
+
+        <!-- RIGHT: tabbed My Work + Queue -->
+        <section class="pf-mw-pane">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
+            <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'my_work'"
+                      [attr.aria-selected]="tab() === 'my_work'"
+                      (click)="setTab('my_work')">
+                My Work
+                <span class="pf-mw-tab__count">{{ countFor('my_work') }}</span>
+              </button>
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'service_queue'"
+                      [attr.aria-selected]="tab() === 'service_queue'"
+                      (click)="setTab('service_queue')">
+                Queue
+                <span class="pf-mw-tab__count">{{ countFor('service_queue') }}</span>
+              </button>
+            </div>
+            <p class="pf-mw-pane__meta">
+              {{ rows().length }} items
+              @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
+            </p>
+          </header>
+          <div class="pf-mw-pane__body">
       @if (loading() && rows().length === 0) {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           @for (i of [0,1,2,3]; track i) {
@@ -434,7 +501,9 @@ const COUNTERS: CounterSpec[] = [
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
       }
-      } <!-- end @else for non-intake tab -->
+          </div>
+        </section>
+      </div>
     </section>
 
     @if (scanTarget(); as t) {
@@ -465,6 +534,261 @@ const COUNTERS: CounterSpec[] = [
     }
   `,
   styles: [`
+    /* No page-level scroll — :host fills the routed area, the inner
+     * <section> chains flex so the splitter takes the remaining height
+     * and each pane scrolls its own body. Mirrors Frontdesk landing. */
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    :host > section {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    :host > section > pf-kpi-strip,
+    :host > section > pf-screen-header,
+    :host > section > .pf-scan-row,
+    :host > section > .manual-toggle,
+    :host > section > .grid {
+      flex-shrink: 0;
+    }
+
+    /* ── 2-col split: Lab Intake | Workbench tabs ─────────────
+     * Same pattern as the FD landing splitter — single drag handle,
+     * card-style panes, pointer events for reliable resize. */
+    .pf-mw-split {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+      min-height: 0;
+    }
+    .pf-mw-pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      background: var(--glass-bg);
+      overflow: hidden;
+    }
+    .pf-mw-pane__hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--glass-border);
+      flex-shrink: 0;
+    }
+    .pf-mw-pane__hdr--tabs {
+      padding: 6px 12px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pf-mw-pane__title {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    /* Lab Intake header — has the title on the left and an inline scan
+     * bar on the right (icon + manual-typing input + camera shortcut +
+     * Receive button). All three input methods feed the same intake
+     * pipeline. The header gets a bit more padding because the bar is
+     * 36px tall. */
+    .pf-mw-pane__hdr--intake {
+      gap: 12px;
+      padding: 10px 12px;
+      flex-wrap: wrap;
+    }
+    .pf-mw-scan {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1 1 220px;
+      min-width: 0;
+      max-width: 460px;
+      height: 36px;
+      padding: 2px 4px 2px 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 9999px;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .pf-mw-scan:focus-within {
+      border-color: rgba(168, 85, 247, 0.56);
+      background: var(--glass-bg-hover);
+    }
+    .pf-mw-scan__icon { color: var(--text-muted); flex-shrink: 0; }
+    .pf-mw-scan__input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: 0.02em;
+    }
+    .pf-mw-scan__input::placeholder { color: var(--text-muted); }
+    .pf-mw-scan__cam {
+      width: 28px; height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 0;
+      border-radius: 9999px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .pf-mw-scan__cam:hover {
+      background: rgba(168, 85, 247, 0.16);
+      color: #c4b5fd;
+    }
+    .pf-mw-scan__btn {
+      padding: 6px 14px;
+      border: 0;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: filter 0.15s ease, transform 0.06s ease;
+    }
+    .pf-mw-scan__btn:hover { filter: brightness(1.12); }
+    .pf-mw-scan__btn:active { transform: scale(0.98); }
+    .pf-mw-scan__btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      filter: none;
+    }
+    .pf-mw-pane__meta {
+      margin-left: auto;
+      margin: 0 0 0 auto;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .pf-mw-pane__body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 16px 16px;
+    }
+
+    /* Tab cluster (right pane header) */
+    .pf-mw-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 9999px;
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-mw-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border: 0;
+      background: transparent;
+      border-radius: 9999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+    .pf-mw-tab:hover { color: var(--text-primary); }
+    .pf-mw-tab--on {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
+    }
+    .pf-mw-tab__count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.18);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      color: var(--text-primary);
+    }
+    .pf-mw-tab--on .pf-mw-tab__count {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    /* Drag handle — hidden in the mobile/tablet stacked layout below
+     * 1024px. At desktop the panes lay out side-by-side as a row. */
+    .pf-mw-handle { display: none; }
+
+    @media (min-width: 1024px) {
+      .pf-mw-split {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0;
+        flex: 1;
+        min-height: 0;
+      }
+      .pf-mw-pane:first-of-type {
+        flex: 0 0 33%;
+        min-width: 0;
+      }
+      .pf-mw-pane:not(:first-of-type) {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .pf-mw-handle {
+        flex: 0 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: col-resize;
+        touch-action: none;
+        z-index: 2;
+      }
+      .pf-mw-handle__grip {
+        width: 5px;
+        height: 44px;
+        border-radius: 9999px;
+        background: var(--glass-border);
+        opacity: 0.55;
+        transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease;
+      }
+      .pf-mw-handle:hover .pf-mw-handle__grip,
+      .pf-mw-split--dragging .pf-mw-handle__grip {
+        opacity: 1;
+        height: 56px;
+        background: linear-gradient(180deg, #a855f7, #ec4899);
+        box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18);
+      }
+      .pf-mw-split--dragging {
+        cursor: col-resize;
+        user-select: none;
+      }
+    }
+
     /* Delegate link on pool rows — supervisor action. */
     .pf-delegate-btn {
       margin-left: 8px;
@@ -867,10 +1191,73 @@ export class MyWorkComponent implements OnInit {
   // with their rejection reason in the tube tile, so the tech sees WHY
   // the pathologist sent it back without switching tabs.
   readonly tabOptions = [
-    { value: 'intake'        as Tab, label: 'Lab Intake' },
     { value: 'my_work'       as Tab, label: 'My Work' },
-    { value: 'service_queue' as Tab, label: 'Service Queue' }
+    { value: 'service_queue' as Tab, label: 'Queue' }
   ];
+
+  /** ViewChild ref to the embedded Lab Intake component so the pane
+   *  header's inline scan bar can trigger the camera scanner OR pass a
+   *  typed barcode straight to the receive flow. Auto-intake fires when
+   *  the scanner reports a match. */
+  private readonly intakeRef = viewChild<ReceiveSamplesComponent>('intakeRef');
+  /** Buffer for the header's manual-typing input. Cleared after submit. */
+  protected readonly intakeScanInput = signal('');
+  openIntakeScanner() { this.intakeRef()?.openBarcodeScanner(); }
+  intakeReceive() {
+    const code = this.intakeScanInput().trim();
+    if (!code) return;
+    this.intakeRef()?.receiveByCode(code);
+    this.intakeScanInput.set('');
+  }
+
+  // ── Lab Intake ↔ Workbench split (desktop only) ─────────────
+  // Persisted percentage of the row width given to the LEFT pane
+  // (Lab Intake). The right pane fills the remainder.
+  private static readonly MW_SPLIT_KEY = 'pf.lms.lab.mwSplitPct';
+  private readonly _mwSplitPct = signal<number>(this.loadMwSplit());
+  readonly mwSplitPct = this._mwSplitPct.asReadonly();
+  private readonly _mwDragging = signal(false);
+  readonly mwDragging = this._mwDragging.asReadonly();
+  private _mwActivePointerId: number | null = null;
+
+  private loadMwSplit(): number {
+    try {
+      const raw = localStorage.getItem(MyWorkComponent.MW_SPLIT_KEY);
+      const n = raw ? Number(raw) : 33;
+      return Number.isFinite(n) && n >= 20 && n <= 80 ? n : 33;
+    } catch { return 33; }
+  }
+  private persistMwSplit(n: number) {
+    try { localStorage.setItem(MyWorkComponent.MW_SPLIT_KEY, String(n)); } catch { /* ignore */ }
+  }
+
+  onMwSplitPointerDown(ev: PointerEvent) {
+    const target = ev.currentTarget as HTMLElement;
+    target.setPointerCapture(ev.pointerId);
+    this._mwActivePointerId = ev.pointerId;
+    this._mwDragging.set(true);
+    ev.preventDefault();
+  }
+  onMwSplitPointerMove(ev: PointerEvent) {
+    if (this._mwActivePointerId !== ev.pointerId) return;
+    const split = (ev.currentTarget as HTMLElement).parentElement;
+    if (!split) return;
+    const rect = split.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const raw = ((ev.clientX - rect.left) / rect.width) * 100;
+    const clamped = Math.max(20, Math.min(80, raw));
+    this._mwSplitPct.set(clamped);
+    const firstPane = split.querySelector<HTMLElement>(':scope > .pf-mw-pane');
+    if (firstPane) firstPane.style.flexBasis = clamped + '%';
+  }
+  onMwSplitPointerUp(ev: PointerEvent) {
+    if (this._mwActivePointerId !== ev.pointerId && ev.type !== 'lostpointercapture') return;
+    const target = ev.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(ev.pointerId)) target.releasePointerCapture(ev.pointerId);
+    this._mwActivePointerId = null;
+    this._mwDragging.set(false);
+    this.persistMwSplit(this._mwSplitPct());
+  }
   readonly counters = COUNTERS;
 
   private readonly _tab = signal<Tab>('my_work');

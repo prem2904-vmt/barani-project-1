@@ -137,6 +137,55 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _selectedIds = signal<Set<string>>(new Set());
   readonly selectedIds = this._selectedIds.asReadonly();
 
+  // Mobile / tablet accordion state — which of the 3 split panes is
+  // currently expanded. Single-expand for predictable layout: tapping a
+  // header expands that pane and collapses the other two; tapping the
+  // already-expanded header collapses everything ('none' state shows
+  // just the 3 header bars). Ignored at desktop (≥1024px) where the CSS
+  // grid lays all three panes out side-by-side.
+  private readonly _expandedPane = signal<'appt' | 'work' | 'none'>('appt');
+  readonly expandedPane = this._expandedPane.asReadonly();
+  togglePane(id: 'appt' | 'work') {
+    this._expandedPane.update(curr => curr === id ? 'none' : id);
+  }
+
+
+  // Active tab inside the Work pane — In progress vs Completed. Persisted
+  // so the user lands on the same tab next session.
+  private static readonly WORK_TAB_KEY = 'pf.lms.frontdesk.workTab';
+  private readonly _workTab = signal<'ip' | 'done'>(this.loadWorkTab());
+  readonly workTab = this._workTab.asReadonly();
+  setWorkTab(t: 'ip' | 'done') {
+    this._workTab.set(t);
+    try { localStorage.setItem(FrontdeskLandingComponent.WORK_TAB_KEY, t); } catch { /* ignore */ }
+  }
+  private loadWorkTab(): 'ip' | 'done' {
+    try {
+      const raw = localStorage.getItem(FrontdeskLandingComponent.WORK_TAB_KEY);
+      return raw === 'done' ? 'done' : 'ip';
+    } catch { return 'ip'; }
+  }
+
+  // ── Two-pane split (when one column is hidden) ────────────
+  // When the user hides one pane, the remaining two share the row. This
+  // is a separate split percentage from the 3-pane case (--appt-a/--b)
+  // so toggling between modes preserves both mental models. Persisted
+  // independently. 0-100 = % width of the FIRST visible pane.
+  private static readonly TWO_SPLIT_KEY = 'pf.lms.frontdesk.twoPaneSplit';
+  protected readonly _twoPaneSplit = signal<number>(this.loadTwoPaneSplit());
+  readonly twoPaneSplit = this._twoPaneSplit.asReadonly();
+  private loadTwoPaneSplit(): number {
+    try {
+      const raw = localStorage.getItem(FrontdeskLandingComponent.TWO_SPLIT_KEY);
+      const n = raw ? Number(raw) : 50;
+      return Number.isFinite(n) && n >= 15 && n <= 85 ? n : 50;
+    } catch { return 50; }
+  }
+  private persistTwoPaneSplit(n: number) {
+    try { localStorage.setItem(FrontdeskLandingComponent.TWO_SPLIT_KEY, String(n)); }
+    catch { /* quota / private mode */ }
+  }
+
   private readonly _stragglersOpen = signal<boolean>(false);
   readonly stragglersOpen = this._stragglersOpen.asReadonly();
   private readonly _stragglersDismissed = signal<boolean>(false);
@@ -173,14 +222,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _apptSplitDragging = signal<boolean>(false);
   readonly apptSplitDragging = this._apptSplitDragging.asReadonly();
   /** Which slider is currently being dragged: 'a' (left) or 'b' (right). */
-  private _draggingHandle: 'a' | 'b' | null = null;
+  private _draggingHandle: 'a' | 'b' | 'two' | null = null;
   /** ViewChild ref — gives us the container's bounding rect so we can
    *  translate pointer X into a percentage. */
   protected readonly apptSplitEl = viewChild<ElementRef<HTMLDivElement>>('apptSplit');
-  /** Live drag handlers, kept on the instance so we can detach them on
-   *  pointerup. Bound in arrow form because the events fire on window. */
-  private _onDragMove?: (ev: MouseEvent | TouchEvent) => void;
-  private _onDragEnd?: () => void;
+  /** Active pointer id during drag — set in pointerdown, cleared in
+   *  pointerup. Used to ignore stray pointermove events from a different
+   *  pointer (e.g. a second touch). */
+  private _activePointerId: number | null = null;
 
   /** Which exception-queue drawer is open (null = none). Walk-ins / Ready /
       Payments-due used to be tabs; they're now alert chips that open this
@@ -509,6 +558,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       prevReady = next;
     });
 
+    // Mirror the Appt|Work split into the first pane's `flex-basis`
+    // whenever the value changes (or the viewChild ref becomes
+    // available). Belt-and-braces alongside the [style.flex-basis.%]
+    // template binding — guarantees the layout reacts to drag updates
+    // even if the binding's CD pass is delayed.
+    effect(() => {
+      const v = this._twoPaneSplit();
+      const el = this.apptSplitEl()?.nativeElement;
+      if (!el) return;
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      if (firstPane) firstPane.style.flexBasis = v + '%';
+    });
+
     // Refresh the queue immediately when a new appointment is booked
     // (e.g. via the calendar's quick-book modal). Without this, a fresh
     // booking only shows up at the next 30s poll.
@@ -792,68 +854,59 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this._advancedOpen.update(o => !o);
   }
 
-  // ── Appointments ↔ In-progress draggable splitter ─────────
-  startApptSplitDrag(ev: MouseEvent | TouchEvent, handle: 'a' | 'b' = 'a') {
-    // Skip the drag flow on viewports below 1024px — the layout stacks
-    // vertically there and the handle isn't even rendered, but this is
-    // belt-and-braces in case CSS/TS get out of sync.
-    if (typeof window === 'undefined' || window.innerWidth < 1024) return;
-    ev.preventDefault();
+  // ── Splitter drag (Pointer Events API) ─────────────────────
+  // Pointer Events with setPointerCapture is the modern, reliable way
+  // to handle drag — works for mouse, touch, and pen with the same
+  // code, doesn't lose track when the cursor leaves the viewport, and
+  // doesn't need fragile window-level mousemove listeners.
 
-    this._draggingHandle = handle;
+  /** Pointerdown on the handle: capture the pointer so every
+   *  subsequent move + up event is delivered to this element. */
+  onSplitPointerDown(ev: PointerEvent) {
+    const target = ev.currentTarget as HTMLElement;
+    target.setPointerCapture(ev.pointerId);
+    this._activePointerId = ev.pointerId;
+    this._draggingHandle = 'two';
     this._apptSplitDragging.set(true);
-    this._onDragMove = (e: MouseEvent | TouchEvent) => this.onApptSplitMove(e);
-    this._onDragEnd  = () => this.endApptSplitDrag();
-    window.addEventListener('mousemove', this._onDragMove as EventListener);
-    window.addEventListener('mouseup',   this._onDragEnd!);
-    window.addEventListener('touchmove', this._onDragMove as EventListener, { passive: false });
-    window.addEventListener('touchend',  this._onDragEnd!);
-    window.addEventListener('touchcancel', this._onDragEnd!);
+    ev.preventDefault();
   }
 
-  private onApptSplitMove(ev: MouseEvent | TouchEvent) {
+  /** Pointermove on the handle (delivered here directly because we
+   *  captured the pointer in pointerdown). Translate clientX into a
+   *  percentage of the splitter row, clamp 15–85, write to both the
+   *  signal and the pane's inline flex-basis for snappy feedback. */
+  onSplitPointerMove(ev: PointerEvent) {
+    if (this._activePointerId !== ev.pointerId) return;
     const el = this.apptSplitEl()?.nativeElement;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const clientX = ev instanceof MouseEvent
-      ? ev.clientX
-      : (ev.touches[0]?.clientX ?? rect.left + rect.width / 2);
-    if (ev instanceof TouchEvent && ev.cancelable) ev.preventDefault();
-
-    const raw = ((clientX - rect.left) / rect.width) * 100;
-    if (this._draggingHandle === 'a') {
-      const { a, b } = this.clampSplit(raw, this._apptSplitPctB());
-      this._apptSplitPctA.set(a);
-      this._apptSplitPctB.set(b);
-    } else if (this._draggingHandle === 'b') {
-      const { a, b } = this.clampSplit(this._apptSplitPctA(), raw);
-      this._apptSplitPctA.set(a);
-      this._apptSplitPctB.set(b);
-    }
+    if (rect.width <= 0) return;
+    const raw = ((ev.clientX - rect.left) / rect.width) * 100;
+    const clamped = Math.max(15, Math.min(85, raw));
+    this._twoPaneSplit.set(clamped);
+    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+    if (firstPane) firstPane.style.flexBasis = clamped + '%';
   }
 
-  private endApptSplitDrag() {
-    this._apptSplitDragging.set(false);
+  /** Pointerup / pointercancel / lostpointercapture — release capture,
+   *  flush the persisted value, drop dragging state. */
+  onSplitPointerUp(ev: PointerEvent) {
+    if (this._activePointerId !== ev.pointerId && ev.type !== 'lostpointercapture') return;
+    const target = ev.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(ev.pointerId)) {
+      target.releasePointerCapture(ev.pointerId);
+    }
+    this._activePointerId = null;
     this._draggingHandle = null;
-    if (this._onDragMove) {
-      window.removeEventListener('mousemove', this._onDragMove as EventListener);
-      window.removeEventListener('touchmove', this._onDragMove as EventListener);
-    }
-    if (this._onDragEnd) {
-      window.removeEventListener('mouseup', this._onDragEnd);
-      window.removeEventListener('touchend', this._onDragEnd);
-      window.removeEventListener('touchcancel', this._onDragEnd);
-    }
-    this._onDragMove = undefined;
-    this._onDragEnd = undefined;
-    this.persistApptSplit();
+    this._apptSplitDragging.set(false);
+    this.persistTwoPaneSplit(this._twoPaneSplit());
   }
 
   /** Keyboard accessibility — left/right arrows nudge the focused
    *  divider in 2% steps; Home/End jump to the bounds for that
    *  handle's allowed range. The handle ('a' or 'b') is passed via
    *  the (keydown) binding on each separator element. */
-  onApptSplitKey(ev: KeyboardEvent, handle: 'a' | 'b' = 'a') {
+  onApptSplitKey(ev: KeyboardEvent, handle: 'a' | 'b' | 'two' = 'a') {
     const step =
       ev.key === 'ArrowLeft'  ? -2 :
       ev.key === 'ArrowRight' ? +2 :
@@ -865,12 +918,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       const { a, b } = this.clampSplit(this._apptSplitPctA() + step, this._apptSplitPctB());
       this._apptSplitPctA.set(a);
       this._apptSplitPctB.set(b);
-    } else {
+      this.persistApptSplit();
+    } else if (handle === 'b') {
       const { a, b } = this.clampSplit(this._apptSplitPctA(), this._apptSplitPctB() + step);
       this._apptSplitPctA.set(a);
       this._apptSplitPctB.set(b);
+      this.persistApptSplit();
+    } else {
+      const next = Math.max(15, Math.min(85, this._twoPaneSplit() + step));
+      this._twoPaneSplit.set(next);
+      this.persistTwoPaneSplit(next);
     }
-    this.persistApptSplit();
   }
 
   resetApptSplit() {

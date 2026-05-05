@@ -58,7 +58,10 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </pf-screen-header>
       }
 
-      <!-- Scan hero -->
+      <!-- Scan hero — hidden when embedded (the parent pane header
+           hosts a camera-icon shortcut that opens the same scanner via
+           openBarcodeScanner(); barcode auto-intakes on match). -->
+      @if (!embedded) {
       <pf-tile tone="violet" padding="lg" class="block mb-6">
         <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
                style="color: var(--text-muted);">Scan barcode</label>
@@ -96,10 +99,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </button>
         </div>
       </pf-tile>
+      }
 
-      <!-- ─── Package intake (PKG-XXXX) ──────────────────────────────
+      <!-- ─── Package intake (PKG-XXXX) — hidden when embedded ─────
            Receive an entire bundle of orders in one tap by scanning /
            typing the dispatch package code reception generated. -->
+      @if (!embedded) {
       <pf-tile tone="default" padding="lg" class="block mb-6">
         <div class="flex items-center justify-between mb-2">
           <label class="text-[11px] font-mono uppercase tracking-[0.16em] block"
@@ -178,8 +183,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </div>
         }
       </pf-tile>
+      }
 
-      @if (manualMode()) {
+      @if (manualMode() && !embedded) {
         <pf-tile tone="default" padding="lg" class="block mb-6">
           <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 block"
                  style="color: var(--text-muted);">Manual barcode entry</label>
@@ -251,65 +257,85 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       <!-- ─── Dispatched orders (FD has handed off, awaiting arrival) ─── -->
       @if (dispatchedOrders().length > 0) {
-        <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
-          <div class="flex items-center gap-2">
-            <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                  style="color: var(--text-secondary);">Dispatched · awaiting arrival</span>
-            <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
+        @if (!embedded) {
+          <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                    style="color: var(--text-secondary);">Dispatched · awaiting arrival</span>
+              <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
+            </div>
+            <p class="text-[10.5px] font-mono" style="color: var(--text-muted);">
+              Counter staff: log incoming batches as Arrived. Bench tech picks tubes off the arrived queue below.
+            </p>
           </div>
-          <p class="text-[10.5px] font-mono" style="color: var(--text-muted);">
-            Counter staff: log incoming batches as Arrived. Bench tech picks tubes off the arrived queue below.
-          </p>
-        </div>
-        <div class="space-y-2.5 mb-6">
+        }
+        <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
           @for (g of dispatchedOrders(); track g.orderId) {
-            <pf-tile [tone]="g.state === 'awaiting' ? 'amber' : 'violet'" padding="md" class="block"
-                     [class.opacity-60]="g.state === 'awaiting'">
-              <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
-                  <div class="flex-1 min-w-0">
-                    <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
-                    <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
-                      #{{ g.orderId.slice(0,8) }}
-                      @if (g.tubeCount > 0) {
-                        <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
-                      }
-                      @if (g.receivedCount > 0) {
-                        <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
-                      }
-                      @if (g.notReadyCount > 0) {
-                        <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
-                      }
-                      @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
-                    </p>
-                  </div>
-                </div>
-                @switch (g.state) {
-                  @case ('ready') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
-                                  class="w-full sm:w-auto">
-                      Mark Arrived
-                    </pf-touch-btn>
-                  }
-                  @case ('partial') {
-                    <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
-                                  class="w-full sm:w-auto">
-                      Mark Arrived ({{ g.tubeCount }})
-                    </pf-touch-btn>
-                  }
-                  @case ('awaiting') {
-                    <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
-                          style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
-                          title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
-                      ⚠ Not dispatched yet
-                    </span>
-                  }
+            @if (embedded) {
+              <!-- Compact row: avatar + name + Intake button only. -->
+              <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'">
+                <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
+                <span class="pf-rs-row__name">{{ g.patientName }}</span>
+                @if (g.state === 'awaiting') {
+                  <span class="pf-rs-row__chip" title="Tubes still at FD counter — ask reception to dispatch.">
+                    Awaiting
+                  </span>
+                } @else {
+                  <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
+                          (click)="markArrived(g.orderId)">Intake</button>
                 }
-              </div>
-            </pf-tile>
+              </li>
+            } @else {
+              <li>
+                <pf-tile [tone]="g.state === 'awaiting' ? 'amber' : 'violet'" padding="md" class="block"
+                         [class.opacity-60]="g.state === 'awaiting'">
+                  <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                      <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                      <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                          #{{ g.orderId.slice(0,8) }}
+                          @if (g.tubeCount > 0) {
+                            <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
+                          }
+                          @if (g.receivedCount > 0) {
+                            <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
+                          }
+                          @if (g.notReadyCount > 0) {
+                            <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                          }
+                          @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                        </p>
+                      </div>
+                    </div>
+                    @switch (g.state) {
+                      @case ('ready') {
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                                      class="w-full sm:w-auto">
+                          Mark Arrived
+                        </pf-touch-btn>
+                      }
+                      @case ('partial') {
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                                      class="w-full sm:w-auto">
+                          Mark Arrived ({{ g.tubeCount }})
+                        </pf-touch-btn>
+                      }
+                      @case ('awaiting') {
+                        <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
+                              style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
+                              title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
+                          ⚠ Not dispatched yet
+                        </span>
+                      }
+                    }
+                  </div>
+                </pf-tile>
+              </li>
+            }
           }
-        </div>
+        </ul>
       }
 
       <!-- ─── Legacy "arrived → pickup" queue ──────────────────────────
@@ -388,8 +414,77 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         (cancelled)="closePackageScanner()">
       </pf-barcode-scanner-modal>
     }
+
+    @if (barScannerOpen()) {
+      <pf-barcode-scanner-modal
+        title="Scan tube barcode to intake"
+        (matched)="onBarcodeScanned($event)"
+        (cancelled)="closeBarcodeScanner()">
+      </pf-barcode-scanner-modal>
+    }
   `,
   styles: [`
+    /* ── Embedded compact list (used inside the my-work Lab Intake pane).
+     * Each row is a single-line tile with avatar + name + Intake button. */
+    .pf-rs-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pf-rs-list--compact { gap: 6px; }
+    .pf-rs-row {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .pf-rs-row:hover {
+      background: var(--glass-bg-hover);
+      border-color: rgba(168, 85, 247, 0.36);
+    }
+    .pf-rs-row--awaiting { opacity: 0.65; }
+    .pf-rs-row__name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pf-rs-row__btn {
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: #fff;
+      border: 0;
+      cursor: pointer;
+      transition: filter 0.15s ease, transform 0.06s ease;
+    }
+    .pf-rs-row__btn:hover { filter: brightness(1.08); }
+    .pf-rs-row__btn:active { transform: scale(0.98); }
+    .pf-rs-row__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pf-rs-row__chip {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border-radius: 9999px;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.32);
+    }
+
     /* Scan field: glass input with icon prefix, matching patient-search look */
     .scan-field {
       flex: 1;
@@ -619,6 +714,29 @@ export class ReceiveSamplesComponent implements OnInit {
    *  BarcodeScannerModalComponent handles HID gun input AND camera
    *  decoding via @zxing/browser, so we get both for free. */
   protected readonly pkgScannerOpen = signal(false);
+  /** Tube-barcode camera scanner state. Triggered from outside when
+   *  embedded (via the Lab Intake pane's header camera icon) — opens
+   *  a fullscreen camera that decodes a tube barcode and auto-intakes. */
+  readonly barScannerOpen = signal(false);
+  /** Public — called from the parent component (e.g., my-work) so the
+   *  Lab Intake pane header can host a camera icon. */
+  openBarcodeScanner() { this.barScannerOpen.set(true); }
+  closeBarcodeScanner() { this.barScannerOpen.set(false); }
+  /** Camera matched a tube barcode → drop it into the scan input and
+   *  auto-receive immediately, no extra tap needed. */
+  onBarcodeScanned(code: string) {
+    this.barScannerOpen.set(false);
+    this.scanValue.set(code);
+    this.receiveByBarcode();
+  }
+  /** Public — call from a parent to receive a barcode the parent typed
+   *  (e.g., the Lab Intake pane's inline input in my-work). Sets the
+   *  scan value then triggers the receive flow. */
+  receiveByCode(code: string) {
+    if (!code) return;
+    this.scanValue.set(code);
+    this.receiveByBarcode();
+  }
 
   // Manual entry state
   protected readonly manualMode = signal(false);

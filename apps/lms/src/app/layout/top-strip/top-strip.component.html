@@ -100,11 +100,71 @@
 
     <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
-    <div class="flex items-center gap-1 flex-shrink-0">
+    <div class="flex items-center gap-2 flex-shrink-0">
 
-      <!-- Tenant + branch context moved to <pf-tenant-strip>,
-           rendered by the shell just above the routed content so
-           every screen shows it. -->
+      <!-- Tenant identity pill — logo + name. Click goes to /setup
+           branding. Hidden under sm so the right cluster stays compact
+           on mobile (the bottom-nav already covers identity there). -->
+      @if (tenantLoaded()) {
+        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
+           [class.pf-ts-tenant--empty]="!hasBrand()"
+           [attr.aria-label]="brandAriaLabel()">
+          @if (showLogo() && tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+          } @else {
+            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+          }
+          @if (showName()) {
+            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+          }
+        </a>
+
+        <!-- Branch selector — kept on the top strip so route context stays
+             visible without a second navbar. md+ only; mobile users use the
+             dedicated branch settings screen. -->
+        <div class="relative hidden md:block">
+          <button type="button" class="pf-ts-branch press"
+                  [class.pf-ts-branch--open]="branchOpen()"
+                  [attr.aria-expanded]="branchOpen()"
+                  [attr.aria-label]="'Switch branch — currently ' + branch()"
+                  (click)="toggleBranch()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z" />
+              <circle cx="12" cy="9" r="2.5" />
+            </svg>
+            <span class="pf-ts-branch__name">{{ branch() }}</span>
+            <svg class="pf-ts-branch__chev" width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          @if (branchOpen()) {
+            <div class="pf-ts-branch__pop" role="menu">
+              <div class="pf-ts-branch__pop-head">
+                <p class="pf-ts-branch__pop-eyebrow">Active branch</p>
+                <p class="pf-ts-branch__pop-current">{{ branch() }}</p>
+              </div>
+              <div class="pf-ts-branch__pop-divider"></div>
+              @for (b of branches; track b) {
+                <button type="button" class="pf-ts-branch__pop-item"
+                        [class.pf-ts-branch__pop-item--active]="b === branch()"
+                        (click)="selectBranch(b)" role="menuitem">
+                  <span class="truncate">{{ b }}</span>
+                  @if (b === branch()) {
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 12 4 4L19 6" />
+                    </svg>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
 
       <pf-notification-bell></pf-notification-bell>
 

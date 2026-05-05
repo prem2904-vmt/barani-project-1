@@ -44,6 +44,12 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         @if (state() === 'loading') {
           <span class="field-spinner" aria-hidden="true"></span>
         }
+        <!-- Trailing-action slot. Projected actions sit at the right edge of
+             the field, after the clear/spinner. Frontdesk uses this for the
+             Advanced-search trigger so it lives inside the search bar. -->
+        <span class="field-trail">
+          <ng-content select="[trailing]"></ng-content>
+        </span>
       </div>
 
       @if (open()) {
@@ -181,7 +187,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
     .field-clear {
       position: absolute;
-      right: 16px;
+      right: 52px;
       width: 28px;
       height: 28px;
       display: inline-flex;
@@ -198,6 +204,9 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--bg-hover);
       color: var(--text-primary);
     }
+    /* When no trailing slot is in use, the clear button reverts to the
+       original right-edge slot (no trailing icon to dodge). */
+    .field:not(:has(.field-trail > *)) .field-clear { right: 16px; }
 
     .field-spinner, .panel-spinner {
       width: 18px;
@@ -208,7 +217,22 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       animation: pf-ps-spin 0.8s linear infinite;
       display: inline-block;
     }
-    .field-spinner { position: absolute; right: 20px; }
+    .field-spinner { position: absolute; right: 56px; }
+    .field:not(:has(.field-trail > *)) .field-spinner { right: 20px; }
+
+    /* Trailing slot — pinned to the right edge of the field, sits above the
+       background. Children render naturally; consumers style their own
+       buttons. Empty when no content is projected (no width / no border). */
+    .field-trail {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .field-trail:empty { display: none; }
 
     @keyframes pf-ps-spin { to { transform: rotate(360deg); } }
 

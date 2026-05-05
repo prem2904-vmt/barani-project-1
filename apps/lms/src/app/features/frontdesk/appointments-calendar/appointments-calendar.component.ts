@@ -1,9 +1,10 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, DestroyRef,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef,
   computed, effect, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { skip } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
@@ -42,6 +43,15 @@ const STATUS_CLASS: Record<string, string> = {
   template: `
     <section class="pf-cal-page">
       <header class="pf-cal-hdr">
+        <button type="button" class="pf-cal-back press" (click)="goBack()"
+                aria-label="Back to Frontdesk">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 12H5"/>
+            <path d="m12 19-7-7 7-7"/>
+          </svg>
+          <span>Back</span>
+        </button>
         <div class="pf-cal-hdr__l">
           <h1>Appointments</h1>
           <p>Tap an empty slot to book · click an event to open the patient profile</p>
@@ -246,11 +256,36 @@ const STATUS_CLASS: Record<string, string> = {
       display: flex; flex-direction: column; gap: 16px; min-height: 100%;
     }
     .pf-cal-hdr {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; justify-content: flex-start;
       gap: 16px; flex-wrap: wrap;
     }
+    .pf-cal-hdr__l { flex: 1; min-width: 0; }
     .pf-cal-hdr__l h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
     .pf-cal-hdr__l p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
+    .pf-cal-hdr__r { flex-shrink: 0; }
+
+    /* Back button — returns to /frontdesk (or browser history if it's
+     * the same origin). Sits at the very left of the calendar header. */
+    .pf-cal-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px 7px 12px;
+      font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
+      flex-shrink: 0;
+    }
+    .pf-cal-back:hover {
+      background: var(--glass-bg-hover);
+      border-color: rgba(168, 85, 247, 0.45);
+      color: var(--text-primary);
+    }
+    .pf-cal-back:active { transform: translateY(1px); }
+    .pf-cal-back svg { color: var(--text-muted); }
+    .pf-cal-back:hover svg { color: #c4b5fd; }
 
     .pf-cal-book {
       display: inline-flex; align-items: center; gap: 6px;
@@ -562,6 +597,20 @@ export class AppointmentsCalendarComponent {
   private readonly booking = inject(AppointmentBookingService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
+
+  /** Back button — prefer browser history (so the user lands wherever
+   * they came from), but fall back to /frontdesk if the calendar was
+   * opened directly via deep-link (no history to pop). */
+  goBack() {
+    const hasHistory = typeof history !== 'undefined' && history.length > 1;
+    if (hasHistory) {
+      this.location.back();
+    } else {
+      this.router.navigateByUrl('/frontdesk');
+    }
+  }
 
   // exposed to template
   protected readonly HOUR_HEIGHT = HOUR_HEIGHT;
@@ -710,11 +759,31 @@ export class AppointmentsCalendarComponent {
     return (this.appointmentsByDay().get(d.iso) ?? []).map(a => placeEvent(a));
   });
 
+  private readonly hostEl: ElementRef<HTMLElement> = inject(ElementRef);
+
   constructor() {
     // Refetch whenever the visible range changes. effect runs in DI ctx.
     effect(() => {
       const range = this.viewRange();
       this.fetchRange(range.from, range.to);
+    });
+
+    // Auto-scroll the Day / Week time grid to a position ~1.5 hours
+    // above the current time whenever those views become active. So
+    // opening the calendar at 3 PM lands you at ~1:30 PM with "now"
+    // mid-screen, instead of staring at midnight. queueMicrotask gives
+    // the @switch template a frame to render before we read the body.
+    effect(() => {
+      const v = this.view();
+      if (v !== 'day' && v !== 'week') return;
+      queueMicrotask(() => {
+        const body = this.hostEl.nativeElement.querySelector<HTMLElement>('.pf-cal-time__body');
+        if (!body) return;
+        const now = new Date();
+        const currentHour = now.getHours() + now.getMinutes() / 60;
+        const targetTop = Math.max(0, (currentHour - 1.5) * HOUR_HEIGHT);
+        body.scrollTop = targetTop;
+      });
     });
 
     // Refetch after a successful booking. skip(1) drops the initial signal.

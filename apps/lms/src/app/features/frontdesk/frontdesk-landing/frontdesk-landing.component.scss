@@ -1,13 +1,13 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior-y: contain;
+  overflow: hidden;
 }
 
 .pf-page {
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -16,19 +16,61 @@
   flex-shrink: 0;
 }
 
+/* Body lays out: KPI strip + stragglers + filter row + the 3-pane row.
+ * Everything except the splitter row has natural height; the splitter
+ * grows to fill the remaining height so it owns its own scroll surface
+ * (per-pane, not page-level). */
 .pf-page__body {
+  flex: 1;
+  min-height: 0;
   padding-top: 4px;
-  padding-bottom: 16px;
+  padding-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pf-page__body > pf-kpi-strip,
+.pf-page__body > .pf-stat-row,
+.pf-page__body > .pf-filter-row {
+  flex-shrink: 0;
+}
+/* The Tailwind `.grid grid-cols-1 items-start` wrapper around the
+ * splitter has to become a flex column too so `flex: 1` propagates
+ * down to the splitter row that owns the per-pane scroll.
+ * align-items: stretch overrides Tailwind's `items-start` so children
+ * fill the cross-axis (horizontal width). Without this, the inner
+ * `.min-w-0` would be content-sized and the panes would get squished
+ * to the left. */
+.pf-page__body > .grid {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+.pf-page__body > .grid > .min-w-0 {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pf-list-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 /* ── Compact header ─────────────────────────────────────── */
 .pf-head {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   grid-template-areas:
-    "title actions"
-    "sub actions";
-  gap: 2px 16px;
+    "title alerts actions"
+    "sub   alerts actions";
+  gap: 2px 12px;
   align-items: center;
   padding: 6px 0 12px;
 }
@@ -36,16 +78,114 @@
 @media (max-width: 767px) {
   .pf-head {
     grid-template-columns: 1fr;
-    grid-template-areas: "title" "sub" "actions";
+    grid-template-areas: "title" "sub" "alerts" "actions";
     gap: 4px;
   }
 
-  .pf-head__actions {
+  .pf-head__actions, .pf-head__alerts {
     justify-content: flex-start;
     flex-wrap: wrap;
     margin-top: 8px;
   }
 }
+
+/* Alert chips in the page header — compact, persistent, click to act
+ * (ready → Results, payments → drawer, follow-up → popover). Replaces
+ * the old toolbar-row banner that ate ~50px of vertical space. */
+.pf-head__alerts {
+  grid-area: alerts;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+.pf-head__alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
+}
+.pf-head__alert:hover { transform: translateY(-1px); }
+.pf-head__alert:active { transform: translateY(0); }
+.pf-head__alert-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--alert-dot, #a855f7);
+  box-shadow: 0 0 0 2px var(--alert-dot-halo, rgba(168, 85, 247, 0.16));
+  flex-shrink: 0;
+}
+.pf-head__alert-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+.pf-head__alert-lbl { color: var(--text-secondary); }
+
+.pf-head__alert--ready {
+  --alert-dot: #34d399;
+  --alert-dot-halo: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.32);
+}
+.pf-head__alert--ready:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+.pf-head__alert--payments {
+  --alert-dot: #60a5fa;
+  --alert-dot-halo: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.32);
+}
+.pf-head__alert--payments:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+.pf-head__alert--follow {
+  --alert-dot: #f59e0b;
+  --alert-dot-halo: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+.pf-head__alert--follow:hover, .pf-head__alert--follow.pf-head__alert--on {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+/* Stragglers popover anchored to the follow-up chip */
+.pf-pop--stragglers {
+  width: min(420px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.pf-pop__sub-line {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-pop__dismiss {
+  margin-left: auto;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pf-pop__dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .pf-head__title {
   grid-area: title;
@@ -411,60 +551,29 @@
   }
 }
 
-.pf-adv-search-btn {
+/* Icon-only Advanced-search trigger — slotted into the patient-search
+ * field via [trailing]. 32×32 hit area, transparent so it blends with
+ * the field, brightens on hover. */
+.pf-adv-search-icon {
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 60px;
-  padding: 0 18px;
-  border-radius: 18px;
-  background: var(--glass-bg);
-  border: 1.5px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text-muted);
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-
-.pf-adv-search-btn:hover {
-  color: var(--text-primary);
-  background: var(--glass-bg-hover);
-  border-color: rgba(168, 85, 247, 0.5);
-}
-
-.pf-adv-search-btn svg {
-  color: #c4b5fd;
-}
-
-.pf-adv-search-btn__kbd {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 6px;
+.pf-adv-search-icon:hover {
   background: rgba(168, 85, 247, 0.14);
-  border: 1px solid rgba(168, 85, 247, 0.28);
   color: #d8b4fe;
 }
-
-@media (max-width: 720px) {
-  .pf-adv-search-btn {
-    height: 52px;
-    padding: 0 14px;
-  }
-
-  .pf-adv-search-btn__label {
-    display: none;
-  }
-
-  .pf-adv-search-btn__kbd {
-    display: none;
-  }
+.pf-adv-search-icon:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.7);
+  outline-offset: 2px;
 }
 
 .pf-date-pills {
@@ -898,6 +1007,132 @@
   font-size: 13px;
   color: var(--text-tertiary);
 }
+
+/* ── Empty-state tile ───────────────────────────────────────
+ * Used by the three FD landing panes (Appointments / In Progress /
+ * Completed) when their list is empty. A soft glass card with a tinted
+ * icon disc, a clear title, a one-liner explanation and an optional CTA.
+ * Each pane gets its own hue via .pf-empty-tile--{appt|ip|done}. */
+.pf-empty-tile {
+  /* The pane itself is the card now (border + bg). The empty tile sits
+   * inside it, fills the available height and centers content. */
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 200px;
+  margin: 0;
+  padding: 22px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  position: relative;
+  overflow: hidden;
+}
+.pf-empty-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 50% 0%, var(--empty-tone, rgba(168, 85, 247, 0.18)), transparent 70%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.pf-empty-tile__icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--empty-icon-bg, rgba(168, 85, 247, 0.16));
+  border: 1px solid var(--empty-icon-border, rgba(168, 85, 247, 0.32));
+  color: var(--empty-icon-color, #c4b5fd);
+}
+.pf-empty-tile__title {
+  position: relative;
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.pf-empty-tile__sub {
+  position: relative;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  max-width: 260px;
+}
+.pf-empty-tile__cta {
+  position: relative;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 9999px;
+  background: var(--empty-cta-bg, rgba(168, 85, 247, 0.18));
+  border: 1px solid var(--empty-cta-border, rgba(168, 85, 247, 0.4));
+  color: var(--empty-cta-color, #ddd6fe);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+.pf-empty-tile__cta:hover {
+  background: var(--empty-cta-bg-hover, rgba(168, 85, 247, 0.28));
+  border-color: var(--empty-cta-border-hover, rgba(168, 85, 247, 0.55));
+  color: #ffffff;
+}
+.pf-empty-tile__cta:active { transform: scale(0.985); }
+
+/* Per-pane tinting — appointments=violet, in-progress=amber,
+ * completed=emerald. These match the count-pill tones already used
+ * in the pane headers so the panes feel cohesive. */
+.pf-empty-tile--appt {
+  --empty-tone: rgba(168, 85, 247, 0.20);
+  --empty-icon-bg: rgba(168, 85, 247, 0.16);
+  --empty-icon-border: rgba(168, 85, 247, 0.34);
+  --empty-icon-color: #c4b5fd;
+  --empty-cta-bg: rgba(168, 85, 247, 0.18);
+  --empty-cta-border: rgba(168, 85, 247, 0.4);
+  --empty-cta-color: #ddd6fe;
+  --empty-cta-bg-hover: rgba(168, 85, 247, 0.3);
+  --empty-cta-border-hover: rgba(168, 85, 247, 0.6);
+}
+.pf-empty-tile--ip {
+  --empty-tone: rgba(245, 158, 11, 0.20);
+  --empty-icon-bg: rgba(245, 158, 11, 0.16);
+  --empty-icon-border: rgba(245, 158, 11, 0.34);
+  --empty-icon-color: #fcd34d;
+  --empty-cta-bg: rgba(245, 158, 11, 0.18);
+  --empty-cta-border: rgba(245, 158, 11, 0.4);
+  --empty-cta-color: #fde68a;
+  --empty-cta-bg-hover: rgba(245, 158, 11, 0.3);
+  --empty-cta-border-hover: rgba(245, 158, 11, 0.6);
+}
+.pf-empty-tile--done {
+  --empty-tone: rgba(16, 185, 129, 0.20);
+  --empty-icon-bg: rgba(16, 185, 129, 0.16);
+  --empty-icon-border: rgba(16, 185, 129, 0.34);
+  --empty-icon-color: #6ee7b7;
+}
+
+/* Light theme tints — softer pastel surfaces so the tile stays gentle
+ * on a white page instead of glowing. */
+:host-context([data-theme="light"]) .pf-empty-tile {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.9));
+  border-color: rgba(15, 23, 42, 0.08);
+}
+:host-context([data-theme="light"]) .pf-empty-tile__icon { color: var(--empty-icon-color); }
 
 .pf-cards {
   list-style: none;
@@ -2480,24 +2715,106 @@
   gap: 16px;
 }
 
-@media (min-width: 1024px) {
+/* ── Accordion mode (< 1024px) ────────────────────────────────
+ * Tablet portrait + mobile collapse the 3-column grid into a vertical
+ * stack of collapsible tiles. The expanded pane fills the remaining
+ * height with internal scroll; the others show only their header bar.
+ * Page never scrolls — the accordion fits the viewport. */
+@media (max-width: 1023px) {
   .pf-appt-split {
-    /* Three panes (Appointments · In Progress · Completed) with two
-     * 8px draggable handles between them. Track widths come from the
-     * --appt-a / --appt-b CSS variables (percentages of the row
-     * width). Pane widths are: A | (B − A) | (100 − B). */
-    grid-template-columns:
-      calc(var(--appt-a, 33%) - 4px) 8px calc(var(--appt-b, 66%) - var(--appt-a, 33%) - 8px) 8px calc(100% - var(--appt-b, 66%) - 4px);
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+  }
+  .pf-appt-split__pane {
+    flex: 0 0 auto;
+    min-height: 0;
+    transition: flex 0.2s ease;
+  }
+  .pf-appt-split__pane > .pf-appt-split__hdr {
+    cursor: pointer;
+    border-bottom-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .pf-appt-split__pane > .pf-appt-split__hdr:hover {
+    background: var(--bg-hover);
+  }
+  .pf-appt-split__pane--expanded > .pf-appt-split__hdr {
+    border-bottom-color: var(--glass-border);
+  }
+  /* Collapsed panes hide their content entirely — header bar only. */
+  .pf-appt-split__pane--collapsed > :not(.pf-appt-split__hdr),
+  .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) > :not(.pf-appt-split__hdr) {
+    display: none;
+  }
+  /* Expanded pane grows to fill remaining vertical space; cards list
+   * scrolls inside. Empty tile fills the area with content centered. */
+  .pf-appt-split__pane--expanded {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .pf-appt-split__pane--expanded > .pf-cards,
+  .pf-appt-split__pane--expanded > .pf-empty-tile,
+  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+    display: flex;
+  }
+  .pf-appt-split__pane--expanded > .pf-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 14px 14px;
+    margin: 0;
+  }
+  .pf-appt-split__pane--expanded > .pf-empty-tile {
+    margin: 12px 14px 14px;
+    flex: 1 1 auto;
+  }
+  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+    margin: 10px 14px 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Use FLEX (not grid) for the splitter row so we can drive the split
+   * by writing `flex-basis` directly on the first pane via an Angular
+   * [style] binding. This bypasses any CSS-variable-vs-grid interaction
+   * issues that make the resize feel "static" — the binding here is on
+   * a built-in CSS property that Angular has always reliably reflected
+   * to the DOM. */
+  .pf-appt-split {
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: nowrap;
     gap: 0;
-    /* Cap the row to a viewport-relative height so each pane has
-     * a finite area to scroll inside. The page itself can still
-     * scroll for content above (header) and below (kpi strip). */
-    height: calc(100dvh - 280px);
-    min-height: 420px;
+    /* Splitter fills the remaining body height so each pane owns its
+     * own scroll surface; the outer page does NOT scroll. */
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    /* Clear the base block's grid template so it doesn't fight flex. */
+    grid-template-columns: initial;
+  }
+  /* First visible pane: width set by an inline style binding. */
+  .pf-appt-split > .pf-appt-split__pane:first-of-type {
+    flex: 0 0 33%;
+    min-width: 0;
+  }
+  /* Second visible pane: takes the remainder. */
+  .pf-appt-split > .pf-appt-split__pane:not(:first-of-type) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Handle is a fixed-width flex item between the two panes. */
+  .pf-appt-split > .pf-appt-split__handle {
+    flex: 0 0 8px;
   }
 
   /* Mid-drag: kill text selection + show a column-resize cursor on
-   * the whole grid so the user doesn't lose feedback if their mouse
+   * the whole row so the user doesn't lose feedback if their mouse
    * drifts off the 8px handle. */
   .pf-appt-split--dragging {
     cursor: col-resize;
@@ -2509,46 +2826,48 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  overflow: hidden;
 }
 
 @media (min-width: 1024px) {
-
-  /* Symmetric padding: every pane has 8px on each inner side, so the
-   * 8px draggable handle sits inside a 24px breathing strip
-   * (8 pane + 8 handle + 8 pane). Outer edges of the first/last pane
-   * hug the row edge so the row uses its full width. */
-  .pf-appt-split__pane {
-    padding: 0 8px;
-  }
-
-  .pf-appt-split__pane:first-child {
-    padding-left: 0;
-  }
-
-  .pf-appt-split__pane--done {
-    padding-right: 0;
-  }
-
   /* Each pane is its own scroll container: header stays put, the
-   * cards list flexes to the remaining height and scrolls. */
+   * cards list flexes to the remaining height and scrolls. The card
+   * styling (border + bg + overflow:hidden) now lives on the base
+   * .pf-appt-split__pane rule. */
   .pf-appt-split__pane {
     min-height: 0;
-    overflow: hidden;
   }
 
-  .pf-appt-split__pane>.pf-appt-split__hdr,
-  .pf-appt-split__pane>.pf-bulk-bar,
-  .pf-appt-split__pane>.pf-empty {
+  .pf-appt-split__pane > .pf-appt-split__hdr,
+  .pf-appt-split__pane > .pf-bulk-bar,
+  .pf-appt-split__pane > .pf-empty {
     flex-shrink: 0;
   }
 
-  .pf-appt-split__pane>.pf-cards {
+  .pf-appt-split__pane > .pf-cards {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-right: 4px;
+    padding: 10px 12px 12px;
+    margin: 0;
+  }
+
+  .pf-appt-split__pane > .pf-empty-tile {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* Single-pane mode (one column hidden) — the only visible pane fills
+   * the full row width. */
+  .pf-appt-split--has-hidden {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2567,45 +2886,35 @@
     align-items: center;
     justify-content: center;
     cursor: col-resize;
-    /* Bigger hit area than the visual line so dragging is forgiving. */
+    /* 8px column matches the grid track that holds this handle. The
+     * grip pill (5px wide) is always visible inside; the remaining
+     * 1.5px each side is the cursor hit-area gutter. */
     width: 8px;
     touch-action: none;
+    z-index: 2;
   }
 
-  .pf-appt-split__handle::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1px;
-    background: var(--glass-border);
-    transition: background 0.15s ease, width 0.15s ease;
-  }
-
-  .pf-appt-split__handle:hover::before,
-  .pf-appt-split__handle:focus-visible::before,
-  .pf-appt-split--dragging .pf-appt-split__handle::before {
-    background: rgba(168, 85, 247, 0.6);
-    width: 2px;
-  }
-
+  /* Visible grip pill — always rendered so the splitter is obvious now
+   * that the panes have their own borders (the 1px line approach got
+   * lost between the two pane borders). Brightens to violet on hover
+   * and during a drag. */
   .pf-appt-split__grip {
     position: relative;
-    width: 4px;
-    height: 32px;
+    width: 5px;
+    height: 44px;
     border-radius: 9999px;
     background: var(--glass-border);
-    opacity: 0;
-    transition: opacity 0.15s ease, background 0.15s ease;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease;
   }
 
   .pf-appt-split__handle:hover .pf-appt-split__grip,
   .pf-appt-split__handle:focus-visible .pf-appt-split__grip,
   .pf-appt-split--dragging .pf-appt-split__grip {
     opacity: 1;
-    background: rgba(168, 85, 247, 0.7);
+    height: 56px;
+    background: linear-gradient(180deg, #a855f7, #ec4899);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18);
   }
 
   .pf-appt-split__handle:focus-visible {
@@ -2617,7 +2926,155 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 2px 8px;
+  padding: 10px 14px;
+  cursor: default;
+  user-select: none;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* Tabbed header variant — used by the merged In progress / Completed
+ * pane. The header row holds the tab cluster on the left and the hide
+ * button + chevron on the right. Slightly tighter padding than the
+ * single-title header so the tabs read at the same visual weight. */
+.pf-appt-split__hdr--tabs {
+  padding: 6px 10px;
+}
+
+/* Tab cluster — a pill-style row of mutually exclusive buttons. */
+.pf-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--glass-border);
+}
+.pf-tabs__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+.pf-tabs__btn:hover { color: var(--text-primary); }
+.pf-tabs__btn--on {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
+}
+.pf-tabs__count {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: rgba(168, 85, 247, 0.18);
+  border: 1px solid rgba(168, 85, 247, 0.32);
+  color: var(--text-primary);
+}
+.pf-tabs__count[data-tone='active'] {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.85), rgba(217, 119, 6, 0.85));
+  border-color: rgba(217, 119, 6, 0.6);
+  color: #fff;
+}
+.pf-tabs__count[data-tone='ok'] {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+.pf-tabs__btn--on .pf-tabs__count {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Hide-column button — small × tucked at the right edge of every
+ * pane header. Click hides the pane; user restores via the chip row
+ * above the splitter. */
+.pf-appt-split__hide {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pf-appt-split__hide:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* "Hidden columns" chip row — sits above the splitter. Shows one chip
+ * per hidden pane; clicking restores it. Only renders when any pane
+ * is hidden, so visually disappears the moment everything is back. */
+.pf-pane-hidden-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.pf-pane-hidden-row__lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pf-pane-hidden-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px dashed var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pf-pane-hidden-chip:hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: var(--text-primary);
+}
+.pf-pane-hidden-chip svg { color: var(--text-muted); flex-shrink: 0; }
+.pf-pane-hidden-chip:hover svg { color: #c4b5fd; }
+
+/* Chevron next to the count — rotates when this pane is expanded.
+ * Only visible at <1024px (accordion mode); the desktop grid hides it. */
+.pf-appt-split__chev {
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: transform 0.2s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+@media (min-width: 1024px) {
+  .pf-appt-split__chev { display: none; }
+}
+.pf-appt-split__pane--expanded > .pf-appt-split__hdr .pf-appt-split__chev {
+  transform: rotate(180deg);
+  color: var(--text-primary);
 }
 
 .pf-appt-split__title {
@@ -2669,6 +3126,16 @@
   color: var(--text-primary);
   background: var(--bg-hover);
   border-color: rgba(168, 85, 247, 0.4);
+}
+
+/* Icon-only variant — the Appointments pane header just shows a calendar
+ * glyph. Square hit area, no text label. */
+.pf-appt-split__link--icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  justify-content: center;
 }
 
 /* In-progress card — checkbox + avatar + body + chip + action */

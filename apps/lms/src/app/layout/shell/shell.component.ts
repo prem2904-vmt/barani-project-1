@@ -4,7 +4,6 @@ import { ToastService } from '../../core/services/toast.service';
 import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
 import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
-import { TenantStripV2Component } from '../tenant-strip/tenant-strip-v2.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
 import { PatientProfileModalComponent } from '../../shared/components/patient-profile-modal/patient-profile-modal.component';
 import { AppointmentBookingModalComponent } from '../../shared/components/appointment-booking-modal/appointment-booking-modal.component';
@@ -12,7 +11,7 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, TenantStripV2Component, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
+  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -20,14 +19,10 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 
     <!-- Everything above sits in a stacking context on top of the ambient. -->
     <div class="shell-stack">
-      <!-- Unified chrome pill: both navbars live inside one rounded
-           container. The card provides border-radius + background +
-           blur; the inner rows are flat. A hairline divider separates
-           the two rows without breaking the single-card feel. -->
+      <!-- Unified chrome card: single navbar row. Tenant + branch
+           moved into the top-strip's right cluster; second row removed. -->
       <div class="pf-chrome">
         <pf-top-strip></pf-top-strip>
-        <div class="pf-chrome__divider" aria-hidden="true"></div>
-        <pf-tenant-strip-v2></pf-tenant-strip-v2>
       </div>
 
       <main class="shell-main relative">
@@ -102,9 +97,13 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
       overflow: hidden;
     }
 
-    /* Single chrome card — both navbars live inside one floating
-     * rounded container. The card is sticky so it remains at the top
-     * as the page content scrolls below it. */
+    /* Chrome card — the single navbar row sits inside this floating
+     * rounded container. Sticky so it stays at the top as content
+     * scrolls below it. NOTE: no overflow:hidden — the navbar's
+     * dropdown popovers (branch picker, profile menu, more) need to
+     * escape the card. The card's rounded corners still clip via the
+     * border-radius itself; only inner backgrounds with sharp edges
+     * would notice, and there are none. */
     .pf-chrome {
       position: sticky;
       top: 0;
@@ -116,17 +115,9 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
       border: 1px solid var(--header-border);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
-      overflow: hidden;
     }
     @media (min-width: 640px) {
       .pf-chrome { margin: 8px 16px 0; }
-    }
-
-    /* Hairline between the two navbar rows */
-    .pf-chrome__divider {
-      height: 1px;
-      background: var(--header-border);
-      margin: 0 16px;
     }
 
     .shell-main {
