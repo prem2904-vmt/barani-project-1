@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -10,7 +10,17 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
+
+/** Minimal parameter shape for the column-tab live preview. */
+interface DemoParamRow {
+  name: string;
+  result: string;
+  unit: string;
+  range: string;
+  description: string;
+}
 
 type Tab = 'branding' | 'layout' | 'columns' | 'footer';
 
@@ -129,7 +139,10 @@ type Tab = 'branding' | 'layout' | 'columns' | 'footer';
           @if (tab() === 'columns') {
             <!-- Per-department report column structure. The Save button at the
                  top of this screen does NOT save columns — the editor has its
-                 own Save button so you can iterate per dept independently. -->
+                 own Save button so you can iterate per dept independently.
+                 The viewChild query in the class binds this instance to
+                 previewColumns() so the right-side aside can render the
+                 column-aware sample table. -->
             <pf-report-columns-editor></pf-report-columns-editor>
           }
 
@@ -191,10 +204,43 @@ type Tab = 'branding' | 'layout' | 'columns' | 'footer';
             </div>
             <div class="mt-3 pt-3 text-[11px]" style="border-top: 1px solid #e2e8f0; color: #0f172a;">
               <p class="font-semibold">Haematology — CBC</p>
-              <table class="w-full mt-1">
-                <tr><td>Haemoglobin</td><td class="text-right">14.2 g/dL</td></tr>
-                <tr><td>WBC</td><td class="text-right">8,400 /µL</td></tr>
-              </table>
+              @if (tab() === 'columns' && previewColumns().length > 0) {
+                <!-- Column-aware sample: walks the dept columns the admin is
+                     editing and renders a small mock table. Each row uses the
+                     column's type to pick a believable demo value (so admins
+                     can see exactly how widths / labels / types lay out). -->
+                <table class="w-full mt-1" style="border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: #f1f5f9;">
+                      @for (c of previewColumns(); track c.id) {
+                        <th [style.width.%]="c.width"
+                            class="text-left font-semibold px-1 py-0.5"
+                            style="font-size: 9.5px; color: #475569; border-bottom: 1px solid #cbd5e1;">
+                          {{ c.label || c.name || '—' }}
+                        </th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (sample of sampleParamRows; track sample.name) {
+                      <tr>
+                        @for (c of previewColumns(); track c.id) {
+                          <td class="px-1 py-0.5"
+                              style="font-size: 10px; border-bottom: 1px dotted #e2e8f0;">
+                            {{ demoCellValue(c, sample) }}
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <p class="mt-1 text-[9px]" style="color: #94a3b8;">Column widths · {{ previewColumns().length }} configured</p>
+              } @else {
+                <table class="w-full mt-1">
+                  <tr><td>Haemoglobin</td><td class="text-right">14.2 g/dL</td></tr>
+                  <tr><td>WBC</td><td class="text-right">8,400 /µL</td></tr>
+                </table>
+              }
             </div>
             @if (tpl().showSignature) {
               <div class="mt-4 flex justify-between items-end">
@@ -317,6 +363,39 @@ export class ReportTemplateComponent implements OnInit {
   }
 
   readonly qrCells = Array.from({ length: 36 }, (_, i) => (i * 7 + i % 3) % 3 === 0 ? 1 : 0);
+
+  // The columns-tab editor lives inside an @if, so its #colsEditor template
+  // ref isn't visible to the sibling right-side preview. We mirror it via
+  // viewChild — Angular re-runs this query when the editor mounts/unmounts,
+  // so swapping tabs cleanly toggles the column-aware preview branch.
+  readonly columnsEditor = viewChild(ReportColumnsEditorComponent);
+  readonly previewColumns = computed<ReportColumn[]>(() =>
+    this.columnsEditor()?.columnsSnapshot() ?? []
+  );
+
+  /** Mock CBC rows used by the columns-tab live preview. Picked to span the
+   *  type variants admins commonly configure (numeric, qualitative, range). */
+  readonly sampleParamRows: DemoParamRow[] = [
+    { name: 'Haemoglobin', result: '14.2', unit: 'g/dL',  range: '12 – 16',     description: 'Hb' },
+    { name: 'WBC',         result: '8400', unit: '/µL',   range: '4000 – 11000', description: 'Total leucocytes' },
+    { name: 'Platelets',   result: '245',  unit: '×10³/µL', range: '150 – 450',  description: '' }
+  ];
+
+  /** Pick a demo value for a (column, parameter) pair based on the column's
+   *  semantic type. Locked columns always show their locked value; the
+   *  text/parameter-name fallback uses the parameter name when description
+   *  is empty so the preview never has trailing blank cells. */
+  demoCellValue(c: ReportColumn, p: DemoParamRow): string {
+    if (c.locked) return c.lockedValue ?? '—';
+    switch (c.type) {
+      case 'result': return p.result;
+      case 'unit':   return p.unit;
+      case 'range':  return p.range;
+      case 'flag':   return '';
+      case 'text':
+      default:       return p.description || p.name;
+    }
+  }
 
   ngOnInit() {
     // Honor `?tab=…` deep-links — admin dashboard's Report Columns tile

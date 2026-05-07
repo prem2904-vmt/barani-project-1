@@ -79,6 +79,10 @@ export interface ConditionThen {
   variables?: Record<string, unknown>;
   /** Override specific cells (grid rows). Keyed by column.name. */
   cells?: Record<string, string>;
+  /** Override the merged row's note text on match. Only meaningful for
+   *  merged rows; ignored on parameter rows. Lets one merged row carry
+   *  different notes for different branches (low/normal/high). */
+  merge_content?: string;
 }
 
 export interface ConditionRule {

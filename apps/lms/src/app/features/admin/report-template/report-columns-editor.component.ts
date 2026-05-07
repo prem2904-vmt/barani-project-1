@@ -91,13 +91,19 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                 </button>
               </div>
 
-              <!-- Label + machine name -->
+              <!-- Label + machine name. Both inputs coerce to '' so a column
+                   with an undefined name (e.g. loaded from a legacy / corrupted
+                   row) doesn't render the literal string "undefined". When
+                   admin types in the label and the machine name is empty, we
+                   auto-derive a sensible default (lowercase + underscores). -->
               <div class="grow grid gap-1">
                 <input type="text" class="pf-input pf-input--compact"
-                       [value]="c.label" (input)="patchCol(i, { label: $any($event.target).value })"
+                       [value]="c.label ?? ''"
+                       (input)="onLabelInput(i, $any($event.target).value)"
                        placeholder="Label (Specimen, Result, …)" />
                 <input type="text" class="pf-input pf-input--mono"
-                       [value]="c.name" (input)="patchCol(i, { name: $any($event.target).value })"
+                       [value]="c.name ?? ''"
+                       (input)="patchCol(i, { name: slugifyName($any($event.target).value) })"
                        placeholder="machine_name" />
               </div>
 
@@ -303,6 +309,10 @@ export class ReportColumnsEditorComponent implements OnInit {
   );
   protected readonly totalOk = computed(() => Math.abs(this.totalWidth() - 100) < 0.5);
 
+  // Public read-only accessor so the parent template ref (e.g. `#colsEditor`)
+  // can drive its right-side preview panel from the columns being edited.
+  readonly columnsSnapshot = this.columns.asReadonly();
+
   ngOnInit() {
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: list => {
@@ -321,7 +331,17 @@ export class ReportColumnsEditorComponent implements OnInit {
     this.selectedDeptId.set(deptId);
     this.loading.set(true);
     this.layout.getDeptColumns(deptId).then(res => {
-      this.columns.set([...res.columns].sort((a, b) => a.order - b.order));
+      // Rescue legacy / partially-populated rows: if a column came back
+      // missing `name` or `label`, derive sensible defaults so the UI never
+      // renders the literal string "undefined" or saves nullish names.
+      const sorted = [...res.columns]
+        .sort((a, b) => a.order - b.order)
+        .map(c => ({
+          ...c,
+          label: c.label ?? '',
+          name: c.name && c.name.trim() !== '' ? c.name : this.slugifyName(c.label ?? '')
+        }));
+      this.columns.set(sorted);
       this.configured.set(res.configured);
       this.loading.set(false);
     }).catch(() => {
@@ -338,6 +358,31 @@ export class ReportColumnsEditorComponent implements OnInit {
       next[i] = { ...next[i], ...patch };
       return next;
     });
+  }
+
+  /** Label input handler: also auto-derives the machine name when it's empty
+   *  or matches the previously-derived form, so admins don't have to fill in
+   *  the second box for the common case. Once they hand-type a custom name
+   *  it sticks (we detect this by storing the previous derived label hash). */
+  onLabelInput(i: number, label: string) {
+    const cols = this.columns();
+    const cur = cols[i];
+    const prevDerived = this.slugifyName(cur.label ?? '');
+    const patch: Partial<ReportColumn> = { label };
+    if (!cur.name || cur.name === prevDerived) {
+      patch.name = this.slugifyName(label);
+    }
+    this.patchCol(i, patch);
+  }
+
+  /** Lowercase + collapse non-alnum to underscore, trim leading/trailing _.
+   *  Empty input becomes ''. Used both as the auto-derive and as a sanitiser
+   *  on the machine-name input itself. */
+  slugifyName(raw: string): string {
+    if (!raw) return '';
+    return raw.toString().trim().toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
   }
 
   clampWidth(v: unknown): number {
@@ -366,8 +411,18 @@ export class ReportColumnsEditorComponent implements OnInit {
   addColumn() {
     const id = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
       ? crypto.randomUUID() : `c-${Date.now()}`;
+    // Build a name that's guaranteed unique against the existing
+    // columns. Cells are keyed by `name`, so a duplicate would
+    // collapse multiple cells onto the same entry — typing in one
+    // cell would propagate to the others. (See test-layout-editor.)
+    const existing = new Set(this.columns().map(c => c.name));
+    let name = 'new_column';
+    let suffix = 2;
+    while (existing.has(name)) {
+      name = `new_column_${suffix++}`;
+    }
     const newCol: ReportColumn = {
-      id, name: 'new_column', label: 'New column',
+      id, name, label: 'New column',
       order: this.columns().length + 1, width: 10,
       type: 'text', locked: false, lockedValue: null
     };

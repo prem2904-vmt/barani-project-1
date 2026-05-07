@@ -780,10 +780,12 @@ export class ReportViewerComponent implements OnInit {
    *  layout against the actual entered values. Skips tests without a
    *  configured layout (empty sections) so the legacy table fallback
    *  renders. Image URLs aren't yet plumbed through the result model
-   *  on the report endpoint — passed as empty until that lands. */
+   *  on the report endpoint — passed as empty until that lands.
+   *
+   *  Tests live inside the parsed `data` blob (same JSON the rest of
+   *  this view renders from) — not on the raw Report API response. */
   private async resolveLayouts() {
-    const r = this._report() as Report & { tests?: ReportData['tests'] } | null;
-    const tests = r?.tests ?? [];
+    const tests = this.data()?.tests ?? [];
     if (tests.length === 0) return;
 
     const next: Record<string, ResolvedReportLayout> = {};
