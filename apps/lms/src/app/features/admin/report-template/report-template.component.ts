@@ -9,8 +9,9 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ReportColumnsEditorComponent } from './report-columns-editor.component';
 
-type Tab = 'branding' | 'layout' | 'footer';
+type Tab = 'branding' | 'layout' | 'columns' | 'footer';
 
 @Component({
   selector: 'pf-report-template',
@@ -22,7 +23,8 @@ type Tab = 'branding' | 'layout' | 'footer';
     SegmentedComponent,
     TileComponent,
     ToggleComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    ReportColumnsEditorComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -121,6 +123,13 @@ type Tab = 'branding' | 'layout' | 'footer';
                 }
               </div>
             </pf-tile>
+          }
+
+          @if (tab() === 'columns') {
+            <!-- Per-department report column structure. The Save button at the
+                 top of this screen does NOT save columns — the editor has its
+                 own Save button so you can iterate per dept independently. -->
+            <pf-report-columns-editor></pf-report-columns-editor>
           }
 
           @if (tab() === 'footer') {
@@ -259,6 +268,7 @@ export class ReportTemplateComponent implements OnInit {
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'branding', label: 'Branding' },
     { value: 'layout',   label: 'Layout' },
+    { value: 'columns',  label: 'Report columns' },
     { value: 'footer',   label: 'Footer' }
   ];
   private readonly _tab = signal<Tab>('branding');

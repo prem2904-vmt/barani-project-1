@@ -21,6 +21,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { TestLayoutEditorComponent } from './test-layout-editor.component';
 
 interface DraftTest {
   id?: string;
@@ -98,7 +99,8 @@ function newFieldId(): string {
     ScreenHeaderComponent,
     SelectComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    TestLayoutEditorComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -300,6 +302,23 @@ function newFieldId(): string {
           </div>
         }
       </pf-tile>
+
+      <!-- Report Layout — only meaningful after the test has been saved
+           (we need its id for the report-layout endpoints). -->
+      @if (draft().id) {
+        <pf-test-layout-editor class="block mt-4"
+          [testId]="draft().id || ''"
+          [parameters]="parameterNames()">
+        </pf-test-layout-editor>
+      } @else {
+        <pf-tile tone="default" padding="md" class="block mt-4">
+          <p class="text-[13px]" style="color: var(--text-tertiary);">
+            <strong style="color: var(--text-secondary);">Report Layout</strong>
+            — save this test first, then return here to design how the test's
+            results render in the patient report.
+          </p>
+        </pf-tile>
+      }
     </section>
   `,
   styles: [`
@@ -402,6 +421,13 @@ export class TestEditorComponent implements OnInit {
 
   private readonly _fields = signal<FormField[]>([]);
   readonly fields = this._fields.asReadonly();
+  /** Flat list of parameter machine names — used by the report layout editor
+   *  for parameter-pickers + sample-value inputs in the live preview. */
+  readonly parameterNames = computed<string[]>(() =>
+    this._fields()
+      .map(f => (f.name ?? '').trim())
+      .filter(n => n.length > 0)
+  );
 
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
