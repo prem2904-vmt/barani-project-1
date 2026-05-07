@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
@@ -264,6 +265,7 @@ type Tab = 'branding' | 'layout' | 'columns' | 'footer';
 export class ReportTemplateComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'branding', label: 'Branding' },
@@ -317,6 +319,13 @@ export class ReportTemplateComponent implements OnInit {
   readonly qrCells = Array.from({ length: 36 }, (_, i) => (i * 7 + i % 3) % 3 === 0 ? 1 : 0);
 
   ngOnInit() {
+    // Honor `?tab=…` deep-links — admin dashboard's Report Columns tile
+    // lands here with `?tab=columns`. Falls back to the default 'branding'.
+    const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    if (initial && this.tabOptions.some(o => o.value === initial)) {
+      this._tab.set(initial);
+    }
+
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => { if (t) this._tpl.set({ ...this._tpl(), ...t }); }
     });

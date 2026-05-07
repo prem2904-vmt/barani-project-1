@@ -13,10 +13,6 @@ interface SeedSummary {
   preSeededRoles: number;
   tests: number;
   workflows: number;
-  /** Reports waiting to be delivered (status='ready'). */
-  reportsReady?: number;
-  /** Reports marked delivered today. */
-  reportsDelivered?: number;
 }
 
 type GradientKey = 'violet' | 'pink' | 'emerald' | 'amber' | 'sky' | 'rose' | 'fuchsia' | 'teal';
@@ -198,12 +194,13 @@ export class AdminDashboardComponent implements OnInit {
       subtitle: () => 'B2B credit accounts · top-ups & usage history'
     },
     {
-      title: 'Reports queue',
-      href: '/reports',
+      title: 'Report Columns',
+      href: '/admin/reports?tab=columns',
       gradient: 'emerald',
-      iconPath: 'M4 4h11l5 5v11H4z',
-      iconExtra: 'M15 4v5h5M9 14l2 2 4-4',
-      subtitle: () => `${this._summary()?.reportsReady ?? '—'} ready · ${this._summary()?.reportsDelivered ?? '—'} delivered`
+      // Column-grid glyph — three vertical bars to read as a table layout.
+      iconPath: 'M4 5v14M10 5v14M16 5v14M22 5v14',
+      iconExtra: 'M2 5h22M2 19h22',
+      subtitle: () => 'Per-department report column structure (specimen / result / unit / range / …)'
     },
     {
       title: 'Report Template',
@@ -211,7 +208,7 @@ export class AdminDashboardComponent implements OnInit {
       gradient: 'fuchsia',
       iconPath: 'M4 4h11l5 5v11H4z',
       iconExtra: 'M15 4v5h5M8 14h8M8 18h6',
-      subtitle: () => 'Branding, layout, columns, footer'
+      subtitle: () => 'Branding, layout, footer'
     },
     {
       title: 'Notifications',
