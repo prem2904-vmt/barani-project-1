@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
@@ -12,6 +13,7 @@ import {
   ImageSection,
   ParagraphSection,
   ChartSection,
+  ReportColumn,
   ReportSection,
   ReportSectionType,
   ResolvedReportLayout,
@@ -52,7 +54,7 @@ const OPERATORS = [
 @Component({
   selector: 'pf-test-layout-editor',
   standalone: true,
-  imports: [FormsModule, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, RouterLink, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -181,10 +183,34 @@ const OPERATORS = [
                                 · {{ phLabel }} resolve to result values
                               </span>
                             </label>
+
+                            <!-- Department columns this test inherits — click a
+                                 chip to add an override row for that column. -->
+                            @if (deptColumns().length > 0) {
+                              <div class="pf-col-chips">
+                                <span class="text-[10px]" style="color: var(--text-muted);">
+                                  Department columns:
+                                </span>
+                                @for (dc of deptColumns(); track dc.id) {
+                                  <button type="button" class="pf-col-chip"
+                                          [class.pf-col-chip--used]="hasCellKey(r, dc.name)"
+                                          (click)="addCellKeyNamed(i, ri, dc.name)"
+                                          [title]="'Click to add an override for ' + dc.label">
+                                    {{ dc.label }} <span class="pf-col-chip__name">{{ dc.name }}</span>
+                                  </button>
+                                }
+                              </div>
+                            } @else if (departmentId()) {
+                              <p class="text-[10.5px]" style="color: var(--text-muted);">
+                                This department's columns aren't configured yet —
+                                <a routerLink="/admin/reports" [queryParams]="{ tab: 'columns' }"
+                                   style="color: #c4b5fd;">configure them</a>
+                                so the engine has something to render against. The default 5-col
+                                structure (specimen / result / unit / range / description) is used until then.
+                              </p>
+                            }
+
                             <div class="pf-cells">
-                              <!-- Render input per column key the admin has decided to override.
-                                   We don't enumerate dept columns here (we don't know them);
-                                   admin types the column.name directly. -->
                               @for (k of cellKeys(r); track k; let ki = $index) {
                                 <div class="pf-cell">
                                   <input type="text" class="pf-input pf-input--mono pf-input--compact"
@@ -698,6 +724,38 @@ const OPERATORS = [
     .pf-cell { display: flex; align-items: center; gap: 6px; }
     .pf-cell > .grow { flex: 1; }
 
+    /* Department-column quick-pick chips above the cells list. */
+    .pf-col-chips {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      margin: 6px 0;
+      padding: 6px 8px;
+      background: rgba(168, 85, 247, 0.06);
+      border: 1px dashed rgba(168, 85, 247, 0.3);
+      border-radius: 8px;
+    }
+    .pf-col-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px;
+      font-size: 11.5px; font-weight: 600;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.36);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: filter 0.12s ease, opacity 0.12s ease;
+    }
+    .pf-col-chip:hover { filter: brightness(1.12); }
+    .pf-col-chip--used {
+      opacity: 0.5;
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .pf-col-chip__name {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+
     .pf-cond {
       display: flex; flex-direction: column; gap: 6px;
       padding: 8px;
@@ -899,6 +957,17 @@ export class TestLayoutEditorComponent {
    *  preview panel's sample-value inputs. Owner is the parent test editor
    *  which already maintains the field list. */
   readonly parameters = input<string[]>([]);
+  /** Test's department id — drives the dept-column lookup so the row
+   *  editor can surface the configured columns instead of asking admin
+   *  to type column names blindly. */
+  readonly departmentId = input<string>('');
+
+  /** Department columns the test inherits — fetched whenever departmentId
+   *  changes. Empty array when the dept hasn't been configured yet (the
+   *  engine falls back to the canonical 5-col default in that case). */
+  protected readonly deptColumns = signal<ReportColumn[]>([]);
+  /** Quick-pick options for cell-key inputs, derived from deptColumns. */
+  protected readonly columnNames = computed(() => this.deptColumns().map(c => c.name));
 
   protected readonly sections = signal<ReportSection[]>([]);
   protected readonly version = signal(0);
@@ -939,6 +1008,20 @@ export class TestLayoutEditorComponent {
       for (const r of rows) map[r.parameterName] = { ...r.columnLocks };
       this._locks.set(map);
     }).catch(() => this._locks.set({}));
+  });
+
+  /** Fetch the test's department columns whenever departmentId binds.
+   *  These drive the row editor's "available columns" hints + auto-fill
+   *  cell keys when the admin clicks a column chip. */
+  private readonly _deptLoader = effect(() => {
+    const deptId = this.departmentId();
+    if (!deptId) {
+      this.deptColumns.set([]);
+      return;
+    }
+    this.layout.getDeptColumns(deptId).then(res => {
+      this.deptColumns.set([...(res.columns ?? [])].sort((a, b) => a.order - b.order));
+    }).catch(() => this.deptColumns.set([]));
   });
 
   // ── Per-(test, parameter) cell locks ──────────────────────
@@ -1181,6 +1264,33 @@ export class TestLayoutEditorComponent {
       next[sectionIdx] = { ...sec, rows };
       return next;
     });
+  }
+
+  /** Click-to-add a specific dept column to a row's cell overrides.
+   *  Used by the column chips above the cells list. If the column is
+   *  already present, this is a no-op (chip styling shows the
+   *  already-added state via .pf-col-chip--used). */
+  addCellKeyNamed(sectionIdx: number, rowIdx: number, columnName: string) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[sectionIdx] as GridSection;
+      const rows = [...sec.rows];
+      const r = rows[rowIdx] as GridRowParameter;
+      if (columnName in (r.cells ?? {})) return arr;
+      // Prefill with the result placeholder for the row's parameter when
+      // the column is the canonical "result" name — saves a typing step.
+      const seedValue = columnName === 'result' && r.parameter_name
+        ? `{{${r.parameter_name}}}`
+        : '';
+      rows[rowIdx] = { ...r, cells: { ...r.cells, [columnName]: seedValue } };
+      next[sectionIdx] = { ...sec, rows };
+      return next;
+    });
+  }
+
+  /** Has this row already overridden the named column? */
+  hasCellKey(r: GridRow, name: string): boolean {
+    return !r.row_merge && name in ((r as GridRowParameter).cells ?? {});
   }
 
   setCellValue(sectionIdx: number, rowIdx: number, key: string, value: string) {

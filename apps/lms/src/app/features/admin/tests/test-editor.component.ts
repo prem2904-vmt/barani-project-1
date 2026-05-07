@@ -308,6 +308,7 @@ function newFieldId(): string {
       @if (draft().id) {
         <pf-test-layout-editor class="block mt-4"
           [testId]="draft().id || ''"
+          [departmentId]="draft().departmentId || ''"
           [parameters]="parameterNames()">
         </pf-test-layout-editor>
       } @else {

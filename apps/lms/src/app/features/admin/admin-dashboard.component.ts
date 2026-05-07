@@ -19,7 +19,11 @@ type GradientKey = 'violet' | 'pink' | 'emerald' | 'amber' | 'sky' | 'rose' | 'f
 
 interface Tile {
   title: string;
+  /** Plain route path (no query string). Use `queryParams` for those —
+   *  Angular's routerLink doesn't parse `?foo=bar` out of a single href. */
   href: string;
+  /** Optional query params merged onto the routerLink. */
+  queryParams?: Record<string, string>;
   gradient: GradientKey;
   /** SVG `d` path, drawn on 24×24 viewBox with currentColor stroke. */
   iconPath: string;
@@ -60,7 +64,8 @@ interface Tile {
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
         @for (tile of tiles; track tile.title) {
-          <a [routerLink]="tile.href" class="pf-card group press block">
+          <a [routerLink]="tile.href" [queryParams]="tile.queryParams ?? null"
+             class="pf-card group press block">
             <div class="flex items-start gap-4">
               <span class="pf-tile-icon shrink-0" [attr.data-g]="tile.gradient">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
@@ -195,7 +200,8 @@ export class AdminDashboardComponent implements OnInit {
     },
     {
       title: 'Report Columns',
-      href: '/admin/reports?tab=columns',
+      href: '/admin/reports',
+      queryParams: { tab: 'columns' },
       gradient: 'emerald',
       // Column-grid glyph — three vertical bars to read as a table layout.
       iconPath: 'M4 5v14M10 5v14M16 5v14M22 5v14',
