@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
@@ -86,6 +86,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
@@ -1434,7 +1435,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         return;
       }
       const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-      generateReportPdf({ report });
+      const resolvedLayouts = await this.fetchResolvedLayouts(report);
+      generateReportPdf({ report, resolvedLayouts });
     } catch (err) {
       console.error('[fd] download report failed', err);
       this.toasts.error('Could not download the report');
@@ -1442,6 +1444,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._downloadingReport.set(false);
     }
   }
+  /** Walk every test on the report and ask the engine to resolve its
+   *  per-test layout against the entered values. Returns a testId →
+   *  ResolvedReportLayout map that the PDF generator consumes; the map
+   *  is empty for tests without a configured layout (PDF then falls
+   *  back to the legacy parameter table for those). */
+  private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
+    const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
+    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    try {
+      const snap = JSON.parse(report.data ?? '{}');
+      tests = snap?.tests ?? [];
+    } catch { /* malformed — proceed with empty layouts map */ }
+    if (tests.length === 0) return out;
+
+    const { ReportLayoutService } = await import('../../../core/services/report-layout.service');
+    const svc = this.injector.get(ReportLayoutService);
+    await Promise.all(tests.map(async t => {
+      if (!t.testId) return;
+      try {
+        out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, []);
+      } catch { /* test without a layout — fallback table renders */ }
+    }));
+    return out;
+  }
+
   /** Count of staff with status === 'on_duty' for the button badge. */
   onDutyCount(): number { return this.staff.filter(s => s.status === 'on_duty').length; }
   toggleSelect(id: string) {

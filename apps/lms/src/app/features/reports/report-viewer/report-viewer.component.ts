@@ -2,9 +2,11 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
+import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -178,28 +180,111 @@ interface ReportData {
                       }
                     </div>
 
-                    @if (paramRows(t).length > 0) {
-                      <table class="pf-paper__table">
-                        <thead>
-                          <tr>
-                            <th>Parameter</th>
-                            <th class="text-right">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          @for (p of paramRows(t); track p.name) {
-                            <tr>
-                              <td>{{ p.name }}</td>
-                              <td class="text-right pf-mono"
-                                  [class.pf-paper__val--crit]="t.result?.flags?.critical && tpl()?.showCriticalFlag !== false">
-                                {{ p.value }}
-                              </td>
-                            </tr>
+                    <!-- Dynamic resolved layout — when admin has configured
+                         per-test sections, the engine returns a fully-resolved
+                         view-model and we render that. Falls through to the
+                         default parameter table when nothing's configured. -->
+                    @if (resolvedFor(t.testId); as pv) {
+                      @for (sec of pv.sections; track sec.id) {
+                        <div class="pf-paper__rs" [attr.data-type]="sec.type">
+                          @if (sec.label) {
+                            <h4 class="pf-paper__rs-label">{{ sec.label }}</h4>
                           }
-                        </tbody>
-                      </table>
+
+                          @if (sec.type === 'grid' && sec.rows) {
+                            <table class="pf-paper__table">
+                              <thead>
+                                <tr>
+                                  @for (c of pv.columns; track c.id) {
+                                    <th [style.width.%]="c.width">{{ c.label }}</th>
+                                  }
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (row of sec.rows; track row.id) {
+                                  @if (row.isMerged) {
+                                    <tr class="pf-paper__row pf-paper__row--merged">
+                                      <td [attr.colspan]="pv.columns.length">{{ row.mergeContent }}</td>
+                                    </tr>
+                                  } @else {
+                                    <tr class="pf-paper__row"
+                                        [style.color]="row.color || null"
+                                        [style.font-weight]="row.isBold ? '700' : null">
+                                      @for (c of pv.columns; track c.id) {
+                                        <td>{{ row.cells[c.name] }}</td>
+                                      }
+                                    </tr>
+                                  }
+                                }
+                              </tbody>
+                            </table>
+                          }
+
+                          @if (sec.type === 'paragraph') {
+                            <p class="pf-paper__note pf-paper__rs-para">{{ sec.content }}</p>
+                          }
+
+                          @if (sec.type === 'image') {
+                            @if (sec.imageUrls && sec.imageUrls.length > 0) {
+                              <div class="pf-paper__rs-images">
+                                @for (u of sec.imageUrls; track u) {
+                                  <img [src]="u" alt="" />
+                                }
+                              </div>
+                            }
+                          }
+
+                          @if (sec.type === 'chart' && sec.chart) {
+                            <div class="pf-paper__rs-chart">
+                              <div class="pf-paper__rs-chart-bar">
+                                @for (z of sec.chart.zones; track z.from) {
+                                  <span class="pf-paper__rs-chart-zone"
+                                        [style.left.%]="zonePctLeft(sec.chart, z)"
+                                        [style.width.%]="zonePctWidth(sec.chart, z)"
+                                        [style.background]="zoneHex(z.color)"></span>
+                                }
+                                @if (sec.chart.value !== null && sec.chart.value !== undefined) {
+                                  <span class="pf-paper__rs-chart-marker"
+                                        [style.left.%]="markerPct(sec.chart)"></span>
+                                }
+                              </div>
+                              <div class="pf-paper__rs-chart-axis">
+                                <span>{{ sec.chart.min }}</span>
+                                <span>{{ sec.chart.value ?? '–' }}</span>
+                                <span>{{ sec.chart.max }}</span>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                      @if (pv.sections.length === 0) {
+                        <p class="pf-paper__empty">No values recorded.</p>
+                      }
                     } @else {
-                      <p class="pf-paper__empty">No values recorded.</p>
+                      <!-- Fallback: simple parameter table when no layout configured. -->
+                      @if (paramRows(t).length > 0) {
+                        <table class="pf-paper__table">
+                          <thead>
+                            <tr>
+                              <th>Parameter</th>
+                              <th class="text-right">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (p of paramRows(t); track p.name) {
+                              <tr>
+                                <td>{{ p.name }}</td>
+                                <td class="text-right pf-mono"
+                                    [class.pf-paper__val--crit]="t.result?.flags?.critical && tpl()?.showCriticalFlag !== false">
+                                  {{ p.value }}
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      } @else {
+                        <p class="pf-paper__empty">No values recorded.</p>
+                      }
                     }
 
                     @if (t.result?.note) {
@@ -443,6 +528,73 @@ interface ReportData {
     .text-right { text-align: right; }
     .pf-paper__val--crit { color: #b91c1c; font-weight: 700; }
 
+    /* Resolved-layout sections (when admin has configured a per-test layout) */
+    .pf-paper__rs { margin: 10px 0; }
+    .pf-paper__rs-label {
+      margin: 0 0 4px; font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: #475569;
+    }
+    /* Override the legacy thead style so dynamic-layout headers use the
+     * configured column widths and the navy bar matches the spec. */
+    .pf-paper__rs .pf-paper__table th {
+      background: #1B3A6B;
+      color: #ffffff;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .pf-paper__row--merged td {
+      background: #f1f5f9;
+      font-style: italic;
+      color: #475569;
+      text-align: center;
+      padding: 8px;
+    }
+    .pf-paper__rs-para {
+      margin: 4px 0 0;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-left: 3px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 12.5px;
+      color: #1e293b;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .pf-paper__rs-images {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .pf-paper__rs-images img {
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .pf-paper__rs-chart { display: flex; flex-direction: column; gap: 4px; }
+    .pf-paper__rs-chart-bar {
+      position: relative;
+      height: 14px;
+      background: #f1f5f9;
+      border-radius: 7px;
+      overflow: hidden;
+    }
+    .pf-paper__rs-chart-zone { position: absolute; top: 0; bottom: 0; }
+    .pf-paper__rs-chart-marker {
+      position: absolute;
+      top: -3px; bottom: -3px;
+      width: 3px; background: #0f172a;
+      border-radius: 2px;
+      transform: translateX(-1.5px);
+    }
+    .pf-paper__rs-chart-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #64748b;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
     .pf-paper__note {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -578,14 +730,73 @@ export class ReportViewerComponent implements OnInit {
     return 'default';
   }
 
+  // ── Dynamic resolved layouts (one per testId) ─────────────
+  // The admin's per-test report layout (sections + conditions) is fetched
+  // for each test via /api/report-layout/preview/:testId with that test's
+  // entered result values. Tests without a configured layout return an
+  // empty sections array — the template renders the legacy parameter
+  // table in that case.
+  private readonly layoutSvc = inject(ReportLayoutService);
+  private readonly _resolved = signal<Record<string, ResolvedReportLayout>>({});
+  resolvedFor(testId: string): ResolvedReportLayout | null {
+    const r = this._resolved()[testId];
+    return r && r.sections.length > 0 ? r : null;
+  }
+
+  // Chart preview math — same as the admin live preview.
+  zonePctLeft(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number }): number {
+    if (!chart || chart.max <= chart.min) return 0;
+    return Math.max(0, Math.min(100, ((z.from - chart.min) / (chart.max - chart.min)) * 100));
+  }
+  zonePctWidth(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number; to: number }): number {
+    if (!chart || chart.max <= chart.min) return 0;
+    return Math.max(0, Math.min(100, ((z.to - z.from) / (chart.max - chart.min)) * 100));
+  }
+  markerPct(chart: ResolvedReportLayout['sections'][number]['chart']): number {
+    if (!chart || chart.value === null || chart.value === undefined || chart.max <= chart.min) return 0;
+    return Math.max(0, Math.min(100, ((chart.value - chart.min) / (chart.max - chart.min)) * 100));
+  }
+  zoneHex(token: string): string {
+    if (token === 'red')    return '#fecaca';
+    if (token === 'orange') return '#fed7aa';
+    if (token === 'green')  return '#bbf7d0';
+    return token.startsWith('#') ? token : '#e2e8f0';
+  }
+
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
-      next: r => this._report.set(r),
+      next: r => {
+        this._report.set(r);
+        this.resolveLayouts();
+      },
       error: () => this.toasts.error('Could not load report')
     });
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({ next: t => this._tpl.set(t) });
+  }
+
+  /** Walk every test on the report and ask the engine to resolve its
+   *  layout against the actual entered values. Skips tests without a
+   *  configured layout (empty sections) so the legacy table fallback
+   *  renders. Image URLs aren't yet plumbed through the result model
+   *  on the report endpoint — passed as empty until that lands. */
+  private async resolveLayouts() {
+    const r = this._report() as Report & { tests?: ReportData['tests'] } | null;
+    const tests = r?.tests ?? [];
+    if (tests.length === 0) return;
+
+    const next: Record<string, ResolvedReportLayout> = {};
+    await Promise.all(tests.map(async t => {
+      const values = (t.result?.values ?? {}) as Record<string, unknown>;
+      try {
+        const pv = await this.layoutSvc.preview(t.testId, values, []);
+        next[t.testId] = pv;
+      } catch {
+        /* test without a configured layout — fallback table will render */
+      }
+    }));
+    this._resolved.set(next);
   }
 
   back() { this.router.navigateByUrl('/reports'); }

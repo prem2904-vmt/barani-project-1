@@ -1,5 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -499,6 +499,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
+  private readonly injector = inject(Injector);
 
   // "Completed" = lab work signed off, report generated, awaiting
   // delivery. Backed by deliveryStatus === 'pending' on the report row
@@ -736,11 +737,37 @@ export class ReportQueueComponent implements OnInit {
 
   view(r: Report) { this.router.navigate(['/reports/view', r.id]); }
 
-  /** Download the report as a PDF (client-side render via jsPDF). */
+  /** Download the report as a PDF (client-side render via jsPDF). Pulls
+   *  the per-test resolved layouts so the PDF matches the on-screen viewer
+   *  exactly (column widths, row colors + bold from conditions, merged
+   *  rows, paragraphs, charts). */
   async downloadPdf(r: Report) {
     try {
-      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-      generateReportPdf({ report: r });
+      const [{ generateReportPdf }, { ReportLayoutService }] = await Promise.all([
+        import('../../../shared/utils/report-pdf'),
+        import('../../../core/services/report-layout.service')
+      ]);
+      const svc = this.injector.get(ReportLayoutService);
+      const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
+
+      let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+      try {
+        const snap = JSON.parse(r.data ?? '{}');
+        tests = snap?.tests ?? [];
+      } catch { /* malformed snapshot — render PDF without layouts */ }
+
+      await Promise.all(tests.map(async t => {
+        if (!t.testId) return;
+        try {
+          resolvedLayouts[t.testId] = await svc.preview(
+            t.testId,
+            (t.result?.values ?? {}) as Record<string, unknown>,
+            []
+          );
+        } catch { /* test without a configured layout — fallback table */ }
+      }));
+
+      generateReportPdf({ report: r, resolvedLayouts });
     } catch (err) {
       console.error('[reports] download failed', err);
       this.toasts.error('Could not download report');

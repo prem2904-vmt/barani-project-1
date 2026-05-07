@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
+  ColumnLock,
   ConditionRule,
   GridRow,
   GridRowMerged,
@@ -200,6 +201,64 @@ const OPERATORS = [
                               }
                               <button type="button" class="pf-link-btn" (click)="addCellKey(i, ri)">+ Cell override</button>
                             </div>
+
+                            <!-- ── Per-parameter cell locks ──────────────
+                                 Pin specific cells to a fixed value for THIS
+                                 parameter. Resolves above column-level locks
+                                 and result lookups. Persisted separately via
+                                 /api/report-layout/test/:id/locks. -->
+                            @if (asParam(r).parameter_name) {
+                              <div class="pf-locks">
+                                <div class="flex items-center justify-between">
+                                  <label class="pf-label-mini">Cell locks for "{{ asParam(r).parameter_name }}"
+                                    <span class="text-[10px]" style="color: var(--text-muted);">
+                                      · pinned values that ignore the entered result
+                                    </span>
+                                  </label>
+                                  <button type="button" class="pf-link-btn"
+                                          (click)="toggleLockEditor(asParam(r).parameter_name)">
+                                    {{ isLockEditorOpen(asParam(r).parameter_name) ? 'Hide' : (lockCount(asParam(r).parameter_name) > 0 ? lockCount(asParam(r).parameter_name) + ' locked · edit' : '+ Add lock') }}
+                                  </button>
+                                </div>
+                                @if (isLockEditorOpen(asParam(r).parameter_name)) {
+                                  <div class="pf-locks__body">
+                                    @for (lk of lockEntries(asParam(r).parameter_name); track lk.column; let lki = $index) {
+                                      <div class="pf-cell">
+                                        <input type="text" class="pf-input pf-input--mono pf-input--compact"
+                                               placeholder="column.name"
+                                               [value]="lk.column"
+                                               (input)="renameLockColumn(asParam(r).parameter_name, lk.column, $any($event.target).value)" />
+                                        <input type="text" class="pf-input pf-input--compact grow"
+                                               placeholder="locked value"
+                                               [value]="lk.value ?? ''"
+                                               (input)="setLockValue(asParam(r).parameter_name, lk.column, $any($event.target).value)" />
+                                        <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                                                (click)="removeLock(asParam(r).parameter_name, lk.column)"
+                                                aria-label="Remove lock">×</button>
+                                      </div>
+                                    }
+                                    <div class="flex items-center gap-2 mt-1">
+                                      <button type="button" class="pf-link-btn"
+                                              (click)="addLockColumn(asParam(r).parameter_name)">
+                                        + Lock another column
+                                      </button>
+                                      @if (lockCount(asParam(r).parameter_name) > 0) {
+                                        <span class="grow"></span>
+                                        <button type="button" class="pf-link-btn pf-link-btn--danger"
+                                                (click)="clearLocks(asParam(r).parameter_name)">
+                                          Clear all locks
+                                        </button>
+                                        <button type="button" class="pf-link-btn"
+                                                (click)="saveLocks(asParam(r).parameter_name)"
+                                                [disabled]="savingLock() === asParam(r).parameter_name">
+                                          {{ savingLock() === asParam(r).parameter_name ? 'Saving…' : 'Save locks' }}
+                                        </button>
+                                      }
+                                    </div>
+                                  </div>
+                                }
+                              </div>
+                            }
                           </div>
                         }
 
@@ -369,9 +428,53 @@ const OPERATORS = [
                              (input)="patchSection(i, { max: +$any($event.target).value })" />
                     </div>
                   </div>
-                  <p class="text-[11px] mt-3" style="color: var(--text-muted);">
-                    Zone editor (low/normal/high colored bands) — coming in the next pass.
-                  </p>
+                  <!-- Zones — colored bands on the scale (low / normal / high). -->
+                  <div class="pf-zones">
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="pf-label-mini">Zones</label>
+                      <button type="button" class="pf-link-btn" (click)="addZone(i)">+ Add zone</button>
+                    </div>
+                    @if (asChart(s).zones.length === 0) {
+                      <p class="text-[11px]" style="color: var(--text-muted);">
+                        No zones yet — add bands to highlight low / normal / high ranges on the scale.
+                      </p>
+                    }
+                    @for (z of asChart(s).zones; track $index; let zi = $index) {
+                      <div class="pf-zone">
+                        <div class="pf-zone__row">
+                          <input type="text" class="pf-input pf-input--compact"
+                                 placeholder="Label (low / normal / high)"
+                                 [value]="z.label ?? ''"
+                                 (input)="patchZone(i, zi, { label: $any($event.target).value })" />
+                          <span class="text-[11px]" style="color: var(--text-muted);">From</span>
+                          <input type="number" class="pf-input pf-input--compact pf-input--num" style="width: 80px"
+                                 [value]="z.from"
+                                 (input)="patchZone(i, zi, { from: +$any($event.target).value })" />
+                          <span class="text-[11px]" style="color: var(--text-muted);">To</span>
+                          <input type="number" class="pf-input pf-input--compact pf-input--num" style="width: 80px"
+                                 [value]="z.to"
+                                 (input)="patchZone(i, zi, { to: +$any($event.target).value })" />
+                          <span class="grow"></span>
+                          @for (col of zoneColors; track col.value) {
+                            <button type="button" class="pf-color-chip"
+                                    [class.pf-color-chip--on]="z.color === col.value"
+                                    [style.background]="col.hex"
+                                    (click)="patchZone(i, zi, { color: col.value })"
+                                    [attr.aria-label]="col.label" [title]="col.label"></button>
+                          }
+                          <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                                  (click)="removeZone(i, zi)" aria-label="Remove zone">×</button>
+                        </div>
+                        <!-- Mini preview bar inline. -->
+                        <div class="pf-zone__bar">
+                          <span class="pf-zone__bar-band"
+                                [style.left.%]="zonePctLeftDraft(asChart(s), z)"
+                                [style.width.%]="zonePctWidthDraft(asChart(s), z)"
+                                [style.background]="zoneHex(z.color)"></span>
+                        </div>
+                      </div>
+                    }
+                  </div>
                 </div>
               }
 
@@ -669,6 +772,41 @@ const OPERATORS = [
       border-radius: 6px;
     }
     .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); }
+    .pf-link-btn--danger { color: #f87171; }
+    .pf-link-btn--danger:hover { background: rgba(244, 63, 94, 0.12); }
+
+    .pf-locks {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed rgba(168, 85, 247, 0.4);
+      border-radius: 10px;
+      background: rgba(168, 85, 247, 0.06);
+    }
+    .pf-locks__body { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+    /* Chart zone editor */
+    .pf-zones { margin-top: 14px; }
+    .pf-zone {
+      padding: 8px;
+      margin-bottom: 8px;
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.18);
+    }
+    .pf-zone__row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .pf-zone__row > .grow { flex: 1; }
+    .pf-zone__bar {
+      position: relative; height: 8px;
+      margin-top: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .pf-zone__bar-band {
+      position: absolute; top: 0; bottom: 0;
+    }
 
     .pf-section-add {
       display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -783,11 +921,12 @@ export class TestLayoutEditorComponent {
   protected readonly cellValuePlaceholder = 'value (use {{paramName}} to inject result)';
   protected readonly paragraphPlaceholder = 'The result is {{paramName}} {{paramName_unit}}…';
 
-  /** Reload sections whenever the parent rebinds testId. */
+  /** Reload sections + locks whenever the parent rebinds testId. */
   private readonly _loader = effect(() => {
     const id = this.testId();
     if (!id) {
       this.sections.set([]);
+      this._locks.set({});
       return;
     }
     this.layout.getTestLayout(id).then(res => {
@@ -795,7 +934,120 @@ export class TestLayoutEditorComponent {
       this.version.set(res.version);
       this.configured.set(res.configured);
     }).catch(() => this.sections.set([]));
+    this.layout.listLocks(id).then(rows => {
+      const map: Record<string, Record<string, ColumnLock>> = {};
+      for (const r of rows) map[r.parameterName] = { ...r.columnLocks };
+      this._locks.set(map);
+    }).catch(() => this._locks.set({}));
   });
+
+  // ── Per-(test, parameter) cell locks ──────────────────────
+  // Keyed by parameterName → { columnName → { locked, value } }.
+  // Lock editor expansion is tracked separately so collapsing a
+  // section doesn't lose unsaved edits.
+  protected readonly _locks = signal<Record<string, Record<string, ColumnLock>>>({});
+  protected readonly _lockOpen = signal<Set<string>>(new Set());
+  protected readonly savingLock = signal<string | null>(null);
+
+  isLockEditorOpen(p: string): boolean { return this._lockOpen().has(p); }
+  toggleLockEditor(p: string) {
+    this._lockOpen.update(s => {
+      const next = new Set(s);
+      next.has(p) ? next.delete(p) : next.add(p);
+      return next;
+    });
+    // First-time open and no rows yet → seed an empty entry so the user
+    // sees the row editor without an extra "+ Lock another column" tap.
+    if (this._lockOpen().has(p) && this.lockCount(p) === 0) {
+      this.addLockColumn(p);
+    }
+  }
+  lockEntries(p: string): Array<{ column: string; value: string | null; locked: boolean }> {
+    const m = this._locks()[p] ?? {};
+    return Object.keys(m).map(column => ({ column, value: m[column].value, locked: m[column].locked }));
+  }
+  lockCount(p: string): number {
+    const m = this._locks()[p] ?? {};
+    return Object.keys(m).filter(k => m[k].locked && m[k].value != null && m[k].value !== '').length;
+  }
+  addLockColumn(p: string) {
+    this._locks.update(all => {
+      const next = { ...all };
+      const inner = { ...(next[p] ?? {}) };
+      const key = uniqueKey(inner, 'column');
+      inner[key] = { locked: true, value: '' };
+      next[p] = inner;
+      return next;
+    });
+  }
+  renameLockColumn(p: string, oldKey: string, newKey: string) {
+    if (!newKey.trim() || newKey === oldKey) return;
+    this._locks.update(all => {
+      const next = { ...all };
+      const inner = { ...(next[p] ?? {}) };
+      if (!(oldKey in inner)) return all;
+      inner[newKey] = inner[oldKey];
+      delete inner[oldKey];
+      next[p] = inner;
+      return next;
+    });
+  }
+  setLockValue(p: string, column: string, value: string) {
+    this._locks.update(all => {
+      const next = { ...all };
+      const inner = { ...(next[p] ?? {}) };
+      inner[column] = { locked: true, value };
+      next[p] = inner;
+      return next;
+    });
+  }
+  removeLock(p: string, column: string) {
+    this._locks.update(all => {
+      const next = { ...all };
+      const inner = { ...(next[p] ?? {}) };
+      delete inner[column];
+      next[p] = inner;
+      return next;
+    });
+  }
+  async clearLocks(p: string) {
+    if (!confirm(`Remove all column locks for "${p}"?`)) return;
+    const id = this.testId();
+    if (!id) return;
+    this._locks.update(all => {
+      const next = { ...all };
+      delete next[p];
+      return next;
+    });
+    try {
+      await this.layout.deleteLock(id, p);
+      this.toasts.success(`Locks cleared for ${p}`);
+    } catch {
+      this.toasts.error('Could not clear locks on the server');
+    }
+  }
+  async saveLocks(p: string) {
+    const id = this.testId();
+    if (!id) return;
+    this.savingLock.set(p);
+    try {
+      const map = this._locks()[p] ?? {};
+      // Drop any rows with an empty column key (admin abandoned a fresh lock).
+      const cleaned: Record<string, ColumnLock> = {};
+      for (const k of Object.keys(map)) {
+        if (!k.trim()) continue;
+        cleaned[k] = map[k];
+      }
+      await this.layout.saveLock(id, p, cleaned);
+      this._locks.update(all => ({ ...all, [p]: cleaned }));
+      this.toasts.success(`Locks saved for ${p}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Save failed';
+      this.toasts.error(msg);
+    } finally {
+      this.savingLock.set(null);
+    }
+  }
 
   // ───────── Section helpers (cast guards for the union) ─────
 
@@ -1082,7 +1334,64 @@ export class TestLayoutEditorComponent {
     }
   }
 
-  // ───────── Chart preview math ─────────────────────────
+  // ───────── Chart zone editor ──────────────────────────
+
+  /** Color tokens for chart zones — same canonical set as condition colors
+   *  but with explicit "Default" stripped (zones must have a color). */
+  protected readonly zoneColors = [
+    { value: 'red',    label: 'Red',    hex: '#C0392B' },
+    { value: 'orange', label: 'Orange', hex: '#E87722' },
+    { value: 'green',  label: 'Green',  hex: '#1D9E75' },
+  ];
+
+  addZone(sectionIdx: number) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[sectionIdx] as ChartSection;
+      if (sec.type !== 'chart') return arr;
+      // Slot the new zone at the end of the existing range so it doesn't
+      // overlap visually — admin tweaks from/to immediately.
+      const last = sec.zones[sec.zones.length - 1];
+      const from = last ? last.to : sec.min;
+      const to = Math.min(sec.max, from + Math.max(1, (sec.max - sec.min) / 5));
+      const zone = { from, to, color: 'green', label: '' };
+      next[sectionIdx] = { ...sec, zones: [...sec.zones, zone] };
+      return next;
+    });
+  }
+
+  patchZone(sectionIdx: number, zoneIdx: number, patch: Partial<{ from: number; to: number; color: string; label: string }>) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[sectionIdx] as ChartSection;
+      const zones = [...sec.zones];
+      zones[zoneIdx] = { ...zones[zoneIdx], ...patch };
+      next[sectionIdx] = { ...sec, zones };
+      return next;
+    });
+  }
+
+  removeZone(sectionIdx: number, zoneIdx: number) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[sectionIdx] as ChartSection;
+      next[sectionIdx] = { ...sec, zones: sec.zones.filter((_, i) => i !== zoneIdx) };
+      return next;
+    });
+  }
+
+  /** Same percentage math as the rendered chart, applied to the draft so
+   *  the inline preview band updates as the admin tweaks from/to. */
+  zonePctLeftDraft(chart: ChartSection, z: { from: number }): number {
+    if (!chart || chart.max <= chart.min) return 0;
+    return Math.max(0, Math.min(100, ((z.from - chart.min) / (chart.max - chart.min)) * 100));
+  }
+  zonePctWidthDraft(chart: ChartSection, z: { from: number; to: number }): number {
+    if (!chart || chart.max <= chart.min) return 0;
+    return Math.max(0, Math.min(100, ((z.to - z.from) / (chart.max - chart.min)) * 100));
+  }
+
+  // ───────── Chart preview math (resolved) ──────────────
 
   zonePctLeft(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number }): number {
     if (!chart || chart.max <= chart.min) return 0;
