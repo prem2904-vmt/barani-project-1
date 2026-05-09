@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { RouterLink } from '@angular/router';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -56,7 +57,7 @@ const OPERATORS = [
 @Component({
   selector: 'pf-test-layout-editor',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, RouterLink, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, NgTemplateOutlet, RouterLink, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -202,22 +203,22 @@ const OPERATORS = [
                                   </button>
                                 } @else {
                                   <span class="pf-merged-rule__lbl">Show when</span>
-                                  <select class="pf-input pf-input--cell pf-merged-rule__param"
-                                          [ngModel]="getMergedRulePart(r, 'parameter')"
-                                          (ngModelChange)="setMergedRulePart(selectedSectionIndex(), ri, 'parameter', $event)">
-                                    <option value="">— always —</option>
-                                    @for (p of parameters(); track p) {
-                                      <option [value]="p">{{ p }}</option>
-                                    }
-                                  </select>
+                                  <pf-select
+                                    class="pf-merged-rule__param"
+                                    size="sm"
+                                    [options]="toOpts(parameters(), '— always —')"
+                                    [value]="getMergedRulePart(r, 'parameter')"
+                                    (valueChange)="setMergedRulePart(selectedSectionIndex(), ri, 'parameter', $event)">
+                                  </pf-select>
                                   @if (getMergedRulePart(r, 'parameter')) {
-                                    <select class="pf-input pf-input--cell pf-merged-rule__op"
-                                            [ngModel]="getMergedRulePart(r, 'operator')"
-                                            (ngModelChange)="setMergedRulePart(selectedSectionIndex(), ri, 'operator', $event)">
-                                      @for (op of operators; track op.value) {
-                                        <option [value]="op.value">{{ op.label }}</option>
-                                      }
-                                    </select>
+                                    <pf-select
+                                      class="pf-merged-rule__op"
+                                      style="width: 72px"
+                                      size="sm"
+                                      [options]="operators"
+                                      [value]="getMergedRulePart(r, 'operator')"
+                                      (valueChange)="setMergedRulePart(selectedSectionIndex(), ri, 'operator', $event)">
+                                    </pf-select>
                                     <input type="number" class="pf-input pf-input--cell pf-merged-rule__val"
                                            [value]="getMergedRulePart(r, 'value')"
                                            (input)="setMergedRulePart(selectedSectionIndex(), ri, 'value', $any($event.target).value)" />
@@ -233,14 +234,12 @@ const OPERATORS = [
                             </td>
                           } @else {
                             <td class="pf-le-sheet__c-param">
-                              <select class="pf-input pf-input--cell"
-                                      [ngModel]="asParam(r).parameter_name"
-                                      (ngModelChange)="patchRow(selectedSectionIndex(), ri, { parameter_name: $event })">
-                                <option value="">— pick —</option>
-                                @for (p of parameters(); track p) {
-                                  <option [value]="p">{{ p }}</option>
-                                }
-                              </select>
+                              <pf-select
+                                size="sm"
+                                [options]="toOpts(parameters(), '— pick —')"
+                                [value]="asParam(r).parameter_name"
+                                (valueChange)="patchRow(selectedSectionIndex(), ri, { parameter_name: $event })">
+                              </pf-select>
                               @if (condCount(r) > 0) {
                                 <span class="pf-le-sheet__cond-pill" [title]="condCount(r) + ' condition(s)'">
                                   {{ condCount(r) }}↯
@@ -427,12 +426,12 @@ const OPERATORS = [
                 <div class="pf-le-grid3">
                   <div>
                     <label class="pf-label-mini">Parameter</label>
-                    <select class="pf-input pf-input--compact"
-                            [ngModel]="asChart(s).parameter"
-                            (ngModelChange)="patchSection(selectedSectionIndex(), { parameter: $event })">
-                      <option value="">— pick —</option>
-                      @for (p of parameters(); track p) { <option [value]="p">{{ p }}</option> }
-                    </select>
+                    <pf-select
+                      size="sm"
+                      [options]="toOpts(parameters(), '— pick —')"
+                      [value]="asChart(s).parameter"
+                      (valueChange)="patchSection(selectedSectionIndex(), { parameter: $event })">
+                    </pf-select>
                   </div>
                   <div>
                     <label class="pf-label-mini">Min</label>
@@ -635,21 +634,19 @@ const OPERATORS = [
                 @if (!c.if?.parameter) {
                   <span class="pf-cond__warn" title="Predicate not set — this branch will never match">Pick a parameter →</span>
                 }
-                <select class="pf-input pf-input--compact"
-                        [ngModel]="c.if?.parameter ?? ''"
-                        (ngModelChange)="patchCond(selectedSectionIndex(), ri, ci, { if: { ...(c.if ?? {}), parameter: $event } })">
-                  <option value="">— param —</option>
-                  @for (p of parameters(); track p) {
-                    <option [value]="p">{{ p }}</option>
-                  }
-                </select>
-                <select class="pf-input pf-input--compact" style="width: 60px"
-                        [ngModel]="c.if?.operator ?? '<'"
-                        (ngModelChange)="patchCond(selectedSectionIndex(), ri, ci, { if: { ...(c.if ?? {}), operator: $event } })">
-                  @for (op of operators; track op.value) {
-                    <option [value]="op.value">{{ op.label }}</option>
-                  }
-                </select>
+                <pf-select
+                  size="sm"
+                  [options]="toOpts(parameters(), '— param —')"
+                  [value]="c.if?.parameter ?? ''"
+                  (valueChange)="patchCond(selectedSectionIndex(), ri, ci, { if: { ...(c.if ?? {}), parameter: $event } })">
+                </pf-select>
+                <pf-select
+                  size="sm"
+                  style="width: 72px"
+                  [options]="operators"
+                  [value]="c.if?.operator ?? '<'"
+                  (valueChange)="patchCond(selectedSectionIndex(), ri, ci, { if: { ...(c.if ?? {}), operator: $event } })">
+                </pf-select>
                 <input type="number" class="pf-input pf-input--compact" style="width: 90px"
                        [value]="$any(c.if?.value ?? '')"
                        (input)="patchCond(selectedSectionIndex(), ri, ci, { if: { ...(c.if ?? {}), value: numOrStr($any($event.target).value) } })" />
@@ -727,13 +724,12 @@ const OPERATORS = [
                 </div>
                 @for (entry of condCellEntries(c); track entry[0]) {
                   <div class="pf-cond__cell-edit">
-                    <select class="pf-input pf-input--compact"
-                            [ngModel]="entry[0]"
-                            (ngModelChange)="setCondCellKey(selectedSectionIndex(), ri, ci, entry[0], $event)">
-                      @for (col of deptColumnsForRender(); track col.id) {
-                        <option [value]="col.name">{{ col.label }}</option>
-                      }
-                    </select>
+                    <pf-select
+                      size="sm"
+                      [options]="colOpts()"
+                      [value]="entry[0]"
+                      (valueChange)="setCondCellKey(selectedSectionIndex(), ri, ci, entry[0], $event)">
+                    </pf-select>
                     <input type="text" class="pf-input pf-input--compact grow"
                            [value]="entry[1]"
                            (input)="setCondCellValue(selectedSectionIndex(), ri, ci, entry[0], $any($event.target).value)"
@@ -757,21 +753,19 @@ const OPERATORS = [
                 {{ c.else ? 'ELSE' : 'IF' }}
               </button>
               @if (!c.else) {
-                <select class="pf-input pf-input--compact"
-                        [ngModel]="c.if?.parameter ?? ''"
-                        (ngModelChange)="patchSectionCond(selectedSectionIndex(), ci, { if: { ...(c.if ?? {}), parameter: $event } })">
-                  <option value="">— param —</option>
-                  @for (p of parameters(); track p) {
-                    <option [value]="p">{{ p }}</option>
-                  }
-                </select>
-                <select class="pf-input pf-input--compact" style="width: 60px"
-                        [ngModel]="c.if?.operator ?? '<'"
-                        (ngModelChange)="patchSectionCond(selectedSectionIndex(), ci, { if: { ...(c.if ?? {}), operator: $event } })">
-                  @for (op of operators; track op.value) {
-                    <option [value]="op.value">{{ op.label }}</option>
-                  }
-                </select>
+                <pf-select
+                  size="sm"
+                  [options]="toOpts(parameters(), '— param —')"
+                  [value]="c.if?.parameter ?? ''"
+                  (valueChange)="patchSectionCond(selectedSectionIndex(), ci, { if: { ...(c.if ?? {}), parameter: $event } })">
+                </pf-select>
+                <pf-select
+                  size="sm"
+                  style="width: 72px"
+                  [options]="operators"
+                  [value]="c.if?.operator ?? '<'"
+                  (valueChange)="patchSectionCond(selectedSectionIndex(), ci, { if: { ...(c.if ?? {}), operator: $event } })">
+                </pf-select>
                 <input type="number" class="pf-input pf-input--compact" style="width: 90px"
                        [value]="$any(c.if?.value ?? '')"
                        (input)="patchSectionCond(selectedSectionIndex(), ci, { if: { ...(c.if ?? {}), value: numOrStr($any($event.target).value) } })" />
@@ -2194,8 +2188,20 @@ export class TestLayoutEditorComponent {
     this.removeSection(i);
   }
 
-  protected readonly operators = OPERATORS;
+  protected readonly operators: PfSelectOption[] = [...OPERATORS];
   protected readonly colors = COLOR_TOKENS;
+
+  /** Convert a string array (parameter names) to PfSelectOption[] for pf-select. */
+  toOpts(strs: readonly string[], emptyLabel?: string): PfSelectOption[] {
+    const base: PfSelectOption[] = emptyLabel !== undefined
+      ? [{ value: '', label: emptyLabel }] : [];
+    return [...base, ...strs.map(s => ({ value: s, label: s }))];
+  }
+
+  /** Convert dept columns to PfSelectOption[] (name → label). */
+  colOpts(): PfSelectOption[] {
+    return this.deptColumnsForRender().map(c => ({ value: c.name, label: c.label ?? c.name }));
+  }
   /** Literal label for `{{paramName}}` placeholders — kept off-template so
    *  the Angular parser doesn't try to interpolate the example. */
   protected readonly phLabel = '{{paramName}}';

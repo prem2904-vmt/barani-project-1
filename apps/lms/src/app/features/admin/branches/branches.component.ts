@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Branch, Department, SubBranch } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -13,6 +14,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
   standalone: true,
   imports: [
     FormsModule,
+    SelectComponent,
     ChipComponent,
     ScreenHeaderComponent,
     TileComponent,
@@ -160,14 +162,14 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                               }
                             }
                             @if (unassignedDeptsFor(b.id).length > 0) {
-                              <select class="pf-mini-select"
-                                      [ngModel]="''"
-                                      (ngModelChange)="assignDepartment(sb.id, $event)">
-                                <option value="" disabled>+ Assign department</option>
-                                @for (d of unassignedDeptsFor(b.id); track d.id) {
-                                  <option [value]="d.id">{{ d.name }}</option>
-                                }
-                              </select>
+                              <pf-select
+                                style="width: 160px"
+                                size="sm"
+                                [options]="deptsAsOpts(unassignedDeptsFor(b.id))"
+                                [value]="''"
+                                placeholder="+ Assign dept"
+                                (valueChange)="assignDepartment(sb.id, $event)">
+                              </pf-select>
                             }
                           </div>
                         </div>
@@ -182,13 +184,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                                [ngModel]="subBranchDraft().name" (ngModelChange)="patchSubBranchDraft({ name: $event })" />
                         <input type="text" class="pf-input uppercase" placeholder="CODE"
                                [ngModel]="subBranchDraft().code" (ngModelChange)="patchSubBranchDraft({ code: $event.toUpperCase() })" />
-                        <select class="pf-input"
-                                [ngModel]="subBranchDraft().type"
-                                (ngModelChange)="patchSubBranchDraft({ type: $event })">
-                          <option value="lab">Lab (in-house)</option>
-                          <option value="collection-center">Collection center</option>
-                          <option value="satellite">Satellite</option>
-                        </select>
+                        <pf-select
+                          [options]="subBranchTypeOpts"
+                          [value]="subBranchDraft().type"
+                          (valueChange)="patchSubBranchDraft({ type: $any($event) })">
+                        </pf-select>
                         <input type="text" class="pf-input" placeholder="City"
                                [ngModel]="subBranchDraft().city" (ngModelChange)="patchSubBranchDraft({ city: $event })" />
                       </div>
@@ -228,14 +228,14 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                           </div>
                           <div class="flex items-center gap-2">
                             @if (subBranchesFor(b.id).length > 0) {
-                              <select class="pf-mini-select"
-                                      [ngModel]="''"
-                                      (ngModelChange)="assignDepartment($event, d.id)">
-                                <option value="" disabled>Assign →</option>
-                                @for (sb of subBranchesFor(b.id); track sb.id) {
-                                  <option [value]="sb.id">{{ sb.name }}</option>
-                                }
-                              </select>
+                              <pf-select
+                                style="width: 150px"
+                                size="sm"
+                                [options]="subBranchesAsOpts(subBranchesFor(b.id))"
+                                [value]="''"
+                                placeholder="Assign →"
+                                (valueChange)="assignDepartment($event, d.id)">
+                              </pf-select>
                             }
                             @if (d.isActive) {
                               <span class="pf-dot-on" aria-label="Active"></span>
@@ -421,6 +421,20 @@ export class BranchesComponent implements OnInit {
   readonly branches = this._branches.asReadonly();
   readonly subBranches = this._subBranches.asReadonly();
   readonly departments = this._departments.asReadonly();
+
+  readonly subBranchTypeOpts: PfSelectOption[] = [
+    { value: 'lab',               label: 'Lab (in-house)' },
+    { value: 'collection-center', label: 'Collection center' },
+    { value: 'satellite',         label: 'Satellite' }
+  ];
+
+  deptsAsOpts(depts: Department[]): PfSelectOption[] {
+    return depts.map(d => ({ value: d.id, label: d.name }));
+  }
+
+  subBranchesAsOpts(sbs: SubBranch[]): PfSelectOption[] {
+    return sbs.map(s => ({ value: s.id, label: s.name }));
+  }
 
   protected readonly newBranchOpen = signal(false);
   private readonly _newBranch = signal({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false });

@@ -9,6 +9,7 @@ import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 
 interface BulkSubmitResponse {
   sample: OrderSample;
@@ -30,7 +31,7 @@ interface BulkSubmitResponse {
 @Component({
   selector: 'pf-sample-result-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, CommentThreadComponent],
+  imports: [CommonModule, FormsModule, CommentThreadComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Full-width container matching FD/collect screens — was centered
@@ -151,15 +152,14 @@ interface BulkSubmitResponse {
                                     (ngModelChange)="setValue(t.id, p.name, $event)"></textarea>
                         }
                         @case ('select') {
-                          <select class="pf-sre__input"
-                                  [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                  [ngModel]="getValue(t.id, p.name)"
-                                  (ngModelChange)="setValue(t.id, p.name, $event)">
-                            <option value="">—</option>
-                            @for (o of (p.options ?? []); track o) {
-                              <option [value]="o">{{ o }}</option>
-                            }
-                          </select>
+                          <div class="pf-sre__select-wrap"
+                               [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)">
+                            <pf-select
+                              [options]="[{ value: '', label: '—' }, ...(p.options ?? []).map(o => ({ value: o, label: o }))]"
+                              [value]="getValue(t.id, p.name)"
+                              (valueChange)="setValue(t.id, p.name, $event)">
+                            </pf-select>
+                          </div>
                         }
                         @case ('checkbox') {
                           <input type="checkbox" class="pf-sre__cb"
@@ -424,6 +424,15 @@ interface BulkSubmitResponse {
        tech focuses there before submitting. */
     .pf-sre__input--flagged {
       border-color: rgba(239, 68, 68, 0.6) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10);
+    }
+    .pf-sre__select-wrap {
+      border: 1px solid transparent;
+      border-radius: 12px;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .pf-sre__select-wrap.pf-sre__input--flagged {
+      border-color: rgba(239, 68, 68, 0.6);
       box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10);
     }
     .pf-sre__param-flag {

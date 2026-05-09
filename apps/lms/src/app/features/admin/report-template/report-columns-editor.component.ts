@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -10,6 +9,7 @@ import {
   ReportColumnType,
 } from '../../../shared/models/report-layout.model';
 import { Department } from '../../../shared/models/tenant.model';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -26,7 +26,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [FormsModule, TileComponent, ToggleComponent, TouchButtonComponent],
+  imports: [SelectComponent, TileComponent, ToggleComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -36,16 +36,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
         <div class="flex items-center gap-3">
           <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
                  style="color: var(--text-muted);">Department</label>
-          <select class="pf-input pf-input--inline"
-                  [ngModel]="selectedDeptId()"
-                  (ngModelChange)="selectDepartment($event)">
-            @if (departments().length === 0) {
-              <option value="">Loading…</option>
-            }
-            @for (d of departments(); track d.id) {
-              <option [value]="d.id">{{ d.name }}{{ d.code ? ' · ' + d.code : '' }}</option>
-            }
-          </select>
+          <pf-select
+            style="width: 220px"
+            [options]="deptOptions()"
+            [value]="selectedDeptId()"
+            [placeholder]="departments().length === 0 ? 'Loading…' : 'Select department'"
+            (valueChange)="selectDepartment($event)">
+          </pf-select>
         </div>
 
         @if (configured()) {
@@ -108,12 +105,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
               </div>
 
               <!-- Type -->
-              <select class="pf-input pf-input--compact" style="width: 150px"
-                      [ngModel]="c.type" (ngModelChange)="patchCol(i, { type: $event })">
-                @for (opt of typeOptions; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              <pf-select
+                style="width: 150px"
+                size="sm"
+                [options]="typeOptions"
+                [value]="c.type"
+                (valueChange)="patchCol(i, { type: $any($event) })">
+              </pf-select>
 
               <!-- Width -->
               <input type="number" class="pf-input pf-input--compact pf-input--num" style="width: 80px"
@@ -296,6 +294,13 @@ export class ReportColumnsEditorComponent implements OnInit {
   private readonly toasts = inject(ToastService);
 
   protected readonly typeOptions = COLUMN_TYPE_OPTIONS;
+
+  deptOptions(): PfSelectOption[] {
+    return this.departments().map(d => ({
+      value: d.id,
+      label: d.name + (d.code ? ' · ' + d.code : '')
+    }));
+  }
 
   protected readonly departments = signal<Department[]>([]);
   protected readonly selectedDeptId = signal<string>('');
