@@ -201,6 +201,11 @@ export interface ResolvedReportLayout {
   testId: string;
   testName: string;
   departmentName: string;
+  /** Specimen / sample type for this test (e.g. "Serum", "EDTA Whole
+   *  Blood"). Surfaced from TestEntity.Parameters JSON's `sampleType`
+   *  wrapper key. The PDF prints this as an italic dim sub-line under
+   *  each test name, like Drlogy's "CREATININE, SERUM" rendering. */
+  sampleType?: string | null;
   columns: ReportColumn[];
   sections: ResolvedSection[];
 }
@@ -219,6 +224,11 @@ export interface ResolvedSection {
 
 export interface ResolvedRow {
   id: string;
+  /** Parameter name this row was built from (e.g. "Hemoglobin"). Empty
+   *  for merged rows. The PDF renderer uses this to synthesize a
+   *  "Test/Investigation" column when the configured layout doesn't
+   *  already display the parameter name itself. */
+  parameterName?: string;
   cells: Record<string, string>;
   isMerged: boolean;
   mergeType?: 'paragraph' | 'image';
