@@ -51,6 +51,27 @@ interface BulkSubmitResponse {
             <p class="pf-sre__sub">{{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
           </div>
         }
+        <span class="pf-sre__view" role="group" aria-label="Result view">
+          <button type="button" class="pf-sre__view-btn"
+                  [class.pf-sre__view-btn--on]="viewMode() === 'grid'"
+                  (click)="setViewMode('grid')" aria-label="Grid view">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+            </svg>
+            Grid
+          </button>
+          <button type="button" class="pf-sre__view-btn"
+                  [class.pf-sre__view-btn--on]="viewMode() === 'form'"
+                  (click)="setViewMode('form')" aria-label="Form view">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="5" rx="1"/>
+              <rect x="3" y="11" width="18" height="5" rx="1"/>
+              <rect x="3" y="18" width="18" height="3" rx="1"/>
+            </svg>
+            Form
+          </button>
+        </span>
       </header>
 
       @if (loading()) {
@@ -92,6 +113,22 @@ interface BulkSubmitResponse {
               } @else if (t.status === 'entered' || t.status === 'validated') {
                 <span class="pf-sre__test-pill">Entered</span>
               }
+              <!-- Compact "+ Note" pill at the right edge of the header.
+                   Replaces the full-width "Add Overall Observation" button
+                   that used to consume a vertical slot above the params. -->
+              @if (commentsFor(t.id, null).length > 0) {
+                <button type="button" class="pf-sre__note-btn pf-sre__note-btn--has"
+                        (click)="toggleOverall(t.id)"
+                        [attr.aria-expanded]="isOverallOpen(t.id) || commentsFor(t.id, null).length > 0">
+                  Notes ({{ commentsFor(t.id, null).length }})
+                </button>
+              } @else {
+                <button type="button" class="pf-sre__note-btn"
+                        (click)="toggleOverall(t.id)"
+                        [attr.aria-expanded]="isOverallOpen(t.id)">
+                  {{ isOverallOpen(t.id) ? '× Close note' : '+ Note' }}
+                </button>
+              }
             </header>
             <!-- Per-test rejection reason — repeats the banner info but
                  right next to the inputs the tech is about to edit, so
@@ -103,21 +140,115 @@ interface BulkSubmitResponse {
             }
 
             <!-- Overall conversation thread for THIS test — comments
-                 with parameterName == null. Tech can drop an
-                 observation here ("patient was nervous, two attempts")
-                 and reply to validator corrections. Auto-resolves
-                 after Submit All. -->
-            <div class="pf-sre__test-comments">
-              <pf-comment-thread
-                [comments]="commentsFor(t.id, null)"
-                currentRole="tech"
-                (add)="addOverallComment(t.id, $event.body, $event.type)"
-                (reply)="replyToOverall(t.id, $event.parentId, $event.body)">
-              </pf-comment-thread>
-            </div>
+                 with parameterName == null. Rendered only when the tech
+                 toggles it open via the "+ Note" header pill, OR when
+                 the test already has overall comments (existing
+                 conversation must always be visible). -->
+            @if (isOverallOpen(t.id) || commentsFor(t.id, null).length > 0) {
+              <div class="pf-sre__test-comments">
+                <pf-comment-thread
+                  [comments]="commentsFor(t.id, null)"
+                  currentRole="tech"
+                  (add)="addOverallComment(t.id, $event.body, $event.type)"
+                  (reply)="replyToOverall(t.id, $event.parentId, $event.body)">
+                </pf-comment-thread>
+              </div>
+            }
 
             @if (parametersFor(t).length === 0) {
               <p class="pf-sre__test-empty">No parameter schema — this test has no inputs.</p>
+            } @else if (viewMode() === 'grid') {
+              <!-- Grid view: mirrors the report PDF column structure so the
+                   tech enters results in the same shape they'll appear in
+                   the patient report. Toggle in the page header switches
+                   back to the legacy form view. -->
+              <div class="pf-sre__grid-wrap">
+                <table class="pf-sre__grid">
+                  <thead>
+                    <tr>
+                      <th class="pf-sre__gc-param">Parameter</th>
+                      <th class="pf-sre__gc-result">Result</th>
+                      <th class="pf-sre__gc-unit">Unit</th>
+                      <th class="pf-sre__gc-range">Reference range</th>
+                      <th class="pf-sre__gc-method">Method</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (p of parametersFor(t); track p.name; let idx = $index) {
+                      <tr class="pf-sre__grow"
+                          [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
+                        <td class="pf-sre__gc-param">
+                          <span class="pf-sre__gidx">{{ idx + 1 }}</span>
+                          {{ p.title || p.name }}
+                          @if (hasOpenComment(t.id, p.name)) {
+                            <span class="pf-sre__param-flag" title="Pathologist commented">↻</span>
+                          }
+                        </td>
+                        <td class="pf-sre__gc-result">
+                          @switch (inputKindFor(p)) {
+                            @case ('number') {
+                              <input type="number" step="any" class="pf-sre__ginput pf-sre__ginput--num"
+                                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                                     [ngModel]="getValue(t.id, p.name)"
+                                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+                            }
+                            @case ('select') {
+                              <select class="pf-sre__ginput"
+                                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                                      [ngModel]="getValue(t.id, p.name)"
+                                      (ngModelChange)="setValue(t.id, p.name, $event)">
+                                <option value="">—</option>
+                                @for (o of (p.options ?? []); track o) {
+                                  <option [value]="o">{{ o }}</option>
+                                }
+                              </select>
+                            }
+                            @case ('textarea') {
+                              <textarea class="pf-sre__ginput pf-sre__ginput--ta" rows="1"
+                                        [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                                        [ngModel]="getValue(t.id, p.name)"
+                                        (ngModelChange)="setValue(t.id, p.name, $event)"></textarea>
+                            }
+                            @case ('checkbox') {
+                              <input type="checkbox" class="pf-sre__cb"
+                                     [ngModel]="!!getValue(t.id, p.name)"
+                                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+                            }
+                            @case ('date') {
+                              <input type="date" class="pf-sre__ginput"
+                                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                                     [ngModel]="getValue(t.id, p.name)"
+                                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+                            }
+                            @default {
+                              <input type="text" class="pf-sre__ginput"
+                                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                                     [ngModel]="getValue(t.id, p.name)"
+                                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+                            }
+                          }
+                        </td>
+                        <td class="pf-sre__gc-unit">{{ p.unit || '—' }}</td>
+                        <td class="pf-sre__gc-range">{{ refLabelFor(p) || '—' }}</td>
+                        <td class="pf-sre__gc-method">{{ methodologyOf(p) }}</td>
+                      </tr>
+                      @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
+                        <tr class="pf-sre__grow-comments">
+                          <td colspan="5">
+                            <pf-comment-thread
+                              [comments]="commentsFor(t.id, p.name)"
+                              currentRole="tech"
+                              [composeLabel]="'Add note on this parameter'"
+                              (add)="addParameterComment(t.id, p.name, $event.body, $event.type)"
+                              (reply)="replyToParameter(t.id, p.name, $event.parentId, $event.body)">
+                            </pf-comment-thread>
+                          </td>
+                        </tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
             } @else {
               <div class="pf-sre__params">
                 @for (p of parametersFor(t); track p.name) {
@@ -229,6 +360,104 @@ interface BulkSubmitResponse {
     </section>
   `,
   styles: [`
+    /* ── Grid / Form view toggle in page header ───────────────── */
+    .pf-sre__view {
+      display: inline-flex; gap: 2px;
+      padding: 2px;
+      margin-left: auto;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-sre__view-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px;
+      font-size: 12px; font-weight: 600;
+      border: 0; background: transparent;
+      border-radius: 9999px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .pf-sre__view-btn:hover { color: var(--text-primary); }
+    .pf-sre__view-btn--on {
+      background: rgba(168, 85, 247, 0.16);
+      color: #c4b5fd;
+    }
+
+    /* ── Grid view (mirrors report PDF) ───────────────────────── */
+    .pf-sre__grid-wrap {
+      margin-top: 8px;
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--glass-bg);
+    }
+    .pf-sre__grid {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      font-size: 13px;
+    }
+    .pf-sre__grid thead th {
+      text-align: left;
+      padding: 9px 10px;
+      font-size: 10.5px; font-weight: 800;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: #c4b5fd;
+      background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
+      border-bottom: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .pf-sre__gc-param  { width: 28%; }
+    .pf-sre__gc-result { width: 22%; }
+    .pf-sre__gc-unit   { width: 12%; }
+    .pf-sre__gc-range  { width: 22%; }
+    .pf-sre__gc-method { width: 16%; }
+    .pf-sre__grow td {
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--glass-border);
+      vertical-align: middle;
+    }
+    .pf-sre__grow:nth-child(odd) td { background: rgba(255, 255, 255, 0.012); }
+    .pf-sre__grow:hover td { background: rgba(168, 85, 247, 0.06); }
+    .pf-sre__grow--flagged td { background: rgba(244, 63, 94, 0.08) !important; }
+    .pf-sre__gc-param {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .pf-sre__gidx {
+      display: inline-block; min-width: 18px;
+      font-size: 9.5px; font-weight: 700;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+    .pf-sre__ginput {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13.5px; font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .pf-sre__ginput:focus {
+      outline: 0;
+      border-color: rgba(168, 85, 247, 0.6);
+      background: rgba(168, 85, 247, 0.1);
+    }
+    .pf-sre__ginput--num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pf-sre__ginput--ta  { resize: vertical; min-height: 32px; font-weight: 500; }
+    .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method {
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+    .pf-sre__grow-comments td {
+      padding: 8px 10px;
+      background: rgba(168, 85, 247, 0.04);
+    }
+
     :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
     /* Full-width like FD/collect — Tailwind utility classes on the
        outer section provide the responsive padding; no max-width or
@@ -371,6 +600,35 @@ interface BulkSubmitResponse {
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .pf-sre__test-empty { font-size: 13px; color: var(--text-tertiary); margin: 0; }
+
+    /* Compact "+ Note" pill in the test header's right corner — replaces
+       the previous full-width "Add Overall Observation" button which was
+       consuming a vertical slot per test. Toggles a thread block beneath
+       the header; once notes exist, the pill switches to "Notes (N)". */
+    .pf-sre__note-btn {
+      margin-left: auto;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 4px 10px; border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.10);
+      color: #c4b5fd;
+      border: 1px solid rgba(168, 85, 247, 0.30);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pf-sre__note-btn:hover {
+      background: rgba(168, 85, 247, 0.18);
+      border-color: rgba(168, 85, 247, 0.45);
+    }
+    .pf-sre__note-btn--has {
+      background: rgba(96, 165, 250, 0.12);
+      color: #93c5fd;
+      border-color: rgba(96, 165, 250, 0.35);
+    }
+    .pf-sre__note-btn--has:hover {
+      background: rgba(96, 165, 250, 0.20);
+      border-color: rgba(96, 165, 250, 0.50);
+    }
 
     .pf-sre__params {
       display: grid;
@@ -560,6 +818,49 @@ export class SampleResultEntryComponent {
       case 'date':               return 'date';
       default:                   return 'text';
     }
+  }
+
+  /** Grid vs form view — grid is the default (mirrors report PDF columns).
+   *  Persisted across sessions in localStorage. */
+  private readonly _viewMode = signal<'grid' | 'form'>(
+    (typeof localStorage !== 'undefined' && (localStorage.getItem('pf-sre-view') as 'grid' | 'form')) || 'grid'
+  );
+  readonly viewMode = this._viewMode.asReadonly();
+  setViewMode(mode: 'grid' | 'form') {
+    this._viewMode.set(mode);
+    try { localStorage.setItem('pf-sre-view', mode); } catch { /* no-op */ }
+  }
+
+  /** Per-test "show overall observation thread" toggle. The thread block
+   *  is heavy (composer textarea + buttons), so we keep it collapsed until
+   *  the tech clicks the compact "+ Note" pill in the test header. Threads
+   *  with existing comments stay always-visible (see template @if). */
+  private readonly _overallOpen = signal<Set<string>>(new Set<string>());
+  isOverallOpen(testId: string): boolean { return this._overallOpen().has(testId); }
+  toggleOverall(testId: string) {
+    const next = new Set(this._overallOpen());
+    next.has(testId) ? next.delete(testId) : next.add(testId);
+    this._overallOpen.set(next);
+  }
+
+  /** Pretty-formatted reference range for the grid's Range column. Handles
+   *  the standard {min,max} pair plus the `ref_range` text fallback used
+   *  for sex-segmented + qualitative ranges. */
+  refLabelFor(p: TestParameter): string {
+    const r = (p as TestParameter & { ref_range?: string }).ref_range;
+    if (r) return r;
+    const rr = p.referenceRanges?.[0];
+    if (rr && rr.min != null && rr.max != null) return `${rr.min} – ${rr.max}`;
+    if (rr && rr.min != null) return `> ${rr.min}`;
+    if (rr && rr.max != null) return `< ${rr.max}`;
+    if (p.normalValue) return p.normalValue;
+    return '';
+  }
+
+  /** Methodology lives on the legacy TestParameter, dropped through from
+   *  the importer. Returns '—' so the column never reads blank. */
+  methodologyOf(p: TestParameter): string {
+    return (p as TestParameter & { methodology?: string }).methodology || '—';
   }
 
   getValue(testId: string, paramName: string): unknown {

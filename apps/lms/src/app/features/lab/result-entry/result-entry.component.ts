@@ -166,7 +166,156 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                   }
                 </span>
                 <span class="pf-results-head__pct">{{ filledPercentRounded() }}%</span>
+
+                <!-- Grid / Cards view toggle. Grid mirrors the eventual report
+                     PDF (Parameter · Result · Unit · Reference · Method) so
+                     techs see the same layout they're filling toward. Cards
+                     are kept as the fallback for tests with complex composed
+                     widgets that don't fit a single-cell input. -->
+                <span class="pf-view-toggle" role="group" aria-label="Result view">
+                  <button type="button"
+                          class="pf-view-toggle__btn"
+                          [class.pf-view-toggle__btn--on]="viewMode() === 'grid'"
+                          (click)="setViewMode('grid')"
+                          aria-label="Grid view">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+                    </svg>
+                  </button>
+                  <button type="button"
+                          class="pf-view-toggle__btn"
+                          [class.pf-view-toggle__btn--on]="viewMode() === 'cards'"
+                          (click)="setViewMode('cards')"
+                          aria-label="Card view">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="5" rx="1"/>
+                      <rect x="3" y="11" width="18" height="5" rx="1"/>
+                      <rect x="3" y="18" width="18" height="3" rx="1"/>
+                    </svg>
+                  </button>
+                </span>
               </header>
+
+              <!-- ── GRID VIEW ── Mirrors the report layout columns. -->
+              @if (viewMode() === 'grid') {
+                <div class="pf-result-grid-wrap pf-col-scrolls__body">
+                  <table class="pf-result-grid">
+                    <thead>
+                      <tr>
+                        <th class="pf-rg__col-param">Parameter</th>
+                        <th class="pf-rg__col-result">Result</th>
+                        <th class="pf-rg__col-unit">Unit</th>
+                        <th class="pf-rg__col-range">Reference range</th>
+                        <th class="pf-rg__col-method">Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (p of parameters(); track p.name; let idx = $index) {
+                        @let kind = inputKindFor(p);
+                        @if (isLayoutKind(kind)) {
+                          <tr class="pf-result-grid__row pf-result-grid__row--section">
+                            <td colspan="5">
+                              @if (kind === 'section-header') {
+                                <strong>{{ p.title }}</strong>
+                              } @else {
+                                <em>{{ p.normalValue ?? p.title }}</em>
+                              }
+                            </td>
+                          </tr>
+                        } @else {
+                          <tr class="pf-result-grid__row"
+                              [class.pf-result-grid__row--filled]="isFilled(p.name)"
+                              [class.pf-result-grid__row--active]="activeParam() === p.name"
+                              [class.pf-result-grid__row--critical]="isParamCritical(p)">
+                            <td class="pf-rg__c-param">
+                              <span class="pf-rg__idx">{{ idx + 1 }}</span>
+                              {{ p.title }}
+                              <span class="pf-rg__req">*</span>
+                            </td>
+                            <td class="pf-rg__c-result">
+                              @switch (kind) {
+                                @case ('numeric') {
+                                  <input type="number" inputmode="decimal" step="any"
+                                         class="pf-rg__input pf-rg__input--num"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         placeholder="—"/>
+                                }
+                                @case ('dropdown') {
+                                  <select class="pf-rg__input pf-rg__select"
+                                          [value]="valueOf(p.name) ?? ''"
+                                          (focus)="setActive(p.name)"
+                                          (change)="setValue(p.name, asSelect($event))">
+                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
+                                    @for (opt of p.options ?? []; track opt) {
+                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
+                                    }
+                                  </select>
+                                }
+                                @case ('radio') {
+                                  <select class="pf-rg__input pf-rg__select"
+                                          [value]="valueOf(p.name) ?? ''"
+                                          (focus)="setActive(p.name)"
+                                          (change)="setValue(p.name, asSelect($event))">
+                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
+                                    @for (opt of p.options ?? []; track opt) {
+                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
+                                    }
+                                  </select>
+                                }
+                                @case ('yesno') {
+                                  <select class="pf-rg__input pf-rg__select"
+                                          [value]="valueOf(p.name) ?? ''"
+                                          (focus)="setActive(p.name)"
+                                          (change)="setValue(p.name, asSelect($event))">
+                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
+                                    <option value="yes" [selected]="valueOf(p.name) === 'yes'">Yes</option>
+                                    <option value="no"  [selected]="valueOf(p.name) === 'no'">No</option>
+                                  </select>
+                                }
+                                @case ('textarea') {
+                                  <textarea class="pf-rg__input pf-rg__textarea" rows="1"
+                                            [value]="valueOf(p.name) ?? ''"
+                                            (focus)="setActive(p.name)"
+                                            (input)="setValue(p.name, asInput($event))"
+                                            placeholder="—"></textarea>
+                                }
+                                @case ('date') {
+                                  <input type="date" class="pf-rg__input pf-rg__date"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (change)="setValue(p.name, asInput($event))"/>
+                                }
+                                @default {
+                                  <input type="text" class="pf-rg__input"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         placeholder="—"/>
+                                }
+                              }
+                              @if (flagFor(p); as fl) {
+                                <span class="pf-rg__flag" [attr.data-tone]="fl.tone">{{ fl.label }}</span>
+                              }
+                            </td>
+                            <td class="pf-rg__c-unit">{{ p.unit ?? '—' }}</td>
+                            <td class="pf-rg__c-range">
+                              @if (refLabel(p); as r) { {{ r }} } @else { — }
+                            </td>
+                            <td class="pf-rg__c-method">
+                              {{ $any(p)?.methodology ?? '—' }}
+                            </td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
 
               <div class="pf-params pf-col-scrolls__body">
                 @for (p of parameters(); track p.name; let idx = $index) {
@@ -531,6 +680,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                   </div>
                 }
               </div>
+              }
             </pf-tile>
           } @else if (orderTest() && parameters().length === 0) {
             <pf-tile tone="amber" padding="lg" class="pf-col-static">
@@ -1441,6 +1591,134 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
     }
 
+    /* ── Grid view (mirrors the report PDF columns) ─────────── */
+    .pf-view-toggle {
+      display: inline-flex;
+      gap: 2px;
+      padding: 2px;
+      margin-left: 8px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-view-toggle__btn {
+      width: 28px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 0;
+      border-radius: 9999px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .pf-view-toggle__btn:hover { color: var(--text-primary); }
+    .pf-view-toggle__btn--on {
+      background: rgba(168, 85, 247, 0.16);
+      color: #c4b5fd;
+    }
+
+    .pf-result-grid-wrap {
+      padding: 8px 4px 16px;
+      overflow-x: auto;
+    }
+    .pf-result-grid {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      min-width: 760px;
+      font-size: 13px;
+    }
+    .pf-result-grid thead th {
+      text-align: left;
+      padding: 9px 10px;
+      font-size: 10.5px; font-weight: 800;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: #c4b5fd;
+      background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
+      border-bottom: 1px solid rgba(168, 85, 247, 0.4);
+      position: sticky; top: 0; z-index: 1;
+    }
+    .pf-rg__col-param  { width: 28%; }
+    .pf-rg__col-result { width: 22%; }
+    .pf-rg__col-unit   { width: 12%; }
+    .pf-rg__col-range  { width: 22%; }
+    .pf-rg__col-method { width: 16%; }
+
+    .pf-result-grid__row td {
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--glass-border);
+      vertical-align: middle;
+    }
+    .pf-result-grid__row:nth-child(odd) td { background: rgba(255, 255, 255, 0.012); }
+    .pf-result-grid__row:hover td { background: rgba(168, 85, 247, 0.06); }
+    .pf-result-grid__row--active td { background: rgba(168, 85, 247, 0.12) !important; }
+    .pf-result-grid__row--filled td { color: var(--text-primary); }
+    .pf-result-grid__row--critical td {
+      background: rgba(239, 68, 68, 0.10) !important;
+    }
+    .pf-result-grid__row--section td {
+      padding: 10px 10px 6px !important;
+      background: rgba(168, 85, 247, 0.10) !important;
+      color: var(--text-primary);
+      font-size: 11.5px;
+      letter-spacing: 0.04em;
+    }
+
+    .pf-rg__c-param {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .pf-rg__idx {
+      font-size: 9.5px; font-weight: 700;
+      color: var(--text-muted);
+      min-width: 18px;
+    }
+    .pf-rg__req {
+      color: rgba(244, 63, 94, 0.6);
+      font-weight: 700;
+      margin-left: 2px;
+    }
+    .pf-rg__c-result {
+      position: relative;
+    }
+    .pf-rg__input {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .pf-rg__input:focus {
+      outline: 0;
+      border-color: rgba(168, 85, 247, 0.6);
+      background: rgba(168, 85, 247, 0.1);
+    }
+    .pf-rg__input--num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pf-rg__select { font-weight: 500; }
+    .pf-rg__textarea { resize: vertical; min-height: 32px; }
+    .pf-rg__c-unit, .pf-rg__c-range, .pf-rg__c-method {
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+    .pf-rg__flag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 8px;
+      font-size: 9.5px; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border-radius: 9999px;
+    }
+    .pf-rg__flag[data-tone='low']      { background: rgba(59, 130, 246, 0.16); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .pf-rg__flag[data-tone='high']     { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); }
+    .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+
     /* ── Live flag pill ─────────────────────────────────────── */
     .pf-flag {
       display: inline-flex;
@@ -2169,6 +2447,21 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly activeParam = this._active.asReadonly();
   readonly note = this._note.asReadonly();
 
+  /** Result entry layout — `grid` mirrors the report PDF's column
+   *  structure (Parameter · Result · Unit · Reference · Method), so a
+   *  tech sees the same shape they're filling toward. `cards` is the
+   *  legacy vertical-card layout, kept for tests with composed widgets
+   *  (image input, size/duration tuples). Persisted across sessions in
+   *  localStorage. */
+  private readonly _viewMode = signal<'grid' | 'cards'>(
+    (typeof localStorage !== 'undefined' && (localStorage.getItem('pf-result-view') as 'grid' | 'cards')) || 'grid'
+  );
+  readonly viewMode = this._viewMode.asReadonly();
+  setViewMode(mode: 'grid' | 'cards') {
+    this._viewMode.set(mode);
+    try { localStorage.setItem('pf-result-view', mode); } catch { /* no-op */ }
+  }
+
   private readonly _paramsBlob = computed<TestParametersBlob | null>(() => {
     const raw = this._ot()?.test?.parameters;
     if (!raw) return null;
@@ -2210,7 +2503,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // 'stub' joins them so admins can drop Tier 3 complex widgets into a
   // schema without them blocking canSubmit (the widgets don't render
   // interactive UI yet, so users couldn't fill them even if required).
-  private isLayoutKind(k: InputKind): boolean {
+  isLayoutKind(k: InputKind): boolean {
     return k === 'section-header' || k === 'info-text' || k === 'stub';
   }
   private hasValue(v: unknown, kind: InputKind): boolean {
