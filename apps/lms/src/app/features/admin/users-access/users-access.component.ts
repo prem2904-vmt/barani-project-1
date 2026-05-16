@@ -99,10 +99,10 @@ type Tab = 'users' | 'roles';
                     </p>
                   </div>
                   @if (u.isActive) {
-                    @if (canCall(u)) {
+                    @if (canCall(u) && u.authId) {
                       <pf-touch-btn size="sm" variant="ghost"
-                                    [disabled]="!isOnline(u.id)"
-                                    [title]="isOnline(u.id) ? 'Voice call ' + u.displayName : u.displayName + ' is offline'"
+                                    [disabled]="!isOnline(u.authId)"
+                                    [title]="isOnline(u.authId) ? 'Voice call ' + u.displayName : u.displayName + ' is offline'"
                                     (pressed)="callUser(u)">
                         <span icon-left aria-hidden="true">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -197,13 +197,16 @@ export class UsersAccessComponent implements OnInit {
   }
 
   async callUser(u: User): Promise<void> {
-    if (!this.canCall(u)) return;
-    if (!this.isOnline(u.id)) {
+    if (!this.canCall(u) || !u.authId) return;
+    if (!this.isOnline(u.authId)) {
       this.toasts.info(`${u.displayName} is offline.`);
       return;
     }
     try {
-      await this.webrtc.startCall(u.id, 'admin_internal');
+      // SignalR addresses users by Supabase sub (== UserEntity.AuthId), not
+      // the prefrontal UserEntity.Id. SubClaimUserIdProvider on the server
+      // registers each connection under its sub claim, so this id matches.
+      await this.webrtc.startCall(u.authId, 'admin_internal');
       this.toasts.info(`Ringing ${u.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not place call.');
