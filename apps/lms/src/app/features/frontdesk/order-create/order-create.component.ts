@@ -741,7 +741,7 @@ interface HistoryRow {
     @media (min-width: 640px) {
       .pf-rail-card { flex: 0 0 220px; }
     }
-    .pf-rail-card:hover { background: var(--glass-bg-hover); border-color: rgba(168, 85, 247, 0.40); }
+    .pf-rail-card:not(.pf-rail-card--on):hover { background: var(--glass-bg-hover); border-color: rgba(168, 85, 247, 0.40); }
     .pf-rail-card:active { transform: scale(0.98); }
     .pf-rail-card--on {
       background: color-mix(in srgb, #10b981 14%, transparent);
@@ -763,21 +763,20 @@ interface HistoryRow {
       color: var(--text-muted);
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer;
-      transition: opacity 0.15s, visibility 0.15s, color 0.15s, background 0.15s;
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      flex-shrink: 0;
-      margin-left: 12px;
-    }
-    .pf-rail-card:hover .pf-rail-card__star,
-    .pf-rail-card:focus-within .pf-rail-card__star {
+      transition: color 0.15s, background 0.15s, transform 0.08s;
       opacity: 1;
       visibility: visible;
       pointer-events: auto;
+      flex-shrink: 0;
+      margin-left: 12px;
     }
     .pf-rail-card__star:hover { background: var(--glass-bg-hover); color: #fbbf24; }
-    .pf-rail-card__star--on { color: #fbbf24; }
+    /* Favourites keep the filled color and remain visible */
+    .pf-rail-card__star--on { color: #fbbf24; opacity: 1; visibility: visible; }
+
+    /* Selected card should keep its selected background and get a subtle stronger accent on hover */
+    .pf-rail-card--on { background: color-mix(in srgb, #10b981 14%, transparent); border-color: rgba(16, 185, 129, 0.45); }
+    .pf-rail-card--on:hover { background: color-mix(in srgb, #10b981 20%, transparent); border-color: rgba(16, 185, 129, 0.6); }
 
     /* Tag sits at the top of the card content area, left-aligned.
      * Star lives above this in the padding region, never overlapping. */
