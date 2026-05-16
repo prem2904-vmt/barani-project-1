@@ -376,13 +376,11 @@ interface DepartmentDraft {
                                      (ngModelChange)="updateSubBranch(i, sbi, { code: $event.toUpperCase() })" />
                             </div>
                             <div class="sub-branch-type">
-                              <select class="pf-input"
-                                      [ngModel]="sb.type"
-                                      (ngModelChange)="updateSubBranch(i, sbi, { type: $event })">
-                                <option value="lab">Lab</option>
-                                <option value="collection-center">Collection</option>
-                                <option value="satellite">Satellite</option>
-                              </select>
+                              <pf-select
+                                [options]="subBranchTypeOpts"
+                                [value]="sb.type"
+                                (valueChange)="updateSubBranch(i, sbi, { type: $any($event) })">
+                              </pf-select>
                             </div>
                             <button type="button" class="row-remove"
                                     (click)="removeSubBranch(i, sbi)" aria-label="Remove sub-branch">
@@ -765,6 +763,11 @@ export class SetupWizardComponent {
     { value: 'chain',             label: 'Chain' },
     { value: 'hospital',          label: 'Hospital' },
     { value: 'diagnostic_center', label: 'Diagnostic center' }
+  ];
+  readonly subBranchTypeOpts: PfSelectOption<string>[] = [
+    { value: 'lab',               label: 'Lab' },
+    { value: 'collection-center', label: 'Collection' },
+    { value: 'satellite',         label: 'Satellite' }
   ];
   // India address dropdowns — see shared/data/india-locations.ts
   readonly stateSelectOptions: PfSelectOption<string>[] = stateOptions();

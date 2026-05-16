@@ -13,6 +13,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -69,7 +70,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     AvatarComponent,
     ChipComponent,
     NumPadComponent,
-    TileComponent
+    TileComponent,
+    SelectComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -341,15 +343,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
                         @case ('dropdown') {
-                          <select class="pf-param__input pf-param__select"
-                                  [value]="valueOf(p.name) ?? ''"
-                                  (focus)="setActive(p.name)"
-                                  (change)="setValue(p.name, asSelect($event))">
-                            <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                            @for (opt of p.options ?? []; track opt) {
-                              <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
-                            }
-                          </select>
+                          <div (click)="setActive(p.name)">
+                            <pf-select
+                              placeholder="— Choose —"
+                              [options]="(p.options ?? []).map(o => ({ value: o, label: o }))"
+                              [value]="valueOf(p.name) ?? ''"
+                              (valueChange)="setValue(p.name, $event)">
+                            </pf-select>
+                          </div>
                         }
                         @case ('chips-multi') {
                           <div class="pf-param__choices">
@@ -472,13 +473,11 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                    (focus)="setActive(p.name)"
                                    (input)="setDurationValue(p.name, { value: toNumOrNull(asInput($event)) })"
                                    placeholder="0" />
-                            <select class="pf-param__input pf-param__select"
-                                    [value]="durationValueOf(p.name).unit"
-                                    (change)="setDurationValue(p.name, { unit: asSelect($event) })">
-                              @for (u of durationUnitsFor(p); track u) {
-                                <option [value]="u" [selected]="durationValueOf(p.name).unit === u">{{ u }}</option>
-                              }
-                            </select>
+                            <pf-select
+                              [options]="durationUnitsFor(p).map(u => ({ value: u, label: u }))"
+                              [value]="durationValueOf(p.name).unit"
+                              (valueChange)="setDurationValue(p.name, { unit: $any($event) })">
+                            </pf-select>
                           </div>
                         }
                         @case ('size') {
@@ -492,13 +491,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                      (input)="setSizeValueAt(p.name, i, toNumOrNull(asInput($event)))"
                                      placeholder="—"/>
                             }
-                            <select class="pf-param__input pf-param__select pf-param__size-unit"
-                                    [value]="sizeValueOf(p.name).unit"
-                                    (change)="setSizeUnit(p.name, asSelect($event))">
-                              @for (u of sizeUnits; track u) {
-                                <option [value]="u" [selected]="sizeValueOf(p.name).unit === u">{{ u }}</option>
-                              }
-                            </select>
+                            <pf-select
+                              class="pf-param__size-unit"
+                              [options]="sizeUnits.map(u => ({ value: u, label: u }))"
+                              [value]="sizeValueOf(p.name).unit"
+                              (valueChange)="setSizeUnit(p.name, $any($event))">
+                            </pf-select>
                           </div>
                         }
                         @case ('measure') {
