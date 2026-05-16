@@ -380,6 +380,20 @@
   .pf-icon-btn--xl-only { display: inline-flex; }
 }
 
+/* Unread badge on the People icon — small numeric pill, top-right. */
+.pf-icon-btn__badge {
+  position: absolute;
+  top: -3px; right: -3px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg-card-solid, #14142a);
+  line-height: 1;
+}
+
 /* Profile avatar + popover ------------------------------- */
 .pf-avatar-btn {
   position: relative;

@@ -129,80 +129,189 @@ interface HistoryRow {
             </div>
           </div>
 
-          <!-- Quick packages -->
-          @if (packages().length > 0 && !query()) {
-            <div>
-              <p class="pf-eyebrow mb-2 px-1">Quick packages</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                @for (pkg of packages(); track pkg.id) {
-                  <button type="button" (click)="togglePackage(pkg)"
-                          class="pf-pkg press"
-                          [class.pf-pkg--on]="isSelected(pkg.id)">
-                    @if (isSelected(pkg.id)) {
-                      <span class="pf-pkg__check" aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="m5 12 4 4L19 6"/>
-                        </svg>
-                      </span>
-                    }
-                    <div class="min-w-0 flex-1 text-left">
-                      <p class="pf-pkg__name">{{ pkg.name }}</p>
-                      <p class="pf-pkg__meta">package · TAT {{ pkg.tatHours }}h</p>
-                    </div>
-                    <p class="pf-pkg__price">{{ pkg.price | inr }}</p>
-                  </button>
+          <!-- Ref doctor (optional) — typeahead from past orders' RefDoctorName.
+               Stored as RefDoctorName on the order; backend auto-suggests
+               doctors seen on prior orders within the tenant. -->
+          <div class="pf-refdoc">
+            <label class="pf-eyebrow mb-1 px-1 block">Referring doctor <span class="pf-refdoc__opt">(optional)</span></label>
+            <div class="pf-refdoc__field">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="pf-refdoc__icon">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input type="text" class="pf-refdoc__input"
+                     [value]="refDoctorName()"
+                     (input)="onRefDoctorInput(asInput($event))"
+                     (focus)="onRefDoctorFocus()"
+                     (blur)="onRefDoctorBlur()"
+                     placeholder="Type a doctor's name — suggestions from past orders" />
+              @if (refDoctorName()) {
+                <button type="button" class="pf-refdoc__clear press"
+                        (mousedown)="pickRefDoctor('')" aria-label="Clear">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12"/>
+                  </svg>
+                </button>
+              }
+            </div>
+            @if (refDoctorOpen() && refDoctorSuggestions().length > 0) {
+              <div class="pf-refdoc__pop">
+                @for (name of refDoctorSuggestions(); track name) {
+                  <button type="button" class="pf-refdoc__pop-item press"
+                          (mousedown)="pickRefDoctor(name)">{{ name }}</button>
                 }
               </div>
-            </div>
-          }
+            }
+          </div>
 
-          <!-- Test catalog -->
+          <!-- Categorized test picker. Tabs swap the rail content; rail
+               itself is one horizontal scroll-snap row. Star = toggle
+               favourite (per-user). 'all' falls back to the dept-grouped
+               grid for full catalogue browsing. -->
           <div>
-            <div class="flex items-center justify-between mb-2 px-1">
-              <p class="pf-eyebrow">Test catalog · <span class="pf-catalog-count">{{ filteredTests().length }}</span></p>
-              @if (query()) {
-                <span class="pf-filter-hint">filtered · "{{ query() }}"</span>
+            <div class="pf-tabs pf-no-print" role="tablist" aria-label="Test categories">
+              @for (tab of [
+                { id: 'recent',     label: 'Recent',     count: recentTests().length    },
+                { id: 'favourites', label: 'Favourites', count: favouriteTests().length },
+                { id: 'packages',   label: 'Packages',   count: packages().length       },
+                { id: 'all',        label: 'All tests',  count: individualTests().length }
+              ]; track tab.id) {
+                <button type="button" class="pf-tabs__btn"
+                        [class.pf-tabs__btn--on]="categoryTab() === tab.id"
+                        (click)="setCategoryTab($any(tab.id))"
+                        role="tab" [attr.aria-selected]="categoryTab() === tab.id">
+                  <span>{{ tab.label }}</span>
+                  @if (tab.count > 0) {
+                    <span class="pf-tabs__count">{{ tab.count }}</span>
+                  }
+                </button>
               }
             </div>
 
-            @if (filteredTests().length === 0 && individualTests().length > 0) {
-              <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests match "{{ query() }}"</p>
-            } @else if (individualTests().length === 0) {
-              <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests configured.</p>
-            } @else {
-              <div class="flex flex-col gap-5">
-                @for (group of filteredTestsByDept(); track group.department) {
-                  <div>
-                    <div class="pf-dept-hdr">
-                      <span class="pf-dept-hdr__name">{{ group.department }}</span>
-                      <span class="pf-dept-hdr__count">{{ group.tests.length }}</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-                      @for (t of group.tests; track t.id) {
-                        <button type="button"
-                                (click)="toggleTest(t)"
-                                class="pf-test press"
-                                [class.pf-test--on]="isSelected(t.id)">
-                          <span class="pf-test__badge">
-                            @if (isSelected(t.id)) {
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m5 12 4 4L19 6"/>
-                              </svg>
-                            } @else {
-                              {{ shortCode(t) }}
-                            }
-                          </span>
-                          <div class="flex-1 min-w-0 text-left">
-                            <p class="pf-test__name">{{ t.name }}</p>
-                            <p class="pf-test__meta">TAT {{ t.tatHours }}h</p>
-                          </div>
-                          <span class="pf-test__price">{{ t.price | inr }}</span>
-                        </button>
+            @if (categoryTab() === 'recent') {
+              @if (recentTests().length === 0) {
+                <p class="pf-empty-line">No recent tests yet — they appear here once you create your first order.</p>
+              } @else {
+                <div class="pf-rail" role="list">
+                  @for (t of recentTests(); track t.id) {
+                    <button type="button" class="pf-rail-card press"
+                            [class.pf-rail-card--on]="isSelected(t.id)"
+                            (click)="toggleTest(t)" role="listitem">
+                      <button type="button" class="pf-rail-card__star"
+                              [class.pf-rail-card__star--on]="isFavourite(t.id)"
+                              (click)="toggleFavourite(t.id, $event)"
+                              [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
+                        <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                      </button>
+                      <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                      <p class="pf-rail-card__name">{{ t.name }}</p>
+                      <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
+                      <p class="pf-rail-card__price">{{ t.price | inr }}</p>
+                      @if (isSelected(t.id)) {
+                        <span class="pf-rail-card__on-tag">✓ Added</span>
                       }
+                    </button>
+                  }
+                </div>
+              }
+            }
+
+            @if (categoryTab() === 'favourites') {
+              @if (favouriteTests().length === 0) {
+                <p class="pf-empty-line">No favourites yet — click the ☆ on any test to pin it here.</p>
+              } @else {
+                <div class="pf-rail" role="list">
+                  @for (t of favouriteTests(); track t.id) {
+                    <button type="button" class="pf-rail-card press"
+                            [class.pf-rail-card--on]="isSelected(t.id)"
+                            (click)="toggleTest(t)" role="listitem">
+                      <button type="button" class="pf-rail-card__star pf-rail-card__star--on"
+                              (click)="toggleFavourite(t.id, $event)" aria-label="Unpin">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                      </button>
+                      <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                      <p class="pf-rail-card__name">{{ t.name }}</p>
+                      <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
+                      <p class="pf-rail-card__price">{{ t.price | inr }}</p>
+                      @if (isSelected(t.id)) {
+                        <span class="pf-rail-card__on-tag">✓ Added</span>
+                      }
+                    </button>
+                  }
+                </div>
+              }
+            }
+
+            @if (categoryTab() === 'packages') {
+              @if (packages().length === 0) {
+                <p class="pf-empty-line">No packages configured.</p>
+              } @else {
+                <div class="pf-rail" role="list">
+                  @for (pkg of packages(); track pkg.id) {
+                    <button type="button" class="pf-rail-card pf-rail-card--pkg press"
+                            [class.pf-rail-card--on]="isSelected(pkg.id)"
+                            (click)="togglePackage(pkg)" role="listitem">
+                      <span class="pf-rail-card__tag">PACKAGE</span>
+                      <p class="pf-rail-card__name">{{ pkg.name }}</p>
+                      <p class="pf-rail-card__meta">TAT {{ pkg.tatHours }}h</p>
+                      <p class="pf-rail-card__price">{{ pkg.price | inr }}</p>
+                      @if (isSelected(pkg.id)) {
+                        <span class="pf-rail-card__on-tag">✓ Added</span>
+                      }
+                    </button>
+                  }
+                </div>
+              }
+            }
+
+            @if (categoryTab() === 'all') {
+              @if (filteredTests().length === 0 && individualTests().length > 0) {
+                <p class="pf-empty-line">No tests match "{{ query() }}"</p>
+              } @else if (individualTests().length === 0) {
+                <p class="pf-empty-line">No tests configured.</p>
+              } @else {
+                <div class="flex flex-col gap-5">
+                  @for (group of filteredTestsByDept(); track group.department) {
+                    <div>
+                      <div class="pf-dept-hdr">
+                        <span class="pf-dept-hdr__name">{{ group.department }}</span>
+                        <span class="pf-dept-hdr__count">{{ group.tests.length }}</span>
+                      </div>
+                      <div class="pf-rail" role="list">
+                        @for (t of group.tests; track t.id) {
+                          <button type="button" class="pf-rail-card press"
+                                  [class.pf-rail-card--on]="isSelected(t.id)"
+                                  (click)="toggleTest(t)" role="listitem">
+                            <button type="button" class="pf-rail-card__star"
+                                    [class.pf-rail-card__star--on]="isFavourite(t.id)"
+                                    (click)="toggleFavourite(t.id, $event)"
+                                    [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
+                              <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
+                                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                              </svg>
+                            </button>
+                            <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                            <p class="pf-rail-card__name">{{ t.name }}</p>
+                            <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
+                            <p class="pf-rail-card__price">{{ t.price | inr }}</p>
+                            @if (isSelected(t.id)) {
+                              <span class="pf-rail-card__on-tag">✓ Added</span>
+                            }
+                          </button>
+                        }
+                      </div>
                     </div>
-                  </div>
-                }
-              </div>
+                  }
+                </div>
+              }
             }
           </div>
         </div>
@@ -384,6 +493,192 @@ interface HistoryRow {
     </section>
   `,
   styles: [`
+    /* ── Ref doctor autocomplete ────────────────────────────── */
+    .pf-refdoc { position: relative; }
+    .pf-refdoc__opt { font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+    .pf-refdoc__field {
+      position: relative;
+      display: flex; align-items: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 0 10px 0 36px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .pf-refdoc__field:focus-within {
+      border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
+    }
+    .pf-refdoc__icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-tertiary);
+    }
+    .pf-refdoc__input {
+      flex: 1; min-width: 0; height: 40px;
+      background: transparent; border: none; outline: none;
+      color: var(--text-primary); font-size: 13.5px;
+    }
+    .pf-refdoc__input::placeholder { color: var(--text-muted); }
+    .pf-refdoc__clear {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--glass-bg-hover);
+      border: none; color: var(--text-secondary); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-left: 4px;
+    }
+    .pf-refdoc__pop {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+      background: var(--bg-card-solid, #14142a);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      padding: 6px;
+      max-height: 240px; overflow-y: auto;
+    }
+    .pf-refdoc__pop-item {
+      display: block; width: 100%; padding: 8px 10px;
+      background: transparent; border: none; text-align: left;
+      color: var(--text-primary); font-size: 13px; cursor: pointer;
+      border-radius: 8px;
+    }
+    .pf-refdoc__pop-item:hover { background: var(--glass-bg-hover); }
+
+    /* ── Category tabs (Recent / Favourites / Packages / All) ── */
+    .pf-tabs {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+    .pf-tabs__btn {
+      flex: 1 1 auto; min-width: max-content;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 7px 14px;
+      background: transparent; border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--text-tertiary); font-size: 12.5px; font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pf-tabs__btn:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-tabs__btn--on {
+      background: color-mix(in srgb, #a78bfa 14%, transparent);
+      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.55);
+      color: var(--text-primary); font-weight: 600;
+    }
+    .pf-tabs__count {
+      min-width: 18px; padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #c4b5fd;
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* ── Horizontal rail of test cards ───────────────────────── */
+    .pf-rail {
+      display: flex; gap: 10px;
+      overflow-x: auto;
+      padding: 4px 4px 12px;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;
+    }
+    .pf-rail::-webkit-scrollbar { height: 6px; }
+    .pf-rail::-webkit-scrollbar-thumb {
+      background: rgba(168, 85, 247, 0.32); border-radius: 999px;
+    }
+
+    .pf-rail-card {
+      position: relative;
+      flex: 0 0 220px;
+      scroll-snap-align: start;
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 14px 14px 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.08s;
+    }
+    .pf-rail-card:hover { background: var(--glass-bg-hover); border-color: rgba(168, 85, 247, 0.40); }
+    .pf-rail-card:active { transform: scale(0.98); }
+    .pf-rail-card--on {
+      background: color-mix(in srgb, #10b981 14%, transparent);
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+    .pf-rail-card--pkg {
+      background: color-mix(in srgb, #f59e0b 10%, var(--glass-bg));
+      border-color: rgba(245, 158, 11, 0.32);
+    }
+    .pf-rail-card--pkg.pf-rail-card--on {
+      background: color-mix(in srgb, #10b981 14%, transparent);
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+    .pf-rail-card__star {
+      position: absolute; top: 8px; right: 8px;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: transparent; border: none;
+      color: var(--text-muted);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+    .pf-rail-card__star:hover { background: var(--glass-bg-hover); color: #fbbf24; }
+    .pf-rail-card__star--on { color: #fbbf24; }
+    .pf-rail-card__code {
+      align-self: flex-start;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #c4b5fd;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 4px;
+    }
+    .pf-rail-card__tag {
+      align-self: flex-start;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.22);
+      color: #fbbf24;
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-bottom: 4px;
+    }
+    .pf-rail-card__name {
+      margin: 0;
+      font-size: 13.5px; font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .pf-rail-card__meta {
+      margin: 0;
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-rail-card__price {
+      margin: 4px 0 0;
+      font-size: 14px; font-weight: 700;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-rail-card__on-tag {
+      position: absolute; bottom: 8px; right: 10px;
+      font-size: 10.5px; font-weight: 700;
+      color: #10b981;
+    }
+
+    .pf-empty-line {
+      text-align: center; padding: 18px 8px;
+      color: var(--text-tertiary); font-size: 13px;
+    }
+
     /* ── Dept header above each catalog group ───────────────── */
     .pf-dept-hdr {
       display: flex; align-items: center; gap: 8px;
@@ -1294,6 +1589,20 @@ export class OrderCreateComponent implements OnInit {
   private readonly _query = signal<string>('');
   private readonly _cartOpen = signal<boolean>(false);
 
+  // ── Categorized test picker state ─────────────────────────────────
+  /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
+  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('all');
+  /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
+  readonly favouriteIds = signal<Set<string>>(new Set());
+  /** Per-user recent test ids, fetched from /api/test-picker/recent. */
+  readonly recentIds = signal<string[]>([]);
+
+  // ── Ref-doctor field state ────────────────────────────────────────
+  readonly refDoctorName = signal<string>('');
+  readonly refDoctorOpen = signal(false);
+  readonly refDoctorSuggestions = signal<string[]>([]);
+  private refDoctorDebounce: ReturnType<typeof setTimeout> | null = null;
+
   /** Per-patient localStorage key for draft order carts. We keep one
    *  draft per patient so reception can resume any half-built order
    *  on the same browser. Drafts older than 7 days are dropped on
@@ -1313,6 +1622,27 @@ export class OrderCreateComponent implements OnInit {
 
   readonly individualTests = computed(() => this._tests().filter(t => t.type !== 'package'));
   readonly packages = computed(() => this._tests().filter(t => t.type === 'package'));
+
+  // ── Category-aware test lists ────────────────────────────────────
+
+  /** Tests pinned by the current user, in pin order. Filtered to active. */
+  readonly favouriteTests = computed<Test[]>(() => {
+    const ids = this.favouriteIds();
+    if (ids.size === 0) return [];
+    const byId = new Map(this._tests().map(t => [t.id, t]));
+    return Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+  });
+
+  /** Tests this user has ordered in the past, most-recent first. */
+  readonly recentTests = computed<Test[]>(() => {
+    const ids = this.recentIds();
+    if (ids.length === 0) return [];
+    const byId = new Map(this._tests().map(t => [t.id, t]));
+    return ids.map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+  });
+
+  /** True when the test id is in the user's favourites. */
+  isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
   readonly filteredTests = computed(() => {
     const q = this._query().trim().toLowerCase();
@@ -1458,6 +1788,18 @@ export class OrderCreateComponent implements OnInit {
     this.api.get<Test[]>('/api/tests/').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+    });
+
+    // Per-user pinned tests + recent test history. Both endpoints are
+    // best-effort — if they fail the picker still works (tabs fall back to
+    // "All"). Fire in parallel; either response order is fine.
+    this.api.get<string[]>('/api/test-picker/favorites').subscribe({
+      next: ids => this.favouriteIds.set(new Set(ids ?? [])),
+      error: () => { /* silent: empty favourites list */ }
+    });
+    this.api.get<string[]>('/api/test-picker/recent').subscribe({
+      next: ids => this.recentIds.set(ids ?? []),
+      error: () => { /* silent: empty recent list */ }
     });
 
     // Deep-link support — if the route carries ?patientId= (e.g. coming
@@ -1676,6 +2018,7 @@ export class OrderCreateComponent implements OnInit {
     this._saving.set(true);
     this.api.post<Order>('/api/orders/', {
       patientId: p.id,
+      refDoctorName: this.refDoctorName().trim() || null,
       priority: this._priority(),
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
@@ -1710,6 +2053,70 @@ export class OrderCreateComponent implements OnInit {
   back() {
     if (window.history.length > 1) this.locationSvc.back();
     else this.router.navigateByUrl('/frontdesk');
+  }
+
+  // ── Favourites + ref doctor handlers ────────────────────────────
+
+  /** Click handler for the star icon on a test card. Optimistic toggle —
+   *  on API failure we revert and toast. */
+  toggleFavourite(testId: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this.favouriteIds());
+    const wasFav = next.has(testId);
+    if (wasFav) next.delete(testId); else next.add(testId);
+    this.favouriteIds.set(next);
+
+    const obs = wasFav
+      ? this.api.delete<unknown>(`/api/test-picker/favorites/${testId}`)
+      : this.api.post<unknown>(`/api/test-picker/favorites/${testId}`, {});
+    obs.subscribe({
+      error: () => {
+        // Revert.
+        const revert = new Set(this.favouriteIds());
+        if (wasFav) revert.add(testId); else revert.delete(testId);
+        this.favouriteIds.set(revert);
+        this.toasts.error('Could not update favourites');
+      }
+    });
+  }
+
+  setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'all'): void {
+    this.categoryTab.set(tab);
+  }
+
+  /** Reception types in the ref-doctor input — fetch suggestions debounced. */
+  onRefDoctorInput(value: string): void {
+    this.refDoctorName.set(value);
+    this.refDoctorOpen.set(true);
+    if (this.refDoctorDebounce) clearTimeout(this.refDoctorDebounce);
+    this.refDoctorDebounce = setTimeout(() => {
+      const q = value.trim();
+      this.api.get<string[]>(`/api/test-picker/doctors${q ? `?q=${encodeURIComponent(q)}` : ''}`).subscribe({
+        next: names => this.refDoctorSuggestions.set(names ?? []),
+        error: () => this.refDoctorSuggestions.set([])
+      });
+    }, 200);
+  }
+
+  pickRefDoctor(name: string): void {
+    this.refDoctorName.set(name);
+    this.refDoctorOpen.set(false);
+  }
+
+  onRefDoctorBlur(): void {
+    // Delay so a click on a suggestion fires before the popover hides.
+    setTimeout(() => this.refDoctorOpen.set(false), 150);
+  }
+
+  onRefDoctorFocus(): void {
+    // Show recent suggestions when the field is focused, even on empty input.
+    if (this.refDoctorSuggestions().length === 0) {
+      this.api.get<string[]>('/api/test-picker/doctors').subscribe({
+        next: names => this.refDoctorSuggestions.set(names ?? []),
+        error: () => undefined
+      });
+    }
+    this.refDoctorOpen.set(true);
   }
 }
 

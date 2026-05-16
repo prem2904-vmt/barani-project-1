@@ -9,11 +9,20 @@ import { BottomNavComponent } from '../bottom-nav/bottom-nav.component';
 import { TopStripComponent } from '../top-strip/top-strip.component';
 import { PatientProfileModalComponent } from '../../shared/components/patient-profile-modal/patient-profile-modal.component';
 import { AppointmentBookingModalComponent } from '../../shared/components/appointment-booking-modal/appointment-booking-modal.component';
+import { CallOverlayComponent } from '../../shared/components/call-overlay/call-overlay.component';
+import { PeopleDrawerComponent } from '../../shared/components/people-drawer/people-drawer.component';
+import { SignalingService } from '../../core/services/signaling.service';
+import { ChatService } from '../../core/services/chat.service';
+// Touching WebrtcService here ensures its signaling subscriptions wire up
+// on first shell render (it's @Injectable providedIn root, so the inject()
+// pull below boots it lazily without ever being read).
+import { WebrtcService } from '../../core/services/webrtc.service';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
+  imports: [RouterOutlet, RouterLink, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent, CallOverlayComponent, PeopleDrawerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -51,6 +60,12 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 
       <!-- Themed prompt / confirm overlay (replaces window.prompt/confirm). -->
       <pf-dialog-host></pf-dialog-host>
+
+      <!-- Global voice-consult overlay: incoming ringer + active-call pill. -->
+      <pf-call-overlay></pf-call-overlay>
+
+      <!-- Tenant people drawer: contacts + 1:1 chat + call entry. -->
+      <pf-people-drawer></pf-people-drawer>
 
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
@@ -218,6 +233,12 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 export class ShellComponent {
   readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  private readonly signaling = inject(SignalingService);
+  private readonly chat = inject(ChatService);
+  // Boots the WebRTC service so it subscribes to signaling events.
+  // The variable is unused on purpose — the side effect is what we want.
+  private readonly _webrtc = inject(WebrtcService);
 
   /** Tracks the current URL so the back-chip reacts to navigation. */
   private readonly _url = signal<string>(this.router.url);
@@ -225,6 +246,20 @@ export class ShellComponent {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed())
       .subscribe(e => this._url.set(e.urlAfterRedirects));
+
+    // Lazy-connect to the signaling hub once we have an authenticated user.
+    // Fire-and-forget; SignalingService.connect() is idempotent + handles its
+    // own reconnect via withAutomaticReconnect.
+    queueMicrotask(async () => {
+      try {
+        const token = await this.auth.getAccessToken();
+        if (token) {
+          await this.signaling.connect();
+          // Chat connects independently — its own hub, own reconnection.
+          await this.chat.connect().catch(() => undefined);
+        }
+      } catch { /* hub will retry on next user action */ }
+    });
   }
 
   /** Pages that are themselves top-level landings — no back chip on these. */

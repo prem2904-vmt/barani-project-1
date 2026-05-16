@@ -6,6 +6,9 @@ import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
+import { ChatService } from '../../core/services/chat.service';
+import { PeopleDrawerService } from '../../core/services/people-drawer.service';
+import { SignalingService } from '../../core/services/signaling.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -26,6 +29,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
+  protected readonly chat = inject(ChatService);
+  protected readonly signaling = inject(SignalingService);
+  protected readonly peopleDrawer = inject(PeopleDrawerService);
 
   readonly moduleLabel = 'LMS';
   readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];

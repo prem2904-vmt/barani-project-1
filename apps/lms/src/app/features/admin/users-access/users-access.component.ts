@@ -10,6 +10,9 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { WebrtcService } from '../../../core/services/webrtc.service';
+import { SignalingService } from '../../../core/services/signaling.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 type Tab = 'users' | 'roles';
 
@@ -96,6 +99,20 @@ type Tab = 'users' | 'roles';
                     </p>
                   </div>
                   @if (u.isActive) {
+                    @if (canCall(u)) {
+                      <pf-touch-btn size="sm" variant="ghost"
+                                    [disabled]="!isOnline(u.id)"
+                                    [title]="isOnline(u.id) ? 'Voice call ' + u.displayName : u.displayName + ' is offline'"
+                                    (pressed)="callUser(u)">
+                        <span icon-left aria-hidden="true">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
+                          </svg>
+                        </span>
+                        Call
+                      </pf-touch-btn>
+                    }
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivate(u)">Deactivate</pf-touch-btn>
                   }
                 </div>
@@ -165,6 +182,33 @@ export class UsersAccessComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly webrtc = inject(WebrtcService);
+  private readonly signaling = inject(SignalingService);
+  private readonly auth = inject(AuthService);
+
+  /** Returns true if calling this user makes sense (active, not self). */
+  canCall(u: User): boolean {
+    return u.isActive && u.id !== this.auth.user()?.id;
+  }
+
+  /** Online presence check — used to disable the Call button when offline. */
+  isOnline(userId: string): boolean {
+    return this.signaling.onlineUserIds().has(userId);
+  }
+
+  async callUser(u: User): Promise<void> {
+    if (!this.canCall(u)) return;
+    if (!this.isOnline(u.id)) {
+      this.toasts.info(`${u.displayName} is offline.`);
+      return;
+    }
+    try {
+      await this.webrtc.startCall(u.id, 'admin_internal');
+      this.toasts.info(`Ringing ${u.displayName}…`);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not place call.');
+    }
+  }
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'users', label: 'Users' },
