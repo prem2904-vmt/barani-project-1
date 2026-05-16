@@ -81,6 +81,17 @@ const STATUS_CLASS: Record<string, string> = {
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(-1)" aria-label="Previous">‹</button>
           <button type="button" class="pf-cal-nav__btn pf-cal-nav__today" (click)="goToday()">Today</button>
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(1)" aria-label="Next">›</button>
+          <label class="pf-cal-nav__jump" title="Jump to date">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18"/>
+            </svg>
+            <span>Jump</span>
+            <input type="date" class="pf-cal-nav__jump-input"
+                   [value]="cursorIso()"
+                   (change)="jumpToDate($any($event.target).value)" />
+          </label>
           <span class="pf-cal-nav__title">{{ rangeLabel() }}</span>
         </div>
       </div>
@@ -327,6 +338,24 @@ const STATUS_CLASS: Record<string, string> = {
     }
     .pf-cal-nav__btn:hover { background: var(--bg-hover); }
     .pf-cal-nav__today { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; }
+    .pf-cal-nav__jump {
+      position: relative;
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 30px; padding: 0 12px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 8px; color: var(--text-primary);
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pf-cal-nav__jump:hover {
+      background: var(--bg-hover);
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+    .pf-cal-nav__jump-input {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+      width: 100%; height: 100%; border: 0; padding: 0;
+    }
     .pf-cal-nav__title {
       margin-left: 12px; font-size: 14px; font-weight: 600;
       color: var(--text-primary); letter-spacing: -0.01em;
@@ -807,6 +836,22 @@ export class AppointmentsCalendarComponent {
     this.view.set('day');
   }
   goToday() { this.cursor.set(new Date()); }
+
+  /** YYYY-MM-DD of the current cursor — fed to the jump-to-date input. */
+  cursorIso(): string {
+    const c = this.cursor();
+    const y = c.getFullYear();
+    const m = String(c.getMonth() + 1).padStart(2, '0');
+    const d = String(c.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  /** Move cursor to picked date + switch to Day view. */
+  jumpToDate(iso: string) {
+    if (!iso) return;
+    this.cursor.set(new Date(`${iso}T12:00:00`));
+    this.view.set('day');
+  }
+
   navigate(delta: number) {
     const c = this.cursor();
     if (this.view() === 'day') this.cursor.set(addDays(c, delta));

@@ -426,9 +426,9 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
       inset: 0;
       background:
         radial-gradient(900px 600px at 50% 100%, rgba(124, 58, 237, 0.12), transparent 60%),
-        rgba(5, 5, 15, 0.72);
-      backdrop-filter: blur(14px) saturate(1.2);
-      -webkit-backdrop-filter: blur(14px) saturate(1.2);
+        rgba(15, 15, 25, 0.45);
+      backdrop-filter: blur(10px) saturate(1.2);
+      -webkit-backdrop-filter: blur(10px) saturate(1.2);
       animation: pf-pp-fade 0.18s ease-out both;
     }
     .pf-pp-shell {

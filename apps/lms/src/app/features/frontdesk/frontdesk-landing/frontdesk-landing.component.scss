@@ -563,13 +563,16 @@
   background: transparent;
   border: 0;
   border-radius: 9px;
-  color: var(--text-muted);
+  /* `--text-muted` was too faint — particularly in light mode where
+     the icon barely reads. Bumped to --text-secondary so reception
+     spots it without hovering. */
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .pf-adv-search-icon:hover {
-  background: rgba(168, 85, 247, 0.14);
-  color: #d8b4fe;
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
 }
 .pf-adv-search-icon:focus-visible {
   outline: 2px solid rgba(168, 85, 247, 0.7);

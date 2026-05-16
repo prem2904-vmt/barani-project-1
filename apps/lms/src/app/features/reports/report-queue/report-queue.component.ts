@@ -248,41 +248,65 @@ interface PrelimOrder {
       } @else {
         <div class="space-y-2.5">
           @for (r of visible(); track r.id) {
-            <pf-tile [tone]="rowTone(r.deliveryStatus)" padding="md">
-              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                <div class="pf-report-icon" [class]="'pf-report-' + r.deliveryStatus">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <path d="M14 2v6h6"/>
-                    <path d="M16 13H8"/>
-                    <path d="M16 17H8"/>
-                    <path d="M10 9H8"/>
-                  </svg>
-                </div>
-
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-semibold text-[15px]" style="color: var(--text-primary);">
-                      {{ r.order?.patient?.displayName ?? ('Report #' + r.id.slice(0, 8)) }}
-                    </p>
-                    <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
-                  </div>
-                  <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
-                    Order #{{ r.orderId.slice(0, 8) }}
-                    · {{ r.type }}
-                    · generated {{ r.createdAt | date:'short' }}
-                    @if (r.order?.patient?.phone) { · {{ r.order?.patient?.phone }} }
-                  </p>
-                </div>
-
-                <div class="flex items-center gap-1.5 ml-auto">
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="downloadPdf(r)">Download</pf-touch-btn>
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="view(r)">View</pf-touch-btn>
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="deliver(r, 'whatsapp')">WhatsApp</pf-touch-btn>
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="deliver(r, 'print')">Print</pf-touch-btn>
-                </div>
+            <div class="pf-rq-row" [class]="'pf-rq-row--' + r.deliveryStatus">
+              <span class="pf-rq-row__accent" aria-hidden="true"></span>
+              <div class="pf-report-icon" [class]="'pf-report-' + r.deliveryStatus">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <path d="M14 2v6h6"/>
+                  <path d="M16 13H8"/>
+                  <path d="M16 17H8"/>
+                  <path d="M10 9H8"/>
+                </svg>
               </div>
-            </pf-tile>
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <p class="font-semibold text-[15px]" style="color: var(--text-primary);">
+                    {{ r.order?.patient?.displayName ?? ('Report #' + r.id.slice(0, 8)) }}
+                  </p>
+                  <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
+                </div>
+                <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
+                  Order #{{ r.orderId.slice(0, 8) }}
+                  · {{ r.type }}
+                  · generated {{ r.createdAt | date:'short' }}
+                  @if (r.order?.patient?.phone) { · {{ r.order?.patient?.phone }} }
+                </p>
+              </div>
+
+              <div class="pf-rq-actions">
+                <button type="button" class="pf-rq-iconbtn" title="Download PDF" (click)="downloadPdf(r)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span>Download</span>
+                </button>
+                <button type="button" class="pf-rq-iconbtn" title="View on screen" (click)="view(r)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <span>View</span>
+                </button>
+                <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--wa" title="Send via WhatsApp" (click)="deliver(r, 'whatsapp')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.91-7.01Zm-7.01 15.24h-.01a8.23 8.23 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.23 8.23 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.22 8.23Z"/>
+                  </svg>
+                  <span>WhatsApp</span>
+                </button>
+                <button type="button" class="pf-rq-iconbtn" title="Print" (click)="deliver(r, 'print')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                  </svg>
+                  <span>Print</span>
+                </button>
+              </div>
+            </div>
           }
         </div>
       }
@@ -325,6 +349,66 @@ interface PrelimOrder {
       font-size: 18px; line-height: 1;
     }
     .pf-results-search__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* Row card — neutral glass background with a left-edge accent strip
+       that carries the status colour. Replaces the previous full-tile
+       amber/emerald/rose wash which made every row feel tinted. */
+    .pf-rq-row {
+      position: relative;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px 12px 18px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    }
+    .pf-rq-row:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+    .pf-rq-row__accent {
+      position: absolute; left: 0; top: 10px; bottom: 10px;
+      width: 3px; border-radius: 0 4px 4px 0;
+      background: var(--text-muted);
+    }
+    .pf-rq-row--pending   .pf-rq-row__accent { background: #f59e0b; }
+    .pf-rq-row--delivered .pf-rq-row__accent { background: #10b981; }
+    .pf-rq-row--failed    .pf-rq-row__accent { background: #ef4444; }
+
+    /* Action cluster — icon + label buttons in a unified group with
+       subtle dividers, replacing the previous loose row of ghost +
+       secondary buttons which competed visually. */
+    .pf-rq-actions {
+      display: flex; align-items: stretch; gap: 0;
+      margin-left: auto;
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.18);
+    }
+    .pf-rq-iconbtn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 12px;
+      background: transparent; border: 0;
+      border-right: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      font-size: 12.5px; font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .pf-rq-iconbtn:last-child { border-right: 0; }
+    .pf-rq-iconbtn:hover {
+      background: rgba(168, 85, 247, 0.12);
+      color: var(--text-primary);
+    }
+    .pf-rq-iconbtn--wa:hover {
+      background: rgba(37, 211, 102, 0.14);
+      color: #4ade80;
+    }
+    @media (max-width: 720px) {
+      .pf-rq-iconbtn span { display: none; }
+      .pf-rq-iconbtn { padding: 9px 11px; }
+    }
 
     .pf-report-icon {
       width: 40px;
@@ -563,10 +647,11 @@ export class ReportQueueComponent implements OnInit {
     return l;
   });
 
-  rowTone(status: string): TileTone {
-    if (status === 'failed') return 'rose';
-    if (status === 'pending') return 'amber';
-    if (status === 'delivered') return 'emerald';
+  /** Every row now uses the neutral 'default' tile tone — the per-status
+   *  colour wash made the entire row feel amber-on-amber for the common
+   *  "Completed" case. Status is communicated by the small icon badge
+   *  + chip + the left-edge accent strip instead. */
+  rowTone(_status: string): TileTone {
     return 'default';
   }
 
