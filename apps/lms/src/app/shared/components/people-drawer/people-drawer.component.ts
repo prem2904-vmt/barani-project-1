@@ -391,12 +391,17 @@ export class PeopleDrawerComponent {
     const body = this.draft().trim();
     const ou = this.otherUser();
     if (!body || !ou) return;
+    const wasOffline = !this.isOnline(ou.id);
     this.draft.set('');
     try {
       await this.chat.sendMessage(ou.id, body);
       // Stop typing immediately on send.
       void this.chat.setTyping(ou.id, false);
+      // Helpful nudge so the sender knows the message is queued, not lost.
+      if (wasOffline) this.toasts.info(`${ou.displayName} is offline — they'll see it when they're back.`);
     } catch (err) {
+      // Put the draft back so the user doesn't lose what they typed.
+      this.draft.set(body);
       this.toasts.error((err as Error).message ?? 'Message failed to send.');
     }
   }
@@ -451,8 +456,23 @@ export class PeopleDrawerComponent {
 
   private async fetchUsers(): Promise<void> {
     try {
-      const res = await firstValueFrom(this.api.get<User[]>('/api/users'));
-      this.users.set((res ?? []).map(u => ({ ...u, displayName: userDisplayName(u) })));
+      // Use the directory endpoint (auth-only, no admin permission required)
+      // — /api/users is admin-only and would 403 for reception / lab staff.
+      const res = await firstValueFrom(
+        this.api.get<Array<{ id: string; displayName: string; email: string; isActive: boolean }>>(
+          '/api/directory/users'
+        )
+      );
+      this.users.set((res ?? []).map(u => ({
+        id: u.id,
+        tenantId: '',
+        firstName: '',
+        fathersName: '',
+        displayName: u.displayName,
+        email: u.email,
+        isActive: u.isActive,
+        createdAt: ''
+      } as unknown as User)));
     } catch { /* swallow */ }
   }
 }
