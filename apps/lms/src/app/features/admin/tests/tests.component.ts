@@ -41,7 +41,7 @@ type Tab = 'individual' | 'package';
               <path d="M5 12h14"/>
             </svg>
           </span>
-          Create test
+          {{ tab() === 'package' ? 'Create package' : 'Create test' }}
         </pf-touch-btn>
       </pf-screen-header>
 
@@ -198,6 +198,11 @@ export class TestsComponent implements OnInit {
     this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
   }
 
-  openCreate() { this.router.navigateByUrl('/admin/tests/new'); }
+  openCreate() {
+    // Carry the active tab as `?type=` so the test editor lands on the
+    // right form (individual vs package) without admin having to flip
+    // the Type dropdown manually.
+    this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._tab() } });
+  }
   openEdit(t: Test) { this.router.navigate(['/admin/tests', t.id, 'edit']); }
 }

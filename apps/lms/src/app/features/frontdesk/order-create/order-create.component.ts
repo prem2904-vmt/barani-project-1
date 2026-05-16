@@ -165,40 +165,45 @@ interface HistoryRow {
               }
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-              @for (t of filteredTests(); track t.id) {
-                <button type="button"
-                        (click)="toggleTest(t)"
-                        class="pf-test press"
-                        [class.pf-test--on]="isSelected(t.id)">
-                  <span class="pf-test__badge">
-                    @if (isSelected(t.id)) {
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m5 12 4 4L19 6"/>
-                      </svg>
-                    } @else {
-                      {{ shortCode(t) }}
-                    }
-                  </span>
-                  <div class="flex-1 min-w-0 text-left">
-                    <p class="pf-test__name">{{ t.name }}</p>
-                    <p class="pf-test__meta">
-                      @if (t.department?.name) {
-                        {{ t.department?.name }} ·
+            @if (filteredTests().length === 0 && individualTests().length > 0) {
+              <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests match "{{ query() }}"</p>
+            } @else if (individualTests().length === 0) {
+              <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests configured.</p>
+            } @else {
+              <div class="flex flex-col gap-5">
+                @for (group of filteredTestsByDept(); track group.department) {
+                  <div>
+                    <div class="pf-dept-hdr">
+                      <span class="pf-dept-hdr__name">{{ group.department }}</span>
+                      <span class="pf-dept-hdr__count">{{ group.tests.length }}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
+                      @for (t of group.tests; track t.id) {
+                        <button type="button"
+                                (click)="toggleTest(t)"
+                                class="pf-test press"
+                                [class.pf-test--on]="isSelected(t.id)">
+                          <span class="pf-test__badge">
+                            @if (isSelected(t.id)) {
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m5 12 4 4L19 6"/>
+                              </svg>
+                            } @else {
+                              {{ shortCode(t) }}
+                            }
+                          </span>
+                          <div class="flex-1 min-w-0 text-left">
+                            <p class="pf-test__name">{{ t.name }}</p>
+                            <p class="pf-test__meta">TAT {{ t.tatHours }}h</p>
+                          </div>
+                          <span class="pf-test__price">{{ t.price | inr }}</span>
+                        </button>
                       }
-                      TAT {{ t.tatHours }}h
-                    </p>
+                    </div>
                   </div>
-                  <span class="pf-test__price">{{ t.price | inr }}</span>
-                </button>
-              }
-              @if (filteredTests().length === 0 && individualTests().length > 0) {
-                <p class="col-span-full text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests match "{{ query() }}"</p>
-              }
-              @if (individualTests().length === 0) {
-                <p class="col-span-full text-center py-6 text-[13px]" style="color: var(--text-tertiary);">No tests configured.</p>
-              }
-            </div>
+                }
+              </div>
+            }
           </div>
         </div>
 
@@ -379,6 +384,29 @@ interface HistoryRow {
     </section>
   `,
   styles: [`
+    /* ── Dept header above each catalog group ───────────────── */
+    .pf-dept-hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 4px 8px;
+      border-bottom: 1px dashed var(--glass-border);
+      margin-bottom: 8px;
+    }
+    .pf-dept-hdr__name {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pf-dept-hdr__count {
+      padding: 1px 8px;
+      font-size: 10.5px;
+      font-weight: 700;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      color: #c4b5fd;
+    }
+
     :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
     .pf-page { min-height: 100%; display: flex; flex-direction: column; }
     .pf-page__header { flex-shrink: 0; }
@@ -1294,6 +1322,24 @@ export class OrderCreateComponent implements OnInit {
       (t.hsnSacCode ?? '').toLowerCase().includes(q) ||
       (t.department?.name ?? '').toLowerCase().includes(q)
     );
+  });
+
+  /** Tests grouped by department, sorted by dept name. "(No department)"
+   *  is a catch-all bucket so unclassified tests still render. Used by the
+   *  catalog grid so admins can scan by dept rather than a flat list. */
+  readonly filteredTestsByDept = computed<Array<{ department: string; tests: Test[] }>>(() => {
+    const groups = new Map<string, Test[]>();
+    for (const t of this.filteredTests()) {
+      const key = t.department?.name?.trim() || '(No department)';
+      const arr = groups.get(key);
+      if (arr) arr.push(t); else groups.set(key, [t]);
+    }
+    return Array.from(groups.entries())
+      .map(([department, tests]) => ({
+        department,
+        tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name))
+      }))
+      .sort((a, b) => a.department.localeCompare(b.department));
   });
 
   readonly subtotal = computed(() =>

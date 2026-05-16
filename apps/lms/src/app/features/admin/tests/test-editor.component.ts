@@ -17,6 +17,7 @@ import {
   hasOptions as registryHasOptions
 } from '../../../shared/forms';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
+import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
@@ -96,6 +97,7 @@ function newFieldId(): string {
   imports: [
     FormsModule,
     ConditionEditorComponent,
+    CurrencyInrPipe,
     FieldTypePickerComponent,
     NumberInputComponent,
     ValidationEditorComponent,
@@ -112,7 +114,7 @@ function newFieldId(): string {
 
       <pf-screen-header
         eyebrow="Admin · Tests"
-        [title]="draft().id ? 'Edit test' : 'Create test'"
+        [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : 'test')"
         [subtitle]="subtitle()">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
@@ -181,6 +183,11 @@ function newFieldId(): string {
         </pf-tile>
       </div>
 
+      <!-- Packages have a totally different body — a member-test picker
+           instead of parameters/report-layout — so we branch here on type.
+           Individual tests get the tab strip + parameter/layout editors;
+           packages get the member picker with its own summary chips. -->
+      @if (d.type !== 'package') {
       <!-- Tab strip — sits between Pricing & TAT and the Parameters / Report
            Layout content so admins don't have to scroll to find the layout
            editor, but General + Pricing stay always visible up top. -->
@@ -381,6 +388,69 @@ function newFieldId(): string {
           </pf-tile>
         }
       }
+      } @else {
+        <!-- Package member picker. List of all individual tests grouped by
+             department; checkboxes write the selected ids into the package's
+             member list. Price + member count surface at the top so admins
+             can sanity-check the bundle as they tick tests. -->
+        <pf-tile tone="default" padding="lg" class="block">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 class="section-title">Package members</h3>
+              <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
+                Pick the individual tests included in this package.
+              </p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="pf-pkg-chip">
+                <strong>{{ packageItems().length }}</strong> tests
+              </span>
+              <span class="pf-pkg-chip">
+                Member total: <strong>{{ packageMembersTotal() | inr }}</strong>
+              </span>
+            </div>
+          </div>
+
+          <input type="text" class="pf-input mb-4" placeholder="Search tests by name or department…"
+                 [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+
+          @if (filteredPackageCatalogByDept().length === 0) {
+            <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">
+              @if (allIndividualTests().length === 0) {
+                No individual tests configured yet — create a few tests first, then build the package.
+              } @else {
+                No tests match "{{ packageQuery() }}".
+              }
+            </p>
+          } @else {
+            <div class="flex flex-col gap-4">
+              @for (group of filteredPackageCatalogByDept(); track group.department) {
+                <div>
+                  <div class="pf-pkg-dept-hdr">
+                    <span class="pf-pkg-dept-hdr__name">{{ group.department }}</span>
+                    <span class="pf-pkg-dept-hdr__count">{{ group.tests.length }}</span>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    @for (t of group.tests; track t.id) {
+                      <label class="pf-pkg-pick"
+                             [class.pf-pkg-pick--on]="isInPackage(t.id)">
+                        <input type="checkbox"
+                               [checked]="isInPackage(t.id)"
+                               (change)="togglePackageMember(t.id)" />
+                        <span class="flex-1 min-w-0">
+                          <span class="pf-pkg-pick__name">{{ t.name }}</span>
+                          <span class="pf-pkg-pick__meta">TAT {{ t.tatHours }}h</span>
+                        </span>
+                        <span class="pf-pkg-pick__price">{{ t.price | inr }}</span>
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </pf-tile>
+      }
     </section>
   `,
   styles: [`
@@ -390,6 +460,65 @@ function newFieldId(): string {
       color: var(--text-primary);
       letter-spacing: -0.01em;
       margin: 0;
+    }
+
+    /* ── Package picker ── */
+    .pf-pkg-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.14);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      color: var(--text-primary);
+    }
+    .pf-pkg-dept-hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 4px 8px;
+      border-bottom: 1px dashed var(--glass-border);
+      margin-bottom: 8px;
+    }
+    .pf-pkg-dept-hdr__name {
+      font-size: 11px; font-weight: 800;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pf-pkg-dept-hdr__count {
+      padding: 1px 8px;
+      font-size: 10.5px; font-weight: 700;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      color: #c4b5fd;
+    }
+    .pf-pkg-pick {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .pf-pkg-pick:hover { border-color: rgba(168, 85, 247, 0.45); }
+    .pf-pkg-pick--on {
+      background: rgba(168, 85, 247, 0.10);
+      border-color: rgba(168, 85, 247, 0.55);
+    }
+    .pf-pkg-pick input[type="checkbox"] { width: 16px; height: 16px; accent-color: #a855f7; }
+    .pf-pkg-pick__name {
+      display: block;
+      font-weight: 600; font-size: 13px;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-pkg-pick__meta {
+      display: block;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .pf-pkg-pick__price {
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-primary);
     }
 
     /* ── Parameter row ── */
@@ -630,6 +759,48 @@ export class TestEditorComponent implements OnInit {
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
 
+  // ── Package state ─────────────────────────────────────────
+  // Packages bundle individual tests. Storage shape lives in the same
+  // `parameters` JSONB blob as individual tests, but under an `items`
+  // key holding test ids. The picker reads/writes this signal which
+  // serialise into `parametersJson` at save time.
+  private readonly _packageItems = signal<string[]>([]);
+  readonly packageItems = this._packageItems.asReadonly();
+  readonly packageQuery = signal('');
+
+  /** All individual tests in the catalog — feeds the package picker. */
+  private readonly _allIndividualTests = signal<Test[]>([]);
+  readonly allIndividualTests = this._allIndividualTests.asReadonly();
+
+  /** Sum of the prices of the tests currently ticked. Helps admins set
+   *  a sensible package price below the member total. */
+  readonly packageMembersTotal = computed(() => {
+    const picked = new Set(this._packageItems());
+    return this._allIndividualTests()
+      .filter(t => picked.has(t.id))
+      .reduce((s, t) => s + (t.price ?? 0), 0);
+  });
+
+  /** Group the picker's tests by dept and apply the search query. */
+  readonly filteredPackageCatalogByDept = computed(() => {
+    const q = this.packageQuery().trim().toLowerCase();
+    const groups = new Map<string, Test[]>();
+    for (const t of this._allIndividualTests()) {
+      if (q && !t.name.toLowerCase().includes(q) && !(t.department?.name ?? '').toLowerCase().includes(q)) continue;
+      const key = t.department?.name?.trim() || '(No department)';
+      const arr = groups.get(key);
+      if (arr) arr.push(t); else groups.set(key, [t]);
+    }
+    return Array.from(groups.entries())
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name)) }))
+      .sort((a, b) => a.department.localeCompare(b.department));
+  });
+
+  isInPackage(id: string): boolean { return this._packageItems().includes(id); }
+  togglePackageMember(id: string) {
+    this._packageItems.update(arr => arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
+  }
+
   readonly subtitle = computed(() =>
     this._draft().id
       ? 'Update name, pricing, parameters, or flow.'
@@ -640,6 +811,11 @@ export class TestEditorComponent implements OnInit {
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
+    // Load the full individual-test catalog so the package picker has
+    // something to pick from. Filter happens client-side via the search box.
+    this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
+      next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
+    });
 
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
@@ -647,6 +823,14 @@ export class TestEditorComponent implements OnInit {
         next: t => this.hydrateFrom(t),
         error: () => this.toasts.error('Could not load test')
       });
+    } else {
+      // Honour `?type=package` from the admin tests list, so the "Create
+      // package" button lands on this editor with the package type pre-
+      // selected instead of defaulting to individual.
+      const t = this.route.snapshot.queryParamMap.get('type');
+      if (t === 'package' || t === 'individual') {
+        this.patch({ type: t });
+      }
     }
   }
 
@@ -660,6 +844,15 @@ export class TestEditorComponent implements OnInit {
       isActive: t.isActive
     });
     this._fields.set(this.loadParameters(t.parameters ?? ''));
+    // Packages store member-test ids under `items` in the same JSON blob.
+    if (t.type === 'package') {
+      try {
+        const blob = JSON.parse(t.parameters ?? '{}');
+        this._packageItems.set(Array.isArray(blob.items) ? blob.items : []);
+      } catch { this._packageItems.set([]); }
+    } else {
+      this._packageItems.set([]);
+    }
   }
 
   // Is this a numeric field (shows reference-range row)?
@@ -840,12 +1033,21 @@ export class TestEditorComponent implements OnInit {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
 
+    // Packages: serialise member-test ids into the same JSON blob as
+    // `{items: [...]}` so the order-create picker + admin list both
+    // recognise the bundle without a separate column. The individual-
+    // test parametersJson (fields/parameters) isn't relevant for
+    // packages — overwrite it.
+    const parametersJson = d.type === 'package'
+      ? JSON.stringify({ items: this._packageItems() })
+      : (d.parametersJson || undefined);
+
     const body = {
       name: d.name, type: d.type, flow: d.flow,
       price: d.price, taxSlab: d.taxSlab,
-      departmentId: d.departmentId || undefined,
-      tatHours: d.tatHours, sampleType: d.sampleType || undefined,
-      parametersJson: d.parametersJson || undefined,
+      departmentId: d.type === 'package' ? undefined : (d.departmentId || undefined),
+      tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
+      parametersJson,
       conditionsJson: d.conditionsJson || undefined,
       isActive: d.isActive
     };
