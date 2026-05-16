@@ -23,15 +23,21 @@ export interface NavItem {
   billingModes?: Array<'front_desk' | 'separate_counter'>;
 }
 
+// Admin is intentionally NOT in the primary nav anymore — it's a
+// settings destination, not a workflow. It now lives as an icon
+// button in the top-strip's right cluster (next to the bell) so it
+// reads as "configure the app" rather than "one of the modules".
+// Non-admin users (no manage_* permission) no longer see it at all.
+export const ADMIN_NAV: NavItem = {
+  id: 'admin',
+  label: 'Admin',
+  href: '/admin',
+  iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+             'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z'],
+  permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+};
+
 export const PRIMARY_NAV: NavItem[] = [
-  {
-    id: 'home',
-    label: 'Home',
-    href: '/admin',
-    exact: true,
-    iconPath: ['M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z'],
-    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
-  },
   {
     id: 'frontdesk',
     label: 'Frontdesk',
@@ -69,19 +75,23 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['create_bill', 'collect_payment'],
     billingModes: ['separate_counter']
   },
-  {
-    id: 'results',
-    label: 'Results',
-    href: '/reports',
-    iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
-    permissions: ['deliver_report', 'view_report']
-  },
+  // Order: Validate before Results — Validate is the pathologist's
+  // sign-off step that produces a Result. Following the actual lab
+  // pipeline (Collect → Lab → Validate → Results) reads more naturally
+  // than the previous alphabetic ordering.
   {
     id: 'validate',
     label: 'Validate',
     href: '/pathologist',
     iconPath: ['M20 6 9 17l-5-5'],
     permissions: ['validate_result']
+  },
+  {
+    id: 'results',
+    label: 'Results',
+    href: '/reports',
+    iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
+    permissions: ['deliver_report', 'view_report']
   }
 ];
 

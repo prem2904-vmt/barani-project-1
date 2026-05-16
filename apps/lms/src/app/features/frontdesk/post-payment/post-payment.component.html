@@ -111,82 +111,84 @@
     <!-- ══ MAIN CONTENT ══════════════════════════════════════ -->
     <main class="pf-pp-main">
 
-      <!-- Top summary row -->
-      <div class="pf-pp-top">
-
-        <!-- Payment received card -->
-        <div class="pf-pp-pay">
-          <div class="pf-pp-pay__icon-wrap">
-            <span class="pf-pp-pay__ring" aria-hidden="true"></span>
-            <span class="pf-pp-pay__check" aria-hidden="true">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m5 12 4 4L19 6"/>
-              </svg>
-            </span>
-          </div>
-
-          <div class="pf-pp-pay__body">
-            <span class="pf-pp-pay__eyebrow">Payment received</span>
-            @if (paymentSummary(); as ps) {
-              <h2 class="pf-pp-pay__amount">
-                {{ ps.amount | inr }}
-                @if (order()?.patient?.displayName) {
-                  <span class="pf-pp-pay__sep">·</span>
-                  <span class="pf-pp-pay__patient">{{ order()!.patient!.displayName }}</span>
-                }
-              </h2>
-              <p class="pf-pp-pay__meta">
-                {{ ps.mode }}
-                @if (ps.ref) { <span class="pf-pp-pay__meta-sep">·</span> {{ ps.ref }} }
-                <span class="pf-pp-pay__meta-sep">·</span>
-                {{ ps.paidAt | date:'d MMM y, HH:mm' }}
-              </p>
-            } @else if (order()?.patient?.displayName) {
-              <h2 class="pf-pp-pay__amount">{{ order()!.patient!.displayName }}</h2>
-              <p class="pf-pp-pay__meta">Loading payment details…</p>
-            }
-          </div>
-
-          <div class="pf-pp-pay__actions">
-            <button type="button" class="pf-pp-action-btn" (click)="printReceipt()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="5" y="2" width="14" height="20" rx="2"/>
-                <path d="M9 7h6M9 11h6M9 15h4"/>
-              </svg>
-              Receipt
-            </button>
-            <button type="button" class="pf-pp-action-btn" (click)="sendWhatsApp()" [disabled]="waSent()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              {{ waSent() ? 'Sent' : 'SMS to patient' }}
-            </button>
-          </div>
+      <!-- Top summary — single wide Payment Received bar. The Labels
+           progress ring was a separate top-row card that left the page
+           feeling unbalanced (skinny widget squeezed between two
+           bigger cards). It's now an inline chip on the right side of
+           this same card. -->
+      <div class="pf-pp-pay">
+        <div class="pf-pp-pay__icon-wrap">
+          <span class="pf-pp-pay__ring" aria-hidden="true"></span>
+          <span class="pf-pp-pay__check" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m5 12 4 4L19 6"/>
+            </svg>
+          </span>
         </div>
 
-        <!-- Labels counter -->
-        <div class="pf-pp-labels">
-          <div class="pf-pp-labels__ring-wrap">
-            <svg class="pf-pp-labels__ring-svg" viewBox="0 0 48 48" width="60" height="60">
-              <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" stroke-width="3.5"/>
+        <div class="pf-pp-pay__body">
+          <span class="pf-pp-pay__eyebrow">Payment received</span>
+          @if (paymentSummary(); as ps) {
+            <h2 class="pf-pp-pay__amount">
+              {{ ps.amount | inr }}
+              @if (order()?.patient?.displayName) {
+                <span class="pf-pp-pay__sep">·</span>
+                <span class="pf-pp-pay__patient">{{ order()!.patient!.displayName }}</span>
+              }
+            </h2>
+            <p class="pf-pp-pay__meta">
+              {{ ps.mode }}
+              @if (ps.ref) { <span class="pf-pp-pay__meta-sep">·</span> {{ ps.ref }} }
+              <span class="pf-pp-pay__meta-sep">·</span>
+              {{ ps.paidAt | date:'d MMM y, HH:mm' }}
+            </p>
+          } @else if (order()?.patient?.displayName) {
+            <h2 class="pf-pp-pay__amount">{{ order()!.patient!.displayName }}</h2>
+            <p class="pf-pp-pay__meta">
+              <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
+              Loading payment details…
+            </p>
+          }
+        </div>
+
+        <!-- Labels progress chip — inline on the right. Replaces the
+             standalone Labels card that crowded the top row. -->
+        <div class="pf-pp-pay__labels">
+          <div class="pf-pp-pay__labels-ring">
+            <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="3.5"/>
               <circle cx="24" cy="24" r="20" fill="none"
                       stroke="#10b981" stroke-width="3.5" stroke-linecap="round"
                       stroke-dasharray="125.66"
                       [attr.stroke-dashoffset]="ringOffset()"
                       transform="rotate(-90 24 24)"/>
             </svg>
-            <span class="pf-pp-labels__ratio">{{ printedCount() }}/{{ totalCount() }}</span>
+            <span class="pf-pp-pay__labels-ratio">{{ printedCount() }}/{{ totalCount() }}</span>
           </div>
-          <div class="pf-pp-labels__body">
-            <span class="pf-pp-labels__eyebrow">Labels</span>
-            <strong class="pf-pp-labels__pending">{{ totalCount() - printedCount() }} pending print</strong>
-            <span class="pf-pp-labels__hint">Stick on the matching containers</span>
+          <div class="pf-pp-pay__labels-meta">
+            <span class="pf-pp-pay__labels-lbl">Labels</span>
+            <strong class="pf-pp-pay__labels-pending">{{ totalCount() - printedCount() }} pending</strong>
           </div>
         </div>
 
+        <div class="pf-pp-pay__actions">
+          <button type="button" class="pf-pp-action-btn" (click)="printReceipt()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2"/>
+              <path d="M9 7h6M9 11h6M9 15h4"/>
+            </svg>
+            Receipt
+          </button>
+          <button type="button" class="pf-pp-action-btn" (click)="sendWhatsApp()" [disabled]="waSent()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            {{ waSent() ? 'Sent' : 'SMS to patient' }}
+          </button>
+        </div>
       </div>
 
       <!-- Selection toolbar -->

@@ -127,6 +127,9 @@ interface ReportSnapshot {
     age?: number | string;
     sex?: string;
     phone?: string;
+    /** Lifetime MRN, e.g. `DEL-2605-004217-3`. Server-assigned;
+     *  legacy patients may be null until backfilled. */
+    mrn?: string;
   };
   order?: {
     id?: string;
@@ -759,9 +762,9 @@ function drawPatientBlockThreeCol(
     doc.text(`Sex : ${snap.patient.sex}`, x1, y);
     y += 12;
   }
-  const pid = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
-  if (pid) {
-    doc.text(`PID : ${pid}`, x1, y);
+  const mrn = (snap.patient?.mrn ?? '').trim();
+  if (mrn) {
+    doc.text(`MRN : ${mrn}`, x1, y);
   }
 
   // ── Col 2 — Specimens collected + Ref doctor ──
@@ -816,7 +819,9 @@ function drawPatientBlockThreeCol(
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(BLACK);
-  const barcodeText = pid || (report.id.replace(/-/g, '').slice(-12).toUpperCase());
+  // Barcode reads the report (accession) id, not the patient MRN — labs
+  // scan the per-visit code into the LIS, not the lifetime MRN.
+  const barcodeText = (snap.order?.id ?? report.id).replace(/-/g, '').slice(-12).toUpperCase();
   doc.text(barcodeText, x3 + (col3W - 20) / 2, y + 26, { align: 'center' });
   y += 36;
 
@@ -852,7 +857,7 @@ function drawPatientBlockFourCol(
   const blockH = 76;
   const w = A4.w - 2 * MARGIN_X;
   const colW = w / 4;
-  const pid = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
+  const mrn = (snap.patient?.mrn ?? '').trim();
   const ageSex = [
     snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
     snap.patient?.sex ?? ''
@@ -869,7 +874,7 @@ function drawPatientBlockFourCol(
   const cells: { label: string; value: string }[][] = [
     [
       { label: 'PATIENT', value: snap.patient?.displayName ?? '—' },
-      { label: 'PATIENT ID', value: pid ? `#${pid}` : '—' },
+      { label: 'MRN', value: mrn || '—' },
       { label: 'AGE / SEX', value: ageSex || '—' },
       { label: 'REF DOCTOR', value: snap.order?.refDoctorName ?? 'Self' },
     ],
@@ -914,7 +919,8 @@ function drawPatientBlockStacked(
   report: ReportPdfInput['report']
 ): number {
   const top = MARGIN_TOP + 70;
-  const pid = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
+  const mrn = (snap.patient?.mrn ?? '').trim();
+  const orderShort = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
   const ageSex = [
     snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
     snap.patient?.sex ?? ''
@@ -926,7 +932,8 @@ function drawPatientBlockStacked(
   const rows: { label: string; value: string }[] = [];
   rows.push({ label: 'Patient name', value: snap.patient?.displayName ?? '—' });
   rows.push({ label: 'Age / Sex',    value: ageSex || '—' });
-  if (pid) rows.push({ label: 'Patient ID',  value: `#${pid}` });
+  if (mrn) rows.push({ label: 'MRN', value: mrn });
+  if (orderShort) rows.push({ label: 'Order No.', value: `#${orderShort}` });
   if (theme.showAbhaId) rows.push({ label: 'ABHA ID', value: '—' });
   if (snap.patient?.phone) rows.push({ label: 'Phone', value: snap.patient.phone });
   if (snap.order?.refDoctorName) rows.push({ label: 'Ref Doctor', value: snap.order.refDoctorName });

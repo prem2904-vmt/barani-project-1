@@ -12,6 +12,7 @@ import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.com
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.component';
+import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 
 /**
  * Billing counter — for branches in `billing_mode = separate_counter`.
@@ -26,7 +27,8 @@ import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.c
   imports: [
     FormsModule, DatePipe,
     AvatarComponent, ChipComponent,
-    ScreenHeaderComponent, TileComponent, TouchButtonComponent, KpiStripComponent
+    ScreenHeaderComponent, TileComponent, TouchButtonComponent, KpiStripComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -41,7 +43,7 @@ import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.c
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <label class="pf-label">Search patient</label>
         <input class="pf-input" type="search" autofocus
-               placeholder="Name · phone · order ID"
+               placeholder="Name · MRN · phone · order ID"
                [ngModel]="query()" (ngModelChange)="onSearch($event)" />
       </pf-tile>
 
@@ -82,7 +84,10 @@ import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.c
         <h3 class="pf-section mt-6">{{ display(p) }} · unbilled orders</h3>
         @if (loadingOrders()) {
           <pf-tile tone="default" padding="lg" class="block">
-            <p class="text-[12.5px]" style="color: var(--text-tertiary);">Loading orders…</p>
+            <div class="flex justify-center py-6">
+              <pf-loading-logo size="lg" color="purple"
+                               [showText]="true" text="Loading orders…"></pf-loading-logo>
+            </div>
           </pf-tile>
         } @else if (unbilledOrders().length === 0) {
           <pf-tile tone="default" padding="lg" class="block">

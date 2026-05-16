@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService } from '../../core/services/toast.service';
 import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { DialogHostComponent } from '../../shared/components/dialog-host/dialog-host.component';
@@ -11,7 +13,7 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 @Component({
   selector: 'pf-shell',
   standalone: true,
-  imports: [RouterOutlet, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
+  imports: [RouterOutlet, RouterLink, TopStripComponent, BottomNavComponent, DialogHostComponent, AmbientBgComponent, PatientProfileModalComponent, AppointmentBookingModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Flowing ambient background: DNA gradients + drifting pulse/helix/glyphs. -->
@@ -26,6 +28,22 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
       </div>
 
       <main class="shell-main relative">
+        <!-- Auto breadcrumb — appears on every page that isn't itself
+             a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
+             Label switches to the matching section so admin sub-pages
+             read "← Admin", frontdesk sub-pages "← Frontdesk", etc.
+             Covers off-/admin/* targets too — TAT lives at /dashboard,
+             Setup wizard at /setup, but both are reached from the
+             Admin grid so they get "← Admin". -->
+        @if (backLink(); as back) {
+          <a [routerLink]="back.href" class="pf-back-chip press">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Back
+          </a>
+        }
         <router-outlet></router-outlet>
       </main>
 
@@ -127,6 +145,35 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
       overflow-x: hidden;
       padding-bottom: var(--tab-nav-total-height, 0px);
     }
+
+    /* Admin breadcrumb — slim glass pill anchored top-left of the main
+       content area. Shows only on /admin/* sub-routes (controlled by
+       showAdminBack signal). Sticky so it stays visible as the page
+       scrolls; pushed below the chrome card with a small inset. */
+    .pf-back-chip {
+      position: sticky; top: 8px;
+      z-index: 5;
+      display: inline-flex; align-items: center; gap: 6px;
+      margin: 12px 0 0 16px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      font-size: 12.5px; font-weight: 600;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      width: fit-content;
+    }
+    .pf-back-chip:hover {
+      color: var(--text-primary);
+      border-color: rgba(168, 85, 247, 0.40);
+      background: rgba(168, 85, 247, 0.06);
+    }
+    @media (min-width: 640px) {
+      .pf-back-chip { margin-left: 24px; }
+    }
     @media (min-width: 1280px) {
       .shell-main { padding-bottom: 0; }
     }
@@ -170,4 +217,47 @@ import { AppointmentBookingModalComponent } from '../../shared/components/appoin
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);
+  private readonly router = inject(Router);
+
+  /** Tracks the current URL so the back-chip reacts to navigation. */
+  private readonly _url = signal<string>(this.router.url);
+  constructor() {
+    this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed())
+      .subscribe(e => this._url.set(e.urlAfterRedirects));
+  }
+
+  /** Pages that are themselves top-level landings — no back chip on these. */
+  private static readonly LANDING_ROUTES = new Set<string>([
+    '/', '/login', '/admin', '/frontdesk', '/lab/my-work',
+    '/sample-collection', '/billing-counter', '/reports', '/pathologist',
+  ]);
+
+  /** Routes reachable from the Admin grid that DON'T live under /admin/*.
+   *  Without this list, the back chip on /dashboard or /setup would
+   *  default to "Frontdesk" (closest non-admin landing) when in fact
+   *  the user arrived via the Admin dashboard. */
+  private static readonly ADMIN_REACHABLE = new Set<string>([
+    '/dashboard', '/setup',
+  ]);
+
+  /** Returns the back-link target based on the current URL, or null
+   *  if no chip should show. Label is always just "Back" — the
+   *  destination is implicit (whichever module landing you came from)
+   *  and "Back" reads more naturally than "Admin" / "Frontdesk" when
+   *  the user is mid-task. */
+  readonly backLink = computed<{ href: string } | null>(() => {
+    const u = this._url().split('?')[0];
+    if (ShellComponent.LANDING_ROUTES.has(u)) return null;
+    if (u.startsWith('/admin/') || ShellComponent.ADMIN_REACHABLE.has(u))
+      return { href: '/admin' };
+    if (u.startsWith('/frontdesk/'))    return { href: '/frontdesk' };
+    if (u.startsWith('/lab/'))          return { href: '/lab/my-work' };
+    if (u.startsWith('/reports/'))      return { href: '/reports' };
+    if (u.startsWith('/pathologist/'))  return { href: '/pathologist' };
+    if (u.startsWith('/sample-collection/')) return { href: '/sample-collection' };
+    if (u.startsWith('/billing-counter/'))   return { href: '/billing-counter' };
+    // Unknown deep route — generic Back pointing at /admin.
+    return { href: '/admin' };
+  });
 }

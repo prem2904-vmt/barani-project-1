@@ -7,6 +7,7 @@ import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 interface VendorRow {
   id: string;
@@ -55,7 +56,8 @@ const EMPTY_DRAFT: NewVendorDraft = {
   standalone: true,
   imports: [
     FormsModule, CurrencyInrPipe,
-    ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent
+    ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -112,7 +114,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
       @if (loading()) {
         <pf-tile tone="default" padding="lg" class="block">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">Loading vendors…</p>
+          <div class="flex justify-center py-6">
+            <pf-loading-logo size="lg" color="purple" [showDna]="true"
+                             [showText]="true" text="Loading vendors…"></pf-loading-logo>
+          </div>
         </pf-tile>
       } @else if (vendors().length === 0) {
         <pf-tile tone="default" padding="xl" class="block">
@@ -189,7 +194,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
               @if (openTxnsId() === v.id) {
                 <div class="pf-txns">
                   @if (loadingTxns()) {
-                    <p class="text-[12.5px] text-center py-3" style="color: var(--text-tertiary);">Loading…</p>
+                    <div class="flex justify-center py-3">
+                      <pf-loading-logo size="sm" color="purple"
+                                       [showText]="true" text="Loading…"></pf-loading-logo>
+                    </div>
                   } @else if ((txns()[v.id] ?? []).length === 0) {
                     <p class="text-[12.5px] text-center py-3" style="color: var(--text-tertiary);">No transactions yet.</p>
                   } @else {

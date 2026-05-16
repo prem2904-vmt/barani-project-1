@@ -14,6 +14,7 @@ import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -60,7 +61,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     NumPadComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -318,7 +320,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                              (input)="setVendorQuery(asInput($event))"
                              placeholder="Search vendor by name or code…"/>
                       @if (vendors() === null) {
-                        <p class="pf-wallet-empty">Loading vendors…</p>
+                        <p class="pf-wallet-empty">
+                          <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                          Loading vendors…
+                        </p>
                       } @else if (filteredVendors().length === 0) {
                         <p class="pf-wallet-empty">
                           @if (vendorQuery().trim()) { No vendors match "{{ vendorQuery() }}". }
@@ -396,7 +401,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
         </div>
       } @else {
         <pf-tile tone="default" padding="xl" class="block">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">Generating bill…</p>
+          <div class="flex justify-center py-8">
+            <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                             [showText]="true" text="Generating bill…"></pf-loading-logo>
+          </div>
         </pf-tile>
       }
     </section>

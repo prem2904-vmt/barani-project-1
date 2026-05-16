@@ -72,21 +72,44 @@ const COUNTERS: CounterSpec[] = [
         </div>
       </pf-screen-header>
 
-      <!-- Big scan bar -->
+      <!-- Counter filter pills — moved up here directly under the
+           header so the counts read as page metadata, and the scan
+           bar sits below as the primary CTA. -->
+      <div class="pf-counter-row" role="tablist" aria-label="Filter queue">
+        @for (c of counters; track c.id) {
+          <button type="button"
+                  class="pf-counter"
+                  [class.pf-counter--on]="counter() === c.id"
+                  [attr.data-tone]="c.tone"
+                  [attr.aria-pressed]="counter() === c.id"
+                  (click)="setCounter(c.id)">
+            <span class="pf-counter__dot" aria-hidden="true"></span>
+            <span class="pf-counter__label">{{ c.label }}</span>
+            <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Scan bar — primary entry point. Clean compact pill, camera
+           shortcut on the right, manual-entry inline link below. -->
       <div class="pf-scan-row">
         <div class="pf-scan">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
             <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
           </svg>
           <input type="text"
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
-                 placeholder="Scan barcode or type PF-XXXX-XXXXX…"
+                 placeholder="Scan a barcode or type PF-XXXX-XXXXX…"
                  class="pf-scan__input"/>
-          <!-- Opens the camera viewfinder. Whatever it decodes is dropped
-               into the scan input and submitted — hits the same
-               claim-by-scan gate as keyboard/HID entry. -->
+          <button type="button"
+                  class="pf-scan__manual press"
+                  (click)="toggleManual()"
+                  [attr.aria-expanded]="manualMode()"
+                  aria-label="Toggle manual entry">
+            @if (manualMode()) { Close manual } @else { Manual entry }
+          </button>
           <button type="button"
                   class="pf-scan__camera press"
                   (click)="openBarSearchScanner()"
@@ -97,10 +120,6 @@ const COUNTERS: CounterSpec[] = [
               <circle cx="12" cy="13" r="3.5"/>
             </svg>
           </button>
-          <span class="pf-scan__live">
-            <span class="pf-scan__dot"></span>
-            SCANNER · READY
-          </span>
         </div>
         <pf-touch-btn variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
           Open
@@ -110,13 +129,6 @@ const COUNTERS: CounterSpec[] = [
             </svg>
           </span>
         </pf-touch-btn>
-      </div>
-
-      <!-- Manual entry toggle + panel -->
-      <div class="manual-toggle">
-        <button type="button" class="manual-link" (click)="toggleManual()">
-          @if (manualMode()) { ✕ Close manual entry } @else { Or enter barcode manually → }
-        </button>
       </div>
 
       @if (manualMode()) {
@@ -187,20 +199,6 @@ const COUNTERS: CounterSpec[] = [
           </div>
         </pf-tile>
       }
-
-      <!-- Counter tiles -->
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-        @for (c of counters; track c.id) {
-          <button type="button"
-                  class="pf-counter"
-                  [class.pf-counter--on]="counter() === c.id"
-                  [attr.data-tone]="c.tone"
-                  (click)="setCounter(c.id)">
-            <span class="pf-counter__label">{{ c.label }}</span>
-            <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
-          </button>
-        }
-      </div>
 
       <!-- 2-col layout: Lab Intake on the left, My Work / Queue tabs on
            the right. Same pattern as the Frontdesk landing splitter so
@@ -552,7 +550,7 @@ const COUNTERS: CounterSpec[] = [
     :host > section > pf-kpi-strip,
     :host > section > pf-screen-header,
     :host > section > .pf-scan-row,
-    :host > section > .manual-toggle,
+    :host > section > .pf-counter-row,
     :host > section > .grid {
       flex-shrink: 0;
     }
@@ -831,15 +829,9 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-scan-hint--btn:active { transform: scale(0.98); }
 
-    /* Manual entry */
-    .manual-toggle { margin: -8px 0 16px; display: flex; justify-content: flex-end; }
-    .manual-link {
-      background: transparent; border: 0; padding: 4px 8px;
-      color: var(--text-secondary); font-size: 12.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.02em; cursor: pointer; transition: color 0.15s ease;
-    }
-    .manual-link:hover { color: var(--text-primary); }
+    /* Manual-entry trigger now lives inline on the scan bar
+     * (.pf-scan__manual); the old floating link + .manual-toggle wrapper
+     * are no longer used. */
 
     .seg-row {
       display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -890,154 +882,190 @@ const COUNTERS: CounterSpec[] = [
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
 
-    /* Scan bar */
+    /* Scan bar — slimmer, single-row pill. The barcode icon doubles as
+     * the visual cue (no more "SCANNER · READY" badge). Manual-entry
+     * is now an inline text button on the right of the input. */
     .pf-scan-row {
       display: flex;
       align-items: stretch;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 20px;
+      margin-bottom: 14px;
     }
     .pf-scan {
       position: relative;
       flex: 1;
-      min-width: 280px;
-    }
-    .pf-scan__icon {
-      position: absolute;
-      left: 20px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--color-violet-400, #a78bfa);
-    }
-    .pf-scan__input {
-      width: 100%;
-      height: 64px;
-      padding: 0 180px 0 58px;
-      border-radius: 20px;
+      min-width: 260px;
+      display: flex;
+      align-items: center;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      font-size: 16px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      outline: none;
+      border-radius: 14px;
+      padding: 0 6px 0 14px;
       transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
     }
-    .pf-scan__input::placeholder { color: var(--text-muted); }
-    .pf-scan__input:focus {
+    .pf-scan:focus-within {
       background: var(--glass-bg-hover);
       border-color: rgba(168, 85, 247, 0.55);
-      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
-    /* Camera button inside the scan bar — sits next to the live-status
-     * chip. Tap opens the scanner modal in no-expected-code mode. */
+    .pf-scan__icon {
+      color: #a78bfa;
+      flex: 0 0 auto;
+      margin-right: 10px;
+    }
+    .pf-scan__input {
+      flex: 1;
+      min-width: 0;
+      height: 44px;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      outline: none;
+      padding: 0;
+    }
+    .pf-scan__input::placeholder { color: var(--text-muted); }
+
+    /* Inline manual-entry text button — replaces the floating link below. */
+    .pf-scan__manual {
+      flex: 0 0 auto;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-tertiary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .pf-scan__manual:hover {
+      background: var(--glass-bg-hover);
+      color: #c4b5fd;
+      border-color: var(--glass-border);
+    }
+    .pf-scan__manual[aria-expanded='true'] {
+      color: #c4b5fd;
+      background: rgba(168, 85, 247, 0.12);
+      border-color: rgba(168, 85, 247, 0.32);
+    }
+
     .pf-scan__camera {
-      position: absolute;
-      right: 140px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 34px;
-      height: 34px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+      flex: 0 0 auto;
+      width: 32px; height: 32px;
+      margin-left: 6px;
+      border-radius: 9px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 1px solid transparent;
       color: var(--text-secondary);
       cursor: pointer;
-      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 80ms ease;
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 80ms ease;
     }
     .pf-scan__camera:hover {
       background: var(--glass-bg-hover);
       color: #c4b5fd;
-      border-color: rgba(168, 85, 247, 0.55);
+      border-color: var(--glass-border);
     }
-    .pf-scan__camera:active { transform: translateY(-50%) scale(0.95); }
+    .pf-scan__camera:active { transform: scale(0.95); }
+
     @media (max-width: 640px) {
-      .pf-scan__camera { right: 14px; }
-      .pf-scan__live { display: none; }
+      .pf-scan__manual { display: none; }
     }
 
-    .pf-scan__live {
-      position: absolute;
-      right: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
-    .pf-scan__dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 9999px;
-      background: #34d399;
-      animation: pf-scan-pulse 1.6s ease-in-out infinite;
-    }
-    @keyframes pf-scan-pulse {
-      0%, 100% { opacity: 0.5; transform: scale(1); }
-      50%      { opacity: 1;   transform: scale(1.3); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
-    }
-
-    /* Counter tiles */
-    .pf-counter {
+    /* Segmented filter bar — full width, one container with equal-width
+     * clickable cells separated by hairline dividers. Active cell
+     * inverts to white. Matches the report-queue / kpi-strip language. */
+    .pf-counter-row {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      padding: 14px 16px;
-      border-radius: 18px;
+      align-items: stretch;
+      width: 100%;
+      margin-bottom: 12px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .pf-counter {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--glass-border);
       color: var(--text-primary);
-      text-align: left;
       cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
+      transition: background 0.15s ease;
+      line-height: 1.2;
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .pf-counter:last-child { border-right: none; }
+    .pf-counter:hover:not(.pf-counter--on) { background: var(--glass-bg-hover); }
+    @media (max-width: 720px) {
+      /* Phones / iPad portrait: drop the bar chrome, items wrap as pills. */
+      .pf-counter-row {
+        background: transparent; border: none; border-radius: 0;
+        flex-wrap: wrap; gap: 4px 8px;
+      }
+      .pf-counter {
+        border: 1px solid var(--glass-border);
+        border-radius: 999px;
+        padding: 5px 12px; flex: 0 1 auto;
+        background: var(--glass-bg);
+      }
     }
     .pf-counter:hover { background: var(--glass-bg-hover); }
-    .pf-counter:active { transform: scale(0.98); }
-    .pf-counter[data-tone='amber']   { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
-    .pf-counter[data-tone='rose']    { background: rgba(239, 68, 68, 0.1);  border-color: rgba(239, 68, 68, 0.25); }
-    .pf-counter[data-tone='violet']  { background: rgba(124, 58, 237, 0.1); border-color: rgba(168, 85, 247, 0.28); }
-    .pf-counter[data-tone='emerald'] { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); }
-    .pf-counter[data-tone='default'] { background: var(--glass-bg); border-color: var(--glass-border); }
+    .pf-counter:active { transform: scale(0.97); }
 
+    .pf-counter__dot {
+      width: 6px; height: 6px; border-radius: 999px;
+      background: var(--ct-dot);
+      box-shadow: 0 0 6px var(--ct-glow);
+      flex: 0 0 6px;
+    }
     .pf-counter__label {
-      font-size: 11px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: var(--text-secondary);
+      font-size: 11px; font-weight: 500;
+      color: var(--text-tertiary);
+      letter-spacing: 0.01em;
     }
-    /* Per-tone label tint — keeps the label readable AND coded to the
-     * counter's color, so PENDING/CRITICAL/IN PROGRESS/DONE read at a
-     * glance instead of fading into the background. */
-    .pf-counter[data-tone='amber']   .pf-counter__label { color: #d97706; }
-    .pf-counter[data-tone='rose']    .pf-counter__label { color: #e11d48; }
-    .pf-counter[data-tone='violet']  .pf-counter__label { color: #7c3aed; }
-    .pf-counter[data-tone='emerald'] .pf-counter__label { color: #059669; }
-    .pf-counter[data-tone='default'] .pf-counter__label { color: var(--text-secondary); }
     .pf-counter__value {
-      font-size: 30px;
-      font-weight: 700;
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-primary);
       font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: -0.01em;
-      margin-top: 2px;
     }
+
+    /* Per-tone dot color (mirrors the old per-tile palette). */
+    .pf-counter[data-tone='amber']   { --ct-dot: #fbbf24; --ct-glow: rgba(245, 158, 11, 0.45); }
+    .pf-counter[data-tone='rose']    { --ct-dot: #fb7185; --ct-glow: rgba(244, 63, 94, 0.45); }
+    .pf-counter[data-tone='violet']  { --ct-dot: #a78bfa; --ct-glow: rgba(168, 85, 247, 0.45); }
+    .pf-counter[data-tone='emerald'] { --ct-dot: #34d399; --ct-glow: rgba(16, 185, 129, 0.45); }
+    .pf-counter[data-tone='default'] { --ct-dot: #94a3b8; --ct-glow: rgba(148, 163, 184, 0.40); }
+
+    /* Active filter — subtle tone-tinted wash with brighter text and a
+     * thin inner border. Sits on the dark gradient without the harsh
+     * white inversion. Tone color comes from the per-data-tone vars. */
     .pf-counter--on {
-      background: #ffffff !important;
-      border-color: #ffffff !important;
-      color: #0f172a !important;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+      background: color-mix(in srgb, var(--ct-dot) 14%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ct-dot) 55%, transparent);
     }
-    .pf-counter--on .pf-counter__label { color: rgba(15, 23, 42, 0.75) !important; }
+    .pf-counter--on .pf-counter__dot {
+      box-shadow: 0 0 10px var(--ct-glow);
+      transform: scale(1.15);
+    }
+    .pf-counter--on .pf-counter__label {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .pf-counter--on .pf-counter__value {
+      color: var(--ct-dot);
+    }
 
     /* Urgency dot (kept from prior) */
     .pf-grp-count {

@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -81,10 +82,17 @@ interface OrderGroup {
 @Component({
   selector: 'pf-sample-collection',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
+           row entirely. The user clicked Collect on a specific order
+           — show them THAT order's drawer immediately as if it's a
+           dedicated page. The queue UI used to flash for ~500ms while
+           the order data loaded and felt like "two pages" before
+           the drawer appeared. -->
+      @if (!deepLinkMode()) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Lab · Collection"
@@ -100,7 +108,9 @@ interface OrderGroup {
           Refresh
         </pf-touch-btn>
       </pf-screen-header>
+      }
 
+      @if (!deepLinkMode()) {
       <div class="pf-scan">
         <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
                 title="Scan with camera" aria-label="Open camera scanner">
@@ -112,7 +122,7 @@ interface OrderGroup {
         <div class="pf-scan__body">
           <label class="pf-scan__label">Find patient or scan</label>
           <input type="text" class="pf-scan__input"
-                 placeholder="Name · phone · order # · barcode"
+                 placeholder="Name · MRN · phone · order # · barcode"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
@@ -174,6 +184,23 @@ interface OrderGroup {
             </li>
           }
         </ul>
+      }
+      } @else if (!activeGroup()) {
+        <!-- Deep-link mode + drawer not yet ready: render the org's
+             standard loading logo so the page isn't blank while the
+             order fetch resolves. The drawer takes over the moment
+             activeGroup returns. -->
+        <div class="pf-sc__loading">
+          <!-- Full DNA-skeleton + heartbeat-logo variant (showDna). The
+               richer animation is what the user calls out as the
+               "prepare loading" — used here so collection deep-links
+               feel like the same waiting-room treatment as other
+               long-running screens. -->
+          <pf-loading-logo size="xl" color="purple"
+                           [showDna]="true"
+                           [showText]="true"
+                           text="Opening collection…"></pf-loading-logo>
+        </div>
       }
     </section>
 
@@ -585,6 +612,13 @@ interface OrderGroup {
       padding: 28px; text-align: center;
       background: var(--glass-bg); border: 1px dashed var(--glass-border);
       border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
+    }
+    /* Deep-link loading stub — centred loading-logo while the
+       drawer's order fetch resolves. */
+    .pf-sc__loading {
+      display: flex; align-items: center; justify-content: center;
+      padding: 64px 24px;
+      min-height: 60vh;
     }
 
     /* Responsive grid: 1 / 2 / 3 columns depending on width. Matches the
@@ -1366,6 +1400,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
   private readonly _openOrderId = signal<string | null>(null);
+  /** True when the user landed here via ?orderId=… (e.g. FD's "Collect"
+   *  button on an order row). Suppresses the queue list + scan row so
+   *  the page reads as a direct order-collection view, not a queue +
+   *  popup. Set once in ngOnInit and not cleared until navigation. */
+  private readonly _deepLinkMode = signal<boolean>(false);
+  readonly deepLinkMode = this._deepLinkMode.asReadonly();
   protected readonly REJECT_REASONS: ReadonlyArray<{ code: string; label: string }> = [
     { code: 'refused',      label: 'Patient refused' },
     { code: 'fainted',      label: 'Patient fainted' },
@@ -1418,7 +1458,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
       return g.samples.some(s =>
         (s.barcode ?? '').toLowerCase().includes(q) ||
-        (s.order?.patient?.phone ?? '').includes(this.scanValue().trim())
+        (s.order?.patient?.phone ?? '').includes(this.scanValue().trim()) ||
+        (s.order?.patient?.mrn ?? '').toLowerCase().includes(q)
       );
     });
   });
@@ -1434,6 +1475,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const oid = this.route.snapshot.queryParamMap.get('orderId');
     if (oid) {
       this._openOrderId.set(oid);
+      this._deepLinkMode.set(true);
       // Honour an explicit ?from=… if the caller passes one (e.g. lab dispatch
       // counter), otherwise default deep-links back to /frontdesk since that's
       // the only screen that links here today.
@@ -1549,7 +1591,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
       return g.samples.some(s =>
         (s.barcode ?? '').toLowerCase().includes(q) ||
-        (s.order?.patient?.phone ?? '').includes(query)
+        (s.order?.patient?.phone ?? '').includes(query) ||
+        (s.order?.patient?.mrn ?? '').toLowerCase().includes(q)
       );
     });
   }

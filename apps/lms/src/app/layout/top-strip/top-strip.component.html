@@ -62,37 +62,12 @@
       </a>
       }
 
-      <!-- More popover (desktop) -->
-      <div class="relative" [class.hidden]="more().length === 0">
-        <button type="button" class="pf-topnav-btn press" [class.pf-topnav-active]="moreOpen()" (click)="toggleMore()"
-          aria-label="More">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <circle cx="5" cy="12" r="1.8" />
-            <circle cx="12" cy="12" r="1.8" />
-            <circle cx="19" cy="12" r="1.8" />
-          </svg>
-          <span>More</span>
-        </button>
-        @if (moreOpen()) {
-        <div #moreRef class="pf-more-pop">
-          <span class="pf-more-accent" aria-hidden="true"></span>
-          <div class="grid grid-cols-3 gap-1.5 p-3">
-            @for (n of more(); track n.id) {
-            <a [routerLink]="n.href" routerLinkActive="pf-more-pop-active" (click)="closeMore()"
-              class="pf-more-pop-item press">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                @for (path of n.iconPath; track $index) {
-                <path [attr.d]="path" />
-                }
-              </svg>
-              <span class="text-[11.5px] font-medium leading-tight text-center mt-1">{{ n.label }}</span>
-            </a>
-            }
-          </div>
-        </div>
-        }
-      </div>
+      <!-- The "More" popover used to live here with every admin config
+           link crammed into a 12-tile grid. That competed with the
+           primary modules and made the nav noisy. Removed entirely —
+           those items now live inside the Admin panel itself, organised
+           into categories. The routes are unchanged, only the entry
+           point moved. -->
     </nav>
 
     <!-- Spacer pushes right cluster to the far edge -->
@@ -164,6 +139,27 @@
             </div>
           }
         </div>
+      }
+
+      <!-- Admin (settings) — icon button next to the bell. Only renders
+           for users with at least one manage_* permission so reception
+           / lab techs don't see it. Replaces the previous top-nav
+           "Admin" tab to keep the main bar focused on workflows. -->
+      @if (showAdmin()) {
+        <!-- Desktop only (≥1280px). On mobile + iPad the bottom-nav
+             already shows an Admin button, so duplicating it in the
+             top strip would just be visual noise. The top-strip nav
+             itself is also hidden below xl, so this aligns with that
+             cutoff and keeps the right cluster clean on touch
+             viewports. -->
+        <a routerLink="/admin" routerLinkActive="pf-icon-btn--active"
+           class="pf-icon-btn pf-icon-btn--xl-only press" aria-label="Admin settings" title="Admin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+          </svg>
+        </a>
       }
 
       <pf-notification-bell></pf-notification-bell>

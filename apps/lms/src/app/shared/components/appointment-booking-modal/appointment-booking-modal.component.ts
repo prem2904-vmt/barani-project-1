@@ -27,6 +27,7 @@ import { Patient, patientDisplayName } from "../../models/patient.model";
 import { Test } from "../../models/test.model";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
+import { LoadingLogoComponent } from "../loading-logo/loading-logo.component";
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -48,7 +49,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-appointment-booking-modal",
   standalone: true,
-  imports: [CommonModule, AvatarComponent, PatientSearchComponent],
+  imports: [CommonModule, AvatarComponent, PatientSearchComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
@@ -117,7 +118,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 </div>
               } @else {
                 <pf-patient-search
-                  placeholder="Search by name, phone, ABHA…"
+                  placeholder="Search by name, MRN, phone, ABHA…"
                   (picked)="setPatient($event)"
                 ></pf-patient-search>
               }
@@ -176,7 +177,10 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
             <section class="pf-bk-step pf-bk-step--grow">
               <header class="pf-bk-step__hdr"><span>3</span> Time slot</header>
               @if (loadingSlots()) {
-                <p class="pf-bk-empty">Loading slots…</p>
+                <div class="pf-bk-empty flex justify-center py-4">
+                  <pf-loading-logo size="md" color="purple" [showDna]="true"
+                                   [showText]="true" text="Loading slots…"></pf-loading-logo>
+                </div>
               } @else if (slots().length === 0) {
                 <p class="pf-bk-empty">Branch is closed on this day.</p>
               } @else {

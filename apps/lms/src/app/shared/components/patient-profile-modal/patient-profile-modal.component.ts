@@ -9,9 +9,10 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Patient, patientDisplayName } from '../../models/patient.model';
+import { Patient, patientDisplayName, patientMrnLabel } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
+import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
 
 interface HistoryRow {
   id: string;
@@ -58,7 +59,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [CommonModule, AvatarComponent, SelectComponent],
+  imports: [CommonModule, AvatarComponent, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
@@ -66,7 +67,10 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 
         <div class="pf-pp-shell">
           @if (loading()) {
-            <div class="pf-pp-loading">Loading patient…</div>
+            <div class="pf-pp-loading flex justify-center py-10">
+              <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                               [showText]="true" text="Loading patient…"></pf-loading-logo>
+            </div>
           } @else if (!patient()) {
             <div class="pf-pp-loading">Patient not found.</div>
           } @else {
@@ -83,7 +87,8 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                 @if (!editMode()) {
                   <div class="pf-pp-hdr__row1">
                     <h2 class="pf-pp-hdr__name">{{ displayName() }}</h2>
-                    <span class="pf-pp-id-chip" [title]="patient()!.id">#{{ patientShortId() }}</span>
+                    <span class="pf-pp-id-chip"
+                          [title]="'MRN: ' + mrnLabel()">{{ mrnLabel() }}</span>
                   </div>
                   <ul class="pf-pp-hdr__meta">
                     <li class="pf-pp-meta-item">
@@ -1001,7 +1006,7 @@ export class PatientProfileModalComponent {
   readonly deleteBusy = this._deleteBusy.asReadonly();
 
   readonly displayName = computed(() => patientDisplayName(this._patient()));
-  readonly patientShortId = computed(() => (this._patient()?.id ?? '').slice(0, 8).toUpperCase());
+  readonly mrnLabel = computed(() => patientMrnLabel(this._patient()));
 
   /** Quick-glance numbers shown in the header strip — derived from the
    *  loaded history so we don't make a second round-trip. */

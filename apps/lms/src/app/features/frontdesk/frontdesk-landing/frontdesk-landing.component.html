@@ -265,7 +265,7 @@
         <!-- Filter row: search + date pills -->
         <div class="pf-filter-row">
           <div class="pf-search-wrap">
-            <pf-patient-search placeholder="Search patient · name, phone, ABHA, UHID…"
+            <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…"
               (picked)="openProfile($event)">
               <!-- Slotted into the search field's right edge. Single-icon
                    trigger for the multi-filter modal; ⌘K still works globally. -->
@@ -289,6 +289,27 @@
                 [attr.aria-selected]="dateRange() === opt.id" (click)="setDateRange(opt.id)">
                 {{ opt.label }}
               </button>
+              }
+              <!-- Inline date inputs that appear only when "Custom" is
+                   selected. Previously the Custom pill was dead — it
+                   flipped dateRange to 'custom' but no picker UI ever
+                   rendered, so the queue kept showing Today. -->
+              @if (dateRange() === 'custom') {
+                <span class="pf-date-custom">
+                  <input type="date" class="pf-date-custom__inp"
+                         aria-label="Start date"
+                         [value]="customStart() ?? ''"
+                         (change)="pickCustomStart($any($event.target).value)" />
+                  <span class="pf-date-custom__sep" aria-hidden="true">→</span>
+                  <input type="date" class="pf-date-custom__inp"
+                         aria-label="End date"
+                         [value]="customEnd() ?? customStart() ?? ''"
+                         (change)="pickCustomEnd($any($event.target).value)" />
+                  @if (customStart()) {
+                    <button type="button" class="pf-date-custom__clear" (click)="clearCustom()"
+                            aria-label="Clear custom range">×</button>
+                  }
+                </span>
               }
             </div>
           </div>
@@ -514,7 +535,8 @@
                       <div class="pf-card__body">
                         <div class="pf-card__name-row">
                           <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
-                          <span class="pf-card__mrn">#{{ o.id.slice(0, 8) }}</span>
+                          <span class="pf-card__mrn"
+                                [title]="o.patient?.mrn ? ('MRN: ' + (o.patient?.mrn ?? '')) : null">{{ o.patient?.mrn || '—' }}</span>
                           <span class="pf-card__meta-inline">{{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }} · {{ o.createdAt | date:'shortTime' }}</span>
                         </div>
                         @if (o.samples.length > 0) {
@@ -584,7 +606,7 @@
                       <div class="min-w-0 flex-1">
                         <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
                         <p class="pf-card__meta">
-                          #{{ o.id.slice(0, 8) }} · {{ statusLabel(o.status) }}
+                          {{ o.patient?.mrn || '—' }} · {{ statusLabel(o.status) }}
                           · {{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }}
                         </p>
                       </div>
@@ -644,7 +666,9 @@
     <header class="pf-drawer__hdr">
       <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="48"></pf-avatar>
       <div class="pf-drawer__hdr-info">
-        <p class="pf-drawer__hdr-eyebrow">Order · #{{ so.id.slice(0, 8) }}</p>
+        <p class="pf-drawer__hdr-eyebrow">
+          {{ so.patient?.mrn || '—' }} · Order #{{ so.id.slice(0, 8) }}
+        </p>
         <p class="pf-drawer__hdr-name">{{ so.patient?.displayName ?? 'Patient' }}</p>
       </div>
       <div class="pf-drawer__hdr-actions">
@@ -747,18 +771,12 @@
         </ol>
       </section>
     </div>
-    @if (so.status === 'validated' || so.status === 'partially_validated' || so.status === 'delivered' || so.status ===
-    'completed') {
     <footer class="pf-drawer__footer">
-      <button type="button" class="pf-drawer__reprint-btn press" [disabled]="downloadingReport()"
-        (click)="downloadReport(so)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-        </svg>
-        {{ downloadingReport() ? 'Preparing PDF…' : 'Download report' }}
-      </button>
-      <button type="button" class="pf-drawer__reprint-btn press" (click)="repeatOrder(so)">
+      <!-- Repeat is always available — reception often re-orders the
+           same panel for the same patient regardless of where the
+           previous order is in its lifecycle. -->
+      <button type="button" class="pf-drawer__reprint-btn press" (click)="repeatOrder(so)"
+              title="Open a new order pre-filled with these tests">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.4 2.6L21 8"/>
@@ -768,21 +786,28 @@
         </svg>
         Repeat order
       </button>
+      @if (so.status === 'validated' || so.status === 'partially_validated' || so.status === 'delivered' || so.status === 'completed') {
+        <button type="button" class="pf-drawer__reprint-btn press" [disabled]="downloadingReport()"
+          (click)="downloadReport(so)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          {{ downloadingReport() ? 'Preparing PDF…' : 'Download report' }}
+        </button>
+      }
+      @if (so.status === 'billed') {
+        <button type="button" class="pf-drawer__reprint-btn press" (click)="reprintLabels(so)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9V2h12v7" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />
+          </svg>
+          Reprint Labels
+        </button>
+      }
     </footer>
-    }
-    @if (so.status === 'billed') {
-    <footer class="pf-drawer__footer">
-      <button type="button" class="pf-drawer__reprint-btn press" (click)="reprintLabels(so)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M6 9V2h12v7" />
-          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-          <rect x="6" y="14" width="12" height="8" />
-        </svg>
-        Reprint Labels
-      </button>
-    </footer>
-    }
   </aside>
   }
 

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
+import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 
 /**
  * Route-based landing by permission. Ordered from most specific to most generic
@@ -25,7 +26,7 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
 @Component({
   selector: 'pf-login',
   standalone: true,
-  imports: [FormsModule, LogoMarkComponent],
+  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-login">
@@ -135,9 +136,7 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
                   [disabled]="busy() || !email() || !password()">
             <span class="pf-login__submit-shine" aria-hidden="true"></span>
             @if (busy()) {
-              <svg class="pf-login__spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M21 12a9 9 0 1 1-6.2-8.55" opacity="0.85"/>
-              </svg>
+              <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
               Signing you in…
             } @else {
               <span>Sign in</span>

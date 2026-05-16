@@ -9,6 +9,7 @@ import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
 
 interface BulkSubmitResponse {
@@ -31,7 +32,7 @@ interface BulkSubmitResponse {
 @Component({
   selector: 'pf-sample-result-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, CommentThreadComponent, SelectComponent],
+  imports: [CommonModule, FormsModule, CommentThreadComponent, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Full-width container matching FD/collect screens — was centered
@@ -76,7 +77,10 @@ interface BulkSubmitResponse {
       </header>
 
       @if (loading()) {
-        <p class="pf-sre__msg">Loading sample…</p>
+        <div class="pf-sre__msg flex justify-center py-10">
+          <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                           [showText]="true" text="Loading sample…"></pf-loading-logo>
+        </div>
       } @else if (!sample()) {
         <p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p>
       } @else {

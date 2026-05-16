@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 interface KpiCatalogItem {
   id: string;
@@ -61,7 +62,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [CommonModule, SelectComponent],
+  imports: [CommonModule, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page">
@@ -98,7 +99,10 @@ const CATEGORY_LABELS: Record<string, string> = {
       </section>
 
       @if (loading()) {
-        <div class="pf-kpi-loading">Loading…</div>
+        <div class="pf-kpi-loading flex justify-center py-12">
+          <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                           [showText]="true" text="Loading KPI configuration…"></pf-loading-logo>
+        </div>
       } @else {
         <section class="pf-kpi-workshop">
           <!-- Catalog -->

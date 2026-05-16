@@ -396,27 +396,53 @@
   gap: 14px;
 }
 
-/* Top summary row */
-.pf-pp-top {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 14px;
-}
-
-@media (max-width: 640px) {
-  .pf-pp-top { grid-template-columns: 1fr; }
-}
-
-/* Payment received card */
+/* Payment received card — now a single full-width bar (was split with
+   a separate Labels card that left the top row visually lopsided). */
 .pf-pp-pay {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 18px;
+  padding: 18px 22px;
   border-radius: 16px;
   background: var(--surface-elevated);
   border: 1.5px solid var(--success-border);
   box-shadow: 0 1px 8px rgba(16, 185, 129, 0.1);
+}
+
+/* Inline Labels progress chip — sits between the patient text and the
+   action buttons. Vertical divider on the left visually separates it
+   from the payment summary so the card reads as "amount paid | label
+   progress | actions". */
+.pf-pp-pay__labels {
+  display: flex; align-items: center; gap: 10px;
+  padding-left: 18px;
+  border-left: 1px solid var(--glass-border);
+}
+.pf-pp-pay__labels-ring {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px;
+}
+.pf-pp-pay__labels-ratio {
+  position: absolute;
+  font-size: 11px; font-weight: 700; color: var(--text-primary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-pp-pay__labels-meta {
+  display: flex; flex-direction: column; line-height: 1.2;
+}
+.pf-pp-pay__labels-lbl {
+  font-size: 9.5px; font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pf-pp-pay__labels-pending {
+  font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+@media (max-width: 720px) {
+  .pf-pp-pay__labels { padding-left: 0; border-left: 0; }
+  .pf-pp-pay__labels-meta { display: none; }
 }
 
 @media (max-width: 640px) {

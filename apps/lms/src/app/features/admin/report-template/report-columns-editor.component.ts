@@ -13,6 +13,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 /**
  * Per-department column structure editor. Lives inside the Report Template
@@ -26,7 +27,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [SelectComponent, TileComponent, ToggleComponent, TouchButtonComponent],
+  imports: [SelectComponent, TileComponent, ToggleComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -53,7 +54,10 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       </div>
 
       @if (loading()) {
-        <p class="text-center py-8 text-[13px]" style="color: var(--text-tertiary);">Loading…</p>
+        <div class="flex justify-center py-8">
+          <pf-loading-logo size="md" color="purple" [showDna]="true"
+                           [showText]="true" text="Loading…"></pf-loading-logo>
+        </div>
       } @else if (selectedDeptId()) {
         <!-- Column rows -->
         <div class="pf-cols-header">

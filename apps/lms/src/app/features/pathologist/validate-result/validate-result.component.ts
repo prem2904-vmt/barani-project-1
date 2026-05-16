@@ -8,6 +8,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
@@ -50,7 +51,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -70,7 +71,10 @@ interface ValueRow {
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
         @if (loading() && !selected()) {
-          <div class="pf-empty-block">Loading…</div>
+          <div class="pf-empty-block flex justify-center py-12">
+            <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                             [showText]="true" text="Loading validation…"></pf-loading-logo>
+          </div>
         }
 
         @if (!loading() && !selected()) {

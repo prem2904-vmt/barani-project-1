@@ -12,6 +12,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -39,7 +40,8 @@ interface ReportData {
     ChipComponent,
     LogoMarkComponent,
     ScreenHeaderComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -338,7 +340,8 @@ interface ReportData {
         </article>
       } @else {
         <div class="pf-rv-loading">
-          <p>Loading report…</p>
+          <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                           [showText]="true" text="Loading report…"></pf-loading-logo>
         </div>
       }
     </section>

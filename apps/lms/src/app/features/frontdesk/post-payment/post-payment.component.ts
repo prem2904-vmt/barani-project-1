@@ -8,11 +8,12 @@ import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { LabelCardComponent, tubeSpec } from './label-card.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [DatePipe, TitleCasePipe, CurrencyInrPipe, LabelCardComponent],
+  imports: [DatePipe, TitleCasePipe, CurrencyInrPipe, LabelCardComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './post-payment.component.html',
   styleUrl: './post-payment.component.scss',

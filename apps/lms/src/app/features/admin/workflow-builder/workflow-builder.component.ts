@@ -21,6 +21,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
 
@@ -46,7 +47,8 @@ interface HistoryRow {
     SelectComponent,
     TileComponent,
     ToggleComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -435,7 +437,10 @@ interface HistoryRow {
             </header>
             <section class="flex-1 overflow-y-auto px-5 py-3">
               @if (historyLoading()) {
-                <p class="text-[13px]" style="color: var(--text-tertiary);">Loading…</p>
+                <div class="flex justify-center py-3">
+                  <pf-loading-logo size="sm" color="purple"
+                                   [showText]="true" text="Loading…"></pf-loading-logo>
+                </div>
               } @else if (historyRows().length === 0) {
                 <p class="text-[13px]" style="color: var(--text-tertiary);">No prior versions yet. Save or publish to create one.</p>
               } @else {

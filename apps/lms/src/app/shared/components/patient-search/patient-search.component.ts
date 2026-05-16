@@ -2,13 +2,14 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, comput
 import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
+import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [AvatarComponent],
+  imports: [AvatarComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wrap">
@@ -42,7 +43,9 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
           </button>
         }
         @if (state() === 'loading') {
-          <span class="field-spinner" aria-hidden="true"></span>
+          <span class="field-spinner">
+            <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
+          </span>
         }
         <!-- Trailing-action slot. Projected actions sit at the right edge of
              the field, after the clear/spinner. Frontdesk uses this for the
@@ -67,7 +70,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
             }
             @case ('loading') {
               <div class="panel-state">
-                <span class="panel-spinner" aria-hidden="true"></span>
+                <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
                 <span>Searching for "<strong>{{ query() }}</strong>"…</span>
               </div>
             }
@@ -338,7 +341,7 @@ export class PatientSearchComponent {
   private readonly api = inject(ApiService);
   protected readonly name = patientDisplayName;
 
-  @Input() placeholder = 'Search patient by name, phone, or ABHA';
+  @Input() placeholder = 'Search patient by name, MRN, phone, or ABHA';
   @Output() picked = new EventEmitter<Patient>();
 
   protected readonly query = signal('');

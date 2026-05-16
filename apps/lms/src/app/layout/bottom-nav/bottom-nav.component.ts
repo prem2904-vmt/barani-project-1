@@ -7,7 +7,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
-import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
+import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -50,10 +50,16 @@ const DRAG_THRESHOLD_PX = 4;
               aria-hidden="true"></span>
 
         @for (n of primary(); track n.id; let i = $index) {
+          <!-- Buttons auto-scale to the visible-tab count. With many
+               tabs (≥4) we stay icon-only on mobile to keep the pill
+               compact; with few tabs (≤3) we always show the label
+               on every viewport so a 2-button pill doesn't look like
+               a tiny debug widget floating at the bottom. -->
           <button #navBtn type="button"
                   (click)="onTabClick(i, $event)"
-                  class="pf-nav-btn press rounded-full flex flex-col items-center justify-center gap-0.5
-                         shrink-0 w-11 h-11 sm:w-16 sm:h-16 text-[10px] font-semibold leading-none transition-colors"
+                  class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
+                         shrink-0 text-[11px] font-semibold leading-none transition-colors"
+                  [class.pf-nav-btn--compact]="compactMode()"
                   [class.pf-nav-btn--active]="activeIdx() === i">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -61,50 +67,38 @@ const DRAG_THRESHOLD_PX = 4;
                   <path [attr.d]="path"/>
                  }
             </svg>
-            <span class="hidden sm:inline">{{ n.label }}</span>
+            <span class="pf-nav-btn__lbl">{{ n.label }}</span>
           </button>
         }
 
-        @if (more().length > 0) {
+        @if (showAdminTab()) {
           <div class="w-px h-8 sm:h-10 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
 
-          <button #navBtn type="button"
-                  (click)="onMoreClick($event)"
-                  class="pf-nav-btn press rounded-full flex flex-col items-center justify-center gap-0.5
-                         shrink-0 w-11 h-11 sm:w-16 sm:h-16 text-[10px] font-semibold leading-none transition-colors"
-                  [class.pf-nav-btn--active]="moreActive()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="5"  cy="12" r="1.8"/>
-              <circle cx="12" cy="12" r="1.8"/>
-              <circle cx="19" cy="12" r="1.8"/>
+          <!-- Admin = direct navigation to /admin (the categorised
+               dashboard), not a popover. The old "More" sheet listed
+               every admin page; that's now what the 2-panel /admin
+               page itself shows, so the popover became redundant. -->
+          <a #navBtn routerLink="/admin" routerLinkActive="pf-nav-btn--active"
+             class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
+                    shrink-0 text-[11px] font-semibold leading-none transition-colors no-underline"
+             [class.pf-nav-btn--compact]="compactMode()"
+             aria-label="Admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
             </svg>
-            <span class="hidden sm:inline">More</span>
-          </button>
+            <span class="pf-nav-btn__lbl">Admin</span>
+          </a>
         }
       </div>
     </nav>
 
-    <!-- More sheet — mobile only. -->
-    @if (moreOpen()) {
-      <div class="xl:hidden fixed inset-0 z-40 flex items-end justify-center glass-modal-backdrop fade-in"
-           (click)="closeMore()">
-        <div class="m-4 mb-28 p-4 rounded-[28px] min-w-[320px] max-w-[520px] w-[calc(100%-2rem)] slide-up glass-card-elevated grid grid-cols-3 sm:grid-cols-4 gap-2"
-             (click)="$event.stopPropagation()">
-          @for (n of more(); track n.id) {
-            <a [routerLink]="n.href"
-               routerLinkActive="pf-more-active"
-               (click)="closeMore()"
-               class="pf-more-item flex flex-col items-center gap-2 px-2 py-3 rounded-2xl press transition-colors">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path [attr.d]="n.iconPath"/>
-              </svg>
-              <span class="text-[12px] font-medium text-center leading-tight">{{ n.label }}</span>
-            </a>
-          }
-        </div>
-      </div>
-    }
+    <!-- The mobile/iPad "More" sheet (formerly listed every admin
+         page) has been removed. The Admin tab now navigates straight
+         to /admin which already shows the same items in a richer
+         2-panel layout — one destination instead of two competing
+         menus. -->
   `,
   styles: [`
     .pf-bottom-nav {}
@@ -235,11 +229,29 @@ const DRAG_THRESHOLD_PX = 4;
       background: transparent;
       border: 0;
       cursor: pointer;
-      /* Reserve vertical pan for the page; horizontal drag belongs to
-         our pointer handler. Without this the browser may treat a
-         finger-on-button + sideways-swipe as native overflow-x scroll
-         and eat our pointermove events. */
       touch-action: pan-y;
+      /* Default (label-visible) sizing — used when there are few
+         tabs so the pill never looks like a sad widget. The icon +
+         text sit side-by-side; height stays a pill-friendly 44px. */
+      height: 44px;
+      padding: 0 16px;
+      min-width: 88px;
+    }
+    /* Compact mode — applied when there are 4+ visible items. Icon
+       only on mobile, icon+label from sm:up. Matches the original
+       look when the bar is dense. */
+    .pf-nav-btn--compact {
+      width: 44px; min-width: 44px;
+      padding: 0;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+    }
+    .pf-nav-btn--compact .pf-nav-btn__lbl { display: none; }
+    @media (min-width: 640px) {
+      .pf-nav-btn { height: 56px; min-width: 110px; padding: 0 18px; }
+      .pf-nav-btn--compact { width: 64px; min-width: 64px; padding: 0; }
+      .pf-nav-btn--compact .pf-nav-btn__lbl { display: inline; }
     }
     .pf-nav-btn:hover {
       color: var(--text-primary);
@@ -404,7 +416,27 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   };
 
   readonly primary = computed(() => this.visible(PRIMARY_NAV));
-  readonly more = computed(() => this.visible(MORE_NAV));
+  /** More-popover items. On mobile/iPad the desktop top-strip is
+   *  hidden (`xl:flex`), so the new top-strip Admin icon isn't
+   *  reachable there. We prepend ADMIN_NAV into More so admins on
+   *  tablet/phone still have one tap to /admin. The permission
+   *  filter (`visible`) already gates it for non-admins. */
+  readonly more = computed(() => this.visible([ADMIN_NAV, ...MORE_NAV]));
+  /** The Admin tab on the floating pill renders only when the user
+   *  has at least one manage_* permission (i.e. ADMIN_NAV would
+   *  appear in their visible list). Non-admin users see only their
+   *  workflow tabs and no admin tab at all. */
+  readonly showAdminTab = computed(() =>
+    !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
+  );
+
+  /** Compact (icon-only on mobile) when 4+ buttons are visible. With
+   *  fewer the bar would otherwise look like a tiny floating widget;
+   *  showing labels at low counts gives each button room to breathe. */
+  readonly compactMode = computed(() => {
+    const total = this.primary().length + (this.showAdminTab() ? 1 : 0);
+    return total >= 4;
+  });
 
   get pillClasses(): string {
     return 'bg-[var(--header-bg)] border border-[var(--header-border)]';

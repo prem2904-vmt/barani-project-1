@@ -79,27 +79,32 @@ interface PrelimOrder {
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-        <pf-tile tone="violet" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Total</p>
-          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ items().length }}</p>
-        </pf-tile>
-        <pf-tile tone="amber" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Completed</p>
-          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().pending }}</p>
-        </pf-tile>
-        <pf-tile tone="sky" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Partial</p>
-          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ partialOrders().length }}</p>
-        </pf-tile>
-        <pf-tile tone="emerald" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Delivered</p>
-          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().delivered }}</p>
-        </pf-tile>
-        <pf-tile tone="rose" padding="md">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1" style="color: var(--text-secondary);">Failed</p>
-          <p class="text-[28px] font-semibold leading-none" style="color: var(--text-primary);">{{ counts().failed }}</p>
-        </pf-tile>
+      <div class="pf-rq-stats" aria-label="Report queue stats">
+        <span class="pf-rq-stat" data-color="violet">
+          <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+          <span class="pf-rq-stat__label">Total</span>
+          <span class="pf-rq-stat__value">{{ items().length }}</span>
+        </span>
+        <span class="pf-rq-stat" data-color="amber">
+          <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+          <span class="pf-rq-stat__label">Completed</span>
+          <span class="pf-rq-stat__value">{{ counts().pending }}</span>
+        </span>
+        <span class="pf-rq-stat" data-color="sky">
+          <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+          <span class="pf-rq-stat__label">Partial</span>
+          <span class="pf-rq-stat__value">{{ partialOrders().length }}</span>
+        </span>
+        <span class="pf-rq-stat" data-color="emerald">
+          <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+          <span class="pf-rq-stat__label">Delivered</span>
+          <span class="pf-rq-stat__value">{{ counts().delivered }}</span>
+        </span>
+        <span class="pf-rq-stat" data-color="rose">
+          <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+          <span class="pf-rq-stat__label">Failed</span>
+          <span class="pf-rq-stat__value">{{ counts().failed }}</span>
+        </span>
       </div>
 
       <div class="mb-4">
@@ -110,7 +115,7 @@ interface PrelimOrder {
           <input type="text" class="pf-results-search__input"
                  [value]="query()"
                  (input)="setQuery(asInput($event))"
-                 placeholder="Search by patient, phone, or order/report id…"/>
+                 placeholder="Search by patient, MRN, phone, or order/report id…"/>
           @if (query()) {
             <button type="button" class="pf-results-search__clear"
                     (click)="setQuery('')" aria-label="Clear search">×</button>
@@ -313,6 +318,70 @@ interface PrelimOrder {
     </section>
   `,
   styles: [`
+    /* Segmented stat bar — full width, each stat owns an equal slice
+     * with a hairline divider between. Reads as one structural row,
+     * not 5 floating items spread thin on a wide page. */
+    .pf-rq-stats {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      width: 100%;
+      margin-bottom: 16px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .pf-rq-stat {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 7px 14px;
+      line-height: 1.2;
+      flex: 1 1 0; min-width: 0;
+      border-right: 1px solid var(--glass-border);
+    }
+    .pf-rq-stat:last-child { border-right: none; }
+    .pf-rq-stat__dot {
+      width: 6px; height: 6px; border-radius: 999px;
+      align-self: center;
+      background: var(--rq-dot);
+      box-shadow: 0 0 6px var(--rq-glow);
+      flex: 0 0 6px;
+    }
+    .pf-rq-stat__label {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-tertiary); letter-spacing: 0.01em;
+    }
+    .pf-rq-stat__value {
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: -0.01em;
+    }
+    .pf-rq-stat:hover .pf-rq-stat__value {
+      color: var(--rq-dot); transition: color 0.18s ease;
+    }
+    .pf-rq-stat[data-color='violet']  { --rq-dot: #a78bfa; --rq-glow: rgba(168, 85, 247, 0.45); }
+    .pf-rq-stat[data-color='emerald'] { --rq-dot: #34d399; --rq-glow: rgba(16, 185, 129, 0.45); }
+    .pf-rq-stat[data-color='amber']   { --rq-dot: #fbbf24; --rq-glow: rgba(245, 158, 11, 0.45); }
+    .pf-rq-stat[data-color='rose']    { --rq-dot: #fb7185; --rq-glow: rgba(244, 63, 94, 0.45); }
+    .pf-rq-stat[data-color='sky']     { --rq-dot: #38bdf8; --rq-glow: rgba(14, 165, 233, 0.45); }
+    @media (max-width: 720px) {
+      /* Phones / iPad portrait: drop the bar chrome, items wrap as pills. */
+      .pf-rq-stats {
+        background: transparent; border: none; border-radius: 0;
+        gap: 4px 8px;
+      }
+      .pf-rq-stat {
+        border-right: none; padding: 4px 10px; flex: 0 1 auto;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 999px;
+      }
+      .pf-rq-stat__label { font-size: 10.5px; }
+      .pf-rq-stat__value { font-size: 12px; }
+    }
+
     /* Search bar at top of Results — same visual rhythm as the FD
      * landing's main search so reception's muscle memory carries over. */
     .pf-results-search {
@@ -635,11 +704,13 @@ export class ReportQueueComponent implements OnInit {
       l = l.filter(r => {
         const name = (r.order?.patient?.displayName ?? '').toLowerCase();
         const phone = (r.order?.patient?.phone ?? '').toLowerCase();
-        // Match against patient name, phone, the short order id, and
-        // the short report id — covers every reasonable lookup
-        // reception runs from a paper slip.
+        const mrn = (r.order?.patient?.mrn ?? '').toLowerCase();
+        // Match against patient name, phone, MRN, short order id, and
+        // short report id — covers every reasonable lookup reception
+        // runs from a paper slip.
         return name.includes(q)
           || phone.includes(q)
+          || mrn.includes(q)
           || r.orderId.toLowerCase().includes(q)
           || r.id.toLowerCase().includes(q);
       });

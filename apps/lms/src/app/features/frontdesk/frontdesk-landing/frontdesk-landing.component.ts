@@ -1356,6 +1356,24 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this._calendarOpen.set(false);
     this.refresh();
   }
+
+  /** Inline-date-input handlers (used by the Custom pill's date pair).
+   *  Each commit also kicks a refetch so the queue lists update. Empty
+   *  input clears the bound. */
+  pickCustomStart(iso: string) {
+    const v = (iso ?? '').trim();
+    this._customStart.set(v.length > 0 ? v : null);
+    // Reset end if it's now before the new start so we don't end up
+    // with an inverted range.
+    const e = this._customEnd();
+    if (v && e && e < v) this._customEnd.set(null);
+    if (this._customStart()) this.refresh();
+  }
+  pickCustomEnd(iso: string) {
+    const v = (iso ?? '').trim();
+    this._customEnd.set(v.length > 0 ? v : null);
+    if (this._customStart()) this.refresh();
+  }
   clearCustom() {
     this._customStart.set(null);
     this._customEnd.set(null);

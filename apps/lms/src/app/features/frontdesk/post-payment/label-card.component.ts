@@ -481,7 +481,11 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   }
 
   get mrnStr(): string {
-    return (this.patient as any)?.mrn ?? (this.patient?.id ?? '—').slice(0, 16);
+    // Patient.mrn is the server-issued lifetime MRN (e.g. DEL-2605-004217-3).
+    // Falls back to "—" for legacy NULL-MRN patients pre-2026-05-16; never
+    // print the raw GUID slice — it was misleading patient staff into
+    // treating order UUIDs as patient identifiers.
+    return this.patient?.mrn?.trim() || '—';
   }
 
   get dobStr(): string { return this.patient?.dateOfBirth ?? ''; }

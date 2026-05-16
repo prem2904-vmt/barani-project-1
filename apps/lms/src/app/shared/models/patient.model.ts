@@ -1,6 +1,10 @@
 export interface Patient {
   id: string;
   tenantId: string;
+  /** Lifetime patient MRN, e.g. `DEL-2605-004217-3`. Server-assigned on
+   * registration; legacy rows (pre-2026-05-16) may have it null. Use
+   * `patientMrnLabel(p)` to render with a fallback. */
+  mrn?: string;
   firstName: string;
   fathersName: string;
   /** Server computes this. Falls back to `firstName + ' ' + fathersName` in the helper. */
@@ -32,6 +36,11 @@ export function patientDisplayName(
   if (!p) return '';
   if (p.displayName) return p.displayName;
   return [p.firstName, p.fathersName].filter(Boolean).join(' ');
+}
+
+/** Renders an MRN with a graceful fallback for legacy NULL-MRN patients. */
+export function patientMrnLabel(p: Pick<Patient, 'mrn'> | null | undefined): string {
+  return p?.mrn?.trim() || '—';
 }
 
 export interface RegisterPatientInput {

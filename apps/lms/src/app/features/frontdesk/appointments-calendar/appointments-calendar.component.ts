@@ -11,6 +11,7 @@ import { AppointmentBookingService } from '../../../core/services/appointment-bo
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Appointment } from '../../../shared/models/appointment.model';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 type CalView = 'day' | 'week' | 'month';
 
@@ -38,7 +39,7 @@ const STATUS_CLASS: Record<string, string> = {
 @Component({
   selector: 'pf-appointments-calendar',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cal-page">
@@ -106,7 +107,10 @@ const STATUS_CLASS: Record<string, string> = {
       </div>
 
       @if (loading()) {
-        <div class="pf-cal-loading">Loading…</div>
+        <div class="pf-cal-loading">
+          <pf-loading-logo size="lg" color="purple" [showDna]="true"
+                           [showText]="true" text="Loading appointments…"></pf-loading-logo>
+        </div>
       }
     </section>
 

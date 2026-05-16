@@ -6,7 +6,7 @@ import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
-import { MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
+import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
 @Component({
@@ -41,6 +41,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   };
   readonly primary = computed(() => this.visible(PRIMARY_NAV));
   readonly more = computed(() => this.visible(MORE_NAV));
+  /** Show the Admin icon-button (in the right cluster) only when the
+   *  current user holds at least one manage_* permission. Mirrors the
+   *  permission gate from ADMIN_NAV so admins still get one click to
+   *  Admin, non-admins get a cleaner top-strip. */
+  readonly showAdmin = computed(() =>
+    !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
+  );
 
   protected readonly branch = signal<string>('Chennai Main');
   protected readonly branchOpen = signal(false);

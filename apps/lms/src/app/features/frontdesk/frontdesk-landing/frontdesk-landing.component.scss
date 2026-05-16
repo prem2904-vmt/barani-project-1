@@ -593,6 +593,20 @@
   gap: 2px;
   flex-shrink: 0;
 }
+/* On phones the pill cluster becomes a horizontal scroller — the
+   right-most "Custom" pill + its inline date inputs would otherwise
+   shove the cluster off-screen. Auto-height because the inline
+   Custom inputs may wrap below the pills (see .pf-date-custom). */
+@media (max-width: 640px) {
+  .pf-date-pills {
+    height: auto;
+    flex-wrap: wrap;
+    border-radius: 14px;
+    width: 100%;
+    overflow-x: auto;
+  }
+  .pf-date-pill { height: 36px; padding: 0 12px; font-size: 12px; }
+}
 
 .pf-date-pill {
   height: 100%;
@@ -621,6 +635,61 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Inline custom-date range — shows next to the date pills when the
+   user selects the "Custom" pill. Two native date inputs + a small
+   clear button. */
+.pf-date-custom {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 4px;
+  padding: 4px 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  /* Phones — let the chip span the full row beneath the pills so
+     the two date inputs stay readable instead of being squeezed. */
+  .pf-date-custom {
+    display: flex;
+    width: 100%;
+    margin-left: 0; margin-top: 6px;
+    border-radius: 12px;
+  }
+}
+.pf-date-custom__inp {
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  padding: 2px 4px;
+  outline: none;
+  width: 130px;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .pf-date-custom__inp { flex: 1; width: auto; }
+}
+.pf-date-custom__inp::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+.pf-date-custom__sep { color: var(--text-muted); font-size: 12px; }
+.pf-date-custom__clear {
+  background: transparent; border: 0;
+  width: 20px; height: 20px;
+  border-radius: 9999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pf-date-custom__clear:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
 }
 
 /* Calendar popover */

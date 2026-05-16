@@ -9,6 +9,7 @@ import { Patient, patientDisplayName } from '../../../shared/models/patient.mode
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -65,7 +66,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [DatePipe, AvatarComponent, SelectComponent],
+  imports: [DatePipe, AvatarComponent, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -121,8 +122,8 @@ const PAGE_SIZE = 20;
               </label>
 
               <label class="pf-aps-field" style="grid-area: pid">
-                <span class="pf-aps-lbl">Patient ID</span>
-                <input type="text" class="pf-aps-inp" placeholder="UHID / UUID"
+                <span class="pf-aps-lbl">MRN</span>
+                <input type="text" class="pf-aps-inp" placeholder="e.g. DEL-2605-004217-3"
                        [value]="filters().patientId"
                        (input)="setFilter('patientId', $any($event.target).value)" />
               </label>
@@ -266,7 +267,7 @@ const PAGE_SIZE = 20;
                       [disabled]="loading() || !hasAnyFilter()"
                       (click)="runSearch()">
                 @if (loading()) {
-                  <span class="pf-aps-spin" aria-hidden="true"></span>
+                  <pf-loading-logo size="micro" color="white" [inline]="true"></pf-loading-logo>
                   Searching…
                 } @else {
                   Search
@@ -303,6 +304,7 @@ const PAGE_SIZE = 20;
                     <thead>
                       <tr>
                         <th>Patient</th>
+                        <th>MRN</th>
                         <th>Mobile</th>
                         <th>Age / Sex</th>
                         <th>Last visit</th>
@@ -324,6 +326,13 @@ const PAGE_SIZE = 20;
                                 }
                               </div>
                             </button>
+                          </td>
+                          <td>
+                            @if (h.patient.mrn) {
+                              <span class="pf-aps-mono" [title]="'MRN: ' + h.patient.mrn">{{ h.patient.mrn }}</span>
+                            } @else {
+                              <span class="pf-aps-muted">—</span>
+                            }
                           </td>
                           <td>
                             @if (h.patient.phone) {
@@ -391,7 +400,7 @@ const PAGE_SIZE = 20;
                               [disabled]="loadingMore()"
                               (click)="loadMore()">
                         @if (loadingMore()) {
-                          <span class="pf-aps-spin" aria-hidden="true"></span>
+                          <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
                           Loading…
                         } @else {
                           Load {{ remaining() }} more
@@ -1375,7 +1384,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
     const params = new URLSearchParams();
     if (f.phone.trim()) params.set('phone', f.phone.trim());
     if (f.name.trim()) params.set('name', f.name.trim());
-    if (f.patientId.trim()) params.set('patientId', f.patientId.trim());
+    if (f.patientId.trim()) params.set('mrn', f.patientId.trim());
 
     const { from, to } = this.resolveDateRange(f);
     if (from) params.set('dateFrom', from);

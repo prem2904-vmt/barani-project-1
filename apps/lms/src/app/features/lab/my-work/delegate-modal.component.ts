@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output
 import { ApiService } from '../../../core/services/api.service';
 import { User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 // Lightweight supervisor delegation picker. Lists active users in the
 // tenant; on pick, fires (chose) with the target user id. The caller
@@ -11,7 +12,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 @Component({
   selector: 'pf-delegate-modal',
   standalone: true,
-  imports: [AvatarComponent],
+  imports: [AvatarComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-dl" role="dialog" aria-modal="true" aria-label="Delegate test">
@@ -49,7 +50,12 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
             </li>
           } @empty {
             <li class="pf-dl__empty">
-              @if (loading()) { Loading… }
+              @if (loading()) {
+                <div class="flex justify-center py-2">
+                  <pf-loading-logo size="sm" color="purple"
+                                   [showText]="true" text="Loading…"></pf-loading-logo>
+                </div>
+              }
               @else { No matching user. }
             </li>
           }

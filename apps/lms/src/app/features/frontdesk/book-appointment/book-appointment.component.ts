@@ -16,6 +16,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import {
   WorkflowConfig,
   WorkflowConfigRecord,
@@ -32,7 +33,8 @@ import {
     AvatarComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -82,7 +84,10 @@ import {
             (valuesChange)="values.set($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
-          <p class="text-[13px]" style="color: var(--text-tertiary);">Loading workflow…</p>
+          <div class="flex justify-center py-10">
+            <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                             [showText]="true" text="Loading workflow…"></pf-loading-logo>
+          </div>
         }
       </pf-tile>
 
