@@ -87,7 +87,9 @@ const PAGE_SIZE = 20;
               </div>
             </div>
             <div class="pf-aps-hdr-r">
-              <button type="button" class="pf-aps-link" (click)="reset()">Reset</button>
+              <!-- Duplicate Reset removed — the action row's "Clear" button
+                   already does the same. Two identical controls in
+                   different positions was confusing. -->
               <button type="button" class="pf-aps-x" aria-label="Close" (click)="close()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -552,20 +554,21 @@ const PAGE_SIZE = 20;
       align-items: center;
       gap: 8px;
       font-size: 11.5px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
+      font-weight: 700;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--text-tertiary);
+      /* Brighter than --text-tertiary which disappears in light mode. */
+      color: var(--text-secondary);
     }
     .pf-aps-pri {
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      padding: 1px 5px;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 2px 6px;
       border-radius: 4px;
-      background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
-      border: 1px solid rgba(168, 85, 247, 0.24);
+      background: rgba(168, 85, 247, 0.20);
+      color: #7c3aed;
+      border: 1px solid rgba(168, 85, 247, 0.45);
       text-transform: uppercase;
     }
 
@@ -1156,10 +1159,19 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   readonly hasMore = computed(() => this._results().length < this._total());
   readonly remaining = computed(() => Math.min(PAGE_SIZE, this._total() - this._results().length));
 
-  readonly branchOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'Any branch' },
-    ...this._branches().map(b => ({ value: b.id, label: b.name }))
-  ]);
+  readonly branchOptions = computed<PfSelectOption<string>[]>(() => {
+    // De-dupe defensively by branch id — the API can return the same
+    // branch via multiple sub-branch joins which made the dropdown
+    // grow on every re-open.
+    const seen = new Set<string>();
+    const opts: PfSelectOption<string>[] = [{ value: '', label: 'Any branch' }];
+    for (const b of this._branches()) {
+      if (seen.has(b.id)) continue;
+      seen.add(b.id);
+      opts.push({ value: b.id, label: b.name });
+    }
+    return opts;
+  });
 
   readonly filteredTests = computed(() => {
     const q = this.testQuery().trim().toLowerCase();
@@ -1221,6 +1233,31 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   onEsc() { if (this.open) this.close(); }
 
   setFilter<K extends keyof AdvancedFilters>(key: K, value: AdvancedFilters[K]) {
+    // Sanitise text-y fields whose <input> can't enforce constraints
+    // browser-side. Cleaning here keeps filter state always-valid.
+    if (key === 'age' && typeof value === 'string') {
+      const cleaned = (value as string).replace(/[^0-9]/g, '');
+      if (cleaned === '') value = '' as AdvancedFilters[K];
+      else {
+        const n = Math.max(0, Math.min(130, parseInt(cleaned, 10) || 0));
+        value = String(n) as AdvancedFilters[K];
+      }
+    } else if (key === 'patientId' && typeof value === 'string') {
+      value = (value as string).replace(/[^A-Za-z0-9\-]/g, '') as AdvancedFilters[K];
+    } else if (key === 'phone' && typeof value === 'string') {
+      value = (value as string).replace(/[^0-9+]/g, '') as AdvancedFilters[K];
+    } else if ((key === 'dateFrom' || key === 'dateTo') && typeof value === 'string') {
+      const v = (value as string).trim();
+      if (v === '') value = '' as AdvancedFilters[K];
+      else {
+        const d = new Date(v);
+        const isoDay = isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+        if (isoDay !== v) {
+          this._errorMsg.set(`Invalid date "${v}" — pick from the calendar`);
+          return;
+        }
+      }
+    }
     this.filters.update(f => ({ ...f, [key]: value }));
     if (this._errorMsg()) this._errorMsg.set(null);
   }

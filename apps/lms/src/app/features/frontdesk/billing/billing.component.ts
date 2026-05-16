@@ -597,14 +597,17 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       width: 28px; height: 26px;
       background: transparent; border: 0;
       border-radius: 7px;
-      color: var(--text-secondary);
-      font-size: 12px; font-weight: 700;
+      color: var(--text-primary);
+      font-size: 13px; font-weight: 800;
       cursor: pointer;
+      opacity: 0.72;
+      transition: opacity 0.15s, background 0.15s;
     }
-    .pf-discount__kind button:hover { color: var(--text-primary); }
+    .pf-discount__kind button:hover { opacity: 1; background: rgba(168, 85, 247, 0.10); }
     .pf-discount__kind--on {
       background: linear-gradient(135deg, #8b5cf6, #ec4899);
       color: white !important;
+      opacity: 1;
     }
     /* Resolved ₹ value next to a % discount input */
     .pf-discount__resolved {
