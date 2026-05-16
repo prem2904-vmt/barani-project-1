@@ -90,6 +90,11 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
       },
       {
+        path: 'admin/referring-network',
+        canActivate: [permissionGuard(['manage_tenant', 'manage_admin'])],
+        loadComponent: () => import('./features/admin/referring-network/referring-network.component').then(m => m.ReferringNetworkComponent)
+      },
+      {
         path: 'admin/notifications',
         canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)

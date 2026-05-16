@@ -351,14 +351,25 @@ export class PeopleDrawerComponent {
     });
 
     // When the drawer opens (from anywhere — top-strip button etc.), refresh
-    // users + conversations. Close transitions reset to list mode.
+    // users + conversations + presence. The shell already tries to connect
+    // both hubs at boot but the order is not guaranteed — if a user opens
+    // the drawer before the signaling connect completes, presence dots stay
+    // grey. Force a fresh fetch here so what's shown matches who's online.
+    // Close transitions reset to list mode.
     effect(() => {
       const isOpen = this.open();
       if (isOpen) {
         this.mode.set('list');
         queueMicrotask(async () => {
-          await this.chat.connect().catch(() => undefined);
-          await Promise.all([this.fetchUsers(), this.chat.loadConversations().catch(() => undefined)]);
+          await Promise.all([
+            this.signaling.connect().catch(() => undefined),
+            this.chat.connect().catch(() => undefined)
+          ]);
+          await Promise.all([
+            this.fetchUsers(),
+            this.chat.loadConversations().catch(() => undefined),
+            this.signaling.getOnlineUsersWithStatus().catch(() => undefined)
+          ]);
         });
       } else {
         this.mode.set('list');

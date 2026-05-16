@@ -566,6 +566,10 @@ export class AdminDashboardComponent implements OnInit {
           iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
           iconExtra: 'M17 14h.01',
           subtitle: () => 'B2B credit accounts · top-ups & usage' },
+        { title: 'Referring Network', href: '/admin/referring-network', gradient: 'amber',
+          iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4',
+          iconExtra: 'M9 9h.01M9 13h.01M9 17h.01',
+          subtitle: () => 'Hospitals + doctors that send patients to your lab' },
       ]
     },
     {
