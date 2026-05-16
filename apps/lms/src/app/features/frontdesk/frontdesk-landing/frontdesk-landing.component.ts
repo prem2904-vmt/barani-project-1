@@ -998,6 +998,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (a.patientId) this.router.navigate(['/frontdesk/patients', a.patientId]);
   }
   openOrder(o: Order) { this._selectedOrder.set(o); }
+  /** Build a fresh order pre-populated with the tests from a prior order.
+   *  Routes through order-create with `?fromOrderId=…` which triggers
+   *  preselectFromOrder() there — the catalog auto-fills, the
+   *  receptionist confirms or edits before clicking Create Order. */
+  repeatOrder(o: Order) {
+    if (!o.patientId) return;
+    this._selectedOrder.set(null);
+    this.router.navigate(['/frontdesk/order'], {
+      queryParams: { patientId: o.patientId, fromOrderId: o.id }
+    });
+  }
 
   // Only show the inline "Collect Sample" action when reception owns collection
   // at this branch (dedicated_counter mode routes to a separate queue) and the

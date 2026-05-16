@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -515,6 +515,7 @@ export class PatientProfileComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly locationSvc = inject(Location);
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _history = signal<Order[]>([]);
@@ -562,7 +563,10 @@ export class PatientProfileComponent implements OnInit {
     return tests;
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  back() {
+    if (window.history.length > 1) this.locationSvc.back();
+    else this.router.navigateByUrl('/frontdesk');
+  }
 
   startOrder(p: Patient) {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
