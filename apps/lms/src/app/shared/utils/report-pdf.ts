@@ -6,6 +6,7 @@ import {
   ResolvedRow,
   ResolvedSection,
 } from '../models/report-layout.model';
+import { ReportSignature, ReportTemplate } from '../models/report.model';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -31,7 +32,8 @@ export interface ReportPdfInput {
     createdAt?: string;
     data?: string | null;
   };
-  /** Practice letterhead — fed from /practice-settings. */
+  /** Legacy practice letterhead — used when no `template` is supplied.
+   *  When both are present, `template` wins on every field it covers. */
   practice?: {
     name?: string;
     address?: string;
@@ -39,7 +41,6 @@ export interface ReportPdfInput {
     email?: string;
     website?: string;
     nablNumber?: string;
-    /** Up to three sign-off lines for the footer. */
     sigLabTechName?: string;
     sigLabTechTitle?: string;
     sigPathologist1Name?: string;
@@ -47,9 +48,77 @@ export interface ReportPdfInput {
     sigPathologist2Name?: string;
     sigPathologist2Title?: string;
   };
+  /** Per-tenant template config (colors, fonts, header layout, date
+   *  format, signatures, watermark, end-of-report text). When supplied
+   *  the renderer reads it instead of the hardcoded Drlogy defaults —
+   *  every visual element in the PDF can be tuned from the admin UI. */
+  template?: ReportTemplate | null;
   /** Optional: per-test resolved layouts. When provided, the PDF renders
    *  the configured sections instead of the legacy parameter table. */
   resolvedLayouts?: Record<string, ResolvedReportLayout>;
+  /** Base URL prepended to relative image URLs (logos, signatures).
+   *  Defaults to '' so URLs already starting with http(s)://… work
+   *  as-is. */
+  assetBaseUrl?: string;
+  /** Pre-fetched image cache, keyed by the ORIGINAL URL (the one stored
+   *  on the template, e.g. "/uploads/.../foo.png"). Each value is a
+   *  base64 data URL that jsPDF.addImage can consume directly.
+   *  Built by `preloadReportImages()` — the renderer is sync, so any
+   *  caller that wants uploaded images embedded MUST preload first. */
+  imageCache?: Record<string, string>;
+}
+
+/** Effective theme + chrome values fed to every drawing function.
+ *  Built by `resolveTheme()` from the template (preferred) and the
+ *  legacy practice shape (fallback). Keeps every renderer free of
+ *  null-checks against the template. */
+interface ResolvedTheme {
+  // Colors
+  accent: string;          // top bar, blue band, wordmark accent words
+  primary: string;         // headings, dept strip
+  body: string;            // body text
+  divider: string;         // hairlines, table border
+  tableHeaderBg: string;
+  tableHeaderText: string;
+  // Typography
+  font: 'helvetica' | 'times' | 'courier';
+  // Body font scale — 1.0 = current Drlogy size
+  fontScale: number;
+  // Layout
+  headerPreset: 'drlogy' | 'centered' | 'banner' | 'minimal';
+  logoPosition: 'left' | 'center' | 'right';
+  logoSize: 'sm' | 'md' | 'lg';
+  topAccentBar: boolean;
+  tableStyle: 'plain' | 'bordered' | 'striped';
+  zebraRows: boolean;
+  // Date / time
+  dateFormat: string;
+  timeFormat: 'none' | '12h' | '24h';
+  dateTimeSeparator: string;
+  showRegistered: boolean;
+  showCollected: boolean;
+  showReported: boolean;
+  // Patient block toggles
+  showBarcode: boolean;
+  // Chrome
+  endOfReportText: string;
+  showSampleBand: boolean;
+  showPoweredBy: boolean;
+  watermarkText: string;
+  watermarkOpacity: number;
+  footerText: string;
+  // Signature blocks (always 3 slots — empty slots render nothing)
+  signatures: ReportSignature[];
+  // Tagline string (raw — split on '|' at draw time so accent-coloured pipes render)
+  tagline: string;
+  // Patient block layout preset
+  patientLayout: 'three-col' | 'four-col-grid' | 'stacked';
+  // Whether to show ABHA ID row in the patient block
+  showAbhaId: boolean;
+  // Footer chrome
+  disclaimer: string;
+  // QR code toggle (drawn in the sample-band area)
+  showQrCode: boolean;
 }
 
 interface ReportSnapshot {
@@ -91,21 +160,160 @@ const MARGIN_TOP = 28;
 const MARGIN_BOTTOM = 110; // reserves room for the 3-column sig block
 
 // ── Drlogy palette ────────────────────────────────────────────────
-const BLUE = '#0066CC';        // Wordmark "LAB", taglines, accent rules
-const BLUE_DARK = '#003F8F';   // Hover/secondary blue (rarely used)
-const BLACK = '#000000';
-const TEXT = '#1a1a1a';
-const TEXT_DIM = '#666666';
-const HAIR = '#cccccc';
-const FLAG_RED = '#dc2626';    // "High" / critical
-const FLAG_BLUE = '#2563eb';   // "Low"
+// Mutable module-level theme. `applyTheme()` (called at the start of
+// every buildReportPdf) overrides these from the tenant's
+// ReportTemplate so admins can re-skin the PDF without us threading
+// a theme argument through every drawing function.
+let BLUE = '#0066CC';        // Wordmark accent words, blue band
+const BLUE_DARK = '#003F8F'; // (reserved — secondary blue, rarely used)
+let BLACK = '#000000';       // Wordmark first word, headings
+let TEXT = '#1a1a1a';        // Body text
+const TEXT_DIM = '#666666';  // Muted footer / secondary labels
+let HAIR = '#cccccc';        // Hairlines, dividers, table border
+const FLAG_RED = '#dc2626';  // High / critical inline tag
+const FLAG_BLUE = '#2563eb'; // Low inline tag
+let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
+/** Lookup of pre-fetched image data URLs for the current render. Set
+ *  inside buildReportPdf from input.imageCache. */
+let IMG_CACHE: Record<string, string> = {};
 
-export function generateReportPdf(input: ReportPdfInput) {
-  const { report, practice = {}, resolvedLayouts = {} } = input;
+/** Per-render theme — frozen once at the start of buildReportPdf.
+ *  Functions read from these closure-captured vars at draw time. */
+let theme: ResolvedTheme = defaultTheme();
+
+function defaultTheme(): ResolvedTheme {
+  return {
+    accent: '#0066CC', primary: '#1B3A6B', body: '#1a1a1a', divider: '#cccccc',
+    tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
+    font: PDF_FONT, fontScale: 1,
+    headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+    tableStyle: 'plain', zebraRows: false,
+    dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
+    showRegistered: true, showCollected: true, showReported: true,
+    showBarcode: true,
+    endOfReportText: '****End of Report****',
+    showSampleBand: true, showPoweredBy: true,
+    watermarkText: '', watermarkOpacity: 0.08, footerText: '',
+    signatures: [],
+    tagline: 'Accurate | Caring | Instant',
+    patientLayout: 'three-col',
+    showAbhaId: false,
+    disclaimer: '',
+    showQrCode: true,
+  };
+}
+
+/** Resolve the template + practice into the effective theme used by the
+ *  renderer. Template values win; practice + Drlogy defaults fill gaps. */
+function resolveTheme(
+  tpl: ReportTemplate | null | undefined,
+  practice: NonNullable<ReportPdfInput['practice']>
+): ResolvedTheme {
+  const t = defaultTheme();
+  if (!tpl) {
+    // Legacy: build minimal signatures array from the flat practice shape.
+    t.signatures = [
+      { name: practice.sigLabTechName,      title: practice.sigLabTechTitle      },
+      { name: practice.sigPathologist1Name, title: practice.sigPathologist1Title },
+      { name: practice.sigPathologist2Name, title: practice.sigPathologist2Title },
+    ].filter(s => s.name);
+    return t;
+  }
+  // Colors: treat empty strings like missing so blank fields in the DB
+  // (older rows or partial edits where the admin cleared an input) fall
+  // back to the sane Drlogy defaults instead of breaking jsPDF's
+  // setTextColor() with an empty value (which renders as no-text / white).
+  t.accent          = pickColor(tpl.accentColor,     pickColor(tpl.primaryColor, t.accent));
+  t.primary         = pickColor(tpl.primaryColor,    t.primary);
+  t.body            = pickColor(tpl.bodyTextColor,   t.body);
+  t.divider         = pickColor(tpl.dividerColor,    t.divider);
+  t.tableHeaderBg   = pickColor(tpl.tableHeaderBg,   t.tableHeaderBg);
+  t.tableHeaderText = pickColor(tpl.tableHeaderText, t.tableHeaderText);
+  t.font            = (['helvetica','times','courier'].includes(tpl.fontFamily ?? '')
+                       ? (tpl.fontFamily as 'helvetica'|'times'|'courier') : 'helvetica');
+  t.fontScale       = tpl.fontSize === 'sm' ? 0.9 : tpl.fontSize === 'lg' ? 1.1 : 1.0;
+  t.headerPreset    = (tpl.headerPreset as ResolvedTheme['headerPreset']) ?? 'drlogy';
+  t.logoPosition    = (tpl.logoPosition as 'left'|'center'|'right') ?? 'left';
+  t.logoSize        = (tpl.logoSize as 'sm'|'md'|'lg') ?? 'md';
+  t.topAccentBar    = tpl.topAccentBar ?? true;
+  t.tableStyle      = (tpl.tableStyle as 'plain'|'bordered'|'striped') ?? 'plain';
+  t.zebraRows       = tpl.zebraRows ?? (tpl.tableStyle === 'striped');
+  t.dateFormat      = tpl.dateFormat ?? t.dateFormat;
+  t.timeFormat      = (tpl.timeFormat as 'none'|'12h'|'24h') ?? '12h';
+  t.dateTimeSeparator = tpl.dateTimeSeparator ?? t.dateTimeSeparator;
+  t.showRegistered  = tpl.showRegistered ?? true;
+  t.showCollected   = tpl.showCollectionDate ?? true;
+  t.showReported    = tpl.showReportDate ?? true;
+  t.showBarcode     = tpl.showBarcode ?? true;
+  t.endOfReportText = tpl.endOfReportText && tpl.endOfReportText.trim().length > 0
+                      ? tpl.endOfReportText : t.endOfReportText;
+  t.showSampleBand  = tpl.showSampleCollectionBand ?? true;
+  t.showPoweredBy   = tpl.showPoweredBy ?? true;
+  t.watermarkText   = tpl.watermarkText ?? '';
+  t.watermarkOpacity = Math.max(0, Math.min(1, tpl.watermarkOpacity ?? 0.08));
+  t.footerText      = tpl.footerText ?? '';
+  t.signatures      = parseSignatures(tpl.signaturesJson, tpl.signatureUrl);
+  if (tpl.tagline && tpl.tagline.trim().length > 0) t.tagline = tpl.tagline;
+  t.patientLayout   = (tpl.patientLayout as ResolvedTheme['patientLayout']) ?? 'three-col';
+  t.showAbhaId      = tpl.showAbhaId ?? false;
+  t.disclaimer      = tpl.disclaimer ?? '';
+  t.showQrCode      = tpl.showQrCode ?? true;
+  return t;
+}
+
+/** Color fallback that treats undefined / null / empty-string / whitespace
+ *  as "missing" — `??` alone passes empty strings through, which become
+ *  invalid jsPDF color args (renders as transparent / white text). */
+function pickColor(val: string | null | undefined, fallback: string): string {
+  return val && val.trim().length > 0 ? val : fallback;
+}
+
+function parseSignatures(json: string | undefined, legacySigUrl?: string): ReportSignature[] {
+  if (json && json.trim()) {
+    try {
+      const arr = JSON.parse(json);
+      if (Array.isArray(arr)) return arr.filter((s): s is ReportSignature => !!s && (!!s.name || !!s.signatureUrl));
+    } catch { /* fall through */ }
+  }
+  if (legacySigUrl) return [{ signatureUrl: legacySigUrl }];
+  return [];
+}
+
+function applyTheme(t: ResolvedTheme) {
+  theme = t;
+  BLUE = t.accent;
+  BLACK = t.primary;
+  TEXT = t.body;
+  HAIR = t.divider;
+  PDF_FONT = t.font;
+}
+
+/** Build the PDF document without saving — used by both the download
+ *  flow and the live admin preview (which wraps the doc as a blob URL). */
+export function buildReportPdf(input: ReportPdfInput): jsPDF {
+  const { report, practice: rawPractice = {}, resolvedLayouts = {}, template = null, imageCache = {} } = input;
   const snap = parseSnapshot(report.data);
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  IMG_CACHE = imageCache;
 
-  drawLetterhead(doc, practice);
+  // Merge template identity fields into the practice shape. The drawing
+  // functions read from `practice.{name,address,phone,email,website,nablNumber}`
+  // for legacy reasons; without this merge, edits to those fields in
+  // the admin editor (which only passes `template`) wouldn't appear in
+  // the live preview because every read fell back to the Drlogy defaults.
+  const practice: NonNullable<ReportPdfInput['practice']> = template ? {
+    ...rawPractice,
+    name:        rawPractice.name        ?? template.labName,
+    address:     rawPractice.address     ?? template.address,
+    phone:       rawPractice.phone       ?? template.phone,
+    email:       rawPractice.email       ?? template.email,
+    website:     rawPractice.website     ?? template.website,
+    nablNumber:  rawPractice.nablNumber  ?? template.nablNumber,
+  } : rawPractice;
+
+  applyTheme(resolveTheme(template, practice));
+
+  drawLetterhead(doc, practice, template?.logoUrl ?? null);
   const patientBottom = drawPatientBlock(doc, snap, report);
 
   // ── Body — grouped by department ───────────────────────────────
@@ -119,7 +327,7 @@ export function generateReportPdf(input: ReportPdfInput) {
     // name as small uppercase blue text above the test, OR omit it
     // entirely. Use a thin blue label so multi-dept reports stay readable.
     if (byDept.size > 1) {
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(PDF_FONT, 'bold');
       doc.setFontSize(9);
       doc.setTextColor(BLUE);
       doc.text(dept.toUpperCase(), MARGIN_X, cursorY);
@@ -140,7 +348,7 @@ export function generateReportPdf(input: ReportPdfInput) {
   // ── Pending-depts banner (preliminary only) ────────────────────
   if (snap.isPartial && (snap.pendingDepts?.length ?? 0) > 0) {
     if (cursorY > A4.h - MARGIN_BOTTOM - 60) { cursorY = newPage(doc, practice); }
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(PDF_FONT, 'bold');
     doc.setFontSize(9);
     doc.setTextColor('#92400e');
     doc.text(`Other departments still pending: ${snap.pendingDepts!.join(', ')}`,
@@ -154,94 +362,336 @@ export function generateReportPdf(input: ReportPdfInput) {
 
   // ── Signature footer + page numbers (every page, drawn last) ───
   drawSignatureFooter(doc, practice, snap);
+  return doc;
+}
 
+/** Build + trigger a file download. Filename is derived from the
+ *  report's short id and type (final vs preliminary). */
+export function generateReportPdf(input: ReportPdfInput): void {
+  const doc = buildReportPdf(input);
+  const snap = parseSnapshot(input.report.data);
   const tag = snap.isPartial ? 'PRELIM' : 'REPORT';
-  const shortId = report.id.replace(/-/g, '').slice(-8).toUpperCase();
+  const shortId = input.report.id.replace(/-/g, '').slice(-8).toUpperCase();
   doc.save(`${tag}-${shortId}.pdf`);
+}
+
+/** Build + return a blob URL — used by the admin editor's live preview
+ *  iframe. Caller is responsible for URL.revokeObjectURL when swapping. */
+export function renderReportPdfBlobUrl(input: ReportPdfInput): string {
+  const doc = buildReportPdf(input);
+  const blob = doc.output('blob');
+  return URL.createObjectURL(blob);
+}
+
+/** Resolve a template/practice URL to an absolute one for fetching:
+ *  absolute http(s) URLs pass through; "/uploads/…" gets prepended with
+ *  the supplied API base. */
+function absoluteAssetUrl(url: string, baseUrl: string): string {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+  return `${baseUrl.replace(/\/$/, '')}${url}`;
+}
+
+/** Fetch a single image and re-encode it as a PNG data URL via canvas.
+ *  jsPDF.addImage accepts PNG/JPEG data URLs directly but not raw URLs —
+ *  hence the manual fetch + canvas pass. Re-encoding via canvas also
+ *  normalises SVG/WEBP/JPEG into PNG so all uploaded formats work. */
+async function fetchAsDataUrl(absUrl: string): Promise<string | null> {
+  try {
+    const resp = await fetch(absUrl, { mode: 'cors' });
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((res, rej) => {
+        const i = new Image();
+        i.crossOrigin = 'anonymous';
+        i.onload = () => res(i);
+        i.onerror = e => rej(e);
+        i.src = objectUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || 200;
+      canvas.height = img.naturalHeight || 200;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Pre-fetch every image URL referenced by the template + report so the
+ *  sync PDF renderer can embed them. The editor / viewer awaits this
+ *  before calling renderReportPdfBlobUrl or generateReportPdf with the
+ *  returned `imageCache`. Failed fetches are silently dropped — the
+ *  renderer falls back to its placeholder visuals for missing entries. */
+export async function preloadReportImages(
+  input: Omit<ReportPdfInput, 'imageCache'>,
+  baseUrl: string
+): Promise<Record<string, string>> {
+  const urls = new Set<string>();
+  const tpl = input.template;
+  if (tpl?.logoUrl)     urls.add(tpl.logoUrl);
+  if (tpl?.nablLogoUrl) urls.add(tpl.nablLogoUrl);
+  // Parse signatures JSON to discover sig image URLs.
+  if (tpl?.signaturesJson) {
+    try {
+      const arr = JSON.parse(tpl.signaturesJson) as ReportSignature[];
+      if (Array.isArray(arr)) arr.forEach(s => { if (s?.signatureUrl) urls.add(s.signatureUrl); });
+    } catch { /* malformed json — skip */ }
+  }
+  if (tpl?.signatureUrl) urls.add(tpl.signatureUrl);
+
+  const cache: Record<string, string> = {};
+  await Promise.all(Array.from(urls).map(async u => {
+    const abs = absoluteAssetUrl(u, baseUrl);
+    if (!abs) return;
+    const data = await fetchAsDataUrl(abs);
+    if (data) cache[u] = data; // key by original (relative) URL — what the template stores
+  }));
+  return cache;
 }
 
 // ──────────────────────────────────────────────────────────────
 // Letterhead — "LAB NAME" wordmark, address, phone, web band
 // ──────────────────────────────────────────────────────────────
 
-function drawLetterhead(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
-  // Small blue logo disc (left)
-  doc.setFillColor(BLUE);
-  doc.circle(MARGIN_X + 14, MARGIN_TOP + 14, 14, 'F');
-  // Inner white "+" mark
-  doc.setFillColor('#ffffff');
-  doc.rect(MARGIN_X + 13, MARGIN_TOP + 8,  2, 12, 'F');
-  doc.rect(MARGIN_X + 8,  MARGIN_TOP + 13, 12, 2, 'F');
+/** Renders the tagline by splitting on '|' and colouring each separator
+ *  pipe with the accent colour (Drlogy style). For taglines without
+ *  pipes ("Accurate. On time.") it just renders as a single black line. */
+function drawTagline(doc: jsPDF, tagline: string, x: number, y: number) {
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(9);
+  const parts = tagline.split('|');
+  let cx = x;
+  parts.forEach((seg, i) => {
+    const txt = seg;
+    doc.setTextColor(BLACK);
+    doc.text(txt, cx, y);
+    cx += doc.getTextWidth(txt);
+    if (i < parts.length - 1) {
+      doc.setTextColor(BLUE);
+      doc.text(' | ', cx, y);
+      cx += doc.getTextWidth(' | ');
+    }
+  });
+}
 
-  // Wordmark — first word black bold, "PATHOLOGY LAB" blue bold.
-  // We split the practice name on spaces and recolour the first token
-  // to mimic Drlogy's "DRLOGY PATHOLOGY LAB" treatment without
-  // forcing the words.
+/** Faint cursive scribble — placeholder shown when no signature image
+ *  has been uploaded for a sign-off block. */
+function drawSigScribble(doc: jsPDF, px: number, baseY: number) {
+  doc.setDrawColor(TEXT_DIM);
+  doc.setLineWidth(0.6);
+  doc.line(px - 22, baseY,     px - 14, baseY - 6);
+  doc.line(px - 14, baseY - 6, px - 4,  baseY + 4);
+  doc.line(px - 4,  baseY + 4, px + 6,  baseY - 4);
+  doc.line(px + 6,  baseY - 4, px + 18, baseY + 2);
+}
+
+/** Placeholder blue disc + white plus, drawn when no logo upload exists
+ *  (or the bytes failed to decode). Scales with the requested size. */
+function drawLogoPlaceholder(doc: jsPDF, sizePx: number) {
+  const r = sizePx / 2;
+  const cx = MARGIN_X + r;
+  const cy = MARGIN_TOP + r;
+  doc.setFillColor(BLUE);
+  doc.circle(cx, cy, r, 'F');
+  const arm = sizePx * 0.45;
+  const thick = Math.max(1.5, sizePx * 0.08);
+  doc.setFillColor('#ffffff');
+  doc.rect(cx - thick / 2, cy - arm / 2, thick, arm, 'F');
+  doc.rect(cx - arm / 2, cy - thick / 2, arm, thick, 'F');
+}
+
+function drawLetterhead(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  switch (theme.headerPreset) {
+    case 'centered':  drawLetterheadCentered(doc, practice, logoUrl); break;
+    case 'banner':    drawLetterheadBanner  (doc, practice, logoUrl); break;
+    case 'minimal':   drawLetterheadMinimal (doc, practice);          break;
+    case 'drlogy':
+    default:          drawLetterheadDrlogy  (doc, practice, logoUrl);
+  }
+}
+
+/** Drlogy preset — logo + wordmark left, phone/email right, address
+ *  below, optional blue accent band. */
+function drawLetterheadDrlogy(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  const sizePx = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
+  const logoX = logoXFor(sizePx);
+  drawLogo(doc, logoUrl, logoX, MARGIN_TOP, sizePx);
+
   const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
   const tokens = fullName.split(' ');
   const firstWord = tokens[0];
   const rest = tokens.slice(1).join(' ');
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(18 * theme.fontScale);
   doc.setTextColor(BLACK);
-  const wordmarkX = MARGIN_X + 36;
+  const wordmarkX = logoX + sizePx + 6;
   const wordmarkY = MARGIN_TOP + 18;
   doc.text(firstWord, wordmarkX, wordmarkY);
   const firstW = doc.getTextWidth(firstWord + ' ');
   doc.setTextColor(BLUE);
   doc.text(rest, wordmarkX + firstW, wordmarkY);
 
-  // Tagline beneath wordmark
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(BLACK);
-  doc.text('Accurate', wordmarkX, wordmarkY + 14);
-  const wA = doc.getTextWidth('Accurate ');
-  doc.setTextColor(BLUE);
-  doc.text('|', wordmarkX + wA, wordmarkY + 14);
-  doc.setTextColor(BLACK);
-  doc.text(' Caring', wordmarkX + wA + 4, wordmarkY + 14);
-  const wB = doc.getTextWidth('Accurate | Caring ');
-  doc.setTextColor(BLUE);
-  doc.text('|', wordmarkX + wB, wordmarkY + 14);
-  doc.setTextColor(BLACK);
-  doc.text(' Instant', wordmarkX + wB + 4, wordmarkY + 14);
+  drawTagline(doc, theme.tagline, wordmarkX, wordmarkY + 14);
 
-  // Right side: phone + email
   const rightX = A4.w - MARGIN_X;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(9 * theme.fontScale);
   doc.setTextColor(BLACK);
-  if (practice.phone) {
-    doc.text(practice.phone, rightX, MARGIN_TOP + 14, { align: 'right' });
-  }
-  if (practice.email) {
-    doc.text(practice.email, rightX, MARGIN_TOP + 28, { align: 'right' });
-  }
+  if (practice.phone) doc.text(practice.phone, rightX, MARGIN_TOP + 14, { align: 'right' });
+  if (practice.email) doc.text(practice.email, rightX, MARGIN_TOP + 28, { align: 'right' });
 
-  // Address line — small dim text spanning full width below the wordmark
-  const addressY = MARGIN_TOP + 46;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(8 * theme.fontScale);
   doc.setTextColor(TEXT_DIM);
-  if (practice.address) {
-    doc.text(practice.address, MARGIN_X, addressY);
-  }
+  if (practice.address) doc.text(practice.address, MARGIN_X, MARGIN_TOP + 46);
 
-  // Blue chevron band — a flat blue strip with a thin white slash motif.
-  // jsPDF can't paint complex zigzags cheaply, so we approximate with
-  // a flat blue band and a small "www" pill on the right.
+  drawTopAccentBar(doc, practice);
+}
+
+/** Centered preset — logo, wordmark, tagline, address all stacked
+ *  and centered. Phone + email on a single centered line below. */
+function drawLetterheadCentered(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  const sizePx = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
+  drawLogo(doc, logoUrl, (A4.w - sizePx) / 2, MARGIN_TOP, sizePx);
+
+  const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(18 * theme.fontScale);
+  doc.setTextColor(BLACK);
+  doc.text(fullName, A4.w / 2, MARGIN_TOP + sizePx + 14, { align: 'center' });
+
+  // Centered tagline — split + recolour the pipes.
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(9 * theme.fontScale);
+  const taglineW = doc.getTextWidth(theme.tagline.replace(/\|/g, ' | '));
+  drawTagline(doc, theme.tagline, A4.w / 2 - taglineW / 2, MARGIN_TOP + sizePx + 28);
+
+  // Contact line: phone · email · website
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(8 * theme.fontScale);
+  doc.setTextColor(TEXT_DIM);
+  const contact = [practice.phone, practice.email, practice.website].filter(Boolean).join('  ·  ');
+  if (contact) doc.text(contact, A4.w / 2, MARGIN_TOP + sizePx + 40, { align: 'center' });
+  if (practice.address) doc.text(practice.address, A4.w / 2, MARGIN_TOP + sizePx + 50, { align: 'center' });
+
+  drawTopAccentBar(doc, practice);
+}
+
+/** Banner preset — solid coloured band across the top with white text
+ *  inside. Eye-catching, less "lab-formal". */
+function drawLetterheadBanner(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  const bannerH = 54;
+  doc.setFillColor(BLUE);
+  doc.rect(0, 0, A4.w, bannerH, 'F');
+
+  const sizePx = theme.logoSize === 'sm' ? 22 : theme.logoSize === 'lg' ? 36 : 28;
+  const lx = theme.logoPosition === 'right' ? A4.w - MARGIN_X - sizePx
+           : theme.logoPosition === 'center' ? (A4.w - sizePx) / 2
+           : MARGIN_X;
+  // White-on-blue logo placeholder swap: if we have a real upload, use it;
+  // else draw the placeholder over a thin white circle for contrast.
+  drawLogo(doc, logoUrl, lx, (bannerH - sizePx) / 2, sizePx);
+
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(18 * theme.fontScale);
+  doc.setTextColor('#ffffff');
+  const wmX = theme.logoPosition === 'center' ? (A4.w / 2) : (lx + sizePx + 10);
+  const wmAlign: 'left' | 'center' = theme.logoPosition === 'center' ? 'center' : 'left';
+  doc.text((practice.name ?? 'Prefrontal Pathology Lab').toUpperCase(),
+    wmX, 24, { align: wmAlign });
+
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(9 * theme.fontScale);
+  doc.text(theme.tagline, wmX, 40, { align: wmAlign });
+
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(8 * theme.fontScale);
+  doc.setTextColor(TEXT_DIM);
+  const sub = [practice.address, practice.phone, practice.email].filter(Boolean).join('  ·  ');
+  if (sub) doc.text(sub, MARGIN_X, bannerH + 10);
+}
+
+/** Minimal preset — text-only. No logo, no accent bar. */
+function drawLetterheadMinimal(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(16 * theme.fontScale);
+  doc.setTextColor(BLACK);
+  const align: 'left' | 'center' | 'right' = theme.logoPosition === 'center' ? 'center'
+                                            : theme.logoPosition === 'right'  ? 'right' : 'left';
+  const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
+  doc.text((practice.name ?? 'Prefrontal Pathology Lab').toUpperCase(), x, MARGIN_TOP + 14, { align });
+
+  doc.setFont(PDF_FONT, 'normal');
+  doc.setFontSize(9 * theme.fontScale);
+  doc.setTextColor(TEXT_DIM);
+  doc.text(theme.tagline, x, MARGIN_TOP + 26, { align });
+  const sub = [practice.address, practice.phone, practice.email, practice.website].filter(Boolean).join('  ·  ');
+  if (sub) doc.text(sub, x, MARGIN_TOP + 38, { align });
+}
+
+/** Compute the left-X coordinate for the logo group based on the
+ *  template's logoPosition. */
+function logoXFor(sizePx: number): number {
+  if (theme.logoPosition === 'right') {
+    // Reserve room for the wordmark roughly proportional to the page.
+    return A4.w - MARGIN_X - sizePx - 200;
+  }
+  if (theme.logoPosition === 'center') {
+    return (A4.w - sizePx - 200) / 2;
+  }
+  return MARGIN_X;
+}
+
+/** Embed an uploaded logo (when available in IMG_CACHE) or fall back
+ *  to the parametric placeholder. Shared by all letterhead presets. */
+function drawLogo(doc: jsPDF, logoUrl: string | null, x: number, y: number, sizePx: number) {
+  const cached = logoUrl && IMG_CACHE[logoUrl];
+  if (cached) {
+    try {
+      doc.addImage(cached, 'PNG', x, y, sizePx, sizePx, undefined, 'FAST');
+      return;
+    } catch { /* fall through to placeholder */ }
+  }
+  drawLogoPlaceholderAt(doc, x, y, sizePx);
+}
+
+/** Same as drawLogoPlaceholder but at an explicit (x, y) — needed for
+ *  centered / right-aligned presets. */
+function drawLogoPlaceholderAt(doc: jsPDF, x: number, y: number, sizePx: number) {
+  const r = sizePx / 2;
+  const cx = x + r;
+  const cy = y + r;
+  doc.setFillColor(BLUE);
+  doc.circle(cx, cy, r, 'F');
+  const arm = sizePx * 0.45;
+  const thick = Math.max(1.5, sizePx * 0.08);
+  doc.setFillColor('#ffffff');
+  doc.rect(cx - thick / 2, cy - arm / 2, thick, arm, 'F');
+  doc.rect(cx - arm / 2, cy - thick / 2, arm, thick, 'F');
+}
+
+/** Optional thin accent band beneath the letterhead with a "website"
+ *  pill on the right. Shared by drlogy + centered presets. */
+function drawTopAccentBar(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
   const bandY = MARGIN_TOP + 54;
+  if (!theme.topAccentBar) return;
   doc.setFillColor(BLUE);
   doc.rect(MARGIN_X, bandY, A4.w - 2 * MARGIN_X, 4, 'F');
 
   if (practice.website) {
-    // Small white pill on the right with the website text in blue.
     const w = doc.getTextWidth(practice.website) + 12;
     doc.setFillColor('#ffffff');
     doc.rect(A4.w - MARGIN_X - w, bandY - 3, w, 12, 'F');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(PDF_FONT, 'bold');
     doc.setFontSize(8);
     doc.setTextColor(BLUE);
     doc.text(practice.website, A4.w - MARGIN_X - 6, bandY + 5.5, { align: 'right' });
@@ -257,6 +707,23 @@ function drawPatientBlock(
   snap: ReportSnapshot,
   report: ReportPdfInput['report']
 ): number {
+  // Dispatch to the chosen patient-block layout. All three renderers
+  // share the same external contract: take snapshot + report, return
+  // the cursor Y after the block.
+  switch (theme.patientLayout) {
+    case 'four-col-grid': return drawPatientBlockFourCol(doc, snap, report);
+    case 'stacked':       return drawPatientBlockStacked(doc, snap, report);
+    case 'three-col':
+    default:              return drawPatientBlockThreeCol(doc, snap, report);
+  }
+}
+
+/** Patient-block: three-column Drlogy layout (default). */
+function drawPatientBlockThreeCol(
+  doc: jsPDF,
+  snap: ReportSnapshot,
+  report: ReportPdfInput['report']
+): number {
   const top = MARGIN_TOP + 70;
   const blockH = 80;
   const w = A4.w - 2 * MARGIN_X;
@@ -264,7 +731,6 @@ function drawPatientBlock(
   const col2W = w * 0.36;
   const col3W = w * 0.28;
 
-  // Top + bottom hairlines (no background fill — Drlogy style)
   doc.setDrawColor(HAIR);
   doc.setLineWidth(0.5);
   doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
@@ -277,12 +743,12 @@ function drawPatientBlock(
   // ── Col 1 — Patient identity ──
   const x1 = MARGIN_X + 10;
   let y = top + 18;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(13);
   doc.setTextColor(BLACK);
   doc.text(snap.patient?.displayName ?? '—', x1, y);
   y += 16;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(BLACK);
   if (snap.patient?.age != null) {
@@ -301,7 +767,7 @@ function drawPatientBlock(
   // ── Col 2 — Specimens collected + Ref doctor ──
   const x2 = MARGIN_X + col1W + 10;
   y = top + 18;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(BLUE);
   doc.text('Specimen(s) :', x2, y);
@@ -316,7 +782,7 @@ function drawPatientBlock(
       .map(t => (t.sampleType ?? '').trim())
       .filter(s => s.length > 0)
   ));
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(BLACK);
   if (specimens.length > 0) {
@@ -330,12 +796,12 @@ function drawPatientBlock(
   }
 
   if (snap.order?.refDoctorName) {
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(PDF_FONT, 'normal');
     doc.setFontSize(9);
     doc.setTextColor(BLACK);
     doc.text('Ref. By: ', x2, y);
     const refW = doc.getTextWidth('Ref. By: ');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(PDF_FONT, 'bold');
     doc.text(snap.order.refDoctorName, x2 + refW, y);
   }
 
@@ -343,32 +809,151 @@ function drawPatientBlock(
   const x3 = MARGIN_X + col1W + col2W + 10;
   y = top + 14;
   // Tiny barcode-style placeholder: a row of black bars to evoke a barcode.
-  drawBarcodePlaceholder(doc, x3, y, col3W - 20, 18);
+  if (theme.showBarcode) {
+    drawBarcodePlaceholder(doc, x3, y, col3W - 20, 18);
+  }
   // Sample ID number under the barcode
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(BLACK);
   const barcodeText = pid || (report.id.replace(/-/g, '').slice(-12).toUpperCase());
   doc.text(barcodeText, x3 + (col3W - 20) / 2, y + 26, { align: 'center' });
   y += 36;
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(BLACK);
   const drawTimeLine = (label: string, value: string) => {
     if (!value) return;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(PDF_FONT, 'normal');
     doc.text(label, x3, y);
     const labelW = doc.getTextWidth(label);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(PDF_FONT, 'bold');
     doc.text(value, x3 + labelW + 2, y);
     y += 11;
   };
-  drawTimeLine('Registered on: ', formatShort(snap.order?.createdAt));
-  drawTimeLine('Collected on: ',  formatShort(snap.order?.createdAt));
-  drawTimeLine('Reported on: ',   formatShort(report.createdAt));
+  if (theme.showRegistered) drawTimeLine('Registered on: ', formatShort(snap.order?.createdAt));
+  if (theme.showCollected)  drawTimeLine('Collected on: ',  formatShort(snap.order?.createdAt));
+  if (theme.showReported)   drawTimeLine('Reported on: ',   formatShort(report.createdAt));
 
   return top + blockH;
+}
+
+/** Patient-block: 4-column labelled grid (compact, label-above-value).
+ *  Two rows of four cells each. No vertical separators — the labels
+ *  themselves act as visual anchors. Best when the lab wants a more
+ *  "form" feel than the Drlogy 3-column block. */
+function drawPatientBlockFourCol(
+  doc: jsPDF,
+  snap: ReportSnapshot,
+  report: ReportPdfInput['report']
+): number {
+  const top = MARGIN_TOP + 70;
+  const blockH = 76;
+  const w = A4.w - 2 * MARGIN_X;
+  const colW = w / 4;
+  const pid = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
+  const ageSex = [
+    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snap.patient?.sex ?? ''
+  ].filter(Boolean).join(' / ');
+  const specimens = Array.from(new Set(
+    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s.length > 0)
+  )).join(', ');
+
+  doc.setFillColor('#f8fafc');
+  doc.setDrawColor(HAIR);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'FD');
+
+  const cells: { label: string; value: string }[][] = [
+    [
+      { label: 'PATIENT', value: snap.patient?.displayName ?? '—' },
+      { label: 'PATIENT ID', value: pid ? `#${pid}` : '—' },
+      { label: 'AGE / SEX', value: ageSex || '—' },
+      { label: 'REF DOCTOR', value: snap.order?.refDoctorName ?? 'Self' },
+    ],
+    [
+      { label: 'PHONE', value: snap.patient?.phone ?? '—' },
+      { label: 'COLLECTED', value: formatShort(snap.order?.createdAt) || '—' },
+      { label: 'REPORTED', value: formatShort(report.createdAt) || '—' },
+      { label: 'SAMPLE(S)', value: specimens || '—' },
+    ],
+  ];
+
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 4; c++) {
+      const x = MARGIN_X + c * colW + 10;
+      const y = top + r * (blockH / 2) + 13;
+      doc.setFont(PDF_FONT, 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(TEXT_DIM);
+      doc.text(cells[r][c].label, x, y);
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(TEXT);
+      const fit = doc.splitTextToSize(cells[r][c].value, colW - 20)[0] ?? cells[r][c].value;
+      doc.text(fit, x, y + 12);
+    }
+  }
+  // Faint vertical separators between cells
+  doc.setDrawColor(HAIR);
+  for (let c = 1; c < 4; c++) {
+    const x = MARGIN_X + c * colW;
+    doc.line(x, top + 6, x, top + blockH - 6);
+  }
+  return top + blockH;
+}
+
+/** Patient-block: stacked single-column. Each labelled row spans the
+ *  full width on its own line. Best for small labs that want a clean
+ *  "letter" feel and aren't worried about real-estate. */
+function drawPatientBlockStacked(
+  doc: jsPDF,
+  snap: ReportSnapshot,
+  report: ReportPdfInput['report']
+): number {
+  const top = MARGIN_TOP + 70;
+  const pid = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
+  const ageSex = [
+    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snap.patient?.sex ?? ''
+  ].filter(Boolean).join(' / ');
+  const specimens = Array.from(new Set(
+    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s.length > 0)
+  )).join(', ');
+
+  const rows: { label: string; value: string }[] = [];
+  rows.push({ label: 'Patient name', value: snap.patient?.displayName ?? '—' });
+  rows.push({ label: 'Age / Sex',    value: ageSex || '—' });
+  if (pid) rows.push({ label: 'Patient ID',  value: `#${pid}` });
+  if (theme.showAbhaId) rows.push({ label: 'ABHA ID', value: '—' });
+  if (snap.patient?.phone) rows.push({ label: 'Phone', value: snap.patient.phone });
+  if (snap.order?.refDoctorName) rows.push({ label: 'Ref Doctor', value: snap.order.refDoctorName });
+  if (specimens) rows.push({ label: 'Specimens', value: specimens });
+  if (theme.showRegistered) rows.push({ label: 'Registered on', value: formatShort(snap.order?.createdAt) });
+  if (theme.showCollected)  rows.push({ label: 'Collected on',  value: formatShort(snap.order?.createdAt) });
+  if (theme.showReported)   rows.push({ label: 'Reported on',   value: formatShort(report.createdAt) });
+
+  doc.setDrawColor(HAIR);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+
+  let y = top + 16;
+  const labelW = 110;
+  rows.forEach(row => {
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(`${row.label} :`, MARGIN_X, y);
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(TEXT);
+    doc.text(row.value, MARGIN_X + labelW, y);
+    y += 14;
+  });
+  doc.line(MARGIN_X, y + 2, A4.w - MARGIN_X, y + 2);
+  return y + 6;
 }
 
 /** Cheap visual stand-in for a Code-128 barcode — black bars of
@@ -430,7 +1015,7 @@ function renderResolvedTest(
 
 /** Drlogy-style centered uppercase test name. */
 function drawTestHeading(doc: jsPDF, name: string, y: number) {
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(13);
   doc.setTextColor(BLACK);
   doc.text(name.toUpperCase(), A4.w / 2, y + 14, { align: 'center' });
@@ -461,9 +1046,15 @@ function renderGridSection(
   if (rows.length === 0) return startY;
   const bodyRows = rows.filter(r => !r.isMerged);
 
-  // ── Step 1. Drop columns that are empty across every body row ──
-  // (specimen-as-text with no template ends up as "" — gone.)
+  // ── Step 1. Drop only TEXT-type columns that are empty across every
+  //          body row (e.g. an unused "Specimen" column). Typed columns
+  //          (result/unit/range/flag) are KEPT even when empty so a
+  //          test missing unit/ref-range data doesn't accidentally
+  //          remove those header columns — a lab report without a
+  //          "Reference Range" column looks broken even if a single
+  //          test happens to have no range data. ──
   const liveColumns: ReportColumn[] = layout.columns.filter(c => {
+    if (c.type !== 'text') return true; // keep typed columns always
     if (bodyRows.length === 0) return true;
     return bodyRows.some(r => {
       const v = r.cells[c.name];
@@ -490,21 +1081,27 @@ function renderGridSection(
     return !layoutAlreadyShowsName;
   })();
 
+  // ── Step 2b. Reorder columns to Drlogy convention: Result, Reference,
+  //           Unit. Default server layouts return result/unit/range, but
+  //           lab reports conventionally read Result → Reference → Unit
+  //           (so the value and its acceptable range stay adjacent). ──
+  const orderedCols = drlogyOrderedColumns(cols);
+
   // ── Step 3. Compute widths in pts (Drlogy uses generous Investigation, narrow Unit) ──
   const usable = A4.w - 2 * MARGIN_X;
   const investWidth = showInvestigation ? 0.32 * usable : 0;
   const remaining = usable - investWidth;
-  const totalPct = cols.reduce((s, c) => s + c.width, 0) || 1;
-  const dataColWidths = cols.map(c => (c.width / totalPct) * remaining);
+  const totalPct = orderedCols.reduce((s, c) => s + c.width, 0) || 1;
+  const dataColWidths = orderedCols.map(c => (c.width / totalPct) * remaining);
 
   // ── Step 4. Build head + body ──
   type RowCell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const head: RowCell[][] = [[
     ...(showInvestigation ? [{ content: 'Investigation', styles: { halign: 'left' as const } }] : []),
-    ...cols.map((c, i) => ({ content: titleCaseHeader(c.label), styles: { halign: (i === 0 && !showInvestigation ? 'left' : alignFor(c.type)) as 'left' | 'right' | 'center' } })),
+    ...orderedCols.map((c, i) => ({ content: drlogyLabelFor(c), styles: { halign: (i === 0 && !showInvestigation ? 'left' : alignFor(c.type)) as 'left' | 'right' | 'center' } })),
   ]];
 
-  const totalCols = (showInvestigation ? 1 : 0) + cols.length;
+  const totalCols = (showInvestigation ? 1 : 0) + orderedCols.length;
   // Prefer the snapshot's sampleType when present; otherwise fall back
   // to the layout's sampleType (which the engine fills from the test's
   // Parameters JSON). This lets older reports — whose snapshot was
@@ -536,7 +1133,7 @@ function renderGridSection(
       ? [{ content: investContent, styles: { fontStyle: 'bold', textColor: BLACK, fontSize: 9 } }]
       : [];
 
-    const dataCells: RowCell[] = cols.map(c => {
+    const dataCells: RowCell[] = orderedCols.map(c => {
       const value = r.cells[c.name] ?? '';
       const styles: Record<string, unknown> = {};
       if (c.type === 'result') {
@@ -550,7 +1147,7 @@ function renderGridSection(
       }
       // If this is the result column and the row is colored, render
       // "value  High/Low" inline (Drlogy pattern) instead of a separate flag col.
-      if (c.type === 'result' && r.color && !showsFlagColumn(cols)) {
+      if (c.type === 'result' && r.color && !showsFlagColumn(orderedCols)) {
         const tag = flagLabel(r);
         if (tag) {
           return { content: `${value}    ${tag}`, styles };
@@ -569,7 +1166,7 @@ function renderGridSection(
   if (showInvestigation) {
     columnStyles[idx++] = { cellWidth: investWidth, halign: 'left' };
   }
-  cols.forEach((c, i) => {
+  orderedCols.forEach((c, i) => {
     columnStyles[idx++] = { cellWidth: dataColWidths[i], halign: alignFor(c.type) };
   });
 
@@ -579,28 +1176,46 @@ function renderGridSection(
     body: body as unknown as Array<Array<string | RowCell>>,
     margin: { left: MARGIN_X, right: MARGIN_X },
     theme: 'plain',
-    styles: {
-      font: 'helvetica',
-      fontSize: 9,
-      cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
-      textColor: TEXT,
-      lineColor: HAIR,
-      lineWidth: 0,
-    },
-    headStyles: {
-      fillColor: '#ffffff',
-      textColor: BLACK,
-      fontStyle: 'bold',
-      fontSize: 10,
-      halign: 'left',
-      cellPadding: { top: 4, right: 6, bottom: 8, left: 6 },
-      lineColor: HAIR,
-      lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } as unknown as number,
-    },
-    bodyStyles: { fillColor: '#ffffff' },
+    styles: tableBodyStyles(),
+    headStyles: tableHeadStyles(),
+    bodyStyles: { fillColor: theme.tableHeaderBg === '#ffffff' ? '#ffffff' : '#ffffff' },
+    alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
     columnStyles: columnStyles as unknown as Record<number, { cellWidth: number }>,
   });
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+}
+
+/** Shared body styles for both grid + legacy tables. Honours the
+ *  template's font family, font scale, and divider colour, and switches
+ *  to bordered lines when tableStyle === 'bordered'. */
+function tableBodyStyles() {
+  const bordered = theme.tableStyle === 'bordered';
+  return {
+    font: PDF_FONT,
+    fontSize: 9 * theme.fontScale,
+    cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+    textColor: TEXT,
+    lineColor: HAIR,
+    lineWidth: bordered ? 0.4 : 0,
+  };
+}
+
+/** Shared head styles: template-driven bg/text colours; falls through
+ *  to the white-bg + hairline-under-header look when no admin overrides. */
+function tableHeadStyles() {
+  const bordered = theme.tableStyle === 'bordered';
+  return {
+    fillColor: theme.tableHeaderBg,
+    textColor: theme.tableHeaderText,
+    fontStyle: 'bold' as const,
+    fontSize: 10 * theme.fontScale,
+    halign: 'left' as const,
+    cellPadding: { top: 4, right: 6, bottom: 8, left: 6 },
+    lineColor: HAIR,
+    lineWidth: bordered
+      ? 0.4
+      : ({ top: 0, right: 0, bottom: 0.5, left: 0 } as unknown as number),
+  };
 }
 
 /** True if the layout includes any flag-type column. When it does, the
@@ -613,7 +1228,7 @@ function showsFlagColumn(cols: ReportColumn[]): boolean {
 function renderParagraphSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const text = sec.content ?? '';
   if (!text.trim()) return startY;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(TEXT);
   const usable = A4.w - 2 * MARGIN_X;
@@ -630,7 +1245,7 @@ function renderParagraphSection(doc: jsPDF, sec: ResolvedSection, startY: number
 function renderImageSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const urls = sec.imageUrls ?? [];
   if (urls.length === 0) return startY;
-  doc.setFont('helvetica', 'italic');
+  doc.setFont(PDF_FONT, 'italic');
   doc.setFontSize(8.5);
   doc.setTextColor(TEXT_DIM);
   doc.text(`[ ${urls.length} attached image${urls.length === 1 ? '' : 's'} ]`, MARGIN_X, startY + 11);
@@ -664,7 +1279,7 @@ function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): n
     doc.rect(mx - 1.5, barY - 3, 3, barH + 6, 'F');
   }
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8);
   doc.setTextColor(TEXT_DIM);
   doc.text(String(chart.min), barX, barY + barH + 12);
@@ -726,25 +1341,10 @@ function renderLegacyTest(
     body: tableRows as unknown as Array<Array<string | LCell>>,
     margin: { left: MARGIN_X, right: MARGIN_X },
     theme: 'plain',
-    styles: {
-      font: 'helvetica',
-      fontSize: 9,
-      cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
-      textColor: TEXT,
-      lineColor: HAIR,
-      lineWidth: 0,
-    },
-    headStyles: {
-      fillColor: '#ffffff',
-      textColor: BLACK,
-      fontStyle: 'bold',
-      fontSize: 10,
-      halign: 'left',
-      cellPadding: { top: 4, right: 6, bottom: 8, left: 6 },
-      lineColor: HAIR,
-      lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 } as unknown as number,
-    },
+    styles: tableBodyStyles(),
+    headStyles: tableHeadStyles(),
     bodyStyles: { fillColor: '#ffffff' },
+    alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
     columnStyles: {
       0: { cellWidth: 180 },
       1: { cellWidth: 130, fontStyle: 'bold' },
@@ -761,12 +1361,16 @@ function renderLegacyTest(
 
 function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number) {
   const y = startY + 12;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(BLACK);
   doc.text('Thanks for Reference', MARGIN_X, y);
-  doc.text(snap.isPartial ? '****End of Preliminary Report****' : '****End of Report****',
-    A4.w / 2, y, { align: 'center' });
+  // Admin-configurable marker — defaults to "****End of Report****".
+  // Preliminary reports get an explicit "PRELIMINARY" wrapper.
+  const marker = snap.isPartial
+    ? `**** End of Preliminary Report ****`
+    : theme.endOfReportText;
+  doc.text(marker, A4.w / 2, y, { align: 'center' });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -796,58 +1400,126 @@ function drawSigFooterPage(
   const sigsW = A4.w - 2 * MARGIN_X;
   const colW = sigsW / 3;
 
-  // Cursive-script signature placeholder (faint grey)
-  const sigPaths: { name?: string; title?: string }[] = [
-    { name: practice.sigLabTechName,      title: practice.sigLabTechTitle      },
-    { name: practice.sigPathologist1Name, title: practice.sigPathologist1Title },
-    { name: practice.sigPathologist2Name, title: practice.sigPathologist2Title },
-  ];
+  // Prefer template-supplied signatures (admin-editable JSON array); the
+  // legacy flat practice shape is the fallback when no template is set.
+  const sigs: ReportSignature[] = theme.signatures.length > 0
+    ? theme.signatures.slice(0, 3)
+    : [
+        { name: practice.sigLabTechName,      title: practice.sigLabTechTitle      },
+        { name: practice.sigPathologist1Name, title: practice.sigPathologist1Title },
+        { name: practice.sigPathologist2Name, title: practice.sigPathologist2Title },
+      ];
 
-  sigPaths.forEach((s, i) => {
-    if (!s.name) return;
+  sigs.forEach((s, i) => {
+    if (!s.name && !s.signatureUrl) return;
     const cx = MARGIN_X + i * colW;
     const px = cx + colW / 2;
-    // Faint scribble line as a signature placeholder
-    doc.setDrawColor(TEXT_DIM);
-    doc.setLineWidth(0.6);
     const baseY = sigY;
-    doc.line(px - 22, baseY,     px - 14, baseY - 6);
-    doc.line(px - 14, baseY - 6, px - 4,  baseY + 4);
-    doc.line(px - 4,  baseY + 4, px + 6,  baseY - 4);
-    doc.line(px + 6,  baseY - 4, px + 18, baseY + 2);
+    // Signature image upload (pre-fetched into IMG_CACHE) wins; without one
+    // we draw the faint scribble placeholder so the column still reads as
+    // a sign-off zone.
+    const cachedSig = s.signatureUrl ? IMG_CACHE[s.signatureUrl] : null;
+    if (cachedSig) {
+      try {
+        const sigW = 70, sigH = 24;
+        doc.addImage(cachedSig, 'PNG', px - sigW / 2, baseY - sigH + 4, sigW, sigH, undefined, 'FAST');
+      } catch {
+        drawSigScribble(doc, px, baseY);
+      }
+    } else {
+      drawSigScribble(doc, px, baseY);
+    }
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(BLACK);
-    doc.text(s.name, px, baseY + 18, { align: 'center' });
+    if (s.name) {
+      doc.setFont(PDF_FONT, 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(BLACK);
+      doc.text(s.name, px, baseY + 18, { align: 'center' });
+    }
 
     if (s.title) {
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(PDF_FONT, 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(TEXT_DIM);
       doc.text(`(${s.title})`, px, baseY + 30, { align: 'center' });
     }
+    if (s.regNo) {
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(TEXT_DIM);
+      doc.text(`Reg. ${s.regNo}`, px, baseY + 40, { align: 'center' });
+    }
   });
+
+  // Disclaimer + footer text — left-aligned just above the date strip.
+  // Only on the last page so it doesn't repeat ad nauseam on multi-page
+  // reports.
+  if (pageNo === pageTotal) {
+    let extraY = A4.h - 46;
+    if (theme.disclaimer) {
+      doc.setFont(PDF_FONT, 'italic');
+      doc.setFontSize(7);
+      doc.setTextColor(TEXT_DIM);
+      const lines = doc.splitTextToSize(theme.disclaimer, A4.w - 2 * MARGIN_X);
+      for (let i = Math.min(lines.length, 2) - 1; i >= 0; i--) {
+        doc.text(lines[i], MARGIN_X, extraY);
+        extraY -= 9;
+      }
+    }
+    if (theme.footerText) {
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(TEXT_DIM);
+      doc.text(theme.footerText, MARGIN_X, extraY);
+    }
+  }
 
   // Bottom strip: "Generated on : <date>" on the left, "Page N of M" on the right
   doc.setDrawColor(HAIR);
   doc.setLineWidth(0.4);
   doc.line(MARGIN_X, A4.h - 30, A4.w - MARGIN_X, A4.h - 30);
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8);
   doc.setTextColor(BLACK);
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
   doc.text(`Page ${pageNo} of ${pageTotal}`, A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
-  // Blue band at the bottom (Drlogy "Sample Collection" strip)
-  if (snap.patient?.phone) {
+  // Blue band at the bottom (Drlogy "Sample Collection" strip).
+  // Admin toggles via template.showSampleCollectionBand.
+  if (theme.showSampleBand && snap.patient?.phone) {
     doc.setFillColor(BLUE);
     doc.rect(0, A4.h - 12, A4.w, 12, 'F');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(PDF_FONT, 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor('#ffffff');
     doc.text(`Sample Collection  ${snap.patient.phone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
+  }
+
+  // Optional Powered-by footnote (last page only)
+  if (theme.showPoweredBy && pageNo === pageTotal && !theme.showSampleBand) {
+    doc.setFont(PDF_FONT, 'italic');
+    doc.setFontSize(7);
+    doc.setTextColor(TEXT_DIM);
+    doc.text('Powered by Prefrontal LMS', A4.w / 2, A4.h - 4, { align: 'center' });
+  }
+
+  // Optional watermark — drawn behind everything (this runs per-page).
+  if (theme.watermarkText && pageNo === 1) {
+    const wm = theme.watermarkText;
+    const op = theme.watermarkOpacity;
+    // jsPDF doesn't expose a true alpha for text directly without GState;
+    // emulate via a very light grey color computed from the opacity.
+    const lighten = (1 - op) * 255;
+    const grey = Math.round(lighten).toString(16).padStart(2, '0');
+    const wmColor = `#${grey}${grey}${grey}`;
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setFontSize(48);
+    doc.setTextColor(wmColor);
+    // Rotate 30deg around page center
+    const cx = A4.w / 2;
+    const cy = A4.h / 2;
+    doc.text(wm, cx, cy, { align: 'center', angle: 30 });
   }
 }
 
@@ -868,6 +1540,39 @@ function alignFor(type: string): 'left' | 'right' | 'center' {
   if (type === 'result') return 'left';
   if (type === 'unit' || type === 'range') return 'left';
   return 'left';
+}
+
+/** Reorder a column list into the conventional Drlogy lab-report
+ *  arrangement: result first, then reference range (right next to the
+ *  value so the eye can compare them), then unit. Text/flag columns
+ *  preserve their original relative position around the typed core. */
+function drlogyOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
+  // Build a position map so non-typed columns retain their relative order
+  // (e.g. an admin-added "Method" text column stays after the unit, where
+  // they placed it).
+  const result = cols.find(c => c.type === 'result');
+  const range  = cols.find(c => c.type === 'range');
+  const unit   = cols.find(c => c.type === 'unit');
+  const flag   = cols.find(c => c.type === 'flag');
+  if (!result && !range && !unit) return cols;
+  const typedSet = new Set<ReportColumn>([result, range, unit, flag].filter(Boolean) as ReportColumn[]);
+  const ordered: ReportColumn[] = [];
+  if (result) ordered.push(result);
+  if (range)  ordered.push(range);
+  if (unit)   ordered.push(unit);
+  if (flag)   ordered.push(flag);
+  // Append any remaining (text) columns in their original order.
+  cols.forEach(c => { if (!typedSet.has(c)) ordered.push(c); });
+  return ordered;
+}
+
+/** Drlogy-style column header label. Renames the server's "Reference
+ *  range" to "Reference Value" (the term Drlogy uses on its PDFs);
+ *  falls back to title-casing the layout's original label for anything
+ *  custom. */
+function drlogyLabelFor(c: ReportColumn): string {
+  if (c.type === 'range') return 'Reference Value';
+  return titleCaseHeader(c.label);
 }
 
 function titleCaseHeader(label: string): string {
@@ -919,17 +1624,43 @@ function groupBy<T>(items: T[], keyFn: (t: T) => string): Map<string, T[]> {
   return out;
 }
 
-/** "02:31 PM 02 Dec, 2X" — Drlogy short stamp style. */
+/** Admin-configurable date/time stamp. Token-based formatting (NOT .NET):
+ *   'dd MMM yyyy'   → "14 May 2026"
+ *   'dd/MM/yyyy'    → "14/05/2026"
+ *   'MMM dd, yyyy'  → "May 14, 2026"
+ *   'yyyy-MM-dd'    → "2026-05-14"
+ *   Time format: 'none' | '12h' (e.g. "10:59 PM") | '24h' (e.g. "22:59").
+ *   Joined by `theme.dateTimeSeparator` when both shown. */
 function formatShort(iso: string | undefined | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  const hh = String(h).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  return `${hh}:${m} ${ampm} ${dd} ${months[d.getMonth()]}, ${d.getFullYear()}`;
+  const mmNum = String(d.getMonth() + 1).padStart(2, '0');
+  const mmm = months[d.getMonth()];
+  const yyyy = String(d.getFullYear());
+
+  let datePart: string;
+  switch (theme.dateFormat) {
+    case 'dd/MM/yyyy':   datePart = `${dd}/${mmNum}/${yyyy}`; break;
+    case 'MMM dd, yyyy': datePart = `${mmm} ${dd}, ${yyyy}`;  break;
+    case 'yyyy-MM-dd':   datePart = `${yyyy}-${mmNum}-${dd}`; break;
+    case 'dd MMM yyyy':
+    default:             datePart = `${dd} ${mmm} ${yyyy}`;
+  }
+
+  if (theme.timeFormat === 'none') return datePart;
+
+  const min = String(d.getMinutes()).padStart(2, '0');
+  let timePart: string;
+  if (theme.timeFormat === '24h') {
+    timePart = `${String(d.getHours()).padStart(2, '0')}:${min}`;
+  } else {
+    let h = d.getHours();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    timePart = `${String(h).padStart(2, '0')}:${min} ${ampm}`;
+  }
+  return `${datePart}${theme.dateTimeSeparator}${timePart}`;
 }
