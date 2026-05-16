@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { Location, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -1283,6 +1283,7 @@ export class OrderCreateComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly locationSvc = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
 
   private readonly _patient = signal<Patient | null>(null);
@@ -1317,12 +1318,39 @@ export class OrderCreateComponent implements OnInit {
     const q = this._query().trim().toLowerCase();
     const list = this.individualTests();
     if (!q) return list;
-    return list.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      (t.hsnSacCode ?? '').toLowerCase().includes(q) ||
-      (t.department?.name ?? '').toLowerCase().includes(q)
-    );
+    // Common spelling divergences. US "hematology" wouldn't match the
+    // British "haematology" stored in the dept catalogue otherwise; same
+    // for paediatric / pediatric, anaesthesia / anesthesia. Expand the
+    // query into all known variants and match if ANY hit.
+    const variants = this.spellingVariants(q);
+    return list.filter(t => {
+      const hay = [
+        t.name,
+        t.hsnSacCode ?? '',
+        t.department?.name ?? ''
+      ].join(' ').toLowerCase();
+      return variants.some(v => hay.includes(v));
+    });
   });
+
+  /** Generate US/UK spelling variants of a search string so the catalogue
+   *  matches regardless of which spelling the lab catalogue or the user
+   *  typed. Cheap substring substitution; not a full medical thesaurus. */
+  private spellingVariants(q: string): string[] {
+    const swaps: Array<[string, string]> = [
+      ['hema',   'haema'],   // hematology ↔ haematology
+      ['pedia',  'paedia'],  // pediatric ↔ paediatric
+      ['anesth', 'anaesth'], // anesthesia ↔ anaesthesia
+      ['fetal',  'foetal'],  // fetal ↔ foetal
+      ['leuk',   'leuc'],    // leukocyte ↔ leucocyte
+    ];
+    const out = new Set<string>([q]);
+    for (const [us, uk] of swaps) {
+      if (q.includes(us)) out.add(q.replace(us, uk));
+      if (q.includes(uk)) out.add(q.replace(uk, us));
+    }
+    return Array.from(out);
+  }
 
   /** Tests grouped by department, sorted by dept name. "(No department)"
    *  is a catch-all bucket so unclassified tests still render. Used by the
@@ -1437,27 +1465,42 @@ export class OrderCreateComponent implements OnInit {
     // handles selection in-page.
     const pid = this.route.snapshot.queryParamMap.get('patientId');
     const fromOrderId = this.route.snapshot.queryParamMap.get('fromOrderId');
+    const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
     if (pid) {
-      // The /api/patients/{id} response is now an enriched shape with bills
-      // and reports per history row, but for this screen we still only need
-      // the patient object — destructure with `unknown` history to stay
-      // schema-tolerant.
       this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
         next: res => {
           this._patient.set(res.patient);
-          // 1) Try restoring a saved draft for this patient. If found,
-          //    restore the cart + priority from localStorage.
-          // 2) Otherwise, if fromOrderId is set, preselect from the
-          //    prior order (Repeat flow).
+          // Preselection priority:
+          //   1) localStorage draft for this patient
+          //   2) ?fromOrderId=… (Repeat flow from a prior order)
+          //   3) ?appointmentId=… → fetch the appointment's draft TestIds
+          //      and pre-load them into the cart (reception just clicks Create)
           const restored = this.restoreDraftFor(pid);
-          if (!restored && fromOrderId) {
+          if (restored) return;
+          if (fromOrderId) {
             const prior = (res.history ?? []).find(h => h.id === fromOrderId);
-            if (prior) this.preselectFromOrder(prior);
+            if (prior) { this.preselectFromOrder(prior); return; }
           }
+          if (appointmentId) this.preselectFromAppointment(appointmentId);
         },
         error: () => this.toasts.error('Could not load patient')
       });
     }
+  }
+
+  /** Hydrate the cart from an appointment's draft TestIds (CSV stored on
+   *  AppointmentEntity.TestIds during booking). */
+  private preselectFromAppointment(appointmentId: string) {
+    this.api.get<{ id: string; testIds?: string | null } | null>(`/api/appointments/${appointmentId}`).subscribe({
+      next: appt => {
+        const csv = appt?.testIds ?? '';
+        const ids = csv.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (ids.length === 0) return;
+        this._selected.set(ids);
+        this.toasts.info(`Pre-filled ${ids.length} test${ids.length === 1 ? '' : 's'} from the appointment`);
+      },
+      error: () => { /* soft-fail */ }
+    });
   }
 
   /** Save the current cart to localStorage under the patient's id.
@@ -1474,6 +1517,11 @@ export class OrderCreateComponent implements OnInit {
       }));
       this._hasDraft.set(true);
       this.toasts.success('Saved as draft');
+      // After saving there's nothing left to do here — return to FD so
+      // reception can pick up the next patient. The draft survives in
+      // localStorage and the next /frontdesk/order visit for the same
+      // patient restores it automatically.
+      this.router.navigateByUrl('/frontdesk');
     } catch {
       this.toasts.error('Could not save draft (storage full?)');
     }
@@ -1610,7 +1658,10 @@ export class OrderCreateComponent implements OnInit {
   // Canonical flow: Home → patient history → New order (lands here with
   // ?patientId=). "Change" on the attached patient tile bounces back to
   // Home so the user can pick a different one from their records.
-  changePatient() { this.goHome(); }
+  changePatient() {
+    this._patient.set(null);
+    this.router.navigate([], { queryParams: { patientId: null }, queryParamsHandling: 'merge' });
+  }
   goHome() { this.router.navigateByUrl('/frontdesk'); }
 
   submit() {
@@ -1656,7 +1707,10 @@ export class OrderCreateComponent implements OnInit {
     });
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  back() {
+    if (window.history.length > 1) this.locationSvc.back();
+    else this.router.navigateByUrl('/frontdesk');
+  }
 }
 
 /** Suggestion shown above the cart when picked individual tests are
