@@ -743,11 +743,13 @@ export class ReportQueueComponent implements OnInit {
    *  rows, paragraphs, charts). */
   async downloadPdf(r: Report) {
     try {
-      const [{ generateReportPdf }, { ReportLayoutService }] = await Promise.all([
+      const [{ generateReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
         import('../../../shared/utils/report-pdf'),
-        import('../../../core/services/report-layout.service')
+        import('../../../core/services/report-layout.service'),
+        import('../../../core/services/platform.service'),
       ]);
       const svc = this.injector.get(ReportLayoutService);
+      const platform = this.injector.get(PlatformService);
       const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
 
       let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
@@ -756,18 +758,30 @@ export class ReportQueueComponent implements OnInit {
         tests = snap?.tests ?? [];
       } catch { /* malformed snapshot — render PDF without layouts */ }
 
-      await Promise.all(tests.map(async t => {
-        if (!t.testId) return;
-        try {
-          resolvedLayouts[t.testId] = await svc.preview(
-            t.testId,
-            (t.result?.values ?? {}) as Record<string, unknown>,
-            []
-          );
-        } catch { /* test without a configured layout — fallback table */ }
-      }));
+      // Fetch the tenant's template + resolved layouts in parallel.
+      // The template carries all the admin-tunable chrome (colors, logo,
+      // signatures, date format, etc.) — without it the PDF would
+      // render with the hardcoded Drlogy defaults instead of the
+      // saved customization.
+      const [template] = await Promise.all([
+        this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
+        ...tests.map(async t => {
+          if (!t.testId) return;
+          try {
+            resolvedLayouts[t.testId] = await svc.preview(
+              t.testId,
+              (t.result?.values ?? {}) as Record<string, unknown>,
+              []
+            );
+          } catch { /* test without a configured layout — fallback table */ }
+        }),
+      ]);
 
-      generateReportPdf({ report: r, resolvedLayouts });
+      // Preload uploaded images (logo / NABL / signatures) as data URLs
+      // so jsPDF can embed them — the sync renderer can't fetch on its own.
+      const baseInput = { report: r, resolvedLayouts, template: template ?? null };
+      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+      generateReportPdf({ ...baseInput, imageCache });
     } catch (err) {
       console.error('[reports] download failed', err);
       this.toasts.error('Could not download report');

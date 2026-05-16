@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
@@ -122,7 +123,10 @@ interface ReportData {
           <div class="pf-paper__masthead" [style.border-color]="tpl()?.primaryColor ?? '#1B3A6B'">
             <div class="flex items-center gap-3">
               @if (tpl()?.logoUrl && tpl()?.logoUrl !== '/logo.svg') {
-                <img [src]="tpl()?.logoUrl" alt="" class="h-12 w-12 object-contain" />
+                <!-- Uploaded logos come back as server-relative paths (/uploads/...);
+                     prepend the API base so the <img> resolves correctly. -->
+                <img [src]="resolveAsset(tpl()?.logoUrl)" alt="" class="h-12 w-12 object-contain"
+                     onerror="this.style.display='none'" />
               } @else {
                 <pf-logo-mark size="lg" variant="badge"></pf-logo-mark>
               }
@@ -152,10 +156,13 @@ interface ReportData {
               <div><dt>Ref doctor</dt><dd>{{ data()?.order?.refDoctorName }}</dd></div>
             }
             @if (tpl()?.showCollectionDate !== false && data()?.order?.createdAt) {
-              <div><dt>Collected</dt><dd>{{ data()?.order?.createdAt | date:'medium' }}</dd></div>
+              <div><dt>Collected</dt><dd>{{ formatStamp(data()?.order?.createdAt) }}</dd></div>
             }
             @if (tpl()?.showReportDate !== false) {
-              <div><dt>Reported</dt><dd>{{ r.createdAt | date:'medium' }}</dd></div>
+              <div><dt>Reported</dt><dd>{{ formatStamp(r.createdAt) }}</dd></div>
+            }
+            @if (tpl()?.showRegistered !== false && data()?.order?.createdAt) {
+              <div><dt>Registered</dt><dd>{{ formatStamp(data()?.order?.createdAt) }}</dd></div>
             }
           </dl>
 
@@ -192,11 +199,17 @@ interface ReportData {
                           }
 
                           @if (sec.type === 'grid' && sec.rows) {
+                            <!-- Visible columns = layout columns minus any whose cells
+                                 are empty across every body row. Drops the unused
+                                 "Specimen" column at render time so the table doesn't
+                                 leave a blank column behind. -->
                             <table class="pf-paper__table">
                               <thead>
                                 <tr>
-                                  @for (c of pv.columns; track c.id) {
-                                    <th [style.width.%]="c.width">{{ c.label }}</th>
+                                  @for (c of visibleColumns(pv, sec); track c.id) {
+                                    <th [style.width.%]="c.width"
+                                        [style.background]="tpl()?.tableHeaderBg ?? '#1B3A6B'"
+                                        [style.color]="tpl()?.tableHeaderText ?? '#ffffff'">{{ drlogyLabelFor(c) }}</th>
                                   }
                                 </tr>
                               </thead>
@@ -204,13 +217,13 @@ interface ReportData {
                                 @for (row of sec.rows; track row.id) {
                                   @if (row.isMerged) {
                                     <tr class="pf-paper__row pf-paper__row--merged">
-                                      <td [attr.colspan]="pv.columns.length">{{ row.mergeContent }}</td>
+                                      <td [attr.colspan]="visibleColumns(pv, sec).length">{{ row.mergeContent }}</td>
                                     </tr>
                                   } @else {
                                     <tr class="pf-paper__row"
                                         [style.color]="row.color || null"
                                         [style.font-weight]="row.isBold ? '700' : null">
-                                      @for (c of pv.columns; track c.id) {
+                                      @for (c of visibleColumns(pv, sec); track c.id) {
                                         <td>{{ row.cells[c.name] }}</td>
                                       }
                                     </tr>
@@ -741,6 +754,100 @@ export class ReportViewerComponent implements OnInit {
   resolvedFor(testId: string): ResolvedReportLayout | null {
     const r = this._resolved()[testId];
     return r && r.sections.length > 0 ? r : null;
+  }
+
+  /** Visible columns for a resolved layout section. Mirrors the PDF
+   *  renderer: (a) drop text columns whose cells are all blank (the
+   *  unused Specimen case), but KEEP typed columns (result/unit/range/
+   *  flag) so the header stays consistent across tests; (b) reorder to
+   *  the Drlogy convention `Result → Reference → Unit` so the value
+   *  and its acceptable range sit next to each other. */
+  visibleColumns(
+    pv: ResolvedReportLayout,
+    sec: ResolvedReportLayout['sections'][number]
+  ): ResolvedReportLayout['columns'] {
+    const body = (sec.rows ?? []).filter(r => !r.isMerged);
+    const filtered = pv.columns.filter(c => {
+      if (c.type !== 'text') return true;
+      if (body.length === 0) return true;
+      return body.some(r => {
+        const v = r.cells[c.name];
+        return v != null && String(v).trim() !== '';
+      });
+    });
+    const cols = filtered.length > 0 ? filtered : pv.columns;
+
+    // Reorder typed core into Drlogy convention.
+    const result = cols.find(c => c.type === 'result');
+    const range  = cols.find(c => c.type === 'range');
+    const unit   = cols.find(c => c.type === 'unit');
+    const flag   = cols.find(c => c.type === 'flag');
+    if (!result && !range && !unit) return cols;
+    const typedSet = new Set([result, range, unit, flag].filter(Boolean) as ResolvedReportLayout['columns']);
+    const ordered: ResolvedReportLayout['columns'] = [];
+    if (result) ordered.push(result);
+    if (range)  ordered.push(range);
+    if (unit)   ordered.push(unit);
+    if (flag)   ordered.push(flag);
+    cols.forEach(c => { if (!typedSet.has(c)) ordered.push(c); });
+    return ordered;
+  }
+
+  /** Drlogy-style column header label. Server defaults emit
+   *  "Reference range" — Drlogy convention says "Reference Value".
+   *  Falls back to the layout's original label for custom columns. */
+  drlogyLabelFor(c: ResolvedReportLayout['columns'][number]): string {
+    if (c.type === 'range') return 'Reference Value';
+    return c.label;
+  }
+
+  /** Prepend the API base for server-relative asset URLs ("/uploads/…")
+   *  so logos / signature images uploaded via the template editor resolve
+   *  correctly when the viewer is served from a different host than the
+   *  API (dev / capacitor / electron). Absolute http(s) URLs pass through. */
+  private readonly platform = inject(PlatformService);
+  resolveAsset(url: string | null | undefined): string {
+    const u = url ?? '';
+    if (!u) return '';
+    if (/^https?:\/\//i.test(u) || u.startsWith('data:')) return u;
+    return `${this.platform.getApiUrl()}${u}`;
+  }
+
+  /** Template-driven date/time formatter (mirrors the PDF renderer).
+   *  Falls back to the medium Angular date pipe shape when no template
+   *  is loaded yet. */
+  formatStamp(iso: string | undefined | null): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const t = this.tpl();
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mmNum = String(d.getMonth() + 1).padStart(2, '0');
+    const mmm = months[d.getMonth()];
+    const yyyy = String(d.getFullYear());
+    const fmt = t?.dateFormat ?? 'dd MMM yyyy';
+    let datePart: string;
+    switch (fmt) {
+      case 'dd/MM/yyyy':   datePart = `${dd}/${mmNum}/${yyyy}`; break;
+      case 'MMM dd, yyyy': datePart = `${mmm} ${dd}, ${yyyy}`;  break;
+      case 'yyyy-MM-dd':   datePart = `${yyyy}-${mmNum}-${dd}`; break;
+      case 'dd MMM yyyy':
+      default:             datePart = `${dd} ${mmm} ${yyyy}`;
+    }
+    const tf = t?.timeFormat ?? '12h';
+    if (tf === 'none') return datePart;
+    const min = String(d.getMinutes()).padStart(2, '0');
+    let timePart: string;
+    if (tf === '24h') {
+      timePart = `${String(d.getHours()).padStart(2, '0')}:${min}`;
+    } else {
+      let h = d.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      timePart = `${String(h).padStart(2, '0')}:${min} ${ampm}`;
+    }
+    return `${datePart}${t?.dateTimeSeparator ?? ', '}${timePart}`;
   }
 
   // Chart preview math — same as the admin live preview.

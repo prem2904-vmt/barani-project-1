@@ -1434,9 +1434,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-      const resolvedLayouts = await this.fetchResolvedLayouts(report);
-      generateReportPdf({ report, resolvedLayouts });
+      const { generateReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
+      const { PlatformService } = await import('../../../core/services/platform.service');
+      const platform = this.injector.get(PlatformService);
+      const [template, resolvedLayouts] = await Promise.all([
+        // Fetch the tenant's report template so colors / logo / signatures
+        // / date format flow into the PDF. Soft-fail (null) so an unconfigured
+        // tenant still gets a sensible default-themed report.
+        firstValueFrom(this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template')).catch(() => null),
+        this.fetchResolvedLayouts(report),
+      ]);
+      const baseInput = { report, resolvedLayouts, template: template ?? null };
+      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+      generateReportPdf({ ...baseInput, imageCache });
     } catch (err) {
       console.error('[fd] download report failed', err);
       this.toasts.error('Could not download the report');
