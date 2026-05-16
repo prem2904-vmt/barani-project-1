@@ -7,7 +7,7 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
   template: `
     <header class="flex items-start justify-between gap-4 mb-6 md:mb-7">
       <div class="min-w-0 flex-1">
-        <--
+        <!--
         @if (eyebrow) {
           <p
             class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5"
@@ -26,7 +26,7 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
             {{ title }}
           }
         </h1>
-        <--
+        <!--
         @if (subtitle) {
           <p
             class="mt-1.5 md:mt-2 text-[14px] md:text-[15px] max-w-[720px]"

@@ -9,6 +9,8 @@ import { Patient } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -23,19 +25,28 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
       <!-- Compact header — local Back button removed; the shell already
            shows a global Back chip in the top-strip on every non-landing
            page, so duplicating it here read as visual noise. -->
-      <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
-        <div class="pf-head">
-          <h1 class="pf-head__title">Build an order</h1>
-          <p class="pf-head__sub">Pick tests, set priority, review cart.</p>
-        </div>
-      </header>
+
+
+      <pf-screen-header class="px-4 md:px-8 pt-6"
+        eyebrow="Frontdesk · Build an order"
+        title="Build an order"
+        subtitle="Pick tests, set priority, review cart.">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </span>
+          Back
+        </pf-touch-btn>
+      </pf-screen-header>
 
       <!-- Body: single column on everything except desktop (xl+), which gets
            the sticky cart sidebar. Tablet/phone use the cart icon toggle.
@@ -54,10 +65,9 @@ interface HistoryRow {
             <div class="pf-patient">
               <pf-avatar [name]="p.displayName" [size]="40"></pf-avatar>
               <div class="min-w-0 flex-1">
-                <p class="pf-patient__name">{{ p.displayName }}</p>
+                <p class="pf-patient__name">{{ p.displayName }} {{ p.age ?? '—' }}y/{{ p.sex ?? '—' }}</p>
                 <p class="pf-patient__meta">
-                  {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
-                  @if (p.phone) { · {{ p.phone }} }
+                  @if (p.phone) { {{ p.phone }} }
                 </p>
               </div>
               <button type="button" class="pf-patient__change press" (click)="changePatient()">
@@ -243,20 +253,26 @@ interface HistoryRow {
                     <button type="button" class="pf-rail-card press"
                             [class.pf-rail-card--on]="isSelected(t.id)"
                             (click)="toggleTest(t)" role="listitem">
-                      <button type="button" class="pf-rail-card__star"
-                              [class.pf-rail-card__star--on]="isFavourite(t.id)"
-                              (click)="toggleFavourite(t.id, $event)"
-                              [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
-                        <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                        </svg>
-                      </button>
-                      <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                      <div class="pf-rail-card__title-row">
+                        <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        <button type="button" class="pf-rail-card__star"
+                                [class.pf-rail-card__star--on]="isFavourite(t.id)"
+                                (click)="toggleFavourite(t.id, $event)"
+                                [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
+                          <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
+                               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                        </button>
+                      </div>
                       <p class="pf-rail-card__name">{{ t.name }}</p>
-                      <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
-                      <div class="pf-rail-card__footer">
+                      <div class="pf-rail-card__price-row">
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+                        @if (t.tatHours) {
+                          <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
+                        }
+                      </div>
+                      <div class="pf-rail-card__footer">
                         @if (isSelected(t.id)) {
                           <span class="pf-rail-card__on-tag">✓ Added</span>
                         }
@@ -276,18 +292,24 @@ interface HistoryRow {
                     <button type="button" class="pf-rail-card press"
                             [class.pf-rail-card--on]="isSelected(t.id)"
                             (click)="toggleTest(t)" role="listitem">
-                      <button type="button" class="pf-rail-card__star pf-rail-card__star--on"
-                              (click)="toggleFavourite(t.id, $event)" aria-label="Unpin">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                        </svg>
-                      </button>
-                      <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                      <div class="pf-rail-card__title-row">
+                        <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        <button type="button" class="pf-rail-card__star pf-rail-card__star--on"
+                                (click)="toggleFavourite(t.id, $event)" aria-label="Unpin">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
+                               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                        </button>
+                      </div>
                       <p class="pf-rail-card__name">{{ t.name }}</p>
-                      <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
-                      <div class="pf-rail-card__footer">
+                      <div class="pf-rail-card__price-row">
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+                        @if (t.tatHours) {
+                          <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
+                        }
+                      </div>
+                      <div class="pf-rail-card__footer">
                         @if (isSelected(t.id)) {
                           <span class="pf-rail-card__on-tag">✓ Added</span>
                         }
@@ -309,7 +331,7 @@ interface HistoryRow {
                             (click)="togglePackage(pkg)" role="listitem">
                       <span class="pf-rail-card__tag">PACKAGE</span>
                       <p class="pf-rail-card__name">{{ pkg.name }}</p>
-                      <p class="pf-rail-card__meta">TAT {{ pkg.tatHours }}h</p>
+                      <!-- <p class="pf-rail-card__meta">TAT {{ pkg.tatHours }}h</p> -->
                       <div class="pf-rail-card__footer">
                         <span class="pf-rail-card__price">{{ pkg.price | inr }}</span>
                         @if (isSelected(pkg.id)) {
@@ -340,20 +362,26 @@ interface HistoryRow {
                           <button type="button" class="pf-rail-card press"
                                   [class.pf-rail-card--on]="isSelected(t.id)"
                                   (click)="toggleTest(t)" role="listitem">
-                            <button type="button" class="pf-rail-card__star"
-                                    [class.pf-rail-card__star--on]="isFavourite(t.id)"
-                                    (click)="toggleFavourite(t.id, $event)"
-                                    [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
-                              <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
-                                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                              </svg>
-                            </button>
-                            <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                            <div class="pf-rail-card__title-row">
+                              <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                              <button type="button" class="pf-rail-card__star"
+                                      [class.pf-rail-card__star--on]="isFavourite(t.id)"
+                                      (click)="toggleFavourite(t.id, $event)"
+                                      [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
+                                <svg width="14" height="14" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
+                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                              </button>
+                            </div>
                             <p class="pf-rail-card__name">{{ t.name }}</p>
-                            <p class="pf-rail-card__meta">TAT {{ t.tatHours }}h</p>
-                            <div class="pf-rail-card__footer">
+                            <div class="pf-rail-card__price-row">
                               <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+                              @if (t.tatHours) {
+                                <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
+                              }
+                            </div>
+                            <div class="pf-rail-card__footer">
                               @if (isSelected(t.id)) {
                                 <span class="pf-rail-card__on-tag">✓ Added</span>
                               }
@@ -664,6 +692,30 @@ interface HistoryRow {
       scrollbar-width: thin;
       scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
     }
+    @media (min-width: 1280px) {
+      .pf-rail {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-auto-rows: 140px;
+        gap: 10px;
+        max-height: calc(140px * 2 + 10px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        scroll-snap-type: none;
+      }
+      .pf-rail-card {
+        flex: none;
+        align-self: start;
+        min-height: 140px;
+        max-height: 140px;
+        height: 140px;
+      }
+      .pf-rail::-webkit-scrollbar { width: 6px; height: auto; }
+      .pf-rail::-webkit-scrollbar-track { background: transparent; }
+      .pf-rail::-webkit-scrollbar-thumb {
+        background: rgba(168, 85, 247, 0.32); border-radius: 999px;
+      }
+    }
     .pf-rail::-webkit-scrollbar { height: 6px; }
     .pf-rail::-webkit-scrollbar-track { background: transparent; }
     .pf-rail::-webkit-scrollbar-thumb {
@@ -675,10 +727,9 @@ interface HistoryRow {
       /* Width sweet spot: 200px min so two cards fit on a phone, ~220px
        * typical, max ~240px so they don't balloon on wide screens. */
       flex: 0 0 200px;
-      min-height: 140px;
       scroll-snap-align: start;
       display: flex; flex-direction: column;
-      padding: 36px 14px 12px;   /* extra top padding leaves room for star */
+      padding: 5px 8px 0px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
       border-radius: 14px;
@@ -705,23 +756,31 @@ interface HistoryRow {
       border-color: rgba(16, 185, 129, 0.45);
     }
 
-    /* Star sits absolute in the top-right padding region; never overlaps text. */
+    /* Star sits in the title row and shows only on hover/focus. */
     .pf-rail-card__star {
-      position: absolute; top: 6px; right: 6px;
       width: 26px; height: 26px; border-radius: 50%;
       background: transparent; border: none;
       color: var(--text-muted);
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer;
-      transition: color 0.15s, background 0.15s;
-      z-index: 2;
+      transition: opacity 0.15s, visibility 0.15s, color 0.15s, background 0.15s;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+    .pf-rail-card:hover .pf-rail-card__star,
+    .pf-rail-card:focus-within .pf-rail-card__star {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
     }
     .pf-rail-card__star:hover { background: var(--glass-bg-hover); color: #fbbf24; }
     .pf-rail-card__star--on { color: #fbbf24; }
 
-    /* Code / tag sits at the top of the card content area, left-aligned.
+    /* Tag sits at the top of the card content area, left-aligned.
      * Star lives above this in the padding region, never overlapping. */
-    .pf-rail-card__code,
     .pf-rail-card__tag {
       position: absolute; top: 10px; left: 12px;
       padding: 2px 8px;
@@ -730,42 +789,67 @@ interface HistoryRow {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       max-width: calc(100% - 50px);   /* leave room for the star at right */
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .pf-rail-card__code {
-      background: rgba(168, 85, 247, 0.18);
-      color: #c4b5fd;
-      font-size: 10px; letter-spacing: 0.08em;
-    }
-    .pf-rail-card__tag {
       background: rgba(245, 158, 11, 0.22);
       color: #fbbf24;
       font-size: 9.5px; letter-spacing: 0.14em;
     }
+    .pf-rail-card__title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .pf-rail-card__code {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #c4b5fd;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
     .pf-rail-card__name {
-      margin: 0 0 6px;
+      margin: 0;
       font-size: 13.5px; font-weight: 600;
       color: var(--text-primary);
-      line-height: 1.3;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      line-height: 1.25;
+      white-space: normal;
       overflow: hidden;
-      flex: 1 1 auto;
+      min-height: 3em;
+      max-height: 3em;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
-    .pf-rail-card__meta {
-      margin: 0;
-      font-size: 10.5px; color: var(--text-tertiary);
+    .pf-rail-card__price-row {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .pf-rail-card__tat {
+      font-size: 10.5px;
+      color: var(--text-tertiary);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
+      white-space: nowrap;
     }
-    /* Bottom row: price on the left, "Added" pill on the right. Justify-between
-     * prevents the old overlap where both were absolutely positioned at bottom-right. */
     .pf-rail-card__footer {
       margin-top: 6px;
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      display: flex; align-items: center; justify-content: flex-end; gap: 8px;
     }
     .pf-rail-card__price {
       margin: 0;
       font-size: 14px; font-weight: 700;
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
     .pf-rail-card__on-tag {
       font-size: 10.5px; font-weight: 700;
