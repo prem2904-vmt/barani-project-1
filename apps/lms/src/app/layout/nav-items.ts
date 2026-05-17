@@ -92,6 +92,14 @@ export const PRIMARY_NAV: NavItem[] = [
     href: '/reports',
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
     permissions: ['deliver_report', 'view_report']
+  },
+  {
+    // Teams-style chat + group calling. No permissions = open to every
+    // authenticated user (matches the sidebar Workspace entry).
+    id: 'messages',
+    label: 'Messages',
+    href: '/messages',
+    iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']
   }
 ];
 

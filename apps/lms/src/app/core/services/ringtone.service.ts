@@ -1,6 +1,8 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, signal } from '@angular/core';
 
 type Tone = 'ringback' | 'ringtone';
+
+const MUTE_STORAGE_KEY = 'pf.chat.sounds.muted';
 
 /**
  * Tiny Web Audio service for call cues + chat pings. No asset files —
@@ -34,8 +36,28 @@ export class RingtoneService implements OnDestroy {
   private master: GainNode | null = null;
   private active: { stop: () => void; tone: Tone } | null = null;
 
-  /** Start a looping tone. Idempotent on the same tone. */
+  /**
+   * User-controlled mute. When true, both play() and playPing() are
+   * no-ops. Visual notifications (browser Notification, title flash)
+   * are unaffected — those live in ChatNotifyService. Persisted across
+   * reloads via localStorage so a quiet ward stays quiet.
+   */
+  readonly muted = signal<boolean>(this.loadMuted());
+
+  toggleMute(): void { this.setMuted(!this.muted()); }
+  setMuted(next: boolean): void {
+    this.muted.set(next);
+    try { localStorage.setItem(MUTE_STORAGE_KEY, next ? '1' : '0'); } catch { /* private mode */ }
+    if (next) this.stop();
+  }
+  private loadMuted(): boolean {
+    try { return localStorage.getItem(MUTE_STORAGE_KEY) === '1'; }
+    catch { return false; }
+  }
+
+  /** Start a looping tone. Idempotent on the same tone. No-op when muted. */
   play(tone: Tone): void {
+    if (this.muted()) return;
     if (this.active?.tone === tone) return;
     this.stop();
     this.ensureCtx();
@@ -55,8 +77,9 @@ export class RingtoneService implements OnDestroy {
     this.active = { tone, stop: () => { cancelled = true; } };
   }
 
-  /** Short one-shot chime for new chat messages. ~280ms. */
+  /** Short one-shot chime for new chat messages. ~280ms. No-op when muted. */
   playPing(): void {
+    if (this.muted()) return;
     this.ensureCtx();
     if (!this.ctx || !this.master) return;
     const t0 = this.ctx.currentTime + 0.01;

@@ -10,6 +10,19 @@ export interface ChatMessage {
   fromUserId: string;
   body: string;
   sentAt: string;
+  /** Replying to another message — denormalised snippet survives edits. */
+  replyToMessageId?: string | null;
+  replyPreview?: string | null;
+  replyFromName?: string | null;
+  /** Set when the sender edited the body. Renders "(edited)" in the meta. */
+  editedAt?: string | null;
+  /** Soft-delete flag — body is blanked server-side, bubble shows placeholder. */
+  deleted?: boolean;
+  /** Optional single attachment — image inline, PDF as download chip. */
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentMime?: string | null;
+  attachmentSize?: number | null;
   /** Local-only flag for optimistic sends; cleared when server echo arrives. */
   pending?: boolean;
 }
@@ -31,6 +44,8 @@ export interface Conversation {
   id: string;
   isGroup: boolean;
   name: string | null;
+  /** AuthId of the group creator (drives "can I remove others" UX). */
+  createdById: string;
   lastMessageAt: string;
   participants: ConversationParticipant[];
   lastMessage: ConversationLastMessage | null;

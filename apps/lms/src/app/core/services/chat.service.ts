@@ -38,7 +38,20 @@ export class ChatService implements OnDestroy {
   readonly activeConversationId = signal<string | null>(null);
   readonly activeMessages = signal<ChatMessage[]>([]);
   readonly typingByConversation = signal<Map<string, Set<string>>>(new Map());
+  /**
+   * Per-conversation per-user "I've read up to this time" map.
+   *   readReceipts.get(convId)?.get(userId) → ISO timestamp
+   * Populated from server MessageRead broadcasts. Drives the
+   * "Seen / Seen by X" line under my own bubbles.
+   */
+  readonly readReceipts = signal<Map<string, Map<string, string>>>(new Map());
   readonly loadingHistory = signal(false);
+  /** True while older messages are being fetched (top of scroller). */
+  readonly loadingOlder = signal(false);
+  /** Set once a fetch returns <pageSize rows — there's nothing older. */
+  readonly hasMoreHistory = signal<boolean>(true);
+  /** Page size for both initial load and "load older". */
+  private readonly pageSize = 50;
 
   readonly activeConversation = computed(() => {
     const id = this.activeConversationId();
@@ -73,6 +86,10 @@ export class ChatService implements OnDestroy {
     this.connection.on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
     this.connection.on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
       this.onMessageRead(p));
+    this.connection.on('MessageEdited', (p: { id: string; conversationId: string; body: string; editedAt: string }) =>
+      this.onMessageEdited(p));
+    this.connection.on('MessageDeleted', (p: { id: string; conversationId: string }) =>
+      this.onMessageDeleted(p));
     this.connection.on('Typing', (p: { conversationId: string; fromUserId: string; isTyping: boolean }) =>
       this.onTyping(p));
     this.connection.on('ConversationCreated', (_p: { conversationId: string }) =>
@@ -123,20 +140,47 @@ export class ChatService implements OnDestroy {
     this.conversations.set(res ?? []);
   }
 
+  // ── Group member management ─────────────────────────────────────────
+
+  /** Add a member to a group conversation. Idempotent server-side. */
+  async addMember(conversationId: string, userId: string): Promise<void> {
+    await firstValueFrom(this.api.post(
+      `/api/chat/conversations/${conversationId}/members`, { userId }
+    ));
+    await this.loadConversations();
+  }
+
+  /** Remove a member (creator privilege) OR leave (self). */
+  async removeMember(conversationId: string, userId: string): Promise<void> {
+    await firstValueFrom(this.api.delete(
+      `/api/chat/conversations/${conversationId}/members/${userId}`
+    ));
+    // If I just left, drop the conversation from view.
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    if (userId === me) {
+      this.conversations.update(list => list.filter(c => c.id !== conversationId));
+      if (this.activeConversationId() === conversationId) this.closeConversation();
+    } else {
+      await this.loadConversations();
+    }
+  }
+
   // ── Thread actions ──────────────────────────────────────────────────
 
   async openConversation(conversationId: string): Promise<void> {
     await this.connect();
     this.activeConversationId.set(conversationId);
     this.activeMessages.set([]);
+    this.hasMoreHistory.set(true);
     this.loadingHistory.set(true);
     try {
-      const res = await firstValueFrom(this.api.get<ChatMessage[]>(
-        `/api/chat/conversations/${conversationId}/messages?skip=0&take=50`
-      ));
-      this.activeMessages.set(res ?? []);
+      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
+        `/api/chat/conversations/${conversationId}/messages?skip=0&take=${this.pageSize}`
+      )) ?? [];
+      this.activeMessages.set(rows);
+      // Fewer than a full page back = nothing older to fetch.
+      if (rows.length < this.pageSize) this.hasMoreHistory.set(false);
 
-      // Tell the server we've read up to now; clears unread for the badge.
       try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
       this.conversations.update(list =>
         list.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
@@ -146,25 +190,90 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  /**
+   * Fetch the next page of older messages and prepend them. Caller is
+   * responsible for preserving scroll position (capture scrollHeight
+   * before, restore delta after — see messages-page.onScroll).
+   *
+   * Returns the number of rows prepended so the caller can early-out
+   * if there were none.
+   */
+  async loadOlder(conversationId: string): Promise<number> {
+    if (this.loadingOlder() || !this.hasMoreHistory()) return 0;
+    if (this.activeConversationId() !== conversationId) return 0;
+    this.loadingOlder.set(true);
+    try {
+      const skip = this.activeMessages().length;
+      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
+        `/api/chat/conversations/${conversationId}/messages?skip=${skip}&take=${this.pageSize}`
+      )) ?? [];
+      if (rows.length === 0) { this.hasMoreHistory.set(false); return 0; }
+      if (rows.length < this.pageSize) this.hasMoreHistory.set(false);
+      // API returns newest-last (chronological) for the requested page;
+      // they're older than what's onscreen, so prepend.
+      this.activeMessages.update(list => [...rows, ...list]);
+      return rows.length;
+    } finally {
+      this.loadingOlder.set(false);
+    }
+  }
+
   closeConversation(): void {
     this.activeConversationId.set(null);
     this.activeMessages.set([]);
   }
 
-  async sendMessage(conversationId: string, body: string): Promise<void> {
+  /** POST a file to /api/uploads/chat. Returns the server's metadata
+   *  (url, name, mime, size) ready to pass to sendMessage. */
+  async uploadAttachment(file: File): Promise<{ url: string; name: string; contentType: string; size: number }> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    const res = await firstValueFrom(this.api.post<{ url: string; name: string; contentType: string; size: number }>(
+      '/api/uploads/chat', fd
+    ));
+    if (!res?.url) throw new Error('Upload failed.');
+    return res;
+  }
+
+  async sendMessage(
+    conversationId: string,
+    body: string,
+    replyToMessageId?: string | null,
+    attachment?: { url: string; name: string; contentType: string; size: number } | null
+  ): Promise<void> {
     const trimmed = body.trim();
-    if (!trimmed) return;
+    // Body can be empty if an attachment is being sent (caption-less file share).
+    if (!trimmed && !attachment) return;
     await this.connect();
 
     // Optimistic append — instant feedback, replaced when server echoes back.
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // Resolve the quoted preview locally so the optimistic bubble already
+    // shows the reply chip — server echo will overwrite with authoritative data.
+    let replyPreview: string | null = null;
+    let replyFromName: string | null = null;
+    if (replyToMessageId) {
+      const original = this.activeMessages().find(m => m.id === replyToMessageId);
+      if (original) {
+        replyPreview = original.body.length > 280 ? original.body.slice(0, 280) : original.body;
+        const conv = this.conversations().find(c => c.id === conversationId);
+        replyFromName = conv?.participants.find(p => p.userId === original.fromUserId)?.displayName ?? null;
+      }
+    }
     const optimistic: ChatMessage = {
       id: tempId,
       conversationId,
       fromUserId: me,
       body: trimmed,
       sentAt: new Date().toISOString(),
+      replyToMessageId: replyToMessageId ?? null,
+      replyPreview,
+      replyFromName,
+      attachmentUrl: attachment?.url ?? null,
+      attachmentName: attachment?.name ?? null,
+      attachmentMime: attachment?.contentType ?? null,
+      attachmentSize: attachment?.size ?? null,
       pending: true
     };
     if (this.activeConversationId() === conversationId) {
@@ -172,17 +281,34 @@ export class ChatService implements OnDestroy {
     }
 
     try {
-      await this.connection!.invoke('SendMessage', conversationId, trimmed);
-      // Server fires MessageReceived back — onMessageReceived reconciles the
-      // pending entry. If it never arrives (timeout/error), the pending row
-      // sticks; user can retry by re-sending.
+      await this.connection!.invoke(
+        'SendMessage',
+        conversationId,
+        trimmed,
+        replyToMessageId ?? null,
+        attachment?.url ?? null,
+        attachment?.name ?? null,
+        attachment?.contentType ?? null,
+        attachment?.size ?? null
+      );
     } catch (err) {
-      // Mark the optimistic row as failed so the UI can show a retry affordance.
       this.activeMessages.update(list =>
         list.map(m => m.id === tempId ? { ...m, pending: false, body: m.body + ' (failed)' } : m)
       );
       throw err;
     }
+  }
+
+  async editMessage(messageId: string, newBody: string): Promise<void> {
+    const trimmed = newBody.trim();
+    if (!trimmed) return;
+    await this.connect();
+    await this.connection!.invoke('EditMessage', messageId, trimmed);
+  }
+
+  async deleteMessage(messageId: string): Promise<void> {
+    await this.connect();
+    await this.connection!.invoke('DeleteMessage', messageId);
   }
 
   /** Throttled typing broadcast. Caller should debounce to ~1Hz. */
@@ -252,11 +378,44 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  private onMessageEdited(p: { id: string; conversationId: string; body: string; editedAt: string }) {
+    if (this.activeConversationId() === p.conversationId) {
+      this.activeMessages.update(list =>
+        list.map(m => m.id === p.id ? { ...m, body: p.body, editedAt: p.editedAt } : m)
+      );
+    }
+    this.conversations.update(list => list.map(c =>
+      c.id === p.conversationId && c.lastMessage?.id === p.id
+        ? { ...c, lastMessage: { ...c.lastMessage!, body: p.body } }
+        : c
+    ));
+  }
+
+  private onMessageDeleted(p: { id: string; conversationId: string }) {
+    if (this.activeConversationId() === p.conversationId) {
+      this.activeMessages.update(list =>
+        list.map(m => m.id === p.id ? { ...m, deleted: true, body: '', replyPreview: null, replyFromName: null } : m)
+      );
+    }
+    this.conversations.update(list => list.map(c =>
+      c.id === p.conversationId && c.lastMessage?.id === p.id
+        ? { ...c, lastMessage: { ...c.lastMessage!, body: '(message deleted)' } }
+        : c
+    ));
+  }
+
   private onMessageRead(p: { conversationId: string; userId: string; readAt: string }) {
-    // Currently a no-op for the per-user "they've read up to" model; group
-    // read receipts are a future enhancement. Kept as a hook so the
-    // server-side broadcast doesn't error in the client logs.
-    void p;
+    // Update the per-conv per-user lastRead timestamp. Bubble templates
+    // compare this against m.sentAt to decide whether to show "Seen".
+    this.readReceipts.update(map => {
+      const next = new Map(map);
+      const inner = new Map(next.get(p.conversationId) ?? []);
+      const existing = inner.get(p.userId);
+      // Only advance forward; out-of-order broadcasts shouldn't regress.
+      if (!existing || existing < p.readAt) inner.set(p.userId, p.readAt);
+      next.set(p.conversationId, inner);
+      return next;
+    });
   }
 
   private onTyping(p: { conversationId: string; fromUserId: string; isTyping: boolean }) {

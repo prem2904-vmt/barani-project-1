@@ -48,6 +48,40 @@
   justify-content: space-between;
   padding: 16px 16px 10px;
 }
+.pf-msgs__rail-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// "Reconnecting…" banner — appears above the layout when either hub is
+// disconnected. Slim, amber, non-blocking. Disappears silently when
+// hubs come back.
+.pf-msgs__reconnect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  // Sit above everything inside the host but below modals.
+  position: relative;
+  z-index: 1;
+}
+.pf-msgs__reconnect-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--warning-text);
+  animation: pf-msgs-reconnect-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pf-msgs-reconnect-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
 .pf-msgs__title {
   font-size: 18px;
   font-weight: 700;
@@ -317,6 +351,19 @@
   padding: 32px 16px;
   font-size: 13.5px;
 }
+.pf-msgs__older-loading {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+}
+.pf-msgs__older-start {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 0 6px;
+}
 .pf-msgs__day-sep {
   display: flex;
   align-items: center;
@@ -385,6 +432,13 @@
   .pf-msgs__bubble--mine & { color: rgba(255, 255, 255, 0.75); }
 }
 .pf-msgs__tick { font-size: 11px; opacity: 0.7; &.pf-msgs__tick--sent { opacity: 1; } }
+.pf-msgs__seen {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin: 2px 6px 4px 0;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
 
 .pf-msgs__typing {
   display: flex;
@@ -412,14 +466,266 @@
   30%          { transform: translateY(-4px); opacity: 1; }
 }
 
+// ── Bubble wrap + hover actions ──────────────────────────────────────
+.pf-msgs__bubble-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.pf-msgs__bubble-actions {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 2;
+  // Default position (theirs): right edge of bubble
+  right: 4px;
+  &.pf-msgs__bubble-actions--mine {
+    right: auto;
+    left: 4px;
+  }
+  @media (hover: none) { display: none; }
+}
+.pf-msgs__bubble-action {
+  background: transparent;
+  border: none;
+  padding: 5px 6px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+  &:hover { background: var(--bg-hover); color: var(--text-primary); }
+  &.pf-msgs__bubble-action--danger:hover { color: var(--color-danger); }
+}
+
+// ── Reply chip inside a bubble ───────────────────────────────────────
+.pf-msgs__reply-chip {
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--color-violet-400);
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 4px 8px 8px 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  &.pf-msgs__reply-chip--mine {
+    border-left-color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.10);
+  }
+}
+.pf-msgs__reply-from {
+  display: block;
+  font-weight: 600;
+  color: var(--color-violet-300);
+  font-size: 11px;
+  .pf-msgs__reply-chip--mine & { color: rgba(255, 255, 255, 0.85); }
+}
+.pf-msgs__reply-body {
+  display: block;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  .pf-msgs__reply-chip--mine & { color: rgba(255, 255, 255, 0.75); }
+}
+
+// ── Deleted / edited markers ─────────────────────────────────────────
+.pf-msgs__bubble--deleted .pf-msgs__bubble-body { opacity: 0.7; }
+.pf-msgs__bubble-body--deleted {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-style: italic; color: var(--text-tertiary);
+  font-size: 13px;
+}
+.pf-msgs__edited-tag {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 2px;
+  font-style: italic;
+}
+
+// ── Composer banners (reply / edit) ──────────────────────────────────
+.pf-msgs__composer-wrap {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-secondary);
+  background: var(--bg-card-solid);
+}
+.pf-msgs__compose-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(139, 92, 246, 0.08);
+  border-bottom: 1px solid var(--border-muted);
+  &.pf-msgs__compose-banner--edit { background: rgba(245, 158, 11, 0.10); }
+}
+.pf-msgs__compose-banner-bar {
+  width: 3px; align-self: stretch; border-radius: 2px;
+  background: var(--color-violet-400);
+  .pf-msgs__compose-banner--edit & { background: var(--warning-text); }
+}
+.pf-msgs__compose-banner-text {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.pf-msgs__compose-banner-from {
+  font-size: 11px; font-weight: 600;
+  color: var(--color-violet-300);
+  .pf-msgs__compose-banner--edit & { color: var(--warning-text); }
+}
+.pf-msgs__compose-banner-body {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+// ── Emoji popover ────────────────────────────────────────────────────
+.pf-msgs__emoji-popover {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-muted);
+  background: var(--surface-elevated);
+  max-height: 180px;
+  overflow-y: auto;
+  @media (max-width: 480px) { grid-template-columns: repeat(8, 1fr); }
+}
+.pf-msgs__emoji-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.1s;
+  &:hover { background: var(--bg-hover); }
+  &:active { transform: scale(0.9); }
+}
+.pf-msgs__icon-btn--composer {
+  align-self: center;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+.pf-msgs__file-input { display: none; }
+
+// Pending attachment chip (above composer)
+.pf-msgs__pending-attach {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-active);
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-msgs__pending-attach-thumb {
+  width: 40px; height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+}
+.pf-msgs__pending-attach-icon {
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--color-violet-300);
+}
+.pf-msgs__pending-attach-meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.pf-msgs__pending-attach-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-msgs__pending-attach-size {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+// In-bubble attachment renders
+.pf-msgs__attach-image-link {
+  display: block;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+  // Keep the bubble width sane regardless of image aspect.
+  max-width: 320px;
+}
+.pf-msgs__attach-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+.pf-msgs__attach-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.12s;
+  min-width: 240px;
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+  &.pf-msgs__attach-card--mine {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    &:hover { background: rgba(255, 255, 255, 0.18); }
+  }
+}
+.pf-msgs__attach-icon {
+  width: 38px; height: 38px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.18);
+  color: var(--color-violet-300);
+  flex-shrink: 0;
+  .pf-msgs__attach-card--mine & {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+}
+.pf-msgs__attach-meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.pf-msgs__attach-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-msgs__attach-size {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.pf-msgs__icon-btn--active { background: var(--bg-active); border-color: rgba(139, 92, 246, 0.4); color: var(--color-violet-300); }
+
 // ── Composer ─────────────────────────────────────────────────────────
 .pf-msgs__composer {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   padding: 10px 14px 14px;
-  border-top: 1px solid var(--border-secondary);
-  background: var(--bg-card-solid);
+  // border-top now lives on .pf-msgs__composer-wrap so the reply/edit
+  // banner sits flush above the composer without a double line.
   textarea {
     flex: 1;
     resize: none;
@@ -570,12 +876,38 @@
   gap: 12px;
   padding: 8px 20px;
   cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: inherit;
   transition: background 0.12s;
-  &:hover { background: var(--bg-hover); }
+  &:hover:not(:disabled) { background: var(--bg-hover); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  &.pf-msgs__picker-row--static { cursor: default; &:hover { background: transparent; } }
   input[type="checkbox"] {
     width: 16px; height: 16px;
     accent-color: var(--color-violet-500);
     cursor: pointer;
+  }
+}
+.pf-msgs__member-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  &.pf-msgs__member-tag--owner {
+    color: var(--color-violet-300);
+    border-color: rgba(139, 92, 246, 0.35);
+    background: var(--bg-active);
   }
 }
 .pf-msgs__picker-meta { flex: 1; min-width: 0; }

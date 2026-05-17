@@ -1,14 +1,41 @@
+@if (showReconnectBanner()) {
+  <div class="pf-msgs__reconnect" role="status" aria-live="polite">
+    <span class="pf-msgs__reconnect-dot"></span>
+    Reconnecting…
+  </div>
+}
 <div class="pf-msgs" [class.pf-msgs--thread-open]="!!chat.activeConversationId()">
   <!-- ── Left rail ────────────────────────────────────────────────── -->
   <aside class="pf-msgs__rail">
     <header class="pf-msgs__rail-head">
       <h2 class="pf-msgs__title">Messages</h2>
-      @if (activeTab() === 'chats') {
-        <button class="pf-msgs__new-btn" type="button" (click)="openNewChatModal()" title="New chat or group">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>New</span>
+      <div class="pf-msgs__rail-head-actions">
+        <button class="pf-msgs__icon-btn pf-msgs__icon-btn--sm" type="button"
+                (click)="ringtone.toggleMute()"
+                [title]="ringtone.muted() ? 'Unmute sounds' : 'Mute sounds'"
+                [attr.aria-pressed]="ringtone.muted()">
+          @if (ringtone.muted()) {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              <path d="M18.63 13A17.89 17.89 0 0 1 18 8"/>
+              <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/>
+              <path d="M18 8a6 6 0 0 0-9.33-5"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          } @else {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          }
         </button>
-      }
+        @if (activeTab() === 'chats') {
+          <button class="pf-msgs__new-btn" type="button" (click)="openNewChatModal()" title="New chat or group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>New</span>
+          </button>
+        }
+      </div>
     </header>
 
     <nav class="pf-msgs__tabs" role="tablist">
@@ -161,14 +188,31 @@
           <button class="pf-msgs__icon-btn" type="button" (click)="startCall()" title="Voice call">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/></svg>
           </button>
+          @if (conv.isGroup) {
+            <button class="pf-msgs__icon-btn" type="button" (click)="openMembers()" title="Group members">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </button>
+          }
         </div>
       </header>
 
-      <div #thread class="pf-msgs__scroller">
+      <div #thread class="pf-msgs__scroller" (scroll)="onScrollerScroll()">
         @if (chat.loadingHistory()) {
           <div class="pf-msgs__loading">Loading…</div>
-        } @else if (chat.activeMessages().length === 0) {
-          <div class="pf-msgs__empty-thread">No messages yet. Say hello!</div>
+        } @else {
+          @if (chat.loadingOlder()) {
+            <div class="pf-msgs__older-loading"><span class="pf-msgs__typing-dots"><i></i><i></i><i></i></span></div>
+          } @else if (!chat.hasMoreHistory() && chat.activeMessages().length > 0) {
+            <div class="pf-msgs__older-start">— Start of conversation —</div>
+          }
+          @if (chat.activeMessages().length === 0) {
+            <div class="pf-msgs__empty-thread">No messages yet. Say hello!</div>
+          }
         }
         @for (m of chat.activeMessages(); track m.id; let i = $index) {
           @if (showDaySeparatorBefore(i); as sep) {
@@ -176,23 +220,83 @@
               <div class="pf-msgs__day-sep"><span>{{ sep.label }}</span></div>
             }
           }
-          <div class="pf-msgs__bubble-row" [class.pf-msgs__bubble-row--mine]="m.fromUserId === me()">
-            @if (m.fromUserId !== me() && conv.isGroup) {
+          <div class="pf-msgs__bubble-row" [class.pf-msgs__bubble-row--mine]="m.fromUserId === me()"
+               (mouseenter)="hoveredMessageId.set(m.id)" (mouseleave)="hoveredMessageId.set(null)">
+            @if (m.fromUserId !== me() && conv.isGroup && !m.deleted) {
               <span class="pf-msgs__bubble-author">
                 {{ conv.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'Unknown' }}
               </span>
             }
-            <div class="pf-msgs__bubble" [class.pf-msgs__bubble--mine]="m.fromUserId === me()">
-              <div class="pf-msgs__bubble-body">{{ m.body }}</div>
-              <div class="pf-msgs__bubble-meta">
-                {{ m.sentAt | date:'shortTime' }}
-                @if (m.fromUserId === me()) {
-                  <span class="pf-msgs__tick" [class.pf-msgs__tick--sent]="!m.pending">
-                    @if (m.pending) { ⏳ } @else { ✓ }
-                  </span>
+            <div class="pf-msgs__bubble-wrap">
+              <div class="pf-msgs__bubble"
+                   [class.pf-msgs__bubble--mine]="m.fromUserId === me()"
+                   [class.pf-msgs__bubble--deleted]="m.deleted">
+                @if (m.deleted) {
+                  <div class="pf-msgs__bubble-body pf-msgs__bubble-body--deleted">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    message deleted
+                  </div>
+                } @else {
+                  @if (m.replyPreview) {
+                    <div class="pf-msgs__reply-chip" [class.pf-msgs__reply-chip--mine]="m.fromUserId === me()">
+                      <span class="pf-msgs__reply-from">{{ m.replyFromName ?? 'Reply' }}</span>
+                      <span class="pf-msgs__reply-body">{{ m.replyPreview }}</span>
+                    </div>
+                  }
+                  @if (m.attachmentUrl) {
+                    @if (isImage(m.attachmentMime)) {
+                      <a class="pf-msgs__attach-image-link"
+                         [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
+                        <img class="pf-msgs__attach-image"
+                             [src]="resolveAttachmentUrl(m.attachmentUrl)"
+                             [alt]="m.attachmentName ?? 'image'" loading="lazy">
+                      </a>
+                    } @else {
+                      <a class="pf-msgs__attach-card"
+                         [class.pf-msgs__attach-card--mine]="m.fromUserId === me()"
+                         [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
+                        <div class="pf-msgs__attach-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <div class="pf-msgs__attach-meta">
+                          <span class="pf-msgs__attach-name">{{ m.attachmentName ?? 'Attachment' }}</span>
+                          <span class="pf-msgs__attach-size">{{ formatSize(m.attachmentSize) }}</span>
+                        </div>
+                      </a>
+                    }
+                  }
+                  @if (m.body) { <div class="pf-msgs__bubble-body">{{ m.body }}</div> }
+                  <div class="pf-msgs__bubble-meta">
+                    {{ m.sentAt | date:'shortTime' }}
+                    @if (m.editedAt) { <span class="pf-msgs__edited-tag">(edited)</span> }
+                    @if (m.fromUserId === me()) {
+                      <span class="pf-msgs__tick" [class.pf-msgs__tick--sent]="!m.pending">
+                        @if (m.pending) { ⏳ } @else { ✓ }
+                      </span>
+                    }
+                  </div>
                 }
               </div>
+              @if (!m.deleted && hoveredMessageId() === m.id) {
+                <div class="pf-msgs__bubble-actions"
+                     [class.pf-msgs__bubble-actions--mine]="m.fromUserId === me()">
+                  <button type="button" class="pf-msgs__bubble-action" title="Reply" (click)="startReply(m.id)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                  </button>
+                  @if (m.fromUserId === me() && !m.pending) {
+                    <button type="button" class="pf-msgs__bubble-action" title="Edit" (click)="startEdit(m.id)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>
+                    <button type="button" class="pf-msgs__bubble-action pf-msgs__bubble-action--danger" title="Delete" (click)="deleteOwnMessage(m.id)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    </button>
+                  }
+                </div>
+              }
             </div>
+            @if (m.fromUserId === me() && i === lastSeenMineIndex()) {
+              <span class="pf-msgs__seen">{{ readReceiptLabel(i) }}</span>
+            }
           </div>
         }
         @if (activeTypingNames().length > 0) {
@@ -203,13 +307,79 @@
         }
       </div>
 
-      <footer class="pf-msgs__composer">
-        <textarea #composer rows="1" placeholder="Type a message"
-                  [value]="draft()" (input)="draft.set($any($event.target).value); onComposerInput()"
-                  (keydown)="onComposerKeyDown($event)"></textarea>
-        <button class="pf-msgs__send" type="button" (click)="sendDraft()" [disabled]="!draft().trim()" title="Send">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
+      <footer class="pf-msgs__composer-wrap">
+        @if (replyingTo(); as rp) {
+          <div class="pf-msgs__compose-banner">
+            <div class="pf-msgs__compose-banner-bar"></div>
+            <div class="pf-msgs__compose-banner-text">
+              <span class="pf-msgs__compose-banner-from">Replying to {{ rp.fromName }}</span>
+              <span class="pf-msgs__compose-banner-body">{{ rp.preview }}</span>
+            </div>
+            <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm" (click)="cancelReply()" title="Cancel reply">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        } @else if (editingMessageId()) {
+          <div class="pf-msgs__compose-banner pf-msgs__compose-banner--edit">
+            <div class="pf-msgs__compose-banner-bar"></div>
+            <div class="pf-msgs__compose-banner-text">
+              <span class="pf-msgs__compose-banner-from">Editing message</span>
+              <span class="pf-msgs__compose-banner-body">Press Esc or × to cancel</span>
+            </div>
+            <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm" (click)="cancelEdit()" title="Cancel edit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        }
+        @if (pendingAttachment(); as att) {
+          <div class="pf-msgs__pending-attach">
+            @if (isImage(att.contentType)) {
+              <img class="pf-msgs__pending-attach-thumb" [src]="resolveAttachmentUrl(att.url)" alt="">
+            } @else {
+              <div class="pf-msgs__pending-attach-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+            }
+            <div class="pf-msgs__pending-attach-meta">
+              <span class="pf-msgs__pending-attach-name">{{ att.name }}</span>
+              <span class="pf-msgs__pending-attach-size">{{ formatSize(att.size) }} · ready to send</span>
+            </div>
+            <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm" (click)="clearAttachment()" title="Remove attachment">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        }
+        <div class="pf-msgs__composer">
+          <input #fileInput type="file" class="pf-msgs__file-input"
+                 accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,application/pdf"
+                 (change)="onFileChosen($event)">
+          <button class="pf-msgs__icon-btn pf-msgs__icon-btn--composer" type="button"
+                  (click)="pickFile()" [disabled]="attachmentUploading() || !!editingMessageId()" title="Attach a file">
+            @if (attachmentUploading()) {
+              <span class="pf-msgs__typing-dots"><i></i><i></i><i></i></span>
+            } @else {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            }
+          </button>
+          <button class="pf-msgs__icon-btn pf-msgs__icon-btn--composer" type="button"
+                  (click)="toggleEmoji()" [class.pf-msgs__icon-btn--active]="emojiOpen()" title="Emoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+          <textarea #composer rows="1" [placeholder]="editingMessageId() ? 'Edit message' : (pendingAttachment() ? 'Add a caption…' : 'Type a message')"
+                    [value]="draft()" (input)="draft.set($any($event.target).value); onComposerInput()"
+                    (keydown)="onComposerKeyDown($event)"></textarea>
+          <button class="pf-msgs__send" type="button" (click)="sendDraft()"
+                  [disabled]="!draft().trim() && !pendingAttachment()" title="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        @if (emojiOpen()) {
+          <div class="pf-msgs__emoji-popover">
+            @for (e of emojiBank; track e) {
+              <button type="button" class="pf-msgs__emoji-btn" (click)="insertEmoji(e)">{{ e }}</button>
+            }
+          </div>
+        }
       </footer>
     } @else {
       <div class="pf-msgs__placeholder">
@@ -287,6 +457,91 @@
           </button>
         </div>
       </footer>
+    </div>
+  </div>
+}
+
+<!-- ── Group members modal ─────────────────────────────────────────── -->
+@if (membersOpen() && chat.activeConversation(); as conv) {
+  <div class="pf-msgs__modal-backdrop" (click)="closeMembers()">
+    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+      <header class="pf-msgs__modal-head">
+        <h3>{{ conv.name ?? 'Group' }} · {{ conv.participants.length }} members</h3>
+        <button class="pf-msgs__icon-btn" type="button" (click)="closeMembers()" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+
+      <ul class="pf-msgs__picker-list">
+        @for (p of conv.participants; track p.userId) {
+          <li>
+            <div class="pf-msgs__picker-row pf-msgs__picker-row--static">
+              <div class="pf-msgs__avatar pf-msgs__avatar--sm">{{ nameInitials(p.displayName) }}</div>
+              <div class="pf-msgs__picker-meta">
+                <span class="pf-msgs__picker-name">
+                  {{ p.displayName }}
+                  @if (p.userId === me()) { <span class="pf-msgs__member-tag">you</span> }
+                  @if (p.userId === conv.createdById) { <span class="pf-msgs__member-tag pf-msgs__member-tag--owner">owner</span> }
+                </span>
+                <span class="pf-msgs__picker-email">{{ p.email }}</span>
+              </div>
+              @if (canManageMembers() && p.userId !== me()) {
+                <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm"
+                        (click)="removeMember(p.userId)" title="Remove from group">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+
+      <footer class="pf-msgs__modal-foot">
+        <button type="button" class="pf-msgs__btn pf-msgs__btn--ghost" (click)="leaveGroup()">
+          Leave group
+        </button>
+        <div class="pf-msgs__modal-actions">
+          @if (canManageMembers()) {
+            <button type="button" class="pf-msgs__btn pf-msgs__btn--primary" (click)="openAddMember()">
+              + Add member
+            </button>
+          }
+        </div>
+      </footer>
+    </div>
+  </div>
+}
+
+<!-- ── Add member sub-modal ────────────────────────────────────────── -->
+@if (addMemberOpen()) {
+  <div class="pf-msgs__modal-backdrop" (click)="closeAddMember()">
+    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+      <header class="pf-msgs__modal-head">
+        <h3>Add member</h3>
+        <button class="pf-msgs__icon-btn" type="button" (click)="closeAddMember()" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div class="pf-msgs__modal-search">
+        <input type="text" placeholder="Search people"
+               [value]="addMemberSearch()" (input)="addMemberSearch.set($any($event.target).value)">
+      </div>
+      <ul class="pf-msgs__picker-list">
+        @for (u of addMemberCandidates(); track u.id) {
+          <li>
+            <button type="button" class="pf-msgs__picker-row" [disabled]="addMemberBusy()"
+                    (click)="addMember(u.id)">
+              <div class="pf-msgs__avatar pf-msgs__avatar--sm">{{ nameInitials(u.displayName) }}</div>
+              <div class="pf-msgs__picker-meta">
+                <span class="pf-msgs__picker-name">{{ u.displayName }}</span>
+                <span class="pf-msgs__picker-email">{{ u.email }}</span>
+              </div>
+            </button>
+          </li>
+        } @empty {
+          <li class="pf-msgs__empty-rail"><p>Everyone in your org is already a member.</p></li>
+        }
+      </ul>
     </div>
   </div>
 }

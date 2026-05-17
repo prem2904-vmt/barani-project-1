@@ -519,12 +519,27 @@ interface DirectoryUser {
       gap: 12px;
       padding: 12px 0;
     }
+    /* On phone, keep cards comfortable when the call grows to 4-5 people.
+       2 per row is the right density at this width; auto-fit handles the
+       rest via the smaller minmax. */
+    @media (max-width: 480px) {
+      .pf-call-screen__participants {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .pf-call-screen__pcard { padding: 12px 8px; }
+      .pf-call-screen__avatar { width: 44px; height: 44px; font-size: 16px; }
+      .pf-call-screen__pname { font-size: 12px; }
+    }
     .pf-call-screen__pcard {
       display: flex; flex-direction: column; align-items: center; gap: 8px;
       padding: 18px 10px;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 14px;
+      // Subtle pulse when remote is unmuted (best-effort visual cue —
+      // proper VAD speech detection would need WebAudio analysis).
+      transition: border-color 0.2s, background 0.2s;
     }
     .pf-call-screen__avatar {
       width: 56px; height: 56px; border-radius: 50%;
@@ -653,12 +668,22 @@ export class CallOverlayComponent {
     const dir = this.directoryUsers();
     const byId = new Map(dir.map(d => [d.id, d.displayName]));
     const mutedRemote = this.webrtc.remoteMuted();
-    const remote = this.webrtc.remoteParticipants().map(rid => ({
-      id: rid,
-      name: byId.get(rid) ?? this.webrtc.localCallerName() ?? 'Caller',
-      isMe: false,
-      muted: mutedRemote.get(rid) ?? false
-    }));
+    const incomingCallerId = this.webrtc.incomingCall()?.callerId;
+    const incomingCallerName = this.webrtc.localCallerName();
+    const remote = this.webrtc.remoteParticipants().map(rid => {
+      // Directory entry wins. If missing, fall back to the incoming-call
+      // payload ONLY when this rid is the original caller — otherwise other
+      // group participants would all wrongly inherit that name. Last resort
+      // is "Joining…" which reads correctly while the directory is loading.
+      const fromDir = byId.get(rid);
+      const fromCaller = rid === incomingCallerId ? incomingCallerName : null;
+      return {
+        id: rid,
+        name: fromDir ?? fromCaller ?? 'Joining…',
+        isMe: false,
+        muted: mutedRemote.get(rid) ?? false
+      };
+    });
     return [
       { id: meId, name: me?.displayName ?? 'You', isMe: true, muted: this.webrtc.micMuted() },
       ...remote
