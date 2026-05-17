@@ -40,6 +40,8 @@ export class WebrtcService implements OnDestroy {
   readonly micMuted = signal(false);
   readonly remoteParticipants = signal<string[]>([]);
   readonly remoteAudio = signal<Map<string, MediaStream>>(new Map());
+  /** Per-remote-participant mute state, broadcast via signaling. */
+  readonly remoteMuted = signal<Map<string, boolean>>(new Map());
   readonly incomingCall = signal<IncomingCallInfo | null>(null);
   readonly usingTurnRelay = signal(false);
   readonly callError = signal<string | null>(null);
@@ -141,6 +143,9 @@ export class WebrtcService implements OnDestroy {
     const next = !this.micMuted();
     this.micMuted.set(next);
     this.localStream?.getAudioTracks().forEach(t => { t.enabled = !next; });
+    // Broadcast so remote participants see a "muted" badge on my card.
+    const sid = this.sessionId();
+    if (sid) void this.signaling.setMuteState(sid, next).catch(() => undefined);
     return next;
   }
 
@@ -164,8 +169,16 @@ export class WebrtcService implements OnDestroy {
       this.signaling.sessionOffer.subscribe(p => this.onSessionOffer(p)),
       this.signaling.sessionAnswer.subscribe(p => this.onSessionAnswer(p)),
       this.signaling.sessionIceCandidate.subscribe(p => this.onIceCandidate(p)),
+      this.signaling.remoteMuteChanged.subscribe(p => this.onRemoteMuteChanged(p)),
       this.signaling.reconnected$.subscribe(() => this.onReconnected())
     );
+  }
+
+  private onRemoteMuteChanged(p: { sessionId: string; userId: string; isMuted: boolean }): void {
+    if (p.sessionId !== this.sessionId()) return;
+    const next = new Map(this.remoteMuted());
+    next.set(p.userId, p.isMuted);
+    this.remoteMuted.set(next);
   }
 
   private onIncomingCall(info: IncomingCallInfo) {
@@ -276,9 +289,12 @@ export class WebrtcService implements OnDestroy {
     const state: PeerState = { pc, remoteUserId, makingOffer: false, ignoreOffer: false, polite };
     this.peers.set(remoteUserId, state);
 
-    // Attach local audio.
-    this.localStream?.getTracks().forEach(t => pc.addTrack(t, this.localStream!));
-
+    // CRITICAL: attach event handlers BEFORE addTrack. addTrack schedules a
+    // `negotiationneeded` event (microtask) — if the handler isn't set when
+    // the event fires, the first SDP offer is never sent and the call
+    // connects but carries no audio. This was the silent regression behind
+    // "call connects, no voice on either side". Handler attachment order
+    // matters here.
     pc.ontrack = ev => {
       const stream = ev.streams[0] ?? new MediaStream([ev.track]);
       const next = new Map(this.remoteAudio());
@@ -317,6 +333,10 @@ export class WebrtcService implements OnDestroy {
         state.makingOffer = false;
       }
     };
+
+    // NOW add local tracks — handlers are wired up, so the negotiationneeded
+    // event that this schedules will hit our handler and an offer goes out.
+    this.localStream?.getTracks().forEach(t => pc.addTrack(t, this.localStream!));
 
     return state;
   }
@@ -357,7 +377,13 @@ export class WebrtcService implements OnDestroy {
   private async acquireLocalStream(): Promise<void> {
     if (this.localStream) return;
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Pin echoCancellation / noiseSuppression / autoGainControl ON across
+      // all browsers — defaults vary subtly and Safari has flipped these
+      // historically. Defensive lock so behaviour is identical everywhere.
+      this.localStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false
+      });
       this.micMuted.set(false);
     } catch (err) {
       this.callError.set('Microphone permission denied or unavailable.');
@@ -400,6 +426,7 @@ export class WebrtcService implements OnDestroy {
     this.sessionId.set(null);
     this.remoteParticipants.set([]);
     this.remoteAudio.set(new Map());
+    this.remoteMuted.set(new Map());
     this.callStartedAt.set(null);
     this.localCallerName.set(null);
     this.currentSource = undefined;

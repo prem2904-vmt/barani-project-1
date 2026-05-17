@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } 
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { RingtoneService } from '../../../core/services/ringtone.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -29,11 +30,13 @@ interface DirectoryUser {
   imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Hidden audio sinks for each remote peer's stream -->
+    <!-- Hidden audio sinks for each remote peer's stream. data-remote-call
+         is the discovery marker for the effect that programmatically sets
+         srcObject + calls .play() — see the effect in the constructor for
+         why we don't rely on Angular's [srcObject] binding. -->
     @for (entry of audioEntries(); track entry.userId) {
-      <audio #remoteAudio
+      <audio data-remote-call="1"
              [attr.data-user]="entry.userId"
-             [srcObject]="entry.stream"
              autoplay
              playsinline></audio>
     }
@@ -584,6 +587,7 @@ export class CallOverlayComponent {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
+  private readonly ringtone = inject(RingtoneService);
 
   // ── Add-participant (group call) state ────────────────────────
   protected readonly invitePopoverOpen = signal(false);
@@ -603,11 +607,12 @@ export class CallOverlayComponent {
     const meId = me?.authId ?? me?.id ?? '';
     const dir = this.directoryUsers();
     const byId = new Map(dir.map(d => [d.id, d.displayName]));
+    const mutedRemote = this.webrtc.remoteMuted();
     const remote = this.webrtc.remoteParticipants().map(rid => ({
       id: rid,
       name: byId.get(rid) ?? this.webrtc.localCallerName() ?? 'Caller',
       isMe: false,
-      muted: false
+      muted: mutedRemote.get(rid) ?? false
     }));
     return [
       { id: meId, name: me?.displayName ?? 'You', isMe: true, muted: this.webrtc.micMuted() },
@@ -674,6 +679,51 @@ export class CallOverlayComponent {
         this.callExpanded.set(true);
         this.invitePopoverOpen.set(false);
       }
+    });
+
+    // Audio cues — synthesised tones via Web Audio API, no asset files.
+    // ringback while outgoing (caller hears it before pickup); ringtone
+    // while an incoming call is pending. Stops the moment status leaves
+    // those states (answered / rejected / cancelled).
+    effect(() => {
+      const status = this.webrtc.status();
+      const incoming = this.webrtc.incomingCall();
+      if (incoming) {
+        this.ringtone.play('ringtone');
+      } else if (status === 'outgoing') {
+        this.ringtone.play('ringback');
+      } else {
+        this.ringtone.stop();
+      }
+    });
+
+    // Voice playback hardening: every time the remote-stream map changes,
+    // walk the rendered <audio> elements and (a) re-assign srcObject via
+    // property, (b) call .play() explicitly. The Angular template binding
+    // `[srcObject]="..."` works in some browsers and silently no-ops in
+    // others; explicit assignment + play() is the reliable path. This was
+    // the actual reason "call connects but no voice" — the audio elements
+    // existed but their srcObject was never wired to the MediaStream.
+    effect(() => {
+      const _ = this.webrtc.remoteAudio();   // dependency: react to changes
+      queueMicrotask(() => {
+        const els = document.querySelectorAll<HTMLAudioElement>('audio[data-remote-call]');
+        const map = this.webrtc.remoteAudio();
+        els.forEach(el => {
+          const userId = el.getAttribute('data-user');
+          if (!userId) return;
+          const stream = map.get(userId);
+          if (stream && el.srcObject !== stream) el.srcObject = stream;
+          if (stream) {
+            const p = el.play();
+            if (p && typeof (p as Promise<void>).catch === 'function') {
+              (p as Promise<void>).catch(() => {
+                this.toast.info('Tap anywhere to enable call audio');
+              });
+            }
+          }
+        });
+      });
     });
   }
 

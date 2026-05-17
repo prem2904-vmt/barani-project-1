@@ -54,6 +54,7 @@ export class SignalingService implements OnDestroy {
   readonly sessionOffer = new Subject<SessionSignal>();
   readonly sessionAnswer = new Subject<SessionSignal>();
   readonly sessionIceCandidate = new Subject<SessionSignal>();
+  readonly remoteMuteChanged = new Subject<{ sessionId: string; userId: string; isMuted: boolean }>();
 
   // ── Connection lifecycle ──────────────────────────────────────────
 
@@ -135,6 +136,7 @@ export class SignalingService implements OnDestroy {
     this.connection.on('SessionOffer',        (p: SessionSignal) => this.sessionOffer.next(p));
     this.connection.on('SessionAnswer',       (p: SessionSignal) => this.sessionAnswer.next(p));
     this.connection.on('SessionIceCandidate', (p: SessionSignal) => this.sessionIceCandidate.next(p));
+    this.connection.on('RemoteMuteChanged',   (p: { sessionId: string; userId: string; isMuted: boolean }) => this.remoteMuteChanged.next(p));
   }
 
   // ── Hub method facades ────────────────────────────────────────────
@@ -171,6 +173,9 @@ export class SignalingService implements OnDestroy {
   }
   async sendSessionIceCandidate(sessionId: string, targetUserId: string, candidate: string): Promise<void> {
     return await this.connection!.invoke('SendSessionIceCandidate', sessionId, targetUserId, candidate);
+  }
+  async setMuteState(sessionId: string, isMuted: boolean): Promise<void> {
+    return await this.connection!.invoke('SetMuteState', sessionId, isMuted);
   }
   async getTurnCredentials(): Promise<TurnCredentials> {
     await this.connect();
