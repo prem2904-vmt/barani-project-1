@@ -1,6 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
+
+interface DirectoryUser {
+  id: string;          // Supabase sub (== AuthId)
+  displayName: string;
+  email: string;
+  isActive: boolean;
+}
 
 /**
  * Global call overlay — mounted once in the shell. Renders two states:
@@ -93,6 +104,20 @@ import { ToastService } from '../../../core/services/toast.service';
             </svg>
           }
         </button>
+        <!-- Add participant (group call) — opens a popover with online
+             tenant users not already in the call. Click one to invite. -->
+        <button type="button" class="pf-call-pill__btn pf-call-pill__btn--add"
+                (click)="toggleInvite()"
+                [class.pf-call-pill__btn--on]="invitePopoverOpen()"
+                aria-label="Add participant" title="Add participant">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="8.5" cy="7" r="4"/>
+            <line x1="20" y1="8" x2="20" y2="14"/>
+            <line x1="23" y1="11" x2="17" y2="11"/>
+          </svg>
+        </button>
         <button type="button" class="pf-call-pill__btn pf-call-pill__btn--end"
                 (click)="leave()" aria-label="End call">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -101,6 +126,36 @@ import { ToastService } from '../../../core/services/toast.service';
                   transform="rotate(135 12 12)"/>
           </svg>
         </button>
+
+        @if (invitePopoverOpen()) {
+          <div class="pf-call-invite-pop" role="dialog" aria-label="Invite to call"
+               (click)="$event.stopPropagation()">
+            <header class="pf-call-invite-pop__hdr">
+              <span class="pf-call-invite-pop__title">Invite to call</span>
+              <span class="pf-call-invite-pop__count">{{ availableToInvite().length }} online</span>
+            </header>
+            @if (loadingInvite()) {
+              <p class="pf-call-invite-pop__empty">Loading…</p>
+            } @else if (availableToInvite().length === 0) {
+              <p class="pf-call-invite-pop__empty">No one else is online right now.</p>
+            } @else {
+              <ul class="pf-call-invite-pop__list" role="listbox">
+                @for (u of availableToInvite(); track u.id) {
+                  <li>
+                    <button type="button" class="pf-call-invite-pop__item press"
+                            (click)="inviteUser(u)">
+                      <span class="pf-call-invite-pop__name">{{ u.displayName }}</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
       </div>
     }
 
@@ -218,11 +273,71 @@ import { ToastService } from '../../../core/services/toast.service';
     .pf-call-pill__btn--on { background: rgba(244, 63, 94, 0.25); color: #fb7185; }
     .pf-call-pill__btn--end { background: #ef4444; color: #fff; }
     .pf-call-pill__btn--end:hover { background: #dc2626; }
+    .pf-call-pill__btn--add { background: rgba(168, 85, 247, 0.20); color: #c4b5fd; }
+    .pf-call-pill__btn--add:hover { background: rgba(168, 85, 247, 0.35); }
+
+    /* ── Invite-to-call popover (anchored to the pill) ──────────── */
+    .pf-call-invite-pop {
+      position: absolute; bottom: calc(100% + 8px); right: 0;
+      width: 260px; max-height: 320px;
+      display: flex; flex-direction: column;
+      background: rgba(8, 8, 20, 0.95); backdrop-filter: blur(12px);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+      overflow: hidden;
+      animation: pf-call-pop-in 0.16s ease-out;
+    }
+    @keyframes pf-call-pop-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .pf-call-invite-pop__hdr {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .pf-call-invite-pop__title { font-size: 13px; font-weight: 600; color: #fff; }
+    .pf-call-invite-pop__count {
+      font-size: 10.5px; color: rgba(255,255,255,0.55);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-call-invite-pop__list { list-style: none; padding: 6px; margin: 0; overflow-y: auto; }
+    .pf-call-invite-pop__item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      width: 100%; padding: 8px 10px;
+      background: transparent; border: none; border-radius: 8px;
+      color: #fff; font-size: 13px; text-align: left; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .pf-call-invite-pop__item:hover { background: rgba(255,255,255,0.08); }
+    .pf-call-invite-pop__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-call-invite-pop__empty {
+      padding: 18px 14px; text-align: center; font-size: 12.5px;
+      color: rgba(255,255,255,0.55);
+    }
   `]
 })
 export class CallOverlayComponent {
   protected readonly webrtc = inject(WebrtcService);
   private readonly toast = inject(ToastService);
+  private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
+  private readonly signaling = inject(SignalingService);
+
+  // ── Add-participant (group call) state ────────────────────────
+  protected readonly invitePopoverOpen = signal(false);
+  protected readonly loadingInvite = signal(false);
+  private readonly directoryUsers = signal<DirectoryUser[]>([]);
+
+  /** Online users in my tenant who AREN'T already in the call (and aren't me). */
+  protected readonly availableToInvite = computed<DirectoryUser[]>(() => {
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const online = this.signaling.onlineUserIds();
+    const inCall = new Set<string>([me, ...this.webrtc.remoteParticipants()]);
+    return this.directoryUsers().filter(u =>
+      u.isActive && !inCall.has(u.id) && online.has(u.id));
+  });
 
   protected readonly audioEntries = computed(() => {
     const m = this.webrtc.remoteAudio();
@@ -282,4 +397,41 @@ export class CallOverlayComponent {
     await this.webrtc.cancelOutgoing();
   }
   toggleMute() { this.webrtc.toggleMute(); }
+
+  // ── Add participant (group call) ─────────────────────────────
+
+  async toggleInvite(): Promise<void> {
+    const next = !this.invitePopoverOpen();
+    this.invitePopoverOpen.set(next);
+    if (next) {
+      // Lazy-load directory on first open. Skip if already fetched this session.
+      if (this.directoryUsers().length === 0) {
+        this.loadingInvite.set(true);
+        try {
+          const list = await firstValueFrom(
+            this.api.get<DirectoryUser[]>('/api/directory/users'));
+          this.directoryUsers.set(list ?? []);
+        } catch {
+          this.toast.error('Could not load people list');
+        } finally {
+          this.loadingInvite.set(false);
+        }
+      }
+      // Make sure presence is fresh so we don't show offline users.
+      void this.signaling.getOnlineUsersWithStatus().catch(() => undefined);
+    }
+  }
+
+  async inviteUser(u: DirectoryUser): Promise<void> {
+    this.invitePopoverOpen.set(false);
+    try {
+      // u.id is the Supabase sub (DirectoryController returns AuthId as Id).
+      // Matches the id space SignalR addresses connections by, so the
+      // IncomingCall event fires on the right tab.
+      await this.webrtc.inviteToCall(u.id);
+      this.toast.info(`Ringing ${u.displayName}…`);
+    } catch (err) {
+      this.toast.error((err as Error).message ?? 'Could not invite');
+    }
+  }
 }

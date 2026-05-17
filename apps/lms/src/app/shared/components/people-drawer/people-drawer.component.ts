@@ -298,7 +298,12 @@ export class PeopleDrawerComponent {
 
   protected readonly scrollPane = viewChild<ElementRef<HTMLDivElement>>('scrollPane');
 
-  protected readonly me = computed(() => this.auth.user()?.id ?? '');
+  /** Used to exclude myself from the People list. Must be the same id space
+   *  the directory hands us — i.e. the Supabase authId (matches SubClaimUserIdProvider
+   *  + DirectoryUser.Id). Falls back to UserEntity.Id only if authId isn't
+   *  loaded yet, which would mean the filter quietly fails-open until the
+   *  next render. */
+  protected readonly me = computed(() => this.auth.user()?.authId ?? this.auth.user()?.id ?? '');
 
   /** Active, non-self users in my tenant. */
   protected readonly activeUsers = computed(() =>

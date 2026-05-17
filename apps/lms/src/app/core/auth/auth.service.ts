@@ -7,6 +7,7 @@ import { supabase } from './supabase.client';
 
 interface MeResponse {
   id: string;
+  authId?: string;
   firstName: string;
   fathersName: string;
   displayName: string;
@@ -237,6 +238,7 @@ export class AuthService {
 
       this._user.set({
         id: data.id,
+        authId: data.authId,
         firstName: data.firstName ?? '',
         fathersName: data.fathersName ?? '',
         displayName: data.displayName || [data.firstName, data.fathersName].filter(Boolean).join(' '),
