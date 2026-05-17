@@ -45,38 +45,45 @@ interface DirectoryUser {
     @if (webrtc.incomingCall(); as ic) {
       <div class="pf-call-ring" role="dialog" aria-modal="true" aria-label="Incoming call">
         <div class="pf-call-ring__backdrop"></div>
-        <div class="pf-call-ring__card">
-          <div class="pf-call-ring__avatar">{{ initials(ic.isGroup ? (ic.conversationName ?? 'GG') : ic.callerName) }}</div>
+        <div class="pf-call-ring__card" [class.pf-call-ring__card--group]="ic.isGroup">
           <p class="pf-call-ring__eyebrow">
-            @if (ic.isGroup) { Group {{ ic.callType }} call } @else { Incoming {{ ic.callType }} call }
+            @if (ic.isGroup) { Incoming group call }
+            @else { Incoming call }
           </p>
-          <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group') : ic.callerName }}</h2>
+          <div class="pf-call-ring__avatar-wrap">
+            <span class="pf-call-ring__pulse-ring" aria-hidden="true"></span>
+            <span class="pf-call-ring__pulse-ring pf-call-ring__pulse-ring--delay" aria-hidden="true"></span>
+            <div class="pf-call-ring__avatar">
+              {{ initials(ic.isGroup ? (ic.conversationName ?? 'Group') : ic.callerName) }}
+            </div>
+          </div>
+          <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group call') : ic.callerName }}</h2>
           @if (ic.isGroup) {
             <p class="pf-call-ring__source">{{ ic.callerName }} is calling</p>
           } @else if (ic.source) {
             <p class="pf-call-ring__source">{{ sourceLabel(ic.source) }}</p>
+          } @else {
+            <p class="pf-call-ring__source">Voice call</p>
           }
-          <div class="pf-call-ring__pulse" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </div>
           <div class="pf-call-ring__actions">
             <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject"
                     (click)="reject()" aria-label="Decline">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15.5C21 16.6 19.8 17.7 17.5 17.7C12 17.7 7 12.7 7 7.2C7 4.9 8.1 3.7 9.2 3.7"
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
                       transform="rotate(135 12 12)"/>
               </svg>
-              Decline
             </button>
             <button type="button" class="pf-call-ring__btn pf-call-ring__btn--accept"
                     (click)="accept()" aria-label="Accept">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/>
               </svg>
-              Accept
             </button>
+          </div>
+          <div class="pf-call-ring__labels">
+            <span>Decline</span><span>Accept</span>
           </div>
         </div>
       </div>
@@ -91,44 +98,68 @@ interface DirectoryUser {
         <div class="pf-call-screen__backdrop"></div>
         <div class="pf-call-screen__card">
           <header class="pf-call-screen__hdr">
-            <button type="button" class="pf-call-screen__min press"
-                    (click)="minimise()" aria-label="Minimise to floating pill">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            <button type="button" class="pf-call-screen__icon-btn"
+                    (click)="minimise()" aria-label="Minimise" title="Minimise">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 14h5v5M19 10h-5V5"/>
+                <polyline points="6 9 12 15 18 9"/>
               </svg>
-              Minimise
             </button>
-            <span class="pf-call-screen__title">
-              {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
-            </span>
-            <span class="pf-call-screen__time">{{ duration() }}</span>
-            @if (showRemaining()) {
-              <span class="pf-call-screen__remaining" [class.pf-call-screen__remaining--urgent]="remainingUrgent()"
-                    title="Call auto-ends at this point">
-                {{ remainingLabel() }}
+            <div class="pf-call-screen__hdr-info">
+              <span class="pf-call-screen__hdr-status"
+                    [class.pf-call-screen__hdr-status--live]="webrtc.status() === 'active'">
+                <span class="pf-call-screen__live-dot"></span>
+                {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
               </span>
-            }
+              <span class="pf-call-screen__hdr-meta">
+                <span class="pf-call-screen__time">{{ duration() }}</span>
+                <span class="pf-call-screen__route-chip" [attr.data-cost]="routeCost()" [title]="routeTitle()">
+                  {{ routeCost() === 'paid' ? 'Relay' : 'Direct' }}
+                </span>
+                @if (showRemaining()) {
+                  <span class="pf-call-screen__remaining" [class.pf-call-screen__remaining--urgent]="remainingUrgent()"
+                        title="Call auto-ends at this point">
+                    {{ remainingLabel() }}
+                  </span>
+                }
+              </span>
+            </div>
+            <button type="button" class="pf-call-screen__icon-btn"
+                    (click)="leave()" aria-label="End call" title="End call">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </header>
 
-          <div class="pf-call-screen__participants">
+          <div class="pf-call-screen__participants" [attr.data-count]="participants().length">
             @for (p of participants(); track p.id) {
-              <div class="pf-call-screen__pcard">
-                <div class="pf-call-screen__avatar">{{ initials(p.name) }}</div>
+              <div class="pf-call-screen__pcard"
+                   [class.pf-call-screen__pcard--mine]="p.isMe"
+                   [class.pf-call-screen__pcard--muted]="p.muted">
+                <div class="pf-call-screen__avatar-wrap">
+                  <span class="pf-call-screen__avatar-ring" aria-hidden="true"></span>
+                  <div class="pf-call-screen__avatar">{{ initials(p.name) }}</div>
+                  @if (p.muted) {
+                    <span class="pf-call-screen__mute-badge" title="Muted">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                      </svg>
+                    </span>
+                  }
+                </div>
                 <p class="pf-call-screen__pname">{{ p.name }}</p>
                 <p class="pf-call-screen__pmeta">
-                  @if (p.isMe) { you }
-                  @else if (p.muted) { muted }
-                  @else { speaking }
+                  @if (p.isMe) { You }
+                  @else if (p.muted) { Muted }
+                  @else { Connected }
                 </p>
               </div>
             }
-          </div>
-
-          <!-- Media-path billing tag — explicit on the full-screen view. -->
-          <div class="pf-call-screen__route" [attr.data-cost]="routeCost()">
-            <span class="pf-call-screen__route-dot"></span>
-            <span>{{ routeLabel() }}</span>
           </div>
 
           <footer class="pf-call-screen__ctrls">
@@ -136,42 +167,49 @@ interface DirectoryUser {
                     [class.pf-call-screen__ctrl--on]="webrtc.micMuted()"
                     (click)="toggleMute()"
                     [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
-              @if (webrtc.micMuted()) {
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="1" y1="1" x2="23" y2="23"/>
-                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-              } @else {
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-              }
+              <div class="pf-call-screen__ctrl-circle">
+                @if (webrtc.micMuted()) {
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                } @else {
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                }
+              </div>
               <span class="pf-call-screen__ctrl-lbl">{{ webrtc.micMuted() ? 'Unmute' : 'Mute' }}</span>
             </button>
             <button type="button" class="pf-call-screen__ctrl"
+                    [class.pf-call-screen__ctrl--active]="invitePopoverOpen()"
                     (click)="toggleInvite()" aria-label="Add participant">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="8.5" cy="7" r="4"/>
-                <line x1="20" y1="8" x2="20" y2="14"/>
-                <line x1="23" y1="11" x2="17" y2="11"/>
-              </svg>
+              <div class="pf-call-screen__ctrl-circle">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="8.5" cy="7" r="4"/>
+                  <line x1="20" y1="8" x2="20" y2="14"/>
+                  <line x1="23" y1="11" x2="17" y2="11"/>
+                </svg>
+              </div>
               <span class="pf-call-screen__ctrl-lbl">Add</span>
             </button>
             <button type="button" class="pf-call-screen__ctrl pf-call-screen__ctrl--end"
                     (click)="leave()" aria-label="End call">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
-                        transform="rotate(135 12 12)"/>
-              </svg>
+              <div class="pf-call-screen__ctrl-circle">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
+                          transform="rotate(135 12 12)"/>
+                </svg>
+              </div>
               <span class="pf-call-screen__ctrl-lbl">End</span>
             </button>
           </footer>
@@ -211,10 +249,17 @@ interface DirectoryUser {
 
     @if (showInCallPanel() && !callExpanded()) {
       <div class="pf-call-pill" role="region" aria-label="Active call">
-        <div class="pf-call-pill__dot" [class.pf-call-pill__dot--muted]="webrtc.micMuted()"></div>
+        <div class="pf-call-pill__avatar">
+          @if (webrtc.status() === 'active') {
+            <span class="pf-call-pill__avatar-live" aria-hidden="true"></span>
+          }
+          {{ initials(pillTitle()) }}
+        </div>
         <div class="pf-call-pill__meta">
-          <span class="pf-call-pill__label">{{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}</span>
-          <span class="pf-call-pill__time">{{ duration() }}</span>
+          <span class="pf-call-pill__label">{{ pillTitle() }}</span>
+          <span class="pf-call-pill__time">
+            {{ webrtc.status() === 'active' ? duration() : 'Connecting…' }}
+          </span>
         </div>
         @if (showRemaining()) {
           <span class="pf-call-pill__remaining" [class.pf-call-pill__remaining--urgent]="remainingUrgent()"
@@ -311,333 +356,644 @@ interface DirectoryUser {
 
     @if (webrtc.status() === 'outgoing' && !webrtc.incomingCall()) {
       <div class="pf-call-pill pf-call-pill--ringing" role="region" aria-label="Ringing">
-        <div class="pf-call-pill__dot pf-call-pill__dot--ring"></div>
+        <div class="pf-call-pill__avatar">
+          <span class="pf-call-pill__avatar-pulse" aria-hidden="true"></span>
+          {{ initials(webrtc.localCallerName() ?? 'Calling') }}
+        </div>
         <div class="pf-call-pill__meta">
-          <span class="pf-call-pill__label">Ringing…</span>
-          <span class="pf-call-pill__time">{{ webrtc.localCallerName() ?? 'Calling' }}</span>
+          <span class="pf-call-pill__label">{{ webrtc.localCallerName() ?? 'Calling' }}</span>
+          <span class="pf-call-pill__time">Ringing…</span>
         </div>
         <button type="button" class="pf-call-pill__btn pf-call-pill__btn--end"
                 (click)="cancelOutgoing()" aria-label="Cancel call">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 6 6 18M6 6l12 12"/>
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
+                  transform="rotate(135 12 12)"/>
           </svg>
         </button>
       </div>
     }
   `,
   styles: [`
+    /* Call overlay — themed against the app's violet glass tokens
+       (--gradient-primary, --glass-*, --color-violet-*). No hardcoded
+       hex/rgba except small inline shadows that need fixed alpha. */
     :host { display: contents; }
 
-    /* ── Incoming-call full-screen ringer ────────────────────────── */
-    .pf-call-ring { position: fixed; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center; padding: 16px; }
-    .pf-call-ring__backdrop { position: absolute; inset: 0;
-      background: rgba(8, 8, 20, 0.78); backdrop-filter: blur(10px); }
-    .pf-call-ring__card { position: relative; width: 100%; max-width: 360px;
-      padding: 32px 28px 24px; border-radius: 24px;
-      background: linear-gradient(180deg, rgba(20,20,40,0.95), rgba(8,8,20,0.95));
-      border: 1px solid rgba(168, 85, 247, 0.32);
-      box-shadow: 0 20px 60px rgba(168, 85, 247, 0.35), 0 0 0 1px rgba(255,255,255,0.05) inset;
-      text-align: center; color: #fff;
-      animation: pf-call-ring-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    /* ── Shared mono accent for time/duration ─────────────────── */
+    .pf-call-mono { font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* ─────────────────────────────────────────────────────────
+       INCOMING-CALL RINGER — fullscreen, avatar-centric, big
+       circular accept/decline buttons. Pulse rings emanate from
+       the avatar (one solid + one delayed) for a phone-style
+       "someone's calling you" feel.
+       ───────────────────────────────────────────────────────── */
+    .pf-call-ring {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .pf-call-ring__backdrop {
+      position: absolute; inset: 0;
+      background: rgba(8, 8, 20, 0.82);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .pf-call-ring__card {
+      position: relative;
+      width: 100%; max-width: 380px;
+      padding: 36px 28px 28px;
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.22), transparent 65%),
+        var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+      color: var(--text-primary); text-align: center;
+      animation: pf-call-ring-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
     @keyframes pf-call-ring-in {
-      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      from { opacity: 0; transform: translateY(24px) scale(0.94); }
       to   { opacity: 1; transform: none; }
+    }
+    .pf-call-ring__eyebrow {
+      font-size: 10.5px; font-weight: 700;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--color-violet-300);
+      margin: 0 0 16px;
+    }
+    .pf-call-ring__avatar-wrap {
+      position: relative;
+      width: 112px; height: 112px;
+      margin: 0 auto 22px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pf-call-ring__pulse-ring {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 2px solid var(--color-violet-500);
+      animation: pf-call-ring-pulse 1.8s ease-out infinite;
+      opacity: 0;
+    }
+    .pf-call-ring__pulse-ring--delay { animation-delay: 0.9s; }
+    @keyframes pf-call-ring-pulse {
+      0%   { transform: scale(0.85); opacity: 0.65; }
+      80%  { transform: scale(1.45); opacity: 0;    }
+      100% { transform: scale(1.45); opacity: 0;    }
     }
     .pf-call-ring__avatar {
-      width: 72px; height: 72px; border-radius: 50%;
-      margin: 0 auto 20px;
-      background: linear-gradient(135deg, #a78bfa, #ec4899);
+      position: relative;
+      width: 96px; height: 96px; border-radius: 50%;
+      background: var(--gradient-primary);
       display: flex; align-items: center; justify-content: center;
-      font-size: 26px; font-weight: 600; color: #fff;
-      box-shadow: 0 0 30px rgba(168, 85, 247, 0.5);
+      font-size: 32px; font-weight: 700; color: #fff;
+      letter-spacing: 0.02em;
+      box-shadow: 0 0 32px rgba(139, 92, 246, 0.55), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
     }
-    .pf-call-ring__eyebrow { font-size: 10.5px; font-weight: 600;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: rgba(255,255,255,0.55); margin: 0 0 6px; }
-    .pf-call-ring__name { font-size: 22px; font-weight: 600; margin: 0;
-      letter-spacing: -0.01em; }
-    .pf-call-ring__source { font-size: 12px; color: rgba(255,255,255,0.55);
-      margin: 4px 0 0; }
-    .pf-call-ring__pulse {
-      display: flex; gap: 6px; justify-content: center; margin: 24px 0 28px;
+    .pf-call-ring__card--group .pf-call-ring__avatar {
+      background: linear-gradient(135deg, #06b6d4, #6366f1);
+      box-shadow: 0 0 32px rgba(99, 102, 241, 0.5), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
     }
-    .pf-call-ring__pulse span {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #a78bfa;
-      animation: pf-call-pulse 1.4s ease-in-out infinite;
+    .pf-call-ring__card--group .pf-call-ring__pulse-ring {
+      border-color: #6366f1;
     }
-    .pf-call-ring__pulse span:nth-child(2) { animation-delay: 0.2s; }
-    .pf-call-ring__pulse span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes pf-call-pulse {
-      0%, 100% { opacity: 0.3; transform: scale(0.8); }
-      50%      { opacity: 1;   transform: scale(1.3); box-shadow: 0 0 12px rgba(168, 85, 247, 0.9); }
+    .pf-call-ring__name {
+      font-size: 24px; font-weight: 700; margin: 0;
+      letter-spacing: -0.015em;
+      color: var(--text-primary);
     }
-    .pf-call-ring__actions { display: flex; gap: 14px; justify-content: center; }
-    .pf-call-ring__btn { display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 22px; border-radius: 999px; border: none;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      transition: transform 80ms, box-shadow 150ms; }
-    .pf-call-ring__btn:active { transform: scale(0.96); }
-    .pf-call-ring__btn--reject { background: #ef4444; color: #fff;
-      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4); }
-    .pf-call-ring__btn--reject:hover { box-shadow: 0 8px 22px rgba(239, 68, 68, 0.55); }
-    .pf-call-ring__btn--accept { background: #10b981; color: #fff;
-      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4); }
-    .pf-call-ring__btn--accept:hover { box-shadow: 0 8px 22px rgba(16, 185, 129, 0.55); }
+    .pf-call-ring__source {
+      font-size: 13px; color: var(--text-tertiary);
+      margin: 6px 0 0;
+    }
+    .pf-call-ring__actions {
+      display: flex; gap: 56px; justify-content: center;
+      margin-top: 32px;
+    }
+    .pf-call-ring__btn {
+      width: 68px; height: 68px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 50%; border: none; cursor: pointer; color: #fff;
+      transition: transform 0.1s, box-shadow 0.2s, filter 0.2s;
+    }
+    .pf-call-ring__btn:hover { filter: brightness(1.08); }
+    .pf-call-ring__btn:active { transform: scale(0.94); }
+    .pf-call-ring__btn--reject {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      box-shadow: 0 10px 28px rgba(244, 63, 94, 0.45);
+    }
+    .pf-call-ring__btn--accept {
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.45);
+      animation: pf-call-accept-breathe 1.6s ease-in-out infinite;
+    }
+    @keyframes pf-call-accept-breathe {
+      0%, 100% { transform: scale(1);    box-shadow: 0 10px 28px rgba(16, 185, 129, 0.45); }
+      50%      { transform: scale(1.05); box-shadow: 0 14px 36px rgba(16, 185, 129, 0.6);  }
+    }
+    .pf-call-ring__labels {
+      display: flex; gap: 56px; justify-content: center;
+      margin-top: 12px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-tertiary);
+    }
+    .pf-call-ring__labels span {
+      flex-basis: 68px; text-align: center;
+    }
 
-    /* ── In-call floating pill ───────────────────────────────────── */
-    .pf-call-pill { position: fixed; bottom: 88px; right: 16px; z-index: 60;
+    /* ─────────────────────────────────────────────────────────
+       MINIMIZED PILL — slim glass capsule bottom-right with a
+       small avatar, peer name + duration, and the core controls.
+       Sits above the mobile bottom-nav.
+       ───────────────────────────────────────────────────────── */
+    .pf-call-pill {
+      position: fixed;
+      bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+      right: 12px; z-index: 60;
       display: inline-flex; align-items: center; gap: 10px;
-      padding: 8px 8px 8px 14px;
-      border-radius: 999px;
-      background: rgba(8, 8, 20, 0.85); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 8px 28px rgba(0,0,0,0.4);
-      color: #fff; font-size: 12.5px; line-height: 1.2;
-      animation: pf-call-pill-in 0.18s ease-out; }
-    @media (min-width: 1024px) { .pf-call-pill { bottom: 16px; } }
+      padding: 6px 8px 6px 6px;
+      border-radius: 9999px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      box-shadow: var(--glass-shadow), 0 0 0 1px rgba(139, 92, 246, 0.15) inset;
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      color: var(--text-primary);
+      font-size: 12.5px; line-height: 1.2;
+      animation: pf-call-pill-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: calc(100vw - 24px);
+    }
+    @media (min-width: 1280px) {
+      .pf-call-pill { bottom: 16px; right: 16px; }
+    }
     @keyframes pf-call-pill-in {
-      from { opacity: 0; transform: translateY(8px); }
+      from { opacity: 0; transform: translateY(10px) scale(0.92); }
       to   { opacity: 1; transform: none; }
     }
-    .pf-call-pill__dot { width: 8px; height: 8px; border-radius: 50%;
-      background: #10b981; box-shadow: 0 0 8px #10b981;
-      animation: pf-pill-blink 1.6s ease-in-out infinite; }
-    .pf-call-pill__dot--muted { background: #94a3b8; box-shadow: none; animation: none; }
-    .pf-call-pill__dot--ring  { background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
-    @keyframes pf-pill-blink { 0%,100%{opacity:.6;} 50%{opacity:1;} }
-    .pf-call-pill__meta { display: flex; flex-direction: column; gap: 1px; }
-    .pf-call-pill__label { font-weight: 600; }
-    .pf-call-pill__time { font-size: 11px; color: rgba(255,255,255,0.6);
-      font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .pf-call-pill__relay { color: #fbbf24; font-size: 13px; cursor: help; }
-    .pf-call-pill__btn { width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(255,255,255,0.10); border: none; color: #fff;
+    .pf-call-pill__avatar {
+      position: relative;
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--gradient-primary);
       display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: background 120ms, transform 80ms; }
-    .pf-call-pill__btn:hover { background: rgba(255,255,255,0.18); }
+      font-size: 12px; font-weight: 700; color: #fff;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+      flex-shrink: 0;
+    }
+    .pf-call-pill__avatar-live {
+      position: absolute; inset: -3px;
+      border-radius: 50%;
+      border: 2px solid var(--color-success);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+      animation: pf-call-pill-ring 1.8s ease-in-out infinite;
+    }
+    .pf-call-pill__avatar-pulse {
+      position: absolute; inset: -4px;
+      border-radius: 50%;
+      border: 2px solid var(--color-violet-400);
+      animation: pf-call-pill-ring 1.4s ease-in-out infinite;
+    }
+    @keyframes pf-call-pill-ring {
+      0%, 100% { transform: scale(1);   opacity: 0.85; }
+      50%      { transform: scale(1.15); opacity: 0.25; }
+    }
+    .pf-call-pill__meta {
+      display: flex; flex-direction: column; gap: 0;
+      min-width: 0; max-width: 130px;
+    }
+    .pf-call-pill__label {
+      font-weight: 600; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-call-pill__time {
+      font-size: 11px; color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-call-pill__btn {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--glass-bg-hover);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, transform 0.08s, border-color 0.12s;
+    }
+    .pf-call-pill__btn:hover {
+      background: rgba(139, 92, 246, 0.2);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: var(--text-primary);
+    }
     .pf-call-pill__btn:active { transform: scale(0.92); }
-    .pf-call-pill__btn--on { background: rgba(244, 63, 94, 0.25); color: #fb7185; }
-    .pf-call-pill__btn--end { background: #ef4444; color: #fff; }
-    .pf-call-pill__btn--end:hover { background: #dc2626; }
-    .pf-call-pill__btn--add { background: rgba(168, 85, 247, 0.20); color: #c4b5fd; }
-    .pf-call-pill__btn--add:hover { background: rgba(168, 85, 247, 0.35); }
+    .pf-call-pill__btn--on {
+      background: rgba(244, 63, 94, 0.22);
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #fb7185;
+    }
+    .pf-call-pill__btn--add {
+      background: rgba(139, 92, 246, 0.2);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: var(--color-violet-300);
+    }
+    .pf-call-pill__btn--end {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
+    }
+    .pf-call-pill__btn--end:hover {
+      background: linear-gradient(135deg, #ec4055, #be123c);
+      color: #fff;
+    }
 
-    /* Remaining-time chip — appears when under 2min, urgent flash under 1min. */
+    /* Remaining time + route chips on the pill */
     .pf-call-pill__remaining {
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-      padding: 3px 8px; border-radius: 999px;
+      padding: 3px 8px; border-radius: 9999px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      background: rgba(56, 189, 248, 0.20); color: #7dd3fc;
+      background: var(--info-bg); color: var(--info-text);
       white-space: nowrap; cursor: help;
     }
     .pf-call-pill__remaining--urgent {
-      background: rgba(244, 63, 94, 0.28); color: #fda4af;
+      background: var(--error-bg); color: var(--error-text);
       animation: pf-call-remaining-pulse 1s ease-in-out infinite;
     }
     @keyframes pf-call-remaining-pulse {
       0%, 100% { opacity: 1; }
-      50%      { opacity: 0.55; }
+      50%      { opacity: 0.5; }
     }
-    .pf-call-screen__remaining {
-      font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
-      padding: 4px 10px; border-radius: 999px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      background: rgba(56, 189, 248, 0.20); color: #7dd3fc;
-      margin-left: 8px;
-    }
-    .pf-call-screen__remaining--urgent {
-      background: rgba(244, 63, 94, 0.28); color: #fda4af;
-      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
-    }
-
-    /* Route badge — Free (peer-to-peer) vs Paid (TURN-relayed) so the user
-     * sees the cost implication at a glance. */
     .pf-call-pill__route {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-      padding: 3px 8px; border-radius: 999px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 9999px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       white-space: nowrap; cursor: help;
+      text-transform: uppercase;
     }
     .pf-call-pill__route[data-cost='free'] {
-      background: rgba(16, 185, 129, 0.18); color: #34d399;
+      background: var(--success-bg); color: var(--success-text);
     }
     .pf-call-pill__route[data-cost='paid'] {
-      background: rgba(245, 158, 11, 0.22); color: #fbbf24;
+      background: var(--warning-bg); color: var(--warning-text);
+    }
+    /* Hide the route badge on narrow phones — keep the pill compact. */
+    @media (max-width: 420px) {
+      .pf-call-pill__route { display: none; }
     }
 
-    /* ── Full-screen call view ────────────────────────────────── */
-    .pf-call-screen { position: fixed; inset: 0; z-index: 90;
-      display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .pf-call-pill--ringing .pf-call-pill__avatar {
+      background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       FULL-SCREEN ACTIVE CALL — wider card, clean header with
+       live-dot status + duration + relay chip, larger participant
+       tiles with a pulsing ring around connected (unmuted) people,
+       and Teams-style circular control buttons at the bottom.
+       ───────────────────────────────────────────────────────── */
+    .pf-call-screen {
+      position: fixed; inset: 0; z-index: 90;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
     .pf-call-screen__backdrop {
       position: absolute; inset: 0;
-      background: rgba(8, 8, 20, 0.78); backdrop-filter: blur(14px);
+      background: rgba(8, 8, 20, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
     .pf-call-screen__card {
       position: relative;
-      width: 100%; max-width: 540px;
-      padding: 16px 20px 20px;
+      width: 100%; max-width: 720px;
+      max-height: min(92vh, 760px);
+      padding: 14px 18px 18px;
       border-radius: 22px;
-      background: linear-gradient(180deg, rgba(20,20,40,0.96), rgba(8,8,20,0.96));
-      border: 1px solid rgba(168, 85, 247, 0.32);
-      box-shadow: 0 30px 80px rgba(168, 85, 247, 0.32);
-      color: #fff;
+      background:
+        radial-gradient(circle at 80% -10%, rgba(139, 92, 246, 0.12), transparent 55%),
+        radial-gradient(circle at -10% 110%, rgba(236, 72, 153, 0.10), transparent 55%),
+        var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+      color: var(--text-primary);
       display: flex; flex-direction: column; gap: 16px;
-      animation: pf-call-screen-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: pf-call-screen-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes pf-call-screen-in {
-      from { opacity: 0; transform: scale(0.96); }
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
       to   { opacity: 1; transform: none; }
     }
+
+    /* Header: icon-btn left (minimise) + status pill + chips + icon-btn right (close).
+       Compact, glass surfaces, no borders that look like form fields. */
     .pf-call-screen__hdr {
       display: flex; align-items: center; gap: 10px;
       padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 1px solid var(--border-muted);
     }
-    .pf-call-screen__min {
+    .pf-call-screen__icon-btn {
+      width: 32px; height: 32px; border-radius: 9px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      flex-shrink: 0;
+    }
+    .pf-call-screen__icon-btn:hover {
+      background: var(--glass-bg-hover);
+      color: var(--text-primary);
+      border-color: var(--glass-border-hover);
+    }
+    .pf-call-screen__hdr-info {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-width: 0;
+    }
+    .pf-call-screen__hdr-status {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 10px; border-radius: 8px;
-      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85);
-      border: 1px solid rgba(255,255,255,0.08);
-      font-size: 12px; cursor: pointer;
-      transition: background 0.12s;
+      padding: 3px 10px; border-radius: 9999px;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-tertiary);
     }
-    .pf-call-screen__min:hover { background: rgba(255,255,255,0.12); }
-    .pf-call-screen__title { flex: 1; text-align: center; font-size: 13px; color: rgba(255,255,255,0.85); }
+    .pf-call-screen__hdr-status--live {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.32);
+      color: var(--color-success);
+    }
+    .pf-call-screen__live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 6px var(--color-success);
+      animation: pf-call-live-blink 1.6s ease-in-out infinite;
+    }
+    .pf-call-screen__hdr-status:not(.pf-call-screen__hdr-status--live) .pf-call-screen__live-dot {
+      background: var(--color-violet-400);
+      box-shadow: 0 0 6px var(--color-violet-400);
+    }
+    @keyframes pf-call-live-blink {
+      0%, 100% { opacity: 0.55; transform: scale(0.85); }
+      50%      { opacity: 1;    transform: scale(1.15); }
+    }
+    .pf-call-screen__hdr-meta {
+      display: inline-flex; align-items: center; gap: 6px;
+      flex-wrap: wrap; justify-content: center;
+    }
     .pf-call-screen__time {
-      font-size: 12.5px; font-variant-numeric: tabular-nums;
+      font-size: 12px; color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: rgba(255,255,255,0.65);
+    }
+    .pf-call-screen__route-chip {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 2px 7px; border-radius: 9999px;
+      text-transform: uppercase;
+      cursor: help;
+    }
+    .pf-call-screen__route-chip[data-cost='free'] {
+      background: var(--success-bg); color: var(--success-text);
+    }
+    .pf-call-screen__route-chip[data-cost='paid'] {
+      background: var(--warning-bg); color: var(--warning-text);
+    }
+    .pf-call-screen__remaining {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 3px 8px; border-radius: 9999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      background: var(--info-bg); color: var(--info-text);
+    }
+    .pf-call-screen__remaining--urgent {
+      background: var(--error-bg); color: var(--error-text);
+      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
     }
 
+    /* Participants grid — bigger cards, ring around the avatar that
+       pulses for connected (unmuted) participants, mute badge in the
+       corner. Phone gets a 2-col stack. */
     .pf-call-screen__participants {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 12px;
-      padding: 12px 0;
+      padding: 4px 0;
+      overflow-y: auto;
     }
-    /* On phone, keep cards comfortable when the call grows to 4-5 people.
-       2 per row is the right density at this width; auto-fit handles the
-       rest via the smaller minmax. */
-    @media (max-width: 480px) {
+    .pf-call-screen__participants[data-count='1'],
+    .pf-call-screen__participants[data-count='2'] {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    @media (max-width: 520px) {
       .pf-call-screen__participants {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
       }
-      .pf-call-screen__pcard { padding: 12px 8px; }
-      .pf-call-screen__avatar { width: 44px; height: 44px; font-size: 16px; }
-      .pf-call-screen__pname { font-size: 12px; }
     }
     .pf-call-screen__pcard {
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      padding: 18px 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      // Subtle pulse when remote is unmuted (best-effort visual cue —
-      // proper VAD speech detection would need WebAudio analysis).
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 20px 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
       transition: border-color 0.2s, background 0.2s;
     }
-    .pf-call-screen__avatar {
-      width: 56px; height: 56px; border-radius: 50%;
-      background: linear-gradient(135deg, #a78bfa, #ec4899);
+    .pf-call-screen__pcard--mine {
+      border-color: rgba(139, 92, 246, 0.35);
+      background: var(--bg-active);
+    }
+    .pf-call-screen__pcard--muted { opacity: 0.7; }
+
+    .pf-call-screen__avatar-wrap {
+      position: relative;
+      width: 64px; height: 64px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 700; color: #fff;
-      box-shadow: 0 0 20px rgba(168, 85, 247, 0.45);
     }
-    .pf-call-screen__pname { margin: 0; font-size: 13.5px; font-weight: 600; text-align: center;
-      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-call-screen__pmeta { margin: 0; font-size: 11px; color: rgba(255,255,255,0.55); }
+    .pf-call-screen__avatar-ring {
+      position: absolute; inset: -4px;
+      border-radius: 50%;
+      border: 2px solid var(--color-success);
+      opacity: 0;
+      animation: pf-call-screen-ring 2.2s ease-in-out infinite;
+    }
+    /* Only show the connected-ring pulse on participants who are NOT
+       muted (best-effort visual; real VAD would need WebAudio). */
+    .pf-call-screen__pcard:not(.pf-call-screen__pcard--muted) .pf-call-screen__avatar-ring {
+      opacity: 1;
+    }
+    @keyframes pf-call-screen-ring {
+      0%, 100% { transform: scale(1);    opacity: 0.7; }
+      50%      { transform: scale(1.08); opacity: 0.2; }
+    }
+    .pf-call-screen__avatar {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: var(--gradient-primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700; color: #fff;
+      letter-spacing: 0.02em;
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.32), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+    }
+    .pf-call-screen__pcard--mine .pf-call-screen__avatar {
+      background: linear-gradient(135deg, #06b6d4, #6366f1);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.32), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+    }
+    .pf-call-screen__mute-badge {
+      position: absolute;
+      right: -2px; bottom: -2px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 2px solid var(--bg-card-solid);
+      color: var(--color-danger);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .pf-call-screen__pname {
+      margin: 0;
+      font-size: 13.5px; font-weight: 600;
+      text-align: center;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--text-primary);
+    }
+    .pf-call-screen__pmeta {
+      margin: 0;
+      font-size: 11px; font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    @media (max-width: 520px) {
+      .pf-call-screen__avatar-wrap { width: 52px; height: 52px; }
+      .pf-call-screen__avatar      { width: 52px; height: 52px; font-size: 18px; }
+      .pf-call-screen__pcard       { padding: 14px 8px 12px; gap: 8px; }
+      .pf-call-screen__pname       { font-size: 12.5px; }
+      .pf-call-screen__pmeta       { font-size: 10px; }
+    }
 
-    .pf-call-screen__route {
-      align-self: center;
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 14px; border-radius: 999px;
-      font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-    }
-    .pf-call-screen__route[data-cost='free'] {
-      background: rgba(16, 185, 129, 0.18); color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.35);
-    }
-    .pf-call-screen__route[data-cost='paid'] {
-      background: rgba(245, 158, 11, 0.22); color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.38);
-    }
-    .pf-call-screen__route::before {
-      content: ''; display: inline-block;
-      width: 6px; height: 6px; border-radius: 50%;
-      background: currentColor;
-    }
-    .pf-call-screen__route-dot { display: none; }
-
+    /* Control row: 3 buttons each as a {circle + label} stack.
+       The circles look like Teams/Zoom — large, solid, with the
+       End button in danger red and the active state on Add. */
     .pf-call-screen__ctrls {
-      display: flex; align-items: center; justify-content: center; gap: 14px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: flex-start; justify-content: center; gap: 28px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-muted);
+    }
+    @media (max-width: 520px) {
+      .pf-call-screen__ctrls { gap: 18px; }
     }
     .pf-call-screen__ctrl {
-      display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
-      padding: 12px 14px;
-      min-width: 80px;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 14px;
-      color: #fff; cursor: pointer;
-      transition: background 0.15s, transform 0.08s;
+      display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
+      background: transparent; border: none; padding: 0;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: color 0.12s;
     }
-    .pf-call-screen__ctrl:hover { background: rgba(255,255,255,0.12); }
-    .pf-call-screen__ctrl:active { transform: scale(0.96); }
-    .pf-call-screen__ctrl--on { background: rgba(244, 63, 94, 0.22); color: #fb7185;
-      border-color: rgba(244, 63, 94, 0.4); }
-    .pf-call-screen__ctrl--end { background: #ef4444; color: #fff; border-color: transparent; }
-    .pf-call-screen__ctrl--end:hover { background: #dc2626; }
-    .pf-call-screen__ctrl-lbl { font-size: 10.5px; font-weight: 500; }
-
-    .pf-call-invite-pop--screen {
-      bottom: 100px; right: 50%; transform: translateX(50%);
+    .pf-call-screen__ctrl:hover { color: var(--text-primary); }
+    .pf-call-screen__ctrl-circle {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--glass-bg-hover);
+      border: 1px solid var(--glass-border-hover);
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.15s;
     }
+    .pf-call-screen__ctrl:hover .pf-call-screen__ctrl-circle {
+      background: rgba(139, 92, 246, 0.18);
+      border-color: rgba(139, 92, 246, 0.4);
+    }
+    .pf-call-screen__ctrl:active .pf-call-screen__ctrl-circle {
+      transform: scale(0.94);
+    }
+    .pf-call-screen__ctrl--on .pf-call-screen__ctrl-circle {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: rgba(244, 63, 94, 0.45);
+      color: #fb7185;
+    }
+    .pf-call-screen__ctrl--on { color: #fb7185; }
+    .pf-call-screen__ctrl--active .pf-call-screen__ctrl-circle {
+      background: rgba(139, 92, 246, 0.28);
+      border-color: var(--color-violet-500);
+    }
+    .pf-call-screen__ctrl--active { color: var(--color-violet-300); }
+    .pf-call-screen__ctrl--end .pf-call-screen__ctrl-circle {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(244, 63, 94, 0.42);
+    }
+    .pf-call-screen__ctrl--end:hover .pf-call-screen__ctrl-circle {
+      background: linear-gradient(135deg, #ec4055, #be123c);
+    }
+    .pf-call-screen__ctrl--end { color: #fb7185; }
+    .pf-call-screen__ctrl-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
 
-    /* ── Invite-to-call popover (anchored to the pill) ──────────── */
+    /* ── Invite-to-call popover ───────────────────────────────── */
     .pf-call-invite-pop {
       position: absolute; bottom: calc(100% + 8px); right: 0;
-      width: 260px; max-height: 320px;
+      width: 280px; max-height: 320px;
       display: flex; flex-direction: column;
-      background: rgba(8, 8, 20, 0.95); backdrop-filter: blur(12px);
-      border: 1px solid rgba(168, 85, 247, 0.32);
-      border-radius: 12px;
-      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+      background: var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      border-radius: 14px;
+      box-shadow: var(--glass-shadow-hover);
       overflow: hidden;
-      animation: pf-call-pop-in 0.16s ease-out;
+      animation: pf-call-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pf-call-invite-pop--screen {
+      position: absolute;
+      bottom: 92px;
+      left: 50%; right: auto;
+      transform: translateX(-50%);
     }
     @keyframes pf-call-pop-in {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(8px) scale(0.95); }
       to   { opacity: 1; transform: none; }
+    }
+    .pf-call-invite-pop--screen[class] {
+      /* Override the translateY animation start so the centered one
+         doesn't override our centering. */
+      animation: pf-call-pop-in-center 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes pf-call-pop-in-center {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
+      to   { opacity: 1; transform: translateX(-50%); }
     }
     .pf-call-invite-pop__hdr {
       display: flex; align-items: baseline; justify-content: space-between;
-      padding: 10px 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-muted);
     }
-    .pf-call-invite-pop__title { font-size: 13px; font-weight: 600; color: #fff; }
+    .pf-call-invite-pop__title {
+      font-size: 13px; font-weight: 700;
+      color: var(--text-primary);
+    }
     .pf-call-invite-pop__count {
-      font-size: 10.5px; color: rgba(255,255,255,0.55);
+      font-size: 10.5px; color: var(--text-tertiary);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
-    .pf-call-invite-pop__list { list-style: none; padding: 6px; margin: 0; overflow-y: auto; }
+    .pf-call-invite-pop__list {
+      list-style: none; padding: 6px; margin: 0;
+      overflow-y: auto;
+    }
     .pf-call-invite-pop__item {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      width: 100%; padding: 8px 10px;
+      width: 100%; padding: 9px 10px;
       background: transparent; border: none; border-radius: 8px;
-      color: #fff; font-size: 13px; text-align: left; cursor: pointer;
-      transition: background 0.12s;
+      color: var(--text-secondary);
+      font-size: 13px; font-weight: 500; text-align: left;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
     }
-    .pf-call-invite-pop__item:hover { background: rgba(255,255,255,0.08); }
-    .pf-call-invite-pop__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-call-invite-pop__item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .pf-call-invite-pop__name {
+      flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .pf-call-invite-pop__empty {
-      padding: 18px 14px; text-align: center; font-size: 12.5px;
-      color: rgba(255,255,255,0.55);
+      padding: 22px 16px; text-align: center;
+      font-size: 12.5px; color: var(--text-tertiary);
     }
   `]
 })
@@ -660,6 +1016,19 @@ export class CallOverlayComponent {
   protected readonly callExpanded = signal(true);
   expand(): void { this.callExpanded.set(true); }
   minimise(): void { this.callExpanded.set(false); this.invitePopoverOpen.set(false); }
+
+  /**
+   * Title for the minimized call pill: the other party for 1:1, or
+   * "Group call · N" for multi-party. Falls back to "On call" if we
+   * don't have the directory loaded yet.
+   */
+  protected readonly pillTitle = computed(() => {
+    const parts = this.participants();
+    const others = parts.filter(p => !p.isMe);
+    if (others.length === 0) return 'Connecting…';
+    if (others.length === 1) return others[0].name;
+    return `Group call · ${others.length + 1}`;
+  });
 
   /** Self + remote participants, with names resolved from the directory cache. */
   protected readonly participants = computed(() => {
