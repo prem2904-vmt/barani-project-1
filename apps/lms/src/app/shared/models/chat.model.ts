@@ -36,3 +36,23 @@ export interface Conversation {
   lastMessage: ConversationLastMessage | null;
   unreadCount: number;
 }
+
+export interface CallLogPeer {
+  userId: string;
+  displayName: string;
+}
+
+export interface CallLog {
+  id: string;
+  roomId: string;
+  /** initiated | ringing | active | ended | cancelled | rejected | missed */
+  status: string;
+  callType: string;
+  source: string | null;
+  /** "incoming" if I was the callee, "outgoing" if I started it. */
+  direction: 'incoming' | 'outgoing';
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  peer: CallLogPeer;
+}

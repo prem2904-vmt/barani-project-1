@@ -3,12 +3,30 @@
   <aside class="pf-msgs__rail">
     <header class="pf-msgs__rail-head">
       <h2 class="pf-msgs__title">Messages</h2>
-      <button class="pf-msgs__new-btn" type="button" (click)="openNewChatModal()" title="New chat or group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span>New</span>
-      </button>
+      @if (activeTab() === 'chats') {
+        <button class="pf-msgs__new-btn" type="button" (click)="openNewChatModal()" title="New chat or group">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>New</span>
+        </button>
+      }
     </header>
 
+    <nav class="pf-msgs__tabs" role="tablist">
+      <button type="button" role="tab"
+              class="pf-msgs__tab" [class.pf-msgs__tab--active]="activeTab() === 'chats'"
+              [attr.aria-selected]="activeTab() === 'chats'" (click)="switchTab('chats')">
+        Chats
+        @if (chat.totalUnread() > 0) { <span class="pf-msgs__tab-pill">{{ chat.totalUnread() }}</span> }
+      </button>
+      <button type="button" role="tab"
+              class="pf-msgs__tab" [class.pf-msgs__tab--active]="activeTab() === 'calls'"
+              [attr.aria-selected]="activeTab() === 'calls'" (click)="switchTab('calls')">
+        Calls
+        @if (missedCount() > 0) { <span class="pf-msgs__tab-pill pf-msgs__tab-pill--danger">{{ missedCount() }}</span> }
+      </button>
+    </nav>
+
+    @if (activeTab() === 'chats') {
     <div class="pf-msgs__search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" placeholder="Search conversations" [value]="searchTerm()" (input)="searchTerm.set($any($event.target).value)">
@@ -47,6 +65,73 @@
         </li>
       }
     </ul>
+    } @else {
+      <!-- Calls tab -->
+      <nav class="pf-msgs__sub-tabs" role="tablist">
+        <button type="button" role="tab" class="pf-msgs__sub-tab"
+                [class.pf-msgs__sub-tab--active]="callFilter() === 'all'"
+                (click)="setCallFilter('all')">All</button>
+        <button type="button" role="tab" class="pf-msgs__sub-tab"
+                [class.pf-msgs__sub-tab--active]="callFilter() === 'missed'"
+                (click)="setCallFilter('missed')">
+          Missed
+          @if (missedCount() > 0) { <span class="pf-msgs__tab-pill pf-msgs__tab-pill--danger">{{ missedCount() }}</span> }
+        </button>
+      </nav>
+
+      <ul class="pf-msgs__call-list">
+        @if (callLogLoading() && callLog().length === 0) {
+          <li class="pf-msgs__empty-rail"><p>Loading call history…</p></li>
+        }
+        @for (c of filteredCalls(); track c.id) {
+          <li>
+            <div class="pf-msgs__call-row"
+                 [class.pf-msgs__call-row--missed]="isMissed(c)">
+              <div class="pf-msgs__avatar pf-msgs__avatar--sm">
+                {{ nameInitials(c.peer.displayName) }}
+              </div>
+              <div class="pf-msgs__call-meta">
+                <div class="pf-msgs__call-top">
+                  <span class="pf-msgs__call-name">{{ c.peer.displayName }}</span>
+                  <time class="pf-msgs__call-time">{{ c.startedAt | date:'shortTime' }}</time>
+                </div>
+                <div class="pf-msgs__call-bottom">
+                  <span class="pf-msgs__call-status">
+                    @if (c.direction === 'incoming') {
+                      @if (isMissed(c)) {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" class="pf-msgs__call-icon pf-msgs__call-icon--missed"><polyline points="16 17 22 17 22 11"/><line x1="3" y1="7" x2="22" y2="17"/></svg>
+                      } @else {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" class="pf-msgs__call-icon pf-msgs__call-icon--in"><polyline points="7 11 11 7 7 3"/><path d="M11 7H7a4 4 0 0 0-4 4v10"/></svg>
+                      }
+                    } @else {
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" class="pf-msgs__call-icon pf-msgs__call-icon--out"><polyline points="17 11 21 7 17 3"/><path d="M21 7h-9a4 4 0 0 0-4 4v10"/></svg>
+                    }
+                    {{ callStatusLabel(c) }}
+                  </span>
+                  <time class="pf-msgs__call-date">{{ c.startedAt | date:'mediumDate' }}</time>
+                </div>
+              </div>
+              <div class="pf-msgs__call-actions">
+                <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm"
+                        (click)="openChatFromCall(c)" [disabled]="!c.peer.userId" title="Open chat">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm pf-msgs__icon-btn--accent"
+                        (click)="callBack(c)" [disabled]="!c.peer.userId" title="Call back">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/></svg>
+                </button>
+              </div>
+            </div>
+          </li>
+        } @empty {
+          <li class="pf-msgs__empty-rail">
+            <p>
+              @if (callFilter() === 'missed') { No missed calls. } @else { No call history yet. }
+            </p>
+          </li>
+        }
+      </ul>
+    }
   </aside>
 
   <!-- ── Right pane: active thread ────────────────────────────────── -->

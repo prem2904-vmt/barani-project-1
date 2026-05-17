@@ -11,9 +11,11 @@ import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { ToastService } from '../../core/services/toast.service';
-import { Conversation } from '../../shared/models/chat.model';
+import { CallLog, Conversation } from '../../shared/models/chat.model';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
+type RailTab = 'chats' | 'calls';
+type CallFilter = 'all' | 'missed';
 
 /**
  * Teams-style messages page. Layout: left rail (search + conversation
@@ -45,6 +47,8 @@ export class MessagesPageComponent implements OnInit {
   @ViewChild('composer') private composerEl?: ElementRef<HTMLTextAreaElement>;
 
   // ── Local state ────────────────────────────────────────────────────
+  protected readonly activeTab = signal<RailTab>('chats');
+  protected readonly callFilter = signal<CallFilter>('all');
   protected readonly searchTerm = signal('');
   protected readonly draft = signal('');
   protected readonly newChatOpen = signal(false);
@@ -52,6 +56,8 @@ export class MessagesPageComponent implements OnInit {
   protected readonly pickerSelection = signal<Set<string>>(new Set());
   protected readonly groupNameDraft = signal('');
   protected readonly pickerSearch = signal('');
+  protected readonly callLog = signal<CallLog[]>([]);
+  protected readonly callLogLoading = signal(false);
 
   private lastTypingSent = 0;
   private typingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -67,6 +73,51 @@ export class MessagesPageComponent implements OnInit {
     if (!term) return all;
     return all.filter(c => this.displayName(c).toLowerCase().includes(term));
   });
+
+  /** Missed-call count — drives the small red dot on the Calls tab. */
+  protected readonly missedCount = computed(() =>
+    this.callLog().filter(c => this.isMissed(c)).length
+  );
+
+  /** Calls filtered by tab sub-filter (all vs missed). */
+  protected readonly filteredCalls = computed<CallLog[]>(() => {
+    const all = this.callLog();
+    return this.callFilter() === 'missed' ? all.filter(c => this.isMissed(c)) : all;
+  });
+
+  /** A call is "missed" if it was an incoming ring I never picked up. */
+  protected isMissed(c: CallLog): boolean {
+    return c.direction === 'incoming' && (c.status === 'missed' || c.status === 'cancelled');
+  }
+  protected isRejected(c: CallLog): boolean {
+    return c.status === 'rejected';
+  }
+  protected isAnswered(c: CallLog): boolean {
+    return c.status === 'ended' || c.status === 'active';
+  }
+  /** Initials for a directory name — used in the calls list avatars. */
+  protected nameInitials(name: string): string {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '??';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  /** Compact duration label — "0:42" or "12:05". Empty for unanswered. */
+  protected formatDuration(seconds: number | null): string {
+    if (!seconds || seconds < 0) return '';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+  protected callStatusLabel(c: CallLog): string {
+    if (this.isMissed(c)) return c.direction === 'incoming' && c.status === 'missed' ? 'Missed call' : 'Cancelled';
+    if (this.isRejected(c)) return c.direction === 'outgoing' ? 'Declined' : 'Rejected';
+    if (this.isAnswered(c)) {
+      const d = this.formatDuration(c.durationSeconds);
+      return d ? (c.direction === 'incoming' ? `Incoming · ${d}` : `Outgoing · ${d}`) : 'Connected';
+    }
+    return c.direction === 'incoming' ? 'Incoming' : 'Outgoing';
+  }
 
   /** Display name for a conversation: group name OR the other participant. */
   protected displayName(c: Conversation): string {
@@ -153,8 +204,54 @@ export class MessagesPageComponent implements OnInit {
     ]);
     await Promise.all([
       this.chat.loadConversations().catch(() => undefined),
-      this.signaling.getOnlineUsersWithStatus().catch(() => undefined)
+      this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
+      this.loadCallLog().catch(() => undefined)
     ]);
+  }
+
+  // ── Calls tab ───────────────────────────────────────────────────────
+
+  protected switchTab(tab: RailTab): void {
+    this.activeTab.set(tab);
+    if (tab === 'calls') void this.loadCallLog();
+  }
+
+  protected setCallFilter(f: CallFilter): void { this.callFilter.set(f); }
+
+  protected async loadCallLog(): Promise<void> {
+    this.callLogLoading.set(true);
+    try {
+      const res = await firstValueFrom(this.api.get<CallLog[]>('/api/calls/recent?take=80'));
+      this.callLog.set(res ?? []);
+    } catch { /* swallow — empty state is fine */ }
+    finally { this.callLogLoading.set(false); }
+  }
+
+  /**
+   * Call back from a row in the Calls tab. For 1:1 we just re-ring the
+   * peer. For group calls (no peerId), the row is informational — user
+   * has to find the group in Chats to re-start. We disable the row in
+   * that case.
+   */
+  protected async callBack(c: CallLog): Promise<void> {
+    if (!c.peer.userId) return;
+    try {
+      await this.webrtc.startCall(c.peer.userId, 'calls_tab');
+      this.toasts.info(`Ringing ${c.peer.displayName}…`);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not start call.');
+    }
+  }
+
+  /** Open the existing 1:1 thread (or create it) from a call-log row. */
+  protected async openChatFromCall(c: CallLog): Promise<void> {
+    if (!c.peer.userId) return;
+    try {
+      await this.chat.openDirectConversation(c.peer.userId);
+      this.activeTab.set('chats');
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not open chat.');
+    }
   }
 
   // ── Thread actions ──────────────────────────────────────────────────
