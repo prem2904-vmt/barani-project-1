@@ -1467,3 +1467,231 @@ html[data-theme="light"] .pf-vial__outline {
     font-size: 12.5px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   AUTO BOTTOM-SHEET — every dialog becomes a slide-up sheet on phone
+   without the caller having to opt in. Catches every [role="dialog"]
+   in the app: confirm dialog, patient profile modal, appointment
+   booking, advanced patient search, referring-network editors, sample
+   collection, lab my-work delegate, billing modals, frontdesk
+   landing dispatch, pathologist validate, etc.
+
+   Opt out by adding `.pf-modal-centered` to the dialog element — the
+   call overlay does this because it has its own bespoke mobile
+   layout (full-bleed ringer with thumb-zone buttons).
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Backdrop wrappers — anything that holds a [role="dialog"] directly
+     should align it to the bottom and drop edge padding. The :has()
+     selector is supported in Chrome 105+, Safari 15.4+, Firefox 121+
+     (well above our target user base). */
+  *:has(> [role='dialog']:not(.pf-modal-centered)),
+  *:has(> [aria-modal='true']:not(.pf-modal-centered)) {
+    align-items: flex-end !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+  }
+
+  /* The dialog itself — full width, top-rounded only, capped height,
+     slides up. Same animation as .pf-sheet. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    max-height: 90vh !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    position: relative;
+  }
+
+  /* Grab handle, same as .pf-sheet__panel. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before,
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 36px; height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   AUTO TABLE WRAPPER — long admin tables (users, tests, branches,
+   vendors, etc.) overflow at 375px width. This wraps them into a
+   horizontal-scroll envelope so the rest of the page stays sane.
+   Opt out by giving the table the `.pf-table-fixed` class.
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Use a containing block to scroll. Direct table styling can't
+     scroll itself; we use an inline-block wrapper trick. */
+  .pf-page table:not(.pf-table-fixed),
+  main table:not(.pf-table-fixed) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    white-space: nowrap;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   PAGE PADDING — common "main content" containers shrink their gutter
+   on mobile so 375px screens don't lose 64px to side padding.
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .pf-page,
+  .pf-page-shell,
+  [class*='__page'],
+  [class*='__shell'],
+  [class*='__content'],
+  .pf-content {
+    padding-left: max(12px, env(safe-area-inset-left)) !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   ACTION BARS — bottom-pinned action rows (e.g. Save / Cancel) on
+   forms should stay above the bottom-nav + honour safe-area.
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  [class*='__actions'],
+  [class*='__footer'],
+  [class*='__form-actions'] {
+    gap: 8px !important;
+  }
+  /* Action buttons in those rows full-width unless the row says otherwise. */
+  [class*='__actions'] > button:not([class*='--ghost-narrow']):not([class*='--icon']),
+  [class*='__form-actions'] > button:not([class*='--ghost-narrow']):not([class*='--icon']) {
+    min-height: 44px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   PAGE-LEVEL MOBILE FIXES — derived from the cross-page audit.
+   Targets the patterns the audit flagged: dual-pane splitters,
+   fixed-width sidebars, tab strips, counter pills, picker tiles.
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+
+  /* 1) Dual-pane splitters across the app (frontdesk landing's
+        appt/work split, anywhere else using the same pattern).
+        On phone, the 8px drag handle is meaningless — force stack
+        and let panes show one above the other. */
+  [class*='__split'],
+  [class*='-splitter'],
+  [class*='__splitter'] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  [class*='__split-handle'],
+  [class*='__splitter-handle'] {
+    display: none !important;
+  }
+
+  /* 2) Right-cart sidebars on transactional pages (order-create,
+        billing, post-payment, validate-result). These commonly use
+        `xl:grid-cols-[1fr_400px]` which on small screens auto-stacks,
+        but the SIDEBAR content sometimes has its own min-width that
+        overflows. Force any descendant flagged as a sidebar/cart
+        to take full width instead of its hard-coded min/max. */
+  [class*='__cart'],
+  [class*='__sidebar'],
+  [class*='__side-panel'],
+  [class*='__aside'],
+  aside[class*='__col'] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* 3) Tab strips (admin pages, my-work, message tabs). Many
+        components use `inline-flex gap-1` for tabs which overflows
+        on narrow widths. Allow horizontal scroll without scrollbar
+        chrome — the user scrolls naturally. */
+  [class*='__tabs'],
+  [class*='__segmented'],
+  [class*='__counter-row'],
+  [class*='__pill-row'],
+  [role='tablist']:not(.pf-msgs__tabs):not(.pf-msgs__sub-tabs) {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    &::-webkit-scrollbar { display: none !important; }
+    /* Each tab/pill keeps its own width but flex-shrink: 0 so they
+       don't crush each other. */
+    > * { flex-shrink: 0 !important; }
+  }
+
+  /* 4) Picker tiles (test picker on order-create, test selection on
+        billing). Many use `minmax(200px, 1fr)` which forces tiles to
+        overflow on a 375px viewport. Cap them to fit. */
+  [class*='__picker-grid'],
+  [class*='__tile-grid'],
+  [class*='__test-grid'],
+  [class*='__option-grid'] {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+  }
+
+  /* 5) Inline metadata rows on queue tiles (lab my-work, report
+        queue, pathologist queue). Allow them to wrap so the right-
+        side action buttons drop to a second row instead of being
+        clipped off. */
+  [class*='__tile']:not([class*='--no-wrap']),
+  [class*='__queue-row']:not([class*='--no-wrap']),
+  [class*='__list-item']:not([class*='--no-wrap']) {
+    flex-wrap: wrap !important;
+  }
+
+  /* 6) Form fields full-width on phone. Anything tagged as an input,
+        select, textarea respects this; many pages set explicit
+        max-width on the wrapper which we override. */
+  [class*='__form'] input,
+  [class*='__form'] select,
+  [class*='__form'] textarea,
+  [class*='__filters'] input {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 7) Action button rows on forms — full-width buttons stacked
+        instead of inline so they're easy thumb targets. The user
+        can opt out with `--inline` modifier on the row. */
+  [class*='__form-actions']:not([class*='--inline']),
+  [class*='__form-foot']:not([class*='--inline']) {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    > button { width: 100% !important; min-height: 44px !important; }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   ILLUSTRATIONS THAT BREAK AT NARROW WIDTHS
+   The sample-collection vial illustration is a common offender —
+   custom SVG/CSS art with hardcoded width that crowds the counter
+   UI on phone. Scope: any element classed like `__vial`, `__tube`,
+   `__illustration`. Centre + cap them.
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  [class*='__vial'],
+  [class*='__tube'],
+  [class*='__illustration'],
+  [class*='__art'],
+  [class*='__hero-image'] {
+    max-width: 180px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    display: block !important;
+  }
+}

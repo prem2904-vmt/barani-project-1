@@ -45,9 +45,9 @@ interface DirectoryUser {
     }
 
     @if (webrtc.incomingCall(); as ic) {
-      <div class="pf-call-ring" role="dialog" aria-modal="true" aria-label="Incoming call">
+      <div class="pf-call-ring pf-modal-centered" role="dialog" aria-modal="true" aria-label="Incoming call">
         <div class="pf-call-ring__backdrop"></div>
-        <div class="pf-call-ring__card" [class.pf-call-ring__card--group]="ic.isGroup">
+        <div class="pf-call-ring__card pf-modal-centered" [class.pf-call-ring__card--group]="ic.isGroup">
           <p class="pf-call-ring__eyebrow">
             @if (ic.isGroup) { Incoming group call }
             @else { Incoming call }
@@ -96,9 +96,9 @@ interface DirectoryUser {
          more breathing room. Click the minimise icon to return to the
          floating pill; click End to leave. -->
     @if (showInCallPanel() && callExpanded()) {
-      <div class="pf-call-screen" role="dialog" aria-modal="true" aria-label="Active call">
+      <div class="pf-call-screen pf-modal-centered" role="dialog" aria-modal="true" aria-label="Active call">
         <div class="pf-call-screen__backdrop"></div>
-        <div class="pf-call-screen__card" [class.pf-call-screen__card--with-chat]="chatPanelOpen()">
+        <div class="pf-call-screen__card pf-modal-centered" [class.pf-call-screen__card--with-chat]="chatPanelOpen()">
           <header class="pf-call-screen__hdr">
             <button type="button" class="pf-call-screen__icon-btn"
                     (click)="minimise()" aria-label="Minimise" title="Minimise">
