@@ -53,7 +53,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
-      class="pf-bk-root"
+      class="pf-bk-root pf-sheet"
       [class.pf-bk-hidden]="!open()"
       role="dialog"
       aria-modal="true"
@@ -62,7 +62,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     >
       <div class="pf-bk-backdrop" (click)="close()"></div>
 
-      <div class="pf-bk-shell">
+      <div class="pf-bk-shell pf-sheet__panel">
         <header class="pf-bk-hdr">
           <div>
             <h2>Book appointment</h2>

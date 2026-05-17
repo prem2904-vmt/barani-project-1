@@ -207,7 +207,7 @@ interface Doctor {
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
         <div class="pf-rn-modal-bd" (click)="closeHospitalEditor()"></div>
-        <div class="pf-rn-modal" role="dialog" aria-modal="true">
+        <div class="pf-rn-modal pf-sheet__panel" role="dialog" aria-modal="true">
           <header class="pf-rn-modal__hdr">
             <h3>{{ he.id ? 'Edit hospital' : 'Add hospital' }}</h3>
             <button type="button" class="pf-rn-modal__close press" (click)="closeHospitalEditor()" aria-label="Close">
@@ -265,7 +265,7 @@ interface Doctor {
       <!-- ── Doctor editor modal ───────────────────────────────── -->
       @if (doctorEditor(); as de) {
         <div class="pf-rn-modal-bd" (click)="closeDoctorEditor()"></div>
-        <div class="pf-rn-modal" role="dialog" aria-modal="true">
+        <div class="pf-rn-modal pf-sheet__panel" role="dialog" aria-modal="true">
           <header class="pf-rn-modal__hdr">
             <h3>{{ de.id ? 'Edit doctor' : 'Add doctor' }}</h3>
             <button type="button" class="pf-rn-modal__close press" (click)="closeDoctorEditor()" aria-label="Close">

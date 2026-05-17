@@ -1695,3 +1695,105 @@ html[data-theme="light"] .pf-vial__outline {
     display: block !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   AUTO BOTTOM-SHEET — coverage for sibling-backdrop + outer-dialog
+   patterns the original :has() rule missed.
+
+   Structures found in the audit:
+
+     A) Nested  — :has(>) catches it. Already handled above.
+        <wrapper>
+          <div role="dialog">…</div>     ← already covered
+        </wrapper>
+
+     B) Siblings — backdrop + dialog as siblings (referring-network,
+        frontdesk dispatch package). The dialog is `position: fixed`
+        with its own layout.
+        <div class="bd"></div>
+        <div role="dialog">…</div>       ← needs targeting directly
+
+     C) Outer-container — dialog IS the fullscreen overlay, backdrop
+        and panel are children (patient-profile-modal, appointment-
+        booking-modal).
+        <div role="dialog">              ← needs flex-end + child styling
+          <div class="backdrop"/>
+          <div class="shell">…</div>     ← becomes the sheet
+        </div>
+
+   Strategy: target [role=dialog] directly + the panel-child by common
+   class-name conventions (shell|panel|modal|card|sheet). Skips
+   anything called "backdrop" / "-bd" / "-bg".
+   ───────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* CASE B + C — the role=dialog element itself becomes a bottom-aligned
+     flex container so its visible panel-child sticks to the bottom. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) {
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+  }
+
+  /* The visible panel inside the dialog — match common class-name
+     conventions (XX-shell / XX-panel / XX-modal / XX-card / XX-sheet),
+     anything in /* but * NOT a backdrop. This covers patient-profile-
+     modal (.pf-pp-shell), appointment-booking-modal (.pf-bk-shell),
+     referring-network (.pf-rn-modal), frontdesk dispatch (.pf-pkg-modal).
+     Combined with the wrapper-flex above, the panel slides up from the bottom.
+
+     We use multiple selectors instead of a wildcard because we don't
+     want the backdrop element to ALSO be styled as a sheet. */
+  [role='dialog']:not(.pf-modal-centered) > [class*='shell'],
+  [role='dialog']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop']),
+  [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop']),
+  [role='dialog']:not(.pf-modal-centered) > [class*='card']:not([class*='backdrop']),
+  [role='dialog']:not(.pf-modal-centered) > [class*='sheet']:not([class*='backdrop']),
+  [aria-modal='true']:not(.pf-modal-centered) > [class*='shell'],
+  [aria-modal='true']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop']),
+  [aria-modal='true']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop']) {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 90vh !important;
+    margin: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    position: relative;
+  }
+
+  /* CASE B-bonus — sibling backdrop pattern. The dialog has its own
+     position: fixed; styling so we force it to bottom-align as a sheet
+     even without a wrapper. */
+  body > [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
+  pf-referring-network > [role='dialog']:not(.pf-modal-centered) {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 90vh !important;
+    border-radius: 18px 18px 0 0 !important;
+    margin: 0 !important;
+    animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
+  /* Grab handle on the panel — same as .pf-sheet__panel. */
+  [role='dialog']:not(.pf-modal-centered) > [class*='shell']::before,
+  [role='dialog']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop'])::before,
+  [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop'])::before,
+  body > [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 36px; height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    pointer-events: none;
+    z-index: 10;
+  }
+}

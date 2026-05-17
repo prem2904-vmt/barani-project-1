@@ -62,10 +62,10 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
   imports: [CommonModule, AvatarComponent, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-pp-root" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
+    <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
       <div class="pf-pp-backdrop" (click)="close()"></div>
 
-        <div class="pf-pp-shell">
+        <div class="pf-pp-shell pf-sheet__panel">
           @if (loading()) {
             <div class="pf-pp-loading flex justify-center py-10">
               <pf-loading-logo size="xl" color="purple" [showDna]="true"

@@ -27,7 +27,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
       </button>
 
       @if (open()) {
-        <div class="pf-bell-panel slide-up" role="dialog" aria-label="Notifications">
+        <div class="pf-bell-panel slide-up pf-modal-centered" role="dialog" aria-label="Notifications">
           <header class="pf-bell-header">
             <div>
               <p class="text-[11px] font-mono uppercase tracking-[0.16em]"

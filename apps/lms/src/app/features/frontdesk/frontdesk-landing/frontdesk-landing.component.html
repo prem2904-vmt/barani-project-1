@@ -918,9 +918,9 @@
      inside. The lab's receive screen accepts the code via scan or
      manual entry. -->
 @if (activePackage(); as pkg) {
-<div class="pf-pkg-modal" role="dialog" aria-modal="true" aria-label="Dispatch package">
+<div class="pf-pkg-modal pf-sheet" role="dialog" aria-modal="true" aria-label="Dispatch package">
   <div class="pf-pkg-modal__backdrop" (click)="closeDispatchPackage()"></div>
-  <div class="pf-pkg-modal__shell">
+  <div class="pf-pkg-modal__shell pf-sheet__panel">
     <header class="pf-pkg-modal__hdr">
       <div>
         <p class="pf-eyebrow">Dispatch package</p>
