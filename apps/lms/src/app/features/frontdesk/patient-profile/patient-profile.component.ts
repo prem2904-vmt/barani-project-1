@@ -780,7 +780,11 @@ export class PatientProfileComponent implements OnInit {
     if (!p) return;
     this.chatPickerSending.set(true);
     try {
-      await this.chat.sharePatientWithUser(u.id, p.id);
+      // Anchor the chat to this patient: future messages between us about
+      // them stay in this thread instead of cluttering the general 1:1.
+      // The context label is what shows in the thread header chip.
+      const label = `${this.displayName()}${(p as any).mrn ? ' · ' + (p as any).mrn : ''}`;
+      await this.chat.sharePatientWithUser(u.id, p.id, label);
       this.toasts.info(`Sent ${this.displayName()} to ${u.displayName}`);
       this.closeChatPicker();
       this.router.navigate(['/messages']);

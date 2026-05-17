@@ -807,6 +807,218 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+// ── Pinned strip above the thread ───────────────────────────────────
+.pf-msgs__pinned-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.18);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.pf-msgs__pinned-icon { color: var(--warning-text); flex-shrink: 0; }
+.pf-msgs__pinned-body { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.pf-msgs__pinned-count {
+  font-weight: 700; color: var(--warning-text);
+  text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+.pf-msgs__pinned-preview {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text-tertiary);
+}
+.pf-msgs__pinned-tag-icon { color: var(--warning-text); opacity: 0.85; }
+
+// ── In-thread search bar ────────────────────────────────────────────
+.pf-msgs__search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-muted);
+  background: var(--bg-card-solid);
+  svg { color: var(--text-muted); flex-shrink: 0; }
+  input {
+    flex: 1;
+    background: transparent; border: none; outline: none;
+    color: var(--text-primary); font-size: 13px;
+    padding: 4px 0;
+    &::placeholder { color: var(--text-muted); }
+  }
+}
+.pf-msgs__search-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-msgs__search-results {
+  border-top: 1px solid var(--border-muted);
+  background: var(--surface-elevated);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.pf-msgs__search-row {
+  display: flex; flex-direction: column;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent; border: none;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-muted);
+  &:hover { background: var(--bg-hover); }
+}
+.pf-msgs__search-row-body {
+  font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-msgs__search-row-time {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+// ── Reactions row + quick-react in hover menu ───────────────────────
+.pf-msgs__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  &.pf-msgs__reactions--mine { justify-content: flex-end; }
+}
+.pf-msgs__react-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  &:hover { background: var(--glass-bg-hover); }
+  &.pf-msgs__react-pill--mine-reacted {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: var(--color-violet-300);
+  }
+}
+.pf-msgs__react-pill-emoji { font-size: 13px; line-height: 1; }
+.pf-msgs__react-pill-count { font-weight: 700; }
+
+.pf-msgs__bubble-action--react {
+  font-size: 16px; padding: 4px 6px; line-height: 1;
+}
+.pf-msgs__bubble-action-divider {
+  width: 1px; align-self: stretch; margin: 4px 2px;
+  background: var(--border-muted);
+}
+
+// ── @mention ─────────────────────────────────────────────────────────
+.pf-msgs__mention {
+  color: var(--color-violet-300);
+  font-weight: 600;
+  background: rgba(139, 92, 246, 0.16);
+  padding: 0 4px;
+  border-radius: 4px;
+  .pf-msgs__bubble--mine & {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.22);
+  }
+  &.pf-msgs__mention--you {
+    background: rgba(245, 158, 11, 0.28);
+    color: var(--warning-text);
+  }
+}
+
+// ── Mention autocomplete popover ────────────────────────────────────
+.pf-msgs__mention-popover {
+  border-top: 1px solid var(--border-muted);
+  background: var(--surface-elevated);
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.pf-msgs__mention-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 6px 14px;
+  background: transparent; border: none;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  &.pf-msgs__mention-row--active { background: var(--bg-hover); }
+}
+.pf-msgs__mention-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0;
+}
+.pf-msgs__mention-meta { display: flex; flex-direction: column; min-width: 0; }
+.pf-msgs__mention-name { font-size: 13px; font-weight: 600; }
+.pf-msgs__mention-email {
+  font-size: 11px; color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+// ── Notes-to-self rail shortcut ─────────────────────────────────────
+.pf-msgs__notes-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+  &:hover {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+}
+.pf-msgs__notes-shortcut-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--warning-text);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.pf-msgs__notes-shortcut-meta { display: flex; flex-direction: column; min-width: 0; }
+.pf-msgs__notes-shortcut-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pf-msgs__notes-shortcut-sub { font-size: 11px; color: var(--text-tertiary); }
+
+// ── Forward modal preview block ─────────────────────────────────────
+.pf-msgs__forward-preview {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-muted);
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(139, 92, 246, 0.06);
+}
+.pf-msgs__forward-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-violet-300);
+}
+.pf-msgs__forward-body {
+  font-size: 13px; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 // ── Share-record popover (currently patient picker) ─────────────────
 .pf-msgs__share-popover {
   border-top: 1px solid var(--border-muted);

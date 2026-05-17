@@ -25,6 +25,14 @@ export interface ChatMessage {
   sharedRecordId?: string | null;
   sharedRecordTitle?: string | null;
   sharedRecordSubtitle?: string | null;
+  /** Pinned-in-conversation flag. Pinned messages appear in the
+   *  pinned-strip above the thread for quick recall. */
+  isPinned?: boolean;
+  /** AuthIds the message @mentions — drives the "you were mentioned"
+   *  notification override and the highlighted-bubble visual. */
+  mentions?: string[] | null;
+  /** Reactions aggregated by emoji: { '👍': [userId, …], '❤️': […] }. */
+  reactions?: Array<{ emoji: string; userIds: string[] }> | null;
   /** Replying to another message — denormalised snippet survives edits. */
   replyToMessageId?: string | null;
   replyPreview?: string | null;
@@ -65,10 +73,14 @@ export interface Conversation {
   participants: ConversationParticipant[];
   lastMessage: ConversationLastMessage | null;
   unreadCount: number;
-  /** Optional clinical anchor — drives the thread-header context chip. */
-  contextType?: 'patient' | 'order' | 'report' | null;
+  /** Optional clinical anchor — drives the thread-header context chip.
+   *  'self' = "Notes to self" pseudo-conversation. */
+  contextType?: 'patient' | 'order' | 'report' | 'self' | null;
   contextId?: string | null;
   contextLabel?: string | null;
+  /** Per-user mute for this conversation. Distinct from RingtoneService
+   *  global mute. Mentions still notify even when muted. */
+  isMuted?: boolean;
 }
 
 export interface CallLogPeer {

@@ -1,7 +1,10 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ChatService } from '../../../core/services/chat.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -71,6 +74,14 @@ interface ReportData {
           </pf-touch-btn>
         }
         @if (report()) {
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="openSharePicker()">
+            <span icon-left aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </span>
+            Share with…
+          </pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="deliverWhatsApp()">
             <span icon-left aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -82,6 +93,39 @@ interface ReportData {
           </pf-touch-btn>
         }
       </pf-screen-header>
+
+      @if (chatPickerOpen()) {
+        <div class="pf-rv-share-backdrop" (click)="closeSharePicker()">
+          <div class="pf-rv-share-modal" (click)="$event.stopPropagation()">
+            <header class="pf-rv-share-head">
+              <div>
+                <h3>Share this report</h3>
+                <p>The colleague will receive a tap-to-open report card in their chat.</p>
+              </div>
+              <button type="button" class="pf-rv-share-close" (click)="closeSharePicker()" aria-label="Close">✕</button>
+            </header>
+            <div class="pf-rv-share-search">
+              <input type="text" placeholder="Search by name or email"
+                     [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
+            </div>
+            <ul class="pf-rv-share-list">
+              @for (u of chatPickerFiltered(); track u.id) {
+                <li>
+                  <button type="button" class="pf-rv-share-row" [disabled]="chatPickerSending()" (click)="shareWith(u)">
+                    <div class="pf-rv-share-avatar">{{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</div>
+                    <div class="pf-rv-share-meta">
+                      <span class="pf-rv-share-name">{{ u.displayName }}</span>
+                      <span class="pf-rv-share-email">{{ u.email }}</span>
+                    </div>
+                  </button>
+                </li>
+              } @empty {
+                <li class="pf-rv-share-empty">No colleagues match.</li>
+              }
+            </ul>
+          </div>
+        </div>
+      }
 
       @if (report(); as r) {
         <!-- Status strip -->
@@ -688,6 +732,72 @@ interface ReportData {
         padding: 18mm 14mm !important;
       }
     }
+
+    /* Share-with-colleague modal */
+    .pf-rv-share-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .pf-rv-share-modal {
+      background: var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      border-radius: 14px;
+      width: 100%; max-width: 440px;
+      max-height: min(80vh, 560px);
+      display: flex; flex-direction: column;
+      box-shadow: var(--glass-shadow-hover);
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+    .pf-rv-share-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; padding: 14px 18px;
+      border-bottom: 1px solid var(--border-muted);
+      h3 { font-size: 14px; font-weight: 700; margin: 0; }
+      p  { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 0; }
+    }
+    .pf-rv-share-close {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      width: 28px; height: 28px; border-radius: 7px;
+      cursor: pointer; font-size: 12px;
+      &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    }
+    .pf-rv-share-search {
+      padding: 12px 18px; border-bottom: 1px solid var(--border-muted);
+      input {
+        width: 100%; padding: 9px 12px; border-radius: 9px;
+        border: 1px solid var(--input-border); background: var(--bg-input);
+        color: var(--input-text); font-size: 13px; outline: none;
+        &:focus { border-color: var(--input-border-focus); }
+      }
+    }
+    .pf-rv-share-list {
+      list-style: none; margin: 0; padding: 6px 0 10px;
+      overflow-y: auto; flex: 1;
+    }
+    .pf-rv-share-row {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 8px 18px;
+      background: transparent; border: none;
+      text-align: left; cursor: pointer;
+      color: inherit;
+      &:hover:not(:disabled) { background: var(--bg-hover); }
+      &:disabled { opacity: 0.55; cursor: progress; }
+    }
+    .pf-rv-share-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--gradient-primary); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .pf-rv-share-meta { display: flex; flex-direction: column; min-width: 0; }
+    .pf-rv-share-name { font-size: 13px; font-weight: 600; }
+    .pf-rv-share-email { font-size: 11px; color: var(--text-tertiary); }
+    .pf-rv-share-empty { padding: 20px 16px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
   `]
 })
 export class ReportViewerComponent implements OnInit {
@@ -695,11 +805,56 @@ export class ReportViewerComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly chat = inject(ChatService);
+  private readonly auth = inject(AuthService);
 
   private readonly _report = signal<Report | null>(null);
   private readonly _tpl = signal<ReportTemplate | null>(null);
   readonly report = this._report.asReadonly();
   readonly tpl = this._tpl.asReadonly();
+
+  // Share-with-colleague picker state.
+  protected readonly chatPickerOpen = signal(false);
+  protected readonly chatPickerSearch = signal('');
+  protected readonly chatPickerUsers = signal<{ id: string; displayName: string; email: string; isActive: boolean }[]>([]);
+  protected readonly chatPickerSending = signal(false);
+  protected readonly chatPickerFiltered = computed(() => {
+    const term = this.chatPickerSearch().toLowerCase().trim();
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    return this.chatPickerUsers()
+      .filter(u => u.id !== me && u.isActive)
+      .filter(u => !term || u.displayName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term));
+  });
+
+  async openSharePicker(): Promise<void> {
+    this.chatPickerOpen.set(true);
+    this.chatPickerSearch.set('');
+    if (this.chatPickerUsers().length === 0) {
+      try {
+        const users = await firstValueFrom(this.api.get<{ id: string; displayName: string; email: string; isActive: boolean }[]>('/api/directory/users'));
+        this.chatPickerUsers.set(users ?? []);
+      } catch {
+        this.toasts.error('Could not load directory.');
+      }
+    }
+  }
+  closeSharePicker(): void { this.chatPickerOpen.set(false); this.chatPickerSending.set(false); }
+
+  async shareWith(u: { id: string; displayName: string }): Promise<void> {
+    const r = this.report();
+    if (!r) return;
+    this.chatPickerSending.set(true);
+    try {
+      const label = this.subtitle() || `Report #${r.id.slice(0, 8)}`;
+      const convId = await this.chat.openConversationWithContext(u.id, 'report', r.id, label);
+      await this.chat.shareReport(convId, r.id);
+      this.toasts.info(`Sent to ${u.displayName}`);
+      this.closeSharePicker();
+      this.router.navigate(['/messages']);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not share report.');
+    } finally { this.chatPickerSending.set(false); }
+  }
 
   readonly data = computed<ReportData | null>(() => {
     const raw = this._report()?.data;

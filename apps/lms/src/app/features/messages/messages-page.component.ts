@@ -87,6 +87,33 @@ export class MessagesPageComponent implements OnInit {
   protected readonly pendingAttachment = signal<{ url: string; name: string; contentType: string; size: number } | null>(null);
   protected readonly attachmentUploading = signal(false);
 
+  // ── Mention autocomplete state ──────────────────────────────────────
+  protected readonly mentionOpen = signal(false);
+  protected readonly mentionQuery = signal('');
+  protected readonly mentionAnchorPos = signal(0);
+  /** Active mention-suggestion index for arrow-key navigation. */
+  protected readonly mentionActiveIdx = signal(0);
+  protected readonly mentionCandidates = computed(() => {
+    const conv = this.chat.activeConversation();
+    if (!conv) return [];
+    const q = this.mentionQuery().toLowerCase();
+    const me = this.me();
+    return conv.participants
+      .filter(p => p.userId !== me)
+      .filter(p => !q || p.displayName.toLowerCase().includes(q) || p.email.toLowerCase().includes(q))
+      .slice(0, 8);
+  });
+
+  // ── Pinned-strip + search + forward state ───────────────────────────
+  protected readonly pinnedMessages = signal<ChatMessage[]>([]);
+  protected readonly pinnedStripCollapsed = signal(false);
+  protected readonly searchOpen = signal(false);
+  protected readonly searchQuery = signal('');
+  protected readonly searchResults = signal<ChatMessage[]>([]);
+  private searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  protected readonly forwardingMessage = signal<ChatMessage | null>(null);
+  protected readonly forwardSearch = signal('');
+
   /** Share-record picker (currently patient-only; order/report could be
    *  added by extending sharePickerType). Opens a popover above the
    *  composer with a live search box. */
@@ -348,6 +375,40 @@ export class MessagesPageComponent implements OnInit {
         if (pane) pane.scrollTop = pane.scrollHeight;
       });
     });
+    // Refresh pinned strip + reset search whenever active thread changes.
+    effect(() => {
+      const id = this.chat.activeConversationId();
+      this.pinnedMessages.set([]);
+      this.searchOpen.set(false);
+      this.searchQuery.set('');
+      this.searchResults.set([]);
+      if (!id) return;
+      void this.refreshPinned(id);
+    });
+    // Local fallback: keep pinned strip in sync with bubble pin toggles.
+    effect(() => {
+      const id = this.chat.activeConversationId();
+      const messages = this.chat.activeMessages();
+      if (!id) return;
+      const pinned = messages.filter(m => m.isPinned && !m.deleted);
+      // Only patch when our cached list disagrees — avoids infinite loop.
+      const current = this.pinnedMessages();
+      if (current.length !== pinned.length
+          || current.some((c, i) => c.id !== pinned[i]?.id)) {
+        // Merge: use the loaded messages where present, fall back to the
+        // last server fetch for ids not in the active page (older pins).
+        const ids = new Set(pinned.map(p => p.id));
+        const fromServer = current.filter(c => !ids.has(c.id));
+        this.pinnedMessages.set([...pinned, ...fromServer]);
+      }
+    });
+  }
+
+  private async refreshPinned(conversationId: string): Promise<void> {
+    try {
+      const rows = await this.chat.getPinned(conversationId);
+      this.pinnedMessages.set(rows);
+    } catch { this.pinnedMessages.set([]); }
   }
 
   /**
@@ -548,26 +609,85 @@ export class MessagesPageComponent implements OnInit {
 
   protected async onFileChosen(ev: Event): Promise<void> {
     const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    // Reset the input so the same file can be re-picked after removing it.
+    const files = Array.from(input.files ?? []);
     input.value = '';
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) {
-      this.toasts.error('File is larger than 15 MB.');
-      return;
-    }
+    if (files.length === 0) return;
+    await this.handleIncomingFiles(files);
+  }
+
+  /**
+   * Common pipeline for file batches: file-picker, drag-drop, and paste.
+   * For 1 file: stage in the pending-attachment chip (user can add caption).
+   * For N files: send each as its own message, sequentially. This avoids
+   * the schema change a true multi-attachment column would need.
+   */
+  private async handleIncomingFiles(files: File[]): Promise<void> {
+    const valid = files.filter(f => {
+      if (f.size > 15 * 1024 * 1024) {
+        this.toasts.error(`${f.name} is larger than 15 MB.`);
+        return false;
+      }
+      return true;
+    });
+    if (valid.length === 0) return;
+
+    const convId = this.chat.activeConversationId();
     this.attachmentUploading.set(true);
     try {
-      // Resize images client-side before upload: a 12MB phone photo
-      // becomes a ~400KB JPEG that's still plenty sharp for chat.
-      // PDFs and unsupported types pass through unchanged.
-      const toUpload = await this.maybeCompressImage(file);
-      const uploaded = await this.chat.uploadAttachment(toUpload);
-      this.pendingAttachment.set(uploaded);
-      queueMicrotask(() => this.composerEl?.nativeElement.focus());
+      if (valid.length === 1) {
+        // Single → stage as pending so the user can add a caption.
+        const toUpload = await this.maybeCompressImage(valid[0]);
+        const uploaded = await this.chat.uploadAttachment(toUpload);
+        this.pendingAttachment.set(uploaded);
+        queueMicrotask(() => this.composerEl?.nativeElement.focus());
+      } else {
+        if (!convId) return;
+        // Multi → upload + send each. No caption is added to any of them;
+        // first message includes any text already in the composer, the
+        // rest are caption-less. Sequential to keep the order deterministic.
+        const caption = this.draft().trim();
+        this.draft.set('');
+        for (let i = 0; i < valid.length; i++) {
+          const toUpload = await this.maybeCompressImage(valid[i]);
+          const uploaded = await this.chat.uploadAttachment(toUpload);
+          await this.chat.sendMessage(convId, i === 0 ? caption : '', null, uploaded);
+        }
+      }
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Upload failed.');
     } finally { this.attachmentUploading.set(false); }
+  }
+
+  /** Paste handler — wired on the textarea. Grabs image data off the
+   *  clipboard and routes it into the file pipeline. Falls through to
+   *  default behaviour (text paste) when there's no image. */
+  protected onComposerPaste(ev: ClipboardEvent): void {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length === 0) return;
+    ev.preventDefault();
+    void this.handleIncomingFiles(files);
+  }
+
+  /** Drag-drop handler — wired on the thread scroller. */
+  protected onScrollerDragOver(ev: DragEvent): void {
+    if (!ev.dataTransfer?.types.includes('Files')) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+  }
+  protected onScrollerDrop(ev: DragEvent): void {
+    const files = Array.from(ev.dataTransfer?.files ?? []);
+    if (files.length === 0) return;
+    ev.preventDefault();
+    void this.handleIncomingFiles(files);
   }
 
   /**
@@ -886,6 +1006,158 @@ export class MessagesPageComponent implements OnInit {
   protected async deleteOwnMessage(messageId: string): Promise<void> {
     try { await this.chat.deleteMessage(messageId); }
     catch (err) { this.toasts.error((err as Error).message ?? 'Could not delete message.'); }
+  }
+
+  protected async togglePin(messageId: string, currentlyPinned: boolean): Promise<void> {
+    try { await this.chat.setPinned(messageId, !currentlyPinned); }
+    catch (err) { this.toasts.error((err as Error).message ?? 'Could not pin/unpin.'); }
+  }
+
+  protected async addReaction(messageId: string, emoji: string): Promise<void> {
+    try { await this.chat.toggleReaction(messageId, emoji); }
+    catch (err) { this.toasts.error((err as Error).message ?? 'Could not react.'); }
+  }
+
+  /** Default reactions surfaced inline on every bubble hover. */
+  protected readonly quickReactions = ['👍', '❤️', '😂', '🎉', '😢', '🙏'];
+
+  /** True when I've already reacted with this emoji on a message. */
+  protected didIReact(m: ChatMessage, emoji: string): boolean {
+    const me = this.me();
+    return !!m.reactions?.find(r => r.emoji === emoji)?.userIds.includes(me);
+  }
+
+  // ── Forward ─────────────────────────────────────────────────────────
+
+  protected startForward(m: ChatMessage): void {
+    this.forwardingMessage.set(m);
+    this.forwardSearch.set('');
+  }
+  protected cancelForward(): void { this.forwardingMessage.set(null); }
+  protected readonly forwardCandidates = computed(() => {
+    const q = this.forwardSearch().toLowerCase().trim();
+    const skipId = this.chat.activeConversationId();
+    return this.chat.conversations()
+      .filter(c => c.id !== skipId)
+      .filter(c => !q || this.displayName(c).toLowerCase().includes(q));
+  });
+  protected async confirmForward(c: Conversation): Promise<void> {
+    const m = this.forwardingMessage();
+    if (!m) return;
+    try {
+      await this.chat.forwardMessage(c.id, m);
+      this.toasts.info(`Forwarded to ${this.displayName(c)}`);
+      this.cancelForward();
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not forward.');
+    }
+  }
+
+  // ── Per-conversation mute ───────────────────────────────────────────
+
+  protected async toggleConvMute(): Promise<void> {
+    const conv = this.chat.activeConversation();
+    if (!conv) return;
+    try { await this.chat.setConversationMute(conv.id, !conv.isMuted); }
+    catch (err) { this.toasts.error((err as Error).message ?? 'Could not update mute.'); }
+  }
+
+  // ── In-thread search ────────────────────────────────────────────────
+
+  protected toggleSearch(): void {
+    const open = !this.searchOpen();
+    this.searchOpen.set(open);
+    if (!open) { this.searchQuery.set(''); this.searchResults.set([]); }
+  }
+  protected onSearchInput(value: string): void {
+    this.searchQuery.set(value);
+    if (this.searchDebounce) clearTimeout(this.searchDebounce);
+    this.searchDebounce = setTimeout(() => void this.runSearch(), 200);
+  }
+  private async runSearch(): Promise<void> {
+    const id = this.chat.activeConversationId();
+    const q = this.searchQuery();
+    if (!id || !q.trim()) { this.searchResults.set([]); return; }
+    try { this.searchResults.set(await this.chat.searchConversation(id, q)); }
+    catch { this.searchResults.set([]); }
+  }
+  protected jumpToSearchResult(m: ChatMessage): void {
+    // Closing the search overlay; user scrolls to context themselves
+    // (full message-jump-and-highlight is a future polish).
+    this.searchOpen.set(false);
+  }
+
+  // ── Notes-to-self ───────────────────────────────────────────────────
+
+  protected async openNotesToSelf(): Promise<void> {
+    try { await this.chat.openNotesToSelf(); }
+    catch (err) { this.toasts.error((err as Error).message ?? 'Could not open Notes.'); }
+  }
+
+  // ── Mention autocomplete ────────────────────────────────────────────
+
+  /** Called from the composer (input). Detects an open '@…' token at
+   *  caret and opens the suggestion popover. */
+  protected detectMention(): void {
+    const ta = this.composerEl?.nativeElement;
+    if (!ta) return;
+    const value = this.draft();
+    const caret = ta.selectionStart ?? value.length;
+    // Find the start of the @-token immediately before the caret.
+    const before = value.slice(0, caret);
+    const m = before.match(/(?:^|\s)@([\w]*)$/);
+    if (m) {
+      this.mentionOpen.set(true);
+      this.mentionQuery.set(m[1] ?? '');
+      this.mentionAnchorPos.set(caret - (m[1].length + 1));
+      this.mentionActiveIdx.set(0);
+    } else {
+      this.mentionOpen.set(false);
+    }
+  }
+
+  /** Insert @<authId> at the mention anchor, replacing the typed query. */
+  protected pickMention(p: { userId: string; displayName: string }): void {
+    const ta = this.composerEl?.nativeElement;
+    if (!ta) return;
+    const value = this.draft();
+    const anchor = this.mentionAnchorPos();
+    const caret = ta.selectionStart ?? value.length;
+    // Inserted token: '@<authId> ' (trailing space). The body stores the
+    // AuthId GUID; the bubble renderer swaps it for the display name.
+    const inserted = `@${p.userId} `;
+    const next = value.slice(0, anchor) + inserted + value.slice(caret);
+    this.draft.set(next);
+    this.mentionOpen.set(false);
+    queueMicrotask(() => {
+      const newCaret = anchor + inserted.length;
+      ta.focus();
+      ta.setSelectionRange(newCaret, newCaret);
+    });
+  }
+
+  /** Render a message body with @<authId> tokens replaced by names +
+   *  highlight when I'm the mentioned user. Returns an HTML string;
+   *  template uses [innerHTML] so we sanitise here.
+   *
+   *  Keep this fast — runs per bubble per render. */
+  protected renderBodyHtml(m: ChatMessage): string {
+    const conv = this.chat.activeConversation();
+    if (!conv) return this.escapeHtml(m.body);
+    const me = this.me();
+    return this.escapeHtml(m.body).replace(
+      /@([0-9a-fA-F-]{36})/g,
+      (_full, id) => {
+        const part = conv.participants.find(p => p.userId === id);
+        const name = part?.displayName ?? '@user';
+        const youCls = id === me ? ' pf-msgs__mention--you' : '';
+        return `<span class="pf-msgs__mention${youCls}">@${this.escapeHtml(name)}</span>`;
+      });
+  }
+  private escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]!));
   }
 
   protected toggleEmoji(): void { this.emojiOpen.set(!this.emojiOpen()); }

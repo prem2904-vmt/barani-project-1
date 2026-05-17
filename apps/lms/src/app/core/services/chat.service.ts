@@ -90,6 +90,13 @@ export class ChatService implements OnDestroy {
       this.onMessageEdited(p));
     this.connection.on('MessageDeleted', (p: { id: string; conversationId: string }) =>
       this.onMessageDeleted(p));
+    this.connection.on('MessagePinChanged',
+      (p: { id: string; conversationId: string; isPinned: boolean }) => this.onMessagePinChanged(p));
+    this.connection.on('MessageReactionChanged',
+      (p: { id: string; conversationId: string; reactions: Array<{ emoji: string; userIds: string[] }> }) =>
+        this.onMessageReactionChanged(p));
+    this.connection.on('ConversationMuteChanged',
+      (p: { conversationId: string; isMuted: boolean }) => this.onConversationMuteChanged(p));
     this.connection.on('Typing', (p: { conversationId: string; fromUserId: string; isTyping: boolean }) =>
       this.onTyping(p));
     this.connection.on('ConversationCreated', (_p: { conversationId: string }) =>
@@ -162,9 +169,16 @@ export class ChatService implements OnDestroy {
   /**
    * Convenience for "Send patient to <colleague>": gets-or-creates the
    * 1:1 conversation, shares the patient, opens the thread.
+   *
+   * When `contextLabel` is provided, the conversation is anchored to
+   * the patient (separate from the general 1:1 thread between the two
+   * users). The thread-header chip + context chip on /messages then
+   * surfaces the anchor.
    */
-  async sharePatientWithUser(otherUserId: string, patientId: string): Promise<string> {
-    const convId = await this.openDirectConversation(otherUserId);
+  async sharePatientWithUser(otherUserId: string, patientId: string, contextLabel?: string): Promise<string> {
+    const convId = contextLabel
+      ? await this.openConversationWithContext(otherUserId, 'patient', patientId, contextLabel)
+      : await this.openDirectConversation(otherUserId);
     await this.sharePatient(convId, patientId);
     return convId;
   }
@@ -358,6 +372,66 @@ export class ChatService implements OnDestroy {
     await this.connection!.invoke('DeleteMessage', messageId);
   }
 
+  async setPinned(messageId: string, pinned: boolean): Promise<void> {
+    await this.connect();
+    await this.connection!.invoke('SetPinned', messageId, pinned);
+  }
+
+  async toggleReaction(messageId: string, emoji: string): Promise<void> {
+    await this.connect();
+    await this.connection!.invoke('ToggleReaction', messageId, emoji);
+  }
+
+  /** Per-conversation mute. Updates local state immediately + persists
+   *  via the hub; server echoes back ConversationMuteChanged for other tabs. */
+  async setConversationMute(conversationId: string, isMuted: boolean): Promise<void> {
+    this.conversations.update(list =>
+      list.map(c => c.id === conversationId ? { ...c, isMuted } : c));
+    await this.connect();
+    await this.connection!.invoke('SetConversationMute', conversationId, isMuted);
+  }
+
+  /** Get-or-create "Notes to self" — opens it as the active conversation. */
+  async openNotesToSelf(): Promise<string> {
+    const res = await firstValueFrom(this.api.post<{ conversationId: string }>(
+      '/api/chat/conversations/notes-to-self', {}
+    ));
+    if (!res?.conversationId) throw new Error('Could not open Notes to self.');
+    await this.loadConversations();
+    await this.openConversation(res.conversationId);
+    return res.conversationId;
+  }
+
+  /** Server-side search inside a single conversation. Substring match. */
+  async searchConversation(conversationId: string, q: string): Promise<ChatMessage[]> {
+    if (!q.trim()) return [];
+    const res = await firstValueFrom(this.api.get<ChatMessage[]>(
+      `/api/chat/conversations/${conversationId}/search?q=${encodeURIComponent(q.trim())}`
+    ));
+    return res ?? [];
+  }
+
+  /** Fetch the pinned-strip messages for a conversation. */
+  async getPinned(conversationId: string): Promise<ChatMessage[]> {
+    const res = await firstValueFrom(this.api.get<ChatMessage[]>(
+      `/api/chat/conversations/${conversationId}/pinned`
+    ));
+    return res ?? [];
+  }
+
+  /** Forward an existing message into another conversation. */
+  async forwardMessage(toConversationId: string, original: ChatMessage): Promise<void> {
+    // Forward = re-send the body + attachment metadata. We don't carry
+    // reactions/edits/replies forward — fresh send in the new thread.
+    await this.sendMessage(toConversationId, original.body || '', null,
+      original.attachmentUrl ? {
+        url: original.attachmentUrl,
+        name: original.attachmentName ?? 'forwarded',
+        contentType: original.attachmentMime ?? 'application/octet-stream',
+        size: original.attachmentSize ?? 0
+      } : null);
+  }
+
   /** Throttled typing broadcast. Caller should debounce to ~1Hz. */
   async setTyping(conversationId: string, isTyping: boolean): Promise<void> {
     await this.connect();
@@ -413,18 +487,42 @@ export class ChatService implements OnDestroy {
       return list;
     });
 
-    // Notification side-effect: only for 'user' kind from someone else
-    // when I'm not in that thread. System ('Alice added Bob') and call
-    // ('Missed call') events shouldn't ping — they're informational
-    // already-known or visually-loud-enough events.
+    // Notification side-effect. Skipped for:
+    //   - my own echoed sends
+    //   - non-'user' kinds (system / call rows)
+    //   - the conversation I'm currently reading
+    //   - per-conversation mute, UNLESS I was @mentioned (mentions override)
     const isUserKind = !m.kind || m.kind === 'user';
-    if (isUserKind && m.fromUserId !== me && this.activeConversationId() !== m.conversationId) {
+    const conv = this.conversations().find(c => c.id === m.conversationId);
+    const iAmMentioned = !!m.mentions && m.mentions.includes(me);
+    const muted = !!conv?.isMuted && !iAmMentioned;
+    if (isUserKind && m.fromUserId !== me
+        && this.activeConversationId() !== m.conversationId
+        && !muted) {
       this.ringtone.playPing();
-      const conv = this.conversations().find(c => c.id === m.conversationId);
       const senderName = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
       const title = conv?.isGroup && conv.name ? `${senderName} · ${conv.name}` : senderName;
       this.notify.notify(title, m.body, m.conversationId);
     }
+  }
+
+  private onMessagePinChanged(p: { id: string; conversationId: string; isPinned: boolean }) {
+    if (this.activeConversationId() === p.conversationId) {
+      this.activeMessages.update(list =>
+        list.map(m => m.id === p.id ? { ...m, isPinned: p.isPinned } : m));
+    }
+  }
+
+  private onMessageReactionChanged(p: { id: string; conversationId: string; reactions: Array<{ emoji: string; userIds: string[] }> }) {
+    if (this.activeConversationId() === p.conversationId) {
+      this.activeMessages.update(list =>
+        list.map(m => m.id === p.id ? { ...m, reactions: p.reactions } : m));
+    }
+  }
+
+  private onConversationMuteChanged(p: { conversationId: string; isMuted: boolean }) {
+    this.conversations.update(list =>
+      list.map(c => c.id === p.conversationId ? { ...c, isMuted: p.isMuted } : c));
   }
 
   private onMessageEdited(p: { id: string; conversationId: string; body: string; editedAt: string }) {

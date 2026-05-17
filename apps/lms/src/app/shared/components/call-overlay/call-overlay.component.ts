@@ -1,7 +1,9 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ChatService } from '../../../core/services/chat.service';
 import { RingtoneService } from '../../../core/services/ringtone.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
@@ -28,7 +30,7 @@ interface DirectoryUser {
 @Component({
   selector: 'pf-call-overlay',
   standalone: true,
-  imports: [SrcObjectDirective],
+  imports: [SrcObjectDirective, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Hidden audio sinks for each remote peer's stream. The SrcObjectDirective
@@ -96,7 +98,7 @@ interface DirectoryUser {
     @if (showInCallPanel() && callExpanded()) {
       <div class="pf-call-screen" role="dialog" aria-modal="true" aria-label="Active call">
         <div class="pf-call-screen__backdrop"></div>
-        <div class="pf-call-screen__card">
+        <div class="pf-call-screen__card" [class.pf-call-screen__card--with-chat]="chatPanelOpen()">
           <header class="pf-call-screen__hdr">
             <button type="button" class="pf-call-screen__icon-btn"
                     (click)="minimise()" aria-label="Minimise" title="Minimise">
@@ -124,6 +126,14 @@ interface DirectoryUser {
                 }
               </span>
             </div>
+            <button type="button" class="pf-call-screen__icon-btn"
+                    [class.pf-call-screen__icon-btn--active]="chatPanelOpen()"
+                    (click)="toggleChatPanel()" aria-label="In-call chat" title="In-call chat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
             <button type="button" class="pf-call-screen__icon-btn"
                     (click)="leave()" aria-label="End call" title="End call">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -161,6 +171,46 @@ interface DirectoryUser {
               </div>
             }
           </div>
+
+          @if (chatPanelOpen()) {
+            <aside class="pf-call-screen__chat" aria-label="In-call chat">
+              <header class="pf-call-screen__chat-hdr">
+                <span class="pf-call-screen__chat-title">Chat</span>
+                <button type="button" class="pf-call-screen__icon-btn pf-call-screen__icon-btn--sm"
+                        (click)="toggleChatPanel()" title="Close chat">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </header>
+              <div class="pf-call-screen__chat-scroller">
+                @if (chat.activeMessages().length === 0) {
+                  <p class="pf-call-screen__chat-empty">No messages yet — say something during the call.</p>
+                }
+                @for (m of chat.activeMessages(); track m.id) {
+                  <div class="pf-call-screen__chat-row"
+                       [class.pf-call-screen__chat-row--mine]="m.fromUserId === meAuthId()">
+                    <div class="pf-call-screen__chat-bubble"
+                         [class.pf-call-screen__chat-bubble--mine]="m.fromUserId === meAuthId()">
+                      <div class="pf-call-screen__chat-body">{{ m.body }}</div>
+                      <div class="pf-call-screen__chat-time">{{ m.sentAt | date:'shortTime' }}</div>
+                    </div>
+                  </div>
+                }
+              </div>
+              <div class="pf-call-screen__chat-composer">
+                <input type="text" placeholder="Type a message" [value]="chatDraft()"
+                       (input)="chatDraft.set($any($event.target).value)" (keydown)="onChatKeyDown($event)">
+                <button type="button" (click)="sendInCallMessage()" [disabled]="!chatDraft().trim()" title="Send">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                </button>
+              </div>
+            </aside>
+          }
 
           <footer class="pf-call-screen__ctrls">
             <button type="button" class="pf-call-screen__ctrl"
@@ -926,6 +976,135 @@ interface DirectoryUser {
     .pf-call-screen__ctrl--end { color: #fb7185; }
     .pf-call-screen__ctrl-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
 
+    /* ── In-call chat side panel ─────────────────────────────── */
+    .pf-call-screen__card--with-chat {
+      max-width: 980px;
+      display: grid;
+      grid-template-areas:
+        "hdr      hdr"
+        "people   chat"
+        "ctrls    ctrls";
+      grid-template-columns: 1fr 300px;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+    }
+    .pf-call-screen__card--with-chat .pf-call-screen__hdr           { grid-area: hdr; }
+    .pf-call-screen__card--with-chat .pf-call-screen__participants  { grid-area: people; }
+    .pf-call-screen__card--with-chat .pf-call-screen__chat          { grid-area: chat; }
+    .pf-call-screen__card--with-chat .pf-call-screen__ctrls         { grid-area: ctrls; }
+    @media (max-width: 720px) {
+      .pf-call-screen__card--with-chat {
+        grid-template-areas:
+          "hdr"
+          "chat"
+          "ctrls";
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+      }
+      .pf-call-screen__card--with-chat .pf-call-screen__participants { display: none; }
+    }
+
+    .pf-call-screen__chat {
+      display: flex; flex-direction: column;
+      min-height: 0; min-width: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .pf-call-screen__chat-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-muted);
+      background: var(--bg-card-solid);
+    }
+    .pf-call-screen__chat-title {
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pf-call-screen__icon-btn--sm {
+      width: 24px; height: 24px;
+      padding: 0;
+    }
+    .pf-call-screen__icon-btn--active {
+      background: rgba(139, 92, 246, 0.22);
+      border-color: rgba(139, 92, 246, 0.45);
+      color: var(--color-violet-300);
+    }
+    .pf-call-screen__chat-scroller {
+      flex: 1; min-height: 0;
+      overflow-y: auto;
+      padding: 10px 10px 6px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .pf-call-screen__chat-empty {
+      margin: auto;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      padding: 16px;
+    }
+    .pf-call-screen__chat-row {
+      display: flex;
+      &.pf-call-screen__chat-row--mine { justify-content: flex-end; }
+    }
+    .pf-call-screen__chat-bubble {
+      max-width: 78%;
+      padding: 6px 10px;
+      border-radius: 10px 10px 10px 3px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      &.pf-call-screen__chat-bubble--mine {
+        border-radius: 10px 10px 3px 10px;
+        background: var(--gradient-primary);
+        color: #fff;
+        border-color: transparent;
+      }
+    }
+    .pf-call-screen__chat-body {
+      font-size: 12.5px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .pf-call-screen__chat-time {
+      font-size: 10px;
+      opacity: 0.7;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-call-screen__chat-composer {
+      display: flex; gap: 6px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border-muted);
+      background: var(--bg-card-solid);
+      input {
+        flex: 1; min-width: 0;
+        padding: 6px 10px;
+        border-radius: 16px;
+        border: 1px solid var(--input-border);
+        background: var(--bg-input);
+        color: var(--input-text);
+        font-size: 12.5px;
+        outline: none;
+        &:focus { border-color: var(--input-border-focus); }
+      }
+      button {
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        border: none;
+        background: var(--gradient-primary);
+        color: #fff;
+        display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        &:disabled { opacity: 0.4; cursor: not-allowed; }
+      }
+    }
+
     /* ── Invite-to-call popover ───────────────────────────────── */
     .pf-call-invite-pop {
       position: absolute; bottom: calc(100% + 8px); right: 0;
@@ -999,11 +1178,70 @@ interface DirectoryUser {
 })
 export class CallOverlayComponent {
   protected readonly webrtc = inject(WebrtcService);
+  protected readonly chat = inject(ChatService);
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
   private readonly ringtone = inject(RingtoneService);
+
+  // ── In-call chat side panel ──────────────────────────────────────
+  protected readonly chatPanelOpen = signal(false);
+  protected readonly chatDraft = signal('');
+
+  /** Resolve the conversation to use for the in-call chat sidebar:
+   *   - Group call (incoming-call payload carried conversationId) → that.
+   *   - 1:1 with one remote participant → get-or-create the direct convo.
+   *   - Otherwise null (no chat). */
+  protected async toggleChatPanel(): Promise<void> {
+    const next = !this.chatPanelOpen();
+    this.chatPanelOpen.set(next);
+    if (!next) return;
+    // Already open? Make sure ChatService has the right conversation loaded.
+    const ic = this.webrtc.incomingCall();
+    const remotes = this.webrtc.remoteParticipants();
+    try {
+      if (ic?.isGroup && ic.conversationId) {
+        if (this.chat.activeConversationId() !== ic.conversationId) {
+          await this.chat.openConversation(ic.conversationId);
+        }
+      } else if (remotes.length === 1) {
+        await this.chat.openDirectConversation(remotes[0]);
+      } else {
+        // Group call I initiated → look for the matching group conversation
+        // by participant overlap. Best-effort.
+        const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+        const all = new Set([me, ...remotes]);
+        const match = this.chat.conversations().find(c =>
+          c.isGroup
+          && c.participants.length === all.size
+          && c.participants.every(p => all.has(p.userId)));
+        if (match) await this.chat.openConversation(match.id);
+        else {
+          this.toast.info('In-call chat is not available for this call.');
+          this.chatPanelOpen.set(false);
+        }
+      }
+    } catch (err) {
+      this.toast.error('Could not open chat for this call.');
+      this.chatPanelOpen.set(false);
+    }
+  }
+
+  protected async sendInCallMessage(): Promise<void> {
+    const body = this.chatDraft().trim();
+    const convId = this.chat.activeConversationId();
+    if (!body || !convId) return;
+    this.chatDraft.set('');
+    try { await this.chat.sendMessage(convId, body); }
+    catch (err) { this.toast.error((err as Error).message ?? 'Could not send.'); }
+  }
+  protected onChatKeyDown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void this.sendInCallMessage(); }
+  }
+  protected meAuthId(): string {
+    return this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+  }
 
   // ── Add-participant (group call) state ────────────────────────
   protected readonly invitePopoverOpen = signal(false);
