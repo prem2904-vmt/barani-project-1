@@ -309,6 +309,126 @@
   color: var(--text-tertiary);
   margin: 2px 0 0;
 }
+
+// Context chip — under thread name when the conversation is anchored
+// to a patient/order/report. Clickable; deep-links to the record.
+.pf-msgs__context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-tertiary);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: rgba(139, 92, 246, 0.32);
+  }
+  &.pf-msgs__context-chip--patient {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.32);
+    color: #93c5fd;
+  }
+  &.pf-msgs__context-chip--order {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.32);
+    color: #6ee7b7;
+  }
+  &.pf-msgs__context-chip--report {
+    background: rgba(168, 85, 247, 0.14);
+    border-color: rgba(168, 85, 247, 0.32);
+    color: var(--color-violet-300);
+  }
+  svg { flex-shrink: 0; opacity: 0.8; }
+}
+.pf-msgs__context-chip-type {
+  text-transform: uppercase;
+  font-size: 9.5px;
+  opacity: 0.7;
+  padding-right: 6px;
+  border-right: 1px solid currentColor;
+}
+.pf-msgs__context-chip-label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+// Shared report card inside a bubble — clickable.
+.pf-msgs__report-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  min-width: 260px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s;
+  &:hover {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+  &.pf-msgs__report-card--mine {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.2);
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+}
+.pf-msgs__report-card-icon {
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  background: rgba(168, 85, 247, 0.2);
+  color: var(--color-violet-300);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  .pf-msgs__report-card--mine & {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+}
+.pf-msgs__report-card-meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.pf-msgs__report-card-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.pf-msgs__report-card-patient {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-msgs__report-card-tests {
+  font-size: 11.5px;
+  opacity: 0.75;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pf-msgs__report-card-go {
+  opacity: 0.5;
+  flex-shrink: 0;
+  .pf-msgs__report-card:hover & { opacity: 1; }
+}
 .pf-msgs__thread-actions { display: flex; gap: 4px; }
 .pf-msgs__icon-btn {
   background: var(--glass-bg);
@@ -364,6 +484,35 @@
   text-transform: uppercase;
   padding: 12px 0 6px;
 }
+// System / call rows — centered, chromeless, muted. No bubble.
+.pf-msgs__sys-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.pf-msgs__sys-body {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-weight: 500;
+}
+.pf-msgs__sys-row--call .pf-msgs__sys-body {
+  background: var(--bg-active);
+  border-color: rgba(139, 92, 246, 0.25);
+  color: var(--color-violet-300);
+}
+.pf-msgs__sys-time {
+  font-size: 10.5px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
 .pf-msgs__day-sep {
   display: flex;
   align-items: center;
@@ -387,8 +536,21 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  margin: 2px 0;
+  margin: 6px 0 2px;
   &.pf-msgs__bubble-row--mine { align-items: flex-end; }
+  // Grouped continuation: tighter top margin + softer corner where
+  // the tail meets the prior bubble. Reads as one "block from the
+  // same person" instead of separated messages.
+  &.pf-msgs__bubble-row--grouped {
+    margin-top: 1px;
+    .pf-msgs__bubble {
+      border-top-left-radius: 6px;
+    }
+    &.pf-msgs__bubble-row--mine .pf-msgs__bubble {
+      border-top-left-radius: 14px;
+      border-top-right-radius: 6px;
+    }
+  }
 }
 .pf-msgs__bubble-author {
   font-size: 11px;
@@ -398,7 +560,11 @@
 }
 
 .pf-msgs__bubble {
-  max-width: 72%;
+  // max-width belongs on the wrap (see .pf-msgs__bubble-wrap) — putting it
+  // here while the parent was shrink-to-fit caused short messages like
+  // "Yes" to wrap one character per line. Bubble is now content-sized.
+  display: inline-block;
+  max-width: 100%;
   padding: 9px 13px;
   border-radius: 14px 14px 14px 4px;          // tail on bottom-left (other)
   background: var(--bg-card);
@@ -414,7 +580,46 @@
     border-radius: 14px 14px 4px 14px;        // tail on bottom-right (me)
     box-shadow: 0 4px 16px rgba(139, 92, 246, 0.28);
   }
-  @media (max-width: 640px) { max-width: 84%; }
+  // ── Image-dominant: when the only content is an attached image
+  // (no caption, no reply chip), the chrome around the image looks
+  // bad. Drop the padding + frame; let the image be the bubble. The
+  // meta line sits in a translucent overlay at the bottom-right.
+  &.pf-msgs__bubble--image {
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    .pf-msgs__attach-image-link { margin: 0; border-radius: 14px; overflow: hidden; }
+    &.pf-msgs__bubble--mine .pf-msgs__attach-image-link {
+      border-radius: 14px 14px 4px 14px;
+    }
+    .pf-msgs__bubble-meta {
+      position: absolute;
+      right: 8px; bottom: 8px;
+      margin: 0;
+      padding: 3px 7px;
+      border-radius: 9999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+  }
+  // ── Emoji-dominant: single emoji message renders 2x size with no
+  // chrome — WhatsApp/Telegram convention. Detection in the TS:
+  // body is 1-3 emoji chars, no attachment, no reply.
+  &.pf-msgs__bubble--emoji-only {
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    .pf-msgs__bubble-body { font-size: 36px; line-height: 1; }
+    .pf-msgs__bubble-meta { color: var(--text-muted); padding-left: 2px; }
+    &.pf-msgs__bubble--mine .pf-msgs__bubble-meta { color: var(--text-muted); }
+  }
+  @media (max-width: 640px) {
+    &.pf-msgs__bubble--emoji-only .pf-msgs__bubble-body { font-size: 32px; }
+  }
 }
 .pf-msgs__bubble-body {
   font-size: 13.5px;
@@ -470,7 +675,11 @@
 .pf-msgs__bubble-wrap {
   position: relative;
   display: inline-block;
-  max-width: 100%;
+  // The width cap lives here, not on the bubble. Inline-block + max-width
+  // gives the bubble inside its natural width up to the cap — without
+  // the "1 char per line" collapse short messages suffered before.
+  max-width: 72%;
+  @media (max-width: 640px) { max-width: 84%; }
 }
 .pf-msgs__bubble-actions {
   position: absolute;
@@ -616,6 +825,59 @@
 }
 .pf-msgs__file-input { display: none; }
 
+// Mic-instead-of-send when composer is empty
+.pf-msgs__send--mic {
+  background: var(--glass-bg-hover);
+  border: 1px solid var(--glass-border-hover);
+  color: var(--color-violet-300);
+  box-shadow: none;
+  &:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.45);
+  }
+}
+
+// Recording bar — replaces the whole composer while recording.
+.pf-msgs__record-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 22px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.32);
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 40px;
+}
+.pf-msgs__record-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: 0 0 8px var(--color-danger);
+  animation: pf-msgs-record-pulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pf-msgs-record-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+.pf-msgs__record-time {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.pf-msgs__record-hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0.75;
+  text-transform: none;
+  letter-spacing: 0;
+  @media (max-width: 480px) { display: none; }
+}
+
 // Pending attachment chip (above composer)
 .pf-msgs__pending-attach {
   display: flex;
@@ -671,6 +933,24 @@
   object-fit: cover;
   cursor: zoom-in;
 }
+// Audio attachment — uses the browser's native audio player but
+// themed to fit the bubble. Compact: ~240px wide on desktop.
+.pf-msgs__attach-audio {
+  margin-bottom: 6px;
+  audio {
+    display: block;
+    width: 240px;
+    max-width: 100%;
+    height: 36px;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.18);
+    color-scheme: dark;
+  }
+  .pf-msgs__bubble--mine & audio {
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
 .pf-msgs__attach-card {
   display: flex;
   align-items: center;

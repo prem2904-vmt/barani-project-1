@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import {
   ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild,
   computed, effect, inject, signal
@@ -32,7 +33,7 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe],
+  imports: [CommonModule, FormsModule, DatePipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
@@ -78,6 +79,16 @@ export class MessagesPageComponent implements OnInit {
   /** Staged attachment: uploaded to server, waiting for the user to hit send. */
   protected readonly pendingAttachment = signal<{ url: string; name: string; contentType: string; size: number } | null>(null);
   protected readonly attachmentUploading = signal(false);
+
+  /** Voice-message recording state. While recording, the composer shows
+   *  an inline waveform-style indicator + elapsed time. Release to send. */
+  protected readonly recording = signal(false);
+  protected readonly recordElapsedMs = signal(0);
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordChunks: Blob[] = [];
+  private recordStartedAt = 0;
+  private recordTimer: ReturnType<typeof setInterval> | null = null;
+  private recordStream: MediaStream | null = null;
   /** Built-in emoji bank — no third-party dep. ~50 of the most common. */
   protected readonly emojiBank: string[] = [
     '👍','❤️','😂','🙏','🔥','🎉','😍','😊','👏','💯',
@@ -255,6 +266,37 @@ export class MessagesPageComponent implements OnInit {
     if (seenBy.length === 1) return `Seen by ${seenBy[0]}`;
     if (seenBy.length === 2) return `Seen by ${seenBy[0]} and ${seenBy[1]}`;
     return `Seen by ${seenBy[0]} +${seenBy.length - 1}`;
+  }
+
+  /**
+   * Consecutive-message grouping (Teams/Slack pattern). Returns true when
+   * the previous message in the list was sent by the same author within
+   * 5 minutes AND neither row is a system/call row AND no day separator
+   * is rendered between them. Used by the template to:
+   *   - hide the author label on follow-up bubbles in a group
+   *   - hide the per-bubble timestamp on all but the LAST in a run
+   *   - tighten vertical spacing on follow-up bubbles
+   */
+  protected isGroupedWithPrev(idx: number): boolean {
+    if (idx === 0) return false;
+    const messages = this.chat.activeMessages();
+    const prev = messages[idx - 1];
+    const curr = messages[idx];
+    if (!prev || !curr) return false;
+    if ((prev.kind && prev.kind !== 'user') || (curr.kind && curr.kind !== 'user')) return false;
+    if (prev.fromUserId !== curr.fromUserId) return false;
+    // Day separator in between → new day, restart grouping.
+    if (this.showDaySeparatorBefore(idx).show) return false;
+    const dt = new Date(curr.sentAt).getTime() - new Date(prev.sentAt).getTime();
+    return dt >= 0 && dt < 5 * 60 * 1000;
+  }
+
+  /** True when the NEXT message continues the current group → hide
+   *  the current bubble's timestamp (it'll show on the last in the run). */
+  protected isGroupedWithNext(idx: number): boolean {
+    const messages = this.chat.activeMessages();
+    if (idx >= messages.length - 1) return false;
+    return this.isGroupedWithPrev(idx + 1);
   }
 
   protected showDaySeparatorBefore(idx: number): { show: boolean; label: string } {
@@ -500,7 +542,11 @@ export class MessagesPageComponent implements OnInit {
     }
     this.attachmentUploading.set(true);
     try {
-      const uploaded = await this.chat.uploadAttachment(file);
+      // Resize images client-side before upload: a 12MB phone photo
+      // becomes a ~400KB JPEG that's still plenty sharp for chat.
+      // PDFs and unsupported types pass through unchanged.
+      const toUpload = await this.maybeCompressImage(file);
+      const uploaded = await this.chat.uploadAttachment(toUpload);
       this.pendingAttachment.set(uploaded);
       queueMicrotask(() => this.composerEl?.nativeElement.focus());
     } catch (err) {
@@ -508,11 +554,80 @@ export class MessagesPageComponent implements OnInit {
     } finally { this.attachmentUploading.set(false); }
   }
 
+  /**
+   * Downscale a large image to 1600px on its long side and re-encode at
+   * JPEG quality 0.85. Returns the original file unchanged for non-images,
+   * very-small images (<300KB), or when the browser fails to decode.
+   */
+  private async maybeCompressImage(file: File): Promise<File> {
+    if (!file.type.startsWith('image/')) return file;
+    if (file.type === 'image/gif') return file;            // animation
+    if (file.size < 300 * 1024) return file;               // already small
+    const MAX_SIDE = 1600;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const longSide = Math.max(bitmap.width, bitmap.height);
+      const scale = longSide > MAX_SIDE ? MAX_SIDE / longSide : 1;
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close?.();
+      const blob: Blob | null = await new Promise(resolve =>
+        canvas.toBlob(b => resolve(b), 'image/jpeg', 0.85));
+      if (!blob) return file;
+      // Only use the compressed copy if it's actually smaller.
+      if (blob.size >= file.size * 0.95) return file;
+      const base = file.name.replace(/\.[^.]+$/, '');
+      return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
+    } catch { return file; }
+  }
+
   protected clearAttachment(): void { this.pendingAttachment.set(null); }
 
   /** True for image MIME types — drives inline preview vs file-card render. */
   protected isImage(mime: string | null | undefined): boolean {
     return !!mime && mime.startsWith('image/');
+  }
+
+  /**
+   * True when the bubble's only content is the image (no caption, no
+   * reply chip). Drives the image-dominant render: image fills the
+   * bubble, padding/border drop, timestamp floats over the image.
+   */
+  protected isImageDominant(m: { body: string; attachmentUrl?: string | null; attachmentMime?: string | null; replyPreview?: string | null }): boolean {
+    return !!m.attachmentUrl
+      && this.isImage(m.attachmentMime)
+      && !m.body.trim()
+      && !m.replyPreview;
+  }
+
+  /**
+   * True when the bubble is 1–3 emoji characters with nothing else.
+   * Renders WhatsApp/Telegram-style: 2x font size, no chrome.
+   * Uses Intl.Segmenter to count user-perceived "emoji clusters"
+   * correctly (compound emoji like 👨‍⚕️ count as one).
+   */
+  protected isEmojiOnly(m: { body: string; attachmentUrl?: string | null; replyPreview?: string | null }): boolean {
+    if (m.attachmentUrl || m.replyPreview) return false;
+    const body = m.body.trim();
+    if (!body) return false;
+    // Quick reject: contains any letter/digit → definitely not emoji-only.
+    if (/[A-Za-z0-9]/.test(body)) return false;
+    // Use Intl.Segmenter where available (modern Chrome/Safari/Firefox).
+    if (typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+      const seg = new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' });
+      const clusters = [...seg.segment(body)] as Array<{ segment: string }>;
+      // 1-3 grapheme clusters AND every cluster must be an emoji-like char.
+      if (clusters.length === 0 || clusters.length > 3) return false;
+      return clusters.every(c => /\p{Extended_Pictographic}/u.test(c.segment));
+    }
+    // Fallback: best-effort regex (won't perfectly handle compound emoji).
+    const stripped = body.replace(/\s+/g, '');
+    return stripped.length > 0 && stripped.length <= 8 && /^\p{Extended_Pictographic}+$/u.test(stripped);
   }
 
   /** "12.3 KB", "4.5 MB" — human-readable size. */
@@ -531,6 +646,102 @@ export class MessagesPageComponent implements OnInit {
     // Strip trailing /api or /api/ if env.apiUrl includes it; uploads live at root.
     const base = (this.api as any).baseUrl ?? '';
     return `${base}${url}`;
+  }
+
+  /** True for audio MIME types — drives voice-message bubble render. */
+  protected isAudio(mime: string | null | undefined): boolean {
+    return !!mime && mime.startsWith('audio/');
+  }
+
+  /** Deep-link for the thread-header context chip. */
+  protected contextLink(c: { contextType?: string | null; contextId?: string | null }): any[] | null {
+    if (!c.contextType || !c.contextId) return null;
+    switch (c.contextType) {
+      case 'patient': return ['/frontdesk', 'patients', c.contextId];
+      case 'order':   return ['/lab', 'my-work'];   // no per-order route yet; closest landing
+      case 'report':  return ['/reports', 'view', c.contextId];
+      default: return null;
+    }
+  }
+
+  // ── Voice messages ──────────────────────────────────────────────────
+
+  /**
+   * Mic button: press to start recording, release (or click again) to
+   * stop + send. Auto-stops at 60s. Permission prompt fires the first
+   * time. Falls back gracefully if MediaRecorder is unsupported.
+   */
+  protected async toggleRecord(): Promise<void> {
+    if (this.recording()) { this.stopRecording(true); return; }
+    if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') {
+      this.toasts.error('Voice messages aren\'t supported on this browser.');
+      return;
+    }
+    try {
+      this.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Prefer audio/webm with opus (Chrome/Firefox); Safari picks audio/mp4.
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+      this.mediaRecorder = mime
+        ? new MediaRecorder(this.recordStream, { mimeType: mime })
+        : new MediaRecorder(this.recordStream);
+      this.recordChunks = [];
+      this.mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) this.recordChunks.push(e.data);
+      };
+      this.mediaRecorder.onstop = () => void this.finalizeRecording();
+      this.mediaRecorder.start();
+      this.recordStartedAt = Date.now();
+      this.recording.set(true);
+      this.recordTimer = setInterval(() => {
+        const elapsed = Date.now() - this.recordStartedAt;
+        this.recordElapsedMs.set(elapsed);
+        if (elapsed >= 60000) this.stopRecording(true); // hard cap at 60s
+      }, 100);
+    } catch (err) {
+      this.toasts.error('Microphone permission denied.');
+    }
+  }
+
+  protected cancelRecord(): void { this.stopRecording(false); }
+
+  /** Stops the recorder. send=true → upload + queue as attachment;
+   *  send=false → discard. */
+  private stopRecording(send: boolean): void {
+    if (!this.recording()) return;
+    this.recording.set(false);
+    if (this.recordTimer) { clearInterval(this.recordTimer); this.recordTimer = null; }
+    try { this.mediaRecorder?.stop(); } catch { /* ignore */ }
+    this.recordStream?.getTracks().forEach(t => t.stop());
+    this.recordStream = null;
+    if (!send) this.recordChunks = [];
+  }
+
+  /** After MediaRecorder fires onstop, upload + queue the voice clip. */
+  private async finalizeRecording(): Promise<void> {
+    if (this.recordChunks.length === 0) return;
+    const durationSec = Math.max(1, Math.round((Date.now() - this.recordStartedAt) / 1000));
+    const mime = this.mediaRecorder?.mimeType?.split(';')[0] ?? 'audio/webm';
+    const ext = mime === 'audio/mp4' ? 'm4a' : 'webm';
+    const blob = new Blob(this.recordChunks, { type: mime });
+    this.recordChunks = [];
+    const file = new File([blob], `voice-${durationSec}s.${ext}`, { type: mime });
+    this.attachmentUploading.set(true);
+    try {
+      const uploaded = await this.chat.uploadAttachment(file);
+      this.pendingAttachment.set(uploaded);
+      // Auto-send: voice messages are usually meant to send immediately.
+      await this.sendDraft();
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Voice upload failed.');
+    } finally { this.attachmentUploading.set(false); }
+  }
+
+  protected formatRecordTime(): string {
+    const ms = this.recordElapsedMs();
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
   }
 
   // ── Reply / edit / delete / emoji ────────────────────────────────────

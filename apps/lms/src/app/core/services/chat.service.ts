@@ -122,6 +122,35 @@ export class ChatService implements OnDestroy {
     return res.conversationId;
   }
 
+  /**
+   * Get-or-create a 1:1 conversation anchored to a clinical record
+   * (patient / order / report). Same pair can have multiple context-
+   * anchored threads — each (contextType, contextId) is its own thread.
+   */
+  async openConversationWithContext(
+    otherUserId: string,
+    contextType: 'patient' | 'order' | 'report',
+    contextId: string,
+    contextLabel: string
+  ): Promise<string> {
+    const res = await firstValueFrom(this.api.post<{ conversationId: string }>(
+      '/api/chat/conversations/with-context',
+      { otherUserId, contextType, contextId, contextLabel }
+    ));
+    if (!res?.conversationId) throw new Error('Failed to open conversation.');
+    await this.loadConversations();
+    await this.openConversation(res.conversationId);
+    return res.conversationId;
+  }
+
+  /** Share a finalized report into an existing conversation. */
+  async shareReport(conversationId: string, reportId: string): Promise<void> {
+    await firstValueFrom(this.api.post<{ conversationId: string; messageId: string }>(
+      `/api/chat/conversations/${conversationId}/share-report`,
+      { reportId }
+    ));
+  }
+
   /** Create a group chat. Returns the conversation id. */
   async createGroup(name: string, memberIds: string[]): Promise<string> {
     const res = await firstValueFrom(this.api.post<{ conversationId: string }>(
@@ -348,7 +377,8 @@ export class ChatService implements OnDestroy {
     this.conversations.update(list => {
       const idx = list.findIndex(c => c.id === m.conversationId);
       const isToMe = m.fromUserId !== me;
-      const incUnread = isToMe && this.activeConversationId() !== m.conversationId ? 1 : 0;
+      const isUserKindSummary = !m.kind || m.kind === 'user';
+      const incUnread = isToMe && isUserKindSummary && this.activeConversationId() !== m.conversationId ? 1 : 0;
       if (idx >= 0) {
         const current = list[idx];
         const updated: Conversation = {
@@ -365,11 +395,12 @@ export class ChatService implements OnDestroy {
       return list;
     });
 
-    // Notification side-effect: a message from someone else, NOT in the
-    // conversation I'm currently reading → audible ping + browser
-    // Notification (if granted) + title-bar flash. Skipped for my own
-    // echoes (so I don't ping myself on send).
-    if (m.fromUserId !== me && this.activeConversationId() !== m.conversationId) {
+    // Notification side-effect: only for 'user' kind from someone else
+    // when I'm not in that thread. System ('Alice added Bob') and call
+    // ('Missed call') events shouldn't ping — they're informational
+    // already-known or visually-loud-enough events.
+    const isUserKind = !m.kind || m.kind === 'user';
+    if (isUserKind && m.fromUserId !== me && this.activeConversationId() !== m.conversationId) {
       this.ringtone.playPing();
       const conv = this.conversations().find(c => c.id === m.conversationId);
       const senderName = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';

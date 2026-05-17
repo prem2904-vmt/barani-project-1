@@ -10,6 +10,13 @@ export interface ChatMessage {
   fromUserId: string;
   body: string;
   sentAt: string;
+  /** 'user' (normal message) | 'system' (group event) | 'call' (call summary). */
+  kind?: 'user' | 'system' | 'call';
+  /** When the message carries a shared lab report, these are set so
+   *  the bubble can render a clickable report card. */
+  sharedReportId?: string | null;
+  sharedReportPatientName?: string | null;
+  sharedReportTestSummary?: string | null;
   /** Replying to another message — denormalised snippet survives edits. */
   replyToMessageId?: string | null;
   replyPreview?: string | null;
@@ -50,6 +57,10 @@ export interface Conversation {
   participants: ConversationParticipant[];
   lastMessage: ConversationLastMessage | null;
   unreadCount: number;
+  /** Optional clinical anchor — drives the thread-header context chip. */
+  contextType?: 'patient' | 'order' | 'report' | null;
+  contextId?: string | null;
+  contextLabel?: string | null;
 }
 
 export interface CallLogPeer {
