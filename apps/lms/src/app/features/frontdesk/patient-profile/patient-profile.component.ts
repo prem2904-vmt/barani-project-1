@@ -1,13 +1,19 @@
 import { DatePipe, Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ChatService } from '../../../core/services/chat.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
+
+interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
 interface ProfilePayload {
   patient: Patient;
@@ -199,6 +205,110 @@ interface ProfilePayload {
       transition: background 0.15s;
     }
     .pf-pp__btn-secondary:hover { background: var(--glass-bg-hover); }
+
+    /* ── Send-to-chat colleague picker modal ──────────────── */
+    .pf-pp__chat-pick-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      animation: pf-pp-fade 0.16s ease-out;
+    }
+    .pf-pp__chat-pick {
+      background: var(--surface-elevated);
+      border: 1px solid var(--glass-border-hover);
+      border-radius: 14px;
+      width: 100%; max-width: 440px;
+      max-height: min(80vh, 560px);
+      display: flex; flex-direction: column;
+      box-shadow: var(--glass-shadow-hover);
+      color: var(--text-primary);
+      overflow: hidden;
+      animation: pf-pp-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pf-pp__chat-pick-hdr {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-muted);
+      h3 { font-size: 14px; font-weight: 700; margin: 0; color: var(--text-primary); }
+      p { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 0; }
+    }
+    .pf-pp__chat-pick-close {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    }
+    .pf-pp__chat-pick-search {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border-muted);
+      input {
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 9px;
+        border: 1px solid var(--input-border);
+        background: var(--bg-input);
+        color: var(--input-text);
+        font-size: 13px;
+        outline: none;
+        &:focus { border-color: var(--input-border-focus); }
+        &::placeholder { color: var(--input-placeholder); }
+      }
+    }
+    .pf-pp__chat-pick-list {
+      list-style: none; margin: 0;
+      padding: 6px 0 10px;
+      overflow-y: auto;
+      flex: 1; min-height: 0;
+    }
+    .pf-pp__chat-pick-row {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 8px 18px;
+      background: transparent; border: none;
+      color: inherit; text-align: left;
+      cursor: pointer;
+      transition: background 0.12s;
+      &:hover:not(:disabled) { background: var(--bg-hover); }
+      &:disabled { opacity: 0.55; cursor: progress; }
+    }
+    .pf-pp__chat-pick-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: var(--gradient-primary);
+      color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+    }
+    .pf-pp__chat-pick-meta {
+      display: flex; flex-direction: column; min-width: 0;
+    }
+    .pf-pp__chat-pick-name {
+      font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-pp__chat-pick-email {
+      font-size: 11px; color: var(--text-tertiary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-pp__chat-pick-empty {
+      padding: 20px 16px;
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+    }
+    @keyframes pf-pp-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pf-pp-pop {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
 
     /* ── Visit history ───────────────────────────────────── */
     .pf-pp__hist-hdr {
@@ -431,8 +541,55 @@ interface ProfilePayload {
               </svg>
               Book
             </button>
+            <button type="button" class="pf-pp__btn-secondary press" (click)="openChatPicker()" title="Share this patient in chat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              Send to chat
+            </button>
           </div>
         </div>
+
+        <!-- Colleague-picker modal for "Send to chat". Reuses local
+             directory + ChatService.sharePatientWithUser. -->
+        @if (chatPickerOpen()) {
+          <div class="pf-pp__chat-pick-backdrop" (click)="closeChatPicker()">
+            <div class="pf-pp__chat-pick" (click)="$event.stopPropagation()">
+              <header class="pf-pp__chat-pick-hdr">
+                <div>
+                  <h3>Send patient to a colleague</h3>
+                  <p>{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
+                </div>
+                <button type="button" class="pf-pp__chat-pick-close" (click)="closeChatPicker()" aria-label="Close">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </header>
+              <div class="pf-pp__chat-pick-search">
+                <input type="text" placeholder="Search by name or email"
+                       [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
+              </div>
+              <ul class="pf-pp__chat-pick-list">
+                @for (u of chatPickerFiltered(); track u.id) {
+                  <li>
+                    <button type="button" class="pf-pp__chat-pick-row" [disabled]="chatPickerSending()"
+                            (click)="sendPatientToColleague(u)">
+                      <div class="pf-pp__chat-pick-avatar">
+                        {{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}
+                      </div>
+                      <div class="pf-pp__chat-pick-meta">
+                        <span class="pf-pp__chat-pick-name">{{ u.displayName }}</span>
+                        <span class="pf-pp__chat-pick-email">{{ u.email }}</span>
+                      </div>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="pf-pp__chat-pick-empty">No colleagues match.</li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
 
         <!-- ── Visit history ──────────────────────────────── -->
         <div class="pf-pp__hist-hdr">
@@ -516,6 +673,9 @@ export class PatientProfileComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly locationSvc = inject(Location);
+  private readonly chat = inject(ChatService);
+  private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _history = signal<Order[]>([]);
@@ -524,6 +684,20 @@ export class PatientProfileComponent implements OnInit {
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly displayName = computed(() => patientDisplayName(this._patient()));
+
+  // Send-to-chat colleague picker state.
+  protected readonly chatPickerOpen = signal(false);
+  protected readonly chatPickerSearch = signal('');
+  protected readonly chatPickerUsers = signal<DirectoryUser[]>([]);
+  protected readonly chatPickerSending = signal(false);
+  protected readonly chatPickerFiltered = computed(() => {
+    const term = this.chatPickerSearch().toLowerCase().trim();
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const all = this.chatPickerUsers().filter(u => u.id !== me && u.isActive);
+    return term
+      ? all.filter(u => u.displayName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term))
+      : all;
+  });
 
   ngOnInit() {
     this.route.paramMap.subscribe(map => {
@@ -574,6 +748,47 @@ export class PatientProfileComponent implements OnInit {
 
   bookAppointment(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
+  }
+
+  // ── Send-to-chat ──────────────────────────────────────────────────
+
+  async openChatPicker(): Promise<void> {
+    this.chatPickerOpen.set(true);
+    this.chatPickerSearch.set('');
+    if (this.chatPickerUsers().length === 0) {
+      try {
+        const users = await firstValueFrom(
+          this.api.get<DirectoryUser[]>('/api/directory/users'));
+        this.chatPickerUsers.set(users ?? []);
+      } catch {
+        this.toasts.error('Could not load directory.');
+      }
+    }
+  }
+  closeChatPicker(): void {
+    this.chatPickerOpen.set(false);
+    this.chatPickerSending.set(false);
+  }
+
+  /**
+   * Share this patient into a 1:1 with the chosen colleague. Get-or-creates
+   * the conversation, drops the patient card into it, then navigates to
+   * /messages so the user sees the thread ready to type into.
+   */
+  async sendPatientToColleague(u: DirectoryUser): Promise<void> {
+    const p = this.patient();
+    if (!p) return;
+    this.chatPickerSending.set(true);
+    try {
+      await this.chat.sharePatientWithUser(u.id, p.id);
+      this.toasts.info(`Sent ${this.displayName()} to ${u.displayName}`);
+      this.closeChatPicker();
+      this.router.navigate(['/messages']);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not share patient.');
+    } finally {
+      this.chatPickerSending.set(false);
+    }
   }
 
   private load(id: string) {

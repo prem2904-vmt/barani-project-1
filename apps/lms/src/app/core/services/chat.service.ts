@@ -151,6 +151,24 @@ export class ChatService implements OnDestroy {
     ));
   }
 
+  /** Share a patient profile into an existing conversation. */
+  async sharePatient(conversationId: string, patientId: string): Promise<void> {
+    await firstValueFrom(this.api.post<{ conversationId: string; messageId: string }>(
+      `/api/chat/conversations/${conversationId}/share-patient`,
+      { patientId }
+    ));
+  }
+
+  /**
+   * Convenience for "Send patient to <colleague>": gets-or-creates the
+   * 1:1 conversation, shares the patient, opens the thread.
+   */
+  async sharePatientWithUser(otherUserId: string, patientId: string): Promise<string> {
+    const convId = await this.openDirectConversation(otherUserId);
+    await this.sharePatient(convId, patientId);
+    return convId;
+  }
+
   /** Create a group chat. Returns the conversation id. */
   async createGroup(name: string, memberIds: string[]): Promise<string> {
     const res = await firstValueFrom(this.api.post<{ conversationId: string }>(

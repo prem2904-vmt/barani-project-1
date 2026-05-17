@@ -14,9 +14,16 @@ import { WebrtcService } from '../../core/services/webrtc.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ChatNotifyService } from '../../core/services/chat-notify.service';
 import { RingtoneService } from '../../core/services/ringtone.service';
-import { CallLog, Conversation } from '../../shared/models/chat.model';
+import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
+interface PatientLite {
+  id: string;
+  firstName: string;
+  fathersName: string;
+  mrn?: string | null;
+  phone?: string | null;
+}
 type RailTab = 'chats' | 'calls';
 type CallFilter = 'all' | 'missed';
 
@@ -79,6 +86,15 @@ export class MessagesPageComponent implements OnInit {
   /** Staged attachment: uploaded to server, waiting for the user to hit send. */
   protected readonly pendingAttachment = signal<{ url: string; name: string; contentType: string; size: number } | null>(null);
   protected readonly attachmentUploading = signal(false);
+
+  /** Share-record picker (currently patient-only; order/report could be
+   *  added by extending sharePickerType). Opens a popover above the
+   *  composer with a live search box. */
+  protected readonly sharePickerOpen = signal(false);
+  protected readonly sharePatientSearch = signal('');
+  protected readonly sharePatientResults = signal<PatientLite[]>([]);
+  protected readonly sharePatientLoading = signal(false);
+  private sharePatientDebounce: ReturnType<typeof setTimeout> | null = null;
 
   /** Voice-message recording state. While recording, the composer shows
    *  an inline waveform-style indicator + elapsed time. Release to send. */
@@ -661,6 +677,103 @@ export class MessagesPageComponent implements OnInit {
       case 'order':   return ['/lab', 'my-work'];   // no per-order route yet; closest landing
       case 'report':  return ['/reports', 'view', c.contextId];
       default: return null;
+    }
+  }
+
+  // ── Shared-record cards (patient / order / report in a bubble) ──────
+
+  /** Has *any* shared record? New generic field OR legacy report field. */
+  protected hasSharedRecord(m: ChatMessage): boolean {
+    return !!(m.sharedRecordType && m.sharedRecordId) || !!m.sharedReportId;
+  }
+
+  /** Normalised view of the shared record. Prefers the generic columns
+   *  but falls back to legacy SharedReport* so old rows still render. */
+  protected sharedRecord(m: ChatMessage): { type: 'patient' | 'order' | 'report'; id: string; title: string; subtitle: string } | null {
+    if (m.sharedRecordType && m.sharedRecordId) {
+      return {
+        type: m.sharedRecordType,
+        id: m.sharedRecordId,
+        title: m.sharedRecordTitle ?? '(record)',
+        subtitle: m.sharedRecordSubtitle ?? ''
+      };
+    }
+    if (m.sharedReportId) {
+      return {
+        type: 'report',
+        id: m.sharedReportId,
+        title: m.sharedReportPatientName ?? 'Lab report',
+        subtitle: m.sharedReportTestSummary ?? ''
+      };
+    }
+    return null;
+  }
+
+  /** Router link target for a shared-record card. Matches contextLink. */
+  protected sharedRecordLink(rec: { type: string; id: string }): any[] | null {
+    switch (rec.type) {
+      case 'patient': return ['/frontdesk', 'patients', rec.id];
+      case 'order':   return ['/lab', 'my-work'];
+      case 'report':  return ['/reports', 'view', rec.id];
+      default: return null;
+    }
+  }
+  protected sharedRecordEyebrow(type: string): string {
+    return type === 'patient' ? 'Patient' : type === 'order' ? 'Order' : 'Lab report';
+  }
+
+  // ── Share-record popover (patient picker) ──────────────────────────
+
+  protected toggleSharePicker(): void {
+    const open = !this.sharePickerOpen();
+    this.sharePickerOpen.set(open);
+    if (open) {
+      this.sharePatientSearch.set('');
+      this.sharePatientResults.set([]);
+      void this.searchPatients('');
+    }
+  }
+  protected closeSharePicker(): void { this.sharePickerOpen.set(false); }
+
+  protected onSharePatientInput(value: string): void {
+    this.sharePatientSearch.set(value);
+    if (this.sharePatientDebounce) clearTimeout(this.sharePatientDebounce);
+    // Debounce 200ms so we don't hammer the search endpoint per keystroke.
+    this.sharePatientDebounce = setTimeout(() => void this.searchPatients(value), 200);
+  }
+
+  private async searchPatients(q: string): Promise<void> {
+    this.sharePatientLoading.set(true);
+    try {
+      const path = q.trim().length > 0
+        ? `/api/patients?q=${encodeURIComponent(q.trim())}&limit=12`
+        : '/api/patients?limit=12';
+      const rows = await firstValueFrom(this.api.get<PatientLite[]>(path));
+      this.sharePatientResults.set(rows ?? []);
+    } catch { this.sharePatientResults.set([]); }
+    finally { this.sharePatientLoading.set(false); }
+  }
+
+  /** Format a patient row's subtitle: MRN if present, else phone. */
+  protected patientSubtitle(p: PatientLite): string {
+    if (p.mrn) return p.mrn;
+    if (p.phone) return `📞 ${p.phone}`;
+    return '—';
+  }
+  protected patientName(p: PatientLite): string {
+    const n = `${p.firstName ?? ''} ${p.fathersName ?? ''}`.trim();
+    return n || '(unknown)';
+  }
+
+  protected async confirmSharePatient(p: PatientLite): Promise<void> {
+    const convId = this.chat.activeConversationId();
+    if (!convId) return;
+    try {
+      await this.chat.sharePatient(convId, p.id);
+      this.closeSharePicker();
+      this.toasts.info(`Shared ${this.patientName(p)}`);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not share patient.');
     }
   }
 

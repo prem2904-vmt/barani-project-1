@@ -263,19 +263,34 @@
                       <span class="pf-msgs__reply-body">{{ m.replyPreview }}</span>
                     </div>
                   }
-                  @if (m.sharedReportId) {
-                    <a class="pf-msgs__report-card"
-                       [class.pf-msgs__report-card--mine]="m.fromUserId === me()"
-                       [routerLink]="['/reports', 'view', m.sharedReportId]" title="Open report">
-                      <div class="pf-msgs__report-card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                  @if (sharedRecord(m); as rec) {
+                    <a class="pf-msgs__rec-card"
+                       [class.pf-msgs__rec-card--mine]="m.fromUserId === me()"
+                       [class.pf-msgs__rec-card--patient]="rec.type === 'patient'"
+                       [class.pf-msgs__rec-card--order]="rec.type === 'order'"
+                       [class.pf-msgs__rec-card--report]="rec.type === 'report'"
+                       [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + rec.type">
+                      <div class="pf-msgs__rec-card-icon">
+                        @switch (rec.type) {
+                          @case ('patient') {
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          }
+                          @case ('order') {
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                          }
+                          @default {
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                          }
+                        }
                       </div>
-                      <div class="pf-msgs__report-card-meta">
-                        <span class="pf-msgs__report-card-eyebrow">Lab report</span>
-                        <span class="pf-msgs__report-card-patient">{{ m.sharedReportPatientName ?? 'Patient' }}</span>
-                        <span class="pf-msgs__report-card-tests">{{ m.sharedReportTestSummary ?? '' }}</span>
+                      <div class="pf-msgs__rec-card-meta">
+                        <span class="pf-msgs__rec-card-eyebrow">{{ sharedRecordEyebrow(rec.type) }}</span>
+                        <span class="pf-msgs__rec-card-title">{{ rec.title }}</span>
+                        @if (rec.subtitle) {
+                          <span class="pf-msgs__rec-card-sub">{{ rec.subtitle }}</span>
+                        }
                       </div>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="pf-msgs__report-card-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="pf-msgs__rec-card-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </a>
                   }
                   @if (m.attachmentUrl) {
@@ -304,7 +319,7 @@
                       </a>
                     }
                   }
-                  @if (m.body && !m.sharedReportId) { <div class="pf-msgs__bubble-body">{{ m.body }}</div> }
+                  @if (m.body && !hasSharedRecord(m)) { <div class="pf-msgs__bubble-body">{{ m.body }}</div> }
                   @if (!isGroupedWithNext(i) || m.editedAt || m.pending) {
                     <div class="pf-msgs__bubble-meta">
                       {{ m.sentAt | date:'shortTime' }}
@@ -420,6 +435,11 @@
               }
             </button>
             <button class="pf-msgs__icon-btn pf-msgs__icon-btn--composer" type="button"
+                    (click)="toggleSharePicker()" [class.pf-msgs__icon-btn--active]="sharePickerOpen()"
+                    [disabled]="!!editingMessageId()" title="Share a patient">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </button>
+            <button class="pf-msgs__icon-btn pf-msgs__icon-btn--composer" type="button"
                     (click)="toggleEmoji()" [class.pf-msgs__icon-btn--active]="emojiOpen()" title="Emoji">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
             </button>
@@ -443,6 +463,44 @@
             @for (e of emojiBank; track e) {
               <button type="button" class="pf-msgs__emoji-btn" (click)="insertEmoji(e)">{{ e }}</button>
             }
+          </div>
+        }
+        @if (sharePickerOpen()) {
+          <div class="pf-msgs__share-popover">
+            <header class="pf-msgs__share-popover-hdr">
+              <span class="pf-msgs__share-popover-title">Share a patient</span>
+              <button type="button" class="pf-msgs__icon-btn pf-msgs__icon-btn--sm" (click)="closeSharePicker()" title="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </header>
+            <div class="pf-msgs__share-popover-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="Search patient by name / MRN / phone"
+                     [value]="sharePatientSearch()" (input)="onSharePatientInput($any($event.target).value)" autofocus>
+            </div>
+            <ul class="pf-msgs__share-popover-list">
+              @if (sharePatientLoading() && sharePatientResults().length === 0) {
+                <li class="pf-msgs__share-popover-empty">Searching…</li>
+              }
+              @for (p of sharePatientResults(); track p.id) {
+                <li>
+                  <button type="button" class="pf-msgs__share-popover-item" (click)="confirmSharePatient(p)">
+                    <div class="pf-msgs__share-popover-avatar">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="pf-msgs__share-popover-meta">
+                      <span class="pf-msgs__share-popover-name">{{ patientName(p) }}</span>
+                      <span class="pf-msgs__share-popover-sub">{{ patientSubtitle(p) }}</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" class="pf-msgs__share-popover-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </li>
+              } @empty {
+                @if (!sharePatientLoading()) {
+                  <li class="pf-msgs__share-popover-empty">No patients found.</li>
+                }
+              }
+            </ul>
           </div>
         }
       </footer>

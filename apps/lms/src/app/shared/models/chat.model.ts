@@ -12,11 +12,19 @@ export interface ChatMessage {
   sentAt: string;
   /** 'user' (normal message) | 'system' (group event) | 'call' (call summary). */
   kind?: 'user' | 'system' | 'call';
-  /** When the message carries a shared lab report, these are set so
-   *  the bubble can render a clickable report card. */
+  /** Legacy report-share fields. Kept so messages written before the
+   *  generic share-record refactor still render. The FE prefers
+   *  sharedRecord* below when present. */
   sharedReportId?: string | null;
   sharedReportPatientName?: string | null;
   sharedReportTestSummary?: string | null;
+  /** Generic shared-record card: patient | order | report (or any
+   *  future record type). Title is the primary line; subtitle the
+   *  secondary line; type drives the icon/color + deep-link route. */
+  sharedRecordType?: 'patient' | 'order' | 'report' | null;
+  sharedRecordId?: string | null;
+  sharedRecordTitle?: string | null;
+  sharedRecordSubtitle?: string | null;
   /** Replying to another message — denormalised snippet survives edits. */
   replyToMessageId?: string | null;
   replyPreview?: string | null;
