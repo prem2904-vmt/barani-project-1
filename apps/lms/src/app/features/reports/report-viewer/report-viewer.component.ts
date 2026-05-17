@@ -95,8 +95,8 @@ interface ReportData {
       </pf-screen-header>
 
       @if (chatPickerOpen()) {
-        <div class="pf-rv-share-backdrop" (click)="closeSharePicker()">
-          <div class="pf-rv-share-modal" (click)="$event.stopPropagation()">
+        <div class="pf-rv-share-backdrop pf-sheet" (click)="closeSharePicker()">
+          <div class="pf-rv-share-modal pf-sheet__panel" (click)="$event.stopPropagation()">
             <header class="pf-rv-share-head">
               <div>
                 <h3>Share this report</h3>

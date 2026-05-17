@@ -163,6 +163,22 @@ interface ProfilePayload {
         min-width: 160px;
       }
     }
+    /* Phone: full-width stacked actions so a thumb can hit any of them
+       without overshooting onto the next button. Min-height 48px is
+       above Apple's 44 + Material's 48 recommendation. */
+    @media (max-width: 640px) {
+      .pf-pp { padding: 16px; }
+      .pf-pp__hero-actions {
+        width: 100%;
+        gap: 10px;
+      }
+      .pf-pp__btn-primary,
+      .pf-pp__btn-secondary {
+        width: 100%;
+        height: 48px;
+        font-size: 14px;
+      }
+    }
 
     .pf-pp__btn-primary {
       display: inline-flex;
@@ -554,8 +570,8 @@ interface ProfilePayload {
         <!-- Colleague-picker modal for "Send to chat". Reuses local
              directory + ChatService.sharePatientWithUser. -->
         @if (chatPickerOpen()) {
-          <div class="pf-pp__chat-pick-backdrop" (click)="closeChatPicker()">
-            <div class="pf-pp__chat-pick" (click)="$event.stopPropagation()">
+          <div class="pf-pp__chat-pick-backdrop pf-sheet" (click)="closeChatPicker()">
+            <div class="pf-pp__chat-pick pf-sheet__panel" (click)="$event.stopPropagation()">
               <header class="pf-pp__chat-pick-hdr">
                 <div>
                   <h3>Send patient to a colleague</h3>

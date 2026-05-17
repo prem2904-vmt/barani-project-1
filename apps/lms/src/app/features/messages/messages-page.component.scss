@@ -215,6 +215,14 @@
   text-align: center;
   line-height: 1.45;
   box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);
+  // Bumped on mobile for sunlight readability + thumb-recognisable size.
+  @media (max-width: 640px) {
+    min-width: 22px;
+    height: 22px;
+    line-height: 18px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
 }
 
 .pf-msgs__empty-rail {
@@ -1749,16 +1757,67 @@
 @media (max-width: 640px) {
   .pf-msgs__rail-head { padding: 12px 12px 8px; }
   .pf-msgs__title     { font-size: 17px; }
-  .pf-msgs__search    { margin: 0 10px 8px; }
-  .pf-msgs__conv-row  { padding: 10px 12px; }
-  .pf-msgs__avatar    { width: 38px; height: 38px; font-size: 12.5px; }
-  .pf-msgs__thread-head { padding: 10px 14px; }
+  .pf-msgs__search    { margin: 0 10px 8px; padding: 10px 12px; }
+  // Generous touch zone on conversation rows — 60px min so they're a
+  // proper thumb-target. Avatar bumps to 44px.
+  .pf-msgs__conv-row  { padding: 12px 14px; min-height: 60px; }
+  .pf-msgs__avatar    { width: 44px; height: 44px; font-size: 13.5px; }
+  .pf-msgs__avatar-dot { width: 13px; height: 13px; border-width: 2.5px; }
+  .pf-msgs__thread-head { padding: 10px 12px; }
+  // Sticky pinned strip + reconnect — so they don't scroll away as the
+  // thread grows. Glass effect for legibility against bubbles below.
+  .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
   .pf-msgs__scroller    { padding: 14px 12px 8px; }
-  .pf-msgs__composer    { padding: 8px 10px 12px; gap: 8px; }
+  .pf-msgs__composer    { padding: 8px 10px max(12px, env(safe-area-inset-bottom)); gap: 8px;
+    // Slightly taller textarea — 44px min for thumb comfort.
+    textarea { min-height: 44px; }
+  }
+  .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
+  .pf-msgs__send { width: 44px; height: 44px; }
+  // Bubble actions on touch devices: visible row UNDER the bubble when
+  // the row has the actions-open class (set by tap-toggle). Glass pill,
+  // larger taps. Hover-only (desktop) keeps the absolute positioning.
+  @media (hover: none) {
+    .pf-msgs__bubble-actions {
+      position: static;
+      margin-top: 6px;
+      flex-wrap: wrap;
+      justify-self: stretch;
+      padding: 4px;
+    }
+    .pf-msgs__bubble-action {
+      min-width: 36px; min-height: 36px;
+      padding: 8px 10px;
+    }
+    .pf-msgs__bubble-action--react { font-size: 18px; }
+  }
   .pf-msgs__modal-foot {
     .pf-msgs__picker-count { flex-basis: 100%; order: 2; }
     .pf-msgs__modal-actions { width: 100%; order: 1; justify-content: stretch;
-      .pf-msgs__btn { flex: 1; }
+      .pf-msgs__btn { flex: 1; min-height: 44px; }
     }
+  }
+  // Picker rows tall enough for thumb-precise tapping.
+  .pf-msgs__picker-row { padding: 12px 20px; }
+  .pf-msgs__picker-list,
+  .pf-msgs__call-list,
+  .pf-msgs__share-popover-list { padding-top: 8px; }
+  // The new-chat / members / forward / share / add-member sheets get
+  // a top breathing room for the drag handle that .pf-sheet adds.
+  .pf-msgs__modal-head { padding-top: 24px; }
+  // Tab strip thumb size.
+  .pf-msgs__tab { padding: 12px 14px; }
+  // Reactions row a bit chunkier so taps land.
+  .pf-msgs__react-pill { padding: 4px 10px; font-size: 12px; }
+  // Notes-to-self row mobile.
+  .pf-msgs__notes-shortcut { padding: 12px 14px; min-height: 56px; }
+}
+
+// Hide hover-only bubble actions on touch unless toggled — protects
+// against accidental sticky-hover on iOS.
+@media (hover: none) {
+  .pf-msgs__bubble-row:not(.pf-msgs__bubble-row--actions-open) .pf-msgs__bubble-actions {
+    display: none;
   }
 }

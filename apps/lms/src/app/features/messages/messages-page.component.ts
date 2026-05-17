@@ -82,6 +82,15 @@ export class MessagesPageComponent implements OnInit {
   protected readonly replyingTo = signal<{ id: string; preview: string; fromName: string } | null>(null);
   protected readonly editingMessageId = signal<string | null>(null);
   protected readonly hoveredMessageId = signal<string | null>(null);
+  /** Touch toggle — on coarse pointers a tap on the bubble surfaces the
+   *  action row instead of hover. Same signal so the template stays simple. */
+  protected toggleBubbleActions(messageId: string): void {
+    this.hoveredMessageId.set(this.hoveredMessageId() === messageId ? null : messageId);
+  }
+  /** True for coarse pointers (phones/tablets). Drives a few mobile
+   *  affordances: tap-to-toggle bubble actions, larger composer height. */
+  protected readonly isTouchDevice =
+    typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
   protected readonly emojiOpen = signal(false);
   /** Staged attachment: uploaded to server, waiting for the user to hit send. */
   protected readonly pendingAttachment = signal<{ url: string; name: string; contentType: string; size: number } | null>(null);

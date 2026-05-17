@@ -9,6 +9,14 @@
     <meta name="theme-color" content="#ede8f6" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- 'black-translucent' draws under the iOS status bar so the violet
+         theme bleeds to the very top of the notch — pair with safe-area-
+         inset-top on fixed headers so content sits below the clock. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Prefrontal" />
+    <!-- Disable iOS automatic phone-number detection — false positives on
+         MRN strings (DEL-2605-…) wreck the layout. -->
+    <meta name="format-detection" content="telephone=no" />
     <!-- Vector PF mark as the favicon. /favicon.svg is a dedicated square
          badge variant tuned for small sizes; /logo.svg (vertical glyph) is
          kept around for other parts of the app. The pre-generated PNG /

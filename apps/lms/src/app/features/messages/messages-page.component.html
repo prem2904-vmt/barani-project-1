@@ -299,7 +299,9 @@
           } @else {
           <div class="pf-msgs__bubble-row" [class.pf-msgs__bubble-row--mine]="m.fromUserId === me()"
                [class.pf-msgs__bubble-row--grouped]="isGroupedWithPrev(i)"
-               (mouseenter)="hoveredMessageId.set(m.id)" (mouseleave)="hoveredMessageId.set(null)">
+               [class.pf-msgs__bubble-row--actions-open]="hoveredMessageId() === m.id"
+               (mouseenter)="hoveredMessageId.set(m.id)" (mouseleave)="hoveredMessageId.set(null)"
+               (click)="isTouchDevice && toggleBubbleActions(m.id)">
             @if (m.fromUserId !== me() && conv.isGroup && !m.deleted && !isGroupedWithPrev(i)) {
               <span class="pf-msgs__bubble-author">
                 {{ conv.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'Unknown' }}
@@ -637,8 +639,8 @@
 
 <!-- ── New chat modal ───────────────────────────────────────────────── -->
 @if (newChatOpen()) {
-  <div class="pf-msgs__modal-backdrop" (click)="closeNewChatModal()">
-    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeNewChatModal()">
+    <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>{{ pickerSelection().size <= 1 ? 'New chat' : 'New group' }}</h3>
         <button class="pf-msgs__icon-btn" type="button" (click)="closeNewChatModal()" title="Close">
@@ -705,8 +707,8 @@
 
 <!-- ── Group members modal ─────────────────────────────────────────── -->
 @if (membersOpen() && chat.activeConversation(); as conv) {
-  <div class="pf-msgs__modal-backdrop" (click)="closeMembers()">
-    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeMembers()">
+    <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>{{ conv.name ?? 'Group' }} · {{ conv.participants.length }} members</h3>
         <button class="pf-msgs__icon-btn" type="button" (click)="closeMembers()" title="Close">
@@ -756,8 +758,8 @@
 
 <!-- ── Add member sub-modal ────────────────────────────────────────── -->
 @if (addMemberOpen()) {
-  <div class="pf-msgs__modal-backdrop" (click)="closeAddMember()">
-    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeAddMember()">
+    <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>Add member</h3>
         <button class="pf-msgs__icon-btn" type="button" (click)="closeAddMember()" title="Close">
@@ -790,8 +792,8 @@
 
 <!-- ── Forward-message modal ────────────────────────────────────────── -->
 @if (forwardingMessage(); as fwd) {
-  <div class="pf-msgs__modal-backdrop" (click)="cancelForward()">
-    <div class="pf-msgs__modal" (click)="$event.stopPropagation()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="cancelForward()">
+    <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>Forward to…</h3>
         <button class="pf-msgs__icon-btn" type="button" (click)="cancelForward()" title="Close">

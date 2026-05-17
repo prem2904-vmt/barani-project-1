@@ -1174,6 +1174,85 @@ interface DirectoryUser {
       padding: 22px 16px; text-align: center;
       font-size: 12.5px; color: var(--text-tertiary);
     }
+
+    /* ────────────────────────────────────────────────────────────
+       MOBILE — phone-first overrides
+       The call surface is the most safety-critical UX in the app
+       (incoming call must be impossible to miss + impossible to
+       accidentally accept/decline). On phone we:
+         - take the full viewport, edge-to-edge
+         - push action buttons into the natural thumb-zone (bottom 1/3)
+         - bump button targets to 64-72px diameter
+         - honour safe-area-inset-bottom so the home indicator doesn't
+           sit on top of the End button
+       ──────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      /* Incoming ringer fills the screen — feels like a real phone call */
+      .pf-call-ring { padding: 0; }
+      .pf-call-ring__card {
+        width: 100%; max-width: none;
+        min-height: 100vh;
+        border-radius: 0;
+        padding: max(28px, env(safe-area-inset-top)) 28px max(28px, env(safe-area-inset-bottom));
+        display: flex; flex-direction: column;
+        justify-content: center;
+        animation: pf-call-ring-fade 0.18s ease-out;
+      }
+      @keyframes pf-call-ring-fade { from { opacity: 0; } to { opacity: 1; } }
+      .pf-call-ring__avatar-wrap { width: 132px; height: 132px; }
+      .pf-call-ring__avatar      { width: 116px; height: 116px; font-size: 38px; }
+      .pf-call-ring__name        { font-size: 28px; }
+      .pf-call-ring__source      { font-size: 14px; }
+      .pf-call-ring__actions {
+        gap: 64px;
+        margin-top: auto;       /* push to bottom thumb-zone */
+        padding-top: 64px;
+      }
+      .pf-call-ring__btn  { width: 76px; height: 76px; }
+      .pf-call-ring__labels { gap: 64px;
+        span { flex-basis: 76px; }
+      }
+
+      /* Full-screen active call — edge-to-edge, thicker controls */
+      .pf-call-screen { padding: 0; align-items: stretch; }
+      .pf-call-screen__card {
+        width: 100%; max-width: none;
+        max-height: none;
+        height: 100vh; min-height: 100vh;
+        border-radius: 0;
+        padding: max(12px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
+      }
+      .pf-call-screen__ctrls { gap: 24px; padding-top: 16px; }
+      .pf-call-screen__ctrl-circle { width: 60px; height: 60px; }
+      .pf-call-screen__ctrl-lbl    { font-size: 11px; }
+      .pf-call-screen__hdr-info    { gap: 6px; }
+      .pf-call-screen__hdr-meta    { gap: 6px; }
+
+      /* In-call chat: when open on phone, it takes the participants
+         space + controls area becomes a slim bar at the bottom. */
+      .pf-call-screen__card--with-chat {
+        grid-template-areas: "hdr" "chat" "ctrls" !important;
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto 1fr auto !important;
+      }
+      .pf-call-screen__card--with-chat .pf-call-screen__participants {
+        display: none !important;
+      }
+
+      /* Floating pill — bigger, more prominent above the bottom nav */
+      .pf-call-pill {
+        bottom: calc(96px + env(safe-area-inset-bottom));
+        padding: 8px 10px 8px 8px;
+        font-size: 13px;
+      }
+      .pf-call-pill__avatar { width: 38px; height: 38px; font-size: 13px; }
+      .pf-call-pill__btn    { width: 36px; height: 36px; }
+    }
+
+    @media (max-width: 360px) {
+      .pf-call-pill__meta { max-width: 90px; }
+      .pf-call-pill__btn--add { display: none; }
+    }
   `]
 })
 export class CallOverlayComponent {
