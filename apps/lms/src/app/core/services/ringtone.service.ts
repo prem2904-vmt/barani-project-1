@@ -3,78 +3,157 @@ import { Injectable, OnDestroy } from '@angular/core';
 type Tone = 'ringback' | 'ringtone';
 
 /**
- * Tiny synthesised-tone service for call audio cues. No asset files,
- * no autoplay-policy hoops — uses the Web Audio API to generate
- * dual-frequency tones on demand and loop them with the standard
- * telephone cadences:
+ * Tiny Web Audio service for call cues + chat pings. No asset files —
+ * every sound is synthesised on the fly so the bundle stays lean and
+ * the build never depends on external mp3/ogg files.
  *
- *   ringback (caller-side, "calling…")  — 440 Hz + 480 Hz, 1 s on / 2 s off
- *   ringtone (callee-side, "incoming")  — 440 Hz + 480 Hz, 2 s on / 4 s off
- *                                          (a softer cadence with stereo wobble
- *                                           to mimic a phone ringer)
+ * Sounds:
+ *   - ringtone  (callee-side incoming-call ring)
+ *       4-note rising arpeggio (E maj7: E5 → G#5 → B5 → D#6) layered
+ *       with a soft sine pad. ~1.2s pattern, ~1.8s silence, loops.
+ *       Distinctive enough to recognise across a noisy floor without
+ *       being the cliché telephone bell.
  *
- * The AudioContext is created lazily on first play() because browsers
- * require a user gesture to instantiate it without warning — by the time
- * we play either tone, the user has either clicked "Call" or seen an
- * incoming-call popup whose gesture (or pre-existing session interaction)
- * satisfies autoplay policy.
+ *   - ringback  (caller-side "calling…" tone)
+ *       Single warm sine pulse at A4 (440Hz) with a slow attack/decay.
+ *       0.8s on / 1.6s off. Quieter than the ringtone — it's a status
+ *       cue, not an alert.
+ *
+ *   - ping       (new-message notification, one-shot)
+ *       Two-note chime C6 → G6 with overlapping bell envelopes. ~280ms.
+ *       Modeled on Slack/Teams: short, pleasant, clearly "incoming
+ *       message" without breaking concentration.
+ *
+ * Browsers require a user gesture before AudioContext starts. play()
+ * is idempotent; calling play() before a gesture lazily creates the
+ * ctx, which then unlocks on the next gesture (Accept Call, Send, etc.).
  */
 @Injectable({ providedIn: 'root' })
 export class RingtoneService implements OnDestroy {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private active: { stop: () => void } | null = null;
+  private active: { stop: () => void; tone: Tone } | null = null;
 
-  /** Start a tone. Idempotent — calling with the same tone is a no-op. */
+  /** Start a looping tone. Idempotent on the same tone. */
   play(tone: Tone): void {
-    // Already playing the requested tone — leave it alone.
-    if (this.active && (this.active as any)._tone === tone) return;
+    if (this.active?.tone === tone) return;
     this.stop();
     this.ensureCtx();
     if (!this.ctx || !this.master) return;
 
-    const ctx = this.ctx;
-    const out = this.master;
     let cancelled = false;
-
-    // Cadence: [onSeconds, offSeconds]
-    const cadence: [number, number] = tone === 'ringback' ? [1.0, 2.0] : [2.0, 4.0];
-    const volume = tone === 'ringback' ? 0.10 : 0.16;
-
-    const loop = (startAt: number) => {
+    const cycleMs = tone === 'ringtone' ? 3000 : 2400;
+    const start = () => {
       if (cancelled) return;
-      // Two oscillators (440 + 480 Hz) layered → North-American ringer feel.
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc1.type = 'sine'; osc2.type = 'sine';
-      osc1.frequency.value = 440;
-      osc2.frequency.value = 480;
-      g.gain.setValueAtTime(0, startAt);
-      g.gain.linearRampToValueAtTime(volume, startAt + 0.02);
-      g.gain.setValueAtTime(volume, startAt + cadence[0] - 0.02);
-      g.gain.linearRampToValueAtTime(0, startAt + cadence[0]);
-      osc1.connect(g); osc2.connect(g); g.connect(out);
-      osc1.start(startAt); osc2.start(startAt);
-      osc1.stop(startAt + cadence[0]);
-      osc2.stop(startAt + cadence[0]);
-      // Schedule the next on-cycle.
-      const nextAt = startAt + cadence[0] + cadence[1];
-      const msUntilNext = Math.max(0, (nextAt - ctx.currentTime - 0.05) * 1000);
-      setTimeout(() => loop(nextAt), msUntilNext);
+      const t0 = this.ctx!.currentTime + 0.02;
+      if (tone === 'ringtone') this.scheduleRingtoneCycle(t0);
+      else this.scheduleRingbackCycle(t0);
+      setTimeout(start, cycleMs);
     };
+    start();
 
-    loop(ctx.currentTime + 0.05);
-    this.active = { stop: () => { cancelled = true; } };
-    (this.active as any)._tone = tone;
+    this.active = { tone, stop: () => { cancelled = true; } };
   }
 
-  /** Stop whatever's currently playing (idempotent). */
+  /** Short one-shot chime for new chat messages. ~280ms. */
+  playPing(): void {
+    this.ensureCtx();
+    if (!this.ctx || !this.master) return;
+    const t0 = this.ctx.currentTime + 0.01;
+    // C6 (1047) → G6 (1568), bell envelopes overlapping ~120ms apart.
+    this.scheduleBellNote(1046.5, t0,         0.30, 0.20);
+    this.scheduleBellNote(1567.98, t0 + 0.12, 0.28, 0.22);
+  }
+
   stop(): void {
     if (!this.active) return;
     this.active.stop();
     this.active = null;
   }
+
+  // ── Pattern schedulers ─────────────────────────────────────────────
+
+  /** 4-note rising motif (E major-ish), layered with a soft pad. */
+  private scheduleRingtoneCycle(t0: number): void {
+    // E5, G#5, B5, D#6 — bright open-voicing major-7 feel.
+    const motif = [659.25, 830.61, 987.77, 1244.51];
+    const noteSpacing = 0.16;       // sec between attacks
+    const noteDuration = 0.40;
+    motif.forEach((freq, i) => {
+      const t = t0 + i * noteSpacing;
+      this.scheduleBellNote(freq, t, noteDuration, 0.16);
+    });
+    // Brief sub-pad underneath for warmth (low fifth, slow attack).
+    this.schedulePadNote(164.81 /* E3 */, t0 + 0.04, noteSpacing * motif.length + 0.25, 0.08);
+  }
+
+  /** Single soft pulse at A4 — calm "calling…" cue. */
+  private scheduleRingbackCycle(t0: number): void {
+    this.schedulePadNote(440, t0, 0.80, 0.12);
+  }
+
+  // ── Voice helpers ──────────────────────────────────────────────────
+
+  /**
+   * Bell-like note: sine fundamental + sine octave (mixed quieter) +
+   * fast attack, exponential decay. Creates a pleasing pluck without
+   * sounding metallic.
+   */
+  private scheduleBellNote(freq: number, t: number, dur: number, peakGain: number): void {
+    const ctx = this.ctx!;
+    const out = this.master!;
+
+    // Fundamental
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'sine';
+    osc1.frequency.value = freq;
+
+    // Octave above, quieter — gives sparkle, no chord clash.
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peakGain, t + 0.012);          // fast attack
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);              // exponential decay
+
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(peakGain * 0.35, t + 0.012);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.7);       // octave decays faster
+
+    osc1.connect(g);  g.connect(out);
+    osc2.connect(g2); g2.connect(out);
+    osc1.start(t); osc2.start(t);
+    osc1.stop(t + dur + 0.05);
+    osc2.stop(t + dur + 0.05);
+  }
+
+  /**
+   * Pad note: triangle wave with slow attack & slow release. Used as
+   * the ringback main voice and as the sub-pad under the ringtone.
+   */
+  private schedulePadNote(freq: number, t: number, dur: number, peakGain: number): void {
+    const ctx = this.ctx!;
+    const out = this.master!;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peakGain, t + 0.08);           // slow attack
+    g.gain.setValueAtTime(peakGain, t + dur - 0.15);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);              // slow release
+
+    osc.connect(g); g.connect(out);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  // ── Context lifecycle ──────────────────────────────────────────────
 
   private ensureCtx(): void {
     if (this.ctx) return;
@@ -83,11 +162,12 @@ export class RingtoneService implements OnDestroy {
       if (!Ctor) return;
       this.ctx = new Ctor();
       this.master = this.ctx!.createGain();
-      this.master.gain.value = 1;
+      // Master is intentionally below 1.0 so layered notes don't clip.
+      this.master.gain.value = 0.7;
       this.master.connect(this.ctx!.destination);
-      // Browsers may start the context in a "suspended" state. resume() is a
-      // no-op if it's already running; otherwise it kicks the engine alive
-      // (succeeds because a user gesture preceded our first call).
+      // Browsers may park the ctx in 'suspended' until a user gesture.
+      // resume() succeeds when called inside the gesture handler that
+      // invoked play(); otherwise it'll unlock on the next gesture.
       if (this.ctx!.state === 'suspended') void this.ctx!.resume();
     } catch { /* no audio support → silent fallback */ }
   }

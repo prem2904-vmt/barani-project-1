@@ -11,6 +11,7 @@ import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { ToastService } from '../../core/services/toast.service';
+import { ChatNotifyService } from '../../core/services/chat-notify.service';
 import { CallLog, Conversation } from '../../shared/models/chat.model';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
@@ -42,6 +43,7 @@ export class MessagesPageComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly chatNotify = inject(ChatNotifyService);
 
   @ViewChild('thread') private threadEl?: ElementRef<HTMLDivElement>;
   @ViewChild('composer') private composerEl?: ElementRef<HTMLTextAreaElement>;
@@ -207,6 +209,9 @@ export class MessagesPageComponent implements OnInit {
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
       this.loadCallLog().catch(() => undefined)
     ]);
+    // Ask for Notification permission once. Landing on /messages counts
+    // as the user-gesture browsers want before this prompt fires.
+    void this.chatNotify.ensurePermission();
   }
 
   // ── Calls tab ───────────────────────────────────────────────────────

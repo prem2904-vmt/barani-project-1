@@ -5,6 +5,8 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiService } from './api.service';
+import { RingtoneService } from './ringtone.service';
+import { ChatNotifyService } from './chat-notify.service';
 
 /**
  * Conversation-based chat (1:1 + group). One persistent SignalR
@@ -25,6 +27,8 @@ import { ApiService } from './api.service';
 export class ChatService implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
+  private readonly ringtone = inject(RingtoneService);
+  private readonly notify = inject(ChatNotifyService);
   private connection: signalR.HubConnection | null = null;
   private connecting: Promise<void> | null = null;
   private typingClearTimers = new Map<string, number>(); // convId|userId → setTimeout id
@@ -234,6 +238,18 @@ export class ChatService implements OnDestroy {
       void this.loadConversations();
       return list;
     });
+
+    // Notification side-effect: a message from someone else, NOT in the
+    // conversation I'm currently reading → audible ping + browser
+    // Notification (if granted) + title-bar flash. Skipped for my own
+    // echoes (so I don't ping myself on send).
+    if (m.fromUserId !== me && this.activeConversationId() !== m.conversationId) {
+      this.ringtone.playPing();
+      const conv = this.conversations().find(c => c.id === m.conversationId);
+      const senderName = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
+      const title = conv?.isGroup && conv.name ? `${senderName} · ${conv.name}` : senderName;
+      this.notify.notify(title, m.body, m.conversationId);
+    }
   }
 
   private onMessageRead(p: { conversationId: string; userId: string; readAt: string }) {
