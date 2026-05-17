@@ -117,7 +117,12 @@ export class ChatService implements OnDestroy {
   // ── Server event handlers ─────────────────────────────────────────
 
   private onMessageReceived(m: ChatMessage) {
-    const me = this.auth.user()?.id;
+    // m.fromUserId / m.toUserId are Supabase sub (AuthId) since the backend
+    // switched to SubClaimUserIdProvider. Comparing against auth.user().id
+    // (prefrontal UserEntity.Id) silently never matched — every echoed
+    // message looked like it came from a stranger, so it was dropped from
+    // both activeMessages and the conversation summary update.
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id;
     const other = m.fromUserId === me ? m.toUserId : m.fromUserId;
 
     // Append to active conversation if open.
@@ -152,7 +157,8 @@ export class ChatService implements OnDestroy {
   }
 
   private onTyping(p: { fromUserId: string; toUserId: string; isTyping: boolean }) {
-    const me = this.auth.user()?.id;
+    // toUserId arrives as Supabase sub; compare against authId.
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id;
     if (p.toUserId !== me) return;
     const next = new Set(this.typingFrom());
     if (p.isTyping) next.add(p.fromUserId); else next.delete(p.fromUserId);

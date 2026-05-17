@@ -266,7 +266,10 @@ export class WebrtcService implements OnDestroy {
   // ── Peer-connection plumbing ─────────────────────────────────────
 
   private createPeer(remoteUserId: string): PeerState {
-    const localId = this.auth.user()?.id ?? '';
+    // remoteUserId is the Supabase sub; compare in the same id space so
+    // both ends derive the same polite/impolite split. Using prefrontal id
+    // here would let both ends pick "impolite" → infinite glare loop.
+    const localId = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
     const polite = localId < remoteUserId; // deterministic ordering — lower id is polite
     const pc = new RTCPeerConnection({ iceServers: this.iceServers as RTCIceServer[] });
 

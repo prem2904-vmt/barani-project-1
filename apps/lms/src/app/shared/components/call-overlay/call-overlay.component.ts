@@ -74,16 +74,146 @@ interface DirectoryUser {
       </div>
     }
 
-    @if (showInCallPanel()) {
+    <!-- Full-screen call view (toggleable with the minimise button on the
+         pill). Same controls as the pill but with caller avatars + much
+         more breathing room. Click the minimise icon to return to the
+         floating pill; click End to leave. -->
+    @if (showInCallPanel() && callExpanded()) {
+      <div class="pf-call-screen" role="dialog" aria-modal="true" aria-label="Active call">
+        <div class="pf-call-screen__backdrop"></div>
+        <div class="pf-call-screen__card">
+          <header class="pf-call-screen__hdr">
+            <button type="button" class="pf-call-screen__min press"
+                    (click)="minimise()" aria-label="Minimise to floating pill">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 14h5v5M19 10h-5V5"/>
+              </svg>
+              Minimise
+            </button>
+            <span class="pf-call-screen__title">
+              {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
+            </span>
+            <span class="pf-call-screen__time">{{ duration() }}</span>
+          </header>
+
+          <div class="pf-call-screen__participants">
+            @for (p of participants(); track p.id) {
+              <div class="pf-call-screen__pcard">
+                <div class="pf-call-screen__avatar">{{ initials(p.name) }}</div>
+                <p class="pf-call-screen__pname">{{ p.name }}</p>
+                <p class="pf-call-screen__pmeta">
+                  @if (p.isMe) { you }
+                  @else if (p.muted) { muted }
+                  @else { speaking }
+                </p>
+              </div>
+            }
+          </div>
+
+          <!-- Media-path billing tag — explicit on the full-screen view. -->
+          <div class="pf-call-screen__route" [attr.data-cost]="routeCost()">
+            <span class="pf-call-screen__route-dot"></span>
+            <span>{{ routeLabel() }}</span>
+          </div>
+
+          <footer class="pf-call-screen__ctrls">
+            <button type="button" class="pf-call-screen__ctrl"
+                    [class.pf-call-screen__ctrl--on]="webrtc.micMuted()"
+                    (click)="toggleMute()"
+                    [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
+              @if (webrtc.micMuted()) {
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              } @else {
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              }
+              <span class="pf-call-screen__ctrl-lbl">{{ webrtc.micMuted() ? 'Unmute' : 'Mute' }}</span>
+            </button>
+            <button type="button" class="pf-call-screen__ctrl"
+                    (click)="toggleInvite()" aria-label="Add participant">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="8.5" cy="7" r="4"/>
+                <line x1="20" y1="8" x2="20" y2="14"/>
+                <line x1="23" y1="11" x2="17" y2="11"/>
+              </svg>
+              <span class="pf-call-screen__ctrl-lbl">Add</span>
+            </button>
+            <button type="button" class="pf-call-screen__ctrl pf-call-screen__ctrl--end"
+                    (click)="leave()" aria-label="End call">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
+                        transform="rotate(135 12 12)"/>
+              </svg>
+              <span class="pf-call-screen__ctrl-lbl">End</span>
+            </button>
+          </footer>
+
+          <!-- Invite popover stays attached to the full-screen Add button too. -->
+          @if (invitePopoverOpen()) {
+            <div class="pf-call-invite-pop pf-call-invite-pop--screen" role="dialog" aria-label="Invite to call"
+                 (click)="$event.stopPropagation()">
+              <header class="pf-call-invite-pop__hdr">
+                <span class="pf-call-invite-pop__title">Invite to call</span>
+                <span class="pf-call-invite-pop__count">{{ availableToInvite().length }} online</span>
+              </header>
+              @if (loadingInvite()) {
+                <p class="pf-call-invite-pop__empty">Loading…</p>
+              } @else if (availableToInvite().length === 0) {
+                <p class="pf-call-invite-pop__empty">No one else is online right now.</p>
+              } @else {
+                <ul class="pf-call-invite-pop__list" role="listbox">
+                  @for (u of availableToInvite(); track u.id) {
+                    <li>
+                      <button type="button" class="pf-call-invite-pop__item press" (click)="inviteUser(u)">
+                        <span class="pf-call-invite-pop__name">{{ u.displayName }}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (showInCallPanel() && !callExpanded()) {
       <div class="pf-call-pill" role="region" aria-label="Active call">
         <div class="pf-call-pill__dot" [class.pf-call-pill__dot--muted]="webrtc.micMuted()"></div>
         <div class="pf-call-pill__meta">
           <span class="pf-call-pill__label">{{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}</span>
           <span class="pf-call-pill__time">{{ duration() }}</span>
         </div>
-        @if (webrtc.usingTurnRelay()) {
-          <span class="pf-call-pill__relay" title="Media is relayed via TURN">↻</span>
-        }
+        <!-- Compact route badge: green "Free" when peer-to-peer, amber
+             "Paid" when media is relayed via TURN (CF egress = billable). -->
+        <span class="pf-call-pill__route" [attr.data-cost]="routeCost()" [title]="routeTitle()">
+          {{ routeLabel() }}
+        </span>
+        <button type="button" class="pf-call-pill__btn"
+                (click)="expand()" aria-label="Open full call screen" title="Expand">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/>
+          </svg>
+        </button>
         <button type="button" class="pf-call-pill__btn"
                 [class.pf-call-pill__btn--on]="webrtc.micMuted()"
                 (click)="toggleMute()" [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
@@ -276,6 +406,136 @@ interface DirectoryUser {
     .pf-call-pill__btn--add { background: rgba(168, 85, 247, 0.20); color: #c4b5fd; }
     .pf-call-pill__btn--add:hover { background: rgba(168, 85, 247, 0.35); }
 
+    /* Route badge — Free (peer-to-peer) vs Paid (TURN-relayed) so the user
+     * sees the cost implication at a glance. */
+    .pf-call-pill__route {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      white-space: nowrap; cursor: help;
+    }
+    .pf-call-pill__route[data-cost='free'] {
+      background: rgba(16, 185, 129, 0.18); color: #34d399;
+    }
+    .pf-call-pill__route[data-cost='paid'] {
+      background: rgba(245, 158, 11, 0.22); color: #fbbf24;
+    }
+
+    /* ── Full-screen call view ────────────────────────────────── */
+    .pf-call-screen { position: fixed; inset: 0; z-index: 90;
+      display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .pf-call-screen__backdrop {
+      position: absolute; inset: 0;
+      background: rgba(8, 8, 20, 0.78); backdrop-filter: blur(14px);
+    }
+    .pf-call-screen__card {
+      position: relative;
+      width: 100%; max-width: 540px;
+      padding: 16px 20px 20px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(20,20,40,0.96), rgba(8,8,20,0.96));
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      box-shadow: 0 30px 80px rgba(168, 85, 247, 0.32);
+      color: #fff;
+      display: flex; flex-direction: column; gap: 16px;
+      animation: pf-call-screen-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes pf-call-screen-in {
+      from { opacity: 0; transform: scale(0.96); }
+      to   { opacity: 1; transform: none; }
+    }
+    .pf-call-screen__hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .pf-call-screen__min {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .pf-call-screen__min:hover { background: rgba(255,255,255,0.12); }
+    .pf-call-screen__title { flex: 1; text-align: center; font-size: 13px; color: rgba(255,255,255,0.85); }
+    .pf-call-screen__time {
+      font-size: 12.5px; font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: rgba(255,255,255,0.65);
+    }
+
+    .pf-call-screen__participants {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      padding: 12px 0;
+    }
+    .pf-call-screen__pcard {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 18px 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+    }
+    .pf-call-screen__avatar {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, #a78bfa, #ec4899);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700; color: #fff;
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.45);
+    }
+    .pf-call-screen__pname { margin: 0; font-size: 13.5px; font-weight: 600; text-align: center;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-call-screen__pmeta { margin: 0; font-size: 11px; color: rgba(255,255,255,0.55); }
+
+    .pf-call-screen__route {
+      align-self: center;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+    }
+    .pf-call-screen__route[data-cost='free'] {
+      background: rgba(16, 185, 129, 0.18); color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .pf-call-screen__route[data-cost='paid'] {
+      background: rgba(245, 158, 11, 0.22); color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.38);
+    }
+    .pf-call-screen__route::before {
+      content: ''; display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+    }
+    .pf-call-screen__route-dot { display: none; }
+
+    .pf-call-screen__ctrls {
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .pf-call-screen__ctrl {
+      display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 12px 14px;
+      min-width: 80px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      color: #fff; cursor: pointer;
+      transition: background 0.15s, transform 0.08s;
+    }
+    .pf-call-screen__ctrl:hover { background: rgba(255,255,255,0.12); }
+    .pf-call-screen__ctrl:active { transform: scale(0.96); }
+    .pf-call-screen__ctrl--on { background: rgba(244, 63, 94, 0.22); color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.4); }
+    .pf-call-screen__ctrl--end { background: #ef4444; color: #fff; border-color: transparent; }
+    .pf-call-screen__ctrl--end:hover { background: #dc2626; }
+    .pf-call-screen__ctrl-lbl { font-size: 10.5px; font-weight: 500; }
+
+    .pf-call-invite-pop--screen {
+      bottom: 100px; right: 50%; transform: translateX(50%);
+    }
+
     /* ── Invite-to-call popover (anchored to the pill) ──────────── */
     .pf-call-invite-pop {
       position: absolute; bottom: calc(100% + 8px); right: 0;
@@ -330,6 +590,41 @@ export class CallOverlayComponent {
   protected readonly loadingInvite = signal(false);
   private readonly directoryUsers = signal<DirectoryUser[]>([]);
 
+  // ── Full-screen call view ─────────────────────────────────────
+  /** When true, the rich full-screen call view replaces the floating pill.
+   *  Default is true on call-start; the user can minimise to return to the pill. */
+  protected readonly callExpanded = signal(true);
+  expand(): void { this.callExpanded.set(true); }
+  minimise(): void { this.callExpanded.set(false); this.invitePopoverOpen.set(false); }
+
+  /** Self + remote participants, with names resolved from the directory cache. */
+  protected readonly participants = computed(() => {
+    const me = this.auth.user();
+    const meId = me?.authId ?? me?.id ?? '';
+    const dir = this.directoryUsers();
+    const byId = new Map(dir.map(d => [d.id, d.displayName]));
+    const remote = this.webrtc.remoteParticipants().map(rid => ({
+      id: rid,
+      name: byId.get(rid) ?? this.webrtc.localCallerName() ?? 'Caller',
+      isMe: false,
+      muted: false
+    }));
+    return [
+      { id: meId, name: me?.displayName ?? 'You', isMe: true, muted: this.webrtc.micMuted() },
+      ...remote
+    ];
+  });
+
+  /** Media routing badge: P2P direct = free; TURN relay = billable Cloudflare egress. */
+  protected readonly routeCost = computed<'free' | 'paid'>(() =>
+    this.webrtc.usingTurnRelay() ? 'paid' : 'free');
+  protected readonly routeLabel = computed(() =>
+    this.webrtc.usingTurnRelay() ? '● Paid' : '● Free');
+  protected readonly routeTitle = computed(() =>
+    this.webrtc.usingTurnRelay()
+      ? 'Media is relayed via TURN — billable Cloudflare egress'
+      : 'Peer-to-peer direct media — no relay cost');
+
   /** Online users in my tenant who AREN'T already in the call (and aren't me). */
   protected readonly availableToInvite = computed<DirectoryUser[]>(() => {
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
@@ -357,6 +652,28 @@ export class CallOverlayComponent {
       if (!this.webrtc.inCall()) return;
       const h = setInterval(() => this._now.set(Date.now()), 1000);
       onCleanup(() => clearInterval(h));
+    });
+
+    // On entering a call, expand to full-screen + preload the directory so
+    // participant names render correctly. On exit, reset to expanded for the
+    // next call.
+    effect(() => {
+      const inCall = this.webrtc.inCall();
+      if (inCall) {
+        this.callExpanded.set(true);
+        if (this.directoryUsers().length === 0) {
+          queueMicrotask(async () => {
+            try {
+              const list = await firstValueFrom(
+                this.api.get<DirectoryUser[]>('/api/directory/users'));
+              this.directoryUsers.set(list ?? []);
+            } catch { /* names will fall back to "Caller" */ }
+          });
+        }
+      } else {
+        this.callExpanded.set(true);
+        this.invitePopoverOpen.set(false);
+      }
     });
   }
 
