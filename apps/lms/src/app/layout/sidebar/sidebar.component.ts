@@ -188,6 +188,14 @@ export class SidebarComponent {
       links: [
         { label: 'TAT Dashboard',     href: '/dashboard',            icon: '📊', perms: ['view_tat_dashboard', 'view_dashboard'] }
       ]
+    },
+    {
+      // Teams-style chat + group calling. Open to every authenticated user
+      // (any role in the tenant can message colleagues).
+      title: 'Workspace',
+      links: [
+        { label: 'Messages',          href: '/messages',             icon: '💬', perms: ['*'] }
+      ]
     }
   ];
 
@@ -202,6 +210,9 @@ export class SidebarComponent {
         ...s,
         links: s.links.filter(l => {
           if (l.visible && !l.visible()) return false;
+          // `perms: ['*']` on a link = "every authenticated user". Distinct
+          // from the user holding the `'*'` (super-admin) permission.
+          if (l.perms.length === 1 && l.perms[0] === '*') return true;
           if (isAdmin) return true;
           // `effective: true` runs through hasEffectivePermission so that
           // mode-aware suppressions (e.g. Receptionist loses collect_sample

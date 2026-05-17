@@ -28,6 +28,11 @@ export interface IncomingCallInfo {
   callType: CallType;
   source?: CallSource | string;
   participants: string[];
+  /** Set when the call was started from a group conversation — drives
+   *  the ringer to show the group name + "calling from group" subline. */
+  conversationId?: string;
+  conversationName?: string;
+  isGroup?: boolean;
 }
 
 export interface ActiveSession {

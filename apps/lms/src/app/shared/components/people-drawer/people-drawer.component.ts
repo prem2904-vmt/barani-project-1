@@ -119,8 +119,8 @@ import { AvatarComponent } from '../../primitives/avatar.component';
                 <div class="pf-pd__bubble-meta">
                   {{ m.sentAt | date:'shortTime' }}
                   @if (m.fromUserId === me()) {
-                    <span class="pf-pd__bubble-tick" [class.pf-pd__bubble-tick--read]="m.readAt">
-                      @if (m.readAt) { ✓✓ } @else { ✓ }
+                    <span class="pf-pd__bubble-tick" [class.pf-pd__bubble-tick--read]="!m.pending">
+                      @if (m.pending) { ⏳ } @else { ✓ }
                     </span>
                   }
                 </div>
@@ -344,7 +344,9 @@ export class PeopleDrawerComponent {
 
   protected readonly otherTyping = computed(() => {
     const otherId = this.otherUser()?.id;
-    return !!otherId && this.chat.typingFrom().has(otherId);
+    const convId = this.chat.activeConversationId();
+    if (!otherId || !convId) return false;
+    return this.chat.typingByConversation().get(convId)?.has(otherId) ?? false;
   });
 
   constructor() {
@@ -398,7 +400,9 @@ export class PeopleDrawerComponent {
     this.otherUser.set(u);
     this.mode.set('chat');
     this.draft.set('');
-    await this.chat.openConversation(u.id);
+    // Resolve the 1:1 conversation (server creates one if it doesn't exist).
+    try { await this.chat.openDirectConversation(u.id); }
+    catch (err) { this.toasts.error((err as Error).message ?? 'Could not open chat.'); }
   }
 
   // ── Compose ─────────────────────────────────────────────────────
@@ -406,17 +410,15 @@ export class PeopleDrawerComponent {
   async send(): Promise<void> {
     const body = this.draft().trim();
     const ou = this.otherUser();
-    if (!body || !ou) return;
+    const convId = this.chat.activeConversationId();
+    if (!body || !ou || !convId) return;
     const wasOffline = !this.isOnline(ou.id);
     this.draft.set('');
     try {
-      await this.chat.sendMessage(ou.id, body);
-      // Stop typing immediately on send.
-      void this.chat.setTyping(ou.id, false);
-      // Helpful nudge so the sender knows the message is queued, not lost.
+      await this.chat.sendMessage(convId, body);
+      void this.chat.setTyping(convId, false);
       if (wasOffline) this.toasts.info(`${ou.displayName} is offline — they'll see it when they're back.`);
     } catch (err) {
-      // Put the draft back so the user doesn't lose what they typed.
       this.draft.set(body);
       this.toasts.error((err as Error).message ?? 'Message failed to send.');
     }
@@ -424,16 +426,16 @@ export class PeopleDrawerComponent {
 
   /** Throttled "typing" broadcast — at most one event per 2s while composing. */
   onComposerInput(): void {
-    const ou = this.otherUser();
-    if (!ou) return;
+    const convId = this.chat.activeConversationId();
+    if (!convId) return;
     const now = Date.now();
     if (now - this.lastTypingSent > 2000) {
       this.lastTypingSent = now;
-      void this.chat.setTyping(ou.id, true);
+      void this.chat.setTyping(convId, true);
     }
     if (this.typingTimer) clearTimeout(this.typingTimer);
     this.typingTimer = setTimeout(() => {
-      void this.chat.setTyping(ou.id, false);
+      void this.chat.setTyping(convId, false);
       this.lastTypingSent = 0;
     }, 3000);
   }
@@ -463,11 +465,17 @@ export class PeopleDrawerComponent {
   protected isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);
   }
+  /** 1:1 conversation with this user, if one exists. */
+  private directConversation(userId: string) {
+    return this.chat.conversations().find(c =>
+      !c.isGroup && c.participants.some(p => p.userId === userId)
+    );
+  }
   protected unreadFor(userId: string): number {
-    return this.chat.conversations().find(c => c.otherUserId === userId)?.unread ?? 0;
+    return this.directConversation(userId)?.unreadCount ?? 0;
   }
   protected lastBodyFor(userId: string): string | null {
-    return this.chat.conversations().find(c => c.otherUserId === userId)?.lastMessage.body ?? null;
+    return this.directConversation(userId)?.lastMessage?.body ?? null;
   }
 
   private async fetchUsers(): Promise<void> {

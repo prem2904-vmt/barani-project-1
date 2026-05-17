@@ -272,6 +272,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/billing-counter/billing-counter.component').then(m => m.BillingCounterComponent)
       },
 
+      // Messages — Teams-style chat + group calling.
+      {
+        path: 'messages',
+        loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
+      },
+
       // Ops
       {
         path: 'dashboard',

@@ -145,6 +145,13 @@ export class SignalingService implements OnDestroy {
     await this.connect();
     return await this.connection!.invoke('StartCall', targetUserId, callType, source ?? null);
   }
+  /** Rings every active group member at once. Backend resolves the
+   *  conversation, filters to online members, and pushes IncomingCall
+   *  with conversationId + conversationName attached. */
+  async startGroupCall(conversationId: string, callType: CallType = 'audio', source?: string): Promise<{ sessionId: string; ringing?: string[] }> {
+    await this.connect();
+    return await this.connection!.invoke('StartGroupCall', conversationId, callType, source ?? null);
+  }
   async acceptCall(sessionId: string): Promise<{ sessionId: string; participants: string[] }> {
     await this.connect();
     return await this.connection!.invoke('AcceptCall', sessionId);

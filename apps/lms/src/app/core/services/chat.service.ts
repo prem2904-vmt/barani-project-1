@@ -1,40 +1,52 @@
 import { Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
-import { ChatMessage, ConversationSummary } from '../../shared/models/chat.model';
+import { ChatMessage, Conversation } from '../../shared/models/chat.model';
+import { ApiService } from './api.service';
 
 /**
- * 1:1 chat client. One persistent SignalR connection to /hubs/chat.
- * Owns three pieces of state:
- *   - `conversations` — list of every conversation I've ever had, with
- *     last message + unread count.
- *   - `activeMessages` — messages for the currently-open chat, sorted
- *     chronologically.
- *   - `typingFrom` — set of user ids currently typing toward me.
+ * Conversation-based chat (1:1 + group). One persistent SignalR
+ * connection to /hubs/chat for realtime; REST for create/list.
  *
- * Tenant scope is enforced server-side (every query filters TenantId)
- * so this client never has to think about cross-tenant leakage.
+ * Public signals:
+ *   - conversations: every conversation I'm a member of, newest first
+ *   - activeConversationId: which thread the right pane is showing
+ *   - activeMessages: messages for the active thread, chronological
+ *   - typingByConversation: { convId → set of userIds typing }
+ *   - totalUnread: sum across all conversations (for sidebar badge)
+ *
+ * Optimistic send: append with `pending: true` immediately, replace with
+ * server echo when it arrives (matched by sent body + sender for the
+ * one rare race where the user sends two identical messages back-to-back).
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService implements OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly api = inject(ApiService);
   private connection: signalR.HubConnection | null = null;
   private connecting: Promise<void> | null = null;
+  private typingClearTimers = new Map<string, number>(); // convId|userId → setTimeout id
 
   readonly isConnected = signal(false);
-  readonly conversations = signal<ConversationSummary[]>([]);
-  readonly activeOtherUserId = signal<string | null>(null);
+  readonly conversations = signal<Conversation[]>([]);
+  readonly activeConversationId = signal<string | null>(null);
   readonly activeMessages = signal<ChatMessage[]>([]);
-  readonly typingFrom = signal<Set<string>>(new Set());
+  readonly typingByConversation = signal<Map<string, Set<string>>>(new Map());
   readonly loadingHistory = signal(false);
 
-  /** Total unread across all conversations — for the top-strip badge. */
+  readonly activeConversation = computed(() => {
+    const id = this.activeConversationId();
+    if (!id) return null;
+    return this.conversations().find(c => c.id === id) ?? null;
+  });
+
   readonly totalUnread = computed(() =>
-    this.conversations().reduce((sum, c) => sum + c.unread, 0)
+    this.conversations().reduce((sum, c) => sum + c.unreadCount, 0)
   );
 
-  // ── Connection lifecycle ───────────────────────────────────────────
+  // ── Connection lifecycle ────────────────────────────────────────────
 
   async connect(): Promise<void> {
     if (this.connection?.state === signalR.HubConnectionState.Connected) return;
@@ -55,8 +67,15 @@ export class ChatService implements OnDestroy {
       .build();
 
     this.connection.on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
-    this.connection.on('MessageRead',     (p: { id: string; readAt: string }) => this.onMessageRead(p));
-    this.connection.on('Typing',          (p: { fromUserId: string; toUserId: string; isTyping: boolean }) => this.onTyping(p));
+    this.connection.on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
+      this.onMessageRead(p));
+    this.connection.on('Typing', (p: { conversationId: string; fromUserId: string; isTyping: boolean }) =>
+      this.onTyping(p));
+    this.connection.on('ConversationCreated', (_p: { conversationId: string }) =>
+      void this.loadConversations());
+    this.connection.on('ConversationUpdated',
+      (p: { conversationId: string; lastMessage: any; lastMessageAt: string }) =>
+        this.onConversationUpdated(p));
 
     this.connection.onreconnected(async () => {
       this.isConnected.set(true);
@@ -69,28 +88,54 @@ export class ChatService implements OnDestroy {
     try { await this.loadConversations(); } catch { /* user has no chats yet */ }
   }
 
-  // ── Public actions ────────────────────────────────────────────────
+  // ── REST actions ────────────────────────────────────────────────────
 
-  async sendMessage(toUserId: string, body: string): Promise<void> {
-    const trimmed = body.trim();
-    if (!trimmed) return;
-    await this.connect();
-    await this.connection!.invoke('SendMessage', toUserId, trimmed);
-    // Don't push optimistically — server broadcasts MessageReceived back to us.
+  /** Get-or-create a 1:1 conversation with the given AuthId. Returns the id. */
+  async openDirectConversation(otherUserId: string): Promise<string> {
+    const res = await firstValueFrom(this.api.post<{ conversationId: string }>(
+      '/api/chat/conversations/direct', { otherUserId }
+    ));
+    if (!res?.conversationId) throw new Error('Failed to open conversation.');
+    await this.loadConversations();
+    await this.openConversation(res.conversationId);
+    return res.conversationId;
   }
 
-  async openConversation(otherUserId: string): Promise<void> {
+  /** Create a group chat. Returns the conversation id. */
+  async createGroup(name: string, memberIds: string[]): Promise<string> {
+    const res = await firstValueFrom(this.api.post<{ conversationId: string }>(
+      '/api/chat/conversations/group', { name, memberIds }
+    ));
+    if (!res?.conversationId) throw new Error('Failed to create group.');
+    await this.loadConversations();
+    await this.openConversation(res.conversationId);
+    return res.conversationId;
+  }
+
+  async loadConversations(): Promise<void> {
+    const res = await firstValueFrom(this.api.get<Conversation[]>(
+      '/api/chat/conversations'
+    ));
+    this.conversations.set(res ?? []);
+  }
+
+  // ── Thread actions ──────────────────────────────────────────────────
+
+  async openConversation(conversationId: string): Promise<void> {
     await this.connect();
-    this.activeOtherUserId.set(otherUserId);
+    this.activeConversationId.set(conversationId);
     this.activeMessages.set([]);
     this.loadingHistory.set(true);
     try {
-      const res = await this.connection!.invoke<{ messages: ChatMessage[] }>('LoadConversation', otherUserId, 50);
-      this.activeMessages.set(res.messages ?? []);
-      await this.connection!.invoke('MarkConversationRead', otherUserId);
-      // Clear unread locally — server broadcast will catch any stragglers.
+      const res = await firstValueFrom(this.api.get<ChatMessage[]>(
+        `/api/chat/conversations/${conversationId}/messages?skip=0&take=50`
+      ));
+      this.activeMessages.set(res ?? []);
+
+      // Tell the server we've read up to now; clears unread for the badge.
+      try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
       this.conversations.update(list =>
-        list.map(c => c.otherUserId === otherUserId ? { ...c, unread: 0 } : c)
+        list.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
       );
     } finally {
       this.loadingHistory.set(false);
@@ -98,71 +143,146 @@ export class ChatService implements OnDestroy {
   }
 
   closeConversation(): void {
-    this.activeOtherUserId.set(null);
+    this.activeConversationId.set(null);
     this.activeMessages.set([]);
-    this.typingFrom.set(new Set());
   }
 
-  async loadConversations(): Promise<void> {
+  async sendMessage(conversationId: string, body: string): Promise<void> {
+    const trimmed = body.trim();
+    if (!trimmed) return;
     await this.connect();
-    const res = await this.connection!.invoke<{ conversations: ConversationSummary[] }>('LoadConversations');
-    this.conversations.set(res.conversations ?? []);
+
+    // Optimistic append — instant feedback, replaced when server echoes back.
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic: ChatMessage = {
+      id: tempId,
+      conversationId,
+      fromUserId: me,
+      body: trimmed,
+      sentAt: new Date().toISOString(),
+      pending: true
+    };
+    if (this.activeConversationId() === conversationId) {
+      this.activeMessages.update(list => [...list, optimistic]);
+    }
+
+    try {
+      await this.connection!.invoke('SendMessage', conversationId, trimmed);
+      // Server fires MessageReceived back — onMessageReceived reconciles the
+      // pending entry. If it never arrives (timeout/error), the pending row
+      // sticks; user can retry by re-sending.
+    } catch (err) {
+      // Mark the optimistic row as failed so the UI can show a retry affordance.
+      this.activeMessages.update(list =>
+        list.map(m => m.id === tempId ? { ...m, pending: false, body: m.body + ' (failed)' } : m)
+      );
+      throw err;
+    }
   }
 
-  async setTyping(toUserId: string, isTyping: boolean): Promise<void> {
+  /** Throttled typing broadcast. Caller should debounce to ~1Hz. */
+  async setTyping(conversationId: string, isTyping: boolean): Promise<void> {
     await this.connect();
-    try { await this.connection!.invoke('Typing', toUserId, isTyping); } catch { /* ignore */ }
+    try { await this.connection!.invoke('Typing', conversationId, isTyping); } catch { /* ignore */ }
   }
 
-  // ── Server event handlers ─────────────────────────────────────────
+  // ── Server event handlers ───────────────────────────────────────────
 
   private onMessageReceived(m: ChatMessage) {
-    // m.fromUserId / m.toUserId are Supabase sub (AuthId) since the backend
-    // switched to SubClaimUserIdProvider. Comparing against auth.user().id
-    // (prefrontal UserEntity.Id) silently never matched — every echoed
-    // message looked like it came from a stranger, so it was dropped from
-    // both activeMessages and the conversation summary update.
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id;
-    const other = m.fromUserId === me ? m.toUserId : m.fromUserId;
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
 
-    // Append to active conversation if open.
-    if (this.activeOtherUserId() === other) {
+    // Reconcile optimistic pending row if this is my echoed message.
+    if (m.fromUserId === me && this.activeConversationId() === m.conversationId) {
+      let replaced = false;
+      this.activeMessages.update(list => {
+        const idx = list.findIndex(x => x.pending && x.body === m.body && x.fromUserId === me);
+        if (idx >= 0) {
+          replaced = true;
+          const next = [...list]; next[idx] = m; return next;
+        }
+        return list;
+      });
+      if (replaced) {
+        // Conversation summary still needs the last-message bump below.
+      } else if (this.activeConversationId() === m.conversationId) {
+        this.activeMessages.update(list => [...list, m]);
+      }
+    } else if (this.activeConversationId() === m.conversationId) {
       this.activeMessages.update(list => [...list, m]);
-      // I'm currently looking at this thread — mark read immediately.
-      if (m.toUserId === me) void this.connection?.invoke('MarkRead', m.id);
+      // I'm reading this conversation — mark read so badge stays at 0.
+      void this.connection?.invoke('MarkConversationRead', m.conversationId);
     }
 
     // Update / insert conversation summary.
     this.conversations.update(list => {
-      const idx = list.findIndex(c => c.otherUserId === other);
-      const isToMe = m.toUserId === me;
-      const inc = isToMe && this.activeOtherUserId() !== other ? 1 : 0;
-      const summary: ConversationSummary = {
-        otherUserId: other,
-        lastMessage: { id: m.id, fromUserId: m.fromUserId, body: m.body, sentAt: m.sentAt, readAt: m.readAt },
-        unread: (idx >= 0 ? list[idx].unread : 0) + inc
-      };
+      const idx = list.findIndex(c => c.id === m.conversationId);
+      const isToMe = m.fromUserId !== me;
+      const incUnread = isToMe && this.activeConversationId() !== m.conversationId ? 1 : 0;
       if (idx >= 0) {
+        const current = list[idx];
+        const updated: Conversation = {
+          ...current,
+          lastMessage: { id: m.id, fromUserId: m.fromUserId, body: m.body, sentAt: m.sentAt },
+          lastMessageAt: m.sentAt,
+          unreadCount: current.unreadCount + incUnread
+        };
         const next = [...list]; next.splice(idx, 1);
-        return [summary, ...next];
+        return [updated, ...next];
       }
-      return [summary, ...list];
+      // Message for a conversation we don't yet have in the list — refetch.
+      void this.loadConversations();
+      return list;
     });
   }
 
-  private onMessageRead(p: { id: string; readAt: string }) {
-    this.activeMessages.update(list =>
-      list.map(m => m.id === p.id ? { ...m, readAt: p.readAt } : m)
-    );
+  private onMessageRead(p: { conversationId: string; userId: string; readAt: string }) {
+    // Currently a no-op for the per-user "they've read up to" model; group
+    // read receipts are a future enhancement. Kept as a hook so the
+    // server-side broadcast doesn't error in the client logs.
+    void p;
   }
 
-  private onTyping(p: { fromUserId: string; toUserId: string; isTyping: boolean }) {
-    // toUserId arrives as Supabase sub; compare against authId.
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id;
-    if (p.toUserId !== me) return;
-    const next = new Set(this.typingFrom());
-    if (p.isTyping) next.add(p.fromUserId); else next.delete(p.fromUserId);
-    this.typingFrom.set(next);
+  private onTyping(p: { conversationId: string; fromUserId: string; isTyping: boolean }) {
+    const map = new Map(this.typingByConversation());
+    const set = new Set(map.get(p.conversationId) ?? []);
+    const key = `${p.conversationId}|${p.fromUserId}`;
+    // Clear any existing auto-clear timer for this (conv, user) pair.
+    const existingTimer = this.typingClearTimers.get(key);
+    if (existingTimer) { clearTimeout(existingTimer); this.typingClearTimers.delete(key); }
+
+    if (p.isTyping) {
+      set.add(p.fromUserId);
+      // Auto-clear after 3s of silence — matches HMS UX. If another
+      // Typing(true) arrives, this timer is reset.
+      const t = setTimeout(() => {
+        const m2 = new Map(this.typingByConversation());
+        const s2 = new Set(m2.get(p.conversationId) ?? []);
+        s2.delete(p.fromUserId);
+        if (s2.size === 0) m2.delete(p.conversationId); else m2.set(p.conversationId, s2);
+        this.typingByConversation.set(m2);
+        this.typingClearTimers.delete(key);
+      }, 3000) as unknown as number;
+      this.typingClearTimers.set(key, t);
+    } else {
+      set.delete(p.fromUserId);
+    }
+    if (set.size === 0) map.delete(p.conversationId); else map.set(p.conversationId, set);
+    this.typingByConversation.set(map);
+  }
+
+  private onConversationUpdated(p: { conversationId: string; lastMessage: any; lastMessageAt: string }) {
+    // ConversationUpdated is a lightweight refresh hint; MessageReceived
+    // already does the heavy lifting (last-message + unread). Used today
+    // only to bump lastMessageAt for conversations we're not actively
+    // looking at — keeps the left rail in order without a full refetch.
+    this.conversations.update(list => {
+      const idx = list.findIndex(c => c.id === p.conversationId);
+      if (idx < 0) return list;
+      const updated = { ...list[idx], lastMessageAt: p.lastMessageAt };
+      const next = [...list]; next.splice(idx, 1);
+      return [updated, ...next];
+    });
   }
 
   async disconnect(): Promise<void> {
@@ -172,5 +292,9 @@ export class ChatService implements OnDestroy {
     this.isConnected.set(false);
   }
 
-  ngOnDestroy(): void { void this.disconnect(); }
+  ngOnDestroy(): void {
+    for (const t of this.typingClearTimers.values()) clearTimeout(t);
+    this.typingClearTimers.clear();
+    void this.disconnect();
+  }
 }

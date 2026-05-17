@@ -46,10 +46,14 @@ interface DirectoryUser {
       <div class="pf-call-ring" role="dialog" aria-modal="true" aria-label="Incoming call">
         <div class="pf-call-ring__backdrop"></div>
         <div class="pf-call-ring__card">
-          <div class="pf-call-ring__avatar">{{ initials(ic.callerName) }}</div>
-          <p class="pf-call-ring__eyebrow">Incoming {{ ic.callType }} call</p>
-          <h2 class="pf-call-ring__name">{{ ic.callerName }}</h2>
-          @if (ic.source) {
+          <div class="pf-call-ring__avatar">{{ initials(ic.isGroup ? (ic.conversationName ?? 'GG') : ic.callerName) }}</div>
+          <p class="pf-call-ring__eyebrow">
+            @if (ic.isGroup) { Group {{ ic.callType }} call } @else { Incoming {{ ic.callType }} call }
+          </p>
+          <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group') : ic.callerName }}</h2>
+          @if (ic.isGroup) {
+            <p class="pf-call-ring__source">{{ ic.callerName }} is calling</p>
+          } @else if (ic.source) {
             <p class="pf-call-ring__source">{{ sourceLabel(ic.source) }}</p>
           }
           <div class="pf-call-ring__pulse" aria-hidden="true">
@@ -99,6 +103,12 @@ interface DirectoryUser {
               {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
             </span>
             <span class="pf-call-screen__time">{{ duration() }}</span>
+            @if (showRemaining()) {
+              <span class="pf-call-screen__remaining" [class.pf-call-screen__remaining--urgent]="remainingUrgent()"
+                    title="Call auto-ends at this point">
+                {{ remainingLabel() }}
+              </span>
+            }
           </header>
 
           <div class="pf-call-screen__participants">
@@ -206,6 +216,12 @@ interface DirectoryUser {
           <span class="pf-call-pill__label">{{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}</span>
           <span class="pf-call-pill__time">{{ duration() }}</span>
         </div>
+        @if (showRemaining()) {
+          <span class="pf-call-pill__remaining" [class.pf-call-pill__remaining--urgent]="remainingUrgent()"
+                title="Call auto-ends at this point — 10-minute cap on 1:1, 30-minute on group">
+            {{ remainingLabel() }}
+          </span>
+        }
         <!-- Compact route badge: green "Free" when peer-to-peer, amber
              "Paid" when media is relayed via TURN (CF egress = billable). -->
         <span class="pf-call-pill__route" [attr.data-cost]="routeCost()" [title]="routeTitle()">
@@ -409,6 +425,34 @@ interface DirectoryUser {
     .pf-call-pill__btn--end:hover { background: #dc2626; }
     .pf-call-pill__btn--add { background: rgba(168, 85, 247, 0.20); color: #c4b5fd; }
     .pf-call-pill__btn--add:hover { background: rgba(168, 85, 247, 0.35); }
+
+    /* Remaining-time chip — appears when under 2min, urgent flash under 1min. */
+    .pf-call-pill__remaining {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 3px 8px; border-radius: 999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      background: rgba(56, 189, 248, 0.20); color: #7dd3fc;
+      white-space: nowrap; cursor: help;
+    }
+    .pf-call-pill__remaining--urgent {
+      background: rgba(244, 63, 94, 0.28); color: #fda4af;
+      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
+    }
+    @keyframes pf-call-remaining-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.55; }
+    }
+    .pf-call-screen__remaining {
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 4px 10px; border-radius: 999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      background: rgba(56, 189, 248, 0.20); color: #7dd3fc;
+      margin-left: 8px;
+    }
+    .pf-call-screen__remaining--urgent {
+      background: rgba(244, 63, 94, 0.28); color: #fda4af;
+      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
+    }
 
     /* Route badge — Free (peer-to-peer) vs Paid (TURN-relayed) so the user
      * sees the cost implication at a glance. */
@@ -713,6 +757,18 @@ export class CallOverlayComponent {
     const ss = String(sec % 60).padStart(2, '0');
     return `${mm}:${ss}`;
   });
+
+  /** "MM:SS" countdown until the cap kicks in. Hidden until under 2min. */
+  protected remainingLabel = computed(() => {
+    const ms = this.webrtc.remainingMs();
+    if (ms <= 0) return '';
+    const sec = Math.ceil(ms / 1000);
+    const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+    const ss = String(sec % 60).padStart(2, '0');
+    return `${mm}:${ss} left`;
+  });
+  protected showRemaining = computed(() => this.webrtc.remainingMs() > 0 && this.webrtc.remainingMs() <= 120_000);
+  protected remainingUrgent = computed(() => this.webrtc.remainingMs() > 0 && this.webrtc.remainingMs() <= 60_000);
 
   protected initials(name: string): string {
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join('') || '?';
