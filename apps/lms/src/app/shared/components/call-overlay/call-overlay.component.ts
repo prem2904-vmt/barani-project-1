@@ -6,6 +6,7 @@ import { RingtoneService } from '../../../core/services/ringtone.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { SrcObjectDirective } from '../../directives/src-object.directive';
 
 interface DirectoryUser {
   id: string;          // Supabase sub (== AuthId)
@@ -27,18 +28,18 @@ interface DirectoryUser {
 @Component({
   selector: 'pf-call-overlay',
   standalone: true,
-  imports: [],
+  imports: [SrcObjectDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Hidden audio sinks for each remote peer's stream. data-remote-call
-         is the discovery marker for the effect that programmatically sets
-         srcObject + calls .play() — see the effect in the constructor for
-         why we don't rely on Angular's [srcObject] binding. -->
+    <!-- Hidden audio sinks for each remote peer's stream. The SrcObjectDirective
+         (selector "audio[srcObject]") intercepts the [srcObject] binding in
+         the directive lifecycle — after the element is in the DOM — and
+         calls .play() explicitly. This is the reliable cross-browser path;
+         Angular's raw [srcObject] property binding worked on Chrome but
+         silently no-op'd on Safari, and the earlier querySelectorAll-based
+         effect raced Angular's render and ran before the element existed. -->
     @for (entry of audioEntries(); track entry.userId) {
-      <audio data-remote-call="1"
-             [attr.data-user]="entry.userId"
-             autoplay
-             playsinline></audio>
+      <audio [srcObject]="entry.stream" autoplay playsinline></audio>
     }
 
     @if (webrtc.incomingCall(); as ic) {
@@ -697,34 +698,11 @@ export class CallOverlayComponent {
       }
     });
 
-    // Voice playback hardening: every time the remote-stream map changes,
-    // walk the rendered <audio> elements and (a) re-assign srcObject via
-    // property, (b) call .play() explicitly. The Angular template binding
-    // `[srcObject]="..."` works in some browsers and silently no-ops in
-    // others; explicit assignment + play() is the reliable path. This was
-    // the actual reason "call connects but no voice" — the audio elements
-    // existed but their srcObject was never wired to the MediaStream.
-    effect(() => {
-      const _ = this.webrtc.remoteAudio();   // dependency: react to changes
-      queueMicrotask(() => {
-        const els = document.querySelectorAll<HTMLAudioElement>('audio[data-remote-call]');
-        const map = this.webrtc.remoteAudio();
-        els.forEach(el => {
-          const userId = el.getAttribute('data-user');
-          if (!userId) return;
-          const stream = map.get(userId);
-          if (stream && el.srcObject !== stream) el.srcObject = stream;
-          if (stream) {
-            const p = el.play();
-            if (p && typeof (p as Promise<void>).catch === 'function') {
-              (p as Promise<void>).catch(() => {
-                this.toast.info('Tap anywhere to enable call audio');
-              });
-            }
-          }
-        });
-      });
-    });
+    // Voice playback runs via SrcObjectDirective on the <audio> elements —
+    // see template above. The directive handles property-assignment +
+    // .play() in the element's lifecycle, which avoids the race the
+    // previous querySelectorAll-based effect had with Angular's render
+    // (firing before the new audio element existed in the DOM).
   }
 
   protected duration = computed(() => {
