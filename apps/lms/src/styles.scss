@@ -1488,9 +1488,10 @@ html[data-theme="light"] .pf-vial__outline {
   /* CASE A — `<wrapper><div role=dialog>panel content</div></wrapper>`.
      The dialog IS the panel. The wrapper is a flex container — we
      align its single child to the bottom and remove its padding so
-     the panel reaches edge-to-edge. */
-  *:has(> [role='dialog']:not(.pf-modal-centered)),
-  *:has(> [aria-modal='true']:not(.pf-modal-centered)) {
+     the panel reaches edge-to-edge. Skip if dialog is aria-hidden
+     (i.e. modal is closed) — otherwise we'd force-display a hidden modal. */
+  *:has(> [role='dialog']:not(.pf-modal-centered):not([aria-hidden='true'])),
+  *:has(> [aria-modal='true']:not(.pf-modal-centered):not([aria-hidden='true'])) {
     align-items: flex-end !important;
     justify-content: stretch !important;
     padding: 0 !important;
@@ -1502,9 +1503,10 @@ html[data-theme="light"] .pf-vial__outline {
      (shell/panel/modal/card/sheet). When the dialog wraps its own
      backdrop+panel (case C below), we MUST NOT apply panel styling to
      the wrapper — that would override its position:fixed inset:0 and
-     collapse it into a tiny box, leaving other modals visible behind. */
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))) {
+     collapse it into a tiny box, leaving other modals visible behind.
+     Also skip aria-hidden dialogs (component-controlled visibility). */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))) {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
@@ -1726,14 +1728,17 @@ html[data-theme="light"] .pf-vial__outline {
      bottom. CRITICAL: do NOT override the dialog's position; the
      component's `position: fixed; inset: 0` MUST stay so the dialog
      keeps covering the full viewport (so its backdrop hides whatever's
-     beneath, including a lower-z modal). */
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='shell']),
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='panel']:not([class*='backdrop'])),
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='modal']:not([class*='backdrop'])),
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='card']:not([class*='backdrop'])),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='shell']),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='panel']:not([class*='backdrop'])),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='modal']:not([class*='backdrop'])) {
+     beneath, including a lower-z modal).
+     ALSO: skip aria-hidden=true dialogs — the component uses that to
+     mark a CLOSED modal. Adding `display: flex` to a hidden modal
+     would override its `display: none` and force-show it. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='shell']),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='panel']:not([class*='backdrop'])),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='modal']:not([class*='backdrop'])),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='card']:not([class*='backdrop'])),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='shell']),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='panel']:not([class*='backdrop'])),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not([aria-hidden='true']):has(> [class*='modal']:not([class*='backdrop'])) {
     display: flex !important;
     align-items: flex-end !important;
     justify-content: stretch !important;
