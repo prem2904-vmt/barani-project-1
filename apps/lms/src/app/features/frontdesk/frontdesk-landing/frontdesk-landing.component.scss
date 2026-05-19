@@ -598,6 +598,22 @@
    shove the cluster off-screen. Auto-height because the inline
    Custom inputs may wrap below the pills (see .pf-date-custom). */
 @media (max-width: 640px) {
+  /* Stack the search bar and date pills vertically on phones.
+     Otherwise .pf-search-wrap (display: flex, align-items: center)
+     keeps the patient-search and the 60px-tall date-pills row side-
+     by-side, and the date pills (flex-shrink: 0) refuse to give
+     way — overlapping the search bar at 375px width. */
+  .pf-search-wrap {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+  .pf-search-wrap > pf-patient-search {
+    width: 100% !important;
+  }
+
   .pf-date-pills {
     height: auto;
     flex-wrap: wrap;
