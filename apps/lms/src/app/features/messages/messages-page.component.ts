@@ -226,11 +226,18 @@ export class MessagesPageComponent implements OnInit {
     return c.direction === 'incoming' ? 'Incoming' : 'Outgoing';
   }
 
-  /** Display name for a conversation: group name OR the other participant. */
+  /** Display name for a conversation: group name OR the other participant.
+      For Notes-to-Self (1:1 where every participant is the current user),
+      use the conversation's own name ("Notes to self") rather than falling
+      back to "Unknown" — which is what happened because `find(p => p.userId
+      !== me)` returns undefined when there's no other participant. */
   protected displayName(c: Conversation): string {
     if (c.isGroup) return c.name ?? 'Untitled group';
     const me = this.me();
-    return c.participants.find(p => p.userId !== me)?.displayName ?? 'Unknown';
+    const other = c.participants.find(p => p.userId !== me);
+    if (other) return other.displayName ?? 'Unknown';
+    // No "other" → it's a notes-to-self conversation.
+    return c.name ?? 'Notes to self';
   }
 
   /** Initials for the avatar pill — group = first 2 chars, person = first+last. */
