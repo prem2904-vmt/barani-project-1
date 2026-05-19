@@ -1306,19 +1306,23 @@ html[data-theme="light"] .pf-vial__outline {
     align-items: flex-end !important;
     padding: 0 !important;
   }
-  .pf-sheet__panel,
-  .pf-sheet > * {
+  /* ONLY the explicit panel — never `> *`. The earlier `> *` selector
+     also matched backdrop divs (.pf-pp-bg, .pf-bk-backdrop, etc.) and
+     gave them sheet styling, which broke layouts: each backdrop became
+     a max-85vh flex-item alongside the panel, vertically stacking two
+     sheets when two modals were open. Backdrops MUST stay full-viewport
+     position:absolute so they obscure the modal below. */
+  .pf-sheet__panel {
     width: 100% !important;
     max-width: 100% !important;
     border-radius: 18px 18px 0 0 !important;
-    max-height: 85vh !important;
+    max-height: 92dvh !important;
     /* Grab handle for tactile affordance. */
     position: relative;
     animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
     padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
   }
-  .pf-sheet__panel::before,
-  .pf-sheet > *::before {
+  .pf-sheet__panel::before {
     content: '';
     position: absolute;
     top: 8px; left: 50%;
@@ -1481,10 +1485,10 @@ html[data-theme="light"] .pf-vial__outline {
    layout (full-bleed ringer with thumb-zone buttons).
    ───────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Backdrop wrappers — anything that holds a [role="dialog"] directly
-     should align it to the bottom and drop edge padding. The :has()
-     selector is supported in Chrome 105+, Safari 15.4+, Firefox 121+
-     (well above our target user base). */
+  /* CASE A — `<wrapper><div role=dialog>panel content</div></wrapper>`.
+     The dialog IS the panel. The wrapper is a flex container — we
+     align its single child to the bottom and remove its padding so
+     the panel reaches edge-to-edge. */
   *:has(> [role='dialog']:not(.pf-modal-centered)),
   *:has(> [aria-modal='true']:not(.pf-modal-centered)) {
     align-items: flex-end !important;
@@ -1492,32 +1496,22 @@ html[data-theme="light"] .pf-vial__outline {
     padding: 0 !important;
   }
 
-  /* The dialog itself — full width, top-rounded only, capped height,
-     slides up. Same animation as .pf-sheet. */
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) {
+  /* The dialog-as-panel itself — full width, top-rounded only, capped
+     height, slides up. Same animation as .pf-sheet.
+     IMPORTANT: only fires if the dialog has NO child marked as a panel
+     (shell/panel/modal/card/sheet). When the dialog wraps its own
+     backdrop+panel (case C below), we MUST NOT apply panel styling to
+     the wrapper — that would override its position:fixed inset:0 and
+     collapse it into a tiny box, leaving other modals visible behind. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):not(:has(> [class*='shell'])):not(:has(> [class*='panel']:not([class*='backdrop']))):not(:has(> [class*='modal']:not([class*='backdrop']))):not(:has(> [class*='card']:not([class*='backdrop']))):not(:has(> [class*='sheet']:not([class*='backdrop']))) {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
     border-radius: 18px 18px 0 0 !important;
-    max-height: 90vh !important;
+    max-height: 92dvh !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
-    position: relative;
-  }
-
-  /* Grab handle, same as .pf-sheet__panel. */
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before,
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before {
-    content: '';
-    position: absolute;
-    top: 8px; left: 50%;
-    transform: translateX(-50%);
-    width: 36px; height: 4px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.22);
-    pointer-events: none;
-    z-index: 1;
   }
 }
 
@@ -1726,10 +1720,20 @@ html[data-theme="light"] .pf-vial__outline {
    anything called "backdrop" / "-bd" / "-bg".
    ───────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* CASE B + C — the role=dialog element itself becomes a bottom-aligned
-     flex container so its visible panel-child sticks to the bottom. */
-  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
-  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) {
+  /* CASE C — the role=dialog element wraps backdrop + panel, owns the
+     fullscreen overlay (position: fixed; inset: 0 in component CSS).
+     We turn it into a flex container aligning the panel-child to the
+     bottom. CRITICAL: do NOT override the dialog's position; the
+     component's `position: fixed; inset: 0` MUST stay so the dialog
+     keeps covering the full viewport (so its backdrop hides whatever's
+     beneath, including a lower-z modal). */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='shell']),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='panel']:not([class*='backdrop'])),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='modal']:not([class*='backdrop'])),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='card']:not([class*='backdrop'])),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='shell']),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='panel']:not([class*='backdrop'])),
+  [aria-modal='true']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card):has(> [class*='modal']:not([class*='backdrop'])) {
     display: flex !important;
     align-items: flex-end !important;
     justify-content: stretch !important;
@@ -1737,14 +1741,12 @@ html[data-theme="light"] .pf-vial__outline {
   }
 
   /* The visible panel inside the dialog — match common class-name
-     conventions (XX-shell / XX-panel / XX-modal / XX-card / XX-sheet),
-     anything in /* but * NOT a backdrop. This covers patient-profile-
-     modal (.pf-pp-shell), appointment-booking-modal (.pf-bk-shell),
+     conventions (shell / panel / modal / card / sheet) excluding any
+     class containing "backdrop". Covers patient-profile-modal
+     (.pf-pp-shell), appointment-booking-modal (.pf-bk-shell),
      referring-network (.pf-rn-modal), frontdesk dispatch (.pf-pkg-modal).
-     Combined with the wrapper-flex above, the panel slides up from the bottom.
-
-     We use multiple selectors instead of a wildcard because we don't
-     want the backdrop element to ALSO be styled as a sheet. */
+     We don't add `position: relative` here — the panel already gets a
+     valid containing block from the dialog wrapper (display: flex above). */
   [role='dialog']:not(.pf-modal-centered) > [class*='shell'],
   [role='dialog']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop']),
   [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop']),
@@ -1755,37 +1757,23 @@ html[data-theme="light"] .pf-vial__outline {
   [aria-modal='true']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop']) {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: 90vh !important;
+    max-height: 92dvh !important;
     margin: 0 !important;
     border-radius: 18px 18px 0 0 !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
+  /* Grab handle — attached to the panel-child, not the dialog wrapper,
+     so it sits at the top edge of the visible sheet. */
+  [role='dialog']:not(.pf-modal-centered) > [class*='shell'],
+  [role='dialog']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop']),
+  [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop']) {
     position: relative;
   }
-
-  /* CASE B-bonus — sibling backdrop pattern. The dialog has its own
-     position: fixed; styling so we force it to bottom-align as a sheet
-     even without a wrapper. */
-  body > [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card),
-  pf-referring-network > [role='dialog']:not(.pf-modal-centered) {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    max-height: 90vh !important;
-    border-radius: 18px 18px 0 0 !important;
-    margin: 0 !important;
-    animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
-  }
-
-  /* Grab handle on the panel — same as .pf-sheet__panel. */
   [role='dialog']:not(.pf-modal-centered) > [class*='shell']::before,
   [role='dialog']:not(.pf-modal-centered) > [class*='panel']:not([class*='backdrop'])::before,
-  [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop'])::before,
-  body > [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card)::before {
+  [role='dialog']:not(.pf-modal-centered) > [class*='modal']:not([class*='backdrop'])::before {
     content: '';
     position: absolute;
     top: 8px; left: 50%;
