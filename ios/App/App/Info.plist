@@ -30,16 +30,21 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!-- iPhone: portrait only. The mobile layout assumes a tall, thumb-
+	     reachable phone-shaped viewport. Landscape on a phone leaves
+	     ~375px of height which crushes the chat thread, login form,
+	     and result-entry pages — not worth supporting. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- iPad: landscape only. Tablet layouts use wide 2-pane split
+	     views (Messages list + thread, frontdesk appt + work, admin
+	     browse + detail) that read well at ≥1024px width. Portrait
+	     iPad would collapse them to single-column — duplicating the
+	     phone variant — so we lock to landscape for clarity. -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
