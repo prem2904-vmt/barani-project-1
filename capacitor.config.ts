@@ -10,7 +10,7 @@ import { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'in.prefrontal.lms',
-  appName: 'Prefrontal LMS',
+  appName: 'Prefrontal',
   webDir: 'dist/apps/lms/browser',
   server: {
     androidScheme: 'https',
