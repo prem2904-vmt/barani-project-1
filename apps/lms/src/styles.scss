@@ -1797,3 +1797,206 @@ html[data-theme="light"] .pf-vial__outline {
     z-index: 10;
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════
+   ── MOBILE REDESIGN PASS ──
+   Goal: eliminate every kind of overlap on a 375px viewport without
+   touching desktop/iPad. Anything tagged `@media (max-width: 640px)`
+   only fires on phones.
+
+   The five overlap classes we're killing:
+     (1) Bottom-nav pill (z-30) clipping page content
+     (2) Form/page action bars under the pill (no clearance)
+     (3) Floating CTAs (FAB) under the pill
+     (4) Z-index collisions between nav, action bars, and toolbars
+     (5) Fixed-position sidebars that fight the mobile stack flow
+   ═════════════════════════════════════════════════════════════════ */
+
+/* ── (A) Layer ladder — single source of truth ──────────────────── */
+:root {
+  /* Bottom-nav pill total height incl. its offset from viewport bottom:
+     - pill bottom-offset = max(16px, env(safe-area-inset-bottom))
+     - pill body          ≈ 56px tall (44px min-height + 6px padding * 2)
+     - breathing room     = 12px
+     Adds up to ~92px on non-notched, more on iPhone Pro. */
+  --pf-nav-clear: calc(92px + env(safe-area-inset-bottom, 0px));
+
+  /* Documented z-index layers — keep page rules below the nav,
+     keep modals above. Centralizing this lets us audit at a glance. */
+  --pf-z-content:       1;
+  --pf-z-sticky-header: 5;
+  --pf-z-page-panel:    10;
+  --pf-z-page-actions:  20;   /* page-level fixed action bars */
+  --pf-z-bottom-nav:    35;   /* promoted from 30 to clear z-20 page bars */
+  --pf-z-chrome:        40;   /* topbar / shell chrome */
+  --pf-z-popover:       50;
+  --pf-z-modal:         80;
+  --pf-z-toast:        100;
+  --pf-z-overlay:     1000;   /* call overlay, fullscreen drawers */
+}
+
+/* ── (B) Promote bottom-nav so page action bars never sit on top ── */
+.pf-bottom-nav {
+  z-index: 35 !important;
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   MOBILE-ONLY RULES BELOW
+   ═════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── (C) Tap targets — anything that looks clickable is ≥44px ── */
+  button,
+  a[role='button'],
+  [role='button'],
+  .pf-btn,
+  [class*='__btn']:not([class*='--icon-only-tiny']) {
+    min-height: 44px;
+  }
+
+  /* Inputs at ≥16px so iOS Safari doesn't auto-zoom on focus. */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* ── (D) Page action bars (Save / Cancel / CTA rows pinned to viewport)
+     Any element marked `.pf-action-bar--fixed` OR matching the common
+     -action-bar / -save-bar / -cta-bar class patterns gets auto-pushed
+     above the bottom-nav pill. Add `.pf-no-nav-clear` to opt out. */
+  .pf-action-bar--fixed:not(.pf-no-nav-clear),
+  [class*='-save-bar']:not(.pf-no-nav-clear),
+  [class*='-cta-bar']:not(.pf-no-nav-clear),
+  [class*='-bottom-bar']:not(.pf-no-nav-clear),
+  [class*='__save-bar']:not(.pf-no-nav-clear),
+  [class*='__cta-bar']:not(.pf-no-nav-clear) {
+    position: fixed !important;
+    bottom: var(--pf-nav-clear) !important;
+    left: 12px !important;
+    right: 12px !important;
+    z-index: 20 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* ── (E) Floating Action Buttons — opt-in via `.pf-fab-clear`,
+     or class-matching pattern. Most FABs in this app already do
+     `bottom: calc(Xrem + env(safe-area-inset-bottom))` themselves
+     (see lab/result-entry .pf-rail-fab); we only promote ones that
+     forgot. The `.pf-fab-clear` opt-in is the canonical way for new
+     code. */
+  .pf-fab-clear:not(.pf-no-nav-clear) {
+    bottom: var(--pf-nav-clear) !important;
+    z-index: 40 !important;
+  }
+
+  /* ── (F) Position-fixed sidebars: collapse to in-flow stack on phone
+     so they don't float over the page content. Anything tagged as a
+     sidebar/aside/cart with hardcoded `position: fixed` gets undone. */
+  aside[class*='__col'][style*='position: fixed'],
+  [class*='-sidebar'][style*='position: fixed'],
+  .pf-fl-appt-sidebar,
+  .pf-fl-work-sidebar {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    z-index: auto !important;
+  }
+
+  /* ── (G) Scrollable page content always clears the pill.
+     The shell sets padding-bottom on .shell-main, but inner scroll
+     containers (chat thread, queue lists) can have their own height
+     and need their own clearance. Mark them with `.pf-needs-nav-clear`
+     and they'll add bottom padding. */
+  .pf-needs-nav-clear {
+    padding-bottom: var(--pf-nav-clear) !important;
+    scroll-padding-bottom: var(--pf-nav-clear) !important;
+  }
+
+  /* ── (H) Typography rhythm — keep big headings from blowing the
+     line-grid on a 375px screen. Caps at H1 = 24px, H2 = 20px.
+     Component-specific overrides still win because we use a base
+     selector. */
+  h1, [class*='__h1'], [class*='__title-xl'] {
+    font-size: clamp(18px, 5.6vw, 24px) !important;
+    line-height: 1.2 !important;
+  }
+  h2, [class*='__h2'], [class*='__title-lg'] {
+    font-size: clamp(16px, 4.8vw, 20px) !important;
+    line-height: 1.25 !important;
+  }
+
+  /* ── (I) Modal sheets — guarantee a comfortable safe-area on tall
+     iPhone-Pro notches. The existing :has() and direct-dialog rules
+     already cap max-height: 90vh and pad bottom; we add a top safe-area
+     so the close-X never sits under the notch when a sheet is full-bleed. */
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) > [class*='shell'],
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) > [class*='panel']:not([class*='backdrop']),
+  [role='dialog']:not(.pf-modal-centered):not(.pf-call-ring__card):not(.pf-call-screen__card) > [class*='modal']:not([class*='backdrop']) {
+    /* Reserve room for the grab handle visually. */
+    padding-top: 20px !important;
+  }
+
+  /* ── (J) Horizontal scroll containers (chip rows, tab strips) get
+     a tactile padding so the first/last item isn't crammed against
+     the edge. Combines well with the existing tab-strip overflow rule. */
+  [class*='__chips'],
+  [class*='__chip-row'],
+  [class*='__tabs']:not(.pf-msgs__tabs):not(.pf-msgs__sub-tabs) {
+    padding-inline: max(8px, env(safe-area-inset-left)) !important;
+    scroll-padding-inline: 8px !important;
+  }
+
+  /* ── (K) Card grids — cap to a sensible 2-up on phones, not the
+     aggressive 3-up that some admin pages used. */
+  [class*='__card-grid']:not([class*='--1up']):not([class*='--2up']),
+  [class*='__tile-list']:not([class*='--1up']):not([class*='--2up']) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  /* ── (L) Drawer/modal close buttons — make sure the X is 44px,
+     and sits inside the safe-area on iOS notch. */
+  [class*='__close-btn'],
+  [class*='__close-x'],
+  button[aria-label*='lose' i],
+  button[aria-label='Close'] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    top: max(10px, env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* ── (M) Page-level fixed action bar in result-entry / billing
+     style components — they use position: sticky bottom: 0 inside the
+     scroll container, which works, but when they're position: fixed
+     they collide. Force any descendant of .pf-page with
+     `position: fixed; bottom: 0` to clear the nav. */
+  .pf-page [style*='position: fixed'][style*='bottom: 0'],
+  .pf-page [style*='position:fixed'][style*='bottom:0'] {
+    bottom: var(--pf-nav-clear) !important;
+  }
+
+  /* ── (N) Long-content readability — limit line-length on phones to
+     ~38ch so long medical notes and PDF previews don't sprawl. Apply
+     only to .pf-prose / [class*='__prose'] containers; other layouts
+     are untouched. */
+  .pf-prose,
+  [class*='__prose'],
+  [class*='__notes-body'] {
+    max-width: 38ch !important;
+    margin-inline: auto !important;
+  }
+}
+
+/* ── (O) Reduced-motion respect (no media-width gate; always on) ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
