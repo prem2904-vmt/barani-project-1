@@ -204,22 +204,25 @@ import { AuthService } from "../../core/auth/auth.service";
            clip behind the wifi/battery indicators on landscape. */
         margin:
           calc(env(safe-area-inset-top, 0px) + 8px)
-          calc(env(safe-area-inset-right, 0px) + 12px)
+          calc(env(safe-area-inset-right, 0px) + 16px)
           0
-          calc(env(safe-area-inset-left, 0px) + 12px);
+          calc(env(safe-area-inset-left, 0px) + 16px);
         border-radius: 24px;
         background: var(--header-bg);
         border: 1px solid var(--header-border);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
       }
-      @media (min-width: 640px) {
-        .pf-chrome {
-          margin:
-            calc(env(safe-area-inset-top, 0px) + 8px)
-            calc(env(safe-area-inset-right, 0px) + 16px)
-            0
-            calc(env(safe-area-inset-left, 0px) + 16px);
+
+      /* Mobile (≤640px): drop the chrome entirely. It was only carrying
+         branding + four user-action icons (branch, notif, people,
+         profile) and ate ~80px of vertical space — too expensive on a
+         small viewport where the content matters more. The shell-main
+         absorbs safe-area-inset-top so pages still clear the notch. */
+      @media (max-width: 640px) {
+        .pf-chrome { display: none !important; }
+        .shell-main {
+          padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
         }
       }
 

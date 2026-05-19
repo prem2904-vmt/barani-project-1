@@ -1755,8 +1755,24 @@
 
 // ── Phone-specific tightening ────────────────────────────────────────
 @media (max-width: 640px) {
-  .pf-msgs__rail-head { padding: 12px 12px 8px; }
-  .pf-msgs__title     { font-size: 17px; }
+  /* Tighten the rail head so the "+ New" button doesn't get pushed past
+     the right edge of the viewport. The container is `justify-content:
+     space-between` — title on left, actions on right. Without min-width:0
+     on both children, the actions row can spill. */
+  .pf-msgs__rail-head {
+    padding: 12px 12px 8px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  .pf-msgs__title     { font-size: 17px; flex-shrink: 1; min-width: 0; }
+  .pf-msgs__rail-head-actions { flex-shrink: 0; }
+  /* Icon-only "+ New" — drop the label below 380px to guarantee fit. */
+  .pf-msgs__new-btn {
+    padding: 7px 10px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
   .pf-msgs__search    { margin: 0 10px 8px; padding: 10px 12px; }
   // Generous touch zone on conversation rows — 60px min so they're a
   // proper thumb-target. Avatar bumps to 44px.
