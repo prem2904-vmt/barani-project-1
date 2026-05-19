@@ -720,6 +720,24 @@ interface BulkSubmitResponse {
     }
 
     .pf-sre__footer { position: sticky; bottom: 0; padding: 16px 0 0; background: linear-gradient(to top, var(--bg-page, #04061a) 60%, transparent); }
+    /* Mobile: lift the sticky Submit bar above the floating bottom-nav
+       pill so the violet avatar doesn't peek out from behind the button.
+       The pill body sits ~72px tall + safe-area; we add 16px breathing
+       on top of that. iPad/desktop fall through unchanged. */
+    @media (max-width: 640px) {
+      .pf-sre__footer {
+        bottom: calc(72px + 12px + env(safe-area-inset-bottom, 0px));
+        padding: 12px 0;
+        background: linear-gradient(to top, var(--bg-page, #04061a) 75%, transparent);
+      }
+      /* Each test card has its own table that overflows on a 375px
+         viewport (PARAMETER | RESULT | UNIT | REF RANGE | METHOD = 5
+         cols at ~80px each = 400px+). Wrap the table in a horizontal
+         scroller so METHOD isn't clipped off the right edge. */
+      .pf-sre__test table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+      .pf-sre__test table thead, .pf-sre__test table tbody { display: table; width: max-content; min-width: 100%; }
+      .pf-sre__test table th, .pf-sre__test table td { white-space: nowrap; padding-inline: 8px; }
+    }
     .pf-sre__submit {
       width: 100%;
       min-height: 48px;

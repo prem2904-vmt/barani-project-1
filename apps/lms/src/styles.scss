@@ -1883,6 +1883,20 @@ html[data-theme="light"] .pf-vial__outline {
     z-index: 40 !important;
   }
 
+  /* ── (E2) Page-level sticky bottom footers (Save bar / Submit row /
+     etc.). Pattern: `position: sticky; bottom: 0` inside the scroll
+     container. The shell already pads .shell-main bottom by
+     --tab-nav-total-height so the footer USUALLY sits just above the
+     pill — but with zero breathing room. Push it up an extra 12px
+     across all such footers identified by common class endings. */
+  [class*='__footer']:not(.pf-no-nav-clear),
+  [class*='__submit-bar']:not(.pf-no-nav-clear),
+  [class*='__sticky-foot']:not(.pf-no-nav-clear) {
+    /* Only fires when the element is actually sticky/fixed-bottom;
+       static-position elements get padding harmlessly added. */
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+
   /* ── (F) Position-fixed sidebars: collapse to in-flow stack on phone
      so they don't float over the page content. Anything tagged as a
      sidebar/aside/cart with hardcoded `position: fixed` gets undone. */

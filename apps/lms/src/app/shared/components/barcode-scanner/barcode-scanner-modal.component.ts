@@ -142,13 +142,31 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
       padding: 16px;
-      z-index: 80;
+      /* Promoted from z-80 to z-1000 so the modal sits ABOVE the floating
+         bottom-nav pill (z-35) and any page-level FABs. Modal contract:
+         once a modal is open, nothing else should be tappable. */
+      z-index: 1000;
     }
     .pf-sc__backdrop {
       position: absolute; inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+      /* Bumped from 0.6 → 0.78 so the bottom-nav pill underneath isn't
+         visible as a faint shape through the scrim — modal feels solid. */
+      background: rgba(2, 4, 16, 0.82);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    /* Mobile: make the modal a true full-bleed bottom sheet so its action
+       buttons (Manually / Cancel) sit comfortably above the safe area
+       and never touch the bottom-nav pill. */
+    @media (max-width: 640px) {
+      .pf-sc { padding: 0; align-items: flex-end; }
+      .pf-sc__card {
+        max-width: 100%;
+        width: 100%;
+        border-radius: 18px 18px 0 0;
+        max-height: 92dvh;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+      }
     }
     .pf-sc__card {
       position: relative;
