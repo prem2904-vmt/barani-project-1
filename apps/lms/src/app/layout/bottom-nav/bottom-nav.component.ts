@@ -381,11 +381,20 @@ const DRAG_THRESHOLD_PX = 4;
     }
 
     /* ── More button (PF glyph at end of pill) + popover ──────────── */
+    /* Mobile-only — on iPad/desktop the top chrome already owns the
+       branch picker, notifications, people drawer, theme, profile and
+       logout, so the bottom-nav More button is redundant. Hide it +
+       its popover at ≥641px so the iPad bottom-nav stays at 6 icons. */
     .pf-nav-btn--more {
       width: 44px; min-width: 44px;
       height: 44px;
       padding: 0;
       background: transparent;
+    }
+    @media (min-width: 641px) {
+      .pf-nav-btn--more,
+      .pf-more-bd,
+      .pf-more-pop { display: none !important; }
     }
     /* The brand glyph is gradient-filled (matches the top-strip's
        chrome logo), so we don't tint it via the color property; only
