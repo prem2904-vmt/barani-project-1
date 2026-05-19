@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy,
+  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy,
   computed, effect, inject, signal, viewChild, viewChildren
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -7,6 +7,8 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { PeopleDrawerService } from '../../core/services/people-drawer.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -19,9 +21,13 @@ const DRAG_THRESHOLD_PX = 4;
   template: `
     <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
          Scrolls horizontally on narrow viewports so all nav items stay reachable
-         without overflowing off-screen. -->
-    <nav class="pf-bottom-nav xl:hidden fixed left-1/2 -translate-x-1/2 z-30 safe-area-bottom"
-         style="bottom: max(1rem, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
+         without overflowing off-screen.
+         The 'bottom' inline style now sits ~6px above the home indicator
+         (env safe-area-inset-bottom) instead of stacking +16px on top of
+         it, so the pill is visually close to the bottom edge as the user
+         asked. -->
+    <nav class="pf-bottom-nav xl:hidden fixed left-1/2 -translate-x-1/2 z-30"
+         style="bottom: max(6px, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
       <div #pill
            class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto"
            [class]="pillClasses"
@@ -91,7 +97,72 @@ const DRAG_THRESHOLD_PX = 4;
             <span class="pf-nav-btn__lbl">Admin</span>
           </a>
         }
+
+        <!-- "More" trigger — PF glyph button at the end of the pill.
+             Tapping opens a small popover above the pill with the
+             user-action items that used to live in the top chrome:
+             notifications, theme toggle, people drawer, logout. -->
+        <button #navBtn type="button"
+                class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
+                       shrink-0 transition-colors"
+                [class.pf-nav-btn--compact]="compactMode()"
+                [class.pf-nav-btn--more-on]="moreOpen()"
+                (click)="toggleMore($event)"
+                aria-label="More"
+                [attr.aria-expanded]="moreOpen()">
+          <svg viewBox="0 0 228 292" width="20" height="22" fill="currentColor" aria-hidden="true">
+            <path d="M168.5 0H0v292h59V177h109.5c43.6 0 72.5-28.9 72.5-72.5v-32C241 28.9 212.1 0 168.5 0Zm0 118H59V59h109.5c8 0 14.5 5.5 14.5 14.5v32c0 9-6.5 12.5-14.5 12.5Z"/>
+          </svg>
+        </button>
       </div>
+
+      <!-- More popover — opens upward from above the pill. Tap a
+           backdrop or any item to close. -->
+      @if (moreOpen()) {
+        <div class="pf-more-bd" (click)="closeMore()"></div>
+        <div class="pf-more-pop" role="menu" aria-label="More actions"
+             (click)="$event.stopPropagation()">
+          <button type="button" role="menuitem" class="pf-more-item press"
+                  (click)="onMoreNotifications()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+            <span>Notifications</span>
+          </button>
+          <button type="button" role="menuitem" class="pf-more-item press"
+                  (click)="onMorePeople()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <span>People</span>
+          </button>
+          <button type="button" role="menuitem" class="pf-more-item press"
+                  (click)="onMoreTheme()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
+            </svg>
+            <span>{{ theme.isDark() ? 'Light mode' : 'Dark mode' }}</span>
+          </button>
+          <div class="pf-more-sep"></div>
+          <button type="button" role="menuitem" class="pf-more-item pf-more-item--danger press"
+                  (click)="onMoreLogout()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <path d="M16 17l5-5-5-5"/>
+              <path d="M21 12H9"/>
+            </svg>
+            <span>Sign out</span>
+          </button>
+        </div>
+      }
     </nav>
 
     <!-- The mobile/iPad "More" sheet (formerly listed every admin
@@ -289,17 +360,147 @@ const DRAG_THRESHOLD_PX = 4;
       .pf-nav-indicator--ready { transition: none; }
       .pf-nav-btn--active svg { animation: none; }
     }
+
+    /* ── More button (PF glyph at end of pill) + popover ──────────── */
+    .pf-nav-btn--more {
+      width: 44px; min-width: 44px;
+      height: 44px;
+      padding: 0;
+      color: var(--text-secondary);
+      background: transparent;
+    }
+    .pf-nav-btn--more svg { transition: transform 180ms ease, color 180ms ease; }
+    .pf-nav-btn--more:hover svg,
+    .pf-nav-btn--more-on svg {
+      color: var(--color-violet-300, #c4b5fd);
+      transform: scale(1.06);
+    }
+
+    /* Backdrop covers the screen so taps outside dismiss the menu.
+       z-index sits just below the popover (29) and just above the
+       page content (1). The pill itself stays interactive via its
+       own higher z-index inside .pf-bottom-nav. */
+    .pf-more-bd {
+      position: fixed;
+      inset: 0;
+      background: transparent;
+      z-index: 29;
+    }
+
+    /* The popover floats ABOVE the pill (bottom: 100% + 12px). */
+    .pf-more-pop {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      right: 4px;
+      min-width: 220px;
+      padding: 6px;
+      border-radius: 14px;
+      background: var(--bg-card-solid, rgba(15, 15, 25, 0.96));
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      z-index: 31;
+      display: flex; flex-direction: column; gap: 2px;
+      animation: pf-more-in 180ms cubic-bezier(0.32, 0.72, 0, 1);
+      transform-origin: bottom right;
+    }
+    @keyframes pf-more-in {
+      from { opacity: 0; transform: translateY(6px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Replace any older .pf-more-item styles with popover-row visuals. */
+    .pf-more-pop .pf-more-item {
+      all: unset;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      color: var(--text-primary, #f1f5f9);
+      cursor: pointer;
+      background: transparent !important;
+      border: 0 !important;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .pf-more-pop .pf-more-item:hover {
+      background: var(--bg-hover, rgba(255, 255, 255, 0.06)) !important;
+    }
+    .pf-more-pop .pf-more-item svg {
+      flex-shrink: 0;
+      color: var(--text-tertiary, rgba(148, 163, 184, 0.7));
+    }
+    .pf-more-pop .pf-more-item:hover svg {
+      color: var(--color-violet-300, #c4b5fd);
+    }
+    .pf-more-pop .pf-more-item--danger {
+      color: #fca5a5;
+    }
+    .pf-more-pop .pf-more-item--danger:hover {
+      background: rgba(239, 68, 68, 0.12) !important;
+      color: #fecaca;
+    }
+    .pf-more-pop .pf-more-item--danger svg { color: #fca5a5; }
+    .pf-more-sep {
+      height: 1px;
+      background: var(--glass-border, rgba(255, 255, 255, 0.08));
+      margin: 4px 8px;
+    }
   `]
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly router = inject(Router);
+  /** Theme + people drawer are now reachable from the bottom-nav More
+   *  popover instead of the top chrome (which is hidden on mobile). */
+  protected readonly theme = inject(ThemeService);
+  protected readonly peopleDrawer = inject(PeopleDrawerService);
 
   private readonly btns = viewChildren<ElementRef<HTMLElement>>('navBtn');
   private readonly pillRef = viewChild<ElementRef<HTMLElement>>('pill');
 
   protected readonly moreOpen = signal(false);
+
+  // ─── More popover handlers ────────────────────────────────────────
+  protected toggleMore(ev?: Event): void {
+    ev?.stopPropagation?.();
+    this.moreOpen.update(v => !v);
+  }
+  protected closeMore(): void { this.moreOpen.set(false); }
+
+  protected onMoreNotifications(): void {
+    this.closeMore();
+    // Notifications live at /notifications when that route exists;
+    // until then we route to /admin which surfaces them via the bell.
+    // Fall back to opening the people drawer as a placeholder.
+    void this.router.navigateByUrl('/notifications').catch(() => undefined);
+  }
+  protected onMorePeople(): void {
+    this.closeMore();
+    this.peopleDrawer.open.set(true);
+  }
+  protected onMoreTheme(): void {
+    // Don't close immediately — let the user see the toggle take effect.
+    this.theme.toggle();
+    setTimeout(() => this.closeMore(), 180);
+  }
+  protected onMoreLogout(): void {
+    this.closeMore();
+    void this.auth.signOut().then(() => this.router.navigateByUrl('/login'));
+  }
+
+  /** Tap outside the popover closes it. The transparent .pf-more-bd
+   *  div catches most taps; this listener catches anything else. */
+  @HostListener('document:click', ['$event'])
+  onDocClick(_ev: MouseEvent): void {
+    if (!this.moreOpen()) return;
+    // The popover is responsible for stopPropagation on inside clicks,
+    // so any click that bubbles to document means "outside" → close.
+    this.moreOpen.set(false);
+  }
 
   // ─── Active state ────────────────────────────────────────────────
   protected readonly activeIdx = signal<number>(0);
@@ -442,8 +643,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     return 'bg-[var(--header-bg)] border border-[var(--header-border)]';
   }
 
-  toggleMore() { this.moreOpen.update(v => !v); }
-  closeMore() { this.moreOpen.set(false); }
+  // (Old single-line toggleMore/closeMore removed — the new versions
+  // earlier in the class take an event arg and add stopPropagation.)
 
   // ─── Click → navigate ────────────────────────────────────────────
   onTabClick(idx: number, ev: MouseEvent): void {

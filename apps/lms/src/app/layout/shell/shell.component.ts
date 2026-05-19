@@ -214,16 +214,11 @@ import { AuthService } from "../../core/auth/auth.service";
         -webkit-backdrop-filter: blur(24px);
       }
 
-      /* Mobile (≤640px): drop the chrome entirely. It was only carrying
-         branding + four user-action icons (branch, notif, people,
-         profile) and ate ~80px of vertical space — too expensive on a
-         small viewport where the content matters more. The shell-main
-         absorbs safe-area-inset-top so pages still clear the notch. */
+      /* Mobile (≤640px): drop the chrome entirely. The body already
+         absorbs env(safe-area-inset-top) (see styles.scss), so pages
+         start at the top of the safe area with no double-padding. */
       @media (max-width: 640px) {
         .pf-chrome { display: none !important; }
-        .shell-main {
-          padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
-        }
       }
 
       .shell-main {
