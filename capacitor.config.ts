@@ -43,6 +43,13 @@ const config: CapacitorConfig = {
     LocalNotifications: {
       smallIcon: 'ic_stat_icon_config_sample',
       iconColor: '#2E86AB'
+    },
+    PushNotifications: {
+      // When the app is in the foreground, show the system banner +
+      // play the device sound so chat messages and incoming-call
+      // pushes are visible/audible without having to leave the app.
+      // (Background delivery is always handled by APNs/FCM.)
+      presentationOptions: ['badge', 'sound', 'banner', 'list']
     }
   },
   ios: {

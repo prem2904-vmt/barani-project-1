@@ -15,6 +15,10 @@ PODS:
     - Capacitor
   - CapacitorNetwork (8.0.1):
     - Capacitor
+  - CapacitorPluginCallkitVoip (1.0.4):
+    - Capacitor
+  - CapacitorPushNotifications (8.1.1):
+    - Capacitor
   - CapacitorSplashScreen (8.0.1):
     - Capacitor
   - CapacitorStatusBar (8.0.2):
@@ -30,6 +34,8 @@ DEPENDENCIES:
   - "CapacitorKeyboard (from `../../node_modules/@capacitor/keyboard`)"
   - "CapacitorLocalNotifications (from `../../node_modules/@capacitor/local-notifications`)"
   - "CapacitorNetwork (from `../../node_modules/@capacitor/network`)"
+  - CapacitorPluginCallkitVoip (from `../../node_modules/capacitor-plugin-callkit-voip`)
+  - "CapacitorPushNotifications (from `../../node_modules/@capacitor/push-notifications`)"
   - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
   - "CapacitorStatusBar (from `../../node_modules/@capacitor/status-bar`)"
 
@@ -54,6 +60,10 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/local-notifications"
   CapacitorNetwork:
     :path: "../../node_modules/@capacitor/network"
+  CapacitorPluginCallkitVoip:
+    :path: "../../node_modules/capacitor-plugin-callkit-voip"
+  CapacitorPushNotifications:
+    :path: "../../node_modules/@capacitor/push-notifications"
   CapacitorSplashScreen:
     :path: "../../node_modules/@capacitor/splash-screen"
   CapacitorStatusBar:
@@ -68,10 +78,12 @@ SPEC CHECKSUMS:
   CapacitorKeyboard: 31c8285d92c9d1410071d52449f16d2c6673b6f4
   CapacitorLocalNotifications: 4db83a7f6bdd2f30dcedf5c6f92c415065467a24
   CapacitorNetwork: 8812ce60d11fb63d8f2e4ba51a49b2e59892ebe2
+  CapacitorPluginCallkitVoip: f888485bbe4d44ee3aa460fcc39c56cf05a7daf4
+  CapacitorPushNotifications: ec08d589c226a2c0db7c032ec1bf5b044ec85f8e
   CapacitorSplashScreen: 4b46c72298db552b3c57ce021ef028b6dc7f1fa7
   CapacitorStatusBar: 01d5763b4ed720de5ce2edbc938de6a98f4c8f32
   IONCameraLib: f2349804460bd9e3f892e42109b8d996ab3fa19d
 
-PODFILE CHECKSUM: fce4e3e4d0dbb22cdd32f28421e0f6c5327da22e
+PODFILE CHECKSUM: fe2062797655db50181a65c8791fc0c2ca5e703b
 
 COCOAPODS: 1.16.2
