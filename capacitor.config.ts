@@ -24,9 +24,14 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      // The native splash is just the static "Prefrontal" logo image
+      // copied from resident-fe. Keep it brief — the Angular app's
+      // LoadingLogoComponent owns the live loading state once the web
+      // shell mounts. 600ms is enough for the WKWebView to start the
+      // Angular bootstrap without showing a flash of the OS background.
+      launchShowDuration: 600,
       launchAutoHide: true,
-      backgroundColor: '#1B3A6B',
+      backgroundColor: '#05030E',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false
