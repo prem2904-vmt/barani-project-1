@@ -3972,40 +3972,55 @@
   }
   .pf-head__sub { font-size: 12px; }
 
-  /* ── Action button row: distribute as 2-col grid so primary CTA
-        ("New patient") doesn't visually orphan as a banner across
-        the bottom. Secondary buttons get 50/50 in row 1, primary
-        gets full width in row 2. */
+  /* ── Action button row: full-width vertical stack on mobile. This is
+        the canonical iOS / Android pattern for primary screen actions —
+        easier thumb targets, no awkward orphan columns, scales cleanly
+        whether there are 3 buttons (non-admin) or 5 (admin: Cash flow +
+        Top tests + Staff + Scan QR + Book appt + New patient). */
   .pf-head__actions {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
     gap: 8px !important;
     width: 100%;
     margin-top: 6px !important;
   }
-  /* The primary "New patient" CTA spans both columns and sits below. */
-  .pf-head__actions .pf-head__btn--primary {
-    grid-column: 1 / -1;
+  /* Every direct child fills the column — buttons, links, and the
+     pop-anchor wrapper that holds Staff + Scan QR. */
+  .pf-head__actions > * {
+    width: 100% !important;
+  }
+  /* Pop-anchor wraps Staff + Scan QR together — keep them on one row
+     of their own with 50/50 split so admin still has Cash flow / Top
+     tests stacked above. Other pop-anchors hold single buttons. */
+  .pf-head__actions .pf-pop-anchor {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
     width: 100%;
+  }
+  .pf-head__actions .pf-pop-anchor > .pf-head__btn,
+  .pf-head__actions .pf-pop-anchor > .pf-collection,
+  .pf-head__actions .pf-pop-anchor > .pf-toptest-pill {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+  }
+  /* Secondary buttons: comfortable tap height, clean type. mr-2 from
+     Tailwind interferes with our stack — kill it. */
+  .pf-head__actions .pf-head__btn--secondary {
     justify-content: center;
     height: 44px;
+    margin-right: 0 !important;
+    padding: 0 12px;
     font-size: 14px;
   }
-  /* Secondary buttons: equal width, comfortable height. mr-2 from
-     Tailwind is irrelevant in grid layout — kill it. */
-  .pf-head__actions .pf-head__btn--secondary {
-    width: 100%;
+  /* Primary "New patient" CTA — same width as the rest in the stack,
+     bigger height for visual hierarchy. */
+  .pf-head__actions .pf-head__btn--primary {
     justify-content: center;
-    height: 42px;
-    margin-right: 0 !important;
-    padding: 0 8px;
-    font-size: 13px;
-  }
-  /* `.pf-pop-anchor` is a popover wrapper — must also fill its grid
-     cell so its inner button stretches. */
-  .pf-head__actions .pf-pop-anchor {
-    width: 100%;
-    display: contents;  /* expose the button directly to the grid */
+    height: 48px;
+    font-size: 15px;
+    margin-top: 4px;  /* tiny separator before primary action */
   }
 
   /* ── Alert chips: horizontal scroll so they don't wrap into 2 rows
@@ -4078,20 +4093,9 @@
     letter-spacing: 0.06em !important;
   }
 
-  /* ── KPI strip (Appointments today / Walk-ins today / etc.) — make
-        the four chips an explicit 2x2 grid so we never see an
-        orphaned single chip on row 3. */
-  pf-kpi-strip .pf-kpis,
-  .pf-kpis {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 6px 8px !important;
-  }
-  .pf-kpi {
-    justify-content: flex-start !important;
-    padding: 6px 10px !important;
-    min-height: 36px;
-  }
+  /* KPI strip rule moved to global styles.scss — it lives inside the
+     pf-kpi-strip component, so a frontdesk-scoped rule can't reach it
+     due to Angular emulated view encapsulation. */
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */

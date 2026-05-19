@@ -1883,6 +1883,30 @@ html[data-theme="light"] .pf-vial__outline {
     z-index: 40 !important;
   }
 
+  /* ── KPI strip (`<pf-kpi-strip>`) — the component's internal mobile
+     rule (at width: 720) collapses the segmented bar to free-flowing
+     chips. With 4 chips at 375px width, 3 fit on row 1 and chip #4
+     orphans onto row 2. Force an explicit 2×2 grid so the layout
+     reads as a stat block, not stragglers. Lives in global so it
+     crosses the component's view-encapsulation boundary. */
+  pf-kpi-strip .pf-kpis {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px 8px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  pf-kpi-strip .pf-kpi {
+    justify-content: flex-start !important;
+    padding: 8px 10px !important;
+    min-height: 38px;
+    border-right: none !important;
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 999px !important;
+  }
+
   /* ── (E2) Page-level sticky bottom footers (Save bar / Submit row /
      etc.). Pattern: `position: sticky; bottom: 0` inside the scroll
      container. The shell already pads .shell-main bottom by
