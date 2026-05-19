@@ -1763,7 +1763,11 @@
   .pf-msgs__conv-row  { padding: 12px 14px; min-height: 60px; }
   .pf-msgs__avatar    { width: 44px; height: 44px; font-size: 13.5px; }
   .pf-msgs__avatar-dot { width: 13px; height: 13px; border-width: 2.5px; }
-  .pf-msgs__thread-head { padding: 10px 12px; }
+  /* Add safe-area-inset-top so the avatar + name don't slide UNDER the
+     iPhone notch / Dynamic Island. The chrome above usually owns this
+     inset, but when the messages route uses an immersive layout (no
+     chrome on top), the thread head must take it. */
+  .pf-msgs__thread-head { padding: max(10px, env(safe-area-inset-top, 10px)) 12px 10px; }
   // Sticky pinned strip + reconnect — so they don't scroll away as the
   // thread grows. Glass effect for legibility against bubbles below.
   .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;

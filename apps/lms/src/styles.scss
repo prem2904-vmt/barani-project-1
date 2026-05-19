@@ -555,7 +555,13 @@ pf-shell main>router-outlet+* {
   --navbar-height: 4rem;
   --navbar-total-height: calc(4rem + env(safe-area-inset-top, 0px));
   --tab-nav-height: 72px;
-  --tab-nav-total-height: calc(72px + env(safe-area-inset-bottom, 0px));
+  /* `--tab-nav-total-height` is the bottom padding every scroll
+     container reserves for the floating pill. Pill body sits at
+     max(16px, safe) + 56px tall = 72-90px from the viewport bottom.
+     We add 16px extra breathing so page content doesn't touch the
+     pill (the old value was the exact pill height, which made the
+     content's last row visually butt up against the pill). */
+  --tab-nav-total-height: calc(72px + 16px + env(safe-area-inset-bottom, 0px));
   --tab-sidebar-width: 72px;
 }
 

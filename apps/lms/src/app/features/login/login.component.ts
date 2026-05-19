@@ -116,9 +116,15 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
             </p>
           }
 
+          <!-- Belt-and-braces: type="submit" + (click) so the button
+               works whether the form's ngSubmit fires or not. On iOS
+               WKWebView with certain Angular zone configurations,
+               ngSubmit can silently no-op; the (click) handler is the
+               fallback. Both call the same method. -->
           <button type="submit"
                   class="pf-auth__submit"
-                  [disabled]="busy() || !canSubmit()">
+                  (click)="submit($event)"
+                  [disabled]="busy()">
             @if (busy()) {
               <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
               <span>Signing in…</span>
@@ -521,8 +527,27 @@ export class LoginComponent {
     return true;
   }
 
-  async submit() {
+  async submit(ev?: Event) {
+    // Prevent the form's default action so we don't get a duplicate
+    // call (button click triggers submit AND form ngSubmit can fire).
+    ev?.preventDefault?.();
     if (this.busy()) return;
+
+    // Surface what we have RIGHT NOW so we know the handler fired
+    // even if the network step hangs. Visible in Xcode's console
+    // when running on simulator/device.
+    console.info('[login] submit', {
+      hasEmail: this.email().length > 0,
+      hasPassword: this.password().length > 0,
+      native: this.isNative(),
+      api: environment.apiUrl
+    });
+
+    if (!this.canSubmit()) {
+      this.error.set('Enter your email and password to continue.');
+      return;
+    }
+
     this.error.set(null);
     this.busy.set(true);
     try {

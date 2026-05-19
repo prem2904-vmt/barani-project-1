@@ -192,10 +192,21 @@ import { AuthService } from "../../core/auth/auth.service";
      * would notice, and there are none. */
       .pf-chrome {
         position: sticky;
-        top: 0;
+        /* On iOS with the Dynamic Island / notch, env(safe-area-inset-top)
+           is ~59px — the chrome must clear that or it sits behind the
+           status icons. Add an 8px base inset so non-notched devices and
+           web both get a visible top margin. */
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
         z-index: 40;
         flex-shrink: 0;
-        margin: 8px 12px 0;
+        /* Same safe-area treatment on the LEFT and RIGHT edges so the
+           rounded card doesn't slide into the rounded screen corners or
+           clip behind the wifi/battery indicators on landscape. */
+        margin:
+          calc(env(safe-area-inset-top, 0px) + 8px)
+          calc(env(safe-area-inset-right, 0px) + 12px)
+          0
+          calc(env(safe-area-inset-left, 0px) + 12px);
         border-radius: 24px;
         background: var(--header-bg);
         border: 1px solid var(--header-border);
@@ -204,7 +215,11 @@ import { AuthService } from "../../core/auth/auth.service";
       }
       @media (min-width: 640px) {
         .pf-chrome {
-          margin: 8px 16px 0;
+          margin:
+            calc(env(safe-area-inset-top, 0px) + 8px)
+            calc(env(safe-area-inset-right, 0px) + 16px)
+            0
+            calc(env(safe-area-inset-left, 0px) + 16px);
         }
       }
 

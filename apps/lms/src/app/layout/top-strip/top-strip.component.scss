@@ -815,3 +815,34 @@
   .pf-more-pop, .pf-profile-pop, .pf-ts-branch__pop { animation: none; }
   .pf-avatar-ring { animation: none; }
 }
+
+/* ═════════════════════════════════════════════════════════════════
+   Mobile (≤640px) — collapse to PF logo + vendor pill only.
+   Hides the "Lab Management System" subtitle, branch picker, people
+   icon, notification bell and profile avatar to free horizontal space.
+   The hidden items remain reachable from /more or via tab nav.
+   ═════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Keep the PF glyph + the wordmark "PREFRONTAL"; drop the small
+     "Lab Management System" sub-label so the brand lockup shrinks. */
+  .pf-brand-sub { display: none !important; }
+  .pf-brand-text { gap: 0 !important; }
+  .pf-brand-name { font-size: 13px !important; letter-spacing: 0.02em; }
+  .pf-brand-glyph { width: 28px !important; height: 32px !important; }
+  .pf-brand-pulse { display: none !important; }
+  .pf-brand-chev { display: none !important; }
+
+  /* Vendor pill stays visible — that's the tenant identity for the
+     current user. Tighten its padding so it doesn't dominate. */
+  .pf-ts-tenant { padding-inline: 6px !important; }
+  .pf-ts-tenant__name { font-size: 12.5px !important; max-width: 14ch !important; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Branch picker, people icon, bell, profile avatar — hide on phone.
+     Users get to /more, notifications and profile via the bottom-nav. */
+  .pf-ts-branch,
+  .pf-icon-btn,
+  pf-notification-bell,
+  .pf-avatar-btn {
+    display: none !important;
+  }
+}
