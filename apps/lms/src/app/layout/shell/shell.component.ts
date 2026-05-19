@@ -192,21 +192,17 @@ import { AuthService } from "../../core/auth/auth.service";
      * would notice, and there are none. */
       .pf-chrome {
         position: sticky;
-        /* On iOS with the Dynamic Island / notch, env(safe-area-inset-top)
-           is ~59px — the chrome must clear that or it sits behind the
-           status icons. Add an 8px base inset so non-notched devices and
-           web both get a visible top margin. */
-        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        /* The body element in styles.scss already absorbs
+           env(safe-area-inset-top) globally for Capacitor's full-bleed
+           WebView, so we DON'T add it again here — that was the source
+           of the ~60px extra empty space on iPad. Plain 8px sticky
+           offset is enough. */
+        top: 8px;
         z-index: 40;
         flex-shrink: 0;
-        /* Same safe-area treatment on the LEFT and RIGHT edges so the
-           rounded card doesn't slide into the rounded screen corners or
-           clip behind the wifi/battery indicators on landscape. */
-        margin:
-          calc(env(safe-area-inset-top, 0px) + 8px)
-          calc(env(safe-area-inset-right, 0px) + 16px)
-          0
-          calc(env(safe-area-inset-left, 0px) + 16px);
+        /* Same logic on horizontal margins — body owns the left/right
+           inset, the chrome just adds its visual 16px gutter. */
+        margin: 8px 16px 0;
         border-radius: 24px;
         background: var(--header-bg);
         border: 1px solid var(--header-border);
