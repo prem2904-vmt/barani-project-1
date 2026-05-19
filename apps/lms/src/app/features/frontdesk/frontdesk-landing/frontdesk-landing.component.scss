@@ -3617,37 +3617,13 @@
   min-width: 0;
 }
 
-.pf-date-pills {
-  display: inline-flex;
-  padding: 3px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 9999px;
-  flex: 0 0 auto;
-}
-
-.pf-date-pill {
-  padding: 6px 14px;
-  background: transparent;
-  border: 0;
-  border-radius: 9999px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.pf-date-pill:hover {
-  color: var(--text-primary);
-}
-
-.pf-date-pill--on {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
-}
+/* NOTE: duplicate .pf-date-pills / .pf-date-pill / .pf-date-pill--on
+   definitions were removed here. The canonical definitions live near
+   line 582 above (with the @media (max-width: 640px) mobile override).
+   When duplicates existed lower in the file, source-order made them
+   win — clobbering the mobile override and causing the active "Today"
+   pill's big halo (0 4px 12px) to bleed out of its container's
+   rounded edge on phones. */
 
 /* ── Completed pane card ────────────────────────────────────
  * Cards inside the Completed split pane (3rd column on lg+).
