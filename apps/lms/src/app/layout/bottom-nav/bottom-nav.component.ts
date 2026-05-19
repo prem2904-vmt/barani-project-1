@@ -99,9 +99,13 @@ const DRAG_THRESHOLD_PX = 4;
         }
 
         <!-- "More" trigger — PF glyph button at the end of the pill.
-             Tapping opens a small popover above the pill with the
-             user-action items that used to live in the top chrome:
-             notifications, theme toggle, people drawer, logout. -->
+             Uses the SAME brand glyph as the top-strip chrome (with the
+             violet→pink gradient) so users see a familiar identity. The
+             gradient stop IDs are scoped to this SVG to avoid clashing
+             with the top-strip's pfBrandGradient. Tapping opens a small
+             popover above the pill with the user-action items that used
+             to live in the top chrome: notifications, theme toggle,
+             people drawer, logout. -->
         <button #navBtn type="button"
                 class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
                        shrink-0 transition-colors"
@@ -110,8 +114,23 @@ const DRAG_THRESHOLD_PX = 4;
                 (click)="toggleMore($event)"
                 aria-label="More"
                 [attr.aria-expanded]="moreOpen()">
-          <svg viewBox="0 0 228 292" width="20" height="22" fill="currentColor" aria-hidden="true">
-            <path d="M168.5 0H0v292h59V177h109.5c43.6 0 72.5-28.9 72.5-72.5v-32C241 28.9 212.1 0 168.5 0Zm0 118H59V59h109.5c8 0 14.5 5.5 14.5 14.5v32c0 9-6.5 12.5-14.5 12.5Z"/>
+          <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="#7c3aed" />
+                <stop offset="25%"  stop-color="#8b5cf6" />
+                <stop offset="50%"  stop-color="#a855f7" />
+                <stop offset="75%"  stop-color="#d946ef" />
+                <stop offset="100%" stop-color="#ec4899" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+              fill="url(#pfMoreBrandGradient)" />
+            <path
+              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+              fill="url(#pfMoreBrandGradient)" />
           </svg>
         </button>
       </div>
@@ -366,14 +385,20 @@ const DRAG_THRESHOLD_PX = 4;
       width: 44px; min-width: 44px;
       height: 44px;
       padding: 0;
-      color: var(--text-secondary);
       background: transparent;
     }
-    .pf-nav-btn--more svg { transition: transform 180ms ease, color 180ms ease; }
-    .pf-nav-btn--more:hover svg,
-    .pf-nav-btn--more-on svg {
-      color: var(--color-violet-300, #c4b5fd);
-      transform: scale(1.06);
+    /* The brand glyph is gradient-filled (matches the top-strip's
+       chrome logo), so we don't tint it via the color property; only
+       scale on hover/active to acknowledge the tap. */
+    .pf-more-brand {
+      width: 22px;
+      height: 28px;
+      transition: transform 180ms ease, filter 180ms ease;
+    }
+    .pf-nav-btn--more:hover .pf-more-brand,
+    .pf-nav-btn--more-on .pf-more-brand {
+      transform: scale(1.08);
+      filter: drop-shadow(0 2px 6px rgba(168, 85, 247, 0.45));
     }
 
     /* Backdrop covers the screen so taps outside dismiss the menu.
