@@ -233,12 +233,19 @@ body {
 /* Native (Capacitor) only — guarantee a status-bar gap.
    WKWebView can report env(safe-area-inset-top) as 0 on the first
    paint (before the splash hides), letting the page header slide
-   under the notch until a restart. The 50px floor clears the status
-   bar on every iPhone; once iOS reports the real inset (≈59px on
-   notched devices) max() picks the larger value. Web/desktop never
-   get the .cap-native class, so they're unaffected. */
+   under the notch until a restart.
+   • iPhone: 50px floor clears the notch / Dynamic Island even before
+     iOS reports the real inset (~59px on notched devices).
+   • iPad: only a ~24px status bar, no notch — a 24px floor is plenty.
+     The 50px iPhone floor over-padded iPad, leaving a dead gap below
+     the clock. */
 html.cap-native {
   padding-top: max(env(safe-area-inset-top), 50px);
+}
+@media (min-width: 641px) {
+  html.cap-native {
+    padding-top: max(env(safe-area-inset-top), 24px);
+  }
 }
 
 html::-webkit-scrollbar,

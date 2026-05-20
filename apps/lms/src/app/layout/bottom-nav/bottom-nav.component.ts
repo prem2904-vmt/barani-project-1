@@ -421,22 +421,19 @@ const DRAG_THRESHOLD_PX = 4;
       100% { transform: scale(1); }
     }
 
-    /* ── Rail-mode buttons — icon over label, full rail width. The
-       sliding indicator is absent in rail mode, so the active button
-       carries its own gradient highlight. ───────────────────────── */
+    /* ── Rail-mode buttons — icon-only, compact. The sliding indicator
+       is absent in rail mode, so the active button carries its own
+       gradient highlight. ───────────────────────────────────────── */
     .pf-pill--rail .pf-nav-btn {
-      width: 72px;
-      min-width: 72px;
-      height: auto;
-      padding: 9px 0 7px;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 10.5px;
-      border-radius: 14px;
+      width: 48px;
+      min-width: 48px;
+      height: 48px;
+      padding: 0;
+      border-radius: 13px;
     }
-    /* Label always visible in the rail (overrides --compact's hide). */
+    /* Icon-only — hide the label entirely in the rail. */
     .pf-pill--rail .pf-nav-btn .pf-nav-btn__lbl {
-      display: inline !important;
+      display: none !important;
     }
     .pf-pill--rail .pf-nav-btn--active {
       background: var(--gradient-primary);
@@ -446,11 +443,11 @@ const DRAG_THRESHOLD_PX = 4;
     .pf-pill--rail .pf-nav-btn:not(.pf-nav-btn--active):hover {
       background: rgba(255, 255, 255, 0.06);
     }
-    /* The More (PF glyph) button stretches full rail width too. */
+    /* The More (PF glyph) button matches the icon-only button size. */
     .pf-pill--rail .pf-nav-btn--more {
-      width: 72px;
-      min-width: 72px;
-      height: 52px;
+      width: 48px;
+      min-width: 48px;
+      height: 44px;
     }
     /* Admin divider — a horizontal hairline in the vertical rail. */
     .pf-pill--rail > div[style*="background"] {

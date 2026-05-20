@@ -200,9 +200,10 @@ import { AuthService } from "../../core/auth/auth.service";
         top: 8px;
         z-index: 40;
         flex-shrink: 0;
-        /* Same logic on horizontal margins — body owns the left/right
-           inset, the chrome just adds its visual 16px gutter. */
-        margin: 8px 16px 0;
+        /* Tight 4px gap below the status bar — the body already owns
+           the safe-area-inset-top, so the chrome just needs a hair of
+           breathing room, not a big margin. */
+        margin: 4px 16px 0;
         border-radius: 24px;
         background: var(--header-bg);
         border: 1px solid var(--header-border);
@@ -225,14 +226,18 @@ import { AuthService } from "../../core/auth/auth.service";
         padding-bottom: var(--tab-nav-total-height, 0px);
       }
 
-      /* iPad band (641–1279px): the bottom-nav docks as a vertical rail
-         on the left edge (see bottom-nav.component). Inset the scrolling
-         content so it clears the ~84px-wide rail + its 8px margin. The
-         chrome stays full-width — the rail is vertically centred and
-         short, so it never reaches the chrome row. */
+      /* iPad band (641–1279px): the bottom-nav docks as a vertical
+         icon-only rail on the left edge (see bottom-nav.component).
+         • padding-left clears the ~60px rail + its 8px margin.
+         • padding-bottom is zeroed — there's no bottom pill on iPad,
+           so the content should use the full screen height instead of
+           reserving --tab-nav-total-height of dead space at the bottom.
+         The chrome stays full-width — the rail is vertically centred
+         and short, so it never reaches the chrome row. */
       @media (min-width: 641px) and (max-width: 1279px) {
         .shell-main {
-          padding-left: 100px;
+          padding-left: 76px;
+          padding-bottom: 0;
         }
       }
 
