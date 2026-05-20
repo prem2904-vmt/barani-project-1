@@ -195,6 +195,13 @@
 .pf-card__sel {
   width: 22px;
   height: 22px;
+  /* Pin min-width/height too — the global touch-target rule
+     (button { min-width:44px; min-height:44px } under pointer:coarse)
+     was inflating this small multi-select circle to a 44px empty
+     blob on iPad/touch. This is a secondary control; the whole row
+     is the primary tap target, so 22px is fine here. */
+  min-width: 22px;
+  min-height: 22px;
   border-radius: 9999px;
   background: var(--glass-bg);
   border: 2px solid var(--border-muted);
@@ -204,7 +211,9 @@
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  padding: 0;
 }
+.pf-card__sel svg { width: 12px; height: 12px; }
 
 .pf-card--selected .pf-card__sel {
   background: var(--gradient-primary);
