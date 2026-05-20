@@ -9,6 +9,10 @@ import { NotificationBellComponent } from '../../shared/components/notification-
 import { ChatService } from '../../core/services/chat.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { SignalingService } from '../../core/services/signaling.service';
+import { PushService } from '../../core/services/push.service';
+import { WebrtcService } from '../../core/services/webrtc.service';
+import { PatientProfileService } from '../../core/services/patient-profile.service';
+import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -32,6 +36,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
   protected readonly peopleDrawer = inject(PeopleDrawerService);
+  private readonly push = inject(PushService);
+  private readonly webrtc = inject(WebrtcService);
+  private readonly patientProfile = inject(PatientProfileService);
+  private readonly appointmentBooking = inject(AppointmentBookingService);
 
   readonly moduleLabel = 'LMS';
   readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
@@ -145,6 +153,26 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   async logout() {
     this.profileOpen.set(false);
+    
+    // ── (1) Unregister push notifications ──────────────────────────
+    await this.push.unregister().catch(() => undefined);
+
+    // ── (2) Disconnect realtime hubs ───────────────────────────────
+    await this.chat.disconnect().catch(() => undefined);
+    await this.signaling.disconnect().catch(() => undefined);
+
+    // ── (3) Reset WebRTC ───────────────────────────────────────────
+    this.webrtc.reset();
+
+    // ── (4) Close open modals/modeless overlays ─────────────────────
+    this.patientProfile.close();
+    this.appointmentBooking.close();
+
+    // ── (5) Reset cached tenant/config data ────────────────────────
+    this.tenantState.reset();
+    this.labCfg.reset();
+
+    // ── (6) Final auth sign-out + redirect ─────────────────────────
     await this.auth.signOut();
     this.router.navigateByUrl('/login');
   }

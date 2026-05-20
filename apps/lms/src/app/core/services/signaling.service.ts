@@ -215,6 +215,11 @@ export class SignalingService implements OnDestroy {
     try { await this.connection.stop(); } catch { /* ignore */ }
     this.connection = null;
     this.isConnected.set(false);
+
+    // Clear all stateful signals on disconnect (logout)
+    this.connectionError.set(null);
+    this.onlineUserIds.set(new Set());
+    this.userPresences.set(new Map());
   }
 
   ngOnDestroy(): void { void this.disconnect(); }

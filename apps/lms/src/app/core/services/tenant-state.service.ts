@@ -61,4 +61,10 @@ export class TenantStateService {
     try { this.channel?.postMessage({ type: 'tenant-update', tenant }); }
     catch { /* BroadcastChannel failed — same-tab still works */ }
   }
+
+  reset() {
+    this._tenant.set(null);
+    this._status.set('pending');
+    this._requested = false;
+  }
 }

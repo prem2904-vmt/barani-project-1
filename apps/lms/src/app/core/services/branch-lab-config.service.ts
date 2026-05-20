@@ -38,4 +38,10 @@ export class BranchLabConfigService {
   }
 
   update(next: BranchLabConfig): void { this._config.set(next); }
+
+  reset(): void {
+    this._config.set(null);
+    this._loaded.set(false);
+    this._loading = false;
+  }
 }

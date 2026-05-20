@@ -612,6 +612,19 @@ export class ChatService implements OnDestroy {
     try { await this.connection.stop(); } catch { /* ignore */ }
     this.connection = null;
     this.isConnected.set(false);
+
+    // Clear all stateful signals on disconnect (logout)
+    this.conversations.set([]);
+    this.activeConversationId.set(null);
+    this.activeMessages.set([]);
+    this.typingByConversation.set(new Map());
+    this.readReceipts.set(new Map());
+    this.loadingHistory.set(false);
+    this.loadingOlder.set(false);
+    this.hasMoreHistory.set(true);
+
+    for (const t of this.typingClearTimers.values()) clearTimeout(t);
+    this.typingClearTimers.clear();
   }
 
   ngOnDestroy(): void {
