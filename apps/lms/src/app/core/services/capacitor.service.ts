@@ -41,6 +41,15 @@ export class CapacitorService {
       return;
     }
 
+    // Tag the root element so CSS can reserve a guaranteed status-bar
+    // gap. WKWebView occasionally reports env(safe-area-inset-top) as 0
+    // on the very first paint (before the splash hides), which let the
+    // page header slide under the notch until an app restart. The
+    // `.cap-native` class lets styles.scss apply a 50px floor via
+    // max(env(safe-area-inset-top), 50px) — once iOS reports the real
+    // inset it takes over, with no flash of overlap.
+    document.documentElement.classList.add('cap-native');
+
     try {
       const status = await Network.getStatus();
       this.isOnline.set(status.connected);

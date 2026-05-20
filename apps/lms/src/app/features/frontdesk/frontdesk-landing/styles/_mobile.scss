@@ -64,18 +64,18 @@
      Tailwind interferes with our stack — kill it. */
   .pf-head__actions .pf-head__btn--secondary {
     justify-content: center;
-    height: 44px;
+    height: 40px;
     margin-right: 0 !important;
-    padding: 0 12px;
-    font-size: 14px;
+    padding: 0 10px;
+    font-size: 13px;
   }
-  /* Primary "New patient" CTA — same width as the rest in the stack,
-     bigger height for visual hierarchy. */
+  /* Primary "New patient" CTA — full width, a touch taller than the
+     secondaries for hierarchy but still compact. */
   .pf-head__actions .pf-head__btn--primary {
     justify-content: center;
-    height: 48px;
-    font-size: 15px;
-    margin-top: 4px;  /* tiny separator before primary action */
+    height: 44px;
+    font-size: 14px;
+    margin-top: 2px;
   }
 
   /* ── Alert chips: horizontal scroll so they don't wrap into 2 rows
@@ -148,9 +148,61 @@
     letter-spacing: 0.06em !important;
   }
 
-  /* KPI strip rule moved to global styles.scss — it lives inside the
-     pf-kpi-strip component, so a frontdesk-scoped rule can't reach it
-     due to Angular emulated view encapsulation. */
+  /* KPI strip is hidden on mobile — rule lives in global styles.scss
+     (it crosses the pf-kpi-strip component's encapsulation boundary). */
+
+  /* ── Greeting header top breathing room. The chrome is hidden on
+        phones, so the page header is the first thing under the iOS
+        status bar. Give it a clear gap so "Good day, X" never crowds
+        the clock / Dynamic Island even before env() fully resolves. */
+  .pf-page__header {
+    padding-top: 14px !important;
+  }
+
+  /* ── Appointments section header — the title, count, date-pill
+        cluster, calendar link and chevron were all crammed onto one
+        flex row, so the Yesterday/Today/Tomorrow pills overflowed off
+        the right edge. Let the row wrap: title + count + actions stay
+        on row 1, the date pills drop to a full-width scrollable row 2. */
+  .pf-appt-split__hdr {
+    flex-wrap: wrap !important;
+    row-gap: 8px !important;
+  }
+  .pf-hdr-date-pills {
+    order: 10;            /* force below the title row */
+    flex-basis: 100%;     /* own line */
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+  .pf-hdr-date-pills::-webkit-scrollbar { display: none; }
+  .pf-hdr-date-pill {
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+
+  /* The work-section tab header (IN PROGRESS / COMPLETED + its own
+     date pills) gets the same wrap treatment. */
+  .pf-appt-split__hdr--tabs {
+    flex-wrap: wrap !important;
+    row-gap: 8px !important;
+  }
+
+  /* ── Appointment rows — keep them readable: the time block, avatar,
+        name/meta and call button on one tidy row, name allowed to
+        ellipsis rather than shove the call button off-screen. */
+  [class*='__appt-row'],
+  [class*='__appt-card'] {
+    gap: 10px !important;
+  }
+  [class*='__appt-row'] [class*='__name'],
+  [class*='__appt-card'] [class*='__name'] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */

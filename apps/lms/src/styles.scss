@@ -230,6 +230,17 @@ body {
   -ms-overflow-style: none;
 }
 
+/* Native (Capacitor) only — guarantee a status-bar gap.
+   WKWebView can report env(safe-area-inset-top) as 0 on the first
+   paint (before the splash hides), letting the page header slide
+   under the notch until a restart. The 50px floor clears the status
+   bar on every iPhone; once iOS reports the real inset (≈59px on
+   notched devices) max() picks the larger value. Web/desktop never
+   get the .cap-native class, so they're unaffected. */
+html.cap-native {
+  padding-top: max(env(safe-area-inset-top), 50px);
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;
@@ -1891,28 +1902,14 @@ html[data-theme="light"] .pf-vial__outline {
     z-index: 40 !important;
   }
 
-  /* ── KPI strip (`<pf-kpi-strip>`) — the component's internal mobile
-     rule (at width: 720) collapses the segmented bar to free-flowing
-     chips. With 4 chips at 375px width, 3 fit on row 1 and chip #4
-     orphans onto row 2. Force an explicit 2×2 grid so the layout
-     reads as a stat block, not stragglers. Lives in global so it
-     crosses the component's view-encapsulation boundary. */
-  pf-kpi-strip .pf-kpis {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 6px 8px !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-  }
-  pf-kpi-strip .pf-kpi {
-    justify-content: flex-start !important;
-    padding: 8px 10px !important;
-    min-height: 38px;
-    border-right: none !important;
-    background: var(--glass-bg) !important;
-    border: 1px solid var(--glass-border) !important;
-    border-radius: 999px !important;
+  /* ── KPI strip (`<pf-kpi-strip>`) — hidden on phones.
+     The 4-stat block (Appointments / Walk-ins / Ready / STAT) eats a
+     big vertical chunk on a 375px viewport for numbers the user can
+     get from the queues themselves. Per product call, drop it on
+     mobile entirely. Rule lives in global styles so it crosses the
+     component's view-encapsulation boundary. */
+  pf-kpi-strip {
+    display: none !important;
   }
 
   /* ── (E2) Page-level sticky bottom footers (Save bar / Submit row /
