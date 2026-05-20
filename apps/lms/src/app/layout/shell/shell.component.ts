@@ -225,6 +225,17 @@ import { AuthService } from "../../core/auth/auth.service";
         padding-bottom: var(--tab-nav-total-height, 0px);
       }
 
+      /* iPad band (641–1279px): the bottom-nav docks as a vertical rail
+         on the left edge (see bottom-nav.component). Inset the scrolling
+         content so it clears the ~84px-wide rail + its 8px margin. The
+         chrome stays full-width — the rail is vertically centred and
+         short, so it never reaches the chrome row. */
+      @media (min-width: 641px) and (max-width: 1279px) {
+        .shell-main {
+          padding-left: 100px;
+        }
+      }
+
       /* Admin breadcrumb — slim glass pill anchored top-left of the main
        content area. Shows only on /admin/* sub-routes (controlled by
        showAdminBack signal). Sticky so it stays visible as the page

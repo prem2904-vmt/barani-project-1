@@ -28,10 +28,11 @@ const DRAG_THRESHOLD_PX = 4;
          tap-targets — vertically centred in the ~56px pill — clear of
          the iOS home-indicator gesture zone while the pill sits snug
          at the edge. -->
-    <nav class="pf-bottom-nav xl:hidden fixed left-1/2 -translate-x-1/2 z-30"
-         style="bottom: 8px; max-width: calc(100vw - 16px);">
+    <nav class="pf-bottom-nav xl:hidden fixed z-30"
+         [class.pf-bottom-nav--rail]="railMode()">
       <div #pill
-           class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto"
+           class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 shadow-2xl backdrop-blur-2xl"
+           [class.pf-pill--rail]="railMode()"
            [class]="pillClasses"
            [class.pf-pill--dragging]="dragging()"
            (pointerdown)="onPillPointerDown($event)"
@@ -49,13 +50,19 @@ const DRAG_THRESHOLD_PX = 4;
              icons stay put underneath; the slider's own backdrop blur
              + tinted edges give the iOS Liquid-Glass feel as it slides
              over them. -->
-        <span class="pf-nav-indicator"
-              [class.pf-nav-indicator--ready]="indicatorReady()"
-              [class.pf-nav-indicator--dragging]="dragging()"
-              [style.transform]="indicatorTransform()"
-              [style.width.px]="indicatorRenderedW()"
-              [style.height.px]="indicatorRenderedH()"
-              aria-hidden="true"></span>
+        <!-- Sliding indicator — horizontal-pill only. In rail mode the
+             active state is a static highlight on the button itself
+             (the indicator's offsetLeft/offsetWidth geometry doesn't
+             translate to a vertical axis). -->
+        @if (!railMode()) {
+          <span class="pf-nav-indicator"
+                [class.pf-nav-indicator--ready]="indicatorReady()"
+                [class.pf-nav-indicator--dragging]="dragging()"
+                [style.transform]="indicatorTransform()"
+                [style.width.px]="indicatorRenderedW()"
+                [style.height.px]="indicatorRenderedH()"
+                aria-hidden="true"></span>
+        }
 
         @for (n of primary(); track n.id; let i = $index) {
           <!-- Buttons auto-scale to the visible-tab count. With many
@@ -216,7 +223,25 @@ const DRAG_THRESHOLD_PX = 4;
          menus. -->
   `,
   styles: [`
-    .pf-bottom-nav {}
+    /* Default (phone) — floating bottom pill, horizontally centred,
+       8px above the screen edge. Positioning lives here in CSS now
+       (was Tailwind utility classes) so rail mode can fully override. */
+    .pf-bottom-nav {
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 16px);
+    }
+
+    /* ── Rail mode (iPad band, 641–1279px) — vertical dock on the
+       left edge, vertically centred. ─────────────────────────────── */
+    .pf-bottom-nav--rail {
+      bottom: auto;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      max-width: none;
+    }
 
     /* The pill is the positioning context for the indicator + the
        pointer-event surface for the drag gesture. touch-action: pan-y
@@ -224,10 +249,22 @@ const DRAG_THRESHOLD_PX = 4;
        become our drag (we cancel them via preventDefault on move). */
     .pf-pill {
       position: relative;
+      border-radius: 9999px;
+      overflow-x: auto;
       touch-action: pan-y;
       user-select: none;
       -webkit-user-select: none;
       transition: box-shadow 200ms ease;
+    }
+    /* Rail pill — vertical column of icon+label buttons. */
+    .pf-pill--rail {
+      flex-direction: column;
+      align-items: stretch;
+      border-radius: 22px;
+      overflow-x: visible;
+      gap: 4px;
+      padding: 8px 6px;
+      touch-action: auto;
     }
     .pf-pill::-webkit-scrollbar { display: none; }
     .pf-pill { scrollbar-width: none; -ms-overflow-style: none; }
@@ -384,6 +421,53 @@ const DRAG_THRESHOLD_PX = 4;
       100% { transform: scale(1); }
     }
 
+    /* ── Rail-mode buttons — icon over label, full rail width. The
+       sliding indicator is absent in rail mode, so the active button
+       carries its own gradient highlight. ───────────────────────── */
+    .pf-pill--rail .pf-nav-btn {
+      width: 72px;
+      min-width: 72px;
+      height: auto;
+      padding: 9px 0 7px;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 10.5px;
+      border-radius: 14px;
+    }
+    /* Label always visible in the rail (overrides --compact's hide). */
+    .pf-pill--rail .pf-nav-btn .pf-nav-btn__lbl {
+      display: inline !important;
+    }
+    .pf-pill--rail .pf-nav-btn--active {
+      background: var(--gradient-primary);
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+    }
+    .pf-pill--rail .pf-nav-btn:not(.pf-nav-btn--active):hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    /* The More (PF glyph) button stretches full rail width too. */
+    .pf-pill--rail .pf-nav-btn--more {
+      width: 72px;
+      min-width: 72px;
+      height: 52px;
+    }
+    /* Admin divider — a horizontal hairline in the vertical rail. */
+    .pf-pill--rail > div[style*="background"] {
+      width: 80% !important;
+      height: 1px !important;
+      margin: 4px auto !important;
+    }
+    /* In rail mode the More popover opens to the RIGHT of the rail,
+       anchored near its bottom (where the More button sits). */
+    .pf-bottom-nav--rail .pf-more-pop {
+      bottom: 8px;
+      top: auto;
+      left: calc(100% + 10px);
+      right: auto;
+      transform-origin: left bottom;
+    }
+
     .pf-more-item {
       color: var(--text-secondary);
       background: var(--glass-bg);
@@ -534,6 +618,17 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   protected readonly moreOpen = signal(false);
 
+  /** Rail mode — on the iPad band (641–1279px) the nav docks as a
+   *  vertical rail on the left edge instead of a floating bottom pill.
+   *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
+   *  whole component (xl:hidden) and uses the top-strip nav. */
+  protected readonly railMode = signal<boolean>(this.computeRailMode());
+  private computeRailMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    const w = window.innerWidth;
+    return w >= 641 && w < 1280;
+  }
+
   // ─── More popover handlers ────────────────────────────────────────
   protected toggleMore(ev?: Event): void {
     ev?.stopPropagation?.();
@@ -670,7 +765,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       .subscribe(() => this.recomputeActiveFromUrl());
     this.recomputeActiveFromUrl();
 
-    this.resizeListener = () => this.measureToActive();
+    this.resizeListener = () => {
+      this.railMode.set(this.computeRailMode());
+      this.measureToActive();
+    };
     window.addEventListener('resize', this.resizeListener);
   }
 
@@ -747,6 +845,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   // ─── Pointer drag ────────────────────────────────────────────────
 
   onPillPointerDown(ev: PointerEvent): void {
+    // No drag gesture in rail mode — the rail is a static vertical
+    // dock; horizontal-drag geometry doesn't apply.
+    if (this.railMode()) return;
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
     this.dragPointerId = ev.pointerId;
     this.dragStartClientX = ev.clientX;
