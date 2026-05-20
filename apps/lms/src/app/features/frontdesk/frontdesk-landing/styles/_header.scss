@@ -1,0 +1,246 @@
+/* ── Compact header ─────────────────────────────────────── */
+.pf-head {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-areas:
+    "title alerts actions"
+    "sub   alerts actions";
+  gap: 2px 12px;
+  align-items: center;
+  padding: 6px 0 12px;
+}
+
+@media (max-width: 767px) {
+  .pf-head {
+    grid-template-columns: 1fr;
+    grid-template-areas: "title" "sub" "alerts" "actions";
+    gap: 4px;
+  }
+
+  .pf-head__actions, .pf-head__alerts {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+}
+
+/* Alert chips in the page header — compact, persistent, click to act
+ * (ready → Results, payments → drawer, follow-up → popover). Replaces
+ * the old toolbar-row banner that ate ~50px of vertical space. */
+.pf-head__alerts {
+  grid-area: alerts;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+.pf-head__alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
+}
+.pf-head__alert:hover { transform: translateY(-1px); }
+.pf-head__alert:active { transform: translateY(0); }
+.pf-head__alert-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--alert-dot, #a855f7);
+  box-shadow: 0 0 0 2px var(--alert-dot-halo, rgba(168, 85, 247, 0.16));
+  flex-shrink: 0;
+}
+.pf-head__alert-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+.pf-head__alert-lbl { color: var(--text-secondary); }
+
+.pf-head__alert--ready {
+  --alert-dot: #34d399;
+  --alert-dot-halo: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.32);
+}
+.pf-head__alert--ready:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+.pf-head__alert--payments {
+  --alert-dot: #60a5fa;
+  --alert-dot-halo: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.32);
+}
+.pf-head__alert--payments:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+.pf-head__alert--follow {
+  --alert-dot: #f59e0b;
+  --alert-dot-halo: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+.pf-head__alert--follow:hover, .pf-head__alert--follow.pf-head__alert--on {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+/* Stragglers popover anchored to the follow-up chip */
+.pf-pop--stragglers {
+  width: min(420px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.pf-pop__sub-line {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-pop__dismiss {
+  margin-left: auto;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pf-pop__dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.pf-head__title {
+  grid-area: title;
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+@media (min-width: 768px) {
+  .pf-head__title {
+    font-size: 32px;
+  }
+}
+
+.pf-head__name {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.pf-head__sub {
+  grid-area: sub;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.pf-head__actions {
+  grid-area: actions;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+}
+
+.pf-head__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pf-head__btn--secondary {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border-color: var(--glass-border);
+}
+
+.pf-head__btn--secondary:hover {
+  background: var(--glass-bg-hover);
+}
+
+.pf-head__btn--primary {
+  background: var(--gradient-primary);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
+}
+
+.pf-head__btn--primary:hover {
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.55);
+  transform: translateY(-1px);
+}
+
+/* Today's collection chip */
+.pf-collection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.pf-collection--idle {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  color: var(--text-muted);
+}
+
+.pf-collection__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
+}
+
+.pf-collection--idle .pf-collection__dot {
+  background: var(--text-muted);
+  box-shadow: none;
+}
+
+.pf-collection__sep {
+  opacity: 0.4;
+}
+
+.pf-collection__due {
+  color: #fca5a5;
+  font-weight: 500;
+}
+
+.pf-collection--idle .pf-collection__due {
+  color: var(--text-muted);
+}
+

@@ -297,35 +297,6 @@
                 </svg>
               </button>
             </pf-patient-search>
-            <div class="pf-date-pills" role="tablist" aria-label="Date range">
-              @for (opt of dateOptions; track opt.id) {
-              <button type="button" role="tab" class="pf-date-pill" [class.pf-date-pill--on]="dateRange() === opt.id"
-                [attr.aria-selected]="dateRange() === opt.id" (click)="setDateRange(opt.id)">
-                {{ opt.label }}
-              </button>
-              }
-              <!-- Inline date inputs that appear only when "Custom" is
-                   selected. Previously the Custom pill was dead — it
-                   flipped dateRange to 'custom' but no picker UI ever
-                   rendered, so the queue kept showing Today. -->
-              @if (dateRange() === 'custom') {
-                <span class="pf-date-custom">
-                  <input type="date" class="pf-date-custom__inp"
-                         aria-label="Start date"
-                         [value]="customStart() ?? ''"
-                         (change)="pickCustomStart($any($event.target).value)" />
-                  <span class="pf-date-custom__sep" aria-hidden="true">→</span>
-                  <input type="date" class="pf-date-custom__inp"
-                         aria-label="End date"
-                         [value]="customEnd() ?? customStart() ?? ''"
-                         (change)="pickCustomEnd($any($event.target).value)" />
-                  @if (customStart()) {
-                    <button type="button" class="pf-date-custom__clear" (click)="clearCustom()"
-                            aria-label="Clear custom range">×</button>
-                  }
-                </span>
-              }
-            </div>
           </div>
           <!-- Date-range pills moved into the Advanced Search modal — date
                filtering for historical lookups belongs there. The dashboard
@@ -348,6 +319,27 @@
                       [attr.aria-expanded]="expandedPane() === 'appt'">
                 <span class="pf-appt-split__title">Appointments</span>
                 <span class="pf-appt-split__count">{{ visibleAppointments().length }}</span>
+                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
+                  @for (opt of apptDateOptions; track opt.id) {
+                    @if (opt.id === 'custom') {
+                      <button #apptCustomBtn type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
+                              [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()">
+                        {{ apptCustomRangeLabel() }}
+                      </button>
+                      @if (apptDateRange() === 'custom' && apptCustomStart()) {
+                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom()"
+                                aria-label="Clear custom range">×</button>
+                      }
+                    } @else {
+                      <button type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id"
+                              (click)="setApptDateRange(opt.id)">
+                        {{ opt.label }}
+                      </button>
+                    }
+                  }
+                </div>
                 <a routerLink="/frontdesk/appointments" class="pf-appt-split__link pf-appt-split__link--icon"
                    title="Open calendar" aria-label="Open calendar" (click)="$event.stopPropagation()">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -486,6 +478,27 @@
                     Completed
                     <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
                   </button>
+                </div>
+                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
+                  @for (opt of workDateOptions; track opt.id) {
+                    @if (opt.id === 'custom') {
+                      <button #workCustomBtn type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
+                              [class.pf-hdr-date-pill--has-value]="!!workCustomStart()">
+                        {{ workCustomRangeLabel() }}
+                      </button>
+                      @if (workDateRange() === 'custom' && workCustomStart()) {
+                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
+                                aria-label="Clear custom range">×</button>
+                      }
+                    } @else {
+                      <button type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="workDateRange() === opt.id"
+                              (click)="setWorkDateRange(opt.id)">
+                        {{ opt.label }}
+                      </button>
+                    }
+                  }
                 </div>
                 <svg class="pf-appt-split__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"

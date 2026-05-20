@@ -1,0 +1,161 @@
+/* ═════════════════════════════════════════════════════════════════
+   ── MOBILE PASS for /frontdesk landing ──
+   Tighter header, balanced action row, primary CTA full-width,
+   compact empty state, comfortable touch targets. iPad/desktop
+   untouched (only fires ≤640px).
+   ═════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Page padding: reclaim 24px+ of horizontal real-estate so cards
+        actually fit. The Tailwind `px-4` on .pf-page__header (= 16px)
+        is fine but Tailwind `px-8` at md+ doesn't apply here; we just
+        ensure body matches header so things line up vertically. */
+  .pf-page__header,
+  .pf-page__body {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* ── Greeting + header block tighten. */
+  .pf-head {
+    gap: 8px;
+    padding: 4px 0 10px;
+  }
+  .pf-head__title {
+    font-size: 20px;
+    letter-spacing: -0.015em;
+  }
+  .pf-head__sub { font-size: 12px; }
+
+  /* ── Action button row: full-width vertical stack on mobile. This is
+        the canonical iOS / Android pattern for primary screen actions —
+        easier thumb targets, no awkward orphan columns, scales cleanly
+        whether there are 3 buttons (non-admin) or 5 (admin: Cash flow +
+        Top tests + Staff + Scan QR + Book appt + New patient). */
+  .pf-head__actions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100%;
+    margin-top: 6px !important;
+  }
+  /* Every direct child fills the column — buttons, links, and the
+     pop-anchor wrapper that holds Staff + Scan QR. */
+  .pf-head__actions > * {
+    width: 100% !important;
+  }
+  /* Pop-anchor wraps Staff + Scan QR together — keep them on one row
+     of their own with 50/50 split so admin still has Cash flow / Top
+     tests stacked above. Other pop-anchors hold single buttons. */
+  .pf-head__actions .pf-pop-anchor {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    width: 100%;
+  }
+  .pf-head__actions .pf-pop-anchor > .pf-head__btn,
+  .pf-head__actions .pf-pop-anchor > .pf-collection,
+  .pf-head__actions .pf-pop-anchor > .pf-toptest-pill {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+  }
+  /* Secondary buttons: comfortable tap height, clean type. mr-2 from
+     Tailwind interferes with our stack — kill it. */
+  .pf-head__actions .pf-head__btn--secondary {
+    justify-content: center;
+    height: 44px;
+    margin-right: 0 !important;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  /* Primary "New patient" CTA — same width as the rest in the stack,
+     bigger height for visual hierarchy. */
+  .pf-head__actions .pf-head__btn--primary {
+    justify-content: center;
+    height: 48px;
+    font-size: 15px;
+    margin-top: 4px;  /* tiny separator before primary action */
+  }
+
+  /* ── Alert chips: horizontal scroll so they don't wrap into 2 rows
+        when there are 3 (ready / payments / follow-up). */
+  .pf-head__alerts {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -14px;   /* edge-to-edge under tighter page padding */
+    padding: 0 14px 4px;
+  }
+  .pf-head__alerts::-webkit-scrollbar { display: none; }
+  .pf-head__alert { flex-shrink: 0; }
+
+  /* ── Cash-flow + top-test pills sit in alerts row but might also
+        wrap as their own cluster — keep them in line. */
+  .pf-collection, .pf-toptest-pill { flex-shrink: 0; }
+
+  /* ── Empty-tile compactness: takes ~280px on phone today, drop to
+        ~180px so the user sees the work-section tabs without scrolling
+        a full screen of empty real estate. */
+  .pf-empty-tile {
+    min-height: 140px !important;
+    padding: 16px 14px 14px !important;
+    gap: 6px !important;
+  }
+  .pf-empty-tile__icon {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 12px !important;
+  }
+  .pf-empty-tile__title { font-size: 13px !important; }
+  .pf-empty-tile__sub {
+    font-size: 11.5px !important;
+    line-height: 1.4 !important;
+    max-width: 240px !important;
+  }
+  .pf-empty-tile__cta {
+    min-height: 36px;
+    font-size: 12.5px;
+    padding: 0 14px;
+  }
+
+  /* ── Work-section tabs (IN PROGRESS / COMPLETED) — tighter so the
+        count badge doesn't crowd the label. Make sure the tab strip
+        scrolls horizontally rather than stacking. */
+  .pf-tabs__btn {
+    padding: 0 12px !important;
+    height: 36px !important;
+    font-size: 11.5px !important;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .pf-tabs__count {
+    font-size: 10.5px !important;
+    padding: 0 6px !important;
+    height: 18px;
+    min-width: 18px;
+  }
+
+  /* ── Section card headers (APPOINTMENTS / pf-section-hdr) — tighter
+        type so the icon + count chip fit comfortably. */
+  [class*='__section-hdr'] {
+    padding: 10px 14px !important;
+  }
+  [class*='__section-hdr'] h2,
+  [class*='__section-hdr'] h3 {
+    font-size: 12px !important;
+    letter-spacing: 0.06em !important;
+  }
+
+  /* KPI strip rule moved to global styles.scss — it lives inside the
+     pf-kpi-strip component, so a frontdesk-scoped rule can't reach it
+     due to Angular emulated view encapsulation. */
+}
+
+/* Tighter still at very narrow viewports (≤360px — iPhone SE width). */
+@media (max-width: 360px) {
+  .pf-head__title { font-size: 18px; }
+  .pf-head__actions .pf-head__btn--secondary { font-size: 12px; padding: 0 6px; }
+}
+

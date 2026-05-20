@@ -1,0 +1,71 @@
+/* ── STAT pinned row ────────────────────────────────────── */
+.pf-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(219, 39, 119, 0.06));
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+  overflow-x: auto;
+}
+
+.pf-stat-row__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #fca5a5;
+  flex-shrink: 0;
+}
+
+.pf-stat-row__flag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.9);
+}
+
+.pf-stat-row__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.pf-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+.pf-stat-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pf-stat-chip__name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pf-stat-chip__sub {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+

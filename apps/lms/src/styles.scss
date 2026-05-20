@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@import 'flatpickr/dist/flatpickr.css';
+
 /* Schedule-X calendar theme (used by /frontdesk/appointments). The lib
  * ships with light + dark colour tokens — we run it in dark mode via
  * the calendar component's `isDark` flag. */
