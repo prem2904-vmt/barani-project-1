@@ -161,13 +161,36 @@ const DRAG_THRESHOLD_PX = 4;
             </svg>
             <span>People</span>
           </button>
+          <!-- Theme: cycles System → Light → Dark. "System" follows the
+               OS appearance live; Light/Dark pin an explicit choice. -->
           <button type="button" role="menuitem" class="pf-more-item press"
                   (click)="onMoreTheme()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
-            </svg>
-            <span>{{ theme.isDark() ? 'Light mode' : 'Dark mode' }}</span>
+            @switch (theme.mode()) {
+              @case ('system') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <path d="M8 21h8M12 17v4"/>
+                </svg>
+              }
+              @case ('light') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4"/>
+                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+                </svg>
+              }
+              @default {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
+                </svg>
+              }
+            }
+            <span>Theme</span>
+            <span class="pf-more-item__val">
+              {{ theme.mode() === 'system' ? 'System' : theme.mode() === 'light' ? 'Light' : 'Dark' }}
+            </span>
           </button>
           <div class="pf-more-sep"></div>
           <button type="button" role="menuitem" class="pf-more-item pf-more-item--danger press"
@@ -477,6 +500,17 @@ const DRAG_THRESHOLD_PX = 4;
       color: #fecaca;
     }
     .pf-more-pop .pf-more-item--danger svg { color: #fca5a5; }
+    /* Trailing value chip — e.g. the current theme mode on the Theme
+       row. Pushed to the right edge of the menu item. */
+    .pf-more-pop .pf-more-item__val {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-violet-300, #c4b5fd);
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14);
+    }
     .pf-more-sep {
       height: 1px;
       background: var(--glass-border, rgba(255, 255, 255, 0.08));
@@ -517,9 +551,14 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     this.peopleDrawer.open.set(true);
   }
   protected onMoreTheme(): void {
-    // Don't close immediately — let the user see the toggle take effect.
-    this.theme.toggle();
-    setTimeout(() => this.closeMore(), 180);
+    // Cycle System → Light → Dark → System. "System" follows the OS
+    // appearance live; Light/Dark pin an explicit choice. The popover
+    // stays open so the user can keep tapping to land on the mode
+    // they want and see each one preview.
+    const next: Record<string, 'system' | 'light' | 'dark'> = {
+      system: 'light', light: 'dark', dark: 'system'
+    };
+    this.theme.setMode(next[this.theme.mode()]);
   }
   protected onMoreLogout(): void {
     this.closeMore();
