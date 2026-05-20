@@ -229,15 +229,18 @@ import { AuthService } from "../../core/auth/auth.service";
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
          • padding-left clears the ~60px rail + its 8px margin.
-         • padding-bottom is zeroed — there's no bottom pill on iPad,
-           so the content should use the full screen height instead of
-           reserving --tab-nav-total-height of dead space at the bottom.
+         • padding-bottom is a slim 16px — NOT the ~100px the bottom
+           pill needed (no pill on iPad → that was dead space), but
+           not 0 either: a flush-to-edge content area made the
+           frontdesk panes' bottom border sit on the literal screen
+           edge and read as "cut off". 16px gives the border a clear
+           gap so the panes visibly end within the screen.
          The chrome stays full-width — the rail is vertically centred
          and short, so it never reaches the chrome row. */
       @media (min-width: 641px) and (max-width: 1279px) {
         .shell-main {
           padding-left: 76px;
-          padding-bottom: 0;
+          padding-bottom: 16px;
         }
       }
 
