@@ -148,26 +148,35 @@ const DRAG_THRESHOLD_PX = 4;
                 [class.pf-nav-btn--compact]="compactMode()"
                 [class.pf-nav-btn--more-on]="moreOpen()"
                 (click)="toggleMore($event)"
-                aria-label="More"
+                [attr.aria-label]="railMode() ? 'Account & more' : 'More'"
                 [attr.aria-expanded]="moreOpen()">
-          <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
-               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <defs>
-              <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%"   stop-color="#7c3aed" />
-                <stop offset="25%"  stop-color="#8b5cf6" />
-                <stop offset="50%"  stop-color="#a855f7" />
-                <stop offset="75%"  stop-color="#d946ef" />
-                <stop offset="100%" stop-color="#ec4899" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-              fill="url(#pfMoreBrandGradient)" />
-            <path
-              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-              fill="url(#pfMoreBrandGradient)" />
-          </svg>
+          @if (railMode()) {
+            <!-- iPad rail: the More button IS the user badge — the
+                 chrome's profile avatar folds in here. Tapping opens
+                 the account popover (notifications / people / theme /
+                 sign-out). -->
+            <span class="pf-rail-avatar">{{ userInitials() }}</span>
+          } @else {
+            <!-- Phone: PF brand glyph (the only branding on a phone). -->
+            <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#7c3aed" />
+                  <stop offset="25%"  stop-color="#8b5cf6" />
+                  <stop offset="50%"  stop-color="#a855f7" />
+                  <stop offset="75%"  stop-color="#d946ef" />
+                  <stop offset="100%" stop-color="#ec4899" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+                fill="url(#pfMoreBrandGradient)" />
+              <path
+                d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+                fill="url(#pfMoreBrandGradient)" />
+            </svg>
+          }
         </button>
       </div>
 
@@ -346,6 +355,27 @@ const DRAG_THRESHOLD_PX = 4;
       font-weight: 700;
       letter-spacing: 0.01em;
       box-shadow: 0 4px 12px rgba(124, 58, 237, 0.36);
+    }
+
+    /* ── Rail user avatar — the More button's content in rail mode.
+       Folds in the chrome's profile badge; its popover holds
+       notifications / people / theme / sign-out. ────────────────── */
+    .pf-rail-avatar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .pf-nav-btn--more-on .pf-rail-avatar {
+      box-shadow: 0 0 0 2px var(--color-violet-400, #a78bfa);
     }
     .pf-pill::-webkit-scrollbar { display: none; }
     .pf-pill { scrollbar-width: none; -ms-overflow-style: none; }
@@ -713,6 +743,18 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly tenantInitial = computed(() => {
     const n = this.tenantName().trim();
     return n ? n[0].toUpperCase() : 'P';
+  });
+
+  /** Current user's initials — the rail's More button renders the user
+   *  avatar (the chrome's profile badge folds in here); tapping it opens
+   *  the account popover (notifications / people / theme / sign-out). */
+  protected readonly userInitials = computed(() => {
+    const u = this.auth.user();
+    const name = (u?.displayName || u?.firstName || '').trim();
+    if (!name) return 'U';
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   });
 
   // ─── More popover handlers ────────────────────────────────────────
