@@ -243,9 +243,11 @@ import { AuthService } from "../../core/auth/auth.service";
            gap so the panes visibly end within the screen. */
       @media (min-width: 641px) and (max-width: 1279px) {
         .shell-main {
-          /* Clear the 64px full-height left rail — flush, no gap. The
-             routed page adds its own small gutter on top (see the iPad
-             rule in frontdesk _base.scss). */
+          /* Clear the 64px full-height left rail. Each routed page
+             keeps its own Tailwind lg:px-10 gutter on top of this, so
+             content sits a uniform ~40px off the rail — frontdesk
+             included (its old padding-left:8px override was removed
+             so every screen now has the same left gutter). */
           padding-left: 64px;
           padding-bottom: 16px;
         }

@@ -305,13 +305,16 @@ const DRAG_THRESHOLD_PX = 4;
     }
 
     /* ── Rail mode (iPad band, 641–1279px) — a full-height sidebar
-       docked flush to the left edge. Runs top→bottom; the chrome
-       (z-40) sits over its top strip so the rail visually "starts"
-       below the chrome. No floating gap, no vertical centring — a
-       proper iPadOS-style nav dock. ──────────────────────────────── */
+       docked flush to the left edge. Runs top→bottom.
+       top starts at the safe-area inset, NOT 0: a panel that ran
+       edge-to-edge behind the status bar put its tinted glass +
+       right-edge seam directly under the clock, which read as a
+       messy rectangle around the status-bar text. Beginning the
+       rail just below the clock keeps the status bar on the clean
+       page background. ───────────────────────────────────────────── */
     .pf-bottom-nav--rail {
       left: 0;
-      top: 0;
+      top: env(safe-area-inset-top, 0px);
       bottom: 0;
       transform: none;
       max-width: none;
@@ -330,11 +333,11 @@ const DRAG_THRESHOLD_PX = 4;
       -webkit-user-select: none;
       transition: box-shadow 200ms ease;
     }
-    /* Rail pill — a full-height vertical column. Flush left edge
-       (square left corners), rounded right edge so it reads as a
-       docked panel. There's no top chrome on iPad, so the icons
-       start just below the status bar (safe-area-inset-top + 16px);
-       the More button is pushed to the bottom with margin-top:auto. */
+    /* Rail pill — a full-height vertical column. The rail container
+       already starts at the safe-area inset, so the pill's own
+       padding-top is a plain 10px (no safe-area term — that would
+       double-count and shove the brand glyph too far down). The
+       More button is pushed to the bottom with margin-top:auto. */
     .pf-pill--rail {
       flex-direction: column;
       align-items: center;
@@ -348,7 +351,7 @@ const DRAG_THRESHOLD_PX = 4;
       overflow-x: visible;
       overflow-y: auto;
       gap: 3px;
-      padding: calc(env(safe-area-inset-top, 0px) + 10px) 8px 12px;
+      padding: 10px 8px 12px;
       touch-action: auto;
       scrollbar-width: none;
     }
