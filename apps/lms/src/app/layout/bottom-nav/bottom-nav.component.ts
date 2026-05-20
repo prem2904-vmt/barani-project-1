@@ -233,13 +233,16 @@ const DRAG_THRESHOLD_PX = 4;
       max-width: calc(100vw - 16px);
     }
 
-    /* ── Rail mode (iPad band, 641–1279px) — vertical dock on the
-       left edge, vertically centred. ─────────────────────────────── */
+    /* ── Rail mode (iPad band, 641–1279px) — a full-height sidebar
+       docked flush to the left edge. Runs top→bottom; the chrome
+       (z-40) sits over its top strip so the rail visually "starts"
+       below the chrome. No floating gap, no vertical centring — a
+       proper iPadOS-style nav dock. ──────────────────────────────── */
     .pf-bottom-nav--rail {
-      bottom: auto;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
+      left: 0;
+      top: 0;
+      bottom: 0;
+      transform: none;
       max-width: none;
     }
 
@@ -256,16 +259,26 @@ const DRAG_THRESHOLD_PX = 4;
       -webkit-user-select: none;
       transition: box-shadow 200ms ease;
     }
-    /* Rail pill — vertical column of icon+label buttons. */
+    /* Rail pill — a full-height vertical column. Flush left edge
+       (square left corners), rounded right edge so it reads as a
+       docked panel. Icons start ~96px down to clear the chrome bar;
+       the More button is pushed to the bottom with margin-top:auto. */
     .pf-pill--rail {
       flex-direction: column;
-      align-items: stretch;
-      border-radius: 22px;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100%;
+      width: 64px;
+      border-radius: 0 16px 16px 0;
       overflow-x: visible;
-      gap: 4px;
-      padding: 8px 6px;
+      overflow-y: auto;
+      gap: 6px;
+      padding: 96px 8px 16px;
       touch-action: auto;
+      scrollbar-width: none;
     }
+    .pf-pill--rail::-webkit-scrollbar { display: none; }
+    .pf-pill--rail .pf-nav-btn--more { margin-top: auto; }
     .pf-pill::-webkit-scrollbar { display: none; }
     .pf-pill { scrollbar-width: none; -ms-overflow-style: none; }
     /* While dragging the pill clips horizontal scroll (so our gesture
