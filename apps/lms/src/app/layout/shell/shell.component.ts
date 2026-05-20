@@ -239,7 +239,10 @@ import { AuthService } from "../../core/auth/auth.service";
          and short, so it never reaches the chrome row. */
       @media (min-width: 641px) and (max-width: 1279px) {
         .shell-main {
-          padding-left: 76px;
+          /* Just enough to clear the ~60px rail at left:8px (ends ~68px)
+             with a 4px gap. The routed page adds its own small gutter
+             on top — see the iPad rule in frontdesk _base.scss. */
+          padding-left: 72px;
           padding-bottom: 16px;
         }
       }

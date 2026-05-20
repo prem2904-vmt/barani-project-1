@@ -16,6 +16,17 @@
   flex-shrink: 0;
 }
 
+/* iPad band — the shell already insets the page by ~72px to clear the
+   left nav rail, so the page's own Tailwind `lg:px-10` (40px) gutter
+   on the LEFT is redundant double-spacing. Trim the left gutter to a
+   slim 8px; the right keeps the full gutter. Reclaims ~32px of width. */
+@media (min-width: 641px) and (max-width: 1279px) {
+  .pf-page__header,
+  .pf-page__body {
+    padding-left: 8px !important;
+  }
+}
+
 /* Body lays out: KPI strip + stragglers + filter row + the 3-pane row.
  * Everything except the splitter row has natural height; the splitter
  * grows to fill the remaining height so it owns its own scroll surface
