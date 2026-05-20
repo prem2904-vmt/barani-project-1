@@ -443,115 +443,126 @@ interface DirectoryUser {
        ───────────────────────────────────────────────────────── */
     .pf-call-ring {
       position: fixed; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px;
+      display: flex;
     }
+    /* Immersive full-bleed background — a real "someone's calling you"
+       screen, not a card. Deep violet radial wash over near-black so
+       the avatar + buttons read against a calm field. */
     .pf-call-ring__backdrop {
       position: absolute; inset: 0;
-      background: rgba(8, 8, 20, 0.82);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
+      background:
+        radial-gradient(120% 70% at 50% 18%, rgba(124, 58, 237, 0.42) 0%, transparent 62%),
+        radial-gradient(90% 60% at 50% 100%, rgba(236, 72, 153, 0.20) 0%, transparent 60%),
+        #07050f;
     }
     .pf-call-ring__card {
       position: relative;
-      width: 100%; max-width: 380px;
-      padding: 36px 28px 28px;
-      border-radius: 24px;
-      background:
-        radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.22), transparent 65%),
-        var(--surface-elevated);
-      border: 1px solid var(--glass-border-hover);
-      box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      /* Avatar sits in the upper third; actions hug the bottom thumb
+         zone. safe-area insets keep clear of the notch + home bar. */
+      padding:
+        calc(env(safe-area-inset-top, 0px) + 72px)
+        24px
+        calc(env(safe-area-inset-bottom, 0px) + 40px);
       color: var(--text-primary); text-align: center;
-      animation: pf-call-ring-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      background: transparent; border: 0; border-radius: 0;
+      animation: pf-call-ring-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes pf-call-ring-in {
-      from { opacity: 0; transform: translateY(24px) scale(0.94); }
-      to   { opacity: 1; transform: none; }
+      from { opacity: 0; }
+      to   { opacity: 1; }
     }
     .pf-call-ring__eyebrow {
-      font-size: 10.5px; font-weight: 700;
-      letter-spacing: 0.22em; text-transform: uppercase;
-      color: var(--color-violet-300);
-      margin: 0 0 16px;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: rgba(196, 181, 253, 0.9);
+      margin: 0 0 44px;
     }
     .pf-call-ring__avatar-wrap {
       position: relative;
-      width: 112px; height: 112px;
-      margin: 0 auto 22px;
+      width: 132px; height: 132px;
+      margin: 0 auto 28px;
       display: flex; align-items: center; justify-content: center;
     }
     .pf-call-ring__pulse-ring {
       position: absolute; inset: 0;
       border-radius: 50%;
-      border: 2px solid var(--color-violet-500);
-      animation: pf-call-ring-pulse 1.8s ease-out infinite;
+      border: 2px solid rgba(167, 139, 250, 0.7);
+      animation: pf-call-ring-pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       opacity: 0;
     }
-    .pf-call-ring__pulse-ring--delay { animation-delay: 0.9s; }
+    .pf-call-ring__pulse-ring--delay { animation-delay: 1.2s; }
     @keyframes pf-call-ring-pulse {
-      0%   { transform: scale(0.85); opacity: 0.65; }
-      80%  { transform: scale(1.45); opacity: 0;    }
-      100% { transform: scale(1.45); opacity: 0;    }
+      0%   { transform: scale(0.8);  opacity: 0.7; }
+      70%  { transform: scale(1.6);  opacity: 0;   }
+      100% { transform: scale(1.6);  opacity: 0;   }
     }
     .pf-call-ring__avatar {
       position: relative;
-      width: 96px; height: 96px; border-radius: 50%;
+      width: 116px; height: 116px; border-radius: 50%;
       background: var(--gradient-primary);
       display: flex; align-items: center; justify-content: center;
-      font-size: 32px; font-weight: 700; color: #fff;
+      font-size: 40px; font-weight: 700; color: #fff;
       letter-spacing: 0.02em;
-      box-shadow: 0 0 32px rgba(139, 92, 246, 0.55), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+      box-shadow:
+        0 0 60px rgba(139, 92, 246, 0.55),
+        0 16px 40px rgba(0, 0, 0, 0.45),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.16);
     }
     .pf-call-ring__card--group .pf-call-ring__avatar {
       background: linear-gradient(135deg, #06b6d4, #6366f1);
-      box-shadow: 0 0 32px rgba(99, 102, 241, 0.5), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+      box-shadow:
+        0 0 60px rgba(99, 102, 241, 0.5),
+        0 16px 40px rgba(0, 0, 0, 0.45),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.16);
     }
     .pf-call-ring__card--group .pf-call-ring__pulse-ring {
-      border-color: #6366f1;
+      border-color: rgba(129, 140, 248, 0.7);
     }
     .pf-call-ring__name {
-      font-size: 24px; font-weight: 700; margin: 0;
-      letter-spacing: -0.015em;
-      color: var(--text-primary);
+      font-size: 30px; font-weight: 700; margin: 0;
+      letter-spacing: -0.02em;
+      color: #fff;
     }
     .pf-call-ring__source {
-      font-size: 13px; color: var(--text-tertiary);
-      margin: 6px 0 0;
+      font-size: 15px; color: rgba(226, 232, 240, 0.62);
+      margin: 8px 0 0;
     }
+    /* Spacer pushes the action row to the bottom of the screen. */
     .pf-call-ring__actions {
-      display: flex; gap: 56px; justify-content: center;
-      margin-top: 32px;
+      margin-top: auto;
+      display: flex; gap: 72px; justify-content: center;
     }
     .pf-call-ring__btn {
-      width: 68px; height: 68px;
+      width: 76px; height: 76px;
       display: inline-flex; align-items: center; justify-content: center;
       border-radius: 50%; border: none; cursor: pointer; color: #fff;
-      transition: transform 0.1s, box-shadow 0.2s, filter 0.2s;
+      transition: transform 0.12s, box-shadow 0.2s, filter 0.2s;
     }
     .pf-call-ring__btn:hover { filter: brightness(1.08); }
-    .pf-call-ring__btn:active { transform: scale(0.94); }
+    .pf-call-ring__btn:active { transform: scale(0.92); }
     .pf-call-ring__btn--reject {
       background: linear-gradient(135deg, #f43f5e, #e11d48);
-      box-shadow: 0 10px 28px rgba(244, 63, 94, 0.45);
+      box-shadow: 0 12px 32px rgba(244, 63, 94, 0.5);
     }
     .pf-call-ring__btn--accept {
-      background: linear-gradient(135deg, #10b981, #059669);
-      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.45);
-      animation: pf-call-accept-breathe 1.6s ease-in-out infinite;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 12px 32px rgba(34, 197, 94, 0.5);
+      animation: pf-call-accept-breathe 1.8s ease-in-out infinite;
     }
     @keyframes pf-call-accept-breathe {
-      0%, 100% { transform: scale(1);    box-shadow: 0 10px 28px rgba(16, 185, 129, 0.45); }
-      50%      { transform: scale(1.05); box-shadow: 0 14px 36px rgba(16, 185, 129, 0.6);  }
+      0%, 100% { transform: scale(1);    box-shadow: 0 12px 32px rgba(34, 197, 94, 0.5); }
+      50%      { transform: scale(1.06); box-shadow: 0 18px 44px rgba(34, 197, 94, 0.66); }
     }
     .pf-call-ring__labels {
-      display: flex; gap: 56px; justify-content: center;
-      margin-top: 12px;
-      font-size: 12px; font-weight: 600;
-      color: var(--text-tertiary);
+      display: flex; gap: 72px; justify-content: center;
+      margin-top: 14px;
+      font-size: 13px; font-weight: 500;
+      color: rgba(226, 232, 240, 0.7);
     }
     .pf-call-ring__labels span {
-      flex-basis: 68px; text-align: center;
+      flex-basis: 76px; text-align: center;
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -705,57 +716,54 @@ interface DirectoryUser {
        ───────────────────────────────────────────────────────── */
     .pf-call-screen {
       position: fixed; inset: 0; z-index: 90;
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px;
+      display: flex;
     }
+    /* Immersive full-bleed active-call background — same violet wash
+       family as the ringer so accepting a call feels continuous. */
     .pf-call-screen__backdrop {
       position: absolute; inset: 0;
-      background: rgba(8, 8, 20, 0.82);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background:
+        radial-gradient(110% 60% at 50% 0%, rgba(124, 58, 237, 0.34) 0%, transparent 60%),
+        radial-gradient(90% 55% at 50% 100%, rgba(236, 72, 153, 0.16) 0%, transparent 58%),
+        #07050f;
     }
     .pf-call-screen__card {
       position: relative;
-      width: 100%; max-width: 720px;
-      max-height: min(92vh, 760px);
-      padding: 14px 18px 18px;
-      border-radius: 22px;
-      background:
-        radial-gradient(circle at 80% -10%, rgba(139, 92, 246, 0.12), transparent 55%),
-        radial-gradient(circle at -10% 110%, rgba(236, 72, 153, 0.10), transparent 55%),
-        var(--surface-elevated);
-      border: 1px solid var(--glass-border-hover);
-      box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+      width: 100%; height: 100%;
+      padding:
+        calc(env(safe-area-inset-top, 0px) + 14px)
+        20px
+        calc(env(safe-area-inset-bottom, 0px) + 24px);
+      background: transparent; border: 0; border-radius: 0;
       color: var(--text-primary);
       display: flex; flex-direction: column; gap: 16px;
-      animation: pf-call-screen-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: pf-call-screen-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes pf-call-screen-in {
-      from { opacity: 0; transform: scale(0.96) translateY(8px); }
-      to   { opacity: 1; transform: none; }
+      from { opacity: 0; }
+      to   { opacity: 1; }
     }
 
     /* Header: icon-btn left (minimise) + status pill + chips + icon-btn right (close).
        Compact, glass surfaces, no borders that look like form fields. */
     .pf-call-screen__hdr {
       display: flex; align-items: center; gap: 10px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border-muted);
+      flex-shrink: 0;
     }
     .pf-call-screen__icon-btn {
-      width: 32px; height: 32px; border-radius: 9px;
+      width: 36px; height: 36px; border-radius: 10px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(226, 232, 240, 0.85);
       cursor: pointer;
       transition: background 0.12s, color 0.12s, border-color 0.12s;
       flex-shrink: 0;
     }
     .pf-call-screen__icon-btn:hover {
-      background: var(--glass-bg-hover);
-      color: var(--text-primary);
-      border-color: var(--glass-border-hover);
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
     }
     .pf-call-screen__hdr-info {
       flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -830,6 +838,11 @@ interface DirectoryUser {
       gap: 12px;
       padding: 4px 0;
       overflow-y: auto;
+      /* Fill the space between header and controls, and centre the
+         avatar cards vertically — gives the immersive call the
+         "people floating in the middle" look. */
+      flex: 1; min-height: 0;
+      align-content: center;
     }
     .pf-call-screen__participants[data-count='1'],
     .pf-call-screen__participants[data-count='2'] {
@@ -843,15 +856,18 @@ interface DirectoryUser {
     }
     .pf-call-screen__pcard {
       display: flex; flex-direction: column; align-items: center; gap: 10px;
-      padding: 20px 12px 16px;
-      background: var(--bg-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
+      padding: 22px 12px 18px;
+      /* Translucent glass tile against the immersive backdrop. */
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 18px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       transition: border-color 0.2s, background 0.2s;
     }
     .pf-call-screen__pcard--mine {
-      border-color: rgba(139, 92, 246, 0.35);
-      background: var(--bg-active);
+      border-color: rgba(167, 139, 250, 0.4);
+      background: rgba(124, 58, 237, 0.14);
     }
     .pf-call-screen__pcard--muted { opacity: 0.7; }
 
@@ -924,8 +940,8 @@ interface DirectoryUser {
        End button in danger red and the active state on Add. */
     .pf-call-screen__ctrls {
       display: flex; align-items: flex-start; justify-content: center; gap: 28px;
-      padding-top: 12px;
-      border-top: 1px solid var(--border-muted);
+      padding-top: 8px;
+      flex-shrink: 0;
     }
     @media (max-width: 520px) {
       .pf-call-screen__ctrls { gap: 18px; }
@@ -939,10 +955,14 @@ interface DirectoryUser {
     }
     .pf-call-screen__ctrl:hover { color: var(--text-primary); }
     .pf-call-screen__ctrl-circle {
-      width: 52px; height: 52px;
+      width: 60px; height: 60px;
       border-radius: 50%;
-      background: var(--glass-bg-hover);
-      border: 1px solid var(--glass-border-hover);
+      /* Glass discs against the immersive backdrop — translucent so the
+         violet wash shows through, like FaceTime / Meet controls. */
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       display: inline-flex; align-items: center; justify-content: center;
       transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.15s;
     }
@@ -978,13 +998,12 @@ interface DirectoryUser {
 
     /* ── In-call chat side panel ─────────────────────────────── */
     .pf-call-screen__card--with-chat {
-      max-width: 980px;
       display: grid;
       grid-template-areas:
         "hdr      hdr"
         "people   chat"
         "ctrls    ctrls";
-      grid-template-columns: 1fr 300px;
+      grid-template-columns: 1fr min(360px, 32vw);
       grid-template-rows: auto 1fr auto;
       gap: 12px;
     }
