@@ -1,0 +1,482 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pf-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-page__header {
+  flex-shrink: 0;
+}
+
+/* Body lays out: KPI strip + stragglers + filter row + the 3-pane row.
+ * Everything except the splitter row has natural height; the splitter
+ * grows to fill the remaining height so it owns its own scroll surface
+ * (per-pane, not page-level). */
+.pf-page__body {
+  flex: 1;
+  min-height: 0;
+  padding-top: 4px;
+  padding-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pf-page__body > pf-kpi-strip,
+.pf-page__body > .pf-stat-row,
+.pf-page__body > .pf-filter-row {
+  flex-shrink: 0;
+}
+/* The Tailwind `.grid grid-cols-1 items-start` wrapper around the
+ * splitter has to become a flex column too so `flex: 1` propagates
+ * down to the splitter row that owns the per-pane scroll.
+ * align-items: stretch overrides Tailwind's `items-start` so children
+ * fill the cross-axis (horizontal width). Without this, the inner
+ * `.min-w-0` would be content-sized and the panes would get squished
+ * to the left. */
+.pf-page__body > .grid {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+.pf-page__body > .grid > .min-w-0 {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pf-list-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ── Two-panel layout ───────────────────────────────────── */
+.pf-twopanel {
+  display: grid;
+}
+
+@media (max-width: 767px) {
+  .pf-twopanel {
+    grid-template-rows: auto 1fr;
+    gap: 12px;
+  }
+
+  .pf-twopanel__menu {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-muted);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .pf-twopanel__menu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pf-tp-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .pf-tp-item:hover {
+    color: var(--text-primary);
+  }
+
+  .pf-tp-item--on {
+    color: var(--text-primary);
+  }
+
+  .pf-tp-item--on::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: -1px;
+    height: 3px;
+    background: var(--gradient-primary);
+    border-radius: 3px;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.55);
+    animation: pf-tp-in 0.25s ease both;
+  }
+}
+
+@media (min-width: 768px) {
+  .pf-twopanel {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .pf-twopanel__menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 14px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    position: sticky;
+    top: 12px;
+  }
+
+  .pf-tp-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  }
+
+  .pf-tp-item:hover {
+    background: var(--glass-bg-hover);
+    color: var(--text-primary);
+  }
+
+  .pf-tp-item--on {
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+  }
+
+  .pf-tp-item--on:hover {
+    background: var(--gradient-primary);
+    color: #ffffff;
+  }
+}
+
+@keyframes pf-tp-in {
+  from {
+    transform: scaleX(0.4);
+    opacity: 0;
+  }
+
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.pf-tp-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-tp-item__count {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.pf-tp-item--on .pf-tp-item__count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.pf-tp-item__count[data-tone='rose'] {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.pf-tp-item__count[data-tone='amber'] {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.pf-tp-item__count[data-tone='emerald'] {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.pf-tp-item--on .pf-tp-item__count[data-tone] {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+/* ── Two-panel Appointments + In Progress layout ─────────── */
+/* Mobile/tablet: stacks single-column. Desktop: 3-column grid where the
+ * middle column IS the draggable handle. The left pane width is driven
+ * by the --appt-left CSS variable (set inline by the component, restored
+ * from localStorage). minmax keeps neither side from collapsing.        */
+.pf-appt-split {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+/* ── Accordion mode (< 1024px) ────────────────────────────────
+ * Tablet portrait + mobile collapse the 3-column grid into a vertical
+ * stack of collapsible tiles. The expanded pane fills the remaining
+ * height with internal scroll; the others show only their header bar.
+ * Page never scrolls — the accordion fits the viewport. */
+@media (max-width: 1023px) {
+  .pf-appt-split {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+  }
+  .pf-appt-split__pane {
+    flex: 0 0 auto;
+    min-height: 0;
+    transition: flex 0.2s ease;
+  }
+  .pf-appt-split__pane > .pf-appt-split__hdr {
+    cursor: pointer;
+    border-bottom-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .pf-appt-split__pane > .pf-appt-split__hdr:hover {
+    background: var(--bg-hover);
+  }
+  .pf-appt-split__pane--expanded > .pf-appt-split__hdr {
+    border-bottom-color: var(--glass-border);
+  }
+  /* Collapsed panes hide their content entirely — header bar only. */
+  .pf-appt-split__pane--collapsed > :not(.pf-appt-split__hdr),
+  .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) > :not(.pf-appt-split__hdr) {
+    display: none;
+  }
+  /* Expanded pane grows to fill remaining vertical space; cards list
+   * scrolls inside. Empty tile fills the area with content centered. */
+  .pf-appt-split__pane--expanded {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .pf-appt-split__pane--expanded > .pf-cards,
+  .pf-appt-split__pane--expanded > .pf-empty-tile,
+  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+    display: flex;
+  }
+  .pf-appt-split__pane--expanded > .pf-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 14px 14px;
+    margin: 0;
+  }
+  .pf-appt-split__pane--expanded > .pf-empty-tile {
+    margin: 12px 14px 14px;
+    flex: 1 1 auto;
+  }
+  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+    margin: 10px 14px 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Use FLEX (not grid) for the splitter row so we can drive the split
+   * by writing `flex-basis` directly on the first pane via an Angular
+   * [style] binding. This bypasses any CSS-variable-vs-grid interaction
+   * issues that make the resize feel "static" — the binding here is on
+   * a built-in CSS property that Angular has always reliably reflected
+   * to the DOM. */
+  .pf-appt-split {
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0;
+    /* Splitter fills the remaining body height so each pane owns its
+     * own scroll surface; the outer page does NOT scroll. */
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    /* Clear the base block's grid template so it doesn't fight flex. */
+    grid-template-columns: initial;
+  }
+  /* First visible pane: width set by an inline style binding. */
+  .pf-appt-split > .pf-appt-split__pane:first-of-type {
+    flex: 0 0 33%;
+    min-width: 0;
+  }
+  /* Second visible pane: takes the remainder. */
+  .pf-appt-split > .pf-appt-split__pane:not(:first-of-type) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Handle is a fixed-width flex item between the two panes. */
+  .pf-appt-split > .pf-appt-split__handle {
+    flex: 0 0 8px;
+  }
+
+  /* Mid-drag: kill text selection + show a column-resize cursor on
+   * the whole row so the user doesn't lose feedback if their mouse
+   * drifts off the 8px handle. */
+  .pf-appt-split--dragging {
+    cursor: col-resize;
+    user-select: none;
+  }
+}
+
+.pf-appt-split__pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  /* Each pane is its own scroll container: header stays put, the
+   * cards list flexes to the remaining height and scrolls. The card
+   * styling (border + bg + overflow:hidden) now lives on the base
+   * .pf-appt-split__pane rule. */
+  .pf-appt-split__pane {
+    min-height: 0;
+  }
+
+  .pf-appt-split__pane > .pf-appt-split__hdr,
+  .pf-appt-split__pane > .pf-bulk-bar,
+  .pf-appt-split__pane > .pf-empty {
+    flex-shrink: 0;
+  }
+
+  .pf-appt-split__pane > .pf-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 12px 12px;
+    margin: 0;
+  }
+
+  .pf-appt-split__pane > .pf-empty-tile {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* Single-pane mode (one column hidden) — the only visible pane fills
+   * the full row width. */
+  .pf-appt-split--has-hidden {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Handle ───────────────────────────────────────────────────────────
+   * The handle column is 8px wide and centred. A 1px divider spans the
+   * full height; on hover/drag it brightens and a "grip" pill appears
+   * to confirm the affordance. Hidden in mobile/tablet stacks.         */
+.pf-appt-split__handle {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .pf-appt-split__handle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: col-resize;
+    /* 8px column matches the grid track that holds this handle. The
+     * grip pill (5px wide) is always visible inside; the remaining
+     * 1.5px each side is the cursor hit-area gutter. */
+    width: 8px;
+    touch-action: none;
+    z-index: 2;
+  }
+
+  /* Visible grip pill — always rendered so the splitter is obvious now
+   * that the panes have their own borders (the 1px line approach got
+   * lost between the two pane borders). Brightens to violet on hover
+   * and during a drag. */
+  .pf-appt-split__grip {
+    position: relative;
+    width: 5px;
+    height: 44px;
+    border-radius: 9999px;
+    background: var(--glass-border);
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease;
+  }
+
+  .pf-appt-split__handle:hover .pf-appt-split__grip,
+  .pf-appt-split__handle:focus-visible .pf-appt-split__grip,
+  .pf-appt-split--dragging .pf-appt-split__grip {
+    opacity: 1;
+    height: 56px;
+    background: linear-gradient(180deg, #a855f7, #ec4899);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18);
+  }
+
+  .pf-appt-split__handle:focus-visible {
+    outline: none;
+  }
+}
+
+.pf-appt-split__hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: default;
+  user-select: none;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* Tabbed header variant — used by the merged In progress / Completed
+ * pane. The header row holds the tab cluster on the left and the hide
+ * button + chevron on the right. Slightly tighter padding than the
+ * single-title header so the tabs read at the same visual weight. */
+.pf-appt-split__hdr--tabs {
+  padding: 6px 10px;
+}
+

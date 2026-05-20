@@ -643,6 +643,10 @@ export class WebrtcService implements OnDestroy {
     this.teardown('idle');
   }
 
+  reset(): void {
+    this.teardown('idle');
+  }
+
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
     this.teardown('idle');

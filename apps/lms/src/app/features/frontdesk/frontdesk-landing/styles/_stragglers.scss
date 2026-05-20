@@ -1,0 +1,145 @@
+/* ── Stragglers banner ──────────────────────────────────── */
+.pf-stragglers {
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(239, 68, 68, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  overflow: hidden;
+}
+
+.pf-stragglers__hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.pf-stragglers__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+  flex-shrink: 0;
+}
+
+.pf-stragglers__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-stragglers__sub {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pf-stragglers__chev {
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+}
+
+.pf-stragglers--open .pf-stragglers__chev {
+  transform: rotate(180deg);
+}
+
+.pf-stragglers__x {
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pf-stragglers__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
+  padding-top: 8px;
+}
+
+.pf-stragglers__item {
+  display: grid;
+  grid-template-columns: 110px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 12.5px;
+}
+
+@media (max-width: 767px) {
+  .pf-stragglers__item {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .pf-stragglers__meta {
+    display: none;
+  }
+}
+
+.pf-stragglers__kind {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  text-align: center;
+}
+
+.pf-stragglers__item[data-kind='missed'] .pf-stragglers__kind {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.pf-stragglers__item[data-kind='uncollected'] .pf-stragglers__kind {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+
+.pf-stragglers__item[data-kind='unpaid'] .pf-stragglers__kind {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+}
+
+.pf-stragglers__title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.pf-stragglers__meta {
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.pf-stragglers__cta {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pf-stragglers__cta:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+

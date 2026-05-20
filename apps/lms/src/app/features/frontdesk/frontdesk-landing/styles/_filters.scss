@@ -1,0 +1,469 @@
+/* ── Filter row (search + date pills) ───────────────────── */
+.pf-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pf-search-wrap {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  /* Patient-search component owns the rest of the row width; the Advanced
+     button hugs the right edge but stays in normal flow so the wrap can
+     shrink on narrow viewports. */
+  >pf-patient-search {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Icon-only Advanced-search trigger — slotted into the patient-search
+ * field via [trailing]. 32×32 hit area, transparent so it blends with
+ * the field, brightens on hover. */
+.pf-adv-search-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  /* `--text-muted` was too faint — particularly in light mode where
+     the icon barely reads. Bumped to --text-secondary so reception
+     spots it without hovering. */
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-adv-search-icon:hover {
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+}
+.pf-adv-search-icon:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.7);
+  outline-offset: 2px;
+}
+
+.pf-date-pills {
+  /* Outer container height matched to the search bar (60px) so the row
+   * reads as a single horizontal stripe rather than a tall search next
+   * to a tiny pill cluster. */
+  display: inline-flex;
+  align-items: center;
+  height: 60px;
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  gap: 2px;
+  flex-shrink: 0;
+}
+/* On phones the pill cluster becomes a horizontal scroller — the
+   right-most "Custom" pill + its inline date inputs would otherwise
+   shove the cluster off-screen. Auto-height because the inline
+   Custom inputs may wrap below the pills (see .pf-date-custom). */
+@media (max-width: 640px) {
+  /* Stack the search bar and date pills vertically on phones.
+     Otherwise .pf-search-wrap (display: flex, align-items: center)
+     keeps the patient-search and the 60px-tall date-pills row side-
+     by-side, and the date pills (flex-shrink: 0) refuse to give
+     way — overlapping the search bar at 375px width. */
+  .pf-search-wrap {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+  .pf-search-wrap > pf-patient-search {
+    width: 100% !important;
+  }
+
+  .pf-date-pills {
+    height: auto;
+    flex-wrap: wrap;
+    border-radius: 14px;
+    width: 100%;
+    /* `overflow: hidden` (not overflow-x: auto) so the active pill's
+       box-shadow halo + rounded corners get clipped to the container's
+       rounded border. Without this, the gradient's blur shadow bleeds
+       out of the container's left edge. */
+    overflow: hidden;
+    padding: 6px;
+  }
+  .pf-date-pill {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 12px;
+    /* Match the container's inner radius so the active pill nestles
+       inside instead of clipping at its own larger 9999px curve. */
+    border-radius: 10px;
+  }
+  /* Trim the box-shadow halo on mobile so the active pill doesn't
+     overflow the container at all. */
+  .pf-date-pill--on {
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25) !important;
+  }
+}
+
+.pf-date-pill {
+  height: 100%;
+  padding: 0 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.pf-date-pill:hover,
+.pf-date-pill:focus-visible {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-date-pill--on {
+  background: var(--gradient-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+}
+
+.pf-date-pill--custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Inline custom-date range — shows next to the date pills when the
+   user selects the "Custom" pill. Two native date inputs + a small
+   clear button. */
+.pf-date-custom {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 4px;
+  padding: 4px 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  /* Phones — let the chip span the full row beneath the pills so
+     the two date inputs stay readable instead of being squeezed. */
+  .pf-date-custom {
+    display: flex;
+    width: 100%;
+    margin-left: 0; margin-top: 6px;
+    border-radius: 12px;
+  }
+}
+.pf-date-custom__inp {
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  padding: 2px 4px;
+  outline: none;
+  width: 130px;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .pf-date-custom__inp { flex: 1; width: auto; }
+}
+.pf-date-custom__inp::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+.pf-date-custom__sep { color: var(--text-muted); font-size: 12px; }
+.pf-date-custom__clear {
+  background: transparent; border: 0;
+  width: 20px; height: 20px;
+  border-radius: 9999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pf-date-custom__clear:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+/* Calendar popover */
+.pf-calbd {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+  background: transparent;
+}
+
+.pf-cal {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 286px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  animation: pf-cal-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes pf-cal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .pf-cal {
+    right: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+  }
+}
+
+.pf-cal__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.pf-cal__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.pf-cal__nav {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pf-cal__nav:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-cal__dows {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.pf-cal__dows span {
+  text-align: center;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.pf-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.pf-cal__cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.pf-cal__cell:hover:not(:disabled) {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-cal__cell:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.pf-cal__cell--out {
+  color: var(--text-muted);
+}
+
+.pf-cal__cell--today {
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #c4b5fd;
+}
+
+.pf-cal__cell--in {
+  background: rgba(168, 85, 247, 0.16);
+  color: var(--text-primary);
+}
+
+.pf-cal__cell--start,
+.pf-cal__cell--end {
+  background: var(--gradient-primary) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 6px 14px rgba(124, 58, 237, 0.45);
+}
+
+.pf-cal__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-muted);
+}
+
+.pf-cal__hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-cal__btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.pf-cal__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pf-cal__btn--ghost {
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  border-color: var(--glass-border);
+}
+
+.pf-cal__btn--ghost:hover:not(:disabled) {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-cal__btn--apply {
+  background: var(--gradient-primary);
+  color: #ffffff;
+}
+
+.pf-cal__btn--apply:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
+}
+
+/* =============================================================
+   HEADER DATE FILTER PILLS STYLE
+   ============================================================= */
+.pf-hdr-date-pills {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-secondary);
+}
+
+.pf-hdr-date-pill {
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-hdr-date-pill:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pf-hdr-date-pill--on {
+  background: var(--gradient-primary);
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.pf-hdr-date-pill--has-value {
+  border: 1px dashed var(--color-violet-400);
+}
+
+.pf-hdr-date-pill__clear {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 2px;
+  margin-right: 2px;
+  transition: background 0.2s;
+}
+
+.pf-hdr-date-pill__clear:hover {
+  background: var(--color-danger);
+  color: #fff;
+}

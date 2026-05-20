@@ -1,0 +1,128 @@
+<section class="pf-auth" [class.pf-auth--native]="isNative()">
+  <!-- Animated mesh background — drops to a single softer blob on
+       Capacitor so the GPU on older iPhones isn't churning on three
+       large blurred gradients during keyboard animation. -->
+  <div class="pf-auth__mesh" aria-hidden="true">
+    <span class="pf-auth__blob pf-auth__blob--1"></span>
+    @if (!isNative()) {
+      <span class="pf-auth__blob pf-auth__blob--2"></span>
+      <span class="pf-auth__blob pf-auth__blob--3"></span>
+    }
+  </div>
+
+  <!-- The card stack: brand strip on top, form below. Single column
+       on mobile/native — the marketing "hero panel" is desktop-only
+       so the form is above the fold on a phone. -->
+  <main class="pf-auth__stack">
+    <header class="pf-auth__brand">
+      <pf-logo-mark size="lg" variant="glyph" [pulse]="true" ariaLabel="Prefrontal"></pf-logo-mark>
+      <div class="pf-auth__brand-text">
+        <p class="pf-auth__wordmark">Prefrontal</p>
+        <p class="pf-auth__tagline">Lab software that thinks ahead.</p>
+      </div>
+    </header>
+
+    <form class="pf-auth__form" (ngSubmit)="submit()" novalidate
+          [class.pf-auth__form--busy]="busy()">
+      <h1 class="pf-auth__title">Sign in</h1>
+
+      <label class="pf-auth__field">
+        <span class="pf-auth__field-label">Email</span>
+        <span class="pf-auth__field-row">
+          <input class="pf-auth__field-input"
+                 type="email"
+                 inputmode="email"
+                 autocomplete="username"
+                 autocapitalize="off"
+                 autocorrect="off"
+                 spellcheck="false"
+                 enterkeyhint="next"
+                 required
+                 [ngModel]="email()"
+                 (ngModelChange)="email.set($event); error.set(null)"
+                 name="email"
+                 placeholder="you@lab.example" />
+        </span>
+      </label>
+
+      <label class="pf-auth__field">
+        <span class="pf-auth__field-label">Password</span>
+        <span class="pf-auth__field-row">
+          <input class="pf-auth__field-input"
+                 [type]="showPassword() ? 'text' : 'password'"
+                 autocomplete="current-password"
+                 autocapitalize="off"
+                 autocorrect="off"
+                 spellcheck="false"
+                 enterkeyhint="go"
+                 required
+                 [ngModel]="password()"
+                 (ngModelChange)="password.set($event); error.set(null)"
+                 name="password"
+                 placeholder="••••••••" />
+          <button type="button" class="pf-auth__eye"
+                  (click)="showPassword.set(!showPassword())"
+                  [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+            @if (showPassword()) {
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3l18 18M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6"/>
+                <path d="M9.9 5.1A11 11 0 0 1 12 5c5 0 9 4 10 7a13 13 0 0 1-2.4 3.4M6.4 6.4A13 13 0 0 0 2 12c1 3 5 7 10 7a11 11 0 0 0 4-.7"/>
+              </svg>
+            } @else {
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            }
+          </button>
+        </span>
+      </label>
+
+      @if (error()) {
+        <p class="pf-auth__error" role="alert">
+          <span class="pf-auth__error-icon" aria-hidden="true">!</span>
+          <span class="pf-auth__error-msg">{{ error() }}</span>
+        </p>
+      }
+
+      <!-- Belt-and-braces: type="submit" + (click) so the button
+           works whether the form's ngSubmit fires or not. On iOS
+           WKWebView with certain Angular zone configurations,
+           ngSubmit can silently no-op; the (click) handler is the
+           fallback. Both call the same method. -->
+      <button type="submit"
+              class="pf-auth__submit"
+              (click)="submit($event)"
+              [disabled]="busy()">
+        @if (busy()) {
+          <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
+          <span>Signing in…</span>
+        } @else {
+          <span>Sign in</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+          </svg>
+        }
+      </button>
+
+      <p class="pf-auth__hint">
+        Locked out? Ask your admin to reset your password.
+      </p>
+
+      @if (isNative()) {
+        <!-- Tiny diagnostic strip — visible only on native builds so
+             we can see at a glance which backend the WebView is
+             hitting. If sign-in fails it's usually CORS or the wrong
+             host; this makes that obvious. -->
+        <p class="pf-auth__env">
+          <span class="pf-auth__env-key">api</span>
+          <span class="pf-auth__env-val">{{ apiHost() }}</span>
+        </p>
+      }
+    </form>
+
+    <footer class="pf-auth__foot">
+      <span>Prefrontal LMS · v0.1.0</span>
+    </footer>
+  </main>
+</section>

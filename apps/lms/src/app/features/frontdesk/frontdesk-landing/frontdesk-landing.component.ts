@@ -32,12 +32,13 @@ interface DispatchPackage {
   orderCount: number;
   orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
 }
+import flatpickr from 'flatpickr';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advanced-patient-search.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
-type DateRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
+type DateRange = 'today' | 'yesterday' | 'tomorrow' | '7d' | 'month' | 'custom';
 
 /** Mirrors the AdvancedFilters shape inside the modal — kept in this file
  *  so we don't pull a heavy import just for typing. */
@@ -102,10 +103,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private paidSkipped = false;
   private payLaterSkipped = false;
 
-  readonly dateOptions: Array<{ id: DateRange; label: string }> = [
-    { id: 'today', label: 'Today' },
-    { id: '7d', label: 'Last 7 days' },
-    { id: 'custom', label: 'Custom' },
+  readonly apptDateOptions = [
+    { id: 'yesterday' as DateRange, label: 'Yesterday' },
+    { id: 'today' as DateRange, label: 'Today' },
+    { id: 'tomorrow' as DateRange, label: 'Tomorrow' },
+    { id: 'custom' as DateRange, label: 'Custom' },
+  ];
+
+  readonly workDateOptions = [
+    { id: 'yesterday' as DateRange, label: 'Yesterday' },
+    { id: 'today' as DateRange, label: 'Today' },
+    { id: 'custom' as DateRange, label: 'Custom' },
   ];
 
   readonly dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -118,22 +126,26 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { id: '4', name: 'Kavita Reddy', role: 'Lab technician', status: 'on_break' },
   ];
 
-  private readonly _dateRange = signal<DateRange>('today');
-  readonly dateRange = this._dateRange.asReadonly();
+  protected readonly apptCustomBtn = viewChild<ElementRef<HTMLButtonElement>>('apptCustomBtn');
+  protected readonly workCustomBtn = viewChild<ElementRef<HTMLButtonElement>>('workCustomBtn');
 
-  // Custom date range — stored as ISO yyyy-MM-dd strings so signal equality
-  // works with primitives. _customEnd is null until the user picks a second
-  // day (single-day picks set start, leave end null and we treat end=start).
-  private readonly _customStart = signal<string | null>(null);
-  private readonly _customEnd = signal<string | null>(null);
-  readonly customStart = this._customStart.asReadonly();
-  readonly customEnd = this._customEnd.asReadonly();
-  // Calendar popover open state + the month currently being viewed (1st of
-  // month, so day-grid math doesn't drift across DST boundaries).
-  private readonly _calendarOpen = signal(false);
-  readonly calendarOpen = this._calendarOpen.asReadonly();
-  private readonly _calMonth = signal<Date>(this.firstOfThisMonth());
-  readonly calMonth = this._calMonth.asReadonly();
+  private readonly _apptDateRange = signal<DateRange>('today');
+  readonly apptDateRange = this._apptDateRange.asReadonly();
+
+  private readonly _apptCustomStart = signal<string | null>(null);
+  private readonly _apptCustomEnd = signal<string | null>(null);
+  readonly apptCustomStart = this._apptCustomStart.asReadonly();
+  readonly apptCustomEnd = this._apptCustomEnd.asReadonly();
+
+  private readonly _workDateRange = signal<DateRange>('today');
+  readonly workDateRange = this._workDateRange.asReadonly();
+
+  private readonly _workCustomStart = signal<string | null>(null);
+  private readonly _workCustomEnd = signal<string | null>(null);
+  readonly workCustomStart = this._workCustomStart.asReadonly();
+  readonly workCustomEnd = this._workCustomEnd.asReadonly();
+
+
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   readonly selectedIds = this._selectedIds.asReadonly();
@@ -258,44 +270,65 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
 
   // Date helpers ---------------------------------------------
-  private inRange(d: Date | string | undefined): boolean {
+  private getRangeBounds(r: DateRange, customStart: string | null, customEnd: string | null): { start: number; end: number; isToday: boolean } {
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    let start = now.getTime();
+    let end = now.getTime() + 86_400_000;
+
+    switch (r) {
+      case 'yesterday':
+        start = now.getTime() - 86_400_000;
+        end = now.getTime();
+        break;
+      case 'today':
+        start = now.getTime();
+        end = now.getTime() + 86_400_000;
+        break;
+      case 'tomorrow':
+        start = now.getTime() + 86_400_000;
+        end = now.getTime() + 2 * 86_400_000;
+        break;
+      case '7d':
+        start = now.getTime() - 7 * 86_400_000;
+        end = now.getTime() + 86_400_000;
+        break;
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        end = now.getTime() + 86_400_000;
+        break;
+      case 'custom':
+        if (customStart) {
+          start = this.dayStart(customStart).getTime();
+          const e = customEnd ?? customStart;
+          end = this.dayStart(e).getTime() + 86_400_000;
+        } else {
+          start = now.getTime();
+          end = now.getTime() + 86_400_000;
+        }
+        break;
+    }
+
+    const isToday = r === 'today' && start === now.getTime() && end === now.getTime() + 86_400_000;
+    return { start, end, isToday };
+  }
+
+  readonly apptBounds = computed(() => this.getRangeBounds(this._apptDateRange(), this._apptCustomStart(), this._apptCustomEnd()));
+  readonly workBounds = computed(() => this.getRangeBounds(this._workDateRange(), this._workCustomStart(), this._workCustomEnd()));
+
+  private inApptRange(d: Date | string | undefined): boolean {
     if (!d) return false;
     const when = new Date(d).getTime();
-    const start = this.rangeStart();
-    const end = this.rangeEnd();
-    return when >= start && when < end;
+    const bounds = this.apptBounds();
+    return when >= bounds.start && when < bounds.end;
   }
-  private rangeStart(): number {
-    const r = this._dateRange();
-    const now = new Date(); now.setHours(0, 0, 0, 0);
-    switch (r) {
-      case 'today': return now.getTime();
-      case 'yesterday': return now.getTime() - 86_400_000;
-      case '7d': return now.getTime() - 7 * 86_400_000;
-      case 'month': return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      case 'custom': {
-        const s = this._customStart();
-        return s ? this.dayStart(s).getTime() : now.getTime();
-      }
-      default: return now.getTime();
-    }
+
+  private inWorkRange(d: Date | string | undefined): boolean {
+    if (!d) return false;
+    const when = new Date(d).getTime();
+    const bounds = this.workBounds();
+    return when >= bounds.start && when < bounds.end;
   }
-  private rangeEnd(): number {
-    const r = this._dateRange();
-    const now = new Date(); now.setHours(0, 0, 0, 0);
-    if (r === 'yesterday') return now.getTime();
-    if (r === 'custom') {
-      // End is exclusive; use end-of-day + 1ms so the picked day is included.
-      const e = this._customEnd() ?? this._customStart();
-      if (e) return this.dayStart(e).getTime() + 86_400_000;
-      return now.getTime() + 86_400_000;
-    }
-    // For 'today' / '7d' / 'month', include the rest of the current day —
-    // future appointments today must show in the queue, not be filtered out
-    // because they happen after Date.now(). End is the start of tomorrow
-    // (exclusive bound).
-    return now.getTime() + 86_400_000;
-  }
+
   private dayStart(iso: string): Date {
     const d = new Date(iso); d.setHours(0, 0, 0, 0); return d;
   }
@@ -313,7 +346,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // visible on the calendar route, just not on the operational landing.
   readonly visibleAppointments = computed(() =>
     this._appointments().filter(a =>
-      this.inRange(a.appointmentDate)
+      this.inApptRange(a.appointmentDate)
       && a.status !== 'checked_in'
       && a.status !== 'cancelled'
     )
@@ -323,7 +356,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  the FD board has two clear panes. */
   readonly visibleOrders = computed(() =>
     this._orders().filter(o =>
-      this.inRange(o.createdAt)
+      this.inWorkRange(o.createdAt)
       && o.status !== 'completed'
       && o.status !== 'validated'
       && o.status !== 'partially_validated'
@@ -337,7 +370,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  glance which patients are ready to hand over. */
   readonly completedOrders = computed(() =>
     this._orders().filter(o =>
-      this.inRange(o.createdAt) && (
+      this.inWorkRange(o.createdAt) && (
         o.status === 'validated' ||
         o.status === 'partially_validated' ||
         o.status === 'delivered' ||
@@ -491,41 +524,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
   readonly topTest = computed(() => this.topTests()[0] ?? null);
 
-  // Calendar grid: 6 weeks × 7 days, anchored on the visible month. Each
-  // cell is fully self-describing so the template stays declarative.
-  readonly calCells = computed<Array<{
-    iso: string; day: number; outside: boolean; today: boolean;
-    isStart: boolean; isEnd: boolean; inRange: boolean; future: boolean;
-  }>>(() => {
-    const month = this._calMonth();
-    const year = month.getFullYear();
-    const m = month.getMonth();
-    const todayIso = this.toIsoDay(new Date());
-    const todayMs = this.dayStart(todayIso).getTime();
-    const start = this._customStart();
-    const end = this._customEnd() ?? start;
-    // Grid origin: the Sunday on/before the 1st of the month.
-    const first = new Date(year, m, 1);
-    const origin = new Date(year, m, 1 - first.getDay());
-    const cells = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() + i);
-      const iso = this.toIsoDay(d);
-      const ms = d.getTime();
-      cells.push({
-        iso,
-        day: d.getDate(),
-        outside: d.getMonth() !== m,
-        today: iso === todayIso,
-        isStart: !!start && iso === start,
-        isEnd: !!end && !!start && end !== start && iso === end,
-        inRange: !!start && !!end && ms >= this.dayStart(start).getTime()
-          && ms <= this.dayStart(end).getTime(),
-        future: ms > todayMs,
-      });
-    }
-    return cells;
-  });
+
 
   // Live polling: 30s tick keeps Today's Orders fresh so reception sees
   // status changes (collected → dispatched → received → validated) without
@@ -535,6 +534,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
 
+  private apptFlatpickrInstance: any;
+  private workFlatpickrInstance: any;
+
   constructor() {
     // Restore saved 3-pane split positions (Appointments | In Progress | Completed).
     // Done in the constructor so the first render uses the persisted ratio
@@ -542,6 +544,20 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const restored = this.readApptSplitFromStorage();
     this._apptSplitPctA.set(restored.a);
     this._apptSplitPctB.set(restored.b);
+
+    effect(() => {
+      const apptBtn = this.apptCustomBtn()?.nativeElement;
+      if (apptBtn) {
+        this.initApptFlatpickr(apptBtn);
+      }
+    });
+
+    effect(() => {
+      const workBtn = this.workCustomBtn()?.nativeElement;
+      if (workBtn) {
+        this.initWorkFlatpickr(workBtn);
+      }
+    });
 
     // One-shot toast + tab-title pulse when new orders flip to
     // "Ready for delivery" (status 'validated' / 'partially_validated').
@@ -630,26 +646,36 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
+    if (this.apptFlatpickrInstance) this.apptFlatpickrInstance.destroy();
+    if (this.workFlatpickrInstance) this.workFlatpickrInstance.destroy();
   }
 
   refresh() {
-    // Date-range scoped fetch: fall back to /today when the active
-    // range is exactly today (keeps the optimised endpoint + ETag
-    // path), otherwise hit the new /range endpoint with from/to.
-    const r = this.dateRangeBounds();
-    if (r.isToday) {
+    // Fetch Appointments based on apptBounds
+    const apptB = this.apptBounds();
+    if (apptB.isToday) {
       this.api.get<Appointment[]>('/api/appointments/today').subscribe({
         next: l => this._appointments.set(l ?? []),
       });
-      this.fetchOrdersWithEtag();
     } else {
       const params = new URLSearchParams({
-        from: new Date(r.start).toISOString(),
-        to:   new Date(r.end).toISOString()
+        from: new Date(apptB.start).toISOString(),
+        to:   new Date(apptB.end).toISOString()
       });
       this.api.get<Appointment[]>(`/api/appointments?${params}`).subscribe({
         next: l => this._appointments.set(l ?? []),
         error: () => this._appointments.set([])
+      });
+    }
+
+    // Fetch Orders based on workBounds
+    const workB = this.workBounds();
+    if (workB.isToday) {
+      this.fetchOrdersWithEtag();
+    } else {
+      const params = new URLSearchParams({
+        from: new Date(workB.start).toISOString(),
+        to:   new Date(workB.end).toISOString()
       });
       this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
         next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
@@ -660,23 +686,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._ordersEtag = null;
       this._ordersSig = null;
     }
+
+    // Fetch Bills (always global)
     this.api.get<Bill[]>('/api/billing/').subscribe({
       next: l => this._bills.set(l ?? []),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
-  }
-
-  /** Read the active date filter into start/end timestamps + a hint
-   *  for whether it's the simple "today" case (so we can keep the
-   *  optimised /today + ETag path for the most common selection). */
-  private dateRangeBounds(): { start: number; end: number; isToday: boolean } {
-    const start = this.rangeStart();
-    const end = this.rangeEnd();
-    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-    const isToday = this._dateRange() === 'today'
-      && start === today0.getTime()
-      && end === today0.getTime() + 86_400_000;
-    return { start, end, isToday };
   }
 
   private async fetchOrdersWithEtag() {
@@ -1287,122 +1302,123 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── UI state ──────────────────────────────────────────────
-  setDateRange(d: DateRange) {
-    // Selecting a non-custom pill closes the calendar and clears any draft
-    // custom range so re-opening starts fresh.
-    if (d !== 'custom') {
-      this._calendarOpen.set(false);
-      this._customStart.set(null);
-      this._customEnd.set(null);
-    }
-    this._dateRange.set(d);
-    // Pulling a wider window means the FE needs MORE data than the
-    // /today endpoints return — kick off a fresh fetch through the
-    // range-aware refresh path so the panes actually populate.
-    this.refresh();
-  }
-
-  // ── Custom date range / calendar ─────────────────────────
   private firstOfThisMonth(): Date {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1);
   }
-  toggleCalendar() {
-    this._calendarOpen.update(v => !v);
-    if (this._calendarOpen()) {
-      // Anchor view to whichever month already holds the active selection
-      // (or this month otherwise) so the user lands on familiar ground.
-      const anchor = this._customStart() ?? this.toIsoDay(new Date());
-      this._calMonth.set(this.firstOfMonth(new Date(anchor)));
+
+  setApptDateRange(d: DateRange) {
+    if (d !== 'custom') {
+      this._apptCustomStart.set(null);
+      this._apptCustomEnd.set(null);
     }
-  }
-  closeCalendar() { this._calendarOpen.set(false); }
-  prevMonth() { this._calMonth.update(d => new Date(d.getFullYear(), d.getMonth() - 1, 1)); }
-  nextMonth() {
-    // Don't let the user page past the current month — future-dated visits
-    // aren't a thing in this product.
-    const n = new Date();
-    this._calMonth.update(d => {
-      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const cap = new Date(n.getFullYear(), n.getMonth(), 1);
-      return next > cap ? d : next;
-    });
-  }
-  pickDay(iso: string) {
-    const start = this._customStart();
-    const end = this._customEnd();
-    if (!start || (start && end)) {
-      // Fresh pick (or restarting after a complete range) — set start, clear end.
-      this._customStart.set(iso);
-      this._customEnd.set(null);
-      return;
-    }
-    // We already have a start, no end yet — the second pick closes the range.
-    if (iso < start) {
-      // Picked an earlier day; swap so start always precedes end.
-      this._customEnd.set(start);
-      this._customStart.set(iso);
-    } else if (iso === start) {
-      // Same day — keep as a single-day range, no end needed.
-      this._customEnd.set(null);
-    } else {
-      this._customEnd.set(iso);
-    }
-  }
-  applyCustom() {
-    if (!this._customStart()) return;
-    this._dateRange.set('custom');
-    this._calendarOpen.set(false);
+    this._apptDateRange.set(d);
     this.refresh();
   }
 
-  /** Inline-date-input handlers (used by the Custom pill's date pair).
-   *  Each commit also kicks a refetch so the queue lists update. Empty
-   *  input clears the bound. */
-  pickCustomStart(iso: string) {
-    const v = (iso ?? '').trim();
-    this._customStart.set(v.length > 0 ? v : null);
-    // Reset end if it's now before the new start so we don't end up
-    // with an inverted range.
-    const e = this._customEnd();
-    if (v && e && e < v) this._customEnd.set(null);
-    if (this._customStart()) this.refresh();
-  }
-  pickCustomEnd(iso: string) {
-    const v = (iso ?? '').trim();
-    this._customEnd.set(v.length > 0 ? v : null);
-    if (this._customStart()) this.refresh();
-  }
-  clearCustom() {
-    this._customStart.set(null);
-    this._customEnd.set(null);
-    if (this._dateRange() === 'custom') this._dateRange.set('today');
+  clearApptCustom() {
+    this._apptCustomStart.set(null);
+    this._apptCustomEnd.set(null);
+    if (this._apptDateRange() === 'custom') {
+      this._apptDateRange.set('today');
+    }
     this.refresh();
   }
-  /** Pill label for the Custom button — shows the active range when set. */
-  customRangeLabel(): string {
-    const s = this._customStart();
-    const e = this._customEnd();
+
+  apptCustomRangeLabel(): string {
+    const s = this._apptCustomStart();
+    const e = this._apptCustomEnd();
     if (!s) return 'Custom';
-    const sDate = new Date(s);
+    const sDate = new Date(s!);
     if (!e || e === s) {
       return sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
-    const eDate = new Date(e);
+    const eDate = new Date(e!);
     const sLabel = sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     const eLabel = eDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     return `${sLabel} – ${eLabel}`;
   }
-  /** Footer hint inside the popover — guides the click-once / click-twice flow. */
-  customRangeHint(): string {
-    const s = this._customStart();
-    const e = this._customEnd();
-    if (!s) return 'Pick a start day';
-    if (s && !e) return 'Pick an end day, or Apply for just this day';
-    return 'Range selected';
+
+  setWorkDateRange(d: DateRange) {
+    if (d !== 'custom') {
+      this._workCustomStart.set(null);
+      this._workCustomEnd.set(null);
+    }
+    this._workDateRange.set(d);
+    this.refresh();
   }
-  private firstOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
+
+  clearWorkCustom() {
+    this._workCustomStart.set(null);
+    this._workCustomEnd.set(null);
+    if (this._workDateRange() === 'custom') {
+      this._workDateRange.set('today');
+    }
+    this.refresh();
+  }
+
+  workCustomRangeLabel(): string {
+    const s = this._workCustomStart();
+    const e = this._workCustomEnd();
+    if (!s) return 'Custom';
+    const sDate = new Date(s!);
+    if (!e || e === s) {
+      return sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+    const eDate = new Date(e!);
+    const sLabel = sDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const eLabel = eDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${sLabel} – ${eLabel}`;
+  }
+
+  private initApptFlatpickr(element: HTMLButtonElement) {
+    if (this.apptFlatpickrInstance) return;
+    this.apptFlatpickrInstance = flatpickr(element, {
+      mode: 'range',
+      dateFormat: 'Y-m-d',
+      onClose: (selectedDates) => {
+        if (selectedDates.length === 2) {
+          const start = this.toIsoDay(selectedDates[0]);
+          const end = this.toIsoDay(selectedDates[1]);
+          this._apptCustomStart.set(start);
+          this._apptCustomEnd.set(end);
+          this._apptDateRange.set('custom');
+          this.refresh();
+        } else if (selectedDates.length === 1) {
+          const start = this.toIsoDay(selectedDates[0]);
+          this._apptCustomStart.set(start);
+          this._apptCustomEnd.set(start);
+          this._apptDateRange.set('custom');
+          this.refresh();
+        }
+      }
+    });
+  }
+
+  private initWorkFlatpickr(element: HTMLButtonElement) {
+    if (this.workFlatpickrInstance) return;
+    this.workFlatpickrInstance = flatpickr(element, {
+      mode: 'range',
+      dateFormat: 'Y-m-d',
+      maxDate: 'today',
+      onClose: (selectedDates) => {
+        if (selectedDates.length === 2) {
+          const start = this.toIsoDay(selectedDates[0]);
+          const end = this.toIsoDay(selectedDates[1]);
+          this._workCustomStart.set(start);
+          this._workCustomEnd.set(end);
+          this._workDateRange.set('custom');
+          this.refresh();
+        } else if (selectedDates.length === 1) {
+          const start = this.toIsoDay(selectedDates[0]);
+          this._workCustomStart.set(start);
+          this._workCustomEnd.set(start);
+          this._workDateRange.set('custom');
+          this.refresh();
+        }
+      }
+    });
+  }
   toggleStragglers() { this._stragglersOpen.update(v => !v); }
   dismissStragglers() { this._stragglersDismissed.set(true); }
 
