@@ -145,7 +145,40 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly workCustomStart = this._workCustomStart.asReadonly();
   readonly workCustomEnd = this._workCustomEnd.asReadonly();
 
+  // ── Date-filter popovers ──────────────────────────────────────────
+  // The Yesterday/Today/Tomorrow/Custom pill rows ate a whole header
+  // row. They now collapse behind a single filter icon per pane; the
+  // icon shows the active range, tapping it opens a popover with the
+  // options. Only one filter popover open at a time.
+  private readonly _apptFilterOpen = signal(false);
+  private readonly _workFilterOpen = signal(false);
+  readonly apptFilterOpen = this._apptFilterOpen.asReadonly();
+  readonly workFilterOpen = this._workFilterOpen.asReadonly();
 
+  toggleApptFilter(): void {
+    this._workFilterOpen.set(false);
+    this._apptFilterOpen.update(v => !v);
+  }
+  toggleWorkFilter(): void {
+    this._apptFilterOpen.set(false);
+    this._workFilterOpen.update(v => !v);
+  }
+  closeDateFilters(): void {
+    this._apptFilterOpen.set(false);
+    this._workFilterOpen.set(false);
+  }
+
+  /** Short label of the active range — shown on the filter icon button. */
+  readonly apptRangeLabel = computed(() => {
+    const r = this._apptDateRange();
+    if (r === 'custom') return this._apptCustomStart() ? 'Custom' : 'Custom';
+    return this.apptDateOptions.find(o => o.id === r)?.label ?? 'Today';
+  });
+  readonly workRangeLabel = computed(() => {
+    const r = this._workDateRange();
+    if (r === 'custom') return 'Custom';
+    return this.workDateOptions.find(o => o.id === r)?.label ?? 'Today';
+  });
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   readonly selectedIds = this._selectedIds.asReadonly();

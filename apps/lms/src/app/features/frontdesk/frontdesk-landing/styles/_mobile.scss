@@ -159,35 +159,19 @@
     padding-top: 14px !important;
   }
 
-  /* ── Appointments section header — the title, count, date-pill
-        cluster, calendar link and chevron were all crammed onto one
-        flex row, so the Yesterday/Today/Tomorrow pills overflowed off
-        the right edge. Let the row wrap: title + count + actions stay
-        on row 1, the date pills drop to a full-width scrollable row 2. */
-  .pf-appt-split__hdr {
-    flex-wrap: wrap !important;
-    row-gap: 8px !important;
-  }
-  .pf-hdr-date-pills {
-    order: 10;            /* force below the title row */
-    flex-basis: 100%;     /* own line */
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    scrollbar-width: none;
-    gap: 6px;
-  }
-  .pf-hdr-date-pills::-webkit-scrollbar { display: none; }
-  .pf-hdr-date-pill {
-    flex-shrink: 0;
-    font-size: 12px;
-  }
-
-  /* The work-section tab header (IN PROGRESS / COMPLETED + its own
-     date pills) gets the same wrap treatment. */
+  /* ── Section headers — the date pills now collapse into a single
+        .pf-hdr-filter chip (see _filters.scss), so the header fits on
+        one row without overflow. Keep a wrap fallback as a safety net
+        for very narrow viewports. */
+  .pf-appt-split__hdr,
   .pf-appt-split__hdr--tabs {
     flex-wrap: wrap !important;
     row-gap: 8px !important;
+  }
+  /* The popover opens full-screen-width friendly — cap it so it never
+     spills past the viewport edge on a 375px phone. */
+  .pf-hdr-filter__pop {
+    max-width: calc(100vw - 28px);
   }
 
   /* ── Appointment rows — keep them readable: the time block, avatar,

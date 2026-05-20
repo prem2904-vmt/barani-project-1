@@ -319,25 +319,42 @@
                       [attr.aria-expanded]="expandedPane() === 'appt'">
                 <span class="pf-appt-split__title">Appointments</span>
                 <span class="pf-appt-split__count">{{ visibleAppointments().length }}</span>
-                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
-                  @for (opt of apptDateOptions; track opt.id) {
-                    @if (opt.id === 'custom') {
-                      <button #apptCustomBtn type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
-                              [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()">
-                        {{ apptCustomRangeLabel() }}
-                      </button>
-                      @if (apptDateRange() === 'custom' && apptCustomStart()) {
-                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom()"
-                                aria-label="Clear custom range">×</button>
+                <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
+                  <!-- Collapsed: a single filter chip showing the active
+                       range. Tap to reveal the full option set. -->
+                  <button type="button" class="pf-hdr-filter__btn"
+                          [class.pf-hdr-filter__btn--on]="apptFilterOpen()"
+                          (click)="toggleApptFilter()"
+                          aria-haspopup="true" [attr.aria-expanded]="apptFilterOpen()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 6h16M7 12h10M10 18h4"/>
+                    </svg>
+                    <span>{{ apptRangeLabel() }}</span>
+                  </button>
+                  @if (apptFilterOpen()) {
+                    <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
+                    <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
+                      @for (opt of apptDateOptions; track opt.id) {
+                        @if (opt.id === 'custom') {
+                          <button #apptCustomBtn type="button" class="pf-hdr-date-pill"
+                                  [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
+                                  [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()">
+                            {{ apptCustomRangeLabel() }}
+                          </button>
+                          @if (apptDateRange() === 'custom' && apptCustomStart()) {
+                            <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom()"
+                                    aria-label="Clear custom range">×</button>
+                          }
+                        } @else {
+                          <button type="button" class="pf-hdr-date-pill"
+                                  [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id"
+                                  (click)="setApptDateRange(opt.id); closeDateFilters()">
+                            {{ opt.label }}
+                          </button>
+                        }
                       }
-                    } @else {
-                      <button type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id"
-                              (click)="setApptDateRange(opt.id)">
-                        {{ opt.label }}
-                      </button>
-                    }
+                    </div>
                   }
                 </div>
                 <a routerLink="/frontdesk/appointments" class="pf-appt-split__link pf-appt-split__link--icon"
@@ -479,25 +496,40 @@
                     <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
                   </button>
                 </div>
-                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
-                  @for (opt of workDateOptions; track opt.id) {
-                    @if (opt.id === 'custom') {
-                      <button #workCustomBtn type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
-                              [class.pf-hdr-date-pill--has-value]="!!workCustomStart()">
-                        {{ workCustomRangeLabel() }}
-                      </button>
-                      @if (workDateRange() === 'custom' && workCustomStart()) {
-                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
-                                aria-label="Clear custom range">×</button>
+                <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
+                  <button type="button" class="pf-hdr-filter__btn"
+                          [class.pf-hdr-filter__btn--on]="workFilterOpen()"
+                          (click)="toggleWorkFilter()"
+                          aria-haspopup="true" [attr.aria-expanded]="workFilterOpen()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 6h16M7 12h10M10 18h4"/>
+                    </svg>
+                    <span>{{ workRangeLabel() }}</span>
+                  </button>
+                  @if (workFilterOpen()) {
+                    <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
+                    <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
+                      @for (opt of workDateOptions; track opt.id) {
+                        @if (opt.id === 'custom') {
+                          <button #workCustomBtn type="button" class="pf-hdr-date-pill"
+                                  [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
+                                  [class.pf-hdr-date-pill--has-value]="!!workCustomStart()">
+                            {{ workCustomRangeLabel() }}
+                          </button>
+                          @if (workDateRange() === 'custom' && workCustomStart()) {
+                            <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
+                                    aria-label="Clear custom range">×</button>
+                          }
+                        } @else {
+                          <button type="button" class="pf-hdr-date-pill"
+                                  [class.pf-hdr-date-pill--on]="workDateRange() === opt.id"
+                                  (click)="setWorkDateRange(opt.id); closeDateFilters()">
+                            {{ opt.label }}
+                          </button>
+                        }
                       }
-                    } @else {
-                      <button type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="workDateRange() === opt.id"
-                              (click)="setWorkDateRange(opt.id)">
-                        {{ opt.label }}
-                      </button>
-                    }
+                    </div>
                   }
                 </div>
                 <svg class="pf-appt-split__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
