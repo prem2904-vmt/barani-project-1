@@ -187,11 +187,159 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* ── Greeting removed on phones — the screen leads straight with
+        the action buttons, no "Good day, X" line. */
+  .pf-head__title { display: none !important; }
+
+  /* ── Staff + the header's standalone Scan QR are dropped on phones
+        (pf-pop-anchor--util). Scanning lives in the search field. */
+  .pf-pop-anchor--util { display: none !important; }
+
+  /* ── Scan-QR icon shows inside the search field on phones. */
+  .pf-adv-search-icon--scan { display: inline-flex; }
+
+  /* ── New patient + Book appointment side by side. The cta-row is
+        display:contents elsewhere; here it becomes a 50/50 flex row. */
+  .pf-head__cta-row {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px;
+    width: 100%;
+  }
+  .pf-head__cta-row > .pf-head__btn {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    height: 42px !important;
+    margin: 0 !important;
+    font-size: 13px;
+  }
+
+  /* ── Mobile list switcher replaces the pane accordion. The dropdown
+        owns list selection now, so the per-pane header bars + the drag
+        handle are redundant — hide them. */
+  .pf-mlist { display: block; }
+  .pf-appt-split__hdr,
+  .pf-appt-split__handle { display: none !important; }
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */
 @media (max-width: 360px) {
   .pf-head__title { font-size: 18px; }
   .pf-head__actions .pf-head__btn--secondary { font-size: 12px; padding: 0 6px; }
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   ── Mobile-only widgets (base styles) ──
+   These elements exist in the DOM at every breakpoint but only the
+   mobile pass above flips them to `display`. Default = hidden so
+   iPad/desktop are untouched.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* cta-row: an invisible wrapper on iPad/desktop — display:contents
+   makes its two buttons lay out as direct children of pf-head__actions
+   exactly as before. The mobile pass overrides it to a flex row. */
+.pf-head__cta-row { display: contents; }
+
+/* Scan-QR icon in the search field — phones only. */
+.pf-adv-search-icon--scan { display: none; }
+
+/* ── Mobile list switcher ── */
+.pf-mlist {
+  display: none;
+  position: relative;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
+}
+.pf-mlist__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-mlist__label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-mlist__count {
+  flex-shrink: 0;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.pf-mlist__chev {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+.pf-mlist__menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-card-solid, var(--glass-bg));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.pf-mlist__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-mlist__opt--on {
+  background: var(--gradient-primary);
+  color: #fff;
+}
+.pf-mlist__opt-count {
+  flex-shrink: 0;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.pf-mlist__opt--on .pf-mlist__opt-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border-color: transparent;
 }
 

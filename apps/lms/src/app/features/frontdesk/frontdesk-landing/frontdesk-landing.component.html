@@ -172,8 +172,10 @@
           }
         </div>
         }
-        <!-- Staff on duty: secondary button next to Scan QR. -->
-        <div class="pf-pop-anchor">
+        <!-- Staff on duty + Scan QR. Hidden on phones (pf-pop-anchor--util):
+             the mobile header keeps only New patient / Book appointment,
+             and scanning moves into the search field's trailing icon. -->
+        <div class="pf-pop-anchor pf-pop-anchor--util">
           <button type="button" class="pf-head__btn pf-head__btn--secondary press mr-2"
             [class.pf-head__btn--on]="staffPopoverOpen()" (click)="toggleStaffPopover($event)" aria-haspopup="dialog"
             [attr.aria-expanded]="staffPopoverOpen()">
@@ -221,27 +223,34 @@
           }
         </div>
 
-        <!-- Book appointment — secondary action, opens the booking workflow
-             without a patient pre-selected so reception can either pick an
-             existing patient inside the booking flow or hop to /new-patient. -->
-        <a routerLink="/frontdesk/appointments/new"
-           class="pf-head__btn pf-head__btn--secondary press mr-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <path d="M16 2v4M8 2v4M3 10h18"/>
-            <path d="M9 16h6"/>
-          </svg>
-          Book appointment
-        </a>
+        <!-- Book appointment + New patient. Wrapped in a cta-row that's
+             display:contents on desktop (no layout effect) but a 50/50
+             flex row on phones, so the two primary actions sit side by
+             side instead of stacking. -->
+        <div class="pf-head__cta-row">
+          <!-- Book appointment — secondary action, opens the booking
+               workflow without a patient pre-selected so reception can
+               either pick an existing patient inside the booking flow
+               or hop to /new-patient. -->
+          <a routerLink="/frontdesk/appointments/new"
+             class="pf-head__btn pf-head__btn--secondary press mr-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18"/>
+              <path d="M9 16h6"/>
+            </svg>
+            Book appointment
+          </a>
 
-        <button type="button" class="pf-head__btn pf-head__btn--primary press" (click)="openRegister()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          New patient
-        </button>
+          <button type="button" class="pf-head__btn pf-head__btn--primary press" (click)="openRegister()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New patient
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -281,6 +290,20 @@
           <div class="pf-search-wrap">
             <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…"
               (picked)="openProfile($event)">
+              <!-- Scan-QR trigger — phones only. The standalone header
+                   "Scan QR" button is hidden on mobile, so scanning
+                   lives in the search field's right edge instead. -->
+              <button trailing type="button" class="pf-adv-search-icon pf-adv-search-icon--scan press"
+                      (click)="searchFocus()" aria-label="Scan QR code" title="Scan QR">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 8V6a2 2 0 0 1 2-2h2"/>
+                  <path d="M16 4h2a2 2 0 0 1 2 2v2"/>
+                  <path d="M20 16v2a2 2 0 0 1-2 2h-2"/>
+                  <path d="M8 20H6a2 2 0 0 1-2-2v-2"/>
+                  <line x1="3" y1="12" x2="21" y2="12"/>
+                </svg>
+              </button>
               <!-- Slotted into the search field's right edge. Single-icon
                    trigger for the multi-filter modal; ⌘K still works globally. -->
               <button trailing type="button" class="pf-adv-search-icon press"
@@ -305,6 +328,54 @@
         </div>
 
         <div class="pf-list-wrap">
+
+          <!-- Mobile list switcher — phones (≤640px) drop the pane
+               accordion for a single dropdown picking which list to
+               show. Hidden on iPad/desktop where all panes lay out
+               side by side. -->
+          <div class="pf-mlist">
+            <button type="button" class="pf-mlist__btn press"
+                    (click)="mobileListOpen.set(!mobileListOpen())"
+                    aria-haspopup="listbox" [attr.aria-expanded]="mobileListOpen()">
+              <span class="pf-mlist__label">{{ mobileListLabel() }}</span>
+              <span class="pf-mlist__count">
+                @switch (mobileList()) {
+                  @case ('appt') { {{ visibleAppointments().length }} }
+                  @case ('ip') { {{ visibleOrders().length }} }
+                  @case ('done') { {{ completedOrders().length }} }
+                }
+              </span>
+              <svg class="pf-mlist__chev" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                   stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            @if (mobileListOpen()) {
+              <div class="pf-pop-bd" (click)="mobileListOpen.set(false)"></div>
+              <div class="pf-mlist__menu" role="listbox">
+                <button type="button" role="option" class="pf-mlist__opt press"
+                        [class.pf-mlist__opt--on]="mobileList() === 'appt'"
+                        (click)="setMobileList('appt')">
+                  Appointments
+                  <span class="pf-mlist__opt-count">{{ visibleAppointments().length }}</span>
+                </button>
+                <button type="button" role="option" class="pf-mlist__opt press"
+                        [class.pf-mlist__opt--on]="mobileList() === 'ip'"
+                        (click)="setMobileList('ip')">
+                  In progress
+                  <span class="pf-mlist__opt-count">{{ visibleOrders().length }}</span>
+                </button>
+                <button type="button" role="option" class="pf-mlist__opt press"
+                        [class.pf-mlist__opt--on]="mobileList() === 'done'"
+                        (click)="setMobileList('done')">
+                  Completed
+                  <span class="pf-mlist__opt-count">{{ completedOrders().length }}</span>
+                </button>
+              </div>
+            }
+          </div>
+
           <!-- Two-pane layout: Appointments on the left, In-progress on the
                right. The middle handle is mouse + touch draggable on
                viewports >= 1024px; the resulting split percentage is saved

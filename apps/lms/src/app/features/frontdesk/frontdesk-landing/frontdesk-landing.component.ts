@@ -212,6 +212,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     } catch { return 'ip'; }
   }
 
+  // ── Mobile list selector ──────────────────────────────────
+  // Phones (≤640px) drop the pane accordion for a single list with a
+  // dropdown picker (Appointments / In progress / Completed). It's a
+  // thin projection over expandedPane + workTab — desktop/iPad layout
+  // is untouched.
+  readonly mobileListOpen = signal(false);
+  readonly mobileList = computed<'appt' | 'ip' | 'done'>(() =>
+    this.expandedPane() === 'appt' ? 'appt' : this.workTab());
+  readonly mobileListLabel = computed(() => {
+    switch (this.mobileList()) {
+      case 'appt': return 'Appointments';
+      case 'ip': return 'In progress';
+      default: return 'Completed';
+    }
+  });
+  setMobileList(v: 'appt' | 'ip' | 'done') {
+    if (v === 'appt') {
+      this._expandedPane.set('appt');
+    } else {
+      this._expandedPane.set('work');
+      this.setWorkTab(v);
+    }
+    this.mobileListOpen.set(false);
+  }
+
   // ── Two-pane split (when one column is hidden) ────────────
   // When the user hides one pane, the remaining two share the row. This
   // is a separate split percentage from the 3-pane case (--appt-a/--b)

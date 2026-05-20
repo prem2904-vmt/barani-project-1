@@ -19,7 +19,13 @@
 
 .pf-msgs {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) 1fr;
+  // minmax(0, …) on BOTH tracks: a grid item's default min-width is
+  // `auto` (= min-content), so a long unbreakable string in a
+  // conversation row (a patient MRN, e.g. MWX-2605-000025-9) would
+  // blow the track wider than the viewport and push content off the
+  // right edge. minmax(0, …) lets the track shrink below min-content
+  // and lets the rows ellipsis instead.
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   gap: 0;
@@ -27,7 +33,7 @@
 
   // Tablet & phone: only one pane at a time (list ↔ thread).
   @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     &.pf-msgs--thread-open .pf-msgs__rail { display: none; }
     &:not(.pf-msgs--thread-open) .pf-msgs__thread { display: none; }
   }
@@ -37,6 +43,7 @@
 .pf-msgs__rail {
   display: flex;
   flex-direction: column;
+  min-width: 0; // allow the rail to shrink + its rows to ellipsis
   min-height: 0;
   background: var(--bg-card-solid);
   border-right: 1px solid var(--border-secondary);
@@ -184,6 +191,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0; // shrink inside the flex row so ellipsis can kick in
 }
 .pf-msgs__conv-time {
   font-size: 11px;
@@ -203,6 +211,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0; // shrink inside the flex row so ellipsis can kick in
 }
 .pf-msgs__unread-badge {
   background: var(--gradient-primary);
