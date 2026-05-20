@@ -341,7 +341,10 @@ const DRAG_THRESHOLD_PX = 4;
       justify-content: flex-start;
       height: 100%;
       width: 64px;
-      border-radius: 0 16px 16px 0;
+      /* Square — a full-height edge-docked sidebar reads as a clean
+         rectangle (Slack / VS Code style). Rounded corners on a
+         flush full-bleed panel just get clipped by the screen edge. */
+      border-radius: 0;
       overflow-x: visible;
       overflow-y: auto;
       gap: 3px;
@@ -655,20 +658,19 @@ const DRAG_THRESHOLD_PX = 4;
     }
 
     /* ── More button (PF glyph at end of pill) + popover ──────────── */
-    /* Mobile-only — on iPad/desktop the top chrome already owns the
-       branch picker, notifications, people drawer, theme, profile and
-       logout, so the bottom-nav More button is redundant. Hide it +
-       its popover at ≥641px so the iPad bottom-nav stays at 6 icons. */
+    /* The More button shows on phone (bottom pill, PF glyph) AND iPad
+       (rail, user avatar — opens the account popover with branch /
+       theme / sign-out). Desktop hides the whole nav via xl:hidden,
+       so no per-button hide rule is needed.
+       NOTE: an earlier @media(min-width:641px){display:none} rule
+       used to hide this — it was from when iPad still had the top
+       chrome. The chrome is gone on iPad now, so the rule was
+       removed; it was what made the avatar + branch "disappear". */
     .pf-nav-btn--more {
       width: 44px; min-width: 44px;
       height: 44px;
       padding: 0;
       background: transparent;
-    }
-    @media (min-width: 641px) {
-      .pf-nav-btn--more,
-      .pf-more-bd,
-      .pf-more-pop { display: none !important; }
     }
     /* The brand glyph is gradient-filled (matches the top-strip's
        chrome logo), so we don't tint it via the color property; only
