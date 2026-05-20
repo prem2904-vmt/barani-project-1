@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Prefrontal</string>
     <string name="title_activity_main">Prefrontal</string>
-    <string name="package_name">in.prefrontal.lms</string>
-    <string name="custom_url_scheme">in.prefrontal.lms</string>
+    <string name="package_name">health.prefrontal.lab</string>
+    <string name="custom_url_scheme">health.prefrontal.lab</string>
 </resources>

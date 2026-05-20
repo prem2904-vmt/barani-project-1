@@ -9,7 +9,7 @@ import { CapacitorConfig } from '@capacitor/cli';
  * cap:sync npm script which does both).
  */
 const config: CapacitorConfig = {
-  appId: 'in.prefrontal.lms',
+  appId: 'health.prefrontal.lab',
   appName: 'Prefrontal',
   webDir: 'dist/apps/lms/browser',
   server: {

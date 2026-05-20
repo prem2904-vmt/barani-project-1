@@ -1,4 +1,4 @@
-package in.prefrontal.lms;
+package health.prefrontal.lab;
 
 import com.getcapacitor.BridgeActivity;
 

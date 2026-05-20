@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "437990739146",
-    "project_id": "prefrontal-lms",
-    "storage_bucket": "prefrontal-lms.firebasestorage.app"
+    "project_number": "925304866839",
+    "project_id": "prefrontal-d4943",
+    "storage_bucket": "prefrontal-d4943.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:437990739146:android:b018621445f21122f33833",
+        "mobilesdk_app_id": "1:925304866839:android:73025c1a9d486d3c107452",
         "android_client_info": {
-          "package_name": "com.prefrontal"
+          "package_name": "health.prefrontal.lab"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDFbB300h4qEqO7POmN4AWlkE29SH5879E"
+          "current_key": "AIzaSyCJ4-fM0Ak5GhuIzkSRxHokcHDyeqJAWgs"
         }
       ],
       "services": {
