@@ -261,7 +261,8 @@ const DRAG_THRESHOLD_PX = 4;
     }
     /* Rail pill — a full-height vertical column. Flush left edge
        (square left corners), rounded right edge so it reads as a
-       docked panel. Icons start ~96px down to clear the chrome bar;
+       docked panel. There's no top chrome on iPad, so the icons
+       start just below the status bar (safe-area-inset-top + 16px);
        the More button is pushed to the bottom with margin-top:auto. */
     .pf-pill--rail {
       flex-direction: column;
@@ -273,7 +274,7 @@ const DRAG_THRESHOLD_PX = 4;
       overflow-x: visible;
       overflow-y: auto;
       gap: 6px;
-      padding: 96px 8px 16px;
+      padding: calc(env(safe-area-inset-top, 0px) + 16px) 8px 16px;
       touch-action: auto;
       scrollbar-width: none;
     }

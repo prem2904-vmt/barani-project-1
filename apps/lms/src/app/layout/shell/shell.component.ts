@@ -211,10 +211,16 @@ import { AuthService } from "../../core/auth/auth.service";
         -webkit-backdrop-filter: blur(24px);
       }
 
-      /* Mobile (≤640px): drop the chrome entirely. The body already
-         absorbs env(safe-area-inset-top) (see styles.scss), so pages
+      /* Phone + iPad (≤1279px): drop the top chrome entirely.
+         • Phone uses the floating bottom pill.
+         • iPad uses a full-height left nav rail — having a top chrome
+           AND a side rail is redundant, so the rail owns navigation
+           and its More popover owns the user-actions (notifications,
+           people, theme, logout) that used to live in the chrome.
+         Desktop (≥1280px) keeps the chrome + its top-strip nav.
+         The body already absorbs env(safe-area-inset-top), so pages
          start at the top of the safe area with no double-padding. */
-      @media (max-width: 640px) {
+      @media (max-width: 1279px) {
         .pf-chrome { display: none !important; }
       }
 
@@ -234,9 +240,7 @@ import { AuthService } from "../../core/auth/auth.service";
            not 0 either: a flush-to-edge content area made the
            frontdesk panes' bottom border sit on the literal screen
            edge and read as "cut off". 16px gives the border a clear
-           gap so the panes visibly end within the screen.
-         The chrome stays full-width — the rail is vertically centred
-         and short, so it never reaches the chrome row. */
+           gap so the panes visibly end within the screen. */
       @media (min-width: 641px) and (max-width: 1279px) {
         .shell-main {
           /* Clear the 64px full-height left rail — flush, no gap. The
@@ -244,11 +248,6 @@ import { AuthService } from "../../core/auth/auth.service";
              rule in frontdesk _base.scss). */
           padding-left: 64px;
           padding-bottom: 16px;
-        }
-        /* The chrome bar starts to the RIGHT of the rail so the two
-           don't visually collide on the left. */
-        .pf-chrome {
-          margin-left: 72px;
         }
       }
 
