@@ -469,17 +469,35 @@
 
 /* Card at narrow widths — collapse actions */
 @media (max-width: 640px) {
+  /* Mobile appointment row: select circle + time slot are dropped;
+     the row is avatar · body · actions. The actions keep only the
+     Check-in pill — the call / WhatsApp icon buttons are secondary
+     and reachable by tapping the row into the appointment, and
+     cramming all three plus the content overflowed the 375px row
+     (Check-in wrapped to two lines + clipped off the right edge). */
   .pf-card {
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
   }
+  .pf-card__sel  { display: none !important; }
+  .pf-card__slot { display: none !important; }
 
+  /* `display: inline-flex !important` beats the later unconditional
+     `.pf-card__actions { display: flex }` rule that otherwise wins on
+     source order. */
   .pf-card__actions {
-    display: none;
+    display: inline-flex !important;
+    gap: 4px;
+    flex-shrink: 0;
   }
-
-  .pf-card__sel {
-    display: none;
+  /* Hide the secondary call / WhatsApp icon buttons on phones. */
+  .pf-card__actions .pf-iconbtn { display: none !important; }
+  /* Compact Check-in pill. */
+  .pf-card__actions .pf-ghostbtn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
   }
 }
 
