@@ -193,8 +193,14 @@
   .pf-head__title { display: none !important; }
 
   /* ── Staff + the header's standalone Scan QR are dropped on phones
-        (pf-pop-anchor--util). Scanning lives in the search field. */
-  .pf-pop-anchor--util { display: none !important; }
+        (pf-pop-anchor--util). Scanning lives in the search field.
+        Selector carries the .pf-head__actions ancestor + both classes
+        so it out-specifies the `.pf-head__actions .pf-pop-anchor {
+        display: flex !important }` row rule above — otherwise that
+        higher-specificity !important rule keeps Staff visible. */
+  .pf-head__actions .pf-pop-anchor.pf-pop-anchor--util {
+    display: none !important;
+  }
 
   /* ── Scan-QR icon shows inside the search field on phones. */
   .pf-adv-search-icon--scan { display: inline-flex; }
@@ -217,8 +223,11 @@
 
   /* ── Mobile list switcher replaces the pane accordion. The dropdown
         owns list selection now, so the per-pane header bars + the drag
-        handle are redundant — hide them. */
-  .pf-mlist { display: block; }
+        handle are redundant — hide them.
+        display:block is !important because the base `.pf-mlist {
+        display:none }` rule is declared later in this file (equal
+        specificity) and would otherwise win by source order. */
+  .pf-mlist { display: block !important; }
   .pf-appt-split__hdr,
   .pf-appt-split__handle { display: none !important; }
 }
