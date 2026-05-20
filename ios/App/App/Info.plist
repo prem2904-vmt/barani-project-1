@@ -50,5 +50,17 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Media permission strings. iOS WKWebView DISABLES
+	     navigator.mediaDevices entirely (makes it `undefined`) unless
+	     the matching usage-description key is present — that's why
+	     navigator.mediaDevices.getUserMedia threw "undefined is not an
+	     object" when starting a call.
+	     • Microphone — required for WebRTC voice calls / consults.
+	     • Camera — required for the in-app QR / barcode scanner.
+	     iOS shows these strings in the system permission prompt. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
 </dict>
 </plist>
