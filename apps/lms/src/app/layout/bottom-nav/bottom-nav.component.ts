@@ -129,14 +129,32 @@ const DRAG_THRESHOLD_PX = 4;
           </a>
         }
 
-        <!-- Rail bottom group — the chrome's right-side content folds
-             in here: the vendor (tenant) badge, then the More button
-             whose popover carries notifications / people / theme /
-             sign-out. margin-top:auto on the vendor badge pushes this
-             whole group to the bottom of the rail. -->
+        <!-- Rail bottom group — the chrome's whole right-side cluster
+             folds in here as distinct icons: vendor badge, notification
+             bell, people drawer, then the user-avatar (More) button.
+             margin-top:auto on the leading separator pushes the group
+             to the bottom of the rail. -->
         @if (railMode()) {
           <div class="pf-rail-sep pf-rail-sep--foot" aria-hidden="true"></div>
           <span class="pf-rail-vendor" [title]="tenantName()">{{ tenantInitial() }}</span>
+          <button type="button" class="pf-rail-action press"
+                  (click)="onMoreNotifications()" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+          </button>
+          <button type="button" class="pf-rail-action press"
+                  (click)="onMorePeople()" aria-label="People">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </button>
         }
 
         <!-- "More" trigger. Phone: PF glyph pill at the end of the row.
@@ -186,26 +204,31 @@ const DRAG_THRESHOLD_PX = 4;
         <div class="pf-more-bd" (click)="closeMore()"></div>
         <div class="pf-more-pop" role="menu" aria-label="More actions"
              (click)="$event.stopPropagation()">
-          <button type="button" role="menuitem" class="pf-more-item press"
-                  (click)="onMoreNotifications()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-            </svg>
-            <span>Notifications</span>
-          </button>
-          <button type="button" role="menuitem" class="pf-more-item press"
-                  (click)="onMorePeople()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            <span>People</span>
-          </button>
+          <!-- Notifications + People are standalone rail buttons in
+               iPad rail mode, so the popover only lists them on phone
+               (where the bottom pill has no room for extra icons). -->
+          @if (!railMode()) {
+            <button type="button" role="menuitem" class="pf-more-item press"
+                    (click)="onMoreNotifications()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+              </svg>
+              <span>Notifications</span>
+            </button>
+            <button type="button" role="menuitem" class="pf-more-item press"
+                    (click)="onMorePeople()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <span>People</span>
+            </button>
+          }
           <!-- Theme: cycles System → Light → Dark. "System" follows the
                OS appearance live; Light/Dark pin an explicit choice. -->
           <button type="button" role="menuitem" class="pf-more-item press"
@@ -355,6 +378,28 @@ const DRAG_THRESHOLD_PX = 4;
       font-weight: 700;
       letter-spacing: 0.01em;
       box-shadow: 0 4px 12px rgba(124, 58, 237, 0.36);
+    }
+
+    /* ── Rail action buttons (notification bell, people) — distinct
+       icon buttons in the rail bottom group, mirroring the chrome's
+       right-side icon cluster. ──────────────────────────────────── */
+    .pf-rail-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-secondary, #cbd5e1);
+      cursor: pointer;
+      transition: background 0.14s, color 0.14s;
+    }
+    .pf-rail-action:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-primary, #f1f5f9);
     }
 
     /* ── Rail user avatar — the More button's content in rail mode.
