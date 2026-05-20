@@ -260,6 +260,18 @@ const DRAG_THRESHOLD_PX = 4;
               {{ theme.mode() === 'system' ? 'System' : theme.mode() === 'light' ? 'Light' : 'Dark' }}
             </span>
           </button>
+          <!-- Branch — tap to cycle through the lab's branches. The
+               current branch shows in the trailing chip. -->
+          <button type="button" role="menuitem" class="pf-more-item press"
+                  (click)="onMoreBranch()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span>Branch</span>
+            <span class="pf-more-item__val">{{ currentBranch() }}</span>
+          </button>
           <div class="pf-more-sep"></div>
           <button type="button" role="menuitem" class="pf-more-item pf-more-item--danger press"
                   (click)="onMoreLogout()">
@@ -332,8 +344,8 @@ const DRAG_THRESHOLD_PX = 4;
       border-radius: 0 16px 16px 0;
       overflow-x: visible;
       overflow-y: auto;
-      gap: 6px;
-      padding: calc(env(safe-area-inset-top, 0px) + 16px) 8px 16px;
+      gap: 3px;
+      padding: calc(env(safe-area-inset-top, 0px) + 10px) 8px 12px;
       touch-action: auto;
       scrollbar-width: none;
     }
@@ -344,11 +356,11 @@ const DRAG_THRESHOLD_PX = 4;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
-      height: 44px;
+      width: 38px;
+      height: 38px;
       flex-shrink: 0;
     }
-    .pf-rail-brand svg { width: 26px; height: 32px; }
+    .pf-rail-brand svg { width: 24px; height: 30px; }
 
     /* Hairline separators between the rail's three zones. */
     .pf-rail-sep {
@@ -387,11 +399,11 @@ const DRAG_THRESHOLD_PX = 4;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 44px;
-      height: 44px;
+      width: 40px;
+      height: 40px;
       flex-shrink: 0;
       border: 0;
-      border-radius: 12px;
+      border-radius: 11px;
       background: transparent;
       color: var(--text-secondary, #cbd5e1);
       cursor: pointer;
@@ -581,11 +593,11 @@ const DRAG_THRESHOLD_PX = 4;
        is absent in rail mode, so the active button carries its own
        gradient highlight. ───────────────────────────────────────── */
     .pf-pill--rail .pf-nav-btn {
-      width: 48px;
-      min-width: 48px;
-      height: 48px;
+      width: 44px;
+      min-width: 44px;
+      height: 42px;
       padding: 0;
-      border-radius: 13px;
+      border-radius: 12px;
     }
     /* Icon-only — hide the label entirely in the rail. */
     .pf-pill--rail .pf-nav-btn .pf-nav-btn__lbl {
@@ -599,11 +611,11 @@ const DRAG_THRESHOLD_PX = 4;
     .pf-pill--rail .pf-nav-btn:not(.pf-nav-btn--active):hover {
       background: rgba(255, 255, 255, 0.06);
     }
-    /* The More (PF glyph) button matches the icon-only button size. */
+    /* The More (avatar) button matches the icon-only button size. */
     .pf-pill--rail .pf-nav-btn--more {
-      width: 48px;
-      min-width: 48px;
-      height: 44px;
+      width: 44px;
+      min-width: 44px;
+      height: 42px;
     }
     /* Admin divider — a horizontal hairline in the vertical rail. */
     .pf-pill--rail > div[style*="background"] {
@@ -801,6 +813,19 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   });
+
+  /** Branch switcher — the chrome's branch picker folds into the
+   *  account popover. NOTE: this is a UI-only switch, mirroring the
+   *  top-strip's existing mocked branch list (no backend re-scope
+   *  yet). Tapping the Branch row cycles to the next branch. */
+  protected readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
+  private readonly _branch = signal<string>(this.auth.user()?.branchName ?? 'Chennai Main');
+  protected readonly currentBranch = this._branch.asReadonly();
+  protected onMoreBranch(): void {
+    const list = this.branches;
+    const i = list.indexOf(this._branch());
+    this._branch.set(list[(i + 1) % list.length]);
+  }
 
   // ─── More popover handlers ────────────────────────────────────────
   protected toggleMore(ev?: Event): void {
