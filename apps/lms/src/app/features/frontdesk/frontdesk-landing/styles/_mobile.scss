@@ -301,7 +301,11 @@
 }
 .pf-mlist__menu {
   position: absolute;
-  z-index: 50;
+  /* Above .pf-pop-bd (z-index: 70). The backdrop is rendered just
+     before this menu and covers the screen to catch outside taps —
+     if the menu sat below it, every option tap would land on the
+     backdrop and only close the dropdown without applying anything. */
+  z-index: 80;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
