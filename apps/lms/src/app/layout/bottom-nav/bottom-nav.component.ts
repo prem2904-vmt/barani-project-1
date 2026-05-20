@@ -20,14 +20,16 @@ const DRAG_THRESHOLD_PX = 4;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
-         Scrolls horizontally on narrow viewports so all nav items stay reachable
-         without overflowing off-screen.
-         The 'bottom' inline style now sits ~6px above the home indicator
-         (env safe-area-inset-bottom) instead of stacking +16px on top of
-         it, so the pill is visually close to the bottom edge as the user
-         asked. -->
+         Scrolls horizontally on narrow viewports so all nav items stay
+         reachable without overflowing off-screen.
+         The bottom inline style is a flat 8px — the pill hugs the
+         screen bottom edge with no floating gap (per the user's
+         "bring it to the bottom, no space" call). 8px keeps the icon
+         tap-targets — vertically centred in the ~56px pill — clear of
+         the iOS home-indicator gesture zone while the pill sits snug
+         at the edge. -->
     <nav class="pf-bottom-nav xl:hidden fixed left-1/2 -translate-x-1/2 z-30"
-         style="bottom: max(6px, env(safe-area-inset-bottom)); max-width: calc(100vw - 16px);">
+         style="bottom: 8px; max-width: calc(100vw - 16px);">
       <div #pill
            class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-full shadow-2xl backdrop-blur-2xl overflow-x-auto"
            [class]="pillClasses"
