@@ -64,6 +64,28 @@ const DRAG_THRESHOLD_PX = 4;
                 aria-hidden="true"></span>
         }
 
+        <!-- Rail brand mark — the PF glyph at the top of the rail.
+             On iPad there's no top chrome, so the rail carries the
+             brand. Icon-only (no "PREFRONTAL" wordmark). -->
+        @if (railMode()) {
+          <span class="pf-rail-brand" aria-label="Prefrontal">
+            <svg viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="pfRailBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#7c3aed" />
+                  <stop offset="25%"  stop-color="#8b5cf6" />
+                  <stop offset="50%"  stop-color="#a855f7" />
+                  <stop offset="75%"  stop-color="#d946ef" />
+                  <stop offset="100%" stop-color="#ec4899" />
+                </linearGradient>
+              </defs>
+              <path d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" fill="url(#pfRailBrandGradient)" />
+              <path d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" fill="url(#pfRailBrandGradient)" />
+            </svg>
+          </span>
+          <div class="pf-rail-sep" aria-hidden="true"></div>
+        }
+
         @for (n of primary(); track n.id; let i = $index) {
           <!-- Buttons auto-scale to the visible-tab count. With many
                tabs (≥4) we stay icon-only on mobile to keep the pill
@@ -107,14 +129,19 @@ const DRAG_THRESHOLD_PX = 4;
           </a>
         }
 
-        <!-- "More" trigger — PF glyph button at the end of the pill.
-             Uses the SAME brand glyph as the top-strip chrome (with the
-             violet→pink gradient) so users see a familiar identity. The
-             gradient stop IDs are scoped to this SVG to avoid clashing
-             with the top-strip's pfBrandGradient. Tapping opens a small
-             popover above the pill with the user-action items that used
-             to live in the top chrome: notifications, theme toggle,
-             people drawer, logout. -->
+        <!-- Rail bottom group — the chrome's right-side content folds
+             in here: the vendor (tenant) badge, then the More button
+             whose popover carries notifications / people / theme /
+             sign-out. margin-top:auto on the vendor badge pushes this
+             whole group to the bottom of the rail. -->
+        @if (railMode()) {
+          <div class="pf-rail-sep pf-rail-sep--foot" aria-hidden="true"></div>
+          <span class="pf-rail-vendor" [title]="tenantName()">{{ tenantInitial() }}</span>
+        }
+
+        <!-- "More" trigger. Phone: PF glyph pill at the end of the row.
+             iPad rail: the account/actions button at the bottom — its
+             popover carries notifications, theme, people, sign-out. -->
         <button #navBtn type="button"
                 class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
                        shrink-0 transition-colors"
@@ -279,7 +306,47 @@ const DRAG_THRESHOLD_PX = 4;
       scrollbar-width: none;
     }
     .pf-pill--rail::-webkit-scrollbar { display: none; }
-    .pf-pill--rail .pf-nav-btn--more { margin-top: auto; }
+
+    /* ── Rail brand mark (top) — the PF glyph, icon-only. ────────── */
+    .pf-rail-brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+    .pf-rail-brand svg { width: 26px; height: 32px; }
+
+    /* Hairline separators between the rail's three zones. */
+    .pf-rail-sep {
+      width: 28px;
+      height: 1px;
+      flex-shrink: 0;
+      background: var(--glass-border, rgba(255, 255, 255, 0.1));
+      margin: 2px 0;
+    }
+    /* The footer separator carries margin-top:auto, pushing the
+       vendor badge + More button to the bottom of the rail. */
+    .pf-rail-sep--foot { margin-top: auto; }
+
+    /* ── Rail vendor badge (bottom) — the tenant logo, just the
+       initial. Folds in the chrome's "W Micro World" pill. ───────── */
+    .pf-rail-vendor {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      border-radius: 10px;
+      background: var(--gradient-primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.36);
+    }
     .pf-pill::-webkit-scrollbar { display: none; }
     .pf-pill { scrollbar-width: none; -ms-overflow-style: none; }
     /* While dragging the pill clips horizontal scroll (so our gesture
@@ -639,6 +706,14 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     const w = window.innerWidth;
     return w >= 641 && w < 1280;
   }
+
+  /** Tenant (vendor) name + a 1-letter badge for the rail bottom. The
+   *  chrome's vendor pill folds into the rail as just this badge. */
+  protected readonly tenantName = computed(() => this.auth.user()?.tenantName ?? '');
+  protected readonly tenantInitial = computed(() => {
+    const n = this.tenantName().trim();
+    return n ? n[0].toUpperCase() : 'P';
+  });
 
   // ─── More popover handlers ────────────────────────────────────────
   protected toggleMore(ev?: Event): void {
