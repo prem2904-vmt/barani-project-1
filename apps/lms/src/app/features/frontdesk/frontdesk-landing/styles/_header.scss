@@ -1,19 +1,26 @@
-/* ── Compact header ─────────────────────────────────────── */
+/* ── Compact header ───────────────────────────────────────
+   Two rows: greeting + alert chips on top, then the search field
+   beside the action buttons. The search used to be a full-width band
+   in the page body — folding it into the header grid keeps it on one
+   tidy row with the buttons and frees a row of vertical space. */
 .pf-head {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   grid-template-areas:
-    "title alerts actions"
-    "sub   alerts actions";
-  gap: 2px 12px;
+    "title  alerts"
+    "filter actions";
+  gap: 10px 12px;
   align-items: center;
   padding: 6px 0 12px;
 }
 
+/* The search row sits in the header grid (area: filter). */
+.pf-filter-row { grid-area: filter; }
+
 @media (max-width: 767px) {
   .pf-head {
     grid-template-columns: 1fr;
-    grid-template-areas: "title" "sub" "alerts" "actions";
+    grid-template-areas: "title" "sub" "alerts" "actions" "filter";
     gap: 4px;
   }
 

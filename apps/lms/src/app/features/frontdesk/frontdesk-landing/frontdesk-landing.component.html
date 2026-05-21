@@ -249,6 +249,43 @@
           </button>
         </div>
       </div>
+
+      <!-- Patient search — lives inside .pf-head so it shares the header
+           grid: it sits on its own row beside the action buttons rather
+           than as a full-width band below the header. -->
+      <div class="pf-filter-row">
+        <div class="pf-search-wrap">
+          <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)">
+            <!-- Scan-QR trigger — phones only. The standalone header
+                 "Scan QR" button is hidden on mobile, so scanning
+                 lives in the search field's right edge instead. -->
+            <button trailing type="button" class="pf-adv-search-icon pf-adv-search-icon--scan press"
+              (click)="searchFocus()" aria-label="Scan QR code" title="Scan QR">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+                <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+                <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+                <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+              </svg>
+            </button>
+            <!-- Slotted into the search field's right edge. Single-icon
+                 trigger for the multi-filter modal; ⌘K still works globally. -->
+            <button trailing type="button" class="pf-adv-search-icon press" (click)="openAdvancedSearch()"
+              [attr.aria-label]="'Open advanced patient search (Cmd+K)'" title="Advanced search · ⌘K">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="7" y1="12" x2="20" y2="12" />
+                <line x1="10" y1="18" x2="20" y2="18" />
+                <circle cx="4" cy="12" r="1.4" fill="currentColor" />
+                <circle cx="7" cy="18" r="1.4" fill="currentColor" />
+              </svg>
+            </button>
+          </pf-patient-search>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -281,45 +318,6 @@
 
     <div class="grid grid-cols-1 gap-5 items-start">
       <div class="min-w-0">
-
-        <!-- Filter row: search + date pills -->
-        <div class="pf-filter-row">
-          <div class="pf-search-wrap">
-            <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)">
-              <!-- Scan-QR trigger — phones only. The standalone header
-                   "Scan QR" button is hidden on mobile, so scanning
-                   lives in the search field's right edge instead. -->
-              <button trailing type="button" class="pf-adv-search-icon pf-adv-search-icon--scan press"
-                (click)="searchFocus()" aria-label="Scan QR code" title="Scan QR">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M4 8V6a2 2 0 0 1 2-2h2" />
-                  <path d="M16 4h2a2 2 0 0 1 2 2v2" />
-                  <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
-                  <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                </svg>
-              </button>
-              <!-- Slotted into the search field's right edge. Single-icon
-                   trigger for the multi-filter modal; ⌘K still works globally. -->
-              <button trailing type="button" class="pf-adv-search-icon press" (click)="openAdvancedSearch()"
-                [attr.aria-label]="'Open advanced patient search (Cmd+K)'" title="Advanced search · ⌘K">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="7" y1="12" x2="20" y2="12" />
-                  <line x1="10" y1="18" x2="20" y2="18" />
-                  <circle cx="4" cy="12" r="1.4" fill="currentColor" />
-                  <circle cx="7" cy="18" r="1.4" fill="currentColor" />
-                </svg>
-              </button>
-            </pf-patient-search>
-          </div>
-          <!-- Date-range pills moved into the Advanced Search modal — date
-               filtering for historical lookups belongs there. The dashboard
-               below stays scoped to today's queue, which is what reception
-               works off of by default. -->
-        </div>
 
         <div class="pf-list-wrap">
 

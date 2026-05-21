@@ -10,6 +10,10 @@
 .pf-search-wrap {
   flex: 1;
   min-width: 260px;
+  /* Cap the field width — it shares the header row with the action
+     buttons now, so a full-bleed search bar would crowd them and read
+     as oversized. Left-aligned within its grid track. */
+  max-width: 620px;
   position: relative;
   display: flex;
   align-items: center;
