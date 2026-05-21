@@ -1082,10 +1082,7 @@ interface OrderGroup {
         flex-direction: row;
         align-items: center;
         gap: 12px;
-        /* Right padding sized to fit the stamp + a comfortable gutter so
-           the body text never bleeds underneath the absolutely-positioned
-           stamp. */
-        padding: 12px 92px 12px 14px;
+        padding: 12px 14px;
         width: 100%;
       }
       .pf-vial {
@@ -1119,13 +1116,16 @@ interface OrderGroup {
          room and keep each tile under ~90px tall. */
       .pf-tube__code { display: none; }
 
-      /* Action stamp: small teal pill pinned to the right edge. Compact
-         so it fits inside the 92px right-padding allotment without
-         overrunning the body text. The whole tile is still the click
-         target — the pill just telegraphs the action. */
+      /* Action stamp: small teal pill on its own line at the end of the
+         body. It used to be position:absolute, but .pf-tube__body is
+         position:relative — so the stamp anchored INSIDE the body and
+         overlapped the label/dept/tests text. Keeping it in normal flow
+         (left-aligned, below the tests) is overlap-proof. The whole
+         tile is still the click target — the pill just telegraphs it. */
       .pf-tube__stamp {
-        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-        margin-top: 0;
+        position: static;
+        align-self: flex-start;
+        margin-top: 4px;
         padding: 6px 10px;
         font-size: 10px;
         font-weight: 600;
