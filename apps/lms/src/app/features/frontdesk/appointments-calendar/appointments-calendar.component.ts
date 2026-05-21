@@ -991,7 +991,7 @@ function parseAppointmentStart(a: Appointment): Date | null {
   if (!a.appointmentDate) return null;
   const d = new Date(a.appointmentDate);
   if (isNaN(d.getTime())) return null;
-  if (a.slotTime && /^\d{2}:\d{2}/.test(a.slotTime)) {
+  if (a.slotTime && /^\d{1,2}:\d{2}/.test(a.slotTime)) {
     const [hh, mm] = a.slotTime.split(':').map(n => parseInt(n, 10));
     if (Number.isFinite(hh) && Number.isFinite(mm)) d.setHours(hh, mm, 0, 0);
   }
