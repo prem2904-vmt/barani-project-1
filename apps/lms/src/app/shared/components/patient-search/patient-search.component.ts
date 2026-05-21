@@ -148,8 +148,12 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       position: relative;
       display: flex;
       align-items: center;
+      gap: 4px;
       height: 60px;
-      padding: 0 56px 0 56px;
+      /* Left padding clears the absolutely-positioned search glyph.
+         The right side just needs a small gutter — the clear button,
+         spinner and trailing-action slot now sit in normal flow. */
+      padding: 0 14px 0 56px;
       background: var(--glass-bg);
       border: 1.5px solid var(--glass-border);
       border-radius: 18px;
@@ -189,8 +193,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     }
 
     .field-clear {
-      position: absolute;
-      right: 52px;
+      flex-shrink: 0;
       width: 28px;
       height: 28px;
       display: inline-flex;
@@ -207,10 +210,6 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--bg-hover);
       color: var(--text-primary);
     }
-    /* When no trailing slot is in use, the clear button reverts to the
-       original right-edge slot (no trailing icon to dodge). */
-    .field:not(:has(.field-trail > *)) .field-clear { right: 16px; }
-
     .field-spinner, .panel-spinner {
       width: 18px;
       height: 18px;
@@ -220,17 +219,13 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       animation: pf-ps-spin 0.8s linear infinite;
       display: inline-block;
     }
-    .field-spinner { position: absolute; right: 56px; }
-    .field:not(:has(.field-trail > *)) .field-spinner { right: 20px; }
+    .field-spinner { flex-shrink: 0; }
 
     /* Trailing slot — pinned to the right edge of the field, sits above the
        background. Children render naturally; consumers style their own
        buttons. Empty when no content is projected (no width / no border). */
     .field-trail {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
+      flex-shrink: 0;
       display: inline-flex;
       align-items: center;
       gap: 4px;
