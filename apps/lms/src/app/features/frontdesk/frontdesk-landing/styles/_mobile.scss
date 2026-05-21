@@ -230,6 +230,15 @@
   .pf-mlist { display: block !important; }
   .pf-appt-split__hdr,
   .pf-appt-split__handle { display: none !important; }
+
+  /* The dropdown shows exactly one list at a time. Fully hide the
+     pane that isn't selected — the accordion CSS only hid its inner
+     content, leaving the empty bordered .pf-appt-split__pane box
+     stranded above the active list. display:none on the whole pane
+     keeps the view to a single box, matching the Appointments view. */
+  .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) {
+    display: none !important;
+  }
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */

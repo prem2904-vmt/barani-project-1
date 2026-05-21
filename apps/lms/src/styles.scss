@@ -1859,6 +1859,16 @@ html[data-theme="light"] .pf-vial__outline {
   z-index: 35 !important;
 }
 
+/* ── (B2) Android only — lift the floating nav pill clear of the
+   system navigation bar. Android 15 (targetSdk 35+) forces edge-to-
+   edge, so the WebView paints under the gesture / 3-button bar and
+   the pill at bottom:8px collided with it. iOS already clears the
+   home indicator, so this is scoped to .cap-android and excludes the
+   iPad rail (which is full-height, bottom:0 by design). */
+html.cap-android .pf-bottom-nav:not(.pf-bottom-nav--rail) {
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+
 /* ═════════════════════════════════════════════════════════════════
    MOBILE-ONLY RULES BELOW
    ═════════════════════════════════════════════════════════════════ */

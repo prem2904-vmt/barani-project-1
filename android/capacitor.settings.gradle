@@ -29,5 +29,6 @@ project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capa
 include ':capacitor-status-bar'
 project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacitor/status-bar/android')
 
-include ':capacitor-plugin-callkit-voip'
-project(':capacitor-plugin-callkit-voip').projectDir = new File('../node_modules/capacitor-plugin-callkit-voip/android')
+// capacitor-plugin-callkit-voip excluded — broken android/build.gradle.
+// NOTE: `npx cap sync android` regenerates this file and re-adds it;
+// it must be removed again after every sync.

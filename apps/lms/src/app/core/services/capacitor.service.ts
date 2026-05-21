@@ -6,6 +6,7 @@ import { Network } from '@capacitor/network';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 import { PlatformService } from './platform.service';
 
 /**
@@ -49,6 +50,10 @@ export class CapacitorService {
     // max(env(safe-area-inset-top), 50px) — once iOS reports the real
     // inset it takes over, with no flash of overlap.
     document.documentElement.classList.add('cap-native');
+    // Platform-specific class (cap-ios / cap-android) so CSS can fork
+    // per-OS — e.g. lifting the floating nav pill above Android's
+    // system navigation bar without touching the iOS layout.
+    document.documentElement.classList.add('cap-' + Capacitor.getPlatform());
 
     try {
       const status = await Network.getStatus();
