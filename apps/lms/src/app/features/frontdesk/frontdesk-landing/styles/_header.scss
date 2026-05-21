@@ -130,22 +130,34 @@
 }
 .pf-pop__dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-.pf-head__title {
+/* Greeting block — a small date eyebrow stacked above the greeting
+   line, so the left side carries enough weight to balance the search
+   field + action buttons on the right. */
+.pf-head__greet {
   grid-area: title;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.pf-head__eyebrow {
   margin: 0;
-  font-size: 26px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pf-head__title {
+  margin: 0;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
-  line-height: 1.1;
-}
-
-@media (min-width: 768px) {
-  /* Compact — the greeting is a top-right corner accent now, not the
-     header's headline. */
-  .pf-head__title {
-    font-size: 18px;
-  }
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .pf-head__name {

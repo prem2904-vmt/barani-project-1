@@ -188,9 +188,9 @@
     white-space: nowrap;
   }
 
-  /* ── Greeting removed on phones — the screen leads straight with
-        the action buttons, no "Good day, X" line. */
-  .pf-head__title { display: none !important; }
+  /* ── Greeting block removed on phones — the screen leads straight
+        with the action buttons, no "Good day, X" line. */
+  .pf-head__greet { display: none !important; }
 
   /* ── New patient + Book appointment side by side. The cta-row is
         display:contents elsewhere; here it becomes a 50/50 flex row. */

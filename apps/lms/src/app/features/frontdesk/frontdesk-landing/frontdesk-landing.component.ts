@@ -319,6 +319,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   readonly firstName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'there');
 
+  /** Today's date — shown as a small eyebrow above the greeting. */
+  readonly today = new Date();
+
   readonly statusHint = computed(() => {
     const a = this._appointments().length;
     const o = this._orders().length;
