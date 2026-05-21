@@ -5,10 +5,12 @@
    tidy row with the buttons and frees a row of vertical space. */
 .pf-head {
   display: grid;
-  /* One row, left → right: greeting · alert chips · flexible gap ·
-     search field · action buttons. */
-  grid-template-columns: auto auto 1fr minmax(0, 560px) auto;
-  grid-template-areas: "title alerts . filter actions";
+  /* One row: greeting · alert chips · search · buttons. The search
+     column is the flexible one — it adapts to fill whatever space is
+     left between the greeting and the buttons, from wide desktop
+     down to iPad. */
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "title alerts filter actions";
   gap: 12px;
   align-items: center;
   padding: 6px 0 12px;
