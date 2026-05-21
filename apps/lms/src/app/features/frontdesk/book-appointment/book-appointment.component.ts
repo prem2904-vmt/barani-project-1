@@ -104,8 +104,7 @@ import {
             </span>
           </h3>
           @if (selectedTests().length > 0) {
-            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full"
-                  style="background: rgba(168,85,247,0.15); color: #c4b5fd;">
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-full pf-draft-badge">
               {{ selectedTests().length }} test{{ selectedTests().length === 1 ? '' : 's' }} ·
               ₹{{ selectedTestsTotal() }}
             </span>
@@ -121,8 +120,7 @@ import {
         @if (selectedTests().length > 0) {
           <div class="flex flex-wrap gap-2 mb-3">
             @for (t of selectedTests(); track t.id) {
-              <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full text-[11.5px]"
-                    style="background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.30); color: #c4b5fd;">
+              <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full text-[11.5px] pf-draft-pill">
                 {{ t.name }}
                 <span class="opacity-70 font-mono">₹{{ t.price }}</span>
                 <button type="button" class="bg-transparent border-0 cursor-pointer"
@@ -142,16 +140,14 @@ import {
           }
           @for (t of filteredTests(); track t.id) {
             <button type="button"
-                    class="w-full grid items-center gap-[10px] py-2 px-3 bg-transparent border-0 cursor-pointer text-left"
+                    class="w-full grid items-center gap-[10px] py-2 px-3 bg-transparent border-0 cursor-pointer text-left pf-draft-list-item"
                     style="grid-template-columns: 1fr auto 24px; color: var(--text-primary); border-bottom: 1px solid var(--glass-border);"
                     [style.background]="isSelected(t.id) ? 'rgba(168,85,247,0.10)' : 'transparent'"
                     (click)="toggleTest(t.id)">
               <span class="text-[13px]">{{ t.name }}</span>
               <span class="text-[11.5px] font-mono" style="color: var(--text-tertiary);">₹{{ t.price }}</span>
-              <span class="inline-flex items-center justify-center rounded-full text-[14px] font-semibold"
-                    style="width: 22px; height: 22px;"
-                    [style.background]="isSelected(t.id) ? '#a855f7' : 'rgba(168,85,247,0.18)'"
-                    [style.color]="isSelected(t.id) ? '#ffffff' : '#c4b5fd'">
+              <span class="inline-flex items-center justify-center rounded-full text-[14px] font-semibold pf-draft-test-btn"
+                    [class.selected]="isSelected(t.id)">
                 {{ isSelected(t.id) ? '✓' : '+' }}
               </span>
             </button>
@@ -163,7 +159,56 @@ import {
         Config: appointment_booking v{{ record()?.version ?? '—' }}
       </p>
     </section>
-  `
+  `,
+  styles: [`
+    .pf-draft-badge {
+      background: rgba(168, 85, 247, 0.15);
+      color: #c4b5fd;
+    }
+    :root.light .pf-draft-badge {
+      color: #6d28d9;
+      background: rgba(109, 40, 217, 0.12);
+      font-weight: 600;
+    }
+    
+    .pf-draft-pill {
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.30);
+      color: #c4b5fd;
+    }
+    :root.light .pf-draft-pill {
+      background: rgba(109, 40, 217, 0.08);
+      border-color: rgba(109, 40, 217, 0.25);
+      color: #6d28d9;
+      font-weight: 500;
+    }
+
+    .pf-draft-test-btn {
+      width: 22px;
+      height: 22px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #c4b5fd;
+      transition: all 0.15s ease;
+    }
+    .pf-draft-test-btn.selected {
+      background: #a855f7 !important;
+      color: #ffffff !important;
+    }
+    :root.light .pf-draft-test-btn:not(.selected) {
+      background: rgba(109, 40, 217, 0.12);
+      color: #6d28d9;
+    }
+
+    .pf-draft-list-item {
+      transition: background-color 0.15s ease;
+    }
+    .pf-draft-list-item:hover {
+      background: rgba(168, 85, 247, 0.06) !important;
+    }
+    :root.light .pf-draft-list-item:hover {
+      background: rgba(109, 40, 217, 0.04) !important;
+    }
+  `]
 })
 export class BookAppointmentComponent implements OnInit {
   private readonly api = inject(ApiService);

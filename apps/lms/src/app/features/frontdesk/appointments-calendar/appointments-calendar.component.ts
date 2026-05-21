@@ -233,18 +233,16 @@ const STATUS_CLASS: Record<string, string> = {
                  [class.pf-cal-month__cell--out]="cell.outside"
                  [class.pf-cal-month__cell--today]="cell.today"
                  [class.pf-cal-past]="cell.past"
-                 (click)="onSlotClick(cell.iso, 12, 0)">
+                 (click)="onMonthCellClick(cell, $event)">
               <span class="pf-cal-month__day">{{ cell.date.getDate() }}</span>
-              <div class="pf-cal-month__events">
-                @for (a of cell.events; track a.id) {
-                  <button type="button" class="pf-cal-month__event {{ statusClass(a.status) }}"
-                          (click)="onEventClick(a, $event)">
-                    <span class="pf-cal-month__event-time">{{ a.slotTime ?? '' }}</span>
-                    <span class="pf-cal-month__event-name">{{ a.patient?.displayName ?? 'Patient' }}</span>
-                  </button>
-                }
-                @if (cell.events.length === 0 && !cell.past) {
-                  <span class="pf-cal-month__empty"></span>
+              <div class="pf-cal-month__summary">
+                @if (cell.events.length > 0) {
+                  <div class="pf-cal-month__pill" (click)="onMonthPillClick(cell.iso, $event)">
+                    <span class="pf-cal-month__badge">{{ cell.events.length }}</span>
+                    <span class="pf-cal-month__label">
+                      {{ cell.events.length === 1 ? 'appointment' : 'appointments' }}
+                    </span>
+                  </div>
                 }
               </div>
             </div>
@@ -607,21 +605,49 @@ const STATUS_CLASS: Record<string, string> = {
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 11.5px;
     }
-    .pf-cal-month__events { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden; }
-    .pf-cal-month__event {
-      display: flex; align-items: center; gap: 4px;
-      padding: 2px 6px;
-      background: transparent; border: 1px solid; border-left-width: 3px;
-      border-radius: 5px; font-size: 10.5px; cursor: pointer;
-      text-align: left; white-space: nowrap; overflow: hidden;
+    .pf-cal-month__summary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding-bottom: 4px;
     }
-    .pf-cal-month__event:hover { filter: brightness(1.15); }
-    .pf-cal-month__event-time {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 600; opacity: 0.9;
+    .pf-cal-month__pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
+      font-size: 11px;
+      font-weight: 600;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .pf-cal-month__event-name { overflow: hidden; text-overflow: ellipsis; }
-    .pf-cal-month__empty { display: block; height: 0; }
+    :host-context(html[data-theme="light"]) .pf-cal-month__pill {
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(124, 58, 237, 0.22);
+      color: #6d28d9;
+    }
+    .pf-cal-month__badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-month__badge {
+      background: #7c3aed;
+    }
+    .pf-cal-month__label {
+      white-space: nowrap;
+    }
   `]
 })
 export class AppointmentsCalendarComponent {
@@ -661,7 +687,7 @@ export class AppointmentsCalendarComponent {
   protected readonly allViews: CalView[] = ['day', 'week', 'month'];
 
   // state
-  protected readonly view = signal<CalView>('week');
+  protected readonly view = signal<CalView>('month');
   /** Anchor date — for week view, any date in the visible week; for day,
    *  the day itself; for month, any date in the visible month. */
   protected readonly cursor = signal<Date>(new Date());
@@ -877,6 +903,23 @@ export class AppointmentsCalendarComponent {
       return;
     }
     this.booking.open({ date: iso, time });
+  }
+
+  protected onMonthCellClick(cell: DayCell, ev: MouseEvent) {
+    if (!cell || !cell.iso) return;
+    const today = stripTime(new Date());
+    if (cell.date.getTime() < today.getTime()) {
+      this.toasts.warning('Cannot book an appointment in the past');
+      return;
+    }
+    this.booking.open({ date: cell.iso });
+  }
+
+  protected onMonthPillClick(iso: string, ev: MouseEvent) {
+    if (ev) {
+      ev.stopPropagation();
+    }
+    this.setDay(iso);
   }
 
   protected onEventClick(a: Appointment, ev: MouseEvent) {

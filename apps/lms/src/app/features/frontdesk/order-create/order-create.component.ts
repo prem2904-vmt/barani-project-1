@@ -11,6 +11,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -25,7 +26,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, PatientSearchComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -78,23 +79,24 @@ interface HistoryRow {
               </button>
             </div>
           } @else {
-            <!-- Canonical flow starts at Frontdesk Home: pick a patient there,
-                 open their history, then tap "New order". Route here with
-                 ?patientId=. If someone lands on Orders without a patient
-                 selected, bounce them back to Home via this prompt. -->
             <div class="pf-no-patient">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="pf-no-patient__icon">
-                <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-              </svg>
-              <div class="min-w-0 flex-1">
-                <p class="pf-no-patient__title">No patient attached</p>
-                <p class="pf-no-patient__sub">
-                  Start at Frontdesk Home — search or register a patient, open their history, then tap <b>New order</b>.
-                </p>
+              <div class="flex items-center gap-3 w-full">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="pf-no-patient__icon">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+                </svg>
+                <div class="min-w-0 flex-1">
+                  <p class="pf-no-patient__title">No patient attached</p>
+                  <p class="pf-no-patient__sub">
+                    Search and attach a patient below to start building the order.
+                  </p>
+                </div>
               </div>
-              <button type="button" class="pf-no-patient__go press" (click)="goHome()">
-                Go to Home
-              </button>
+              <div class="w-full">
+                <pf-patient-search
+                  placeholder="Search by name, MRN, phone, ABHA…"
+                  (picked)="attachPatient($event)"
+                ></pf-patient-search>
+              </div>
             </div>
           }
 
@@ -1057,9 +1059,10 @@ interface HistoryRow {
 
     .pf-no-patient {
       display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 16px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+      padding: 20px;
       border-radius: 14px;
       background: var(--glass-bg);
       border: 1px dashed rgba(168, 85, 247, 0.4);
@@ -2193,6 +2196,17 @@ export class OrderCreateComponent implements OnInit {
   changePatient() {
     this._patient.set(null);
     this.router.navigate([], { queryParams: { patientId: null }, queryParamsHandling: 'merge' });
+  }
+  attachPatient(p: Patient) {
+    if (!p) return;
+    this.router.navigate([], { queryParams: { patientId: p.id }, queryParamsHandling: 'merge' });
+    this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${p.id}`).subscribe({
+      next: res => {
+        this._patient.set(res.patient);
+        this.restoreDraftFor(p.id);
+      },
+      error: () => this.toasts.error('Could not load patient details')
+    });
   }
   goHome() { this.router.navigateByUrl('/frontdesk'); }
 

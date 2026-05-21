@@ -405,13 +405,17 @@
    ============================================================= */
 .pf-hdr-date-pills {
   margin-left: auto;
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 4px;
   background: rgba(0, 0, 0, 0.2);
   padding: 2px;
   border-radius: 9999px;
   border: 1px solid var(--border-secondary);
+
+  @media (min-width: 1024px) {
+    display: inline-flex;
+  }
 }
 
 /* ── Collapsed date filter — a single chip that opens a popover ────
@@ -423,6 +427,10 @@
   margin-left: auto;
   position: relative;
   display: inline-flex;
+
+  @media (min-width: 1024px) {
+    display: none;
+  }
 }
 .pf-hdr-filter__btn {
   display: inline-flex;
@@ -457,7 +465,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 60;
+  z-index: 80;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -534,4 +542,27 @@
 .pf-hdr-date-pill__clear:hover {
   background: var(--color-danger);
   color: #fff;
+}
+
+:host-context([data-theme="light"]) {
+  .pf-hdr-date-pills {
+    background: rgba(15, 23, 42, 0.05);
+    border-color: rgba(15, 23, 42, 0.08);
+  }
+  .pf-hdr-date-pill:not(.pf-hdr-date-pill--on) {
+    color: var(--text-secondary);
+  }
+  .pf-hdr-date-pill:hover:not(.pf-hdr-date-pill--on) {
+    background: rgba(15, 23, 42, 0.06);
+    color: var(--text-primary);
+  }
+  .pf-hdr-date-pill__clear {
+    background: rgba(15, 23, 42, 0.1);
+    color: var(--text-primary);
+  }
+  .pf-hdr-filter__btn--on {
+    background: rgba(124, 58, 237, 0.08);
+    border-color: rgba(124, 58, 237, 0.25);
+    color: #6d28d9;
+  }
 }
