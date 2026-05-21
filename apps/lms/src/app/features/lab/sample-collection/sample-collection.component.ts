@@ -1072,9 +1072,17 @@ interface OrderGroup {
        * the right that reads as an action target. Each tile is ~96px
        * tall so a typical 2-3 tube order fits on a single iPhone screen
        * with no horizontal swipe. iPad / desktop unchanged. */
+      /* A single full-width column. The base layout is flex-wrap +
+         justify-content:center, which just centres a content-sized
+         tile — leaving the tube narrow and clipping the stamp pill.
+         flex-direction:column + the default align-items:stretch makes
+         every tube fill the width with no reliance on width:100%. */
       .pf-drawer__tubes {
         padding: 14px 16px 22px;
-        grid-template-columns: 1fr;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        justify-content: flex-start;
         gap: 10px;
       }
 
