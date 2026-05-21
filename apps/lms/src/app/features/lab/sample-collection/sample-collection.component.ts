@@ -1354,6 +1354,23 @@ interface OrderGroup {
       background: rgba(15, 23, 42, 0.04);
     }
 
+    /* ── Mobile vial-tile width — appended last so no earlier rule or
+       cascade quirk can suppress it. The tiles MUST fill the drawer
+       width, otherwise the body squeezes and the stamp pill clips. */
+    @media (max-width: 640px) {
+      .pf-drawer__tubes {
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+      }
+      .pf-drawer__tubes .pf-tube {
+        width: auto !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+    }
+
   `]
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
