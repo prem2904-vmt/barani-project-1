@@ -758,7 +758,8 @@
   gap: 4px;
 }
 
-/* Mobile: sel + actions are hidden → 3 visible items (avatar, body, chip) */
+/* Mobile: sel is hidden → 4 visible items (avatar, body, chip, actions)
+   over a 3-column grid. */
 @media (max-width: 640px) {
   .pf-card--ip {
     grid-template-columns: 36px 1fr auto;
@@ -767,6 +768,16 @@
 
   .pf-card__meta-inline {
     display: none;
+  }
+
+  /* The 4th item (actions) wrapped into the 36px avatar column, which
+     squeezed the Collect pill into a clipped circle. Give the actions
+     their own full-width row, left-aligned, so the pill keeps its
+     natural shape. */
+  .pf-card--ip .pf-card__actions {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 4px;
   }
 }
 
