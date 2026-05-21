@@ -1,0 +1,1327 @@
+﻿<section class="min-h-full bg-[var(--bg-primary)] text-[var(--text-primary)] p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+
+  @if (patient(); as p) {
+
+    <!-- Responsive Grid Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- Left Column: Patient Quick Info & Vitals (lg:col-span-4) -->
+      <div class="lg:col-span-4 flex flex-col gap-6 w-full">
+
+        <!-- Demographics Card -->
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-5">
+          
+          <!-- Back button inside card -->
+          <button type="button" class="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors w-fit cursor-pointer -mt-1" (click)="back()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            BACK TO RECENTS
+          </button>
+
+          <div class="h-px bg-[var(--border-muted)] -mx-6 -my-1"></div>
+
+          <div class="flex items-start gap-4">
+            <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-tight truncate mb-1">
+                {{ displayName() }}
+              </h1>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                  MRN-{{ p.id.slice(-5).toUpperCase() }}
+                </span>
+                @if (p.isMinor) {
+                  <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    MINOR
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="h-px bg-[var(--border-muted)]"></div>
+
+          <!-- Metrics Summary -->
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span class="text-xs text-[var(--text-tertiary)] block">Age / Gender</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ p.age ?? 'â€”' }}y Â· {{ p.sex ?? 'â€”' }}</span>
+            </div>
+            <div>
+              <span class="text-xs text-[var(--text-tertiary)] block">Blood Group</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ clinicalData()?.bloodGroup ?? 'â€”' }}</span>
+            </div>
+            @if (p.dateOfBirth) {
+              <div>
+                <span class="text-xs text-[var(--text-tertiary)] block">Date of Birth</span>
+                <span class="font-semibold text-[var(--text-secondary)]">{{ p.dateOfBirth | date:'d MMM y' }}</span>
+              </div>
+            }
+            <div>
+              <span class="text-xs text-[var(--text-tertiary)] block">Registered On</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ p.createdAt | date:'d MMM y' }}</span>
+            </div>
+          </div>
+
+          <div class="h-px bg-[var(--border-muted)]"></div>
+
+          <!-- Contact Information -->
+          <div class="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
+            @if (p.phone) {
+              <a [href]="'tel:' + p.phone" class="inline-flex items-center gap-2 hover:text-[var(--text-primary)] transition-colors w-fit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.17 12a19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 3.08 1.2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.9z"/>
+                </svg>
+                {{ p.phone }}
+              </a>
+            }
+            @if (p.email) {
+              <a [href]="'mailto:' + p.email" class="inline-flex items-center gap-2 hover:text-[var(--text-primary)] transition-colors truncate">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                {{ p.email }}
+              </a>
+            }
+            @if (p.guardianName) {
+              <div class="text-xs mt-1 p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                <span class="text-[var(--text-tertiary)] block font-medium uppercase tracking-wider text-[9px] mb-0.5">Guardian Details</span>
+                <div class="font-semibold text-[var(--text-primary)]">{{ p.guardianName }} ({{ p.guardianRelationship ?? 'Guardian' }})</div>
+                @if (p.guardianPhone) {
+                  <div class="text-[var(--text-secondary)] font-mono">{{ p.guardianPhone }}</div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="flex flex-col gap-2 mt-2">
+            <button type="button" class="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm transition-all shadow-md shadow-violet-600/20 cursor-pointer" (click)="startOrder(p)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              New Lab Order
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="bookAppointment(p)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                Book Appointment
+              </button>
+              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Send to Chat
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vitals Summary Card -->
+        @if (clinicalData(); as clinical) {
+          <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">
+                Current Vitals
+              </h3>
+              <span class="text-[10px] text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Stable
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <!-- Blood Pressure -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">BP (Syst/Diast)</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.bloodPressure }}</span>
+                <span class="text-[9px] text-[var(--text-muted)]">mmHg</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('bp', clinical.vitals.bloodPressure) + '-400'"></span>
+              </div>
+
+              <!-- Pulse Rate -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Heart Rate</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.pulseRate }}</span>
+                <span class="text-[9px] text-[var(--text-muted)]">bpm</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('heartRate', clinical.vitals.pulseRate) + '-400'"></span>
+              </div>
+
+              <!-- SpO2 -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Oxygen (SpO2)</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.spo2 }}%</span>
+                <span class="text-[9px] text-[var(--text-muted)]">Room Air</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('spo2', clinical.vitals.spo2) + '-400'"></span>
+              </div>
+
+              <!-- Temperature -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Temperature</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.temperature }}Â°F</span>
+                <span class="text-[9px] text-[var(--text-muted)]">Oral</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('temp', clinical.vitals.temperature) + '-400'"></span>
+              </div>
+
+              <!-- Respiratory Rate -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Resp. Rate</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.respiratoryRate }}</span>
+                <span class="text-[9px] text-[var(--text-muted)]">breaths/min</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('respRate', clinical.vitals.respiratoryRate) + '-400'"></span>
+              </div>
+
+              <!-- BMI -->
+              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
+                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Weight / BMI</span>
+                <span class="font-mono text-sm font-bold text-[var(--text-primary)]">{{ clinical.vitals.weight }}kg ({{ clinical.vitals.bmi }})</span>
+                <span class="text-[9px] text-[var(--text-muted)]">Ht: {{ clinical.vitals.height }}cm</span>
+                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('bmi', clinical.vitals.bmi) + '-400'"></span>
+              </div>
+            </div>
+          </div>
+        }
+
+      </div>
+
+      <!-- Right Column: Tabs Navigation and Dynamic Views (lg:col-span-8) -->
+      <div class="lg:col-span-8 flex flex-col gap-6 w-full">
+
+        <!-- Horizontal Tab Bar (Horizontally scrollable on mobile/tablet) -->
+        <div class="flex items-center gap-1.5 p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-2xl overflow-x-auto scrollbar-none w-full select-none">
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'overview' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('overview')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
+              </svg>
+              <span>Overview</span>
+            </span>
+          </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'timeline' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('timeline')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span>Visits Timeline</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
+                [ngClass]="activeTab() === 'timeline' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
+                {{ unifiedTimeline().length }}
+              </span>
+            </span>
+          </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'labs' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('labs')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 2v7.31a2 2 0 0 1-.59 1.42l-4.24 4.24a3 3 0 0 0-.81 3.23l.11.27A3 3 0 0 0 7.24 20h9.52a3 3 0 0 0 2.77-1.77l.11-.27a3 3 0 0 0-.81-3.23l-4.24-4.24a2 2 0 0 1-.59-1.42V2"/><path d="M8.5 2h7"/><path d="M6 14h12"/>
+              </svg>
+              <span>Lab Orders</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
+                [ngClass]="activeTab() === 'labs' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
+                {{ history().length }}
+              </span>
+            </span>
+          </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'opd' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('opd')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+              </svg>
+              <span>OPD Records</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
+                [ngClass]="activeTab() === 'opd' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
+                {{ clinicalData()?.opdRecords?.length ?? 0 }}
+              </span>
+            </span>
+          </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'ipd' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('ipd')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4v16"/><path d="M2 11h18"/><path d="M22 4v16"/><path d="M2 17h20"/><circle cx="8" cy="8" r="2"/>
+              </svg>
+              <span>IPD Admissions</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
+                [ngClass]="activeTab() === 'ipd' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
+                {{ clinicalData()?.ipdAdmissions?.length ?? 0 }}
+              </span>
+            </span>
+          </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'pharmacy' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('pharmacy')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>
+              </svg>
+              <span>Pharmacy</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
+                [ngClass]="activeTab() === 'pharmacy' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
+                {{ clinicalData()?.prescriptions?.length ?? 0 }}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Dynamic Tab Content Views -->
+        <div class="w-full">
+
+          <!-- TAB 1: OVERVIEW -->
+          @if (activeTab() === 'overview') {
+            <div class="flex flex-col gap-6">
+
+              <!-- Clinical Health Summary: BMI Slider & Intake Analysis -->
+              @if (clinicalData(); as clinical) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-5">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="p-1.5 rounded-lg bg-violet-500/10 text-violet-400">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/>
+                        </svg>
+                      </span>
+                      <div>
+                        <h3 class="text-base font-bold text-[var(--text-primary)]">Clinical Metrics & Analysis</h3>
+                        <p class="text-xs text-[var(--text-secondary)]">Intake body metrics and system assessment</p>
+                      </div>
+                    </div>
+                    <span class="text-[10px] text-emerald-400 font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1.5">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Intake Recorded
+                    </span>
+                  </div>
+
+                  <!-- BMI Visual Range Slider -->
+                  <div class="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <span class="text-xs text-[var(--text-tertiary)] font-semibold">Body Mass Index (BMI) Status</span>
+                        <span class="text-xs text-[var(--text-secondary)] block mt-0.5">
+                          Weight: <strong class="font-mono text-violet-400">{{ clinical.vitals.weight }} kg</strong> Â· Height: <strong class="font-mono text-violet-400">{{ clinical.vitals.height }} cm</strong>
+                        </span>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-xl font-bold text-[var(--text-primary)] font-mono leading-none">{{ clinical.vitals.bmi }}</span>
+                        <span class="block text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full"
+                          [ngClass]="{
+                            'bg-sky-500/10 text-sky-400 border border-sky-500/20': clinical.vitals.bmi < 18.5,
+                            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': clinical.vitals.bmi >= 18.5 && clinical.vitals.bmi < 25,
+                            'bg-amber-500/10 text-amber-400 border border-amber-500/20': clinical.vitals.bmi >= 25 && clinical.vitals.bmi < 30,
+                            'bg-rose-500/10 text-rose-400 border border-rose-500/20': clinical.vitals.bmi >= 30
+                          }">
+                          {{ getBmiDetails(clinical.vitals.bmi).label }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Range slider track -->
+                    <div class="relative w-full h-2.5 rounded-full overflow-visible mt-2 bg-zinc-800">
+                      <!-- Underweight Segment (0-25%) -->
+                      <div class="absolute left-0 top-0 bottom-0 w-[25%] rounded-l-full bg-sky-500/40"></div>
+                      <!-- Normal Segment (25-50%) -->
+                      <div class="absolute left-[25%] top-0 bottom-0 w-[25%] bg-emerald-500/40"></div>
+                      <!-- Overweight Segment (50-75%) -->
+                      <div class="absolute left-[50%] top-0 bottom-0 w-[25%] bg-amber-500/40"></div>
+                      <!-- Obese Segment (75-100%) -->
+                      <div class="absolute left-[75%] top-0 bottom-0 w-[25%] rounded-r-full bg-rose-500/40"></div>
+
+                      <!-- The Sliding Indicator Pin -->
+                      <div class="absolute -top-3 w-6 h-6 rounded-full bg-[var(--surface-elevated)] border-2 flex items-center justify-center shadow-lg -ml-3 transition-all duration-300"
+                        [style.left.%]="getBmiDetails(clinical.vitals.bmi).pct"
+                        [style.border-color]="getBmiDetails(clinical.vitals.bmi).color">
+                        <span class="w-2.5 h-2.5 rounded-full" [style.background-color]="getBmiDetails(clinical.vitals.bmi).color"></span>
+                      </div>
+                    </div>
+
+                    <!-- Labels under the track -->
+                    <div class="grid grid-cols-4 text-[9px] text-[var(--text-tertiary)] font-bold text-center mt-1">
+                      <span class="text-left pl-1">Underweight (&lt;18.5)</span>
+                      <span>Normal (18.5-24.9)</span>
+                      <span>Overweight (25-29.9)</span>
+                      <span class="text-right pr-1">Obese (&gt;=30)</span>
+                    </div>
+                  </div>
+
+                  <!-- Clinician Intake Diagnostics Box -->
+                  <div class="p-4 rounded-xl border border-violet-500/10 bg-violet-500/5 relative overflow-hidden flex flex-col gap-2">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full blur-xl pointer-events-none"></div>
+                    <div class="flex items-center gap-2">
+                      <svg class="text-violet-400 shrink-0 animate-pulse" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                      </svg>
+                      <span class="text-xs font-bold text-violet-400 uppercase tracking-wider">Clinician Intake Diagnostics (System Analysis)</span>
+                    </div>
+                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed italic">
+                      "{{ healthStatusNotes() }}"
+                    </p>
+                  </div>
+                </div>
+              }
+
+              <!-- 2-Column Row for Allergies/Precautions & ABHA Card -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Allergies and alerts card -->
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
+                  <h3 class="text-sm font-bold text-[var(--text-primary)] pb-2.5 border-b border-[var(--border-muted)] flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    Allergies & Medical Alerts
+                  </h3>
+
+                  <div class="grid grid-cols-1 gap-5">
+                    <!-- Active Allergies -->
+                    <div class="flex flex-col gap-2.5">
+                      <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                        <svg class="text-rose-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        Active Allergies
+                      </span>
+                      
+                      @if (clinicalData()?.allergies?.length) {
+                        <div class="flex flex-col gap-2">
+                          @for (alg of clinicalData()?.allergies; track alg) {
+                            <div class="flex items-center justify-between p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-400 text-xs font-semibold">
+                              <span class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                {{ alg }} Allergy
+                              </span>
+                              <span class="text-[9px] uppercase tracking-wider bg-rose-500/10 px-1.5 py-0.5 rounded text-rose-400">Severe</span>
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <div class="text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 flex items-center gap-2.5">
+                          <svg class="text-emerald-400 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                          No known drug, food, or environmental allergies on record.
+                        </div>
+                      }
+                    </div>
+
+                    <div class="h-px bg-[var(--border-muted)]"></div>
+
+                    <!-- Clinical Risk Assessment / Precautions -->
+                    <div class="flex flex-col gap-2.5">
+                      <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                        <svg class="text-amber-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Clinical Precautions & Risk
+                      </span>
+
+                      <div class="flex flex-col gap-2">
+                        <!-- Fall Risk Precaution -->
+                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-xs">
+                          <span class="text-[var(--text-secondary)] flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full" [ngClass]="(p.age ?? 0) > 60 ? 'bg-amber-400' : 'bg-emerald-400'"></span>
+                            Fall Risk Level
+                          </span>
+                          <span class="font-bold text-[10px] uppercase" [ngClass]="(p.age ?? 0) > 60 ? 'text-amber-400' : 'text-emerald-400'">
+                            {{ (p.age ?? 0) > 60 ? 'Moderate' : 'Low Risk' }}
+                          </span>
+                        </div>
+
+                        <!-- Pediatric Precaution -->
+                        @if (p.isMinor) {
+                          <div class="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10 text-xs">
+                            <span class="text-amber-400 flex items-center gap-2">
+                              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                              Pediatric Care Protocol
+                            </span>
+                            <span class="font-bold text-[10px] text-amber-400 uppercase">Guardian Required</span>
+                          </div>
+                        }
+
+                        <!-- BP Risk precaution -->
+                        @if (clinicalData(); as clinical) {
+                          @if (clinical.vitals.bloodPressure.startsWith('14') || clinical.vitals.bloodPressure.startsWith('15') || clinical.vitals.bloodPressure.startsWith('16')) {
+                            <div class="flex items-center justify-between p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-xs">
+                              <span class="text-rose-400 flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                Hypertensive Alert
+                              </span>
+                              <span class="font-bold text-[10px] text-rose-400 uppercase">Limit Sodium Intake</span>
+                            </div>
+                          }
+                        }
+
+                        <!-- General Isolation Precaution -->
+                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-xs">
+                          <span class="text-[var(--text-secondary)] flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            Isolation Status
+                          </span>
+                          <span class="font-bold text-[10px] text-emerald-400 uppercase">Standard</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ABHA verification card -->
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
+                  <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border-muted)]">
+                    <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <svg class="text-emerald-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>
+                      </svg>
+                      ABHA Health Card (ABDM)
+                    </h3>
+                    @if (p.abhaId) {
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                        <span class="w-1 h-1 rounded-full bg-emerald-400"></span> ACTIVE
+                      </span>
+                    } @else {
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                        UNLINKED
+                      </span>
+                    }
+                  </div>
+
+                  <!-- Interactive Health ID Card Layout -->
+                  <div class="relative overflow-hidden rounded-xl border border-violet-500/20 bg-gradient-to-br from-slate-900 to-indigo-950 p-5 text-white shadow-lg shadow-violet-950/20 flex flex-col gap-4">
+                    <!-- Hologram/Globe watermark element -->
+                    <div class="absolute right-0 bottom-0 w-32 h-32 bg-violet-600/10 rounded-full blur-2xl pointer-events-none"></div>
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-pink-600/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                    <!-- Card Header (ABDM Branding) -->
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                      <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center border border-white/20">
+                          <svg class="text-emerald-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                        </span>
+                        <div class="leading-none">
+                          <span class="text-[8px] font-mono tracking-widest text-emerald-400 block uppercase font-bold">ABHA HEALTH CARD</span>
+                          <span class="text-[10px] font-bold tracking-tight text-white/90">National Health Authority</span>
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-[7px] text-white/50 block font-mono">GOVERNMENT OF INDIA</span>
+                        <span class="text-[8px] font-bold text-white/80 font-mono">NDHM Registry</span>
+                      </div>
+                    </div>
+
+                    <!-- Card Body (Photo + Info) -->
+                    <div class="flex gap-4 items-start">
+                      <!-- Left: Photo Placeholder & Mini QR -->
+                      <div class="flex flex-col gap-2 shrink-0 items-center">
+                        <div class="w-18 h-18 rounded-lg bg-white/5 border border-white/15 overflow-hidden flex items-center justify-center p-1 relative">
+                          <svg class="text-white/20 w-12 h-12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                          </svg>
+                          @if (p.abhaId) {
+                            <span class="absolute bottom-1 right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center">
+                              <svg class="text-white" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"/>
+                              </svg>
+                            </span>
+                          }
+                        </div>
+                        <!-- Mini mock QR Code -->
+                        <div class="w-8 h-8 bg-white p-0.5 rounded border border-white/20 flex flex-wrap items-center justify-center">
+                          <svg width="28" height="28" viewBox="0 0 29 29" class="text-slate-900">
+                            <path fill="currentColor" d="M0 0h9v9H0zm1 1v7h7V1zm11 0h9v9h-9zm1 1v7h7V2zM0 12h9v9H0zm1 1v7h7v-7zm15-3h2v2h-2zm3 0h2v2h-2zm-3 3h2v2h-2zm3 0h2v2h-2zm-6 3h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zm-6 3h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2z"/>
+                          </svg>
+                        </div>
+                      </div>
+
+                      <!-- Right: Detailed Info -->
+                      <div class="flex-1 min-w-0 flex flex-col gap-2.5 text-xs text-white/80">
+                        <div>
+                          <span class="text-[8px] text-white/40 block uppercase tracking-wider">Patient Name</span>
+                          <span class="font-bold text-white tracking-tight text-sm truncate block">{{ displayName() }}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>
+                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA ID</span>
+                            <span class="font-mono font-bold text-white/95 truncate block text-[11px]">{{ p.abhaId || 'Not Linked' }}</span>
+                          </div>
+                          <div>
+                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA Address</span>
+                            <span class="font-mono text-emerald-400 font-bold truncate block text-[10px]">
+                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : 'â€”' }}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>
+                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">Gender / YOB</span>
+                            <span class="font-semibold block text-[11px]">{{ p.sex || 'â€”' }} Â· {{ (p.dateOfBirth | date:'yyyy') || 'â€”' }}</span>
+                          </div>
+                          <div>
+                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">Security Code</span>
+                            <span class="font-mono font-bold text-violet-400 block text-[11px]">****{{ p.id.slice(-4) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Card Footer Status -->
+                    <div class="flex items-center justify-between border-t border-white/10 pt-2.5 text-[9px] font-mono text-white/50">
+                      <span>CARD REF: NHA-{{ p.id.slice(-6).toUpperCase() }}</span>
+                      @if (p.abhaId) {
+                        <span class="text-emerald-400 font-bold flex items-center gap-1">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                          VERIFIED IDENTITY
+                        </span>
+                      } @else {
+                        <span class="text-amber-400 font-bold">IDENTITY LINK PENDING</span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Action link button -->
+                  @if (!p.abhaId) {
+                    <div class="flex justify-end">
+                      <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                        (click)="toasts.info('ABHA integration workflow initiated. Connecting registry...')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        Verify & Link ABHA Card
+                      </button>
+                    </div>
+                  }
+                </div>
+
+              </div>
+
+              <!-- 2-Column Row for Recent Lab Orders & Active Medications -->
+              @if (clinicalData(); as clinical) {
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  <!-- Recent lab orders overview -->
+                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col justify-between">
+                    <div>
+                      <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                          <svg class="text-violet-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                          </svg>
+                          Recent Lab Orders
+                        </h3>
+                        <button type="button" class="text-xs font-bold text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('labs')">
+                          View All ({{ history().length }}) â†’
+                        </button>
+                      </div>
+
+                      @if (history().length === 0) {
+                        <p class="text-sm text-[var(--text-secondary)] text-center py-8">No lab orders on record.</p>
+                      } @else {
+                        <div class="flex flex-col gap-3">
+                          @for (o of history().slice(0, 2); track o.id) {
+                            <div class="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--card-hover-border)] transition-colors flex items-center justify-between gap-4 cursor-pointer" (click)="activeTab.set('labs')">
+                              <div class="min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                  <span class="font-mono text-xs font-bold text-[var(--text-primary)]">#{{ o.id.slice(0, 8) }}</span>
+                                  <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
+                                </div>
+                                <p class="text-xs text-[var(--text-secondary)] truncate">
+                                  {{ orderTests(o).length }} tests Â· {{ o.createdAt | date:'MMM d, y HH:mm' }}
+                                </p>
+                              </div>
+                              @if (o.totalAmount) {
+                                <span class="font-mono text-sm font-bold text-[var(--text-primary)] shrink-0">{{ o.totalAmount | inr }}</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Active Medications (Pharmacy) -->
+                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col justify-between">
+                    <div>
+                      <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                          <svg class="text-emerald-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>
+                          </svg>
+                          Active Medications
+                        </h3>
+                        <button type="button" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('pharmacy')">
+                          View All ({{ clinical.prescriptions.length }}) â†’
+                        </button>
+                      </div>
+
+                      @if (clinical.prescriptions.length === 0) {
+                        <p class="text-sm text-[var(--text-secondary)] text-center py-8">No active medications prescribed.</p>
+                      } @else {
+                        <div class="flex flex-col gap-3">
+                          @for (m of clinical.prescriptions.slice(0, 3); track m.name + m.date) {
+                            <div class="p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--card-hover-border)] transition-colors flex items-center justify-between gap-3 cursor-pointer" (click)="activeTab.set('pharmacy')">
+                              <div class="flex items-center gap-3 min-w-0">
+                                <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/>
+                                  </svg>
+                                </span>
+                                <div class="min-w-0 leading-tight">
+                                  <h4 class="text-xs font-bold text-[var(--text-primary)] truncate">{{ m.name }}</h4>
+                                  <p class="text-[10px] text-[var(--text-secondary)] mt-0.5 font-mono">
+                                    {{ m.dosage }} Â· {{ m.frequency }}
+                                  </p>
+                                  <p class="text-[9px] text-[var(--text-muted)] mt-0.5 truncate">
+                                    {{ m.instructions }} Â· {{ m.duration }}
+                                  </p>
+                                </div>
+                              </div>
+                              <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0"
+                                [ngClass]="m.status === 'Dispensed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'">
+                                {{ m.status }}
+                              </span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                </div>
+              }
+
+            </div>
+          }
+
+          <!-- TAB 2: VISITS TIMELINE -->
+          @if (activeTab() === 'timeline') {
+            <div class="flex flex-col gap-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
+                  Patient Journey Timeline
+                </h3>
+                <span class="text-xs text-[var(--text-secondary)]">
+                  {{ unifiedTimeline().length }} events found
+                </span>
+              </div>
+
+              @if (unifiedTimeline().length === 0) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
+                  No visits or orders recorded on timeline.
+                </div>
+              } @else {
+                <div class="relative pl-6 border-l-2 border-[var(--border-muted)] ml-4 flex flex-col gap-6 py-2">
+                  @for (evt of unifiedTimeline(); track evt.id) {
+                    <div class="relative">
+                      <!-- Timeline Node Circle -->
+                      <span class="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-3 bg-[var(--bg-primary)] shadow flex items-center justify-center transition-colors"
+                        [ngClass]="{
+                          'border-violet-500': evt.type === 'lab',
+                          'border-emerald-500': evt.type === 'opd',
+                          'border-amber-500': evt.type === 'ipd'
+                        }">
+                      </span>
+
+                      <!-- Timeline Card -->
+                      <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] hover:border-violet-500/30 rounded-xl p-4 transition-all duration-200 flex flex-col gap-3 shadow cursor-pointer"
+                        (click)="toggleVisitExpand(evt.id)">
+                        
+                        <!-- Card Header -->
+                        <div class="flex items-start justify-between gap-4">
+                          <div>
+                            <span class="text-[10px] font-mono font-bold tracking-wider uppercase"
+                              [ngClass]="{
+                                'text-violet-400': evt.type === 'lab',
+                                'text-emerald-400': evt.type === 'opd',
+                                'text-amber-400': evt.type === 'ipd'
+                              }">
+                              {{ evt.type | uppercase }} EVENT
+                            </span>
+                            <h4 class="text-sm font-bold text-[var(--text-primary)] mt-0.5 leading-tight">
+                              {{ evt.title }}
+                            </h4>
+                            <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
+                              {{ evt.subtitle }}
+                            </p>
+                          </div>
+                          <div class="text-right shrink-0">
+                            <span class="text-[10px] font-mono font-semibold text-[var(--text-tertiary)] block">
+                              {{ evt.date | date:'MMM d, y' }}
+                            </span>
+                            <span class="text-[10px] font-mono text-[var(--text-muted)] block">
+                              {{ evt.date | date:'HH:mm' }}
+                            </span>
+                          </div>
+                        </div>
+
+                        <!-- Click to Expand Toggle Banner -->
+                        <div class="flex items-center justify-between text-[10px] text-[var(--text-tertiary)] border-t border-[var(--border-muted)] pt-2 mt-1">
+                          <span>ID: {{ evt.id.slice(0, 10).toUpperCase() }}</span>
+                          <span class="inline-flex items-center gap-1 font-semibold text-violet-400">
+                            {{ expandedVisits()[evt.id] ? 'Hide details' : 'View details' }}
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                              [style.transform]="expandedVisits()[evt.id] ? 'rotate(180deg)' : 'none'" class="transition-transform">
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          </span>
+                        </div>
+
+                        <!-- Expanded Section details -->
+                        @if (expandedVisits()[evt.id]) {
+                          <div class="border-t border-[var(--border-muted)] pt-3 flex flex-col gap-4 mt-1 bg-[var(--glass-bg)]/30 p-3 rounded-lg animate-[pf-pp-fade_0.2s_ease-out]">
+                            
+                            <!-- LAB DETAILED VIEW -->
+                            @if (evt.type === 'lab') {
+                              <div class="flex flex-col gap-2">
+                                <div class="flex items-center justify-between">
+                                  <span class="text-xs text-[var(--text-tertiary)] font-bold">Ordered Panel Tests:</span>
+                                  <pf-chip [tone]="statusTone(evt.status)" size="sm">{{ evt.status }}</pf-chip>
+                                </div>
+                                <div class="flex flex-col gap-2 mt-1">
+                                  @for (t of orderTests(evt.data); track t.id) {
+                                    <div class="flex items-center justify-between gap-3 text-xs bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-2 rounded-lg">
+                                      <div class="truncate">
+                                        @if (t.test?.code) {
+                                          <span class="font-mono font-bold text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded text-[10px] mr-1.5">{{ t.test!.code }}</span>
+                                        }
+                                        <span class="font-semibold text-[var(--text-secondary)]">{{ t.test?.name }}</span>
+                                      </div>
+                                      <pf-chip [tone]="testStatusTone(t.status)" size="sm">{{ t.status }}</pf-chip>
+                                    </div>
+                                  }
+                                </div>
+                                @if (evt.amount) {
+                                  <div class="flex justify-between items-center text-xs mt-2 border-t border-[var(--border-muted)]/50 pt-2 font-mono">
+                                    <span class="text-[var(--text-tertiary)]">Total Invoice:</span>
+                                    <span class="font-bold text-[var(--text-primary)]">{{ evt.amount | inr }}</span>
+                                  </div>
+                                }
+                              </div>
+                            }
+
+                            <!-- OPD DETAILED VIEW -->
+                            @if (evt.type === 'opd') {
+                              <div class="flex flex-col gap-3 text-xs">
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Symptoms</span>
+                                  <div class="flex flex-wrap gap-1 mt-1">
+                                    @for (sym of evt.data.symptoms; track sym) {
+                                      <span class="bg-[var(--bg-secondary)] border border-[var(--glass-border)] px-2 py-0.5 rounded text-[10px]">{{ sym }}</span>
+                                    }
+                                  </div>
+                                </div>
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Clinical Notes</span>
+                                  <p class="text-[var(--text-secondary)] mt-1 leading-relaxed">{{ evt.data.notes }}</p>
+                                </div>
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Prescribed Medicines</span>
+                                  <div class="flex flex-col gap-1.5 mt-1.5">
+                                    @for (med of evt.data.prescriptions; track med.name) {
+                                      <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-2 rounded-lg flex items-center justify-between">
+                                        <div>
+                                          <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
+                                          <span class="text-[10px] text-[var(--text-tertiary)] block">{{ med.dosage }} Â· {{ med.frequency }} Â· {{ med.duration }}</span>
+                                        </div>
+                                        <span class="text-[10px] px-2 py-0.5 rounded"
+                                          [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
+                                          {{ med.status }}
+                                        </span>
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            }
+
+                            <!-- IPD DETAILED VIEW -->
+                            @if (evt.type === 'ipd') {
+                              <div class="flex flex-col gap-3 text-xs">
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Admission Reason</span>
+                                  <p class="text-[var(--text-secondary)] mt-1 leading-relaxed">{{ evt.data.reason }}</p>
+                                </div>
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Period</span>
+                                  <p class="text-[var(--text-secondary)] mt-1 font-semibold">
+                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} â€” Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Rounds summary</span>
+                                  <div class="relative pl-4 border-l border-amber-500/30 ml-2 mt-2 flex flex-col gap-3.5">
+                                    @for (prog of evt.data.dailyProgress; track prog.date) {
+                                      <div class="relative">
+                                        <span class="absolute -left-[20px] top-1 w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500"></span>
+                                        <span class="text-[9px] text-[var(--text-tertiary)] block font-mono font-medium">{{ prog.date | date:'MMM d, y HH:mm' }}</span>
+                                        <p class="text-[var(--text-secondary)] font-medium mt-0.5">{{ prog.note }}</p>
+                                        <span class="text-[9px] text-[var(--text-muted)] block mt-0.5">By: {{ prog.doctor }}</span>
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            }
+
+                          </div>
+                        }
+
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <!-- TAB 3: LAB ORDERS -->
+          @if (activeTab() === 'labs') {
+            <div class="flex flex-col gap-4">
+              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
+                Lab Investigations & Diagnostics
+              </h3>
+
+              @if (history().length === 0) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
+                  No diagnostic orders yet for this patient.
+                </div>
+              } @else {
+                @for (o of history(); track o.id) {
+                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-5 shadow flex flex-col gap-4">
+                    
+                    <!-- Top Order Details Row -->
+                    <div class="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-[var(--border-muted)]">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">#{{ o.id.toUpperCase() }}</span>
+                          <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
+                        </div>
+                        <div class="text-[11px] text-[var(--text-tertiary)] font-mono mt-1">
+                          {{ o.createdAt | date:'d MMM y HH:mm' }} Â· Ref: {{ o.refDoctorName || 'Self Referral' }}
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-[10px] text-[var(--text-muted)] block font-mono">PRIORITY: {{ o.priority | uppercase }}</span>
+                        @if (o.totalAmount) {
+                          <span class="font-mono font-bold text-sm text-[var(--text-primary)] block mt-0.5">{{ o.totalAmount | inr }}</span>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Tests Table/List -->
+                    @if (orderTests(o).length > 0) {
+                      <div class="flex flex-col gap-3">
+                        <h4 class="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Test Status & Results</h4>
+                        <div class="flex flex-col gap-2">
+                          @for (t of orderTests(o); track t.id) {
+                            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                              <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                  @if (t.test?.code) {
+                                    <span class="font-mono font-bold text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{{ t.test!.code }}</span>
+                                  }
+                                  <span class="font-bold text-[var(--text-primary)]">{{ t.test?.name ?? 'Unknown test' }}</span>
+                                </div>
+                                <div class="text-[10px] text-[var(--text-tertiary)] mt-0.5">
+                                  Sample Tube Type: {{ t.subOrder?.department?.name ?? 'Lab Sample' }}
+                                </div>
+                              </div>
+
+                              <!-- Observed value & ref range (mock output for completed results) -->
+                              <div class="flex items-center gap-4 flex-wrap md:justify-end">
+                                @if (t.status === 'validated' || t.status === 'completed') {
+                                  <div class="text-right bg-[var(--bg-card-solid)] border border-[var(--glass-border)] px-3 py-1.5 rounded-lg flex items-center gap-2">
+                                    <div>
+                                      <span class="text-[10px] text-[var(--text-tertiary)] block font-medium uppercase tracking-wide">Observed</span>
+                                      <span class="font-mono text-sm font-bold text-emerald-400 leading-none">
+                                        {{ t.currentResult || (o.id.charCodeAt(0) % 5 + 4.2).toFixed(1) }}
+                                      </span>
+                                    </div>
+                                    <div class="border-l border-[var(--border-muted)] pl-2 text-left">
+                                      <span class="text-[9px] text-[var(--text-muted)] block">Reference</span>
+                                      <span class="text-[10px] font-mono text-[var(--text-secondary)] leading-none">3.5 - 5.5 g/dL</span>
+                                    </div>
+                                  </div>
+                                }
+                                <pf-chip [tone]="testStatusTone(t.status)" size="sm">{{ t.status }}</pf-chip>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                  </div>
+                }
+              }
+            </div>
+          }
+
+          <!-- TAB 4: OPD RECORDS -->
+          @if (activeTab() === 'opd') {
+            <div class="flex flex-col gap-4">
+              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
+                Out-Patient Consultations (OPD)
+              </h3>
+
+              @if (!clinicalData()?.opdRecords?.length) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
+                  No OPD records on record.
+                </div>
+              } @else {
+                @for (opd of clinicalData()?.opdRecords; track opd.id) {
+                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-5 shadow flex flex-col gap-4">
+                    
+                    <!-- Top header -->
+                    <div class="flex items-start justify-between gap-4 border-b border-[var(--border-muted)] pb-3">
+                      <div>
+                        <span class="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          {{ opd.id }}
+                        </span>
+                        <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">{{ opd.diagnosis }}</h4>
+                        <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
+                          Consultant: <span class="text-[var(--text-primary)]">{{ opd.doctorName }}</span> Â· Dept: {{ opd.department }}
+                        </p>
+                      </div>
+                      <span class="text-xs font-mono font-bold text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] px-2.5 py-1 rounded-lg">
+                        {{ opd.date | date:'d MMM y' }}
+                      </span>
+                    </div>
+
+                    <!-- OPD details grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      
+                      <!-- Symptoms & Assessment -->
+                      <div class="md:col-span-8 flex flex-col gap-3">
+                        <div>
+                          <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Chief Symptoms / Complaints</span>
+                          <div class="flex flex-wrap gap-1.5 mt-1.5">
+                            @for (sym of opd.symptoms; track sym) {
+                              <span class="bg-[var(--glass-bg)] border border-[var(--glass-border)] px-2.5 py-1 rounded-lg text-xs text-[var(--text-secondary)] font-medium">
+                                {{ sym }}
+                              </span>
+                            }
+                          </div>
+                        </div>
+
+                        <div>
+                          <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Physician Consultation Notes</span>
+                          <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-1 p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                            {{ opd.notes }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Vitals at visit -->
+                      <div class="md:col-span-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3.5 flex flex-col gap-2.5">
+                        <span class="text-[9px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Vitals during visit</span>
+                        <div class="flex flex-col gap-2 text-xs font-mono">
+                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
+                            <span class="text-[var(--text-secondary)]">Blood Pressure:</span>
+                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.bloodPressure }}</span>
+                          </div>
+                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
+                            <span class="text-[var(--text-secondary)]">Heart Rate:</span>
+                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.pulseRate }} bpm</span>
+                          </div>
+                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
+                            <span class="text-[var(--text-secondary)]">Temperature:</span>
+                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.temperature }}Â°F</span>
+                          </div>
+                          <div class="flex justify-between pb-0.5">
+                            <span class="text-[var(--text-secondary)]">Oxygen (SpO2):</span>
+                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.spo2 }}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <!-- OPD Prescriptions -->
+                    @if (opd.prescriptions.length) {
+                      <div class="border-t border-[var(--border-muted)] pt-3 flex flex-col gap-2">
+                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block mb-1">Prescribed Treatments</span>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          @for (med of opd.prescriptions; track med.name) {
+                            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 rounded-xl flex items-center justify-between text-xs">
+                              <div>
+                                <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
+                                <span class="text-[10px] text-[var(--text-secondary)] block mt-0.5">
+                                  Dosage: {{ med.dosage }} Â· {{ med.frequency }} ({{ med.duration }})
+                                </span>
+                              </div>
+                              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
+                                {{ med.status }}
+                              </span>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                  </div>
+                }
+              }
+            </div>
+          }
+
+          <!-- TAB 5: IPD ADMISSIONS -->
+          @if (activeTab() === 'ipd') {
+            <div class="flex flex-col gap-4">
+              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
+                In-Patient Admissions (IPD)
+              </h3>
+
+              @if (!clinicalData()?.ipdAdmissions?.length) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
+                  No IPD records on file. No past admissions.
+                </div>
+              } @else {
+                @for (ipd of clinicalData()?.ipdAdmissions; track ipd.id) {
+                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow flex flex-col gap-5">
+                    
+                    <!-- Top Row Header -->
+                    <div class="flex justify-between items-start gap-4 flex-wrap border-b border-[var(--border-muted)] pb-3">
+                      <div>
+                        <span class="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {{ ipd.id }}
+                        </span>
+                        <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">Hospitalization: {{ ipd.diagnosis }}</h4>
+                        <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
+                          Admitting Physician: <span class="text-[var(--text-primary)]">{{ ipd.admittingDoctor }}</span> Â· Room: {{ ipd.roomWard }}
+                        </p>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-xs font-mono font-bold px-2 py-1 rounded bg-zinc-500/10 border border-zinc-500/20 text-[var(--text-secondary)]">
+                          {{ ipd.status | uppercase }}
+                        </span>
+                        <span class="text-[10px] text-[var(--text-tertiary)] block mt-1 font-mono">
+                          {{ ipd.admissionDate | date:'d MMM y' }} - {{ ipd.dischargeDate | date:'d MMM y' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Reason -->
+                    <div>
+                      <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Admission Assessment</span>
+                      <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-1 p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                        {{ ipd.reason }}
+                      </p>
+                    </div>
+
+                    <!-- Daily progress summary logs -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      <!-- Progress logs timeline -->
+                      <div class="flex flex-col gap-3">
+                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Daily Nursing & Doctor Logs</span>
+                        <div class="relative pl-4 border-l border-amber-500/30 ml-2 mt-1.5 flex flex-col gap-4">
+                          @for (prog of ipd.dailyProgress; track prog.date) {
+                            <div class="relative text-xs">
+                              <span class="absolute -left-[20px] top-1 w-2 h-2 rounded-full bg-amber-400 shadow"></span>
+                              <span class="text-[9px] text-[var(--text-tertiary)] font-mono block">{{ prog.date | date:'MMM d, y' }}</span>
+                              <p class="text-[var(--text-secondary)] font-medium mt-0.5">{{ prog.note }}</p>
+                              <span class="text-[9px] text-[var(--text-muted)] block mt-0.5">Sign: {{ prog.doctor }}</span>
+                            </div>
+                          }
+                        </div>
+                      </div>
+
+                      <!-- Vitals history during hospitalization -->
+                      <div class="flex flex-col gap-3">
+                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Vitals Log</span>
+                        <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-4 flex flex-col gap-3 text-xs">
+                          <table class="w-full font-mono text-[11px] text-left border-collapse">
+                            <thead>
+                              <tr class="border-b border-[var(--border-muted)] pb-2 text-[var(--text-tertiary)]">
+                                <th class="pb-2">Date</th>
+                                <th class="pb-2">BP</th>
+                                <th class="pb-2">Pulse</th>
+                                <th class="pb-2">Temp</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (v of ipd.vitalsHistory; track v.date) {
+                                <tr class="border-b border-[var(--border-muted)]/30 text-[var(--text-secondary)]">
+                                  <td class="py-2">{{ v.date | date:'MMM d' }}</td>
+                                  <td class="py-2 text-[var(--text-primary)] font-bold">{{ v.bp }}</td>
+                                  <td class="py-2">{{ v.pulse }} bpm</td>
+                                  <td class="py-2">{{ v.temp }}Â°F</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                    </div>
+
+                  </div>
+                }
+              }
+            </div>
+          }
+
+          <!-- TAB 6: PHARMACY / PRESCRIPTIONS -->
+          @if (activeTab() === 'pharmacy') {
+            <div class="flex flex-col gap-4">
+              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
+                Pharmacy & Prescriptions Log
+              </h3>
+
+              @if (!clinicalData()?.prescriptions?.length) {
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
+                  No prescriptions on record.
+                </div>
+              } @else {
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  @for (med of clinicalData()?.prescriptions; track med.name + med.date) {
+                    <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-4 rounded-2xl shadow flex flex-col justify-between gap-3">
+                      <div>
+                        <div class="flex items-start justify-between gap-3">
+                          <span class="font-bold text-sm text-[var(--text-primary)]">{{ med.name }}</span>
+                          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                            [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
+                            {{ med.status }}
+                          </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mt-3 text-xs bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 rounded-xl">
+                          <div>
+                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Dosage</span>
+                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.dosage }}</span>
+                          </div>
+                          <div>
+                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Frequency</span>
+                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.frequency }}</span>
+                          </div>
+                          <div class="col-span-2 border-t border-[var(--border-muted)]/40 pt-1.5 mt-0.5">
+                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Instructions</span>
+                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.instructions }}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="flex justify-between items-center text-[10px] text-[var(--text-tertiary)] border-t border-[var(--border-muted)] pt-2.5 mt-1 font-mono">
+                        <span>Prescribed: {{ med.date | date:'MMM d, y' }}</span>
+                        <span>Duration: {{ med.duration }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Colleague-picker modal for "Send to chat". Reuses local
+         directory + ChatService.sharePatientWithUser. -->
+    @if (chatPickerOpen()) {
+      <div class="pf-pp__chat-pick-backdrop pf-sheet" (click)="closeChatPicker()">
+        <div class="pf-pp__chat-pick pf-sheet__panel" (click)="$event.stopPropagation()">
+          <header class="pf-pp__chat-pick-hdr">
+            <div>
+              <h3>Send patient to a colleague</h3>
+              <p>{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
+            </div>
+            <button type="button" class="pf-pp__chat-pick-close" (click)="closeChatPicker()" aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="pf-pp__chat-pick-search">
+            <input type="text" placeholder="Search by name or email"
+                   [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
+          </div>
+          <ul class="pf-pp__chat-pick-list">
+            @for (u of chatPickerFiltered(); track u.id) {
+              <li>
+                <button type="button" class="pf-pp__chat-pick-row" [disabled]="chatPickerSending()"
+                        (click)="sendPatientToColleague(u)">
+                  <div class="pf-pp__chat-pick-avatar">
+                    {{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}
+                  </div>
+                  <div class="pf-pp__chat-pick-meta">
+                    <span class="pf-pp__chat-pick-name">{{ u.displayName }}</span>
+                    <span class="pf-pp__chat-pick-email">{{ u.email }}</span>
+                  </div>
+                </button>
+              </li>
+            } @empty {
+              <li class="pf-pp__chat-pick-empty">No colleagues match.</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+  } @else if (loading()) {
+    <!-- Skeleton Loaders -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="lg:col-span-4 flex flex-col gap-6 w-full">
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
+          <div class="flex items-center gap-4">
+            <pf-skeleton variant="circle" width="64px" height="64px"></pf-skeleton>
+            <div class="flex-1 flex flex-col gap-2">
+              <pf-skeleton variant="line" width="60%"></pf-skeleton>
+              <pf-skeleton variant="line" width="30%" height="8px"></pf-skeleton>
+            </div>
+          </div>
+          <div class="h-px bg-[var(--border-muted)]"></div>
+          <pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton>
+          <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
+          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
+        </div>
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
+          <pf-skeleton variant="line" width="40%"></pf-skeleton>
+          <div class="grid grid-cols-2 gap-3">
+            <pf-skeleton variant="block" height="50px"></pf-skeleton>
+            <pf-skeleton variant="block" height="50px"></pf-skeleton>
+            <pf-skeleton variant="block" height="50px"></pf-skeleton>
+            <pf-skeleton variant="block" height="50px"></pf-skeleton>
+          </div>
+        </div>
+      </div>
+      <div class="lg:col-span-8 flex flex-col gap-6 w-full">
+        <pf-skeleton variant="block" height="50px"></pf-skeleton>
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
+          <pf-skeleton variant="line" width="30%"></pf-skeleton>
+          <pf-skeleton variant="line" width="100%" height="10px"></pf-skeleton>
+          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
+          <pf-skeleton variant="line" width="95%" height="10px"></pf-skeleton>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="text-center py-16 text-[var(--text-secondary)] bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow">
+      <svg class="mx-auto text-[var(--text-tertiary)] mb-4" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="9" x2="15" y2="9"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+        <line x1="9" y1="17" x2="13" y2="17"/>
+      </svg>
+      Patient record not found.
+    </div>
+  }
+
+</section>
