@@ -241,10 +241,18 @@
    iPad/desktop are untouched.
    ═════════════════════════════════════════════════════════════════ */
 
-/* cta-row: an invisible wrapper on iPad/desktop — display:contents
-   makes its two buttons lay out as direct children of pf-head__actions
-   exactly as before. The mobile pass overrides it to a flex row. */
-.pf-head__cta-row { display: contents; }
+/* cta-row — Book appointment + New patient as an equal-width matched
+   pair (grid 1fr 1fr) so they read as a tidy set, not two mismatched
+   pills. The mobile pass overrides it to a 50/50 flex row. */
+.pf-head__cta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pf-head__cta-row > .pf-head__btn {
+  justify-content: center;
+  height: 44px;
+}
 
 /* ── Mobile list switcher ── */
 .pf-mlist {
