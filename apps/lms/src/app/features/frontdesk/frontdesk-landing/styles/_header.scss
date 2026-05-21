@@ -5,23 +5,18 @@
    tidy row with the buttons and frees a row of vertical space. */
 .pf-head {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    "alerts title"
-    "filter actions";
-  gap: 10px 12px;
+  /* One row, left → right: greeting · alert chips · flexible gap ·
+     search field · action buttons. */
+  grid-template-columns: auto auto 1fr minmax(0, 560px) auto;
+  grid-template-areas: "title alerts . filter actions";
+  gap: 12px;
   align-items: center;
   padding: 6px 0 12px;
 }
 
-/* Search field sits in the header grid (area: filter), a fixed width
-   so the action buttons pack in right beside it with no dead gap. */
-.pf-filter-row { grid-area: filter; width: 560px; max-width: 100%; }
-/* Greeting tucks into the top-right corner — secondary to the
-   search + buttons cluster, which is the functional content. */
-.pf-head__title { justify-self: end; }
-/* Buttons hug the left of their track, right next to the search. */
-.pf-head__actions { justify-self: start; }
+/* Search field sits in the header grid (area: filter); it fills its
+   track (up to 560px) so the buttons pack in right beside it. */
+.pf-filter-row { grid-area: filter; }
 
 @media (max-width: 767px) {
   .pf-head {
