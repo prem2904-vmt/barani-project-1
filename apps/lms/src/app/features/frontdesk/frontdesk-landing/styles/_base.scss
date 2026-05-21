@@ -307,6 +307,8 @@
     overscroll-behavior: contain;
     padding: 12px 14px 14px;
     margin: 0;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
   }
   .pf-appt-split__pane--expanded > .pf-empty-tile {
     margin: 12px 14px 14px;
@@ -369,7 +371,8 @@
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   background: var(--glass-bg);
-  overflow: hidden;
+  position: relative;
+  overflow: visible;
 }
 
 @media (min-width: 1024px) {
@@ -394,6 +397,8 @@
     overscroll-behavior: contain;
     padding: 10px 12px 12px;
     margin: 0;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
   }
 
   .pf-appt-split__pane > .pf-empty-tile {
@@ -465,6 +470,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 6px;
   padding: 10px 14px;
   cursor: default;
   user-select: none;

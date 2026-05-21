@@ -133,6 +133,35 @@
 }
 :host-context([data-theme="light"]) .pf-empty-tile__icon { color: var(--empty-icon-color); }
 
+:host-context([data-theme="light"]) .pf-empty-tile--appt {
+  --empty-tone: rgba(168, 85, 247, 0.08);
+  --empty-icon-bg: rgba(124, 58, 237, 0.08);
+  --empty-icon-border: rgba(124, 58, 237, 0.2);
+  --empty-icon-color: #7c3aed;
+  --empty-cta-bg: rgba(124, 58, 237, 0.10);
+  --empty-cta-border: rgba(124, 58, 237, 0.25);
+  --empty-cta-color: #6d28d9;
+  --empty-cta-bg-hover: rgba(124, 58, 237, 0.18);
+  --empty-cta-border-hover: rgba(124, 58, 237, 0.45);
+}
+:host-context([data-theme="light"]) .pf-empty-tile--ip {
+  --empty-tone: rgba(245, 158, 11, 0.08);
+  --empty-icon-bg: rgba(217, 119, 6, 0.08);
+  --empty-icon-border: rgba(217, 119, 6, 0.2);
+  --empty-icon-color: #d97706;
+  --empty-cta-bg: rgba(217, 119, 6, 0.10);
+  --empty-cta-border: rgba(217, 119, 6, 0.25);
+  --empty-cta-color: #b45309;
+  --empty-cta-bg-hover: rgba(217, 119, 6, 0.18);
+  --empty-cta-border-hover: rgba(217, 119, 6, 0.45);
+}
+:host-context([data-theme="light"]) .pf-empty-tile--done {
+  --empty-tone: rgba(16, 185, 129, 0.08);
+  --empty-icon-bg: rgba(5, 150, 105, 0.08);
+  --empty-icon-border: rgba(5, 150, 105, 0.2);
+  --empty-icon-color: #059669;
+}
+
 .pf-cards {
   list-style: none;
   padding: 0;
@@ -696,6 +725,26 @@
   padding: 0;
   border-radius: 8px;
   justify-content: center;
+}
+
+.pf-appt-split__link--left-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.pf-appt-split__link--left-icon:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: rgba(168, 85, 247, 0.4);
 }
 
 /* In-progress card — checkbox + avatar + body + chip + action */

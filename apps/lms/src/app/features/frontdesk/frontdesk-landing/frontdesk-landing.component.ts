@@ -126,8 +126,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { id: '4', name: 'Kavita Reddy', role: 'Lab technician', status: 'on_break' },
   ];
 
-  protected readonly apptCustomBtn = viewChild<ElementRef<HTMLButtonElement>>('apptCustomBtn');
-  protected readonly workCustomBtn = viewChild<ElementRef<HTMLButtonElement>>('workCustomBtn');
+
 
   private readonly _apptDateRange = signal<DateRange>('today');
   readonly apptDateRange = this._apptDateRange.asReadonly();
@@ -592,8 +591,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
 
-  private apptFlatpickrInstance: any;
-  private workFlatpickrInstance: any;
+
 
   constructor() {
     // Restore saved 3-pane split positions (Appointments | In Progress | Completed).
@@ -603,19 +601,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this._apptSplitPctA.set(restored.a);
     this._apptSplitPctB.set(restored.b);
 
-    effect(() => {
-      const apptBtn = this.apptCustomBtn()?.nativeElement;
-      if (apptBtn) {
-        this.initApptFlatpickr(apptBtn);
-      }
-    });
 
-    effect(() => {
-      const workBtn = this.workCustomBtn()?.nativeElement;
-      if (workBtn) {
-        this.initWorkFlatpickr(workBtn);
-      }
-    });
 
     // One-shot toast + tab-title pulse when new orders flip to
     // "Ready for delivery" (status 'validated' / 'partially_validated').
@@ -704,8 +690,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
-    if (this.apptFlatpickrInstance) this.apptFlatpickrInstance.destroy();
-    if (this.workFlatpickrInstance) this.workFlatpickrInstance.destroy();
   }
 
   refresh() {
@@ -1429,9 +1413,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return `${sLabel} – ${eLabel}`;
   }
 
-  private initApptFlatpickr(element: HTMLButtonElement) {
-    if (this.apptFlatpickrInstance) return;
-    this.apptFlatpickrInstance = flatpickr(element, {
+  openApptDatePicker(element: HTMLButtonElement, event: Event) {
+    event.stopPropagation();
+    if ((element as any)._flatpickr) {
+      (element as any)._flatpickr.open();
+      return;
+    }
+    const fp = flatpickr(element, {
       mode: 'range',
       dateFormat: 'Y-m-d',
       onClose: (selectedDates) => {
@@ -1442,20 +1430,28 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this._apptCustomEnd.set(end);
           this._apptDateRange.set('custom');
           this.refresh();
+          this.closeDateFilters();
         } else if (selectedDates.length === 1) {
           const start = this.toIsoDay(selectedDates[0]);
           this._apptCustomStart.set(start);
           this._apptCustomEnd.set(start);
           this._apptDateRange.set('custom');
           this.refresh();
+          this.closeDateFilters();
         }
       }
     });
+    (element as any)._flatpickr = fp;
+    fp.open();
   }
 
-  private initWorkFlatpickr(element: HTMLButtonElement) {
-    if (this.workFlatpickrInstance) return;
-    this.workFlatpickrInstance = flatpickr(element, {
+  openWorkDatePicker(element: HTMLButtonElement, event: Event) {
+    event.stopPropagation();
+    if ((element as any)._flatpickr) {
+      (element as any)._flatpickr.open();
+      return;
+    }
+    const fp = flatpickr(element, {
       mode: 'range',
       dateFormat: 'Y-m-d',
       maxDate: 'today',
@@ -1467,15 +1463,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this._workCustomEnd.set(end);
           this._workDateRange.set('custom');
           this.refresh();
+          this.closeDateFilters();
         } else if (selectedDates.length === 1) {
           const start = this.toIsoDay(selectedDates[0]);
           this._workCustomStart.set(start);
           this._workCustomEnd.set(start);
           this._workDateRange.set('custom');
           this.refresh();
+          this.closeDateFilters();
         }
       }
     });
+    (element as any)._flatpickr = fp;
+    fp.open();
   }
   toggleStragglers() { this._stragglersOpen.update(v => !v); }
   dismissStragglers() { this._stragglersDismissed.set(true); }
