@@ -8,7 +8,7 @@
            on the right. -->
       <div class="pf-head__greet">
         <p class="pf-head__eyebrow">{{ today | date:'EEEE · d MMM' }}</p>
-        <h1 class="pf-head__title">
+        <h1 class="pf-head__title" [attr.title]="'Good day, ' + firstName()">
           Good day, <span class="pf-head__name">{{ firstName() }}</span>
         </h1>
       </div>
