@@ -170,56 +170,9 @@
           }
         </div>
         }
-        <!-- Staff on duty + Scan QR. Hidden on phones (pf-pop-anchor--util):
-             the mobile header keeps only New patient / Book appointment,
-             and scanning moves into the search field's trailing icon. -->
-        <div class="pf-pop-anchor pf-pop-anchor--util">
-          <button type="button" class="pf-head__btn pf-head__btn--secondary press mr-2"
-            [class.pf-head__btn--on]="staffPopoverOpen()" (click)="toggleStaffPopover($event)" aria-haspopup="dialog"
-            [attr.aria-expanded]="staffPopoverOpen()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            Staff
-            <span class="pf-head__btn-badge" [attr.aria-label]="onDutyCount() + ' on duty'">{{
-              onDutyCount() > 99 ? '99+' : onDutyCount()
-              }}</span>
-          </button>
-
-          <button type="button" class="pf-head__btn pf-head__btn--secondary press" (click)="searchFocus()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="5" width="18" height="14" rx="2" />
-              <path d="M7 10h10M7 14h6" />
-            </svg>
-            Scan QR
-          </button>
-
-          @if (staffPopoverOpen()) {
-          <div class="pf-pop-bd" (click)="closeStaffPopover()"></div>
-          <div class="pf-pop pf-pop--staff" role="dialog" aria-label="Staff on duty" (click)="$event.stopPropagation()">
-            <header class="pf-pop__hdr">
-              <span class="pf-pop__dot pf-pop__dot--staff" aria-hidden="true"></span>
-              <h2 class="pf-pop__title">Staff on duty</h2>
-              <span class="pf-pop__count">{{ onDutyCount() }}/{{ staff.length }}</span>
-            </header>
-            <ul class="pf-staff">
-              @for (s of staff; track s.id) {
-              <li class="pf-staff__row">
-                <pf-avatar [name]="s.name" [size]="24"></pf-avatar>
-                <span class="pf-staff__name">{{ s.name }}</span>
-                <span class="pf-staff__role">{{ s.role }}</span>
-                <span class="pf-staff__dot" [attr.data-state]="s.status"></span>
-              </li>
-              }
-            </ul>
-          </div>
-          }
-        </div>
+        <!-- Staff button removed. Scan QR is no longer a standalone
+             header button — it's a trailing icon inside the search
+             field (see .pf-adv-search-icon--scan below). -->
 
         <!-- Book appointment + New patient. Wrapped in a cta-row that's
              display:contents on desktop (no layout effect) but a 50/50

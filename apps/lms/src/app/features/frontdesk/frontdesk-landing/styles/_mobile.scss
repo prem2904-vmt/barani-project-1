@@ -192,19 +192,6 @@
         the action buttons, no "Good day, X" line. */
   .pf-head__title { display: none !important; }
 
-  /* ── Staff + the header's standalone Scan QR are dropped on phones
-        (pf-pop-anchor--util). Scanning lives in the search field.
-        Selector carries the .pf-head__actions ancestor + both classes
-        so it out-specifies the `.pf-head__actions .pf-pop-anchor {
-        display: flex !important }` row rule above — otherwise that
-        higher-specificity !important rule keeps Staff visible. */
-  .pf-head__actions .pf-pop-anchor.pf-pop-anchor--util {
-    display: none !important;
-  }
-
-  /* ── Scan-QR icon shows inside the search field on phones. */
-  .pf-adv-search-icon--scan { display: inline-flex; }
-
   /* ── New patient + Book appointment side by side. The cta-row is
         display:contents elsewhere; here it becomes a 50/50 flex row. */
   .pf-head__cta-row {
@@ -258,9 +245,6 @@
    makes its two buttons lay out as direct children of pf-head__actions
    exactly as before. The mobile pass overrides it to a flex row. */
 .pf-head__cta-row { display: contents; }
-
-/* Scan-QR icon in the search field — phones only. */
-.pf-adv-search-icon--scan { display: none; }
 
 /* ── Mobile list switcher ── */
 .pf-mlist {
