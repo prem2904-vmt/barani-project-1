@@ -192,22 +192,11 @@
         with the compact action bar. */
   .pf-head__greet { display: none !important; }
 
-  /* ── Phones use the compact icon bar (.pf-mbar) instead of the
-        text action buttons. Hide the desktop cta-row container; the
-        search field stays collapsed until its icon expands it. */
-  .pf-mbar { display: flex; }
-  .pf-mbar--hidden { display: none !important; }
-  .pf-head__actions { display: none !important; }
-  .pf-filter-row { display: none; }
-  .pf-filter-row--open { display: flex; }
-
-  /* ── Mobile list switcher replaces the pane accordion. The dropdown
-        owns list selection now, so the per-pane header bars + the drag
-        handle are redundant — hide them.
-        display:block is !important because the base `.pf-mlist {
-        display:none }` rule is declared later in this file (equal
-        specificity) and would otherwise win by source order. */
-  .pf-mlist { display: block !important; }
+  /* ── Mobile list switcher (icon segmented control) replaces the
+        pane accordion. The per-pane header bars + drag handle are
+        redundant — hide them. !important because the base
+        `.pf-mtabs { display:none }` rule sits later in this file. */
+  .pf-mtabs { display: flex !important; }
   .pf-appt-split__hdr,
   .pf-appt-split__handle { display: none !important; }
 
@@ -247,17 +236,21 @@
   height: 44px;
 }
 
-/* ── Mobile action bar — search / book appointment / new-patient as
-   icons. Hidden until ≤640px; the search icon expands the field. */
+/* ── Header action bar — search · scan QR · book appointment ·
+   new-patient as icons. Shown on every viewport: an auto-width
+   cluster on the right at iPad/desktop, a full-width 4-up row on
+   phones (the buttons flex:1 either way). The search icon expands
+   the field; .pf-mbar--hidden hides the bar while it's expanded. */
 .pf-mbar {
-  display: none;
+  display: flex;
   grid-area: mbar;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
 }
+.pf-mbar--hidden { display: none !important; }
 .pf-mbar__btn {
   flex: 1;
+  min-width: 48px;
   height: 48px;
   display: inline-flex;
   align-items: center;
@@ -267,116 +260,52 @@
   border: 1px solid var(--glass-border);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
 }
-.pf-mbar__btn:active { background: var(--glass-bg-hover); }
+.pf-mbar__btn:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+.pf-mbar__btn:active { transform: scale(0.96); }
 .pf-mbar__btn--primary {
   background: var(--gradient-primary);
   border-color: transparent;
   color: #fff;
   box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
 }
+.pf-mbar__btn--primary:hover { color: #fff; }
 
-/* ── Mobile list switcher ── */
-.pf-mlist {
+/* ── Mobile list switcher — icon segmented control (Appointments /
+   In progress / Completed). Hidden until ≤640px. */
+.pf-mtabs {
   display: none;
-  position: relative;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 10px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   flex: 0 0 auto;
 }
-.pf-mlist__btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 12px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.pf-mlist__label {
+.pf-mtab {
   flex: 1;
   min-width: 0;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pf-mlist__count {
-  flex-shrink: 0;
-  min-width: 22px;
-  padding: 1px 7px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.pf-mlist__chev {
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-}
-.pf-mlist__menu {
-  position: absolute;
-  /* Above .pf-pop-bd (z-index: 70). The backdrop is rendered just
-     before this menu and covers the screen to catch outside taps —
-     if the menu sat below it, every option tap would land on the
-     backdrop and only close the dropdown without applying anything. */
-  z-index: 80;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--bg-card-solid, var(--glass-bg));
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-}
-.pf-mlist__opt {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px 12px;
-  border: none;
-  background: transparent;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  border: 0;
   border-radius: 10px;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 13.5px;
-  font-weight: 600;
-  text-align: left;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.pf-mlist__opt--on {
+.pf-mtab--on {
   background: var(--gradient-primary);
   color: #fff;
 }
-.pf-mlist__opt-count {
-  flex-shrink: 0;
-  min-width: 22px;
-  padding: 1px 7px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.pf-mlist__opt--on .pf-mlist__opt-count {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-  border-color: transparent;
-}
+.pf-mtab svg { flex-shrink: 0; }
 

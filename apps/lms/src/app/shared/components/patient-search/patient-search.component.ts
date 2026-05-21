@@ -219,7 +219,19 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       animation: pf-ps-spin 0.8s linear infinite;
       display: inline-block;
     }
-    .field-spinner { flex-shrink: 0; }
+    /* Size to the loading-logo inside, not the shared 18px ring box —
+       the logo overflowed that box and overlapped the trailing icons
+       on a narrow (mobile) field. */
+    .field-spinner {
+      flex-shrink: 0;
+      width: auto;
+      height: auto;
+      border: 0;
+      animation: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
 
     /* Trailing slot — pinned to the right edge of the field, sits above the
        background. Children render naturally; consumers style their own

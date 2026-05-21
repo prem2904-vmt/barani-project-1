@@ -5,25 +5,31 @@
    tidy row with the buttons and frees a row of vertical space. */
 .pf-head {
   display: grid;
-  /* One row: greeting · alert chips · search · buttons. The search
-     column is the flexible one — it adapts to fill whatever space is
-     left between the greeting and the buttons, from wide desktop
-     down to iPad. */
+  /* One row: greeting · alert chips · search · icon action bar. The
+     search column is the flexible 1fr — empty (collapsed) it gives
+     its slack to push the icon bar to the right edge; expanded, the
+     field fills it. */
   grid-template-columns: auto auto minmax(0, 1fr) auto;
-  grid-template-areas: "title alerts filter actions";
+  grid-template-areas: "title alerts filter mbar";
   gap: 12px;
   align-items: center;
   padding: 6px 0 12px;
 }
 
-/* Search field sits in the header grid (area: filter); it fills its
-   track (up to 560px) so the buttons pack in right beside it. */
-.pf-filter-row { grid-area: filter; }
+/* Search field sits in the header grid (area: filter). It's collapsed
+   on every viewport — the .pf-mbar search icon expands it — so it's
+   display:none unless --open. min-width:0 lets it shrink instead of
+   overflowing the row. */
+.pf-filter-row { grid-area: filter; min-width: 0; }
+.pf-filter-row:not(.pf-filter-row--open) { display: none; }
 
 @media (max-width: 767px) {
   .pf-head {
-    grid-template-columns: 1fr;
-    grid-template-areas: "title" "sub" "alerts" "mbar" "actions" "filter";
+    /* minmax(0, …) so the single column can't grow past the viewport
+       when the search field is expanded (a plain 1fr grows to the
+       field's min-content and overflows the screen). */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "sub" "alerts" "mbar" "filter";
     gap: 4px;
   }
 
