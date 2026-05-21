@@ -189,24 +189,17 @@
   }
 
   /* ── Greeting block removed on phones — the screen leads straight
-        with the action buttons, no "Good day, X" line. */
+        with the compact action bar. */
   .pf-head__greet { display: none !important; }
 
-  /* ── New patient + Book appointment side by side. The cta-row is
-        display:contents elsewhere; here it becomes a 50/50 flex row. */
-  .pf-head__cta-row {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 8px;
-    width: 100%;
-  }
-  .pf-head__cta-row > .pf-head__btn {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    height: 42px !important;
-    margin: 0 !important;
-    font-size: 13px;
-  }
+  /* ── Phones use the compact icon bar (.pf-mbar) instead of the
+        text action buttons. Hide the desktop cta-row container; the
+        search field stays collapsed until its icon expands it. */
+  .pf-mbar { display: flex; }
+  .pf-mbar--hidden { display: none !important; }
+  .pf-head__actions { display: none !important; }
+  .pf-filter-row { display: none; }
+  .pf-filter-row--open { display: flex; }
 
   /* ── Mobile list switcher replaces the pane accordion. The dropdown
         owns list selection now, so the per-pane header bars + the drag
@@ -252,6 +245,36 @@
 .pf-head__cta-row > .pf-head__btn {
   justify-content: center;
   height: 44px;
+}
+
+/* ── Mobile action bar — search / book appointment / new-patient as
+   icons. Hidden until ≤640px; the search icon expands the field. */
+.pf-mbar {
+  display: none;
+  grid-area: mbar;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.pf-mbar__btn {
+  flex: 1;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pf-mbar__btn:active { background: var(--glass-bg-hover); }
+.pf-mbar__btn--primary {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
 }
 
 /* ── Mobile list switcher ── */

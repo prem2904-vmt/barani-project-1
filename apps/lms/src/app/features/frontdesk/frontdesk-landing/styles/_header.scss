@@ -23,7 +23,7 @@
 @media (max-width: 767px) {
   .pf-head {
     grid-template-columns: 1fr;
-    grid-template-areas: "title" "sub" "alerts" "actions" "filter";
+    grid-template-areas: "title" "sub" "alerts" "mbar" "actions" "filter";
     gap: 4px;
   }
 

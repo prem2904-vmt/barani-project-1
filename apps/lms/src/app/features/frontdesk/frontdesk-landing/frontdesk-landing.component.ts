@@ -322,6 +322,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Today's date — shown as a small eyebrow above the greeting. */
   readonly today = new Date();
 
+  // ── Mobile expand-on-tap search ───────────────────────────
+  // Phones show a compact icon bar (search · book · new-patient);
+  // tapping the search icon expands the full field, tapping the
+  // backdrop collapses it back to the icon.
+  readonly mobileSearchOpen = signal(false);
+  private readonly patientSearch = viewChild(PatientSearchComponent);
+  openMobileSearch() {
+    this.mobileSearchOpen.set(true);
+    // Field is revealed via CSS this tick — focus it on the next.
+    setTimeout(() => this.patientSearch()?.focus(), 60);
+  }
+  closeMobileSearch() { this.mobileSearchOpen.set(false); }
+
   readonly statusHint = computed(() => {
     const a = this._appointments().length;
     const o = this._orders().length;

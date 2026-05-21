@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, computed, inject, signal, viewChild } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
@@ -24,7 +24,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
           <circle cx="11" cy="11" r="7"/>
           <path d="m20 20-3.5-3.5"/>
         </svg>
-        <input type="text"
+        <input #searchInput type="text"
                [placeholder]="placeholder"
                [value]="query()"
                (input)="onInput($event)"
@@ -338,6 +338,14 @@ export class PatientSearchComponent {
 
   @Input() placeholder = 'Search patient by name, MRN, phone, or ABHA';
   @Output() picked = new EventEmitter<Patient>();
+  /** Fires once the field has lost focus (after the click-grace delay).
+   *  Consumers that reveal the field on demand use it to collapse. */
+  @Output() blurred = new EventEmitter<void>();
+
+  private readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  /** Focus the search input — used by consumers that reveal the field
+   *  on demand (e.g. the mobile expand-on-tap search). */
+  focus(): void { this.inputEl()?.nativeElement.focus(); }
 
   protected readonly query = signal('');
   protected readonly _focused = signal(false);
@@ -368,7 +376,10 @@ export class PatientSearchComponent {
   }
 
   onBlur() {
-    this._blurTimer = setTimeout(() => this._focused.set(false), 180);
+    this._blurTimer = setTimeout(() => {
+      this._focused.set(false);
+      this.blurred.emit();
+    }, 180);
   }
 
   onInput(ev: Event) {

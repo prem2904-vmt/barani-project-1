@@ -208,12 +208,44 @@
         </div>
       </div>
 
+      <!-- Mobile-only action bar — search / book appointment / new
+           patient as icons. Tapping search expands the full field;
+           tapping the backdrop collapses it back to the icon. -->
+      <div class="pf-mbar" [class.pf-mbar--hidden]="mobileSearchOpen()">
+        <button type="button" class="pf-mbar__btn press" (click)="openMobileSearch()"
+                aria-label="Search patients">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-3.5-3.5"/>
+          </svg>
+        </button>
+        <a routerLink="/frontdesk/appointments/new" class="pf-mbar__btn press"
+           aria-label="Book appointment">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <path d="M16 2v4M8 2v4M3 10h18"/>
+            <path d="M9 16h6"/>
+          </svg>
+        </a>
+        <button type="button" class="pf-mbar__btn pf-mbar__btn--primary press"
+                (click)="openRegister()" aria-label="New patient">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- Patient search — lives inside .pf-head so it shares the header
            grid: it sits on its own row beside the action buttons rather
-           than as a full-width band below the header. -->
-      <div class="pf-filter-row">
+           than as a full-width band below the header. On phones it's
+           collapsed (the .pf-mbar search icon) until expanded. -->
+      <div class="pf-filter-row" [class.pf-filter-row--open]="mobileSearchOpen()">
         <div class="pf-search-wrap">
-          <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)">
+          <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…"
+            (picked)="openProfile($event)" (blurred)="closeMobileSearch()">
             <!-- Scan-QR trigger — phones only. The standalone header
                  "Scan QR" button is hidden on mobile, so scanning
                  lives in the search field's right edge instead. -->
