@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
+import { Router } from '@angular/router';
 
 /** Optional preset when opening the booking modal — pre-selects a patient,
  *  date, and/or time slot. Useful when launching from a calendar slot
@@ -19,6 +20,7 @@ export interface AppointmentBookingPreset {
  */
 @Injectable({ providedIn: 'root' })
 export class AppointmentBookingService {
+  private readonly router = inject(Router);
   private readonly _request = signal<AppointmentBookingPreset | null>(null);
   readonly request = this._request.asReadonly();
 
@@ -38,30 +40,15 @@ export class AppointmentBookingService {
   private _lastFiredAt = 0;
 
   open(preset: AppointmentBookingPreset = {}) {
-    const key = stableKey(preset);
-    const now = Date.now();
-    // Idempotent: same preset and within 1s of the previous call → no-op.
-    // Protects the modal's signal-driven effect from re-running in a loop
-    // if an upstream caller (lib callback, click bubble, etc.) fires
-    // open() multiple times for one user action.
-    if (key === this._lastKey && now - this._lastFiredAt < 1000) return;
-    // Even outside the rapid-fire window, refuse to re-fire if the modal
-    // is already open with an identical payload — there's nothing for the
-    // modal to do differently.
-    const cur = this._request();
-    if (cur && stableKey(cur) === key) return;
+    const queryParams: Record<string, string> = {};
+    if (preset.patientId) queryParams['patientId'] = preset.patientId;
+    if (preset.date) queryParams['date'] = preset.date;
+    if (preset.time) queryParams['time'] = preset.time;
 
-    // First fire (or genuine new payload) — log a one-line trace so we can
-    // see WHO called us if a loop ever starts. Tagged so it's filterable.
-    // eslint-disable-next-line no-console
-    console.info('[booking-svc] open()', key);
-    this._lastKey = key;
-    this._lastFiredAt = now;
-    this._request.set({ ...preset });
+    this.router.navigate(['/frontdesk/appointments/new'], { queryParams });
   }
 
   close() {
-    if (this._request() === null) return;
     this._lastKey = null;
     this._request.set(null);
   }

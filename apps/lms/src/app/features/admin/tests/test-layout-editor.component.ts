@@ -228,7 +228,7 @@ const OPERATORS = [
                             </td>
                             <td [attr.colspan]="deptColumnsForRender().length - 1" class="pf-le-sheet__c-merged">
                               <input type="text" class="pf-input pf-input--cell"
-                                     [value]="asMerged(r).merge_content?.template ?? ''"
+                                     [value]="asMerged(r).merge_content.template ?? ''"
                                      (input)="patchMergeTpl(selectedSectionIndex(), ri, $any($event.target).value)"
                                      [attr.placeholder]="mergedTplPlaceholder" />
                             </td>

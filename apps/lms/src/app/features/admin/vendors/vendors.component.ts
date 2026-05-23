@@ -364,7 +364,7 @@ export class VendorsComponent implements OnInit {
   protected readonly topUpReason = signal<string>('');
 
   protected readonly openTxnsId = signal<string | null>(null);
-  protected readonly txns = signal<Record<string, VendorTxn[]>>({});
+  protected readonly txns = signal<Record<string, VendorTxn[] | undefined>>({});
   protected readonly loadingTxns = signal<boolean>(false);
 
   protected readonly topUpAmountValid = computed(() => {

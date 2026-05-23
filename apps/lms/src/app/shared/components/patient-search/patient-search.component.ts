@@ -55,7 +55,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         </span>
       </div>
 
-      @if (open()) {
+      @if (showPanel()) {
         <div class="panel" role="listbox">
           <span class="panel-accent" aria-hidden="true"></span>
 
@@ -115,21 +115,21 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     </div>
   `,
   styles: [`
-    :host { display: block; }
+    :host { display: block; height: 48px; }
 
-    .wrap { position: relative; width: 100%; }
+    .wrap { position: relative; width: 100%; height: 100%; }
 
     /* ── Pulsing halo behind the field ──────────────────────── */
     .pulse {
       position: absolute;
-      inset: -6px;
-      border-radius: 22px;
+      inset: -4px;
+      border-radius: 18px;
       pointer-events: none;
       background: linear-gradient(135deg,
-        rgba(124, 58, 237, 0.55),
-        rgba(236, 72, 153, 0.55));
+        rgba(124, 58, 237, 0.4),
+        rgba(236, 72, 153, 0.4));
       opacity: 0;
-      filter: blur(14px);
+      filter: blur(10px);
       animation: pf-ps-pulse 2.4s ease-in-out infinite;
       z-index: 0;
     }
@@ -149,22 +149,22 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       display: flex;
       align-items: center;
       gap: 4px;
-      height: 60px;
+      height: 100%;
       /* Left padding clears the absolutely-positioned search glyph.
          The right side just needs a small gutter — the clear button,
          spinner and trailing-action slot now sit in normal flow. */
-      padding: 0 14px 0 56px;
+      padding: 0 12px 0 44px;
       background: var(--glass-bg);
-      border: 1.5px solid var(--glass-border);
-      border-radius: 18px;
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
       transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       z-index: 1;
     }
     .field:hover { border-color: var(--glass-border-hover); }
     .field.field-focused {
-      border-color: rgba(168, 85, 247, 0.7);
+      border-color: rgba(168, 85, 247, 0.6);
       background: var(--glass-bg-hover);
-      box-shadow: 0 0 0 6px rgba(124, 58, 237, 0.18);
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
     }
     .field input {
       flex: 1;
@@ -173,29 +173,29 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       outline: 0;
       background: transparent;
       color: var(--text-primary);
-      font-size: 16px;
+      font-size: 14.5px;
       font-weight: 500;
       letter-spacing: 0.01em;
     }
     .field input::placeholder { color: var(--text-muted); font-weight: 400; }
     .field-icon {
       position: absolute;
-      left: 20px;
-      width: 22px;
-      height: 22px;
+      left: 16px;
+      width: 18px;
+      height: 18px;
       color: var(--text-muted);
       pointer-events: none;
       transition: color 0.15s ease, transform 0.2s ease;
     }
     .field.field-focused .field-icon {
-      color: #a855f7;
+      color: var(--color-violet-500);
       transform: scale(1.05);
     }
 
     .field-clear {
       flex-shrink: 0;
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -378,6 +378,7 @@ export class PatientSearchComponent {
   });
 
   readonly open = computed(() => this.state() !== 'idle');
+  readonly showPanel = computed(() => this._focused() && this.open());
 
   private _timer?: ReturnType<typeof setTimeout>;
   private _blurTimer?: ReturnType<typeof setTimeout>;

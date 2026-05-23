@@ -8,7 +8,6 @@ import {
 import {
   NavigationEnd,
   Router,
-  RouterLink,
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs/operators";
@@ -19,7 +18,6 @@ import { DialogHostComponent } from "../../shared/components/dialog-host/dialog-
 import { BottomNavComponent } from "../bottom-nav/bottom-nav.component";
 import { TopStripComponent } from "../top-strip/top-strip.component";
 import { PatientProfileModalComponent } from "../../shared/components/patient-profile-modal/patient-profile-modal.component";
-import { AppointmentBookingModalComponent } from "../../shared/components/appointment-booking-modal/appointment-booking-modal.component";
 import { CallOverlayComponent } from "../../shared/components/call-overlay/call-overlay.component";
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
 import { SignalingService } from "../../core/services/signaling.service";
@@ -35,13 +33,11 @@ import { AuthService } from "../../core/auth/auth.service";
   standalone: true,
   imports: [
     RouterOutlet,
-    RouterLink,
     TopStripComponent,
     BottomNavComponent,
     DialogHostComponent,
     AmbientBgComponent,
     PatientProfileModalComponent,
-    AppointmentBookingModalComponent,
     CallOverlayComponent,
     PeopleDrawerComponent,
   ],
@@ -93,9 +89,7 @@ import { AuthService } from "../../core/auth/auth.service";
            PatientProfileService.open(patientId) from anywhere. -->
       <pf-patient-profile-modal></pf-patient-profile-modal>
 
-      <!-- Appointment booking modal — globally available; opens via
-           AppointmentBookingService.open(preset?). -->
-      <pf-appointment-booking-modal></pf-appointment-booking-modal>
+
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)

@@ -3,13 +3,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
 .pf-search-wrap {
   flex: 1;
   min-width: 260px;
+  max-width: 480px;
+  width: 100%;
+  margin-left: auto;
   /* Adaptive — the search fills whatever space is left between the
      greeting and the action buttons (its header grid track is the
      flexible 1fr). No fixed cap. */
@@ -56,12 +58,12 @@
 }
 
 .pf-date-pills {
-  /* Outer container height matched to the search bar (60px) so the row
+  /* Outer container height matched to the search bar (48px) so the row
    * reads as a single horizontal stripe rather than a tall search next
    * to a tiny pill cluster. */
   display: inline-flex;
   align-items: center;
-  height: 60px;
+  height: 48px;
   padding: 4px;
   border-radius: 9999px;
   background: var(--glass-bg);

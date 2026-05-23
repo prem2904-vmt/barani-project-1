@@ -16,21 +16,18 @@
   padding: 6px 0 12px;
 }
 
-/* Search field sits in the header grid (area: filter). It's collapsed
-   on every viewport — the .pf-mbar search icon expands it — so it's
-   display:none unless --open. min-width:0 lets it shrink instead of
-   overflowing the row. */
+/* Search field sits in the header grid (area: filter). It is always visible.
+   min-width:0 lets it shrink instead of overflowing the row. */
 .pf-filter-row { grid-area: filter; min-width: 0; }
-.pf-filter-row:not(.pf-filter-row--open) { display: none; }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .pf-head {
     /* minmax(0, …) so the single column can't grow past the viewport
        when the search field is expanded (a plain 1fr grows to the
        field's min-content and overflows the screen). */
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "title" "sub" "alerts" "mbar" "filter";
-    gap: 4px;
+    gap: 8px;
   }
 
   .pf-head__actions, .pf-head__alerts {

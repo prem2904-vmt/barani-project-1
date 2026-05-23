@@ -451,6 +451,19 @@ interface BulkSubmitResponse {
       border-color: rgba(168, 85, 247, 0.6);
       background: rgba(168, 85, 247, 0.1);
     }
+    
+    /* Light mode grid inputs */
+    :host-context(.light) .pf-sre__ginput {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #1e293b;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    :host-context(.light) .pf-sre__ginput:focus {
+      border-color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.05);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    }
     .pf-sre__ginput--num { text-align: right; font-variant-numeric: tabular-nums; }
     .pf-sre__ginput--ta  { resize: vertical; min-height: 32px; font-weight: 500; }
     .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method {
@@ -649,14 +662,26 @@ interface BulkSubmitResponse {
       width: 100%; min-height: 38px;
       padding: 8px 12px;
       border-radius: 8px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+      background: var(--bg-input);
+      border: 1.5px solid var(--input-border, var(--glass-border));
       color: var(--text-primary);
       font-size: 13.5px;
       font-family: inherit;
     }
     .pf-sre__input:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18); }
     .pf-sre__input--ta { resize: vertical; min-height: 56px; font-family: inherit; }
+    
+    /* Light mode: Make input borders more visible */
+    :host-context(.light) .pf-sre__input {
+      border: 1.5px solid #cbd5e1;
+      background: #ffffff;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+      color: #1e293b;
+    }
+    :host-context(.light) .pf-sre__input:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    }
     .pf-sre__cb { width: 18px; height: 18px; }
     .pf-sre__hint { font-size: 10.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
@@ -719,7 +744,8 @@ interface BulkSubmitResponse {
       border: 1px solid var(--glass-border);
     }
 
-    .pf-sre__footer { position: sticky; bottom: 0; padding: 16px 0 0; background: linear-gradient(to top, var(--bg-page, #04061a) 60%, transparent); }
+    .pf-sre__footer { position: sticky; bottom: 0; padding: 16px 0 0; 
+     }
     /* Mobile: lift the sticky Submit bar above the floating bottom-nav
        pill so the violet avatar doesn't peek out from behind the button.
        The pill body sits ~72px tall + safe-area; we add 16px breathing
@@ -728,7 +754,7 @@ interface BulkSubmitResponse {
       .pf-sre__footer {
         bottom: calc(72px + 12px + env(safe-area-inset-bottom, 0px));
         padding: 12px 0;
-        background: linear-gradient(to top, var(--bg-page, #04061a) 75%, transparent);
+       
       }
       /* Each test card has its own table that overflows on a 375px
          viewport (PARAMETER | RESULT | UNIT | REF RANGE | METHOD = 5
@@ -745,14 +771,37 @@ interface BulkSubmitResponse {
       background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
       color: #fff;
       font-size: 15px; font-weight: 700;
-      border: none;
+      border: 2px solid transparent;
       cursor: pointer;
       box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
-      transition: transform 0.1s, box-shadow 0.2s;
+      transition: transform 0.1s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+      /* Improve rendering on some browsers/devices to avoid
+         a tiny anti-aliasing seam at the rounded corners. */
+      -webkit-font-smoothing: antialiased;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      transform: translateZ(0);
+      will-change: transform, box-shadow;
+      /* Ensure background doesn't bleed into the transparent border */
+      background-clip: padding-box;
     }
     .pf-sre__submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(168, 85, 247, 0.45); }
     .pf-sre__submit:active { transform: scale(0.98); }
     .pf-sre__submit:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* Light mode button styling for better contrast */
+    :host-context(.light) .pf-sre__submit {
+      background: linear-gradient(135deg, #8b5cf6, #d946ef);
+      border: 2px solid #cbd5e1;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+    :host-context(.light) .pf-sre__submit:hover:not(:disabled) {
+      border-color: #b8a3f2;
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+    :host-context(.light) .pf-sre__submit:active {
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
 
     .pf-sre__flags { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     .pf-sre__flag {
