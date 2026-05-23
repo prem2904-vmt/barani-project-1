@@ -1,11 +1,11 @@
-@import 'tailwindcss';
+@import url('tailwindcss');
 
-@import 'flatpickr/dist/flatpickr.css';
+@import url('flatpickr/dist/flatpickr.css');
 
 /* Schedule-X calendar theme (used by /frontdesk/appointments). The lib
  * ships with light + dark colour tokens — we run it in dark mode via
  * the calendar component's `isDark` flag. */
-@import '@schedule-x/theme-default/dist/index.css';
+@import url('@schedule-x/theme-default/dist/index.css');
 
 /* Class-based dark/light mode (Tailwind v4). */
 @variant dark (&:where(.dark, .dark *));

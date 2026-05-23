@@ -9,7 +9,6 @@ import {
   Output,
   ViewChild,
 } from '@angular/core';
-import { UpperCasePipe } from '@angular/common';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { OrderSample } from '../../../shared/models/order.model';
@@ -46,7 +45,7 @@ export function tubeSpec(s: OrderSample): TubeSpec {
 @Component({
   selector: 'pf-label-card',
   standalone: true,
-  imports: [UpperCasePipe],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-lc" [class.pf-lc--on]="selected" [class.pf-lc--printing]="printing">

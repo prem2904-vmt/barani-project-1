@@ -8,7 +8,6 @@ import {
 import {
   NavigationEnd,
   Router,
-  RouterLink,
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs/operators";
@@ -35,7 +34,6 @@ import { AuthService } from "../../core/auth/auth.service";
   standalone: true,
   imports: [
     RouterOutlet,
-    RouterLink,
     TopStripComponent,
     BottomNavComponent,
     DialogHostComponent,

@@ -14,7 +14,6 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -48,7 +47,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent
+    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `

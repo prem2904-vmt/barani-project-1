@@ -11,7 +11,6 @@ import {
 import { Department } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
@@ -27,7 +26,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [SelectComponent, TileComponent, ToggleComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -99,11 +98,11 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                    auto-derive a sensible default (lowercase + underscores). -->
               <div class="grow grid gap-1">
                 <input type="text" class="pf-input pf-input--compact"
-                       [value]="c.label ?? ''"
+                       [value]="c.label"
                        (input)="onLabelInput(i, $any($event.target).value)"
                        placeholder="Label (Specimen, Result, …)" />
                 <input type="text" class="pf-input pf-input--mono"
-                       [value]="c.name ?? ''"
+                       [value]="c.name"
                        (input)="patchCol(i, { name: slugifyName($any($event.target).value) })"
                        placeholder="machine_name" />
               </div>

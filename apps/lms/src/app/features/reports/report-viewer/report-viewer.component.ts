@@ -62,35 +62,35 @@ interface ReportData {
           Back
         </pf-touch-btn>
         @if (report()) {
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="print()">
-            <span icon-left aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9"/>
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                <rect x="6" y="14" width="12" height="8"/>
-              </svg>
-            </span>
-            Print
-          </pf-touch-btn>
-        }
-        @if (report()) {
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="openSharePicker()">
-            <span icon-left aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </span>
-            Share with…
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="primary" (pressed)="deliverWhatsApp()">
-            <span icon-left aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m22 2-7 20-4-9-9-4Z"/>
-                <path d="M22 2 11 13"/>
-              </svg>
-            </span>
-            Send WhatsApp
-          </pf-touch-btn>
+          <ng-container actions>
+            <pf-touch-btn size="sm" variant="secondary" (pressed)="print()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"/>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+              </span>
+              Print
+            </pf-touch-btn>
+            <pf-touch-btn size="sm" variant="secondary" (pressed)="openSharePicker()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </span>
+              Share with…
+            </pf-touch-btn>
+            <pf-touch-btn size="sm" variant="primary" (pressed)="deliverWhatsApp()">
+              <span icon-left aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m22 2-7 20-4-9-9-4Z"/>
+                  <path d="M22 2 11 13"/>
+                </svg>
+              </span>
+              Send WhatsApp
+            </pf-touch-btn>
+          </ng-container>
         }
       </pf-screen-header>
 
