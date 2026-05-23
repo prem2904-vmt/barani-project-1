@@ -893,7 +893,9 @@ export class AppointmentsCalendarComponent {
   }
 
   // ── Booking entrypoints ─────────────────────────────────────
-  bookNow() { this.booking.open({}); }
+  bookNow() {
+    this.router.navigate(['/frontdesk/appointments/new']);
+  }
 
   protected onSlotClick(iso: string, hour: number, minute: number) {
     if (!iso) return;
@@ -902,7 +904,7 @@ export class AppointmentsCalendarComponent {
       this.toasts.warning('Cannot book an appointment in the past');
       return;
     }
-    this.booking.open({ date: iso, time });
+    this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { date: iso, time } });
   }
 
   protected onMonthCellClick(cell: DayCell, ev: MouseEvent) {
@@ -912,7 +914,7 @@ export class AppointmentsCalendarComponent {
       this.toasts.warning('Cannot book an appointment in the past');
       return;
     }
-    this.booking.open({ date: cell.iso });
+    this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { date: cell.iso } });
   }
 
   protected onMonthPillClick(iso: string, ev: MouseEvent) {
