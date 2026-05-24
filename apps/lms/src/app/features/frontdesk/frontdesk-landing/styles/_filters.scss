@@ -132,8 +132,8 @@
   transition: color 0.2s, background 0.2s;
 }
 
-.pf-date-pill:hover,
-.pf-date-pill:focus-visible {
+.pf-date-pill:not(.pf-date-pill--on):hover,
+.pf-date-pill:not(.pf-date-pill--on):focus-visible {
   background: var(--glass-bg-hover);
   color: var(--text-primary);
 }
@@ -142,6 +142,12 @@
   background: var(--gradient-primary);
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+}
+
+.pf-date-pill--on:hover {
+  background: var(--gradient-primary);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
 }
 
 .pf-date-pill--custom {
@@ -512,7 +518,7 @@
   justify-content: center;
 }
 
-.pf-hdr-date-pill:hover {
+.pf-hdr-date-pill:not(.pf-hdr-date-pill--on):hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -521,6 +527,12 @@
   background: var(--gradient-primary);
   color: #ffffff !important;
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.pf-hdr-date-pill--on:hover {
+  background: var(--gradient-primary);
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
 }
 
 .pf-hdr-date-pill--has-value {

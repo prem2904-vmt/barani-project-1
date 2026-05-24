@@ -669,11 +669,15 @@ interface HistoryRow {
       transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
-    .pf-tabs__btn:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-tabs__btn:not(.pf-tabs__btn--on):hover { background: var(--glass-bg-hover); color: var(--text-primary); }
     .pf-tabs__btn--on {
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
       color: var(--text-primary); font-weight: 600;
+    }
+    .pf-tabs__btn--on:hover {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);
+      color: var(--text-primary);
     }
     .pf-tabs__count {
       min-width: 18px; padding: 1px 6px;
