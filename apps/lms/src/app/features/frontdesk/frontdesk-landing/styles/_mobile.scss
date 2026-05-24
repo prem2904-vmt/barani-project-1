@@ -262,7 +262,7 @@
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
 }
-.pf-mbar__btn:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+.pf-mbar__btn:not(.pf-mbar__btn--primary):hover { background: var(--glass-bg-hover); color: var(--text-primary); }
 .pf-mbar__btn:active { transform: scale(0.96); }
 .pf-mbar__btn--primary {
   background: var(--gradient-primary);
@@ -270,7 +270,12 @@
   color: #fff;
   box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
 }
-.pf-mbar__btn--primary:hover { color: #fff; }
+.pf-mbar__btn--primary:hover {
+  background: var(--gradient-primary);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.55);
+  transform: translateY(-1px);
+}
 
 /* ── Mobile list switcher — icon segmented control (Appointments /
    In progress / Completed). Hidden until ≤640px. */
