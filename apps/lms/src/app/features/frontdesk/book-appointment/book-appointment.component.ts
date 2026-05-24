@@ -288,13 +288,14 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                 </svg>
               </div>
               <input
+                #testSearchInput
                 type="text"
                 class="w-full pl-10 pr-4 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all duration-200"
                 placeholder="Search tests by name or code..."
                 [value]="testQuery()"
                 (input)="setTestQuery($any($event.target).value)"
-                (focus)="testSearchFocused.set(true)"
-                (blur)="testSearchFocused.set(false)"
+                (focus)="onSearchFocus()"
+                (blur)="onSearchBlur()"
               />
 
               <!-- Floating Suggestions Dropdown (overlaying on top of notes, etc.) -->
@@ -312,7 +313,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                           [class.text-purple-400]="isTestSelected(t.id)"
                           [class.hover:bg-[var(--bg-hover)]]="!isTestSelected(t.id)"
                           [class.text-[var(--text-primary)]]="!isTestSelected(t.id)"
-                          (mousedown)="$event.preventDefault(); toggleTest(t.id)"
+                          (mousedown)="$event.preventDefault(); selectTest(t.id)"
                         >
                           <div class="flex items-center gap-2 min-w-0 flex-1">
                             @if (isTestSelected(t.id)) {
@@ -633,6 +634,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 })
 export class BookAppointmentComponent implements OnInit, OnDestroy {
   readonly flatpickrEl = viewChild<ElementRef<HTMLDivElement>>('flatpickrEl');
+  readonly testSearchInput = viewChild<ElementRef<HTMLInputElement>>('testSearchInput');
   private fpInstance: any = null;
 
   private readonly api = inject(ApiService);
@@ -900,6 +902,33 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     const cur = this.selectedTestIds();
     if (cur.includes(id)) this.selectedTestIds.set(cur.filter((x) => x !== id));
     else this.selectedTestIds.set([...cur, id]);
+  }
+  selectTest(id: string) {
+    if (this.blurTimeout) {
+      clearTimeout(this.blurTimeout);
+      this.blurTimeout = null;
+    }
+    this.toggleTest(id);
+    this.testQuery.set('');
+    this.focusSearchInput();
+  }
+  focusSearchInput() {
+    setTimeout(() => {
+      this.testSearchInput()?.nativeElement?.focus();
+    }, 0);
+  }
+  private blurTimeout: any = null;
+  onSearchFocus() {
+    if (this.blurTimeout) {
+      clearTimeout(this.blurTimeout);
+      this.blurTimeout = null;
+    }
+    this.testSearchFocused.set(true);
+  }
+  onSearchBlur() {
+    this.blurTimeout = setTimeout(() => {
+      this.testSearchFocused.set(false);
+    }, 200);
   }
   isTestSelected(id: string): boolean {
     return this.selectedTestIds().includes(id);
