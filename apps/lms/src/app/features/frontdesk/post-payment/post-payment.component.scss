@@ -6,48 +6,31 @@
   padding: 20px 20px 40px;
 }
 
-/* ── 3-column page layout ────────────────────────────────── */
+/* ── 2-column page layout ────────────────────────────────── */
 .pf-pp-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 260px;
-  grid-template-areas: "left main right";
-  gap: 16px;
+  grid-template-columns: minmax(0, 2fr) 320px;
+  grid-template-areas: "main sidebar";
+  gap: 20px;
   align-items: start;
 }
 
-.pf-pp-aside--left  { grid-area: left; }
 .pf-pp-main         { grid-area: main; }
-.pf-pp-aside--right { grid-area: right; }
+.pf-pp-sidebar      { grid-area: sidebar; }
 
-/* Tubes tablet copy: hidden on desktop, shown on tablet */
-.pf-sb-card--tubes-tablet { display: none; }
-
-/* Tablet: left sidebar + main, right sidebar strictly hidden */
-@media (max-width: 1200px) {
-  .pf-pp-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
-    grid-template-areas: "left main";
-  }
-  .pf-pp-aside--right {
-    display: none !important;
-  }
-  .pf-sb-card--tubes-tablet {
-    display: block;
-  }
-}
-
-/* Mobile: single column, both sidebars hidden */
-@media (max-width: 768px) {
+/* Tablet & Mobile: collapse sidebar and main into single column stack */
+@media (max-width: 1024px) {
   .pf-pp-layout {
     grid-template-columns: 1fr;
-    grid-template-areas: "main";
+    grid-template-areas:
+      "main"
+      "sidebar";
+    gap: 16px;
   }
-  .pf-pp-aside--left  { display: none !important; }
-  .pf-pp-aside--right { display: none !important; }
 }
 
 /* ── Sidebar base ─────────────────────────────────────────── */
-.pf-pp-aside {
+.pf-pp-sidebar {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -60,7 +43,15 @@
   scrollbar-width: none;
 }
 
-.pf-pp-aside::-webkit-scrollbar { display: none; }
+.pf-pp-sidebar::-webkit-scrollbar { display: none; }
+
+@media (max-width: 1024px) {
+  .pf-pp-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
 
 /* ── Sidebar card ─────────────────────────────────────────── */
 .pf-sb-card {
@@ -733,7 +724,7 @@
 
 /* ── Print media ──────────────────────────────────────────── */
 @media print {
-  .pf-pp-aside,
+  .pf-pp-sidebar,
   .pf-pp-top,
   .pf-pp-toolbar,
   .pf-pp-foot { display: none !important; }

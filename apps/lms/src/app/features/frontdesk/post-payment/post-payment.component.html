@@ -1,121 +1,26 @@
-<section class="pf-pp">
+<section class="px-4 md:px-8 pt-4 pb-10 flex flex-col gap-6">
+
+  <!-- Screen Header -->
+  <pf-screen-header
+    eyebrow="Frontdesk · Post Payment"
+    title="Order complete"
+    subtitle="Vial barcodes and receipts generated. Proceed to sample collection.">
+    <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+      <span icon-left aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m15 18-6-6 6-6"/>
+        </svg>
+      </span>
+      Back to reception
+    </pf-touch-btn>
+  </pf-screen-header>
+
   <div class="pf-pp-layout">
 
-    <!-- ══ LEFT SIDEBAR ══════════════════════════════════════ -->
-    <aside class="pf-pp-aside pf-pp-aside--left">
-
-      @if (order(); as o) {
-
-        <!-- Patient card -->
-        <div class="pf-sb-card">
-          <div class="pf-sb-card__hdr">
-            <span class="pf-sb-card__eyebrow">Patient</span>
-          </div>
-          <div class="pf-sb-patient">
-            <div class="pf-sb-avatar" [attr.aria-label]="o.patient?.displayName">
-              {{ initials(o.patient?.displayName) }}
-            </div>
-            <div class="pf-sb-patient__body">
-              <p class="pf-sb-patient__name">{{ o.patient?.displayName ?? '—' }}</p>
-              <p class="pf-sb-patient__sub">{{ ageSex(o.patient) }}</p>
-            </div>
-          </div>
-          <dl class="pf-sb-dl">
-            <div class="pf-sb-dl__row">
-              <dt>MRN</dt>
-              <dd>{{ mrn(o.patient) }}</dd>
-            </div>
-            @if (o.patient?.dateOfBirth) {
-            <div class="pf-sb-dl__row">
-              <dt>DOB</dt>
-              <dd>{{ o.patient!.dateOfBirth }}</dd>
-            </div>
-            }
-            @if (o.patient?.sex) {
-            <div class="pf-sb-dl__row">
-              <dt>Sex</dt>
-              <dd>{{ o.patient!.sex }}</dd>
-            </div>
-            }
-            @if (o.patient?.phone) {
-            <div class="pf-sb-dl__row">
-              <dt>Phone</dt>
-              <dd>{{ o.patient!.phone }}</dd>
-            </div>
-            }
-            @if (o.patient?.abhaId) {
-            <div class="pf-sb-dl__row">
-              <dt>ABHA</dt>
-              <dd class="pf-sb-dl__mono">{{ o.patient!.abhaId }}</dd>
-            </div>
-            }
-          </dl>
-        </div>
-
-        <!-- Order info card -->
-        <div class="pf-sb-card">
-          <div class="pf-sb-card__hdr">
-            <span class="pf-sb-card__eyebrow">Order</span>
-            <span class="pf-sb-badge" [attr.data-priority]="o.priority">{{ o.priority }}</span>
-          </div>
-          <dl class="pf-sb-dl">
-            <div class="pf-sb-dl__row">
-              <dt>Order ID</dt>
-              <dd class="pf-sb-dl__mono pf-sb-dl__truncate">{{ o.id }}</dd>
-            </div>
-            <div class="pf-sb-dl__row">
-              <dt>Created</dt>
-              <dd>{{ o.createdAt | date:'d MMM y, HH:mm' }}</dd>
-            </div>
-            <div class="pf-sb-dl__row">
-              <dt>Source</dt>
-              <dd>{{ o.source | titlecase }}</dd>
-            </div>
-            @if (o.refDoctorName) {
-            <div class="pf-sb-dl__row">
-              <dt>Ref doctor</dt>
-              <dd>{{ o.refDoctorName }}</dd>
-            </div>
-            }
-            <div class="pf-sb-dl__row">
-              <dt>Collection</dt>
-              <dd>{{ o.collectionType | titlecase }}</dd>
-            </div>
-            <div class="pf-sb-dl__row">
-              <dt>Samples</dt>
-              <dd>{{ o.samples.length }} tube{{ o.samples.length === 1 ? '' : 's' }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <!-- Tubes required — tablet only (right sidebar is hidden on tablet) -->
-        <div class="pf-sb-card pf-sb-card--tubes-tablet">
-          <div class="pf-sb-card__hdr">
-            <span class="pf-sb-card__eyebrow">Tubes required</span>
-            <span class="pf-sb-count">{{ o.samples.length }}</span>
-          </div>
-          <ul class="pf-sb-tubes">
-            @for (s of o.samples; track s.id) {
-            <li class="pf-sb-tubes__row">
-              <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
-              <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
-              <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
-            </li>
-            }
-          </ul>
-        </div>
-
-      }
-    </aside>
-
-    <!-- ══ MAIN CONTENT ══════════════════════════════════════ -->
+    <!-- ══ MAIN CONTENT (Payment Banner + Printer Toolbar + Label Grid) ══ -->
     <main class="pf-pp-main">
 
-      <!-- Top summary — single wide Payment Received bar. The Labels
-           progress ring was a separate top-row card that left the page
-           feeling unbalanced (skinny widget squeezed between two
-           bigger cards). It's now an inline chip on the right side of
-           this same card. -->
+      <!-- Payment Confirmation Banner -->
       <div class="pf-pp-pay">
         <div class="pf-pp-pay__icon-wrap">
           <span class="pf-pp-pay__ring" aria-hidden="true"></span>
@@ -152,8 +57,7 @@
           }
         </div>
 
-        <!-- Labels progress chip — inline on the right. Replaces the
-             standalone Labels card that crowded the top row. -->
+        <!-- Labels progress ring (inside payment banner) -->
         <div class="pf-pp-pay__labels">
           <div class="pf-pp-pay__labels-ring">
             <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
@@ -172,6 +76,7 @@
           </div>
         </div>
 
+        <!-- Actions: receipt + sms -->
         <div class="pf-pp-pay__actions">
           <button type="button" class="pf-pp-action-btn" (click)="printReceipt()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -258,107 +163,179 @@
           </pf-label-card>
         }
       </div>
-
-      <div class="pf-pp-foot">
-        <button type="button" class="pf-pp-back" (click)="back()">
-          ← Back to reception
-        </button>
-      </div>
       }
 
     </main>
 
-    <!-- ══ RIGHT SIDEBAR ═════════════════════════════════════ -->
-    <aside class="pf-pp-aside pf-pp-aside--right">
+    <!-- ══ SIDEBAR (Patient Details + Tubes + Bill Summary) ══ -->
+    <aside class="pf-pp-sidebar">
 
-      <!-- Tubes required card -->
       @if (order(); as o) {
-      <div class="pf-sb-card">
-        <div class="pf-sb-card__hdr">
-          <span class="pf-sb-card__eyebrow">Tubes required</span>
-          <span class="pf-sb-count">{{ o.samples.length }}</span>
+        <!-- Patient card -->
+        <div class="pf-sb-card">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Patient Details</span>
+          </div>
+          <div class="pf-sb-patient">
+            <div class="pf-sb-avatar" [attr.aria-label]="o.patient?.displayName">
+              {{ initials(o.patient?.displayName) }}
+            </div>
+            <div class="pf-sb-patient__body">
+              <p class="pf-sb-patient__name">{{ o.patient?.displayName ?? '—' }}</p>
+              <p class="pf-sb-patient__sub">{{ ageSex(o.patient) }}</p>
+            </div>
+          </div>
+          <dl class="pf-sb-dl">
+            <div class="pf-sb-dl__row">
+              <dt>MRN</dt>
+              <dd>{{ mrn(o.patient) }}</dd>
+            </div>
+            @if (o.patient?.dateOfBirth) {
+            <div class="pf-sb-dl__row">
+              <dt>DOB</dt>
+              <dd>{{ o.patient!.dateOfBirth }}</dd>
+            </div>
+            }
+            @if (o.patient?.sex) {
+            <div class="pf-sb-dl__row">
+              <dt>Sex</dt>
+              <dd>{{ o.patient!.sex }}</dd>
+            </div>
+            }
+            @if (o.patient?.phone) {
+            <div class="pf-sb-dl__row">
+              <dt>Phone</dt>
+              <dd>{{ o.patient!.phone }}</dd>
+            </div>
+            }
+            @if (o.patient?.abhaId) {
+            <div class="pf-sb-dl__row">
+              <dt>ABHA</dt>
+              <dd class="pf-sb-dl__mono">{{ o.patient!.abhaId }}</dd>
+            </div>
+            }
+          </dl>
         </div>
-        <ul class="pf-sb-tubes">
-          @for (s of o.samples; track s.id) {
-          <li class="pf-sb-tubes__row">
-            <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
-            <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
-            <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
-          </li>
-          }
-        </ul>
-      </div>
+
+        <!-- Tubes required card -->
+        <div class="pf-sb-card">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Tubes required</span>
+            <span class="pf-sb-count">{{ o.samples.length }}</span>
+          </div>
+          <ul class="pf-sb-tubes">
+            @for (s of o.samples; track s.id) {
+            <li class="pf-sb-tubes__row">
+              <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
+              <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
+              <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
+            </li>
+            }
+          </ul>
+        </div>
+
+        <!-- Order info card -->
+        <div class="pf-sb-card">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Order details</span>
+            <span class="pf-sb-badge" [attr.data-priority]="o.priority">{{ o.priority }}</span>
+          </div>
+          <dl class="pf-sb-dl">
+            <div class="pf-sb-dl__row">
+              <dt>Order ID</dt>
+              <dd class="pf-sb-dl__mono pf-sb-dl__truncate" [title]="o.id">{{ o.id }}</dd>
+            </div>
+            <div class="pf-sb-dl__row">
+              <dt>Created</dt>
+              <dd>{{ o.createdAt | date:'d MMM y, HH:mm' }}</dd>
+            </div>
+            <div class="pf-sb-dl__row">
+              <dt>Source</dt>
+              <dd>{{ o.source | titlecase }}</dd>
+            </div>
+            @if (o.refDoctorName) {
+            <div class="pf-sb-dl__row">
+              <dt>Ref doctor</dt>
+              <dd>{{ o.refDoctorName }}</dd>
+            </div>
+            }
+            <div class="pf-sb-dl__row">
+              <dt>Collection</dt>
+              <dd>{{ o.collectionType | titlecase }}</dd>
+            </div>
+          </dl>
+        </div>
       }
 
       <!-- Bill summary -->
       @if (bill(); as b) {
-      <div class="pf-sb-card">
-        <div class="pf-sb-card__hdr">
-          <span class="pf-sb-card__eyebrow">Bill summary</span>
-          <span class="pf-sb-badge pf-sb-badge--paid">Paid</span>
-        </div>
+        <div class="pf-sb-card">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Bill summary</span>
+            <span class="pf-sb-badge pf-sb-badge--paid">Paid</span>
+          </div>
 
-        <div class="pf-sb-amounts">
-          @if (b.totalDiscount > 0) {
-          <div class="pf-sb-amt-row">
-            <span>Sub total</span>
-            <span>{{ b.subTotal | inr }}</span>
-          </div>
-          <div class="pf-sb-amt-row pf-sb-amt-row--disc">
-            <span>Discount</span>
-            <span>−{{ b.totalDiscount | inr }}</span>
-          </div>
-          }
-          <div class="pf-sb-amt-row pf-sb-amt-row--total">
-            <span>Total</span>
-            <span>{{ b.totalPayable | inr }}</span>
-          </div>
-          <div class="pf-sb-amt-row pf-sb-amt-row--paid">
-            <span>Paid</span>
-            <span>{{ b.totalPaid | inr }}</span>
-          </div>
-          @if (b.balance > 0) {
-          <div class="pf-sb-amt-row pf-sb-amt-row--due">
-            <span>Balance due</span>
-            <span>{{ b.balance | inr }}</span>
-          </div>
-          }
-        </div>
-
-        @if (b.payments && b.payments.length > 0) {
-        <div class="pf-sb-divider"></div>
-        <p class="pf-sb-section-lbl">Payments</p>
-        <ul class="pf-sb-payments">
-          @for (p of b.payments; track p.id) {
-          <li class="pf-sb-payments__row">
-            <span class="pf-sb-payments__mode">{{ p.mode }}</span>
-            @if (p.referenceNo) {
-              <span class="pf-sb-payments__ref">{{ p.referenceNo }}</span>
+          <div class="pf-sb-amounts">
+            @if (b.totalDiscount > 0) {
+            <div class="pf-sb-amt-row">
+              <span>Sub total</span>
+              <span>{{ b.subTotal | inr }}</span>
+            </div>
+            <div class="pf-sb-amt-row pf-sb-amt-row--disc">
+              <span>Discount</span>
+              <span>−{{ b.totalDiscount | inr }}</span>
+            </div>
             }
-            <span class="pf-sb-payments__amt">{{ p.amount | inr }}</span>
-          </li>
-          }
-        </ul>
-        }
-      </div>
+            <div class="pf-sb-amt-row pf-sb-amt-row--total">
+              <span>Total</span>
+              <span>{{ b.totalPayable | inr }}</span>
+            </div>
+            <div class="pf-sb-amt-row pf-sb-amt-row--paid">
+              <span>Paid</span>
+              <span>{{ b.totalPaid | inr }}</span>
+            </div>
+            @if (b.balance > 0) {
+            <div class="pf-sb-amt-row pf-sb-amt-row--due">
+              <span>Balance due</span>
+              <span>{{ b.balance | inr }}</span>
+            </div>
+            }
+          </div>
 
-      <!-- Tests ordered -->
-      @if (b.items && b.items.length > 0) {
-      <div class="pf-sb-card">
-        <div class="pf-sb-card__hdr">
-          <span class="pf-sb-card__eyebrow">Tests ordered</span>
-          <span class="pf-sb-count">{{ b.items.length }}</span>
-        </div>
-        <ul class="pf-sb-tests">
-          @for (item of b.items; track item.id) {
-          <li class="pf-sb-tests__row">
-            <span class="pf-sb-tests__name">{{ item.testName }}</span>
-            <span class="pf-sb-tests__price">{{ item.total | inr }}</span>
-          </li>
+          @if (b.payments && b.payments.length > 0) {
+          <div class="pf-sb-divider"></div>
+          <p class="pf-sb-section-lbl">Payments</p>
+          <ul class="pf-sb-payments">
+            @for (p of b.payments; track p.id) {
+            <li class="pf-sb-payments__row">
+              <span class="pf-sb-payments__mode">{{ p.mode }}</span>
+              @if (p.referenceNo) {
+                <span class="pf-sb-payments__ref">{{ p.referenceNo }}</span>
+              }
+              <span class="pf-sb-payments__amt">{{ p.amount | inr }}</span>
+            </li>
+            }
+          </ul>
           }
-        </ul>
-      </div>
-      }
+        </div>
+
+        <!-- Tests ordered -->
+        @if (b.items && b.items.length > 0) {
+        <div class="pf-sb-card">
+          <div class="pf-sb-card__hdr">
+            <span class="pf-sb-card__eyebrow">Tests ordered</span>
+            <span class="pf-sb-count">{{ b.items.length }}</span>
+          </div>
+          <ul class="pf-sb-tests">
+            @for (item of b.items; track item.id) {
+            <li class="pf-sb-tests__row">
+              <span class="pf-sb-tests__name" [title]="item.testName">{{ item.testName }}</span>
+              <span class="pf-sb-tests__price">{{ item.total | inr }}</span>
+            </li>
+            }
+          </ul>
+        </div>
+        }
       }
 
     </aside>
