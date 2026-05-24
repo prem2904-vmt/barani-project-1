@@ -1,6 +1,7 @@
 import { Location, DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, effect } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, ElementRef, computed, inject, signal, effect, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import flatpickr from 'flatpickr';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
@@ -77,8 +78,8 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       <!-- Grid Layout Container for Desktop (3 columns) -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full">
         
-        <!-- CARD 1: Patient Selection, Date & Time Slots (Spans 1 column on desktop) -->
-        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-5 h-full">
+        <!-- CARD 1: Patient Selection & Date Picker (Spans 1 column on desktop) -->
+        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4 h-full overflow-hidden">
           <!-- Step 1: Patient Picker -->
           <section class="flex flex-col min-h-0 shrink-0">
             <div class="flex items-center gap-2 mb-2">
@@ -112,95 +113,42 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             }
           </section>
 
-          <!-- Step 2: Date Picker (Horizontal Strip) -->
-          <section class="flex flex-col min-h-0 shrink-0">
-            <div class="flex items-center justify-between gap-2 mb-3">
-              <div class="flex items-center gap-2">
-                <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">2</span>
-                <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Date</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  class="w-6 h-6 flex items-center justify-center bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                  (click)="navMonth(-1)"
-                  aria-label="Prev month"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <span class="text-xs font-mono font-semibold text-[var(--text-secondary)] min-w-[90px] text-center">
-                  {{ calendarMonth() | date: "MMMM yyyy" }}
-                </span>
-                <button
-                  type="button"
-                  class="w-6 h-6 flex items-center justify-center bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
-                  (click)="navMonth(1)"
-                  aria-label="Next month"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
+          <!-- Step 2: Date Picker (Flatpickr inline) -->
+          <section class="flex flex-col min-h-0 flex-1 justify-start">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">2</span>
+              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Date</span>
             </div>
             
-            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-4 flex flex-col min-h-0">
-              <div class="date-strip-scroll flex gap-2.5 overflow-x-auto pb-1 pt-0.5 scroll-smooth">
-                @for (cell of daysInMonthList(); track cell.iso) {
-                  <button
-                    type="button"
-                    class="flex-shrink-0 w-12 h-16 flex flex-col items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer bg-transparent border-[var(--glass-border)] text-[var(--text-primary)]"
-                    [class.bg-gradient-to-br]="cell.iso === selectedDate()"
-                    [class.from-purple-600]="cell.iso === selectedDate()"
-                    [class.to-pink-600]="cell.iso === selectedDate()"
-                    [class.border-transparent]="cell.iso === selectedDate()"
-                    [class.text-white]="cell.iso === selectedDate()"
-                    [class.shadow-md]="cell.iso === selectedDate()"
-                    [class.shadow-purple-500/20]="cell.iso === selectedDate()"
-                    [class.hover:bg-[var(--bg-hover)]]="cell.iso !== selectedDate() && !cell.past"
-                    [class.opacity-30]="cell.past"
-                    [class.cursor-not-allowed]="cell.past"
-                    [disabled]="cell.past"
-                    (click)="selectDate(cell.iso)"
-                  >
-                    <span class="text-[9px] uppercase font-bold tracking-wider opacity-60" [class.text-white]="cell.iso === selectedDate()">
-                      {{ cell.dayName }}
-                    </span>
-                    <span class="text-base font-bold font-mono mt-0.5">
-                      {{ cell.day }}
-                    </span>
-                    @if (cell.today && cell.iso !== selectedDate()) {
-                      <span class="w-1 h-1 rounded-full bg-purple-500 mt-0.5"></span>
-                    }
-                  </button>
-                }
-              </div>
+            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-1 flex justify-center min-h-0 w-full">
+              <div #flatpickrEl class="w-full"></div>
             </div>
           </section>
+        </div>
 
+        <!-- CARD 2: Time Slots, Tests Selection & Notes (Spans 1 column on desktop) -->
+        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-5 h-full overflow-visible relative">
           <!-- Step 3: Time slot -->
           <section class="flex flex-col min-h-0 shrink-0">
-            <div class="flex items-center gap-2 mb-2">
+            <div class="flex items-center gap-2 mb-2 shrink-0">
               <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">3</span>
               <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Time slot</span>
             </div>
 
             @if (loadingSlots()) {
-              <div class="flex flex-col items-center justify-center py-10 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl">
-                <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading slots…"></pf-loading-logo>
+              <div class="flex flex-col items-center justify-center py-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl">
+                <pf-loading-logo size="sm" color="purple" [showDna]="false" [showText]="true" text="Loading slots…"></pf-loading-logo>
               </div>
             } @else if (slots().length === 0) {
-              <div class="flex items-center justify-center p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-sm text-[var(--text-muted)]">
+              <div class="flex items-center justify-center p-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-xs text-[var(--text-muted)]">
                 Branch is closed on this day (or all slots have passed).
               </div>
             } @else {
               <!-- Segmented glass control -->
-              <div class="flex p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-xl gap-1.5 mb-4 shrink-0">
+              <div class="flex p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-xl gap-1 mb-2 shrink-0">
                 <button
                   type="button"
-                  class="flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
+                  class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'morning'"
                   [class.text-[var(--text-primary)]]="timePeriod() === 'morning'"
                   [class.shadow-sm]="timePeriod() === 'morning'"
@@ -209,11 +157,11 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                   (click)="timePeriod.set('morning')"
                 >
                   <span>Morning</span>
-                  <span class="text-[10px] opacity-60 font-mono">({{ periodsWithSlots().morning }})</span>
+                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().morning }})</span>
                 </button>
                 <button
                   type="button"
-                  class="flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
+                  class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'afternoon'"
                   [class.text-[var(--text-primary)]]="timePeriod() === 'afternoon'"
                   [class.shadow-sm]="timePeriod() === 'afternoon'"
@@ -222,11 +170,11 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                   (click)="timePeriod.set('afternoon')"
                 >
                   <span>Afternoon</span>
-                  <span class="text-[10px] opacity-60 font-mono">({{ periodsWithSlots().afternoon }})</span>
+                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().afternoon }})</span>
                 </button>
                 <button
                   type="button"
-                  class="flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
+                  class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'evening'"
                   [class.text-[var(--text-primary)]]="timePeriod() === 'evening'"
                   [class.shadow-sm]="timePeriod() === 'evening'"
@@ -235,11 +183,11 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                   (click)="timePeriod.set('evening')"
                 >
                   <span>Evening</span>
-                  <span class="text-[10px] opacity-60 font-mono">({{ periodsWithSlots().evening }})</span>
+                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().evening }})</span>
                 </button>
                 <button
                   type="button"
-                  class="flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
+                  class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'night'"
                   [class.text-[var(--text-primary)]]="timePeriod() === 'night'"
                   [class.shadow-sm]="timePeriod() === 'night'"
@@ -248,22 +196,22 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                   (click)="timePeriod.set('night')"
                 >
                   <span>Night</span>
-                  <span class="text-[10px] opacity-60 font-mono">({{ periodsWithSlots().night }})</span>
+                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().night }})</span>
                 </button>
               </div>
 
               <!-- Slots grid container -->
-              <div class="border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] p-4 flex-1 flex flex-col min-h-0 shrink-0">
+              <div class="border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] p-3 overflow-y-auto max-h-[125px] shrink-0">
                 @if (visibleSlots().length === 0) {
-                  <div class="text-center py-6 text-xs text-[var(--text-muted)] flex-1 flex items-center justify-center">
+                  <div class="text-center py-4 text-xs text-[var(--text-muted)] h-full flex items-center justify-center">
                     No slots available in this period.
                   </div>
                 } @else {
-                  <div class="grid grid-cols-4 sm:grid-cols-5 gap-2.5 pr-1">
+                  <div class="grid grid-cols-4 gap-2 pr-1">
                     @for (s of visibleSlots(); track s.time) {
                       <button
                         type="button"
-                        class="py-2.5 rounded-lg text-xs font-mono font-medium border transition-all duration-150 flex flex-col items-center justify-center relative group cursor-pointer bg-transparent border-[var(--glass-border)] text-[var(--text-primary)]"
+                        class="py-2 rounded-lg text-xs font-mono font-bold border transition-all duration-150 flex flex-col items-center justify-center relative group cursor-pointer bg-transparent border-[var(--glass-border)] text-[var(--text-primary)]"
                         [class.bg-gradient-to-br]="s.time === selectedTime()"
                         [class.from-purple-600]="s.time === selectedTime()"
                         [class.to-pink-600]="s.time === selectedTime()"
@@ -293,19 +241,16 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
               </div>
             }
           </section>
-        </div>
 
-        <!-- CARD 2: Tests Selection & Notes (Spans 1 column on desktop) -->
-        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-5 h-full">
           <!-- Step 4: Tests selection (Search + chips + absolute popup suggestions) -->
-          <section class="flex flex-col relative overflow-visible">
-            <div class="flex items-center justify-between gap-2 mb-2">
+          <section class="flex flex-col relative overflow-visible flex-1 min-h-0">
+            <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
               <div class="flex items-center gap-2">
                 <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">4</span>
                 <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Tests <span class="text-[10px] text-[var(--text-muted)] lowercase font-normal">(optional)</span></span>
               </div>
               @if (selectedTestIds().length > 0) {
-                <span class="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20">
+                <span class="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20 shrink-0">
                   {{ selectedTestIds().length }} picked
                 </span>
               }
@@ -313,8 +258,8 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
             <!-- Selected test chips -->
             @if (selectedTests().length > 0) {
-              <!-- Selected test chips: 2-col wrapping grid, max 5 rows then scroll -->
-              <div class="grid grid-cols-2 gap-1.5 mb-3 overflow-y-auto" style="max-height: 170px;">
+              <!-- Selected test chips: vertical list, dynamic height with scrolling -->
+              <div class="flex flex-col gap-1.5 mb-3 overflow-y-auto max-h-[120px] shrink-0 pr-1">
                 @for (t of selectedTests(); track t.id) {
                   <span
                     class="inline-flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg text-xs text-[var(--text-primary)] font-medium w-full min-w-0"
@@ -336,7 +281,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             }
 
             <!-- Search input container -->
-            <div class="relative">
+            <div class="relative shrink-0">
               <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--text-muted)]">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -352,8 +297,8 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                 (blur)="testSearchFocused.set(false)"
               />
 
-              <!-- Absolute Popover Suggestions List -->
-              @if (testSearchFocused() && filteredTests().length > 0) {
+              <!-- Floating Suggestions Dropdown (overlaying on top of notes, etc.) -->
+              @if (testSearchFocused() && testQuery().trim() !== '' && filteredTests().length > 0) {
                 <div
                   class="absolute left-0 right-0 z-50 mt-1 max-h-[220px] overflow-y-auto bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-xl shadow-2xl backdrop-blur-lg pr-1"
                 >
@@ -375,10 +320,10 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             }
-                            <span class="truncate font-medium">{{ t.name }}</span>
+                            <span class="truncate font-medium text-[11px]">{{ t.name }}</span>
                           </div>
                           @if (t.code) {
-                            <span class="font-mono text-[10px] text-[var(--text-tertiary)] shrink-0 ml-2 bg-[var(--glass-bg)] px-1.5 py-0.5 rounded border border-[var(--glass-border)]">
+                            <span class="font-mono text-[9px] text-[var(--text-tertiary)] shrink-0 ml-2 bg-[var(--glass-bg)] px-1.5 py-0.5 rounded border border-[var(--glass-border)]">
                               {{ t.code }}
                             </span>
                           }
@@ -398,13 +343,14 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           </section>
 
           <!-- Step 5: Notes -->
-          <section class="flex flex-col flex-1 min-h-0">
+          <section class="flex flex-col shrink-0">
             <div class="flex items-center gap-2 mb-2">
               <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">5</span>
               <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Notes <span class="text-[10px] text-[var(--text-muted)] lowercase font-normal">(optional)</span></span>
             </div>
             <textarea
-              class="flex-1 min-h-[30px] h-full w-full p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none resize-none"
+              rows="4"
+              class="w-full p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none resize-none h-[88px]"
               placeholder="Enter any booking instructions or clinical notes..."
               [value]="notes()"
               (input)="notes.set($any($event.target).value)"
@@ -536,10 +482,159 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       :host ::-webkit-scrollbar-thumb:hover {
         background: var(--scrollbar-thumb-hover, rgba(139,92,246,0.6));
       }
+
+      /* Flatpickr layout and theme styling overrides to center and stretch it to 100% width */
+      ::ng-deep {
+        .flatpickr-calendar.inline {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 100% !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          border: none !important;
+          display: block !important;
+          font-family: 'Outfit', sans-serif !important;
+        }
+        .flatpickr-innerContainer {
+          width: 100% !important;
+          display: block !important;
+        }
+        .flatpickr-rContainer {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+        }
+        .flatpickr-days {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+        }
+        .dayContainer {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 100% !important;
+          display: flex !important;
+          flex-wrap: wrap !important;
+          justify-content: space-between !important;
+        }
+        .flatpickr-day {
+          width: 14.28% !important;
+          max-width: 14.28% !important;
+          height: auto !important;
+          aspect-ratio: 1 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          line-height: 1 !important;
+          margin: 1px 0 !important;
+          box-sizing: border-box !important;
+          color: var(--text-primary) !important;
+          border-radius: 8px !important;
+          transition: all 0.15s ease !important;
+          border: 1px solid transparent !important;
+          font-weight: 500 !important;
+        }
+        .flatpickr-day:hover,
+        .flatpickr-day:focus {
+          background: var(--bg-hover) !important;
+          color: var(--text-primary) !important;
+          border-color: transparent !important;
+        }
+        .flatpickr-day.today {
+          border-color: var(--color-primary) !important;
+          color: var(--text-primary) !important;
+        }
+        .flatpickr-day.today:hover {
+          background: var(--bg-hover) !important;
+          color: var(--text-primary) !important;
+        }
+        .flatpickr-day.selected {
+          background: var(--gradient-primary) !important;
+          border-color: transparent !important;
+          color: #ffffff !important;
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4) !important;
+        }
+        .flatpickr-day.prevMonthDay,
+        .flatpickr-day.nextMonthDay {
+          color: var(--text-muted) !important;
+          opacity: 0.5 !important;
+        }
+        .flatpickr-day.disabled,
+        .flatpickr-day.disabled:hover {
+          color: var(--text-muted) !important;
+          background: transparent !important;
+          cursor: not-allowed !important;
+          opacity: 0.25 !important;
+        }
+        .flatpickr-weekdaycontainer {
+          display: flex !important;
+          width: 100% !important;
+        }
+        span.flatpickr-weekday {
+          flex: 1 !important;
+          text-align: center !important;
+          max-width: 14.28% !important;
+          color: var(--text-tertiary) !important;
+          font-weight: 700 !important;
+          font-size: 11px !important;
+        }
+        .flatpickr-months {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          width: 100% !important;
+        }
+        .flatpickr-month {
+          flex: 1 !important;
+          width: 100% !important;
+          color: var(--text-primary) !important;
+          fill: var(--text-primary) !important;
+        }
+        .flatpickr-current-month {
+          font-weight: 600 !important;
+          color: var(--text-primary) !important;
+          font-size: 14px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 4px !important;
+        }
+        .flatpickr-current-month .numInputWrapper {
+          width: 65px !important;
+        }
+        .flatpickr-current-month input.cur-year {
+          font-weight: 600 !important;
+          color: var(--text-primary) !important;
+          background: transparent !important;
+          border: none !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+          font-weight: 600 !important;
+          color: var(--text-primary) !important;
+          background: var(--bg-card-solid) !important;
+          border: 1px solid var(--glass-border) !important;
+          border-radius: 6px !important;
+          padding: 2px 4px !important;
+          outline: none !important;
+        }
+        .flatpickr-prev-month,
+        .flatpickr-next-month {
+          color: var(--text-primary) !important;
+          fill: var(--text-primary) !important;
+          padding: 4px !important;
+        }
+        .flatpickr-prev-month:hover svg,
+        .flatpickr-next-month:hover svg {
+          fill: var(--color-primary) !important;
+        }
+      }
     `
   ]
 })
-export class BookAppointmentComponent implements OnInit {
+export class BookAppointmentComponent implements OnInit, OnDestroy {
+  readonly flatpickrEl = viewChild<ElementRef<HTMLDivElement>>('flatpickrEl');
+  private fpInstance: any = null;
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -689,11 +784,56 @@ export class BookAppointmentComponent implements OnInit {
 
   constructor() {
     effect(() => {
+      const el = this.flatpickrEl()?.nativeElement;
+      if (el) {
+        this.initFlatpickr(el);
+      }
+    });
+
+    effect(() => {
+      const date = this.selectedDate();
+      if (this.fpInstance && date) {
+        try {
+          const fpDate = format(this.fpInstance.selectedDates[0], 'yyyy-MM-dd');
+          if (fpDate !== date) {
+            this.fpInstance.setDate(date, false);
+          }
+        } catch {
+          // ignore parsing error if date array is empty or partial
+        }
+      }
+    });
+
+    effect(() => {
       const date = this.selectedDate();
       if (date) {
         this.fetchAppointmentsForDate(date);
       }
     });
+  }
+
+  private initFlatpickr(el: HTMLElement) {
+    if (this.fpInstance) {
+      this.fpInstance.destroy();
+    }
+    this.fpInstance = flatpickr(el, {
+      inline: true,
+      defaultDate: this.selectedDate(),
+      minDate: 'today',
+      dateFormat: 'Y-m-d',
+      onChange: (selectedDates) => {
+        if (selectedDates.length > 0) {
+          const iso = format(selectedDates[0], 'yyyy-MM-dd');
+          this.selectDate(iso);
+        }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.fpInstance) {
+      this.fpInstance.destroy();
+    }
   }
 
   ngOnInit() {

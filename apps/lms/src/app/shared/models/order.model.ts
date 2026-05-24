@@ -47,6 +47,7 @@ export interface OrderTest {
   id: string;
   subOrderId: string;
   testId: string;
+  name: string;
   packageTestId?: string;
   status: string;
   assignedTo?: string;

@@ -935,7 +935,7 @@
                                   @if (t.test?.code) {
                                     <span class="font-mono font-bold text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{{ t.test!.code }}</span>
                                   }
-                                  <span class="font-bold text-[var(--text-primary)]">{{ t.test?.name ?? 'Unknown test' }}</span>
+                                  <span class="font-bold text-[var(--text-primary)]">{{ t?.name ?? 'Unknown test' }}</span>
                                 </div>
                                 <div class="text-[10px] text-[var(--text-tertiary)] mt-0.5">
                                   Sample Tube Type: {{ t.subOrder?.department?.name ?? 'Lab Sample' }}
