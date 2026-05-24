@@ -116,7 +116,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
 
           <!-- LEFT: invoice preview -->
           <div class="pf-bill-col">
-            <pf-tile tone="default" padding="lg" class="pf-bill-tile block">
+            <pf-tile tone="default" padding="lg" class="pf-bill-tile">
               <div class="flex items-center justify-between mb-4">
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
@@ -140,8 +140,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               <ul class="pf-bill-items">
                 @for (item of b.items; track item.id) {
                   <li class="pf-bill-row">
-                    <span class="pf-bill-code">{{ item.hsnSacCode ?? '—' }}</span>
-                    <span class="pf-bill-name">{{ item.testName }}</span>
+                    <div class="flex flex-col min-w-0">
+                      <span class="pf-bill-name truncate" [title]="item.testName">{{ item.testName }}</span>
+                      @if (item.hsnSacCode) {
+                        <span class="pf-bill-code mt-0.5">{{ item.hsnSacCode }}</span>
+                      }
+                    </div>
                     <span class="pf-bill-amount">{{ item.total | inr }}</span>
                   </li>
                 }
@@ -208,7 +212,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                Marked --noscroll so contents must fit; the per-mode
                panel uses flex / smaller controls to stay inside. -->
           <div class="pf-bill-col pf-no-print">
-            <pf-tile tone="default" padding="lg" class="pf-bill-tile pf-bill-tile--noscroll block">
+            <pf-tile tone="default" padding="lg" class="pf-bill-tile pf-bill-tile--noscroll">
               <div class="pf-pay-modes">
                 <p class="pf-eyebrow mb-2">Payment mode</p>
                 <div class="pf-pay-modes__grid">
@@ -230,19 +234,22 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               <div class="pf-pay-body">
               @switch (mode()) {
                 @case ('upi') {
-                  <div class="flex flex-col items-center text-center py-2">
-                    <p class="pf-eyebrow mb-1">Scan to pay</p>
-                    <p class="pf-big-amount mb-2">{{ effectivePayable() | inr }}</p>
+                  <div class="flex flex-col items-center text-center py-1 gap-2">
+                    <div class="flex flex-col items-center">
+                      <p class="pf-eyebrow mb-0.5">Scan to pay</p>
+                      <p class="pf-big-amount">{{ effectivePayable() | inr }}</p>
+                    </div>
                     <div class="pf-qr">
                       <img class="pf-qr__img" [src]="upiQrUrl()"
-                           width="180" height="180"
                            alt="Scan to pay via UPI"/>
                     </div>
-                    <p class="pf-qr__hint mt-2">prefrontal&#64;upi · Chennai Main</p>
-                    <p class="pf-live">
-                      <span class="pf-live__dot"></span>
-                      Listening for payment…
-                    </p>
+                    <div class="flex flex-col items-center gap-1">
+                      <p class="pf-qr__hint">prefrontal&#64;upi · Chennai Main</p>
+                      <div class="pf-live-badge">
+                        <span class="pf-live__dot"></span>
+                        <span>Listening for payment…</span>
+                      </div>
+                    </div>
                   </div>
                 }
                 @case ('card') {
@@ -255,12 +262,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       <p class="pf-card-pan">•••• •••• •••• 4242</p>
                       <p class="pf-card-foot">TAP TO PAY</p>
                     </div>
-                    <p class="pf-live mt-8">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                    <div class="pf-live-badge mt-4" style="color: var(--color-primary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="pf-spin mr-1">
+                        <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="12"/>
                       </svg>
                       Waiting for card…
-                    </p>
+                    </div>
                   </div>
                 }
                 @case ('cash') {
@@ -382,7 +389,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               }
               </div>
 
-              <pf-touch-btn size="xl" variant="primary" [full]="true"
+              <pf-touch-btn size="md" variant="primary" [full]="true"
                             (pressed)="confirm()"
                             [disabled]="saving() || !canConfirm()"
                             class="mt-3 block pf-bill-confirm">
@@ -512,6 +519,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       display: grid;
       grid-template-columns: 1fr;
       gap: 6px;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
     }
     /* On wider viewports show two test rows side-by-side so the invoice
      * doesn't tower vertically when there are >5 tests. */
@@ -519,29 +530,36 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       .pf-bill-items { grid-template-columns: 1fr 1fr; }
     }
     .pf-bill-row {
-      display: grid;
-      grid-template-columns: 56px 1fr auto;
-      gap: 12px;
+      display: flex;
       align-items: center;
-      padding: 10px 12px;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
       border-radius: 12px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
     }
     .pf-bill-code {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11px;
+      font-size: 10.5px;
+      font-weight: 500;
       color: var(--text-muted);
     }
-    .pf-bill-name { font-size: 13.5px; color: var(--text-primary); }
-    .pf-bill-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+    .pf-bill-name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-bill-amount { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-primary, #7c3aed); }
 
     .pf-bill-totals {
-      padding-top: 14px;
-      border-top: 1px solid var(--border-muted);
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-primary);
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      margin-top: auto;
+    }
+    :root.light .pf-bill-totals {
+      background: rgba(0, 0, 0, 0.02);
     }
     .pf-bill-line {
       display: flex;
@@ -552,8 +570,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-bill-line--discount span { color: var(--text-secondary); }
     .pf-bill-line--total {
-      margin-top: 6px;
-      padding-top: 12px;
+      margin-top: 4px;
+      padding-top: 10px;
       border-top: 1px solid var(--border-muted);
       font-size: 20px;
       font-weight: 700;
@@ -611,9 +629,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       opacity: 0.72;
       transition: opacity 0.15s, background 0.15s;
     }
-    .pf-discount__kind button:hover { opacity: 1; background: rgba(168, 85, 247, 0.10); }
+    .pf-discount__kind button:not(.pf-discount__kind--on):hover { opacity: 1; background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
     .pf-discount__kind--on {
-      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      background: var(--color-primary, #7c3aed);
       color: white !important;
       opacity: 1;
     }
@@ -621,7 +639,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-discount__resolved {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 12px; font-weight: 600;
-      color: #6ee7b7;
+      color: var(--success-text, #10b981);
+      white-space: nowrap;
     }
 
     /* TAT — inline subtle line under the totals (was a chip). */
@@ -694,7 +713,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
     }
-    .pf-mode:hover {
+    .pf-mode:not(.pf-mode--on):hover {
       background: var(--glass-bg-hover);
       border-color: var(--glass-border-hover);
     }
@@ -713,13 +732,13 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       color: var(--text-tertiary);
     }
     .pf-mode--on {
-      background: var(--gradient-primary);
-      border-color: transparent;
-      color: #ffffff;
-      box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 15%, transparent);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent);
+      color: var(--text-primary);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent);
     }
-    .pf-mode--on svg { color: #ffffff; }
-    .pf-mode--on .pf-mode__hint { color: rgba(255, 255, 255, 0.75); }
+    .pf-mode--on svg { color: var(--color-primary, #7c3aed); }
+    .pf-mode--on .pf-mode__hint { color: var(--text-secondary); }
 
     /* Compact variant — used inside the unified payment tile so the
      * mode picker reads as a horizontal strip instead of large stacked
@@ -791,21 +810,21 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-cash-btn:hover { background: var(--glass-bg-hover); }
     .pf-cash-btn--accent {
-      background: rgba(124, 58, 237, 0.15);
-      border-color: rgba(124, 58, 237, 0.35);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 15%, transparent);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent);
+      color: var(--color-primary, #7c3aed);
     }
-    :root.light .pf-cash-btn--accent { color: #6d28d9; }
+    :root.light .pf-cash-btn--accent { color: var(--color-primary, #7c3aed); }
 
     /* UPI QR */
     .pf-qr {
       width: 100%;
-      max-width: 224px;
+      max-width: 160px;
       aspect-ratio: 1 / 1;
-      padding: 20px;
-      border-radius: 24px;
+      padding: 12px;
+      border-radius: 20px;
       background: #ffffff;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     }
     .pf-qr__img {
       width: 100%;
@@ -819,25 +838,41 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       font-size: 13px;
       color: var(--text-secondary);
     }
-    .pf-live {
-      margin: 8px 0 0;
+    .pf-live-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      font-size: 11.5px;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      font-size: 11px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #34d399;
+      font-weight: 600;
+    }
+    :root.light .pf-live-badge {
+      background: rgba(5, 150, 105, 0.08);
+      border-color: rgba(5, 150, 105, 0.2);
+      color: #059669;
     }
     .pf-live__dot {
       width: 6px;
       height: 6px;
       border-radius: 9999px;
-      background: #34d399;
+      background: currentColor;
       animation: pf-live-pulse 1.6s ease-in-out infinite;
     }
     @keyframes pf-live-pulse {
       0%, 100% { opacity: 0.5; transform: scale(1); }
-      50%      { opacity: 1;   transform: scale(1.25); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
+      50%      { opacity: 1;   transform: scale(1.25); box-shadow: 0 0 10px currentColor; }
+    }
+    .pf-spin {
+      animation: pf-spin-key 1s linear infinite;
+    }
+    @keyframes pf-spin-key {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
     }
 
     /* Card mockup */
@@ -1105,12 +1140,13 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       border-bottom: 1px solid var(--glass-border);
     }
     .pf-wallet-row:last-child { border-bottom: 0; }
-    .pf-wallet-row:hover { background: rgba(168, 85, 247, 0.10); }
+    .pf-wallet-row:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
     .pf-wallet-row__name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-wallet-row__code {
       margin-left: 6px;
       padding: 1px 7px;
-      background: rgba(168, 85, 247, 0.15); color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 15%, transparent);
+      color: var(--color-primary, #7c3aed);
       border-radius: 9999px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 10px; font-weight: 700;
@@ -1132,8 +1168,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-wallet-selected {
       display: flex; align-items: center; gap: 14px;
       padding: 14px;
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
-      border: 1px solid rgba(168, 85, 247, 0.35);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent);
       border-radius: 12px;
     }
     .pf-wallet-selected__name {
@@ -1321,7 +1357,7 @@ export class BillingComponent implements OnInit {
     });
     const upi = `upi://pay?${params.toString()}`;
     const enc = encodeURIComponent(upi);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${enc}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${enc}`;
   });
 
   readonly canConfirm = computed(() => {

@@ -48,6 +48,9 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
       gap: 8px;
       width: 100%;
     }
+    .pf-pad--compact {
+      gap: 6px;
+    }
 
     .pf-key {
       height: 64px;
@@ -88,7 +91,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
       cursor: default;
     }
 
-    .pf-pad--compact .pf-key { height: 52px; font-size: 19px; border-radius: 14px; }
+    .pf-pad--compact .pf-key { height: 46px; font-size: 18px; border-radius: 12px; }
 
     .pf-key-confirm {
       grid-column: 1 / -1;
@@ -120,7 +123,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
       cursor: not-allowed;
       box-shadow: none;
     }
-    .pf-pad--compact .pf-key-confirm { height: 50px; font-size: 14.5px; border-radius: 14px; }
+    .pf-pad--compact .pf-key-confirm { height: 44px; font-size: 14px; border-radius: 12px; }
   `]
 })
 export class NumPadComponent {
@@ -147,7 +150,7 @@ export class NumPadComponent {
       ? util('.', '.', 'Decimal point')
       : this.allowNegative
         ? util('±', '±', 'Toggle sign')
-        : spacer;
+        : util('C', 'C', 'Clear');
 
     return [
       digit('1'), digit('2'), digit('3'),
@@ -162,6 +165,10 @@ export class NumPadComponent {
     const cur = this.value ?? '';
     if (k === '⌫') {
       this.valueChange.emit(cur.slice(0, -1));
+      return;
+    }
+    if (k === 'C') {
+      this.valueChange.emit('');
       return;
     }
     if (k === '±') {

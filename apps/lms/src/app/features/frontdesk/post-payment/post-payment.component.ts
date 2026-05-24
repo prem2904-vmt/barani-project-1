@@ -9,11 +9,21 @@ import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { LabelCardComponent, tubeSpec } from './label-card.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [DatePipe, TitleCasePipe, CurrencyInrPipe, LabelCardComponent, LoadingLogoComponent],
+  imports: [
+    DatePipe,
+    TitleCasePipe,
+    CurrencyInrPipe,
+    LabelCardComponent,
+    LoadingLogoComponent,
+    ScreenHeaderComponent,
+    TouchButtonComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './post-payment.component.html',
   styleUrl: './post-payment.component.scss',

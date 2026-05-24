@@ -1,5 +1,5 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
@@ -106,7 +106,8 @@ interface HistoryRow {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="pf-search__icon">
                 <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
               </svg>
-              <input type="text"
+              <input #searchInput
+                     type="text"
                      [value]="query()"
                      (input)="setQuery(asInput($event))"
                      placeholder="Search tests or packages — name, code, department…"
@@ -256,7 +257,12 @@ interface HistoryRow {
                             [class.pf-rail-card--on]="isSelected(t.id)"
                             (click)="toggleTest(t)" role="listitem">
                       <div class="pf-rail-card__title-row">
-                        <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        <span class="inline-flex items-center gap-1.5">
+                          @if (isSelected(t.id)) {
+                            <span class="text-[#10b981] font-bold text-xs" aria-hidden="true">✓</span>
+                          }
+                          <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        </span>
                         <button type="button" class="pf-rail-card__star"
                                 [class.pf-rail-card__star--on]="isFavourite(t.id)"
                                 (click)="toggleFavourite(t.id, $event)"
@@ -272,11 +278,6 @@ interface HistoryRow {
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                         @if (t.tatHours) {
                           <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-                        }
-                      </div>
-                      <div class="pf-rail-card__footer">
-                        @if (isSelected(t.id)) {
-                          <span class="pf-rail-card__on-tag">✓ Added</span>
                         }
                       </div>
                     </button>
@@ -295,7 +296,12 @@ interface HistoryRow {
                             [class.pf-rail-card--on]="isSelected(t.id)"
                             (click)="toggleTest(t)" role="listitem">
                       <div class="pf-rail-card__title-row">
-                        <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        <span class="inline-flex items-center gap-1.5">
+                          @if (isSelected(t.id)) {
+                            <span class="text-[#10b981] font-bold text-xs" aria-hidden="true">✓</span>
+                          }
+                          <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                        </span>
                         <button type="button" class="pf-rail-card__star pf-rail-card__star--on"
                                 (click)="toggleFavourite(t.id, $event)" aria-label="Unpin">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
@@ -309,11 +315,6 @@ interface HistoryRow {
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                         @if (t.tatHours) {
                           <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-                        }
-                      </div>
-                      <div class="pf-rail-card__footer">
-                        @if (isSelected(t.id)) {
-                          <span class="pf-rail-card__on-tag">✓ Added</span>
                         }
                       </div>
                     </button>
@@ -331,14 +332,16 @@ interface HistoryRow {
                     <button type="button" class="pf-rail-card pf-rail-card--pkg press"
                             [class.pf-rail-card--on]="isSelected(pkg.id)"
                             (click)="togglePackage(pkg)" role="listitem">
-                      <span class="pf-rail-card__tag">PACKAGE</span>
+                      <span class="pf-rail-card__tag">
+                        @if (isSelected(pkg.id)) {
+                          <span class="text-[#10b981] font-bold mr-0.5" aria-hidden="true">✓</span>
+                        }
+                        PACKAGE
+                      </span>
                       <p class="pf-rail-card__name">{{ pkg.name }}</p>
                       <!-- <p class="pf-rail-card__meta">TAT {{ pkg.tatHours }}h</p> -->
                       <div class="pf-rail-card__footer">
                         <span class="pf-rail-card__price">{{ pkg.price | inr }}</span>
-                        @if (isSelected(pkg.id)) {
-                          <span class="pf-rail-card__on-tag">✓ Added</span>
-                        }
                       </div>
                     </button>
                   }
@@ -365,7 +368,12 @@ interface HistoryRow {
                                   [class.pf-rail-card--on]="isSelected(t.id)"
                                   (click)="toggleTest(t)" role="listitem">
                             <div class="pf-rail-card__title-row">
-                              <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                              <span class="inline-flex items-center gap-1.5">
+                                @if (isSelected(t.id)) {
+                                  <span class="text-[#10b981] font-bold text-xs" aria-hidden="true">✓</span>
+                                }
+                                <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
+                              </span>
                               <button type="button" class="pf-rail-card__star"
                                       [class.pf-rail-card__star--on]="isFavourite(t.id)"
                                       (click)="toggleFavourite(t.id, $event)"
@@ -381,11 +389,6 @@ interface HistoryRow {
                               <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                               @if (t.tatHours) {
                                 <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-                              }
-                            </div>
-                            <div class="pf-rail-card__footer">
-                              @if (isSelected(t.id)) {
-                                <span class="pf-rail-card__on-tag">✓ Added</span>
                               }
                             </div>
                           </button>
@@ -588,7 +591,7 @@ interface HistoryRow {
     .pf-refrow__field { position: relative; min-width: 0; }
     .pf-refrow__filter-hint {
       font-weight: 400; font-size: 10px;
-      color: #a78bfa; margin-left: 6px;
+      color: var(--color-primary, #7c3aed); margin-left: 6px;
       text-transform: none; letter-spacing: 0;
       font-style: italic;
     }
@@ -668,15 +671,15 @@ interface HistoryRow {
     }
     .pf-tabs__btn:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
     .pf-tabs__btn--on {
-      background: color-mix(in srgb, #a78bfa 14%, transparent);
-      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.55);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
       color: var(--text-primary); font-weight: 600;
     }
     .pf-tabs__count {
       min-width: 18px; padding: 1px 6px;
       border-radius: 999px;
-      background: rgba(168, 85, 247, 0.18);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent);
+      color: var(--color-primary, #7c3aed);
       font-size: 10.5px; font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
@@ -807,8 +810,8 @@ interface HistoryRow {
       justify-content: center;
       padding: 2px 8px;
       border-radius: 999px;
-      background: rgba(168, 85, 247, 0.18);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent);
+      color: var(--color-primary, #7c3aed);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.08em;
@@ -885,8 +888,8 @@ interface HistoryRow {
       font-size: 10.5px;
       font-weight: 700;
       border-radius: 9999px;
-      background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+      color: var(--color-primary, #7c3aed);
     }
 
     :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
@@ -1121,9 +1124,9 @@ interface HistoryRow {
       gap: 4px;
       padding: 4px 10px;
       border-radius: 9999px;
-      background: rgba(168, 85, 247, 0.12);
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+      color: var(--color-primary, #7c3aed);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -1600,7 +1603,7 @@ interface HistoryRow {
       display: flex; align-items: center; gap: 6px;
       font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: #c4b5fd;
+      color: var(--color-primary, #7c3aed);
     }
     .pf-pkg-suggest__icon {
       display: inline-flex; align-items: center; justify-content: center;
@@ -1768,6 +1771,14 @@ export class OrderCreateComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly locationSvc = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
+
+  readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+
+  focusSearchInput() {
+    setTimeout(() => {
+      this.searchInput()?.nativeElement?.focus();
+    }, 0);
+  }
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _tests = signal<Test[]>([]);
@@ -2167,6 +2178,10 @@ export class OrderCreateComponent implements OnInit {
 
   toggleTest(t: Test) {
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
+    if (this.query().trim() !== '') {
+      this.setQuery('');
+      this.focusSearchInput();
+    }
   }
   removeTest(id: string) {
     this._selected.update(cur => cur.filter(x => x !== id));
@@ -2180,6 +2195,10 @@ export class OrderCreateComponent implements OnInit {
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
+    if (this.query().trim() !== '') {
+      this.setQuery('');
+      this.focusSearchInput();
+    }
   }
 
   toggleCart() { this._cartOpen.update(v => !v); }
