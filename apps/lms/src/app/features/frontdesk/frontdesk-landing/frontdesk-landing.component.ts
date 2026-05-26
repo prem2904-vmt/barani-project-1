@@ -247,8 +247,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private loadTwoPaneSplit(): number {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.TWO_SPLIT_KEY);
-      const n = raw ? Number(raw) : 50;
-      return Number.isFinite(n) && n >= 15 && n <= 85 ? n : 50;
+      let n = raw ? Number(raw) : 50;
+      if (!Number.isFinite(n) || n < 15 || n > 85) {
+        n = 50;
+      }
+      if (typeof window !== 'undefined') {
+        const width = window.innerWidth;
+        if (width > 0) {
+          const avail = Math.max(500, width - 80);
+          const minPx = 260;
+          const handlePx = 8;
+          const minPct = (minPx / avail) * 100;
+          const maxPct = ((avail - minPx - handlePx) / avail) * 100;
+          n = Math.max(minPct, Math.min(maxPct, n));
+        }
+      }
+      return n;
     } catch { return 50; }
   }
   private persistTwoPaneSplit(n: number) {
@@ -917,6 +931,24 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this._advancedOpen.update(o => !o);
   }
 
+  @HostListener('window:resize')
+  onResize() {
+    const el = this.apptSplitEl()?.nativeElement;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const minPx = 260;
+    const handlePx = 8;
+    const minPct = Math.max(15, (minPx / rect.width) * 100);
+    const maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
+    const clamped = Math.max(minPct, Math.min(maxPct, this._twoPaneSplit()));
+    if (clamped !== this._twoPaneSplit()) {
+      this._twoPaneSplit.set(clamped);
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      if (firstPane) firstPane.style.flexBasis = clamped + '%';
+    }
+  }
+
   // ── Splitter drag (Pointer Events API) ─────────────────────
   // Pointer Events with setPointerCapture is the modern, reliable way
   // to handle drag — works for mouse, touch, and pen with the same
@@ -945,7 +977,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0) return;
     const raw = ((ev.clientX - rect.left) / rect.width) * 100;
-    const clamped = Math.max(15, Math.min(85, raw));
+    const minPx = 260;
+    const handlePx = 8;
+    const minPct = Math.max(15, (minPx / rect.width) * 100);
+    const maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
+    const clamped = Math.max(minPct, Math.min(maxPct, raw));
     this._twoPaneSplit.set(clamped);
     const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
     if (firstPane) firstPane.style.flexBasis = clamped + '%';
@@ -988,7 +1024,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._apptSplitPctB.set(b);
       this.persistApptSplit();
     } else {
-      const next = Math.max(15, Math.min(85, this._twoPaneSplit() + step));
+      const el = this.apptSplitEl()?.nativeElement;
+      let minPct = 15;
+      let maxPct = 85;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0) {
+          const minPx = 260;
+          const handlePx = 8;
+          minPct = Math.max(15, (minPx / rect.width) * 100);
+          maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
+        }
+      }
+      const next = Math.max(minPct, Math.min(maxPct, this._twoPaneSplit() + step));
       this._twoPaneSplit.set(next);
       this.persistTwoPaneSplit(next);
     }

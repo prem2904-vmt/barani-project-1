@@ -26,7 +26,7 @@
   align-items: center;
   gap: 8px;
   text-align: center;
-  border-radius: 0;
+  border-radius: 0 0 13px 13px;
   background: transparent;
   border: 0;
   position: relative;
@@ -497,7 +497,7 @@
 }
 
 /* Card at narrow widths — collapse actions */
-@media (max-width: 640px) {
+@container (max-width: 420px) {
   /* Mobile appointment row: select circle + time slot are dropped;
      the row is avatar · body · actions. The actions keep only the
      Check-in pill — the call / WhatsApp icon buttons are secondary
@@ -764,7 +764,7 @@
 
 /* Mobile: sel is hidden → 4 visible items (avatar, body, chip, actions)
    over a 3-column grid. */
-@media (max-width: 640px) {
+@container (max-width: 420px) {
   .pf-card--ip {
     grid-template-columns: 36px 1fr auto;
     align-items: center;
@@ -1166,4 +1166,38 @@
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+@container (max-width: 380px) {
+  .pf-tabs {
+    padding: 2px;
+  }
+  .pf-tabs__btn {
+    padding: 4px 8px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .pf-tabs__count {
+    padding: 0px 5px;
+    font-size: 9.5px;
+  }
+}
+
+:host-context([data-theme="light"]) {
+  .pf-card--selected {
+    background: #ffffff !important;
+    border-color: rgba(168, 85, 247, 0.4) !important;
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.12) !important;
+  }
+  .pf-tabs__btn--on {
+    background: #ffffff !important;
+    color: var(--text-primary) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+  }
+  .pf-tabs__btn--on .pf-tabs__count {
+    background: rgba(15, 23, 42, 0.06) !important;
+    border-color: transparent !important;
+    color: var(--text-secondary) !important;
+  }
+}
+
 

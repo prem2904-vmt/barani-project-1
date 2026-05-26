@@ -81,18 +81,33 @@
            branding. Hidden under sm so the right cluster stays compact
            on mobile (the bottom-nav already covers identity there). -->
       @if (tenantLoaded()) {
-        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
-           [class.pf-ts-tenant--empty]="!hasBrand()"
-           [attr.aria-label]="brandAriaLabel()">
-          @if (showLogo() && tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-          } @else {
-            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
-          }
-        </a>
+        @if (showAdmin()) {
+          <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
+             [class.pf-ts-tenant--empty]="!hasBrand()"
+             [attr.aria-label]="brandAriaLabel()">
+            @if (showLogo() && tenantLogo()) {
+              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+            } @else {
+              <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+            }
+            @if (showName()) {
+              <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+            }
+          </a>
+        } @else {
+          <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
+               [class.pf-ts-tenant--empty]="!hasBrand()"
+               [attr.aria-label]="brandAriaLabel()">
+            @if (showLogo() && tenantLogo()) {
+              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+            } @else {
+              <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+            }
+            @if (showName()) {
+              <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+            }
+          </div>
+        }
 
         <!-- Branch selector — kept on the top strip so route context stays
              visible without a second navbar. md+ only; mobile users use the
@@ -206,13 +221,15 @@
 
           <div class="pf-profile-divider"></div>
 
-          <a routerLink="/setup" class="pf-profile-item press" (click)="closeProfile()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" />
-            </svg>
-            <span>Tenant branding</span>
-          </a>
+          @if (showAdmin()) {
+            <a routerLink="/setup" class="pf-profile-item press" (click)="closeProfile()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" />
+              </svg>
+              <span>Tenant branding</span>
+            </a>
+          }
 
           <button type="button" class="pf-profile-item press" (click)="themeService.toggle(); closeProfile()">
             @if (isDark()) {
