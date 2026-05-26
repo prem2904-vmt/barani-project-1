@@ -342,12 +342,12 @@
   /* First visible pane: width set by an inline style binding. */
   .pf-appt-split > .pf-appt-split__pane:first-of-type {
     flex: 0 0 33%;
-    min-width: 0;
+    min-width: 260px;
   }
   /* Second visible pane: takes the remainder. */
   .pf-appt-split > .pf-appt-split__pane:not(:first-of-type) {
     flex: 1 1 0;
-    min-width: 0;
+    min-width: 260px;
   }
   /* Handle is a fixed-width flex item between the two panes. */
   .pf-appt-split > .pf-appt-split__handle {
@@ -373,6 +373,7 @@
   background: var(--glass-bg);
   position: relative;
   overflow: visible;
+  container-type: inline-size;
 }
 
 @media (min-width: 1024px) {
@@ -382,6 +383,7 @@
    * .pf-appt-split__pane rule. */
   .pf-appt-split__pane {
     min-height: 0;
+    overflow: hidden;
   }
 
   .pf-appt-split__pane > .pf-appt-split__hdr,
@@ -404,7 +406,7 @@
   .pf-appt-split__pane > .pf-empty-tile {
     margin: 0;
     border: 0;
-    border-radius: 0;
+    border-radius: 0 0 13px 13px;
     background: transparent;
   }
 
@@ -486,4 +488,11 @@
 .pf-appt-split__hdr--tabs {
   padding: 6px 10px;
 }
+
+:host-context([data-theme="light"]) {
+  .pf-appt-split__pane {
+    background: #ffffff;
+  }
+}
+
 

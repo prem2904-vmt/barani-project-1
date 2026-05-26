@@ -677,7 +677,7 @@
   max-width: 220px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.pf-ts-tenant:hover {
+a.pf-ts-tenant:hover {
   background: var(--glass-bg-hover);
   border-color: rgba(168, 85, 247, 0.45);
 }
