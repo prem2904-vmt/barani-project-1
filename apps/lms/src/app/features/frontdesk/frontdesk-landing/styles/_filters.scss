@@ -580,16 +580,6 @@
     border-color: rgba(124, 58, 237, 0.25);
     color: #6d28d9;
   }
-  .pf-date-pill--on {
-    background: #ffffff !important;
-    color: var(--text-primary) !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
-  }
-  .pf-hdr-date-pill--on {
-    background: #ffffff !important;
-    color: var(--text-primary) !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
-  }
 }
 
 @container (max-width: 380px) {

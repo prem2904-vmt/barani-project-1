@@ -342,13 +342,6 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       .panel { animation: none; }
       .field-spinner, .panel-spinner { animation: none; }
     }
-
-    :host-context([data-theme="light"]) {
-      .row:hover, .row.row-active {
-        background: #ffffff !important;
-        box-shadow: var(--shadow-sm) !important;
-      }
-    }
   `]
 })
 export class PatientSearchComponent {

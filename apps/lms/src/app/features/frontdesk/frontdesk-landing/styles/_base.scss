@@ -493,6 +493,11 @@
   .pf-appt-split__pane {
     background: #ffffff;
   }
+  .pf-tp-item__count[data-tone='emerald'] {
+    background: rgba(5, 150, 105, 0.1) !important;
+    border-color: rgba(5, 150, 105, 0.25) !important;
+    color: #059669 !important;
+  }
 }
 
 
