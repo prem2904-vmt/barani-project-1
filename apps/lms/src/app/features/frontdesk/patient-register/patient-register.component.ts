@@ -49,7 +49,9 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
             [context]="context()"
             [submitting]="saving()"
             [finishLabel]="'Register patient'"
+            [extraActions]="registerActions"
             (valuesChange)="values.set($event)"
+            (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
           <div class="flex justify-center py-10">
@@ -75,6 +77,10 @@ export class PatientRegisterComponent implements OnInit {
   private readonly _config = signal<WorkflowConfig | null>(null);
   private readonly _saving = signal(false);
   protected readonly values = signal<WorkflowFormValues>({});
+  protected readonly registerActions: Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }> = [
+    { id: 'create_order', label: 'Create Order', variant: 'ghost' },
+    { id: 'create_appointment', label: 'Create Appointment', variant: 'ghost' }
+  ];
 
   readonly record = this._record.asReadonly();
   readonly config = this._config.asReadonly();
@@ -112,6 +118,18 @@ export class PatientRegisterComponent implements OnInit {
   back() { this.router.navigateByUrl('/frontdesk'); }
 
   onComplete(values: WorkflowFormValues) {
+    this.savePatient(values, 'profile');
+  }
+
+  onExtraAction(event: { actionId: string; values: WorkflowFormValues }) {
+    if (event.actionId === 'create_order') {
+      this.savePatient(event.values, 'order');
+    } else if (event.actionId === 'create_appointment') {
+      this.savePatient(event.values, 'appointment');
+    }
+  }
+
+  private savePatient(values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
     const cfg = this._config();
     if (!cfg || this._saving()) return;
     const { standard, metadata } = splitByStorage(cfg, values);
@@ -132,8 +150,14 @@ export class PatientRegisterComponent implements OnInit {
         this._saving.set(false);
         this.toasts.success(`Registered ${patient.displayName}`);
         this.values.set({});
-        // After registration: navigate to the new patient's profile page.
-        this.router.navigate(['/frontdesk/patients', patient.id]);
+        if (target === 'order') {
+          this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } });
+        } else if (target === 'appointment') {
+          this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } });
+        } else {
+          // After registration: navigate to the new patient's profile page.
+          this.router.navigate(['/frontdesk/patients', patient.id]);
+        }
       },
       error: e => {
         this._saving.set(false);

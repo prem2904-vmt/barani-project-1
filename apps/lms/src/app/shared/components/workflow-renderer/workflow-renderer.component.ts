@@ -122,9 +122,18 @@ export interface WorkflowStepCompleteEvent {
                 [disabled]="currentIndex() === 0"
                 (click)="back()">← Back</button>
         @if (isLastStep()) {
-          <button type="button" class="pf-btn pf-btn-primary"
-                  [disabled]="submitting()"
-                  (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+          <div class="flex items-center gap-2">
+            @for (action of extraActions(); track action.id) {
+              <button type="button" class="pf-btn"
+                      [class.pf-btn-primary]="action.variant === 'primary'"
+                      [class.pf-btn-ghost]="action.variant !== 'primary'"
+                      [disabled]="submitting()"
+                      (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
+            }
+            <button type="button" class="pf-btn pf-btn-primary"
+                    [disabled]="submitting()"
+                    (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+          </div>
         } @else {
           <button type="button" class="pf-btn pf-btn-primary"
                   (click)="next()">Next →</button>
@@ -139,12 +148,14 @@ export class WorkflowRendererComponent implements OnChanges {
   readonly resources = input<WorkflowRendererResources>({});
   readonly finishLabel = input<string>('Finish');
   readonly submitting = input<boolean>(false);
+  readonly extraActions = input<Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }>>([]);
 
   @Input() initialValues: WorkflowFormValues = {};
 
   readonly stepComplete = output<WorkflowStepCompleteEvent>();
   readonly workflowComplete = output<WorkflowFormValues>();
   readonly valuesChange = output<WorkflowFormValues>();
+  readonly extraActionClicked = output<{ actionId: string; values: WorkflowFormValues }>();
 
   private readonly _formValues = signal<WorkflowFormValues>({});
   private readonly _currentIndex = signal<number>(0);
@@ -263,6 +274,14 @@ export class WorkflowRendererComponent implements OnChanges {
     if (step && !this.validateStep(step)) return;
     if (step) this.stepComplete.emit({ step, values: this._formValues() });
     this.workflowComplete.emit(this._formValues());
+  }
+
+  triggerExtraAction(actionId: string): void {
+    const steps = this.visibleSteps();
+    const step = steps[this._currentIndex()];
+    if (step && !this.validateStep(step)) return;
+    if (step) this.stepComplete.emit({ step, values: this._formValues() });
+    this.extraActionClicked.emit({ actionId, values: this._formValues() });
   }
 
   private resolveNextIndex(step: WorkflowStep): number {
