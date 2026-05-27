@@ -47,11 +47,11 @@
           <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span class="text-xs text-[var(--text-tertiary)] block">Age / Gender</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ p.age ?? 'â€”' }}y Â· {{ p.sex ?? 'â€”' }}</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ p.age ?? '€”' }}y · {{ p.sex ?? '€”' }}</span>
             </div>
             <div>
               <span class="text-xs text-[var(--text-tertiary)] block">Blood Group</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ clinicalData()?.bloodGroup ?? 'â€”' }}</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ clinicalData()?.bloodGroup ?? '€”' }}</span>
             </div>
             @if (p.dateOfBirth) {
               <div>
@@ -162,7 +162,7 @@
               <!-- Temperature -->
               <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
                 <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Temperature</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.temperature }}Â°F</span>
+                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.temperature }}°F</span>
                 <span class="text-[9px] text-[var(--text-muted)]">Oral</span>
                 <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('temp', clinical.vitals.temperature) + '-400'"></span>
               </div>
@@ -313,7 +313,7 @@
                       <div>
                         <span class="text-xs text-[var(--text-tertiary)] font-semibold">Body Mass Index (BMI) Status</span>
                         <span class="text-xs text-[var(--text-secondary)] block mt-0.5">
-                          Weight: <strong class="font-mono text-violet-400">{{ clinical.vitals.weight }} kg</strong> Â· Height: <strong class="font-mono text-violet-400">{{ clinical.vitals.height }} cm</strong>
+                          Weight: <strong class="font-mono text-violet-400">{{ clinical.vitals.weight }} kg</strong> · Height: <strong class="font-mono text-violet-400">{{ clinical.vitals.height }} cm</strong>
                         </span>
                       </div>
                       <div class="text-right">
@@ -560,7 +560,7 @@
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA Address</span>
                             <span class="font-mono text-emerald-400 font-bold truncate block text-[10px]">
-                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : 'â€”' }}
+                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : '€”' }}
                             </span>
                           </div>
                         </div>
@@ -568,7 +568,7 @@
                         <div class="grid grid-cols-2 gap-2">
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">Gender / YOB</span>
-                            <span class="font-semibold block text-[11px]">{{ p.sex || 'â€”' }} Â· {{ (p.dateOfBirth | date:'yyyy') || 'â€”' }}</span>
+                            <span class="font-semibold block text-[11px]">{{ p.sex || '€”' }} · {{ (p.dateOfBirth | date:'yyyy') || '€”' }}</span>
                           </div>
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">Security Code</span>
@@ -625,7 +625,7 @@
                           Recent Lab Orders
                         </h3>
                         <button type="button" class="text-xs font-bold text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('labs')">
-                          View All ({{ history().length }}) â†’
+                          View All ({{ history().length }}) †’
                         </button>
                       </div>
 
@@ -641,7 +641,7 @@
                                   <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
                                 </div>
                                 <p class="text-xs text-[var(--text-secondary)] truncate">
-                                  {{ orderTests(o).length }} tests Â· {{ o.createdAt | date:'MMM d, y HH:mm' }}
+                                  {{ orderTests(o).length }} tests · {{ o.createdAt | date:'MMM d, y HH:mm' }}
                                 </p>
                               </div>
                               @if (o.totalAmount) {
@@ -665,7 +665,7 @@
                           Active Medications
                         </h3>
                         <button type="button" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('pharmacy')">
-                          View All ({{ clinical.prescriptions.length }}) â†’
+                          View All ({{ clinical.prescriptions.length }}) †’
                         </button>
                       </div>
 
@@ -684,10 +684,10 @@
                                 <div class="min-w-0 leading-tight">
                                   <h4 class="text-xs font-bold text-[var(--text-primary)] truncate">{{ m.name }}</h4>
                                   <p class="text-[10px] text-[var(--text-secondary)] mt-0.5 font-mono">
-                                    {{ m.dosage }} Â· {{ m.frequency }}
+                                    {{ m.dosage }} · {{ m.frequency }}
                                   </p>
                                   <p class="text-[9px] text-[var(--text-muted)] mt-0.5 truncate">
-                                    {{ m.instructions }} Â· {{ m.duration }}
+                                    {{ m.instructions }} · {{ m.duration }}
                                   </p>
                                 </div>
                               </div>
@@ -836,7 +836,7 @@
                                       <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-2 rounded-lg flex items-center justify-between">
                                         <div>
                                           <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
-                                          <span class="text-[10px] text-[var(--text-tertiary)] block">{{ med.dosage }} Â· {{ med.frequency }} Â· {{ med.duration }}</span>
+                                          <span class="text-[10px] text-[var(--text-tertiary)] block">{{ med.dosage }} · {{ med.frequency }} · {{ med.duration }}</span>
                                         </div>
                                         <span class="text-[10px] px-2 py-0.5 rounded"
                                           [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
@@ -859,7 +859,7 @@
                                 <div>
                                   <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Period</span>
                                   <p class="text-[var(--text-secondary)] mt-1 font-semibold">
-                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} â€” Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
+                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} €” Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
                                   </p>
                                 </div>
                                 <div>
@@ -908,11 +908,8 @@
                     <div class="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-[var(--border-muted)]">
                       <div>
                         <div class="flex items-center gap-2">
-                          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">#{{ o.id.toUpperCase() }}</span>
+                          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">{{ o.createdAt | date:'d MMM y HH:mm' }} · Ref: {{ o.refDoctorName || 'Self Referral' }}</span>
                           <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
-                        </div>
-                        <div class="text-[11px] text-[var(--text-tertiary)] font-mono mt-1">
-                          {{ o.createdAt | date:'d MMM y HH:mm' }} Â· Ref: {{ o.refDoctorName || 'Self Referral' }}
                         </div>
                       </div>
                       <div class="text-right">
@@ -995,7 +992,7 @@
                         </span>
                         <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">{{ opd.diagnosis }}</h4>
                         <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                          Consultant: <span class="text-[var(--text-primary)]">{{ opd.doctorName }}</span> Â· Dept: {{ opd.department }}
+                          Consultant: <span class="text-[var(--text-primary)]">{{ opd.doctorName }}</span> · Dept: {{ opd.department }}
                         </p>
                       </div>
                       <span class="text-xs font-mono font-bold text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] px-2.5 py-1 rounded-lg">
@@ -1041,7 +1038,7 @@
                           </div>
                           <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
                             <span class="text-[var(--text-secondary)]">Temperature:</span>
-                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.temperature }}Â°F</span>
+                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.temperature }}°F</span>
                           </div>
                           <div class="flex justify-between pb-0.5">
                             <span class="text-[var(--text-secondary)]">Oxygen (SpO2):</span>
@@ -1062,7 +1059,7 @@
                               <div>
                                 <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
                                 <span class="text-[10px] text-[var(--text-secondary)] block mt-0.5">
-                                  Dosage: {{ med.dosage }} Â· {{ med.frequency }} ({{ med.duration }})
+                                  Dosage: {{ med.dosage }} · {{ med.frequency }} ({{ med.duration }})
                                 </span>
                               </div>
                               <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -1104,7 +1101,7 @@
                         </span>
                         <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">Hospitalization: {{ ipd.diagnosis }}</h4>
                         <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                          Admitting Physician: <span class="text-[var(--text-primary)]">{{ ipd.admittingDoctor }}</span> Â· Room: {{ ipd.roomWard }}
+                          Admitting Physician: <span class="text-[var(--text-primary)]">{{ ipd.admittingDoctor }}</span> · Room: {{ ipd.roomWard }}
                         </p>
                       </div>
                       <div class="text-right">
@@ -1162,7 +1159,7 @@
                                   <td class="py-2">{{ v.date | date:'MMM d' }}</td>
                                   <td class="py-2 text-[var(--text-primary)] font-bold">{{ v.bp }}</td>
                                   <td class="py-2">{{ v.pulse }} bpm</td>
-                                  <td class="py-2">{{ v.temp }}Â°F</td>
+                                  <td class="py-2">{{ v.temp }}°F</td>
                                 </tr>
                               }
                             </tbody>
