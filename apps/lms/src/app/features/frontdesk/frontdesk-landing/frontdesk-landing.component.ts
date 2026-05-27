@@ -12,7 +12,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { PatientProfileService } from '../../../core/services/patient-profile.service';
+
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
@@ -1093,11 +1093,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   // ── Navigation & actions ──────────────────────────────────
-  private readonly profileSvc = inject(PatientProfileService);
 
   openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
   searchFocus() { this.toasts.success('QR scanner · coming soon'); }
-  openProfile(p: Patient) { this.profileSvc.open(p.id); }
+  openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
   newOrderFor(p: Patient) {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
   }
