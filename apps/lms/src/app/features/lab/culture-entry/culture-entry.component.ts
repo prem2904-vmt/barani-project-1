@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin: number; resistantMax: number; }
 
@@ -16,7 +17,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
 @Component({
   selector: 'pf-culture-entry',
   standalone: true,
-  imports: [FormsModule, PlateMeasureComponent],
+  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-4 pb-6">
@@ -45,16 +46,35 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
         <!-- Organisms -->
         <div class="flex items-center justify-between">
           <span class="pf-label">Organisms isolated</span>
-          <button type="button" class="text-xs font-semibold text-violet-400 hover:text-violet-300" (click)="addOrganism()">+ Add organism</button>
+          <button type="button" class="text-xs font-semibold text-violet-400 hover:text-violet-300" (click)="toggleOrganisms()">
+            {{ organismsOpen() ? 'Close organism' : '+ Add organism' }}
+          </button>
         </div>
 
-        @for (org of m().organisms ?? []; track oi; let oi = $index) {
+        @if (organismsOpen()) {
+          @for (org of m().organisms ?? []; track oi; let oi = $index) {
           <div class="rounded-xl border p-3" style="border-color: var(--border-subtle);">
-            <div class="flex items-center gap-2 mb-2">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
               <span class="text-[13px] font-bold" style="color: var(--text-tertiary);">{{ oi + 1 }}.</span>
-              <input type="text" class="pf-input flex-1" list="pf-org-list" [ngModel]="org.name"
+              <input type="text" class="pf-input flex-1 min-w-[200px]" list="pf-org-list" [ngModel]="org.name"
                 (ngModelChange)="setOrgName(oi, $event)" placeholder="Organism name" />
-              <button type="button" class="text-rose-400 hover:text-rose-300 px-1" title="Remove organism" (click)="removeOrganism(oi)">×</button>
+              <pf-touch-btn size="sm" variant="secondary" (pressed)="addAb(oi)">
+                + Add antibiotic
+              </pf-touch-btn>
+              <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
+                <svg icon-left width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 7h4l2-3h4l2 3h4v11H4V7z" />
+                  <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+                </svg>
+                Measure
+              </pf-touch-btn>
+              @if (org.plateImageUrl) {
+                <a [href]="resolveUrl(org.plateImageUrl)" target="_blank" rel="noopener" class="h-9 w-9 rounded overflow-hidden border"
+                  style="border-color: var(--border-subtle);" title="View plate photo">
+                  <img [src]="resolveUrl(org.plateImageUrl)" class="h-full w-full object-cover" alt="AST plate" />
+                </a>
+              }
             </div>
 
             <table class="w-full text-[12px]">
@@ -92,21 +112,17 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                         }
                       </div>
                     </td>
-                    <td><button type="button" class="text-rose-400 px-1" title="Remove" (click)="removeAb(oi, abi)">×</button></td>
+                    <td>
+                      <pf-touch-btn size="sm" variant="ghost" (pressed)="removeAb(oi, abi)" title="Remove">
+                        <span style="color: #ef4444;">×</span>
+                      </pf-touch-btn>
+                    </td>
                   </tr>
                 }
               </tbody>
             </table>
-            <div class="flex items-center gap-3 mt-2">
-              <button type="button" class="text-[11px] font-medium text-violet-400 hover:text-violet-300" (click)="addAb(oi)">+ Add antibiotic</button>
-              <button type="button" class="text-[11px] font-medium text-cyan-400 hover:text-cyan-300" (click)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">📷 Measure from plate</button>
-              @if (org.plateImageUrl) {
-                <a [href]="resolveUrl(org.plateImageUrl)" target="_blank" rel="noopener" class="ml-auto" title="View plate photo">
-                  <img [src]="resolveUrl(org.plateImageUrl)" class="h-9 w-9 rounded object-cover border" style="border-color: var(--border-subtle);" alt="AST plate" />
-                </a>
-              }
-            </div>
           </div>
+          }
         }
         <datalist id="pf-org-list">
           @for (o of organisms; track o) { <option [value]="o"></option> }
@@ -181,6 +197,8 @@ export class CultureEntryComponent implements OnInit {
     });
   }
 
+  readonly organismsOpen = signal(false);
+
   private readonly _m = signal<CultureResult>(this.normalize(null));
   readonly m = this._m.asReadonly();
 
@@ -203,6 +221,14 @@ export class CultureEntryComponent implements OnInit {
     const org: CultureOrganism = { name: '', antibiotics: panel.map(n => ({ name: n, zoneSize: null, interpretation: '' as const })) };
     this.commit({ ...this._m(), organisms: [...(this._m().organisms ?? []), org] });
   }
+
+  toggleOrganisms() {
+    if (!this.organismsOpen() && (this._m().organisms ?? []).length === 0) {
+      this.addOrganism();
+    }
+    this.organismsOpen.update(open => !open);
+  }
+
   removeOrganism(i: number) {
     this.commit({ ...this._m(), organisms: (this._m().organisms ?? []).filter((_, k) => k !== i) });
   }
