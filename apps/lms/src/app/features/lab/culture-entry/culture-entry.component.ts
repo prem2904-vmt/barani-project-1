@@ -46,9 +46,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
         <!-- Organisms -->
         <div class="flex items-center justify-between">
           <span class="pf-label">Organisms isolated</span>
-          <button type="button" class="text-xs font-semibold text-violet-400 hover:text-violet-300" (click)="toggleOrganisms()">
-            {{ organismsOpen() ? 'Close organism' : '+ Add organism' }}
-          </button>
+          <pf-touch-btn size="sm" variant="secondary" (pressed)="addOrganism()">+ Add organism</pf-touch-btn>
         </div>
 
         @if (organismsOpen()) {
@@ -68,6 +66,16 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                   <path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
                 </svg>
                 Measure
+              </pf-touch-btn>
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="removeOrganism(org)" title="Remove organism">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
               </pf-touch-btn>
               @if (org.plateImageUrl) {
                 <a [href]="resolveUrl(org.plateImageUrl)" target="_blank" rel="noopener" class="h-9 w-9 rounded overflow-hidden border"
@@ -220,18 +228,19 @@ export class CultureEntryComponent implements OnInit {
     const panel = panelForSpecimen(this._m().specimen);
     const org: CultureOrganism = { name: '', antibiotics: panel.map(n => ({ name: n, zoneSize: null, interpretation: '' as const })) };
     this.commit({ ...this._m(), organisms: [...(this._m().organisms ?? []), org] });
-  }
-
-  toggleOrganisms() {
-    if (!this.organismsOpen() && (this._m().organisms ?? []).length === 0) {
-      this.addOrganism();
+    if (!this.organismsOpen()) {
+      this.organismsOpen.set(true);
     }
-    this.organismsOpen.update(open => !open);
   }
 
-  removeOrganism(i: number) {
-    this.commit({ ...this._m(), organisms: (this._m().organisms ?? []).filter((_, k) => k !== i) });
+  removeOrganism(target: CultureOrganism) {
+    const nextOrgs = (this._m().organisms ?? []).filter(o => o !== target);
+    this.commit({ ...this._m(), organisms: nextOrgs });
+    if (nextOrgs.length === 0) {
+      this.organismsOpen.set(false);
+    }
   }
+
   setOrgName(i: number, name: string) {
     this.updateOrg(i, o => ({ ...o, name }));
     // Group may have changed → re-interpret this organism's non-manual rows.
