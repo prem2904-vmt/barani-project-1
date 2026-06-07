@@ -5,7 +5,7 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="flex items-start justify-between gap-4 mb-6 md:mb-7">
+    <header class="flex items-start justify-between gap-4 mb-2 md:mb-3">
       <div class="min-w-0 flex-1">
         <!--
         @if (eyebrow) {

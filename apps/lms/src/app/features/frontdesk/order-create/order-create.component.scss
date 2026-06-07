@@ -1,12 +1,4 @@
 /* ── Ref hospital + ref doctor row ──────────────────────── */
-.pf-refrow {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-@media (min-width: 768px) {
-  .pf-refrow { grid-template-columns: 1fr 1fr; }
-}
 .pf-refrow__field { position: relative; min-width: 0; }
 .pf-refrow__filter-hint {
   font-weight: 400; font-size: 10px;
@@ -36,7 +28,7 @@
   color: var(--text-tertiary);
 }
 .pf-refdoc__input {
-  flex: 1; min-width: 0; height: 40px;
+  flex: 1; min-width: 0; height: 46px;
   background: transparent; border: none; outline: none;
   color: var(--text-primary); font-size: 13.5px;
 }
@@ -519,147 +511,78 @@
   color: #ffffff;
 }
 
-.pf-empty-patient { margin: 0; font-size: 13px; color: var(--text-tertiary); padding: 8px 4px; }
-
-.pf-no-patient {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+.pf-controls-row {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 16px;
-  padding: 20px;
-  border-radius: 14px;
-  background: var(--glass-bg);
-  border: 1px dashed rgba(168, 85, 247, 0.4);
-}
-.pf-no-patient__icon { color: #a855f7; flex-shrink: 0; }
-.pf-no-patient__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.pf-no-patient__sub {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  line-height: 1.5;
-}
-.pf-no-patient__go {
-  padding: 8px 16px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-  flex-shrink: 0;
-}
-.pf-no-patient__go:hover { box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45); }
-
-/* Inline patient picker */
-.pf-patient-picker {
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: var(--glass-bg);
-  border: 1px dashed var(--glass-border);
-}
-.pf-patient-picker__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.pf-patient-picker__title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.pf-patient-picker__register {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
-  color: var(--color-primary, #7c3aed);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.pf-patient-picker__register:hover { background: rgba(168, 85, 247, 0.2); }
-.pf-patient-picker__search {
   position: relative;
-  display: flex;
-  align-items: center;
+  z-index: 20;
 }
-.pf-patient-picker__icon {
-  position: absolute;
-  left: 12px;
-  color: var(--text-muted);
+@media (min-width: 1024px) {
+  .pf-controls-row {
+    grid-template-columns: 2fr 1.5fr 1.5fr;
+    align-items: center;
+    gap: 12px;
+  }
 }
-.pf-patient-picker__input {
-  width: 100%;
-  padding: 10px 12px 10px 36px;
-  border-radius: 10px;
-  background: var(--bg-card-solid);
-  border: 1px solid var(--border-muted);
-  color: var(--text-primary);
-  font-size: 13.5px;
+@media (min-width: 640px) and (max-width: 1023px) {
+  .pf-controls-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
 }
-.pf-patient-picker__input:focus {
-  outline: none;
-  border-color: rgba(168, 85, 247, 0.6);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
-}
-.pf-patient-picker__list {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-.pf-patient-picker__item {
+
+/* ── Inline Patient Picker & Card ── */
+.pf-patient-inline {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--input-border, var(--glass-border));
+  border-radius: 12px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+.pf-patient-inline .pf-patient__name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-patient-inline .pf-patient__change {
   background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-.pf-patient-picker__item:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-muted);
-}
-.pf-patient-picker__name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0; }
-.pf-patient-picker__meta { font-size: 12px; color: var(--text-tertiary); margin: 2px 0 0; }
-.pf-patient-picker__empty {
-  margin: 10px 0 0;
-  font-size: 12.5px;
+  border: none;
   color: var(--text-tertiary);
-  font-style: italic;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+.pf-patient-inline .pf-patient__change:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+.pf-patient-search-inline {
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Search + Priority share a row ─────────────────────── */
 .pf-search-row {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
+  margin-top: 14px;
+  position: relative;
+  z-index: 5;
 }
 .pf-search-row .pf-search {
   flex: 1 1 auto;
@@ -670,17 +593,10 @@
 }
 .pf-search-row .pf-priority__toggle {
   flex-shrink: 0;
-  height: 44px;
+  height: 48px;
   padding: 4px;
 }
-.pf-search-row .pf-priority__opt { height: 36px; }
-.pf-search-row .pf-priority__toggle[data-active='Normal']::before,
-.pf-search-row .pf-priority__toggle[data-active='Urgent']::before {
-  top: 6px;
-  left: 6px;
-  width: calc(50% - 6px);
-  height: calc(100% - 12px);
-}
+.pf-search-row .pf-priority__opt { height: 40px; }
 
 /* ── Search ── */
 .pf-search {
@@ -688,11 +604,12 @@
   border-radius: 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 .pf-search:focus-within {
-  border-color: rgba(168, 85, 247, 0.55);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+  border-color: rgba(168, 85, 247, 0.65);
+  box-shadow: 0 0 0 4px rgba(124, 58, 247, 0.16);
+  background-color: var(--glass-bg-hover);
 }
 .pf-search__icon {
   position: absolute;
@@ -704,7 +621,7 @@
 }
 .pf-search__input {
   width: 100%;
-  height: 44px;
+  height: 46px;
   padding: 0 40px 0 40px;
   border-radius: 12px;
   background: transparent;
@@ -926,9 +843,9 @@
   top: 12px;
   padding: 18px;
   border-radius: 22px;
-  background: var(--bg-card-solid);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
 }
@@ -951,7 +868,7 @@
   max-height: 75vh;
   padding: 18px;
   border-radius: 22px;
-  background: var(--bg-card-solid);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   z-index: 45;

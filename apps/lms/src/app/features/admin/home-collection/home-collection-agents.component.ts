@@ -31,7 +31,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
   imports: [FormsModule, ChipComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-3xl">
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
       <pf-screen-header
         eyebrow="Admin"
         title="Home-collection agents"
@@ -42,7 +42,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
       </pf-screen-header>
 
       @if (formOpen()) {
-        <pf-tile tone="violet" padding="lg" class="block mb-4">
+        <pf-tile tone="violet" padding="lg" class="block mb-4 max-w-3xl">
           <h3 class="pf-section-title mb-3">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="sm:col-span-2">
@@ -103,19 +103,19 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
           <p class="text-center text-[13px]" style="color: var(--text-tertiary);">No home-collection agents yet.</p>
         </pf-tile>
       } @else {
-        <div class="space-y-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           @for (a of agents(); track a.id) {
-            <pf-tile tone="default" padding="md" class="block">
-              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
-                <div class="flex-1 min-w-0">
+            <pf-tile tone="default" padding="md" class="block h-full">
+              <div class="flex flex-col justify-between h-full gap-3">
+                <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <p class="font-semibold text-[14px] truncate" style="color: var(--text-primary);">{{ agentName(a) }}</p>
                     <pf-chip tone="violet" size="sm">weight {{ a.weightage }}</pf-chip>
                     @if (!a.isActive) { <pf-chip tone="default" size="sm">inactive</pf-chip> }
                   </div>
-                  <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">{{ areaSummary(a) }}</p>
+                  <p class="text-[12px] mt-1.5" style="color: var(--text-tertiary);">{{ areaSummary(a) }}</p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-700/30">
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="edit(a)">Edit</pf-touch-btn>
                   <pf-touch-btn size="sm" variant="ghost" (pressed)="remove(a)">Remove</pf-touch-btn>
                 </div>

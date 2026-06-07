@@ -171,6 +171,26 @@
   gap: 6px;
 }
 
+.pf-cards > li {
+  container-type: inline-size;
+}
+
+@container (min-width: 380px) {
+  .pf-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+@container (min-width: 580px) {
+  .pf-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
 .pf-card {
   display: grid;
   grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;

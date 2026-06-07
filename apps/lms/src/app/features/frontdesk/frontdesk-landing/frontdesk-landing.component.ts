@@ -12,7 +12,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { PatientProfileService } from '../../../core/services/patient-profile.service';
+
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
@@ -196,30 +196,44 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
 
-  // Active tab inside the Work pane — In progress vs Completed. Persisted
-  // so the user lands on the same tab next session.
-  private static readonly WORK_TAB_KEY = 'pf.lms.frontdesk.workTab';
-  private readonly _workTab = signal<'ip' | 'done' | 'home'>(this.loadWorkTab());
-  readonly workTab = this._workTab.asReadonly();
-  setWorkTab(t: 'ip' | 'done' | 'home') {
-    this._workTab.set(t);
-    try { localStorage.setItem(FrontdeskLandingComponent.WORK_TAB_KEY, t); } catch { /* ignore */ }
+  // Active tabs inside the Left and Right panes — persisted so the user lands
+  // on the same tabs next session.
+  private static readonly LEFT_TAB_KEY = 'pf.lms.frontdesk.leftTab';
+  private readonly _leftTab = signal<'appt' | 'home'>(this.loadLeftTab());
+  readonly leftTab = this._leftTab.asReadonly();
+  setLeftTab(t: 'appt' | 'home') {
+    this._leftTab.set(t);
+    try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadWorkTab(): 'ip' | 'done' | 'home' {
+  private loadLeftTab(): 'appt' | 'home' {
     try {
-      const raw = localStorage.getItem(FrontdeskLandingComponent.WORK_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'home' ? 'home' : 'ip';
+      const raw = localStorage.getItem(FrontdeskLandingComponent.LEFT_TAB_KEY);
+      return raw === 'home' ? 'home' : 'appt';
+    } catch { return 'appt'; }
+  }
+
+  private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
+  private readonly _rightTab = signal<'ip' | 'done'>(this.loadRightTab());
+  readonly rightTab = this._rightTab.asReadonly();
+  setRightTab(t: 'ip' | 'done') {
+    this._rightTab.set(t);
+    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
+  }
+  private loadRightTab(): 'ip' | 'done' {
+    try {
+      const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
+      return raw === 'done' ? 'done' : 'ip';
     } catch { return 'ip'; }
   }
 
   // ── Mobile list selector ──────────────────────────────────
   // Phones (≤640px) drop the pane accordion for a single list with a
   // dropdown picker (Appointments / In progress / Completed). It's a
-  // thin projection over expandedPane + workTab — desktop/iPad layout
+  // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
   readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home'>(() =>
-    this.expandedPane() === 'appt' ? 'appt' : this.workTab());
+    this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
@@ -229,11 +243,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
   });
   setMobileList(v: 'appt' | 'ip' | 'done' | 'home') {
-    if (v === 'appt') {
+    if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
+      this.setLeftTab(v);
     } else {
       this._expandedPane.set('work');
-      this.setWorkTab(v);
+      this.setRightTab(v);
     }
     this.mobileListOpen.set(false);
   }
@@ -1118,11 +1133,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   // ── Navigation & actions ──────────────────────────────────
-  private readonly profileSvc = inject(PatientProfileService);
 
   openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
   searchFocus() { this.toasts.success('QR scanner · coming soon'); }
-  openProfile(p: Patient) { this.profileSvc.open(p.id); }
+  openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
   newOrderFor(p: Patient) {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
   }
