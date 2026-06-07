@@ -227,10 +227,15 @@ export class PlateMeasureComponent implements OnInit {
     this.photoBlob = f;
     this.uploadedUrl = null;
     this.imageSrc.set(URL.createObjectURL(f));
+    // Advance out of 'capture' so the photo stage (and its <img>) actually
+    // renders — onImgLoad then captures the natural dimensions. Without this
+    // the stage stays hidden and the load event never fires (deadlock).
+    this.mode.set('calibrate');
   }
   private async setFromDataUrl(dataUrl: string) {
     this.imageSrc.set(dataUrl);
     this.uploadedUrl = null;
+    this.mode.set('calibrate');
     this.photoBlob = await (await fetch(dataUrl)).blob();
   }
   retake() {
