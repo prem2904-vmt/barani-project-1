@@ -1441,8 +1441,13 @@ function renderCultureSection(
     return y;
   }
 
-  const organisms = (c.organisms ?? []).filter(o => (o.name ?? '').trim());
-  const names = organisms.map((o, i) => `${i + 1}. ${o.name}`).join('   ');
+  // Keep any organism that is named OR carries antibiotic data. A tech may
+  // fill the whole sensitivity panel before naming the isolate — we must
+  // never silently drop measured results and mislabel them "no growth".
+  const organisms = (c.organisms ?? []).filter(o =>
+    (o.name ?? '').trim() || (o.antibiotics ?? []).some(a => (a.name ?? '').trim()));
+  const orgLabel = (o: PdfOrganism, i: number): string => (o.name ?? '').trim() || `Isolate ${i + 1}`;
+  const names = organisms.map((o, i) => `${i + 1}. ${orgLabel(o, i)}`).join('   ');
   line('Organism(s) isolated', names || 'No significant growth');
 
   const interpWord = (v?: string): { txt: string; color: string } => {
@@ -1453,7 +1458,8 @@ function renderCultureSection(
     return { txt: '—', color: BLACK };
   };
 
-  for (const org of organisms) {
+  for (let idx = 0; idx < organisms.length; idx++) {
+    const org = organisms[idx];
     if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
     const rows = (org.antibiotics ?? [])
       .filter(a => (a.name ?? '').trim())
@@ -1467,7 +1473,7 @@ function renderCultureSection(
     if (rows.length === 0) continue;
     autoTable(doc, {
       startY: y,
-      head: [[`Antimicrobial for ${org.name}`, 'Interpretation']],
+      head: [[`Antimicrobial for ${orgLabel(org, idx)}`, 'Interpretation']],
       body: rows as unknown as Array<Array<string>>,
       margin: { left: MARGIN_X, right: MARGIN_X },
       theme: 'plain',
