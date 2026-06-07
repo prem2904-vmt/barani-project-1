@@ -11,6 +11,8 @@ import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
+import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
+import { CultureResult } from '../../../shared/models/culture.model';
 
 interface BulkSubmitResponse {
   sample: OrderSample;
@@ -32,7 +34,7 @@ interface BulkSubmitResponse {
 @Component({
   selector: 'pf-sample-result-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, CommentThreadComponent, SelectComponent, LoadingLogoComponent],
+  imports: [CommonModule, FormsModule, CommentThreadComponent, SelectComponent, LoadingLogoComponent, CultureEntryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Full-width container matching FD/collect screens — was centered
@@ -160,7 +162,12 @@ interface BulkSubmitResponse {
               </div>
             }
 
-            @if (parametersFor(t).length === 0) {
+            @if (isCultureTest(t)) {
+              <!-- Microbiology Culture & Sensitivity: structured organism +
+                   antibiotic (zone / S-I-R) entry, replacing the flat grid. -->
+              <pf-culture-entry [value]="cultureValueFor(t)"
+                                (valueChange)="setCulture(t.id, $event)"></pf-culture-entry>
+            } @else if (parametersFor(t).length === 0) {
               <p class="pf-sre__test-empty">No parameter schema — this test has no inputs.</p>
             } @else if (viewMode() === 'grid') {
               <!-- Grid view: mirrors the report PDF column structure so the
@@ -883,6 +890,27 @@ export class SampleResultEntryComponent {
 
   parametersFor(t: OrderTest): TestParameter[] {
     return this._paramsByTest().get(t.id) ?? [];
+  }
+
+  // ── Microbiology Culture & Sensitivity ───────────────────────────────
+  // Tests flagged microFormat=culture_sensitivity render the structured
+  // culture screen (pf-culture-entry) instead of the flat parameter grid.
+  // The whole CultureResult is stored as that test's values payload.
+  private readonly _cultureTestIds = computed<Set<string>>(() => {
+    const set = new Set<string>();
+    for (const t of this._sample()?.tests ?? []) {
+      const raw = t.test?.parameters;
+      if (!raw) continue;
+      try {
+        if ((JSON.parse(raw) as TestParametersBlob).microFormat === 'culture_sensitivity') set.add(t.id);
+      } catch { /* malformed blob → treat as non-culture */ }
+    }
+    return set;
+  });
+  isCultureTest(t: OrderTest): boolean { return this._cultureTestIds().has(t.id); }
+  cultureValueFor(t: OrderTest): CultureResult { return (this._values()[t.id] ?? {}) as CultureResult; }
+  setCulture(testId: string, v: CultureResult) {
+    this._values.update(all => ({ ...all, [testId]: v as unknown as Record<string, unknown> }));
   }
 
   inputKindFor(p: TestParameter): 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text' {
