@@ -6,6 +6,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
+import { CultureResult } from '../../../shared/models/culture.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -115,6 +116,51 @@ interface ValueRow {
             </pf-comment-thread>
           </section>
 
+          <!-- Microbiology Culture & Sensitivity → structured read-only review -->
+          @if (isCulture()) {
+            @if (cultureResult(); as c) {
+              <div class="pf-culture-rev">
+                <div class="pf-culture-rev__meta">
+                  <div><span class="pf-eyebrow">Specimen</span><p>{{ c.specimen || '—' }}</p></div>
+                  <div><span class="pf-eyebrow">Gram stain</span><p>{{ c.gramStain || '—' }}</p></div>
+                  <div><span class="pf-eyebrow">Colony count</span><p>{{ c.colonyCount || '—' }}</p></div>
+                </div>
+                @if (c.noGrowth) {
+                  <p class="pf-culture-rev__growth">No significant growth</p>
+                } @else if ((c.organisms ?? []).length === 0) {
+                  <p class="pf-culture-rev__empty">No organisms recorded.</p>
+                } @else {
+                  @for (org of c.organisms ?? []; track $index) {
+                    <div class="pf-culture-rev__org">
+                      <div class="pf-culture-rev__org-name">{{ org.name || 'Organism' }}</div>
+                      <table class="pf-culture-rev__ast">
+                        <thead>
+                          <tr><th>Antimicrobial</th><th class="w-16">Zone</th><th class="w-32">Interpretation</th></tr>
+                        </thead>
+                        <tbody>
+                          @for (ab of org.antibiotics; track $index) {
+                            <tr>
+                              <td>{{ ab.name }}</td>
+                              <td class="text-center">{{ ab.zoneSize != null ? ab.zoneSize + ' mm' : '—' }}</td>
+                              <td class="font-bold" [style.color]="interpTone(ab.interpretation)">{{ interpLabel(ab.interpretation) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+                }
+                @if (c.resistancePattern) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Resistance pattern</span> {{ c.resistancePattern }}</p> }
+                @if (c.intrinsicResistance) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Intrinsic resistance</span> {{ c.intrinsicResistance }}</p> }
+                @if (c.clinicalNotes) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Clinical notes</span> {{ c.clinicalNotes }}</p> }
+                @if (c.infectionControlAdvice) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Infection control advice</span> {{ c.infectionControlAdvice }}</p> }
+              </div>
+            } @else {
+              <div class="pf-empty-block">No culture result recorded.</div>
+            }
+          }
+
+          @if (!isCulture()) {
           <!-- Summary strip: param counts with color-coded cells -->
           @if (valueRows().length > 0) {
             <div class="pf-summary">
@@ -291,6 +337,7 @@ interface ValueRow {
               </div>
             }
           }
+          }
 
           <!-- Clinical comment -->
           <section class="pf-comment">
@@ -332,12 +379,17 @@ interface ValueRow {
               <div class="flex-1"></div>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="reject()">Reject</button>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="reassign()">Reassign</button>
-              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit()">Edit values</button>
+              @if (!isCulture()) {
+                <!-- Culture values are a structured object; editing them as flat
+                     fields would corrupt the shape. The validator rejects for
+                     re-entry instead, which reopens the structured tech screen. -->
+                <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit()">Edit values</button>
+              }
               <button type="button"
                       class="pf-btn"
                       [class.pf-btn--primary]="!hasCritical()"
                       [class.pf-btn--danger]="hasCritical()"
-                      [disabled]="saving() || valueRows().length === 0"
+                      [disabled]="saving() || (!isCulture() && valueRows().length === 0)"
                       (click)="validate()">
                 {{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}
               </button>
@@ -436,6 +488,22 @@ interface ValueRow {
   styles: [`
     :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
     .pf-page { min-height: 100%; display: flex; flex-direction: column; }
+
+    /* ── Culture & Sensitivity read-only review ─────────────── */
+    .pf-culture-rev { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+    .pf-culture-rev__meta { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .pf-culture-rev__meta p { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-culture-rev__growth { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-secondary); }
+    .pf-culture-rev__empty { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+    .pf-culture-rev__org { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
+    .pf-culture-rev__org-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+    .pf-culture-rev__ast { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pf-culture-rev__ast th { text-align: left; font-weight: 700; font-size: 10.5px; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-tertiary); padding: 4px 6px; border-bottom: 1px solid var(--glass-border); }
+    .pf-culture-rev__ast td { padding: 5px 6px; border-bottom: 1px solid var(--glass-border); color: var(--text-secondary); }
+    .pf-culture-rev__ast tr:last-child td { border-bottom: 0; }
+    .pf-culture-rev__note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+    .pf-culture-rev__note .pf-eyebrow { margin-right: 6px; }
     .pf-page__header { flex-shrink: 0; }
     .pf-page__body { padding-top: 4px; }
 
@@ -1296,6 +1364,26 @@ export class ValidateResultComponent implements OnInit {
   });
 
   readonly hasCritical = computed(() => this.counts().critical > 0);
+
+  // ── Microbiology Culture & Sensitivity (read-only review) ──────────
+  /** True when this test is a structured culture — renders the organism +
+   *  antibiotic (S/I/R) review instead of the flat parameter cards. */
+  readonly isCulture = computed<boolean>(() => {
+    const raw = this._selected()?.test?.parameters;
+    if (!raw) return false;
+    try { return (JSON.parse(raw) as { microFormat?: string }).microFormat === 'culture_sensitivity'; }
+    catch { return false; }
+  });
+  /** The entered culture structure (specimen, organisms, AST, notes). */
+  readonly cultureResult = computed<CultureResult | null>(
+    () => (this.snapshot()?.values as CultureResult) ?? null);
+
+  interpLabel(v?: string): string {
+    return v === 'S' ? 'Sensitive' : v === 'R' ? 'Resistant' : v === 'I' ? 'Intermediate' : '—';
+  }
+  interpTone(v?: string): string {
+    return v === 'S' ? '#10b981' : v === 'R' ? '#ef4444' : v === 'I' ? '#f59e0b' : 'var(--text-tertiary)';
+  }
 
   // ── Range-bar zone computation ─────────────────────────────
   /** Produce zones (critical-low / low / normal / high / critical-high) with proportional widths. */
