@@ -14,7 +14,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
   imports: [ScreenHeaderComponent, TileComponent, TouchButtonComponent, SelectComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-3xl">
+    <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
       <pf-screen-header
         eyebrow="Front desk"
         title="Unassigned home collections"
@@ -42,18 +42,18 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             </p>
           </pf-tile>
         }
-        <div class="space-y-2.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           @for (a of items(); track a.id) {
-            <pf-tile tone="default" padding="md" class="block">
-              <div class="flex items-start gap-3 flex-wrap md:flex-nowrap">
-                <div class="flex-1 min-w-0">
+            <pf-tile tone="default" padding="md" class="block h-full">
+              <div class="flex flex-col justify-between h-full gap-4">
+                <div class="min-w-0">
                   <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ a.patient?.displayName || 'Patient' }}</p>
-                  <p class="text-[13px] mt-0.5" style="color: var(--text-secondary);">{{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}</p>
-                  <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">{{ a.slotTime || '—' }} @if (a.patient?.phone) { · {{ a.patient?.phone }} }</p>
+                  <p class="text-[13px] mt-1" style="color: var(--text-secondary);">{{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}</p>
+                  <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">{{ a.slotTime || '—' }} @if (a.patient; as patient) { @if (patient.phone) { · {{ patient.phone }} } }</p>
                 </div>
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                  <div class="w-44">
-                    <pf-select [options]="agentOptions()" [value]="pick()[a.id] ?? ''"
+                <div class="flex items-center gap-2 pt-2 border-t border-slate-700/30">
+                  <div class="flex-1">
+                    <pf-select [options]="agentOptions()" [value]="pick()[a.id]"
                       placeholder="Choose agent" size="sm"
                       (valueChange)="setPick(a.id, $any($event))"></pf-select>
                   </div>
