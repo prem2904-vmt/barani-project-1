@@ -75,6 +75,22 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['create_bill', 'collect_payment'],
     billingModes: ['separate_counter']
   },
+  {
+    // Live collection queue (token / walk-up / home-collection).
+    id: 'queue',
+    label: 'Queue',
+    href: '/frontdesk/queue',
+    iconPath: ['M3 6h18M3 12h18M3 18h18', 'M7 6v0M7 12v0M7 18v0'],
+    permissions: ['register_patient', 'create_order', 'collect_sample']
+  },
+  {
+    // Home-collection agent's assigned visits.
+    id: 'home-visits',
+    label: 'Home Visits',
+    href: '/home-collections',
+    iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
+    permissions: ['collect_sample']
+  },
   // Order: Validate before Results — Validate is the pathologist's
   // sign-off step that produces a Result. Following the actual lab
   // pipeline (Collect → Lab → Validate → Results) reads more naturally
@@ -147,6 +163,23 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'vendors', label: 'Vendor wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
     permissions: ['manage_tenant']
+  },
+  {
+    id: 'appts', label: 'Appointments', href: '/admin/appointments',
+    iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
+    permissions: ['manage_branches', 'manage_tenant']
+  },
+  {
+    id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection',
+    iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
+    permissions: ['manage_home_collection', 'register_patient', 'create_order']
+  },
+  {
+    id: 'audit', label: 'Audit trail', href: '/admin/audit',
+    iconPath: ['M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
+               'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z',
+               'M9 12h6M9 16h6'],
+    permissions: ['view_audit_log']
   },
   {
     id: 'setup', label: 'Setup', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],

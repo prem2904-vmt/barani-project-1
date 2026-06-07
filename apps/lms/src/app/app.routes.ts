@@ -129,6 +129,27 @@ export const appRoutes: Route[] = [
         canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/kpis/kpi-config.component').then(m => m.KpiConfigComponent)
       },
+      {
+        path: 'admin/audit',
+        canActivate: [permissionGuard('view_audit_log')],
+        loadComponent: () => import('./features/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
+      },
+      {
+        path: 'admin/appointments',
+        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        loadComponent: () => import('./features/admin/appointments-config/appointments-config.component').then(m => m.AppointmentsConfigComponent)
+      },
+      {
+        path: 'admin/home-collection',
+        canActivate: [permissionGuard(['manage_home_collection', 'manage_branches'])],
+        loadComponent: () => import('./features/admin/home-collection/home-collection-agents.component').then(m => m.HomeCollectionAgentsComponent)
+      },
+      {
+        // Agent's own home-collection visit list.
+        path: 'home-collections',
+        canActivate: [permissionGuard('collect_sample')],
+        loadComponent: () => import('./features/home-collection/my-home-collections.component').then(m => m.MyHomeCollectionsComponent)
+      },
 
       // Frontdesk — orders / appointments / billing under one sticky
       // shell. Children swap inside the shell's <router-outlet>. Parent is
@@ -158,6 +179,18 @@ export const appRoutes: Route[] = [
             path: 'appointments',
             canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order'])],
             loadComponent: () => import('./features/frontdesk/appointments-calendar/appointments-calendar.component').then(m => m.AppointmentsCalendarComponent)
+          },
+          {
+            // Live collection queue (token / walk-up / home-collection per branch).
+            path: 'queue',
+            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order', 'collect_sample'])],
+            loadComponent: () => import('./features/frontdesk/collection-queue/collection-queue.component').then(m => m.CollectionQueueComponent)
+          },
+          {
+            // Reception: assign home collections no agent area covered.
+            path: 'home-collection',
+            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order'])],
+            loadComponent: () => import('./features/frontdesk/home-collection-assign/home-collection-assign.component').then(m => m.HomeCollectionAssignComponent)
           },
           {
             path: 'appointments/new',

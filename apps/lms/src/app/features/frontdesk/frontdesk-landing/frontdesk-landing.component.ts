@@ -17,6 +17,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { Appointment } from '../../../shared/models/appointment.model';
+import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
@@ -198,16 +199,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Active tab inside the Work pane — In progress vs Completed. Persisted
   // so the user lands on the same tab next session.
   private static readonly WORK_TAB_KEY = 'pf.lms.frontdesk.workTab';
-  private readonly _workTab = signal<'ip' | 'done'>(this.loadWorkTab());
+  private readonly _workTab = signal<'ip' | 'done' | 'home'>(this.loadWorkTab());
   readonly workTab = this._workTab.asReadonly();
-  setWorkTab(t: 'ip' | 'done') {
+  setWorkTab(t: 'ip' | 'done' | 'home') {
     this._workTab.set(t);
     try { localStorage.setItem(FrontdeskLandingComponent.WORK_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadWorkTab(): 'ip' | 'done' {
+  private loadWorkTab(): 'ip' | 'done' | 'home' {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.WORK_TAB_KEY);
-      return raw === 'done' ? 'done' : 'ip';
+      return raw === 'done' ? 'done' : raw === 'home' ? 'home' : 'ip';
     } catch { return 'ip'; }
   }
 
@@ -217,16 +218,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + workTab — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done'>(() =>
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home'>(() =>
     this.expandedPane() === 'appt' ? 'appt' : this.workTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
       case 'ip': return 'In progress';
+      case 'home': return 'Home collection';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home') {
     if (v === 'appt') {
       this._expandedPane.set('appt');
     } else {
@@ -323,6 +325,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   private readonly _appointments = signal<Appointment[]>([]);
   private readonly _orders = signal<Order[]>([]);
+  private readonly _homeCollections = signal<Appointment[]>([]);
+  readonly homeCollections = this._homeCollections.asReadonly();
+  private readonly _tests = signal<Test[]>([]);
+  readonly testsById = computed(() => {
+    const m = new Map<string, string>();
+    for (const t of this._tests()) m.set(t.id, t.name);
+    return m;
+  });
+  // The home-collection request opened in the detail drawer.
+  private readonly _selectedHc = signal<Appointment | null>(null);
+  readonly selectedHc = this._selectedHc.asReadonly();
   private readonly _bills = signal<Bill[]>([]);
   private readonly _selectedOrder = signal<Order | null>(null);
 
@@ -753,6 +766,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       next: l => this._bills.set(l ?? []),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
+
+    // Fetch open home-collection requests for the Home Collection tab.
+    this.api.get<Appointment[]>('/api/home-collection/all').subscribe({
+      next: l => this._homeCollections.set(l ?? []),
+      error: () => this._homeCollections.set([])
+    });
+
+    // Test catalogue (once) — used to show requested-test names in the
+    // home-collection detail.
+    if (this._tests().length === 0) {
+      this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
+    }
   }
 
   private async fetchOrdersWithEtag() {
@@ -1106,6 +1131,25 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   openAppointment(a: Appointment) {
     if (a.patientId) this.router.navigate(['/frontdesk/patients', a.patientId]);
+  }
+
+  // ── Home-collection request detail ───────────────────────────────
+  openHomeCollection(a: Appointment) { this._selectedHc.set(a); }
+  closeHomeCollection() { this._selectedHc.set(null); }
+
+  /** Resolve a home collection's pre-booked test ids to names. */
+  homeCollectionTests(a: Appointment | null): string[] {
+    if (!a?.testIds) return [];
+    const map = this.testsById();
+    return a.testIds.split(',').map(s => s.trim()).filter(Boolean)
+      .map(id => map.get(id) ?? id.slice(0, 8));
+  }
+  hcMapUrl(a: Appointment): string | null {
+    if (a.latitude != null && a.longitude != null) {
+      return `https://www.google.com/maps/search/?api=1&query=${a.latitude},${a.longitude}`;
+    }
+    if (a.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address + ' ' + (a.pincode ?? ''))}`;
+    return null;
   }
   openOrder(o: Order) { this._selectedOrder.set(o); }
   /** Build a fresh order pre-populated with the tests from a prior order.

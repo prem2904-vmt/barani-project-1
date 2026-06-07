@@ -343,6 +343,46 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             </div>
           </section>
 
+          <!-- Collection type -->
+          <section class="flex flex-col shrink-0">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+              </span>
+              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Collection</span>
+            </div>
+            <div class="flex gap-2 mb-2">
+              <button type="button"
+                class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition"
+                [style.borderColor]="collectionType() === 'walkin' ? '#a855f7' : 'var(--input-border)'"
+                [style.color]="collectionType() === 'walkin' ? '#d8b4fe' : 'var(--text-secondary)'"
+                (click)="collectionType.set('walkin')">Walk-in (lab visit)</button>
+              <button type="button"
+                class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition"
+                [style.borderColor]="collectionType() === 'home_collection' ? '#a855f7' : 'var(--input-border)'"
+                [style.color]="collectionType() === 'home_collection' ? '#d8b4fe' : 'var(--text-secondary)'"
+                (click)="collectionType.set('home_collection')">Home collection</button>
+            </div>
+            @if (collectionType() === 'home_collection') {
+              <input type="text"
+                class="w-full p-3 mb-2 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
+                placeholder="Patient address (required)"
+                [value]="hcAddress()" (input)="hcAddress.set($any($event.target).value)" />
+              <div class="grid grid-cols-3 gap-2">
+                <input type="text" inputmode="numeric"
+                  class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
+                  placeholder="Pincode" [value]="hcPincode()" (input)="hcPincode.set($any($event.target).value)" />
+                <input type="number" step="0.0001"
+                  class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
+                  placeholder="Lat (opt)" [value]="hcLat()" (input)="hcLat.set($any($event.target).valueAsNumber || null)" />
+                <input type="number" step="0.0001"
+                  class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
+                  placeholder="Lng (opt)" [value]="hcLng()" (input)="hcLng.set($any($event.target).valueAsNumber || null)" />
+              </div>
+              <p class="text-[10px] mt-1 text-[var(--text-muted)]">Pincode (or coordinates) auto-assigns the nearest agent. Coordinates are optional.</p>
+            }
+          </section>
+
           <!-- Step 5: Notes -->
           <section class="flex flex-col shrink-0">
             <div class="flex items-center gap-2 mb-2">
@@ -652,6 +692,12 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   protected readonly selectedDate = signal<string>(format(new Date(), 'yyyy-MM-dd'));
   protected readonly selectedTime = signal<string>('');
   protected readonly notes = signal<string>('');
+  // Collection type + home-collection details.
+  protected readonly collectionType = signal<'walkin' | 'home_collection'>('walkin');
+  protected readonly hcAddress = signal<string>('');
+  protected readonly hcPincode = signal<string>('');
+  protected readonly hcLat = signal<number | null>(null);
+  protected readonly hcLng = signal<number | null>(null);
   protected readonly calendarMonth = signal<Date>(startOfMonth(new Date()));
   protected readonly selectedTestIds = signal<string[]>([]);
   protected readonly testQuery = signal<string>('');
@@ -1139,12 +1185,17 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       .post<unknown>('/api/appointments', {
         patientId: p.id,
         type: 'appointment',
-        collectionType: 'walkin',
+        collectionType: this.collectionType(),
         appointmentDate: apptDate.toISOString(),
         slotTime: time,
         consultationFee: 0,
         notes: this.notes() || null,
         testIds: testIds.length ? testIds.join(',') : null,
+        // Home-collection details (ignored server-side for walk-in).
+        address: this.collectionType() === 'home_collection' ? (this.hcAddress() || null) : null,
+        pincode: this.collectionType() === 'home_collection' ? (this.hcPincode() || null) : null,
+        latitude: this.collectionType() === 'home_collection' ? this.hcLat() : null,
+        longitude: this.collectionType() === 'home_collection' ? this.hcLng() : null,
       })
       .subscribe({
         next: () => {

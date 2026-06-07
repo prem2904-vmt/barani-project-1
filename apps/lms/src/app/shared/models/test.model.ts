@@ -21,6 +21,12 @@ export interface Test {
   createdAt: string;
 }
 
+// Canonical reference-range shape (segment label + min/max + structured
+// sex/age selectors). Defined once in the form-field model; re-exported here
+// so result/report code can import it from the test model too.
+export type { ReferenceRange } from '../forms/form-field.model';
+import type { ReferenceRange } from '../forms/form-field.model';
+
 export interface TestParameter {
   id: string;
   name: string;
@@ -28,15 +34,23 @@ export interface TestParameter {
   type: 'numeric' | 'text' | 'textarea' | 'select' | 'multiselect' | 'radio' | 'button_select' | 'yesno' | 'toggle' | 'date' | 'numeric_with_range';
   unit?: string;
   options?: string[];
-  referenceRanges?: { segment: string; min: number; max: number }[];
+  referenceRanges?: ReferenceRange[];
   normalValue?: string;
   criticalLow?: number;
   criticalHigh?: number;
+  // Plausible / analytically-possible band — wider than the reference and
+  // critical ranges. A value outside it is treated as a transcription error
+  // and rejected at submit. Optional; unset = no plausibility check.
+  validLow?: number;
+  validHigh?: number;
 }
 
 export interface TestParametersBlob {
   sampleType?: string;
   tatHours?: number;
+  /** Microbiology result format hint: 'culture_sensitivity' routes to the
+   *  structured culture entry + report; others render generically. */
+  microFormat?: string;
   parameters: TestParameter[];
   // New-format parallel array produced by the test editor. Carries richer
   // per-field metadata (id, showWhen, conditional links) that the legacy

@@ -11,6 +11,7 @@ import {
   FieldTypePickerComponent,
   FormField,
   FormFieldType,
+  ReferenceRange,
   ShowWhen,
   ValidationEditorComponent,
   ValidationPatch,
@@ -152,9 +153,9 @@ function newFieldId(): string {
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label class="pf-label">Department</label>
-                <pf-select [options]="departmentOptions()" [value]="d.departmentId"
+                <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
                            placeholder="— Select department —"
-                           (valueChange)="patch({ departmentId: $event })"></pf-select>
+                           (valueChange)="onDeptPicked($event)"></pf-select>
               </div>
               <div><label class="pf-label">Sample type</label>
                 <input type="text" class="pf-input" [ngModel]="d.sampleType"
@@ -290,22 +291,75 @@ function newFieldId(): string {
 
                     @if (isNumericType(p.type)) {
                       <div class="param-row__ranges">
-                        <span class="pf-mini-lbl pf-mini-lbl--strong">Range</span>
-                        <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
-                          <label class="flex flex-col gap-0.5 min-w-0">
-                            <span class="pf-mini-lbl">Normal min</span>
-                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                              [value]="(p.referenceRanges ?? [])[0]?.min ?? null"
-                                              (valueChange)="patchRange(i, { min: $event ?? undefined })">
-                            </pf-number-input>
-                          </label>
-                          <label class="flex flex-col gap-0.5 min-w-0">
-                            <span class="pf-mini-lbl">Normal max</span>
-                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                              [value]="(p.referenceRanges ?? [])[0]?.max ?? null"
-                                              (valueChange)="patchRange(i, { max: $event ?? undefined })">
-                            </pf-number-input>
-                          </label>
+                        <div class="flex items-center justify-between">
+                          <span class="pf-mini-lbl pf-mini-lbl--strong">Reference ranges</span>
+                          <button type="button"
+                                  class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                  (click)="addRange(i)">+ Add range</button>
+                        </div>
+                        <!-- One band per sex/age segment. Sex/age select which band
+                             a given patient is flagged against; leave Sex = Any and
+                             ages blank for a single all-patients range. -->
+                        @for (r of (p.referenceRanges ?? []); track $index) {
+                          <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Sex</span>
+                              <select class="pf-input pf-input--compact"
+                                      [ngModel]="r.sex ?? 'any'"
+                                      (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
+                                <option value="any">Any</option>
+                                <option value="M">Male</option>
+                                <option value="F">Female</option>
+                              </select>
+                            </label>
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Min age</span>
+                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                                [value]="r.minAge ?? null"
+                                                (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
+                              </pf-number-input>
+                            </label>
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Max age</span>
+                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                                [value]="r.maxAge ?? null"
+                                                (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
+                              </pf-number-input>
+                            </label>
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Age unit</span>
+                              <select class="pf-input pf-input--compact"
+                                      [ngModel]="r.ageUnit ?? 'years'"
+                                      (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
+                                <option value="years">Years</option>
+                                <option value="months">Months</option>
+                                <option value="days">Days</option>
+                              </select>
+                            </label>
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Normal min</span>
+                              <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                                [value]="r.min ?? null"
+                                                (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
+                              </pf-number-input>
+                            </label>
+                            <label class="flex flex-col gap-0.5 min-w-0">
+                              <span class="pf-mini-lbl">Normal max</span>
+                              <div class="flex items-end gap-1">
+                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                                  [value]="r.max ?? null"
+                                                  (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
+                                </pf-number-input>
+                                @if ((p.referenceRanges ?? []).length > 1) {
+                                  <button type="button" title="Remove range"
+                                          class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
+                                          (click)="removeRange(i, $index)">×</button>
+                                }
+                              </div>
+                            </label>
+                          </div>
+                        }
+                        <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
                           <label class="flex flex-col gap-0.5 min-w-0">
                             <span class="pf-mini-lbl">Critical low</span>
                             <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
@@ -318,6 +372,23 @@ function newFieldId(): string {
                             <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
                                               [value]="p.criticalHigh ?? null"
                                               (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })">
+                            </pf-number-input>
+                          </label>
+                          <!-- Plausible band: a value outside this is rejected
+                               at submit as a likely transcription error. Leave
+                               blank to skip the check. -->
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Plausible low</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="p.validLow ?? null"
+                                              (valueChange)="patchField(i, { validLow: $event ?? undefined })">
+                            </pf-number-input>
+                          </label>
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Plausible high</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="p.validHigh ?? null"
+                                              (valueChange)="patchField(i, { validHigh: $event ?? undefined })">
                             </pf-number-input>
                           </label>
                         </div>
@@ -697,10 +768,37 @@ export class TestEditorComponent implements OnInit {
 
   private readonly _departments = signal<Department[]>([]);
   readonly departments = this._departments.asReadonly();
-  readonly departmentOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: '— None —' },
-    ...this._departments().map(d => ({ value: d.id, label: d.name }))
-  ]);
+  // Departments are stored per-branch, so the same name repeats across
+  // branches. The picker is keyed by NAME (deduped) so admins see each
+  // department once instead of "Bio · Bio · Bio".
+  readonly departmentOptions = computed<PfSelectOption<string>[]>(() => {
+    const seen = new Set<string>();
+    const opts: PfSelectOption<string>[] = [{ value: '', label: '— None —' }];
+    for (const d of this._departments()) {
+      const name = (d.name ?? '').trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      opts.push({ value: name, label: name });
+    }
+    return opts;
+  });
+
+  /** The picker value is the department NAME; map the test's stored
+   *  departmentId (a specific per-branch row) to its name for display. */
+  readonly selectedDeptName = computed<string>(() => {
+    const id = this._draft().departmentId;
+    if (!id) return '';
+    return (this._departments().find(d => d.id === id)?.name ?? '').trim();
+  });
+
+  /** User picked a department by name → resolve to a canonical id for that
+   *  name. (Leaving it untouched preserves the original per-branch id, so we
+   *  never silently re-route an existing test's samples.) */
+  onDeptPicked(name: string) {
+    if (!name) { this.patch({ departmentId: '' }); return; }
+    const id = this._departments().find(d => (d.name ?? '').trim() === name)?.id ?? '';
+    this.patch({ departmentId: id });
+  }
 
   private readonly _draft = signal<DraftTest>(makeEmptyDraft());
   readonly draft = this._draft.asReadonly();
@@ -920,6 +1018,8 @@ export class TestEditorComponent implements OnInit {
       referenceRanges: p.referenceRanges ?? null,
       criticalLow: p.criticalLow ?? null,
       criticalHigh: p.criticalHigh ?? null,
+      validLow: p.validLow ?? null,
+      validHigh: p.validHigh ?? null,
       normalValue: p.normalValue ?? null,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
@@ -942,7 +1042,9 @@ export class TestEditorComponent implements OnInit {
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,
-      criticalHigh: f.criticalHigh ?? undefined
+      criticalHigh: f.criticalHigh ?? undefined,
+      validLow: f.validLow ?? undefined,
+      validHigh: f.validHigh ?? undefined
     };
   }
 
@@ -991,16 +1093,35 @@ export class TestEditorComponent implements OnInit {
     this.persistFieldsToDraft();
   }
 
-  patchRange(i: number, updates: Partial<{ min: number | undefined; max: number | undefined }>) {
+  /** Patch one reference-range band (by index) of parameter `i`. */
+  patchRangeAt(i: number, ri: number, updates: Partial<ReferenceRange>) {
     this._fields.update(list => list.map((p, idx) => {
       if (idx !== i) return p;
-      const ranges = [...(p.referenceRanges ?? [{ segment: 'normal' }])];
-      ranges[0] = {
-        ...ranges[0],
-        segment: ranges[0].segment ?? 'normal',
-        ...('min' in updates ? { min: updates.min ?? null } : {}),
-        ...('max' in updates ? { max: updates.max ?? null } : {})
-      };
+      const ranges = [...(p.referenceRanges ?? [])];
+      if (ri < 0 || ri >= ranges.length) return p;
+      // Normalize 'any' sex back to undefined so the persisted JSON stays
+      // clean (a band with no sex constraint = applies to everyone).
+      const next: ReferenceRange = { ...ranges[ri], segment: ranges[ri].segment ?? 'normal', ...updates };
+      if (next.sex === 'any') next.sex = undefined;
+      ranges[ri] = next;
+      return { ...p, referenceRanges: ranges };
+    }));
+    this.persistFieldsToDraft();
+  }
+
+  /** Append an empty reference-range band to parameter `i`. */
+  addRange(i: number) {
+    this._fields.update(list => list.map((p, idx) => idx === i
+      ? { ...p, referenceRanges: [...(p.referenceRanges ?? []), { segment: 'normal', min: null, max: null }] }
+      : p));
+    this.persistFieldsToDraft();
+  }
+
+  /** Remove reference-range band `ri` from parameter `i`. */
+  removeRange(i: number, ri: number) {
+    this._fields.update(list => list.map((p, idx) => {
+      if (idx !== i) return p;
+      const ranges = (p.referenceRanges ?? []).filter((_, k) => k !== ri);
       return { ...p, referenceRanges: ranges };
     }));
     this.persistFieldsToDraft();
