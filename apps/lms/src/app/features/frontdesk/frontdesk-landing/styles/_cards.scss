@@ -175,22 +175,6 @@
   container-type: inline-size;
 }
 
-@container (min-width: 380px) {
-  .pf-cards {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-}
-
-@container (min-width: 580px) {
-  .pf-cards {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-  }
-}
-
 .pf-card {
   display: grid;
   grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
@@ -772,10 +756,27 @@
 }
 
 /* In-progress card — checkbox + avatar + body + chip + action */
+.pf-token {
+  width: 60px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-subtle);
+  flex-shrink: 0;
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+}
+
 .pf-card--ip {
   grid-template-columns: 22px 36px 1fr auto auto;
   gap: 10px;
   padding: 10px 14px;
+}
+
+.pf-card--token-layout {
+  grid-template-columns: 22px 60px 1fr auto auto;
 }
 
 .pf-card--ip .pf-card__actions {
@@ -788,6 +789,10 @@
   .pf-card--ip {
     grid-template-columns: 36px 1fr auto;
     align-items: center;
+  }
+
+  .pf-card--token-layout {
+    grid-template-columns: 60px 1fr auto;
   }
 
   .pf-card__meta-inline {

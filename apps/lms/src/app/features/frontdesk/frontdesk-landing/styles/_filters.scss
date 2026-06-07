@@ -435,7 +435,7 @@
    row. The chip shows the active range; the popover holds the pills.
    ─────────────────────────────────────────────────────────────── */
 .pf-hdr-filter {
-  margin-left: auto;
+  // margin-left: auto;
   position: relative;
   display: inline-flex;
 
@@ -590,4 +590,4 @@
     display: inline-flex !important;
   }
 }
-
+

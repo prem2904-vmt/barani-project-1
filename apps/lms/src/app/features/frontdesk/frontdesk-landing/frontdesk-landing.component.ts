@@ -1889,4 +1889,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return '';
     }
   }
+  getAppointmentForOrder(o: Order): Appointment | null {
+    const list = this._appointments();
+    const active = list.find(a => a.patientId === o.patientId && a.status !== 'booked' && a.status !== 'cancelled' && a.status !== 'no_show');
+    if (active) return active;
+    return list.find(a => a.patientId === o.patientId) ?? null;
+  }
+  typeColor(type?: string): string {
+    const TYPE_COLOR: Record<string, string> = {
+      urgent: '#ef4444', emergency: '#ef4444',
+      appointment: '#f59e0b', walkin: '#eab308', followup: '#22c55e'
+    };
+    return TYPE_COLOR[type ?? ''] ?? '#94a3b8';
+  }
 }

@@ -250,6 +250,45 @@
                     <path d="M9 16h6"/>
                   </svg>
                 </a>
+                                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
+                  <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
+                    <button type="button" class="pf-hdr-filter__btn"
+                      [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
+                      (click)="toggleApptFilter()"
+                      aria-haspopup="true" [attr.aria-expanded]="apptFilterOpen()"
+                      [attr.aria-label]="'Filter by date: ' + apptRangeLabel()"
+                      [attr.title]="'Filter by date: ' + apptRangeLabel()">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 6h16M7 12h10M10 18h4"/>
+                      </svg>
+                    </button>
+                    @if (apptFilterOpen()) {
+                      <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
+                      <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
+                        @for (opt of apptDateOptions; track opt.id) {
+                          @if (opt.id === 'custom') {
+                            <button #apptCustomBtnDropdown type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
+                              [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()"
+                              (click)="openApptDatePicker(apptCustomBtnDropdown, $event)">
+                              {{ apptCustomRangeLabel() }}
+                            </button>
+                            @if (apptDateRange() === 'custom' && apptCustomStart()) {
+                              <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom(); closeDateFilters()"
+                                aria-label="Clear custom range">×</button>
+                            }
+                          } @else {
+                            <button type="button" class="pf-hdr-date-pill"
+                              [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id"
+                              (click)="setApptDateRange(opt.id); closeDateFilters()">
+                              {{ opt.label }}
+                            </button>
+                          }
+                        }
+                      </div>
+                    }
+                  </div>
 
                 <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
                   <button type="button" role="tab" class="pf-tabs__btn press"
@@ -287,46 +326,6 @@
                           {{ opt.label }}
                         </button>
                       }
-                    }
-                  </div>
-
-                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
-                  <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
-                    <button type="button" class="pf-hdr-filter__btn"
-                      [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
-                      (click)="toggleApptFilter()"
-                      aria-haspopup="true" [attr.aria-expanded]="apptFilterOpen()"
-                      [attr.aria-label]="'Filter by date: ' + apptRangeLabel()"
-                      [attr.title]="'Filter by date: ' + apptRangeLabel()">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M4 6h16M7 12h10M10 18h4"/>
-                      </svg>
-                    </button>
-                    @if (apptFilterOpen()) {
-                      <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
-                      <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
-                        @for (opt of apptDateOptions; track opt.id) {
-                          @if (opt.id === 'custom') {
-                            <button #apptCustomBtnDropdown type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
-                              [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()"
-                              (click)="openApptDatePicker(apptCustomBtnDropdown, $event)">
-                              {{ apptCustomRangeLabel() }}
-                            </button>
-                            @if (apptDateRange() === 'custom' && apptCustomStart()) {
-                              <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom(); closeDateFilters()"
-                                aria-label="Clear custom range">×</button>
-                            }
-                          } @else {
-                            <button type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id"
-                              (click)="setApptDateRange(opt.id); closeDateFilters()">
-                              {{ opt.label }}
-                            </button>
-                          }
-                        }
-                      </div>
                     }
                   </div>
                 }
@@ -439,7 +438,7 @@
                   <ul class="pf-cards">
                     @for (a of homeCollections(); track a.id) {
                       <li>
-                        <div class="pf-card pf-card--ip" [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openHomeCollection(a)">
+                        <div class="pf-card pf-card--ip pf-card--token-layout" [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openHomeCollection(a)">
                           <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(a.id)"
                             [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
                             @if (selectedIds().has(a.id)) {
@@ -449,7 +448,10 @@
                               </svg>
                             }
                           </button>
-                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(a.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ a.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
                               <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
@@ -507,45 +509,7 @@
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'work' && expandedPane() !== 'none'">
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('work')" role="button"
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'work'">
-                <div class="pf-tabs" role="tablist" aria-label="Work pane tabs" (click)="$event.stopPropagation()">
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-selected]="rightTab() === 'ip'"
-                    (click)="setRightTab('ip')">
-                    In progress
-                    <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length }}</span>
-                  </button>
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-selected]="rightTab() === 'done'"
-                    (click)="setRightTab('done')">
-                    Completed
-                    <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
-                  </button>
-                </div>
-
-                <!-- Date filters for Right Pane -->
-                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
-                  @for (opt of workDateOptions; track opt.id) {
-                    @if (opt.id === 'custom') {
-                      <button #workCustomBtn type="button" class="pf-hdr-date-pill"
-                        [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
-                        [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
-                        (click)="openWorkDatePicker(workCustomBtn, $event)">
-                        {{ workCustomRangeLabel() }}
-                      </button>
-                      @if (workDateRange() === 'custom' && workCustomStart()) {
-                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
-                          aria-label="Clear custom range">×</button>
-                      }
-                    } @else {
-                      <button type="button" class="pf-hdr-date-pill"
-                        [class.pf-hdr-date-pill--on]="workDateRange() === opt.id" (click)="setWorkDateRange(opt.id)">
-                        {{ opt.label }}
-                      </button>
-                    }
-                  }
-                </div>
-
-                <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
+                              <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
                   <button type="button" class="pf-hdr-filter__btn"
                     [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today'"
                     (click)="toggleWorkFilter()"
@@ -581,6 +545,43 @@
                         }
                       }
                     </div>
+                  }
+                </div>
+                <div class="pf-tabs" role="tablist" aria-label="Work pane tabs" (click)="$event.stopPropagation()">
+                  <button type="button" role="tab" class="pf-tabs__btn press"
+                    [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-selected]="rightTab() === 'ip'"
+                    (click)="setRightTab('ip')">
+                    In progress
+                    <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length }}</span>
+                  </button>
+                  <button type="button" role="tab" class="pf-tabs__btn press"
+                    [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-selected]="rightTab() === 'done'"
+                    (click)="setRightTab('done')">
+                    Completed
+                    <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
+                  </button>
+                </div>
+
+                <!-- Date filters for Right Pane -->
+                <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
+                  @for (opt of workDateOptions; track opt.id) {
+                    @if (opt.id === 'custom') {
+                      <button #workCustomBtn type="button" class="pf-hdr-date-pill"
+                        [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
+                        [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
+                        (click)="openWorkDatePicker(workCustomBtn, $event)">
+                        {{ workCustomRangeLabel() }}
+                      </button>
+                      @if (workDateRange() === 'custom' && workCustomStart()) {
+                        <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
+                          aria-label="Clear custom range">×</button>
+                      }
+                    } @else {
+                      <button type="button" class="pf-hdr-date-pill"
+                        [class.pf-hdr-date-pill--on]="workDateRange() === opt.id" (click)="setWorkDateRange(opt.id)">
+                        {{ opt.label }}
+                      </button>
+                    }
                   }
                 </div>
 
@@ -633,7 +634,7 @@
                   <ul class="pf-cards">
                     @for (o of visibleOrders(); track o.id) {
                       <li>
-                        <div class="pf-card pf-card--ip" [attr.data-priority]="o.priority"
+                        <div class="pf-card pf-card--ip pf-card--token-layout" [attr.data-priority]="o.priority"
                           [class.pf-card--selected]="selectedIds().has(o.id)" (click)="openOrder(o)">
                           <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(o.id)"
                             [attr.aria-label]="selectedIds().has(o.id) ? 'Deselect' : 'Select'">
@@ -644,7 +645,10 @@
                               </svg>
                             }
                           </button>
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(getAppointmentForOrder(o)?.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ getAppointmentForOrder(o)?.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
                               <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
@@ -716,7 +720,10 @@
                       <li>
                         <div class="pf-card pf-card--ip pf-card--completed" [attr.data-priority]="o.priority"
                           (click)="openOrder(o)">
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(getAppointmentForOrder(o)?.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ getAppointmentForOrder(o)?.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="min-w-0 flex-1">
                             <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">
