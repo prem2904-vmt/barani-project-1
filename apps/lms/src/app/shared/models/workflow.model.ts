@@ -93,11 +93,11 @@ export interface ValidationRule {
   message: string;
 }
 
-export interface ReferenceRange {
-  segment: string;
-  min?: number;
-  max?: number;
-}
+// Canonical reference-range type (segment label + min/max + structured
+// sex/age selectors) lives in the form-field model. Re-exported here so the
+// many workflow/dynamic-input consumers keep importing it from one place.
+import type { ReferenceRange } from '../forms/form-field.model';
+export type { ReferenceRange };
 
 export interface ConditionRule {
   field: string;

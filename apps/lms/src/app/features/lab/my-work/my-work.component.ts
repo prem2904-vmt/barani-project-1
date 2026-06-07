@@ -1410,7 +1410,7 @@ export class MyWorkComponent implements OnInit {
       case 'pending':     return list.filter(t => t.status === 'pending' || t.status === 're_entry');
       case 'critical':    return list.filter(t => this.isCritical(t));
       case 'in_progress': return list.filter(t => t.status === 'in_progress' || t.status === 'entered');
-      case 'done':        return list.filter(t => t.status === 'validated' || t.status === 'signed_off');
+      case 'done':        return list.filter(t => t.status === 'validated');
       default:            return list;
     }
   }
@@ -1421,7 +1421,7 @@ export class MyWorkComponent implements OnInit {
       case 'pending':     return enriched.filter(t => t.status === 'pending' || t.status === 're_entry').length;
       case 'critical':    return enriched.filter(t => this.isCritical(t)).length;
       case 'in_progress': return enriched.filter(t => t.status === 'in_progress' || t.status === 'entered').length;
-      case 'done':        return enriched.filter(t => t.status === 'validated' || t.status === 'signed_off').length;
+      case 'done':        return enriched.filter(t => t.status === 'validated').length;
       default:            return enriched.length;
     }
   }

@@ -7,7 +7,10 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { patientDisplayName } from '../../../shared/models/patient.model';
-import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { CultureResult } from '../../../shared/models/culture.model';
+import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
+import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -71,7 +74,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     ChipComponent,
     NumPadComponent,
     TileComponent,
-    SelectComponent
+    SelectComponent,
+    CultureEntryComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -151,7 +155,16 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           <!-- Results — the ONLY scrolling area on the page -->
           <!-- Critical values indicate themselves via row tint + flag pill;
                no separate banner needed. -->
-          @if (parameters().length > 0) {
+          @if (isCulture()) {
+            <pf-tile tone="default" padding="lg" class="pf-col-scrolls">
+              <header class="pf-col-scrolls__head pf-results-head">
+                <span class="pf-results-head__eyebrow">Culture &amp; Sensitivity</span>
+              </header>
+              <div class="px-1 pt-2">
+                <pf-culture-entry [value]="cultureValue()" (valueChange)="setCulture($event)"></pf-culture-entry>
+              </div>
+            </pf-tile>
+          } @else if (parameters().length > 0) {
             <pf-tile tone="default" padding="sm" class="pf-col-scrolls">
               <header class="pf-col-scrolls__head pf-results-head">
                 <span class="pf-results-head__eyebrow">Results</span>
@@ -2466,6 +2479,19 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     try { return JSON.parse(raw) as TestParametersBlob; } catch { return null; }
   });
   readonly allParameters = computed<TestParameter[]>(() => this._paramsBlob()?.parameters ?? []);
+
+  // ── Microbiology Culture & Sensitivity ───────────────────────────────
+  readonly microFormat = computed<string | null>(() => this._paramsBlob()?.microFormat ?? null);
+  readonly isCulture = computed(() => this.microFormat() === 'culture_sensitivity');
+  /** The current result as a culture structure (the whole `values` payload). */
+  readonly cultureValue = computed<CultureResult>(() => (this._values() as CultureResult) ?? {});
+  setCulture(v: CultureResult) { this._values.set(v as Record<string, unknown>); }
+  /** Ready to submit a culture: no growth, or at least one named organism. */
+  readonly cultureReady = computed(() => {
+    const m = this._values() as CultureResult;
+    if (m?.noGrowth) return true;
+    return (m?.organisms ?? []).some(o => (o.name ?? '').trim().length > 0);
+  });
   // FormField[] parallel to `parameters`, carries showWhen + richer type.
   // Older tests without the new editor saved only `parameters`, so this may be empty.
   private readonly _fields = computed<FormField[]>(() => this._paramsBlob()?.fields ?? []);
@@ -2566,9 +2592,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return this.flagFor(p)?.tone === 'critical';
   }
   readonly canSubmit = computed(() =>
-    this.filledCount() === this.requiredCount() &&
-    this.requiredCount() > 0 &&
-    !this.hasValidationErrors()
+    this.isCulture()
+      ? this.cultureReady()
+      : (this.filledCount() === this.requiredCount() &&
+         this.requiredCount() > 0 &&
+         !this.hasValidationErrors())
   );
 
   // TAT
@@ -2815,8 +2843,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
-    const r = (p.referenceRanges ?? [])[0];
-    if (r) {
+    const r = this.rangeFor(p);
+    if (r && r.min != null && r.max != null) {
       const seg = r.segment ? this.prettySegment(r.segment) : '';
       return `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
     }
@@ -2829,6 +2857,19 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
+  /**
+   * Pick the reference band that fits THIS patient's sex/age — mirrors the
+   * backend's selection so the entry preview matches the persisted/reported
+   * flag. Replaces the old "always referenceRanges[0]" shortcut that flagged
+   * every patient against whatever band happened to be first.
+   */
+  private rangeFor(p: TestParameter): ReferenceRange | undefined {
+    const ageRaw = this._ot()?.subOrder?.order?.patient?.age;
+    const ageYears = typeof ageRaw === 'number' ? ageRaw : null;
+    const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
+    return selectReferenceRange(p.referenceRanges, sex, ageYears);
+  }
+
   flagFor(p: TestParameter): Flag | null {
     if (this.inputKindFor(p) !== 'numeric') return null;
     const raw = this._values()[p.name];
@@ -2839,8 +2880,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (p.criticalLow  !== undefined && v < p.criticalLow)  return { tone: 'critical', label: `Critical · below ${p.criticalLow}` };
     if (p.criticalHigh !== undefined && v > p.criticalHigh) return { tone: 'critical', label: `Critical · above ${p.criticalHigh}` };
 
-    const r = (p.referenceRanges ?? [])[0];
-    if (r) {
+    const r = this.rangeFor(p);
+    if (r && r.min != null && r.max != null) {
       if (v < r.min) return { tone: 'low',  label: 'Low' };
       if (v > r.max) return { tone: 'high', label: 'High' };
       return { tone: 'normal', label: 'Normal' };

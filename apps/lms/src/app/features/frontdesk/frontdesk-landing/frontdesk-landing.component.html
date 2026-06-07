@@ -216,6 +216,16 @@
               </svg>
               <span class="pf-mtab__count">{{ completedOrders().length }}</span>
             </button>
+            <button type="button" role="tab" class="pf-mtab press"
+                    [class.pf-mtab--on]="mobileList() === 'home'"
+                    [attr.aria-selected]="mobileList() === 'home'"
+                    (click)="setMobileList('home')" aria-label="Home collection">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/>
+              </svg>
+              <span class="pf-mtab__count">{{ homeCollections().length }}</span>
+            </button>
           </div>
 
           <!-- Two-pane layout: Appointments on the left, In-progress on the
@@ -428,6 +438,12 @@
                     (click)="setWorkTab('done')">
                     Completed
                     <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
+                  </button>
+                  <button type="button" role="tab" class="pf-tabs__btn press"
+                    [class.pf-tabs__btn--on]="workTab() === 'home'" [attr.aria-selected]="workTab() === 'home'"
+                    (click)="setWorkTab('home')">
+                    Home collection
+                    <span class="pf-tabs__count" data-tone="active">{{ homeCollections().length }}</span>
                   </button>
                 </div>
 
@@ -654,6 +670,48 @@
               </ul>
               }
               }
+
+              <!-- HOME COLLECTION TAB -->
+              @if (workTab() === 'home') {
+              @if (homeCollections().length === 0) {
+              <div class="pf-empty-tile">
+                <span class="pf-empty-tile__icon" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12l9-9 9 9" />
+                    <path d="M5 10v10h14V10" />
+                  </svg>
+                </span>
+                <p class="pf-empty-tile__title">No home collections</p>
+                <p class="pf-empty-tile__sub">Home-collection requests show here with their assigned agent. Unassigned
+                  ones can be allocated from the Home assignments screen.</p>
+              </div>
+              } @else {
+              <ul class="pf-cards">
+                @for (a of homeCollections(); track a.id) {
+                <li>
+                  <div class="pf-card pf-card--ip" (click)="openHomeCollection(a)">
+                    <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                    <div class="min-w-0 flex-1">
+                      <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
+                      <p class="pf-card__meta">
+                        {{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}
+                        @if (a.slotTime) { · {{ a.slotTime }} }
+                      </p>
+                    </div>
+                    <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                      @if (a.assignedAgentId) {
+                      <pf-chip tone="emerald" size="sm">Assigned</pf-chip>
+                      } @else {
+                      <pf-chip tone="amber" size="sm">Unassigned</pf-chip>
+                      }
+                    </div>
+                  </div>
+                </li>
+                }
+              </ul>
+              }
+              }
             </section>
           </div>
         </div>
@@ -836,6 +894,60 @@
       </button>
       }
     </footer>
+  </aside>
+  }
+
+  <!-- Home-collection request drawer -->
+  @if (selectedHc(); as hc) {
+  <div class="pf-drawer-bd" (click)="closeHomeCollection()"></div>
+  <aside class="pf-drawer" role="dialog" aria-modal="true" aria-label="Home collection request">
+    <header class="pf-drawer__hdr">
+      <pf-avatar [name]="hc.patient?.displayName ?? 'Patient'" [size]="48"></pf-avatar>
+      <div class="pf-drawer__hdr-info">
+        <p class="pf-drawer__hdr-eyebrow">Home collection · {{ hc.assignedAgentId ? 'Assigned' : 'Unassigned' }}</p>
+        <p class="pf-drawer__hdr-name">{{ hc.patient?.displayName ?? 'Patient' }}</p>
+      </div>
+      <button type="button" class="pf-drawer__close" (click)="closeHomeCollection()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div style="padding: 18px; overflow-y: auto;">
+      <section style="margin-bottom: 18px;">
+        <p class="text-[11px] uppercase font-bold tracking-wider" style="color: var(--text-tertiary);">Address</p>
+        <p class="text-[14px] mt-1" style="color: var(--text-primary);">{{ hc.address || 'No address provided' }}</p>
+        @if (hc.pincode) { <p class="text-[12px] mt-0.5" style="color: var(--text-secondary);">Pincode {{ hc.pincode }}</p> }
+        @if (hcMapUrl(hc); as url) {
+          <a [href]="url" target="_blank" rel="noopener" class="text-[12px] font-medium text-violet-400 hover:text-violet-300 inline-block mt-1">Open in maps ↗</a>
+        }
+      </section>
+
+      <section style="margin-bottom: 18px;">
+        <p class="text-[11px] uppercase font-bold tracking-wider" style="color: var(--text-tertiary);">When</p>
+        <p class="text-[14px] mt-1" style="color: var(--text-primary);">{{ hc.appointmentDate?.slice(0, 10) }}{{ hc.slotTime ? ' · ' + hc.slotTime : '' }}</p>
+        @if (hc.patient?.phone) { <p class="text-[12px] mt-0.5" style="color: var(--text-secondary);">{{ hc.patient?.phone }}</p> }
+      </section>
+
+      <section>
+        <p class="text-[11px] uppercase font-bold tracking-wider" style="color: var(--text-tertiary);">Tests requested ({{ homeCollectionTests(hc).length }})</p>
+        @if (homeCollectionTests(hc).length === 0) {
+          <p class="text-[13px] mt-1" style="color: var(--text-tertiary);">No tests pre-selected — chosen at collection.</p>
+        } @else {
+          <ul class="mt-2 space-y-1.5">
+            @for (t of homeCollectionTests(hc); track t) {
+              <li class="text-[13px] flex items-center gap-2" style="color: var(--text-primary);">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: #a855f7;"></span>{{ t }}
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      @if (hc.patient; as pat) {
+        <div style="margin-top: 22px;">
+          <button type="button" class="pf-ghostbtn press" (click)="openProfile(pat)">View patient profile →</button>
+        </div>
+      }
+    </div>
   </aside>
   }
 

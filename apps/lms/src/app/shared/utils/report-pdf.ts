@@ -139,6 +139,12 @@ interface ReportSnapshot {
   };
   type?: string;
   isPartial?: boolean;
+  /** Present only on a corrected re-issue. Drives the "AMENDED" banner. */
+  amendment?: {
+    isAmended?: boolean;
+    reason?: string;
+    supersedesReleasedAt?: string;
+  } | null;
   pendingDepts?: string[];
   tests?: Array<{
     testId?: string;
@@ -319,10 +325,35 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   drawLetterhead(doc, practice, template?.logoUrl ?? null);
   const patientBottom = drawPatientBlock(doc, snap, report);
 
+  // ── Amended-report banner ──────────────────────────────────────
+  // A corrected re-issue carries snap.amendment; flag it prominently so the
+  // reader knows this supersedes a previously released report.
+  let cursorY = patientBottom + 14;
+  if (snap.amendment?.isAmended) {
+    const supersededOn = snap.amendment.supersedesReleasedAt
+      ? new Date(snap.amendment.supersedesReleasedAt).toLocaleDateString()
+      : null;
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(FLAG_RED);
+    doc.text(
+      supersededOn
+        ? `AMENDED REPORT — supersedes the report issued on ${supersededOn}`
+        : 'AMENDED REPORT — supersedes a previously issued report',
+      MARGIN_X, cursorY + 10);
+    cursorY += 22;
+    if (snap.amendment.reason) {
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor('#92400e');
+      doc.text(`Reason: ${snap.amendment.reason}`, MARGIN_X, cursorY + 6);
+      cursorY += 18;
+    }
+  }
+
   // ── Body — grouped by department ───────────────────────────────
   const tests = snap.tests ?? [];
   const byDept = groupBy(tests, t => t.department ?? 'Tests');
-  let cursorY = patientBottom + 14;
 
   for (const [dept, rows] of byDept.entries()) {
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
@@ -339,7 +370,9 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
 
     for (const t of rows) {
       const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
-      if (layout && layout.sections.length > 0) {
+      if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
+        cursorY = renderCultureSection(doc, t, cursorY, practice);
+      } else if (layout && layout.sections.length > 0) {
         cursorY = renderResolvedTest(doc, t, layout, cursorY, practice);
       } else {
         cursorY = renderLegacyTest(doc, t, cursorY, practice);
@@ -1322,7 +1355,8 @@ function renderLegacyTest(
   if (entries.length > 0) {
     entries.forEach(([paramName, v], i) => {
       const flag = (v?.flag ?? '').toUpperCase();
-      const flagText = flag === 'H' ? 'High' : flag === 'L' ? 'Low' : flag === 'C' ? 'Critical' : '';
+      const flagText = flag === 'H' ? 'High' : flag === 'L' ? 'Low'
+        : flag === 'C' ? 'Critical' : flag === 'A' ? 'Abnormal' : '';
       const valueText = String(v?.value ?? '—');
       const investContent = (i === 0 && sampleTypeLine)
         ? `${humanize(paramName)}\n${sampleTypeLine}`
@@ -1360,6 +1394,108 @@ function renderLegacyTest(
     },
   });
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Microbiology — Culture & Sensitivity
+// ──────────────────────────────────────────────────────────────
+
+interface PdfAst { name?: string; interpretation?: string }
+interface PdfOrganism { name?: string; antibiotics?: PdfAst[] }
+interface PdfCulture {
+  specimen?: string; gramStain?: string; colonyCount?: string; noGrowth?: boolean;
+  organisms?: PdfOrganism[]; resistancePattern?: string; intrinsicResistance?: string;
+  clinicalNotes?: string; infectionControlAdvice?: string;
+}
+
+function renderCultureSection(
+  doc: jsPDF,
+  t: NonNullable<ReportSnapshot['tests']>[number],
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>
+): number {
+  let y = startY;
+  if (y > A4.h - MARGIN_BOTTOM - 90) { y = newPage(doc, practice); }
+
+  drawTestHeading(doc, t.name ?? 'Culture & Sensitivity', y);
+  y += 26;
+
+  const c = (t.result?.['values'] as PdfCulture | undefined) ?? {};
+
+  const line = (label: string, value?: string): void => {
+    if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
+    doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+    doc.text(`${label.toUpperCase()}:`, MARGIN_X, y);
+    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(value && value.trim() ? value : '—', A4.w - 2 * MARGIN_X - 4);
+    doc.text(lines, MARGIN_X, y + 11);
+    y += 11 + lines.length * 11 + 4;
+  };
+
+  line('Specimen', c.specimen || (t.sampleType ?? ''));
+  line('Gram stain', c.gramStain);
+  line('Colony count', c.colonyCount);
+
+  if (c.noGrowth) {
+    line('Result', 'No growth after 48 hours of aerobic incubation.');
+    return y;
+  }
+
+  const organisms = (c.organisms ?? []).filter(o => (o.name ?? '').trim());
+  const names = organisms.map((o, i) => `${i + 1}. ${o.name}`).join('   ');
+  line('Organism(s) isolated', names || 'No significant growth');
+
+  const interpWord = (v?: string): { txt: string; color: string } => {
+    const u = (v ?? '').toUpperCase();
+    if (u === 'S') return { txt: 'S', color: '#16a34a' };
+    if (u === 'R') return { txt: 'R', color: FLAG_RED };
+    if (u === 'I') return { txt: 'M', color: '#d97706' };
+    return { txt: '—', color: BLACK };
+  };
+
+  for (const org of organisms) {
+    if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
+    const rows = (org.antibiotics ?? [])
+      .filter(a => (a.name ?? '').trim())
+      .map(a => {
+        const w = interpWord(a.interpretation);
+        return [
+          { content: a.name ?? '', styles: {} },
+          { content: w.txt, styles: { fontStyle: 'bold', textColor: w.color, halign: 'center' } },
+        ];
+      });
+    if (rows.length === 0) continue;
+    autoTable(doc, {
+      startY: y,
+      head: [[`Antimicrobial for ${org.name}`, 'Interpretation']],
+      body: rows as unknown as Array<Array<string>>,
+      margin: { left: MARGIN_X, right: MARGIN_X },
+      theme: 'plain',
+      styles: tableBodyStyles(),
+      headStyles: tableHeadStyles(),
+      bodyStyles: { fillColor: '#ffffff' },
+      columnStyles: { 0: { cellWidth: 340 }, 1: { cellWidth: 'auto' as unknown as number, halign: 'center' } },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  }
+
+  // Legend.
+  if (y > A4.h - MARGIN_BOTTOM - 40) { y = newPage(doc, practice); }
+  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEXT_DIM);
+  const legend = [
+    'S - Sensitive (clinically effective at standard therapeutic dose)',
+    'R - Resistant (clinically ineffective at standard or increased dose)',
+    'M - Intermediate (may be effective at higher dose or in concentrated body sites)',
+    'Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.',
+  ];
+  legend.forEach(l => { doc.text(doc.splitTextToSize(l, A4.w - 2 * MARGIN_X), MARGIN_X, y); y += 10; });
+  y += 4;
+
+  line('Resistance pattern', c.resistancePattern);
+  line('Intrinsic resistance', c.intrinsicResistance);
+  line('Clinical notes', c.clinicalNotes);
+  line('Infection control advice', c.infectionControlAdvice);
+  return y;
 }
 
 // ──────────────────────────────────────────────────────────────

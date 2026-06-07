@@ -4,10 +4,13 @@ import {
   computed, effect, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Observable } from 'rxjs';
 import { skip } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
+import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Appointment } from '../../../shared/models/appointment.model';
@@ -39,7 +42,7 @@ const STATUS_CLASS: Record<string, string> = {
 @Component({
   selector: 'pf-appointments-calendar',
   standalone: true,
-  imports: [CommonModule, LoadingLogoComponent],
+  imports: [CommonModule, FormsModule, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cal-page">
@@ -250,6 +253,55 @@ const STATUS_CLASS: Record<string, string> = {
         </div>
       </div>
     </ng-template>
+
+    <!-- ── Appointment action sheet ── -->
+    @if (selectedAppt(); as a) {
+      <div class="pf-appt-overlay" (click)="closeAppt()">
+        <div class="pf-appt-card" (click)="$event.stopPropagation()">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ a.patient?.displayName || 'Patient' }}</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                {{ a.type }} · {{ a.slotTime || '—' }} · <span class="capitalize">{{ a.status }}</span>
+                @if (a.tokenNumber) { · token {{ a.tokenNumber }} }
+              </p>
+            </div>
+            <button class="pf-appt-x" (click)="closeAppt()" aria-label="Close">✕</button>
+          </div>
+
+          @if (!rescheduleOpen()) {
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              <button class="pf-appt-btn pf-appt-btn--primary" (click)="openProfile(a)">Open profile</button>
+              @if (a.status === 'booked') {
+                <button class="pf-appt-btn" (click)="run(queue.checkIn(a.id))">Check in</button>
+                <button class="pf-appt-btn" (click)="rescheduleOpen.set(true)">Reschedule</button>
+                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+              }
+              @if (a.status === 'checked_in') {
+                @if (a.type !== 'urgent') {
+                  <button class="pf-appt-btn" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
+                }
+                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+              }
+              @if (a.status !== 'cancelled' && a.status !== 'completed') {
+                <button class="pf-appt-btn pf-appt-btn--danger" (click)="run(queue.cancel(a.id))">Cancel</button>
+              }
+            </div>
+          } @else {
+            <div class="mt-3 flex flex-col gap-2">
+              <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New date
+                <input type="date" class="pf-input" [(ngModel)]="rDate" /></label>
+              <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New time
+                <input type="time" class="pf-input" [(ngModel)]="rTime" /></label>
+              <div class="flex gap-2 justify-end mt-1">
+                <button class="pf-appt-btn" (click)="rescheduleOpen.set(false)">Back</button>
+                <button class="pf-appt-btn pf-appt-btn--primary" (click)="doReschedule(a)">Save</button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
   `,
   styles: [`
     :host {
@@ -648,13 +700,44 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-cal-month__label {
       white-space: nowrap;
     }
+    .pf-appt-overlay {
+      position: fixed; inset: 0; z-index: 60;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .pf-appt-card {
+      width: 100%; max-width: 360px;
+      background: var(--surface-1, #1b1b25);
+      border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .pf-appt-x {
+      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+      color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;
+    }
+    .pf-appt-x:hover { background: var(--surface-2, rgba(255,255,255,0.06)); }
+    .pf-appt-btn {
+      font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px;
+      border: 1px solid var(--border-subtle); background: var(--surface-2, rgba(255,255,255,0.04));
+      color: var(--text-secondary); cursor: pointer;
+    }
+    .pf-appt-btn:hover { filter: brightness(1.15); }
+    .pf-appt-btn--primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .pf-appt-btn--danger { color: #f43f5e; border-color: rgba(244,63,94,0.4); }
   `]
 })
 export class AppointmentsCalendarComponent {
   private readonly api = inject(ApiService);
   private readonly profile = inject(PatientProfileService);
   private readonly booking = inject(AppointmentBookingService);
+  protected readonly queue = inject(AppointmentQueueService);
   private readonly toasts = inject(ToastService);
+
+  // Action sheet for a clicked appointment.
+  protected readonly selectedAppt = signal<Appointment | null>(null);
+  protected readonly rescheduleOpen = signal(false);
+  protected rDate = '';
+  protected rTime = '';
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
@@ -926,7 +1009,38 @@ export class AppointmentsCalendarComponent {
 
   protected onEventClick(a: Appointment, ev: MouseEvent) {
     ev.stopPropagation();
+    // Open an action sheet (check in / reschedule / no-show / cancel / profile)
+    // instead of jumping straight to the profile.
+    this.rescheduleOpen.set(false);
+    this.rDate = a.appointmentDate ? a.appointmentDate.slice(0, 10) : '';
+    this.rTime = a.slotTime ?? '';
+    this.selectedAppt.set(a);
+  }
+
+  protected closeAppt() { this.selectedAppt.set(null); this.rescheduleOpen.set(false); }
+
+  protected openProfile(a: Appointment) {
+    this.closeAppt();
     if (a.patientId) this.profile.open(a.patientId);
+  }
+
+  /** Run a queue transition, then refresh the calendar and close the sheet. */
+  protected run(obs: Observable<unknown>) {
+    obs.subscribe({
+      next: () => { this.refresh(); this.closeAppt(); },
+      error: () => { this.toasts.error('Action failed.'); this.refresh(); }
+    });
+  }
+
+  protected doReschedule(a: Appointment) {
+    if (!this.rDate) { this.toasts.warning('Pick a new date.'); return; }
+    const iso = new Date(this.rDate).toISOString();
+    this.run(this.queue.reschedule(a.id, iso, this.rTime || undefined));
+  }
+
+  private refresh() {
+    const r = this.viewRange();
+    this.fetchRange(r.from, r.to);
   }
 
   protected statusClass(status: string): string {

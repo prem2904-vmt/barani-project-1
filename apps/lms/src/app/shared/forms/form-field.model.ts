@@ -108,6 +108,14 @@ export interface ReferenceRange {
   min?: number | null;
   max?: number | null;
   unit?: string | null;
+  // Structured selectors. When present the backend picks the band by the
+  // patient's sex/age instead of parsing the free-text `segment` label.
+  // `sex` undefined / 'any' = applies to all sexes. Age bounds are in
+  // `ageUnit` (default years); an open-ended bound is left null/undefined.
+  sex?: 'M' | 'F' | 'any' | null;
+  minAge?: number | null;
+  maxAge?: number | null;
+  ageUnit?: 'years' | 'months' | 'days' | null;
 }
 
 // ── Per-type config blocks (stubs where complex renders aren't needed yet) ─
@@ -217,6 +225,10 @@ export interface FormField {
   referenceRanges?: ReferenceRange[] | null;
   criticalLow?: number | null;
   criticalHigh?: number | null;
+  // Plausible / analytically-possible band (wider than reference + critical).
+  // A value outside it is rejected at submit as a likely transcription error.
+  validLow?: number | null;
+  validHigh?: number | null;
   normalValue?: string | null;
 
   // Per-type configs (only populated for the matching type)
