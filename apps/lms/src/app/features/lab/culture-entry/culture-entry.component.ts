@@ -137,6 +137,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
         <pf-plate-measure
           [antibiotics]="activeAbNames()"
           [existingImageUrl]="activePlateUrl()"
+          [srI]="plateInterpret"
           (applied)="onMeasured($event)"
           (cancel)="measureOrg.set(null)" />
       }
@@ -294,6 +295,17 @@ export class CultureEntryComponent implements OnInit {
     this.updateOrg(i, o => ({ ...o, plateImageUrl: e.imageUrl }));
     this.measureOrg.set(null);
   }
+
+  /** Live S/I/R for the plate overlay — interprets a measured zone against the
+   *  active organism's CLSI breakpoints (arrow keeps `this` bound as an input). */
+  readonly plateInterpret = (abName: string, mm: number): 'S' | 'I' | 'R' | '' => {
+    const i = this.measureOrg();
+    if (i == null) return '';
+    const orgName = this._m().organisms?.[i]?.name;
+    const bp = this.bpFor(orgName, abName);
+    if (!bp || mm == null) return '';
+    return mm >= bp.s ? 'S' : mm <= bp.r ? 'R' : 'I';
+  };
 
   /** Resolve a server-relative plate URL to an absolute one for display. */
   resolveUrl(u?: string | null): string {
