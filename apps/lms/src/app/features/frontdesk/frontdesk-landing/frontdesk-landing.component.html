@@ -438,7 +438,7 @@
                   <ul class="pf-cards">
                     @for (a of homeCollections(); track a.id) {
                       <li>
-                        <div class="pf-card pf-card--ip" [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openHomeCollection(a)">
+                        <div class="pf-card pf-card--ip pf-card--token-layout" [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openHomeCollection(a)">
                           <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(a.id)"
                             [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
                             @if (selectedIds().has(a.id)) {
@@ -448,7 +448,10 @@
                               </svg>
                             }
                           </button>
-                          <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(a.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ a.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
                               <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
@@ -631,7 +634,7 @@
                   <ul class="pf-cards">
                     @for (o of visibleOrders(); track o.id) {
                       <li>
-                        <div class="pf-card pf-card--ip" [attr.data-priority]="o.priority"
+                        <div class="pf-card pf-card--ip pf-card--token-layout" [attr.data-priority]="o.priority"
                           [class.pf-card--selected]="selectedIds().has(o.id)" (click)="openOrder(o)">
                           <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(o.id)"
                             [attr.aria-label]="selectedIds().has(o.id) ? 'Deselect' : 'Select'">
@@ -642,7 +645,10 @@
                               </svg>
                             }
                           </button>
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(getAppointmentForOrder(o)?.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ getAppointmentForOrder(o)?.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
                               <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
@@ -714,7 +720,10 @@
                       <li>
                         <div class="pf-card pf-card--ip pf-card--completed" [attr.data-priority]="o.priority"
                           (click)="openOrder(o)">
-                          <pf-avatar [name]="o.patient?.displayName ?? 'Patient'" [size]="36"></pf-avatar>
+                          <div class="pf-token" [style.borderColor]="typeColor(getAppointmentForOrder(o)?.type)">
+                            <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
+                            <span class="text-[18px] font-bold leading-none">{{ getAppointmentForOrder(o)?.tokenNumber ?? '—' }}</span>
+                          </div>
                           <div class="min-w-0 flex-1">
                             <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">

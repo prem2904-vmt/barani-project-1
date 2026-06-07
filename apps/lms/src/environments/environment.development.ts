@@ -6,7 +6,7 @@ export const environment = {
   production: false,
   // Local dev server → local backend (dotnet run on :5270). Point this back
   // at the deployed API only if you intentionally want the dev UI to drive prod.
-  apiUrl: 'http://localhost:5270',
+  apiUrl: 'https://lab-fetch.prefrontal.health',
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',
