@@ -9,7 +9,8 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
-import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
+import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -951,6 +952,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.labCfg.ensureLoaded();
+    this.process.loadActive();
 
     // Re-measure whenever the visible nav set changes (perm reload, mode
     // toggle, etc) so the indicator stays glued to the active button.
@@ -981,6 +983,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   // ─── Visible nav lists ───────────────────────────────────────────
+  private readonly process = inject(ProcessWorkflowService);
   private readonly visible = (items: NavItem[]): NavItem[] => {
     const cMode = this.labCfg.collectionMode();
     const bMode = this.labCfg.billingMode();
@@ -988,11 +991,22 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
       if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
+      // Hide a nav item whose action is switched off in /admin/process.
+      if (i.action && !this.process.isEnabled(i.action)) return false;
       return true;
     });
   };
 
-  readonly primary = computed(() => this.visible(PRIMARY_NAV));
+  private navCtx(): WorkflowNavCtx {
+    return {
+      roles: this.auth.user()?.roles ?? [],
+      hasAnyPermission: (p) => this.auth.hasAnyPermission(p),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  // Live nav = the active workflow's work-areas (admin names + order, role-gated),
+  // each opening its real screen; falls back to PRIMARY_NAV when none is active.
+  readonly primary = computed(() => menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV));
   /** More-popover items. On mobile/iPad the desktop top-strip is
    *  hidden (`xl:flex`), so the new top-strip Admin icon isn't
    *  reachable there. We prepend ADMIN_NAV into More so admins on

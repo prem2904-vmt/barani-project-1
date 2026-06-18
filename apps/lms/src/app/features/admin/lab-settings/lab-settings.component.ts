@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
@@ -37,55 +38,22 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
 
-      <!-- Billing (branch-scoped) -->
+      <!-- Counters & collection — now driven by the Workflow (single source) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Billing</h3>
+        <h3 class="pf-ls__title">Counters &amp; collection</h3>
         <p class="pf-ls__hint">
-          Front Desk bills the order at the same desk that creates it. Separate Counter
-          unlocks a /billing-counter screen for billing-only staff to pick up unbilled
-          orders by name / phone / order ID and process payment.
+          Whether <strong>billing</strong> and <strong>sample collection</strong> run at a separate
+          counter is now set in the <strong>Workflow</strong>: drop the action into its own menu for a
+          separate counter, or keep it inside Frontdesk to run inline. These stay in sync automatically.
         </p>
-        <div class="pf-ls__radio-row">
-          <label class="pf-ls__radio" [class.pf-ls__radio--on]="billingMode() === 'front_desk'">
-            <input type="radio" name="billing-mode" value="front_desk"
-                   [checked]="billingMode() === 'front_desk'"
-                   (change)="setBillingMode('front_desk')" />
-            <span class="pf-ls__radio-title">Front Desk</span>
-            <span class="pf-ls__radio-sub">Reception bills inline.</span>
-          </label>
-          <label class="pf-ls__radio" [class.pf-ls__radio--on]="billingMode() === 'separate_counter'">
-            <input type="radio" name="billing-mode" value="separate_counter"
-                   [checked]="billingMode() === 'separate_counter'"
-                   (change)="setBillingMode('separate_counter')" />
-            <span class="pf-ls__radio-title">Separate Counter</span>
-            <span class="pf-ls__radio-sub">A billing-only staff member processes payments.</span>
-          </label>
-        </div>
-      </pf-tile>
-
-      <!-- Sample Collection (branch-scoped) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Sample Collection</h3>
-        <p class="pf-ls__hint">
-          Choose who collects samples for this branch. Front Desk lets the receptionist
-          collect inline after billing. Dedicated Counter sends billed orders to a queue
-          for a Sample Collector role — a separate sidebar screen is unlocked for them.
-        </p>
-        <div class="pf-ls__radio-row">
-          <label class="pf-ls__radio" [class.pf-ls__radio--on]="collectionMode() === 'front_desk'">
-            <input type="radio" name="collection-mode" value="front_desk"
-                   [checked]="collectionMode() === 'front_desk'"
-                   (change)="setCollectionMode('front_desk')" />
-            <span class="pf-ls__radio-title">Front Desk</span>
-            <span class="pf-ls__radio-sub">Reception collects after payment.</span>
-          </label>
-          <label class="pf-ls__radio" [class.pf-ls__radio--on]="collectionMode() === 'dedicated_counter'">
-            <input type="radio" name="collection-mode" value="dedicated_counter"
-                   [checked]="collectionMode() === 'dedicated_counter'"
-                   (change)="setCollectionMode('dedicated_counter')" />
-            <span class="pf-ls__radio-title">Dedicated Counter</span>
-            <span class="pf-ls__radio-sub">A Sample Collector works a queue.</span>
-          </label>
+        <div class="flex flex-wrap items-center gap-2 mt-3">
+          <span class="text-[12px] px-3 py-1 rounded-full" style="background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);">
+            Billing — <strong style="color: var(--text-primary);">{{ billingMode() === 'separate_counter' ? 'Separate counter' : 'Front desk' }}</strong>
+          </span>
+          <span class="text-[12px] px-3 py-1 rounded-full" style="background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);">
+            Collection — <strong style="color: var(--text-primary);">{{ collectionMode() === 'dedicated_counter' ? 'Dedicated counter' : 'Front desk' }}</strong>
+          </span>
+          <button type="button" class="text-[12px] font-semibold text-violet-400 hover:text-violet-300" (click)="goWorkflow()">Edit in Workflow →</button>
         </div>
       </pf-tile>
 
@@ -268,6 +236,7 @@ export class LabSettingsComponent implements OnInit {
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
+  private readonly router = inject(Router);
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
@@ -345,19 +314,8 @@ export class LabSettingsComponent implements OnInit {
     });
   }
 
-  setCollectionMode(mode: CollectionMode) {
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { collectionMode: mode }).subscribe({
-      next: cfg => this.labCfg.update(cfg),
-      error: e => this.toasts.error(e?.message ?? 'Could not save')
-    });
-  }
-
-  setBillingMode(mode: BillingMode) {
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { billingMode: mode }).subscribe({
-      next: cfg => this.labCfg.update(cfg),
-      error: e => this.toasts.error(e?.message ?? 'Could not save')
-    });
-  }
+  // Billing/collection modes are now derived from the active Workflow.
+  goWorkflow() { this.router.navigate(['/admin/process']); }
 
   /**
    * Dev-testing wipe — confirm via DialogService, POST to the admin

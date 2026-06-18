@@ -1,3 +1,5 @@
+import { ProcessWorkflowConfig, catalogFor, workAreaRoute } from '../shared/models/process-workflow.model';
+
 export interface NavItem {
   id: string;
   label: string;
@@ -21,6 +23,14 @@ export interface NavItem {
    * happens at a separate counter.
    */
   billingModes?: Array<'front_desk' | 'separate_counter'>;
+  /**
+   * The process-workflow action this nav item represents. When the admin
+   * disables that action in /admin/process, the nav item is hidden (the item
+   * still points at its ORIGINAL screen — we only show/hide it). Omit for items
+   * that aren't a single workflow action (e.g. the Frontdesk home, which hosts
+   * several actions as components gated inside the screen).
+   */
+  action?: string;
 }
 
 // Admin is intentionally NOT in the primary nav anymore — it's a
@@ -52,6 +62,7 @@ export const PRIMARY_NAV: NavItem[] = [
   },
   {
     id: 'lab',
+    action: 'result_entry',
     label: 'Lab',
     href: '/lab/my-work',
     iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
@@ -61,6 +72,7 @@ export const PRIMARY_NAV: NavItem[] = [
   },
   {
     id: 'sample-collection',
+    action: 'sample_collection',
     label: 'Collect',
     href: '/sample-collection',
     iconPath: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'],
@@ -69,6 +81,7 @@ export const PRIMARY_NAV: NavItem[] = [
   },
   {
     id: 'billing-counter',
+    action: 'billing',
     label: 'Billing',
     href: '/billing-counter',
     iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
@@ -78,6 +91,7 @@ export const PRIMARY_NAV: NavItem[] = [
   {
     // Live collection queue (token / walk-up / home-collection).
     id: 'queue',
+    action: 'queue',
     label: 'Queue',
     href: '/frontdesk/queue',
     iconPath: ['M3 6h18M3 12h18M3 18h18', 'M7 6v0M7 12v0M7 18v0'],
@@ -86,6 +100,7 @@ export const PRIMARY_NAV: NavItem[] = [
   {
     // Home-collection agent's assigned visits.
     id: 'home-visits',
+    action: 'home_visits',
     label: 'Home Visits',
     href: '/home-collections',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
@@ -97,6 +112,7 @@ export const PRIMARY_NAV: NavItem[] = [
   // than the previous alphabetic ordering.
   {
     id: 'validate',
+    action: 'validate',
     label: 'Validate',
     href: '/pathologist',
     iconPath: ['M20 6 9 17l-5-5'],
@@ -104,6 +120,7 @@ export const PRIMARY_NAV: NavItem[] = [
   },
   {
     id: 'results',
+    action: 'results',
     label: 'Results',
     href: '/reports',
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
@@ -113,11 +130,51 @@ export const PRIMARY_NAV: NavItem[] = [
     // Teams-style chat + group calling. No permissions = open to every
     // authenticated user (matches the sidebar Workspace entry).
     id: 'messages',
+    action: 'messages',
     label: 'Messages',
     href: '/messages',
     iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']
   }
 ];
+
+export interface WorkflowNavCtx {
+  roles: string[];
+  hasAnyPermission: (perms: string[]) => boolean;
+  isSuper: boolean;
+}
+
+/**
+ * Build the primary nav from the active workflow: one item per WORK-AREA the
+ * user can access. The admin's chosen area NAME is the nav label, ordered by the
+ * area's order, role-gated by area.roles, and shown only when the user can run
+ * at least one of its actions. Each area links to its REAL screen (bespoke for
+ * system areas, the dedicated counter screen for single-purpose areas, else the
+ * generic /w/:id host) — never a tile grid. Returns null when there's no usable
+ * workflow so callers fall back to the original PRIMARY_NAV (never lock out).
+ */
+export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
+  if (!cfg?.categories?.length) return null;
+  const items: NavItem[] = [];
+  for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
+    const roleOk = ctx.isSuper || !area.roles?.length || area.roles.some(r => ctx.roles.includes(r));
+    if (!roleOk) continue;
+    const accessible = (cfg.actions ?? [])
+      .filter(a => a.categoryId === area.id && a.enabled)
+      .sort((a, b) => a.order - b.order)
+      .filter(a => {
+        const e = catalogFor(a.type);
+        return e && (!e.permissions?.length || ctx.isSuper || ctx.hasAnyPermission(e.permissions));
+      });
+    if (!accessible.length) continue;
+    items.push({
+      id: area.id,
+      label: area.name,
+      href: workAreaRoute(area, cfg),
+      iconPath: catalogFor(accessible[0].type)?.iconPath ?? ['M4 5h5v5H4zM15 5h5v5h-5zM9 16h5v4H9z'],
+    });
+  }
+  return items.length ? items : null;
+}
 
 export const MORE_NAV: NavItem[] = [
   {
@@ -153,7 +210,11 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_notifications']
   },
   {
-    id: 'workflows', label: 'Flow', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
+    id: 'process', label: 'Workflow', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
+    permissions: ['manage_workflows']
+  },
+  {
+    id: 'workflows', label: 'Form flow', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
     permissions: ['manage_workflows']
   },
   {

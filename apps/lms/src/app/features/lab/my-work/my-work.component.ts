@@ -20,6 +20,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
@@ -47,13 +48,16 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent
+    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
       <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
+
+      <!-- Actions dragged into the Lab work-area in /admin/process render here. -->
+      <pf-work-area-panels menu="lab" />
 
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">

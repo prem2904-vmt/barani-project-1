@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, v
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
@@ -38,6 +39,8 @@ export class OrderCreateComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly locationSvc = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
+  // Workflow is the source of truth for whether billing is a separate counter.
+  private readonly labCfg = inject(BranchLabConfigService);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
 
@@ -257,6 +260,7 @@ export class OrderCreateComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.labCfg.ensureLoaded();
     this.api.get<Test[]>('/api/tests/').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
@@ -540,15 +544,17 @@ export class OrderCreateComponent implements OnInit {
         const pid = p.id;
         try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + pid); } catch { /* ignore */ }
         this._hasDraft.set(false);
-        // Admin-controlled fork: if frontdesk collects payment, jump into
-        // the Billing tab with the new order preselected; otherwise raise
-        // a billing request and reset for the next patient/order.
-        if (this.settings.collectsBilling()) {
+        // Workflow-driven fork: when billing is NOT a separate counter
+        // (front_desk), payment is part of THIS walk-in flow — jump straight
+        // into billing with the order preselected (no detour through the
+        // queue). When the workflow puts billing on a separate counter, raise
+        // the request and reset for the next patient.
+        if (this.labCfg.billingMode() === 'front_desk') {
           this.toasts.success('Order created — enter billing');
           this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: order.id } });
         } else {
-          // Admin set "Frontdesk does not collect" — raise billing as a
-          // separate request and return to Home for the next patient.
+          // Billing lives on a separate counter — raise the request and
+          // return to Home for the next patient.
           this.toasts.success('Order created — billing request raised');
           this._selected.set([]);
           this._patient.set(null);

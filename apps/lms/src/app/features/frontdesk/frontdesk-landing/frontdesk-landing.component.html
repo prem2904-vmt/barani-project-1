@@ -118,6 +118,7 @@
             <line x1="3" y1="12" x2="21" y2="12"/>
           </svg>
         </button>
+        @if (showAppt()) {
         <a routerLink="/frontdesk/appointments/new" class="pf-mbar__btn press"
            aria-label="Book appointment" title="Book appointment">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -127,6 +128,8 @@
             <path d="M9 16h6"/>
           </svg>
         </a>
+        }
+        @if (showOrder()) {
         <a routerLink="/frontdesk/order" class="pf-mbar__btn press"
            aria-label="Create order" title="Create order">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -136,6 +139,8 @@
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
           </svg>
         </a>
+        }
+        @if (showRegister()) {
         <button type="button" class="pf-mbar__btn pf-mbar__btn--primary press"
                 (click)="openRegister()" aria-label="New patient" title="New patient">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -143,6 +148,7 @@
             <path d="M12 5v14M5 12h14"/>
           </svg>
         </button>
+        }
       </div>
     </div>
   </header>
@@ -184,6 +190,7 @@
                In progress / Completed. Hidden on iPad/desktop where
                all panes lay out side by side. -->
           <div class="pf-mtabs" role="tablist" aria-label="List view">
+            @if (showAppt()) {
             <button type="button" role="tab" class="pf-mtab press"
                     [class.pf-mtab--on]="mobileList() === 'appt'"
                     [attr.aria-selected]="mobileList() === 'appt'"
@@ -195,6 +202,7 @@
               </svg>
               <span class="pf-mtab__count">{{ visibleAppointments().length }}</span>
             </button>
+            }
             <button type="button" role="tab" class="pf-mtab press"
                     [class.pf-mtab--on]="mobileList() === 'ip'"
                     [attr.aria-selected]="mobileList() === 'ip'"
@@ -216,6 +224,7 @@
               </svg>
               <span class="pf-mtab__count">{{ completedOrders().length }}</span>
             </button>
+            @if (showHome()) {
             <button type="button" role="tab" class="pf-mtab press"
                     [class.pf-mtab--on]="mobileList() === 'home'"
                     [attr.aria-selected]="mobileList() === 'home'"
@@ -226,6 +235,7 @@
               </svg>
               <span class="pf-mtab__count">{{ homeCollections().length }}</span>
             </button>
+            }
           </div>
 
           <!-- Two-pane layout: Left pane (Appointments & Home collection), Right pane (In progress & Completed).
@@ -241,6 +251,7 @@
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'appt'">
                 
                 <!-- Calendar link (outside tablane, placed at the start of the header) -->
+                @if (showAppt()) {
                 <a routerLink="/frontdesk/appointments" class="pf-appt-split__link--left-icon"
                   title="Open calendar" aria-label="Open calendar" (click)="$event.stopPropagation()">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -250,7 +261,7 @@
                     <path d="M9 16h6"/>
                   </svg>
                 </a>
-                                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
+                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
                   <div class="pf-hdr-filter" (click)="$event.stopPropagation()">
                     <button type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
@@ -289,20 +300,25 @@
                       </div>
                     }
                   </div>
+                }
 
                 <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="leftTab() === 'appt'" [attr.aria-selected]="leftTab() === 'appt'"
-                    (click)="setLeftTab('appt')">
-                    Appointments
-                    <span class="pf-tabs__count" data-tone="active">{{ visibleAppointments().length }}</span>
-                  </button>
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="leftTab() === 'home'" [attr.aria-selected]="leftTab() === 'home'"
-                    (click)="setLeftTab('home')">
-                    Home collection
-                    <span class="pf-tabs__count" data-tone="active">{{ homeCollections().length }}</span>
-                  </button>
+                  @if (showAppt()) {
+                    <button type="button" role="tab" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="leftTab() === 'appt'" [attr.aria-selected]="leftTab() === 'appt'"
+                      (click)="setLeftTab('appt')">
+                      Appointments
+                      <span class="pf-tabs__count" data-tone="active">{{ visibleAppointments().length }}</span>
+                    </button>
+                  }
+                  @if (showHome()) {
+                    <button type="button" role="tab" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="leftTab() === 'home'" [attr.aria-selected]="leftTab() === 'home'"
+                      (click)="setLeftTab('home')">
+                      Home collection
+                      <span class="pf-tabs__count" data-tone="active">{{ homeCollections().length }}</span>
+                    </button>
+                  }
                 </div>
 
                 <!-- Date filters for Left Pane -->
@@ -778,6 +794,10 @@
         (click)="clearSelection()">Clear</button>
     </div>
     }
+
+    <!-- Actions dragged into the Frontdesk work-area in /admin/process (e.g.
+         Result entry for a single-person clinic) render here as panels. -->
+    <pf-work-area-panels menu="frontdesk" />
   </div>
 
   <!-- Order drawer (detail view) -->

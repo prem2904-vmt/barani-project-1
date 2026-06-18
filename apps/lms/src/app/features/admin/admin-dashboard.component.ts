@@ -588,16 +588,19 @@ export class AdminDashboardComponent implements OnInit {
       gradient: 'pink',
       iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z',
       iconExtra: 'M9 7h6M12 14V10',
-      blurb: 'Form flows reception and lab fill in, plus the alerts that fire when things change.',
+      blurb: 'Design the menus, actions and role access your staff see, the form fields they fill, and the alerts that fire.',
       tips: [
-        'Drag-build the Patient Register, Order Create and Appointment Booking forms.',
-        'Configure WhatsApp / SMS alerts on report-ready, payment-received, etc.',
-        'Set escalation rules — when a sample sits in a queue too long, ping the supervisor.'
+        'Drag-build the workflow: which menus exist, what actions sit inside, and who can use them.',
+        'Drag-build the Patient Register, Order Create and Appointment Booking form fields.',
+        'Configure WhatsApp / SMS alerts on report-ready, payment-received, etc.'
       ],
       tiles: [
-        { title: 'Workflows',     href: '/admin/workflows', gradient: 'pink',
+        { title: 'Workflow',      href: '/admin/process', gradient: 'pink',
+          iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',
+          subtitle: () => 'Menus, actions & role access — drives the live nav' },
+        { title: 'Form Flows',    href: '/admin/workflows', gradient: 'pink',
           iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z', iconExtra: 'M9 7h6M12 14V10',
-          subtitle: () => `${this._summary()?.workflows ?? '—'} screens configured` },
+          subtitle: () => `${this._summary()?.workflows ?? '—'} screen forms configured` },
         { title: 'Notifications', href: '/admin/notifications', gradient: 'rose',
           iconPath: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Z', iconExtra: 'M11 20a1 1 0 0 0 2 0',
           subtitle: () => 'Alerts, escalations, patient messages' },

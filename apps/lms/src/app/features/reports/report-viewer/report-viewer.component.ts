@@ -1053,11 +1053,13 @@ export class ReportViewerComponent implements OnInit {
     const tests = this.data()?.tests ?? [];
     if (tests.length === 0) return;
 
+    const p = this.data()?.patient;
+    const patient = { sex: p?.sex ?? null, age: p?.age ?? null };
     const next: Record<string, ResolvedReportLayout> = {};
     await Promise.all(tests.map(async t => {
       const values = (t.result?.values ?? {}) as Record<string, unknown>;
       try {
-        const pv = await this.layoutSvc.preview(t.testId, values, []);
+        const pv = await this.layoutSvc.preview(t.testId, values, [], patient);
         next[t.testId] = pv;
       } catch {
         /* test without a configured layout — fallback table will render */

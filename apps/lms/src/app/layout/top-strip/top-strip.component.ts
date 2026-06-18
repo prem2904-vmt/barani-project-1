@@ -13,7 +13,8 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV } from '../nav-items';
+import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
 @Component({
@@ -40,6 +41,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly webrtc = inject(WebrtcService);
   private readonly patientProfile = inject(PatientProfileService);
   private readonly appointmentBooking = inject(AppointmentBookingService);
+  private readonly process = inject(ProcessWorkflowService);
 
   readonly moduleLabel = 'LMS';
   readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
@@ -50,10 +52,23 @@ export class TopStripComponent implements OnInit, OnDestroy {
       if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
       if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
+      // Workflow source-of-truth: hide a nav item whose action the admin
+      // switched off in /admin/process (the screen itself is unchanged).
+      if (i.action && !this.process.isEnabled(i.action)) return false;
       return true;
     });
   };
-  readonly primary = computed(() => this.visible(PRIMARY_NAV));
+  private navCtx(): WorkflowNavCtx {
+    return {
+      roles: this.auth.user()?.roles ?? [],
+      hasAnyPermission: (p) => this.auth.hasAnyPermission(p),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  // The live nav is built from the active workflow's WORK-AREAS (the admin's
+  // names + order, role-gated), each opening its REAL screen. Falls back to the
+  // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
+  readonly primary = computed(() => menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV));
   readonly more = computed(() => this.visible(MORE_NAV));
   /** Show the Admin icon-button (in the right cluster) only when the
    *  current user holds at least one manage_* permission. Mirrors the
@@ -127,6 +142,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     if (u?.branchName) this.branch.set(u.branchName);
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
+    this.process.loadActive();
   }
   ngOnDestroy() { /* no-op */ }
 

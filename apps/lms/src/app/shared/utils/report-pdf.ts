@@ -182,6 +182,11 @@ let HAIR = '#cccccc';        // Hairlines, dividers, table border
 const FLAG_RED = '#dc2626';  // High / critical inline tag
 const FLAG_BLUE = '#2563eb'; // Low inline tag
 let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
+/** Canonical grid columns for the WHOLE report. Each test is laid out against
+ *  these same columns + widths so the table lines up down the entire report,
+ *  regardless of which typed columns an individual test's layout happens to
+ *  carry. Set once per render in buildReportPdf, before the test loop. */
+let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
 let IMG_CACHE: Record<string, string> = {};
@@ -354,6 +359,12 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // ── Body — grouped by department ───────────────────────────────
   const tests = snap.tests ?? [];
   const byDept = groupBy(tests, t => t.department ?? 'Tests');
+
+  // Canonical columns for the whole report — the typed columns that appear in
+  // ANY test's layout, in Drlogy order. Every grid renders against these so the
+  // columns align down the page (the per-test column variance was the cause of
+  // the ragged look).
+  CANON_COLS = buildCanonicalColumns(resolvedLayouts);
 
   for (const [dept, rows] of byDept.entries()) {
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
@@ -1086,129 +1097,74 @@ function renderGridSection(
   if (rows.length === 0) return startY;
   const bodyRows = rows.filter(r => !r.isMerged);
 
-  // ── Step 1. Drop only TEXT-type columns that are empty across every
-  //          body row (e.g. an unused "Specimen" column). Typed columns
-  //          (result/unit/range/flag) are KEPT even when empty so a
-  //          test missing unit/ref-range data doesn't accidentally
-  //          remove those header columns — a lab report without a
-  //          "Reference Range" column looks broken even if a single
-  //          test happens to have no range data. ──
-  const liveColumns: ReportColumn[] = layout.columns.filter(c => {
-    if (c.type !== 'text') return true; // keep typed columns always
-    if (bodyRows.length === 0) return true;
-    return bodyRows.some(r => {
-      const v = r.cells[c.name];
-      return v != null && String(v).trim() !== '';
-    });
-  });
-  const cols = liveColumns.length > 0 ? liveColumns : layout.columns.slice(1); // never the whole "all empty" list
+  // Lay this test out against the report-wide CANONICAL columns (set in
+  // buildReportPdf) so every test's table lines up. Investigation (the parameter
+  // name) is always the leading column and the typed columns + widths are
+  // identical for every test; the test's own layout only tells us WHICH of its
+  // columns supplies the value for each canonical type.
+  const canon = CANON_COLS;
+  const srcOf = (type: string): ReportColumn | undefined => layout.columns.find(c => c.type === type);
 
-  // ── Step 2. Synthesize Investigation column if needed ──
-  // Show it whenever any row has a `parameterName` AND that name isn't
-  // already echoed verbatim by some existing cell. The previous
-  // "unique-cells" heuristic was unreliable for single-row tests
-  // (a single value is trivially unique), so we check the actual
-  // parameter-name overlap directly.
-  const showInvestigation = (() => {
-    if (bodyRows.length === 0) return false;
-    const anyName = bodyRows.some(r => (r.parameterName ?? '').trim().length > 0);
-    if (!anyName) return false;
-    const layoutAlreadyShowsName = bodyRows.every(r => {
-      const pn = (r.parameterName ?? '').trim().toLowerCase();
-      if (!pn) return true;
-      return cols.some(c => (r.cells[c.name] ?? '').trim().toLowerCase() === pn);
-    });
-    return !layoutAlreadyShowsName;
-  })();
-
-  // ── Step 2b. Reorder columns to Drlogy convention: Result, Reference,
-  //           Unit. Default server layouts return result/unit/range, but
-  //           lab reports conventionally read Result → Reference → Unit
-  //           (so the value and its acceptable range stay adjacent). ──
-  const orderedCols = drlogyOrderedColumns(cols);
-
-  // ── Step 3. Compute widths in pts (Drlogy uses generous Investigation, narrow Unit) ──
   const usable = A4.w - 2 * MARGIN_X;
-  const investWidth = showInvestigation ? 0.32 * usable : 0;
+  const investWidth = 0.34 * usable;
   const remaining = usable - investWidth;
-  const totalPct = orderedCols.reduce((s, c) => s + c.width, 0) || 1;
-  const dataColWidths = orderedCols.map(c => (c.width / totalPct) * remaining);
+  const RATIO: Record<string, number> = { result: 30, range: 42, unit: 28 };
+  const totalRatio = canon.reduce((s, c) => s + (RATIO[c.type] ?? 25), 0) || 1;
+  const dataColWidths = canon.map(c => ((RATIO[c.type] ?? 25) / totalRatio) * remaining);
 
-  // ── Step 4. Build head + body ──
+  // ── Build head + body against the canonical columns ──
   type RowCell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const head: RowCell[][] = [[
-    ...(showInvestigation ? [{ content: 'Investigation', styles: { halign: 'left' as const } }] : []),
-    ...orderedCols.map((c, i) => ({ content: drlogyLabelFor(c), styles: { halign: (i === 0 && !showInvestigation ? 'left' : alignFor(c.type)) as 'left' | 'right' | 'center' } })),
+    { content: 'Investigation', styles: { halign: 'left' as const } },
+    ...canon.map(c => ({ content: c.label, styles: { halign: alignFor(c.type) as 'left' | 'right' | 'center' } })),
   ]];
 
-  const totalCols = (showInvestigation ? 1 : 0) + orderedCols.length;
-  // Prefer the snapshot's sampleType when present; otherwise fall back
-  // to the layout's sampleType (which the engine fills from the test's
-  // Parameters JSON). This lets older reports — whose snapshot was
-  // serialised before per-test sampleType was tracked — still show the
-  // specimen line as long as the layout response carries it.
+  const totalCols = 1 + canon.length;
+  // Prefer the snapshot's sampleType; fall back to the layout's.
   const sampleTypeLine = ((t.sampleType ?? layout.sampleType) ?? '').trim();
 
-  const body: RowCell[][] = rows.map((r, idx): RowCell[] => {
+  const body: RowCell[][] = rows.map((r): RowCell[] => {
     if (r.isMerged) {
       return [{
         content: r.mergeContent ?? '',
         colSpan: totalCols,
-        styles: {
-          fillColor: '#f8fafc',
-          textColor: TEXT,
-          fontStyle: 'italic',
-          halign: 'center',
-          fontSize: 8.5
-        }
+        styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'center', fontSize: 8.5 },
       }];
     }
-    // Bold parameter name + (only on first non-merged row) the sample-type sub-line in italic.
+    // Bold parameter name + (only on the first non-merged row) the sample-type sub-line.
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
     const paramTitle = humanize(r.parameterName ?? '');
     const investContent = isFirstBodyRow && sampleTypeLine
       ? `${paramTitle}\n${sampleTypeLine}`
       : paramTitle;
-    const investCell: RowCell[] = showInvestigation
-      ? [{ content: investContent, styles: { fontStyle: 'bold', textColor: BLACK, fontSize: 9 } }]
-      : [];
+    const investCell: RowCell = { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK, fontSize: 9 } };
 
-    const dataCells: RowCell[] = orderedCols.map(c => {
-      const value = r.cells[c.name] ?? '';
+    const dataCells: RowCell[] = canon.map(c => {
+      const src = srcOf(c.type);
+      const value = src ? (r.cells[src.name] ?? '') : '';
       const styles: Record<string, unknown> = {};
       if (c.type === 'result') {
+        // The value is the focal point: bold, coloured red(high)/blue(low) by the
+        // engine, with an inline "High"/"Low" tag (Drlogy pattern).
         styles['fontStyle'] = 'bold';
         styles['textColor'] = r.color ?? BLACK;
-      } else if (r.color && (c.type === 'flag')) {
-        styles['fontStyle'] = 'bold';
-        styles['textColor'] = r.color;
-      } else {
-        styles['textColor'] = TEXT;
-      }
-      // If this is the result column and the row is colored, render
-      // "value  High/Low" inline (Drlogy pattern) instead of a separate flag col.
-      if (c.type === 'result' && r.color && !showsFlagColumn(orderedCols)) {
-        const tag = flagLabel(r);
-        if (tag) {
-          return { content: `${value}    ${tag}`, styles };
+        if (r.color) {
+          const tag = flagLabel(r);
+          if (tag) return { content: `${value}    ${tag}`, styles };
         }
+        return { content: value, styles };
       }
+      // Reference range + unit muted so the result value stands out.
+      styles['textColor'] = TEXT_DIM;
       return { content: value, styles };
     });
-    return [...investCell, ...dataCells];
+    return [investCell, ...dataCells];
   });
 
-  // Drop the synthetic Flag column if the layout already has one and any
-  // row colors are mapped onto it; otherwise let the result-cell inline tag
-  // do the job. (No separate flag column emitted here.)
   const columnStyles: Record<number, { cellWidth: number; halign?: string }> = {};
   let idx = 0;
-  if (showInvestigation) {
-    columnStyles[idx++] = { cellWidth: investWidth, halign: 'left' };
-  }
-  orderedCols.forEach((c, i) => {
-    columnStyles[idx++] = { cellWidth: dataColWidths[i], halign: alignFor(c.type) };
-  });
+  columnStyles[idx++] = { cellWidth: investWidth, halign: 'left' };
+  canon.forEach((c, i) => { columnStyles[idx++] = { cellWidth: dataColWidths[i], halign: alignFor(c.type) }; });
 
   autoTable(doc, {
     startY,
@@ -1689,6 +1645,25 @@ function alignFor(type: string): 'left' | 'right' | 'center' {
   if (type === 'result') return 'left';
   if (type === 'unit' || type === 'range') return 'left';
   return 'left';
+}
+
+/** Union of the typed columns (result / range / unit) across every test's
+ *  resolved layout, in the conventional Result → Reference Value → Unit order.
+ *  Becomes the single column template the whole report is laid out against. */
+function buildCanonicalColumns(
+  resolvedLayouts: Record<string, ResolvedReportLayout>
+): { type: 'result' | 'range' | 'unit'; label: string }[] {
+  const seen = new Set<string>();
+  for (const lay of Object.values(resolvedLayouts ?? {})) {
+    for (const c of lay.columns ?? []) {
+      if (c.type === 'result' || c.type === 'range' || c.type === 'unit') seen.add(c.type);
+    }
+  }
+  const out: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
+  if (seen.has('result')) out.push({ type: 'result', label: 'Result' });
+  if (seen.has('range'))  out.push({ type: 'range',  label: 'Reference Value' });
+  if (seen.has('unit'))   out.push({ type: 'unit',   label: 'Unit' });
+  return out;
 }
 
 /** Reorder a column list into the conventional Drlogy lab-report

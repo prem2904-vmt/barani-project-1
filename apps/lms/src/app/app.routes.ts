@@ -2,6 +2,7 @@ import { Route } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { landingGuard } from './core/auth/landing.guard';
 import { permissionGuard } from './core/auth/permission.guard';
+import { workflowGuard } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
 
 const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
@@ -105,6 +106,18 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
+        path: 'admin/process',
+        canActivate: [permissionGuard('manage_workflows')],
+        loadComponent: () => import('./features/admin/process-builder/process-builder.component').then(m => m.ProcessBuilderComponent)
+      },
+      {
+        // Generic host for a custom work-area — renders its placed actions as
+        // panels (or launcher cards). System areas route to bespoke screens; this
+        // is only hit for admin-created custom areas in the workflow-driven nav.
+        path: 'w/:menuId',
+        loadComponent: () => import('./features/work-area-host/work-area-host.component').then(m => m.WorkAreaHostComponent)
+      },
+      {
         path: 'admin/workflows/:screen',
         canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
@@ -147,7 +160,7 @@ export const appRoutes: Route[] = [
       {
         // Agent's own home-collection visit list.
         path: 'home-collections',
-        canActivate: [permissionGuard('collect_sample')],
+        canActivate: [permissionGuard('collect_sample'), workflowGuard('home_visits')],
         loadComponent: () => import('./features/home-collection/my-home-collections.component').then(m => m.MyHomeCollectionsComponent)
       },
 
@@ -167,39 +180,39 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'order',
-            canActivate: [permissionGuard('create_order')],
+            canActivate: [permissionGuard('create_order'), workflowGuard('walk_in_order')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
           {
             path: 'billing',
-            canActivate: [permissionGuard(['create_bill', 'collect_payment'])],
+            canActivate: [permissionGuard(['create_bill', 'collect_payment']), workflowGuard('billing')],
             loadComponent: () => import('./features/frontdesk/billing/billing.component').then(m => m.BillingComponent)
           },
           {
             path: 'appointments',
-            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order'])],
+            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order']), workflowGuard('appointment')],
             loadComponent: () => import('./features/frontdesk/appointments-calendar/appointments-calendar.component').then(m => m.AppointmentsCalendarComponent)
           },
           {
             // Live collection queue (token / walk-up / home-collection per branch).
             path: 'queue',
-            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order', 'collect_sample'])],
+            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order', 'collect_sample']), workflowGuard('queue')],
             loadComponent: () => import('./features/frontdesk/collection-queue/collection-queue.component').then(m => m.CollectionQueueComponent)
           },
           {
             // Reception: assign home collections no agent area covered.
             path: 'home-collection',
-            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order'])],
+            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order']), workflowGuard('home_visits')],
             loadComponent: () => import('./features/frontdesk/home-collection-assign/home-collection-assign.component').then(m => m.HomeCollectionAssignComponent)
           },
           {
             path: 'appointments/new',
-            canActivate: [permissionGuard(['register_patient', 'create_order'])],
+            canActivate: [permissionGuard(['register_patient', 'create_order']), workflowGuard('appointment')],
             loadComponent: () => import('./features/frontdesk/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
           },
           {
             path: 'patients/new',
-            canActivate: [permissionGuard('register_patient')],
+            canActivate: [permissionGuard('register_patient'), workflowGuard('patient_registration')],
             loadComponent: () => import('./features/frontdesk/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
           },
           {
@@ -229,7 +242,7 @@ export const appRoutes: Route[] = [
         // enter_result for the result-entry tabs; receive_sample so lab
         // counter / intake-only staff can land on the page and use the
         // embedded "Lab Intake" tab.
-        canActivate: [permissionGuard(['enter_result', 'receive_sample'])],
+        canActivate: [permissionGuard(['enter_result', 'receive_sample']), workflowGuard('result_entry')],
         loadComponent: () => import('./features/lab/my-work/my-work.component').then(m => m.MyWorkComponent)
       },
       {
@@ -238,7 +251,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/collect',
-        canActivate: [permissionGuard('collect_sample')],
+        canActivate: [permissionGuard('collect_sample'), workflowGuard('sample_collection')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       // Dedicated-counter landing. Same component as /lab/collect — the
@@ -249,12 +262,12 @@ export const appRoutes: Route[] = [
         // suppression so a Receptionist (whose seeded role still includes
         // collect_sample) is bounced when collection_mode = dedicated_counter.
         path: 'sample-collection',
-        canActivate: [permissionGuard('collect_sample', { effective: true })],
+        canActivate: [permissionGuard('collect_sample', { effective: true }), workflowGuard('sample_collection')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       {
         path: 'lab/receive',
-        canActivate: [permissionGuard('receive_sample')],
+        canActivate: [permissionGuard('receive_sample'), workflowGuard('lab_intake')],
         loadComponent: () => import('./features/lab/receive-samples/receive-samples.component').then(m => m.ReceiveSamplesComponent)
       },
       {
@@ -274,7 +287,7 @@ export const appRoutes: Route[] = [
       // Pathologist — only doctors with validate_result.
       {
         path: 'pathologist',
-        canActivate: [permissionGuard('validate_result')],
+        canActivate: [permissionGuard('validate_result'), workflowGuard('validate')],
         loadComponent: () => import('./features/pathologist/pending-validation/pending-validation.component').then(m => m.PendingValidationComponent)
       },
       {
@@ -289,7 +302,7 @@ export const appRoutes: Route[] = [
       // looser since pathologists / admins reasonably preview reports.
       {
         path: 'reports',
-        canActivate: [permissionGuard('deliver_report')],
+        canActivate: [permissionGuard('deliver_report'), workflowGuard('results')],
         loadComponent: () => import('./features/reports/report-queue/report-queue.component').then(m => m.ReportQueueComponent)
       },
       {
@@ -301,13 +314,14 @@ export const appRoutes: Route[] = [
       // Billing counter (separate-counter mode).
       {
         path: 'billing-counter',
-        canActivate: [permissionGuard(['create_bill', 'collect_payment'])],
+        canActivate: [permissionGuard(['create_bill', 'collect_payment']), workflowGuard('billing')],
         loadComponent: () => import('./features/billing-counter/billing-counter.component').then(m => m.BillingCounterComponent)
       },
 
       // Messages — Teams-style chat + group calling.
       {
         path: 'messages',
+        canActivate: [workflowGuard('messages')],
         loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
       },
 

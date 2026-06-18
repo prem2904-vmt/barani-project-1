@@ -909,9 +909,11 @@ export class ReportQueueComponent implements OnInit {
       const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
 
       let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+      let patient: { sex?: string | null; age?: number | null } | undefined;
       try {
         const snap = JSON.parse(r.data ?? '{}');
         tests = snap?.tests ?? [];
+        patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
       } catch { /* malformed snapshot — render PDF without layouts */ }
 
       // Fetch the tenant's template + resolved layouts in parallel.
@@ -927,7 +929,8 @@ export class ReportQueueComponent implements OnInit {
             resolvedLayouts[t.testId] = await svc.preview(
               t.testId,
               (t.result?.values ?? {}) as Record<string, unknown>,
-              []
+              [],
+              patient
             );
           } catch { /* test without a configured layout — fallback table */ }
         }),

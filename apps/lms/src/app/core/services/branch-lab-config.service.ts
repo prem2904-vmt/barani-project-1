@@ -1,6 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../shared/models/branch-lab-config.model';
 import { ApiService } from './api.service';
+import { ProcessWorkflowService } from './process-workflow.service';
+import { deriveModes } from '../../shared/models/process-workflow.model';
 
 /**
  * Singleton for the current branch's lab config. Nav items, reception
@@ -10,6 +12,7 @@ import { ApiService } from './api.service';
 @Injectable({ providedIn: 'root' })
 export class BranchLabConfigService {
   private readonly api = inject(ApiService);
+  private readonly process = inject(ProcessWorkflowService);
 
   private readonly _config = signal<BranchLabConfig | null>(null);
   private readonly _loaded = signal(false);
@@ -17,11 +20,14 @@ export class BranchLabConfigService {
 
   readonly config = this._config.asReadonly();
   readonly loaded = this._loaded.asReadonly();
+  // The active workflow is the SOURCE OF TRUTH for these modes (a billing/
+  // collection action in its own menu = a separate counter). Falls back to the
+  // stored config until the workflow loads.
   readonly collectionMode = computed<CollectionMode>(
-    () => this._config()?.collectionMode ?? 'front_desk'
+    () => deriveModes(this.process.active())?.collectionMode ?? this._config()?.collectionMode ?? 'front_desk'
   );
   readonly billingMode = computed<BillingMode>(
-    () => this._config()?.billingMode ?? 'front_desk'
+    () => deriveModes(this.process.active())?.billingMode ?? this._config()?.billingMode ?? 'front_desk'
   );
 
   ensureLoaded(): void {

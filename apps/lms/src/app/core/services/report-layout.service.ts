@@ -70,9 +70,17 @@ export class ReportLayoutService {
 
   /** Run the engine end-to-end. Used by the admin live preview AND the
    *  patient-facing report viewer + PDF generator with real result values. */
-  preview(testId: string, values: Record<string, unknown>, imageUrls: string[] = []): Promise<ResolvedReportLayout> {
+  preview(
+    testId: string,
+    values: Record<string, unknown>,
+    imageUrls: string[] = [],
+    patient?: { sex?: string | null; age?: number | null },
+  ): Promise<ResolvedReportLayout> {
+    // Pass the patient's sex/age so the engine picks the matching reference range
+    // (male/female/age-specific) instead of always the first one.
     return firstValueFrom(this.api.post<ResolvedReportLayout>(
-      `/api/report-layout/preview/${testId}`, { values, imageUrls }
+      `/api/report-layout/preview/${testId}`,
+      { values, imageUrls, sex: patient?.sex ?? null, age: patient?.age ?? null },
     ));
   }
 }

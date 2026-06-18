@@ -11,6 +11,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
@@ -76,7 +78,7 @@ interface StaffMember {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -201,6 +203,26 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private static readonly LEFT_TAB_KEY = 'pf.lms.frontdesk.leftTab';
   private readonly _leftTab = signal<'appt' | 'home'>(this.loadLeftTab());
   readonly leftTab = this._leftTab.asReadonly();
+  // Workflow-as-source-of-truth: each action is a placeable component. When the
+  // admin switches an action OFF in the process workflow, its component vanishes
+  // from this screen (no nav/route change — the real Frontdesk stays put).
+  private readonly process = inject(ProcessWorkflowService);
+  // Placement-aware: the appointment UI lives on Frontdesk only while the action
+  // is placed in the frontdesk work-area. Drag it to Lab in /admin/process and it
+  // leaves here and renders on the Lab screen instead (no active workflow ⇒ native).
+  readonly showAppt = computed(() => {
+    const cfg = this.process.active();
+    return !cfg ? true : this.process.placedIn('appointment') === 'frontdesk';
+  });
+  readonly showHome = computed(() => this.process.isEnabled('home_visits'));
+  readonly showOrder = computed(() => this.process.isEnabled('walk_in_order'));
+  readonly showRegister = computed(() => this.process.isEnabled('patient_registration'));
+  // If the currently-selected left tab gets disabled, fall back to the other one.
+  private readonly _leftTabGuard = effect(() => {
+    const appt = this.showAppt(), home = this.showHome();
+    if (!appt && home && this._leftTab() === 'appt') this._leftTab.set('home');
+    else if (!home && appt && this._leftTab() === 'home') this._leftTab.set('appt');
+  });
   setLeftTab(t: 'appt' | 'home') {
     this._leftTab.set(t);
     try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
@@ -717,6 +739,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
     ngOnInit() {
     this.labCfg.ensureLoaded();
+    this.process.loadActive();
     this.refresh();
     this.pollHandle = setInterval(() => {
       // Skip polls while the tab is hidden — saves bandwidth on inactive
@@ -1676,9 +1699,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
     const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
     let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let patient: { sex?: string | null; age?: number | null } | undefined;
     try {
       const snap = JSON.parse(report.data ?? '{}');
       tests = snap?.tests ?? [];
+      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
     } catch { /* malformed — proceed with empty layouts map */ }
     if (tests.length === 0) return out;
 
@@ -1687,7 +1712,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     await Promise.all(tests.map(async t => {
       if (!t.testId) return;
       try {
-        out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, []);
+        out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
       } catch { /* test without a layout — fallback table renders */ }
     }));
     return out;
