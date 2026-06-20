@@ -129,6 +129,24 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         </div>
       </pf-tile>
 
+      <!-- Inventory master switch -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h3 class="pf-ls__title">Enable inventory</h3>
+            <p class="pf-ls__hint">
+              Track consumable stock (tubes, kits, reagents). When ON, usage is auto-deducted at
+              collection and a test <strong>can't be ordered if its kit isn't fully in stock</strong>.
+              When OFF, inventory is ignored entirely. Manage stock under Admin → Inventory.
+            </p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="inventoryEnabled()">
+            <input type="checkbox" [checked]="inventoryEnabled()" (change)="setInventoryEnabled($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
+      </pf-tile>
+
       <!-- Require payment before collection -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -368,8 +386,16 @@ export class LabSettingsComponent implements OnInit {
   });
 
   // Branch lab-config toggles.
+  protected readonly inventoryEnabled = signal(false);
   protected readonly requireBill = signal(false);
   protected readonly requireValidation = signal(false);
+  setInventoryEnabled(v: boolean) {
+    this.inventoryEnabled.set(v);
+    this.api.patch('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
+      next: () => this.toasts.success(v ? 'Inventory enabled for this branch' : 'Inventory disabled'),
+      error: () => { this.inventoryEnabled.set(!v); this.toasts.error('Could not update setting'); }
+    });
+  }
   setRequireBill(v: boolean) {
     this.requireBill.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
@@ -389,7 +415,11 @@ export class LabSettingsComponent implements OnInit {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
-      next: c => { this.requireBill.set(c?.requireBillBeforeCollection === true); this.requireValidation.set(c?.requireValidationForAllResults === true); }
+      next: c => {
+        this.inventoryEnabled.set(c?.inventoryEnabled === true);
+        this.requireBill.set(c?.requireBillBeforeCollection === true);
+        this.requireValidation.set(c?.requireValidationForAllResults === true);
+      }
     });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {

@@ -25,8 +25,10 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from './test-layout-editor.component';
+import { TestConsumablesComponent } from './test-consumables.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
-type TestEditorTab = 'parameters' | 'layout';
+type TestEditorTab = 'parameters' | 'layout' | 'consumables';
 
 interface DraftTest {
   id?: string;
@@ -107,7 +109,8 @@ function newFieldId(): string {
     SelectComponent,
     TileComponent,
     TouchButtonComponent,
-    TestLayoutEditorComponent
+    TestLayoutEditorComponent,
+    TestConsumablesComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -458,6 +461,14 @@ function newFieldId(): string {
             </p>
           </pf-tile>
         }
+      } @else if (tab() === 'consumables') {
+        @if (d.id) {
+          <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
+        } @else {
+          <pf-tile tone="default" padding="lg" class="block">
+            <p class="text-[13px]" style="color: var(--text-tertiary);">Save the test first, then add the inventory items it consumes here.</p>
+          </pf-tile>
+        }
       }
       } @else {
         <!-- Package member picker. List of all individual tests grouped by
@@ -754,7 +765,10 @@ function newFieldId(): string {
 export class TestEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  /** Consumables tab only for users who manage inventory. */
+  protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
 
   readonly typeOptions: PfSelectOption<'individual' | 'package'>[] = [
@@ -841,7 +855,8 @@ export class TestEditorComponent implements OnInit {
   setTab(t: TestEditorTab) { this._tab.set(t); }
   readonly tabOptions = computed<SegmentedOption<TestEditorTab>[]>(() => [
     { value: 'parameters', label: 'Parameters' },
-    { value: 'layout',     label: 'Report layout' }
+    { value: 'layout',     label: 'Report layout' },
+    ...(this.canManageInventory() ? [{ value: 'consumables' as const, label: 'Consumables' }] : [])
   ]);
 
   private readonly _fields = signal<FormField[]>([]);
