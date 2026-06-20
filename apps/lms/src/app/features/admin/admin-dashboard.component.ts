@@ -70,7 +70,11 @@ interface Category {
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
         </div>
-        <p class="pf-admin-hdr__sub">Pick a category — every config screen lives here.</p>
+        <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
+        <input class="pf-admin-search" type="search" [value]="q()"
+               (input)="setQ($any($event.target).value)"
+               placeholder="Search settings — inventory, invoice, patient ID…"
+               aria-label="Search admin settings" />
       </header>
 
       <div class="pf-admin-layout">
@@ -106,7 +110,39 @@ interface Category {
 
         <!-- ── Right pane: tiles for the selected category ─── -->
         <div class="pf-admin-pane">
-          @if (activeCategory(); as cat) {
+          @if (q().trim()) {
+            <header class="pf-admin-pane__hdr">
+              <div class="pf-admin-pane__hdr-text">
+                <h2 class="pf-admin-pane__title">Search results</h2>
+                <p class="pf-admin-pane__blurb">{{ results().length }} match{{ results().length === 1 ? '' : 'es' }} for “{{ q() }}”</p>
+              </div>
+              <span class="pf-admin-pane__count">{{ results().length }}</span>
+            </header>
+            <div class="pf-admin-pane__grid">
+              @for (r of results(); track r.tile.title) {
+                <a [routerLink]="r.tile.href" [queryParams]="r.tile.queryParams ?? null"
+                   class="pf-admin-tile group press">
+                  <span class="pf-admin-tile__icon" [attr.data-g]="r.cat.gradient">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
+                         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                      <path [attr.d]="r.tile.iconPath"/>
+                      @if (r.tile.iconExtra) { <path [attr.d]="r.tile.iconExtra"/> }
+                    </svg>
+                  </span>
+                  <div class="pf-admin-tile__body">
+                    <p class="pf-admin-tile__title">{{ r.tile.title }}</p>
+                    <p class="pf-admin-tile__sub">{{ r.cat.label }}</p>
+                  </div>
+                  <span class="pf-admin-tile__arrow">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
+                  </span>
+                </a>
+              } @empty {
+                <p style="color:var(--text-tertiary);padding:10px 2px">No settings match “{{ q() }}”.</p>
+              }
+            </div>
+          } @else if (activeCategory(); as cat) {
             <header class="pf-admin-pane__hdr">
               <span class="pf-admin-pane__chip" [attr.data-g]="cat.gradient">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
@@ -212,6 +248,19 @@ interface Category {
       color: var(--text-tertiary);
       margin: 0;
     }
+    .pf-admin-search {
+      margin-top: 12px;
+      width: 100%;
+      max-width: 460px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      font-size: 13.5px;
+    }
+    .pf-admin-search::placeholder { color: var(--text-muted); }
+    .pf-admin-search:focus { outline: none; border-color: var(--violet-500, #8b5cf6); box-shadow: 0 0 0 3px rgba(124,58,237,.18); }
 
     .pf-admin-layout {
       display: grid;
@@ -637,6 +686,27 @@ export class AdminDashboardComponent implements OnInit {
     this.categories.find(c => c.id === this._active())
   );
   select(id: string) { this._active.set(id); }
+
+  // Admin-wide tile search: flatten every category's tiles and match on title,
+  // subtitle, and category label so a setting is one keystroke away.
+  private readonly _q = signal('');
+  readonly q = this._q.asReadonly();
+  setQ(v: string) { this._q.set(v ?? ''); }
+  readonly results = computed<{ tile: Tile; cat: Category }[]>(() => {
+    const term = this._q().trim().toLowerCase();
+    if (!term) return [];
+    const out: { tile: Tile; cat: Category }[] = [];
+    for (const cat of this.categories) {
+      for (const tile of cat.tiles) {
+        let sub = '';
+        try { sub = tile.subtitle() ?? ''; } catch { /* summary not loaded */ }
+        if (`${tile.title} ${sub} ${cat.label} ${cat.blurb}`.toLowerCase().includes(term)) {
+          out.push({ tile, cat });
+        }
+      }
+    }
+    return out;
+  });
 
   ngOnInit(): void {
     // Optional deep-link: /admin?cat=billing routes straight in.
