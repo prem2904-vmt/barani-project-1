@@ -146,6 +146,23 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         </div>
       </pf-tile>
 
+      <!-- Require validation for all results -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h3 class="pf-ls__title">Require validation for all results</h3>
+            <p class="pf-ls__hint">
+              When ON, every result must be validated by a pathologist — even tests set to
+              <strong>direct flow</strong> (which otherwise auto-validate on entry). Leave OFF for default behaviour.
+            </p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireValidation()">
+            <input type="checkbox" [checked]="requireValidation()" (change)="setRequireValidation($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
+      </pf-tile>
+
       <!-- Auto-assign per department -->
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
@@ -350,8 +367,9 @@ export class LabSettingsComponent implements OnInit {
     return head.length ? `${head}${sep}${num}` : num;
   });
 
-  // Require-payment-before-collection toggle (branch lab config).
+  // Branch lab-config toggles.
   protected readonly requireBill = signal(false);
+  protected readonly requireValidation = signal(false);
   setRequireBill(v: boolean) {
     this.requireBill.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
@@ -359,12 +377,19 @@ export class LabSettingsComponent implements OnInit {
       error: () => { this.requireBill.set(!v); this.toasts.error('Could not update setting'); }
     });
   }
+  setRequireValidation(v: boolean) {
+    this.requireValidation.set(v);
+    this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).subscribe({
+      next: () => this.toasts.success(v ? 'All results now require validation' : 'Direct-flow tests auto-validate again'),
+      error: () => { this.requireValidation.set(!v); this.toasts.error('Could not update setting'); }
+    });
+  }
 
   ngOnInit() {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
-      next: c => this.requireBill.set(c?.requireBillBeforeCollection === true)
+      next: c => { this.requireBill.set(c?.requireBillBeforeCollection === true); this.requireValidation.set(c?.requireValidationForAllResults === true); }
     });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
