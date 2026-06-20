@@ -96,7 +96,9 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
                      (ngModelChange)="setTitle($event)" />
             </div>
             <div>
-              <label class="pf-label">Name <span style="color: var(--text-muted);" class="font-normal">(auto)</span></label>
+              <label class="pf-label">Name
+                <span style="color: var(--text-muted);" class="font-normal">(storage key — fixed)</span>
+              </label>
               <input type="text" class="pf-input font-mono"
                      [ngModel]="draft().name"
                      [readonly]="!isCustom() || mode() === 'edit'"
@@ -109,10 +111,11 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
               <label class="pf-label">Type <span class="text-red-500">*</span></label>
               <!-- Shared field-type picker: lists the full 27-type taxonomy
                    grouped by Input / Choice / Layout / Media / Advanced.
-                   Types flipped off in field-registry.ts are filtered out. -->
+                   Types flipped off in field-registry.ts are filtered out.
+                   Editable for standard fields too — only the storage Name
+                   (the DB-column binding) stays fixed. -->
               <pf-field-type-picker
                 [value]="$any(draft().type)"
-                [disabled]="!isCustom()"
                 (valueChange)="setType($any($event))">
               </pf-field-type-picker>
             </div>
