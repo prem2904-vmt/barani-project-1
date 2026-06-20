@@ -123,7 +123,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
                   <p class="pf-bill-no">{{ invoiceNumber() }}</p>
-                  @if (trackToken()) {
+                  @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
                     <div style="margin-top:10px;display:flex;align-items:center;gap:9px">
                       <span style="width:62px;height:62px;display:inline-block">
                         <pf-barcode-display [code]="trackUrl()" [showValue]="false"></pf-barcode-display>
@@ -1323,6 +1323,8 @@ export class BillingComponent implements OnInit {
     return `${p.displayName} · ${p.phone ?? ''}`.trim();
   });
 
+  /** Tenant invoice template (letterhead, GSTIN, document mode, QR toggle). */
+  readonly invoiceTpl = signal<any>(null);
   /** Public result-tracking token for the invoice QR (minted on load). */
   readonly trackToken = signal<string | null>(null);
   readonly trackUrl = computed(() => {
@@ -1427,6 +1429,7 @@ export class BillingComponent implements OnInit {
     this.api.get<{ token: string }>(`/api/orders/${orderId}/track-token`).subscribe({
       next: r => { if (r?.token) this.trackToken.set(r.token); }, error: () => {}
     });
+    this.api.get<any>('/api/config/invoice-template').subscribe({ next: t => this.invoiceTpl.set(t), error: () => {} });
     this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
       next: b => {
         this._bill.set(b);
@@ -1706,15 +1709,23 @@ export class BillingComponent implements OnInit {
     const b = this._bill();
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {
-      // Render the result-tracking link as a QR (PNG) for the printed invoice.
+      const tpl = this.invoiceTpl();
+      // Render the result-tracking link as a QR (PNG) for the printed invoice —
+      // unless the tenant turned tracking QR off in the invoice template.
       let qrDataUrl: string | undefined;
       const url = this.trackUrl();
-      if (url) {
+      if (url && tpl?.showTrackingQr !== false) {
         try {
           const QRCode = (await import('qrcode')).default;
           qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
         } catch { /* QR is best-effort */ }
       }
+      // Document title: explicit mode, else auto from whether the bill carries tax
+      // (most diagnostic services are GST-exempt → Bill of Supply).
+      const mode = tpl?.documentMode ?? 'auto';
+      const docTitle = mode === 'bill_of_supply' ? 'BILL OF SUPPLY'
+        : mode === 'tax_invoice' ? 'TAX INVOICE'
+        : (b.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
       generateInvoicePdf({
         bill: b,
         order: this._order(),
@@ -1722,6 +1733,12 @@ export class BillingComponent implements OnInit {
         effectivePayable: this.effectivePayable(),
         tatLabel: this.tatLabel(),
         qrDataUrl,
+        docTitle,
+        practice: tpl ? {
+          name: tpl.labName || undefined, address: tpl.address || undefined,
+          phone: tpl.phone || undefined, email: tpl.email || undefined,
+          gstin: tpl.showGstin === false ? undefined : (tpl.gstin || undefined),
+        } : undefined,
       });
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);

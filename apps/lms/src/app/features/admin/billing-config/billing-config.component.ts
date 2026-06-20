@@ -217,6 +217,32 @@ interface GstRow {
             </p>
           </div>
         </pf-tile>
+
+        <!-- Letterhead & document type -->
+        <pf-tile tone="default" padding="lg" class="block max-w-2xl mt-5">
+          <h3 class="text-sm font-bold mb-1" style="color: var(--text-primary);">Letterhead &amp; document</h3>
+          <p class="text-[13px] mb-4" style="color: var(--text-tertiary);">Shown on the invoice / receipt PDF. Most diagnostic services are GST-exempt — use Bill of Supply (or Auto).</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="pf-label">Lab name</label><input class="pf-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
+            <div><label class="pf-label">GSTIN</label><input class="pf-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
+            <div class="col-span-2"><label class="pf-label">Address</label><input class="pf-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></div>
+            <div><label class="pf-label">Phone</label><input class="pf-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
+            <div><label class="pf-label">Email</label><input class="pf-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
+            <div><label class="pf-label">Document type</label>
+              <select class="pf-input" [ngModel]="tpl().documentMode" (ngModelChange)="patchTpl({ documentMode: $event })">
+                <option value="auto">Auto (by tax)</option>
+                <option value="tax_invoice">Tax Invoice</option>
+                <option value="bill_of_supply">Bill of Supply</option>
+              </select>
+            </div>
+            <div class="col-span-2"><label class="pf-label">Footer / terms</label><input class="pf-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></div>
+          </div>
+          <div class="flex flex-wrap gap-5 mt-3">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showGstin !== false" (ngModelChange)="patchTpl({ showGstin: $event })"/> Show GSTIN</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showTrackingQr !== false" (ngModelChange)="patchTpl({ showTrackingQr: $event })"/> Show result-tracking QR</label>
+          </div>
+          <button class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white" style="background: var(--violet-600, #7c3aed);" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save letterhead' }}</button>
+        </pf-tile>
       }
     </section>
   `,
@@ -307,9 +333,25 @@ export class BillingConfigComponent implements OnInit {
     return `${c.invoicePrefix}/${year}/${c.invoiceStartNumber}`;
   });
 
+  // Invoice letterhead/template
+  private readonly _tpl = signal<any>({ documentMode: 'auto', showGstin: true, showTrackingQr: true });
+  readonly tpl = this._tpl.asReadonly();
+  readonly savingTpl = signal(false);
+  patchTpl(p: Record<string, unknown>) { this._tpl.set({ ...this._tpl(), ...p }); }
+  saveTpl() {
+    this.savingTpl.set(true);
+    this.api.post('/api/config/invoice-template', this._tpl()).subscribe({
+      next: () => { this.savingTpl.set(false); this.toasts.success('Letterhead saved'); },
+      error: () => { this.savingTpl.set(false); this.toasts.error('Could not save letterhead'); }
+    });
+  }
+
   ngOnInit() {
     this.api.get<TenantBillingConfig>('/api/config/billing').subscribe({
       next: c => { if (c) this._config.set({ ...this._config(), ...c }); }
+    });
+    this.api.get<any>('/api/config/invoice-template').subscribe({
+      next: t => { if (t) this._tpl.set({ documentMode: 'auto', showGstin: true, showTrackingQr: true, ...t }); }
     });
     this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => this._branches.set(l ?? [])

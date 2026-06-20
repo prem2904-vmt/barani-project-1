@@ -29,6 +29,8 @@ export interface InvoicePdfInput {
   };
   /** Optional QR (PNG data URL) linking to the public result-tracking page. */
   qrDataUrl?: string;
+  /** Document title — "TAX INVOICE" (default) or "BILL OF SUPPLY". */
+  docTitle?: string;
 }
 
 const A4 = { w: 595.28, h: 841.89 }; // pt — jsPDF default
@@ -38,7 +40,7 @@ const TEXT_PRIMARY = '#0f172a';
 const TEXT_MUTED = '#64748b';
 
 export function generateInvoicePdf(input: InvoicePdfInput) {
-  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl } = input;
+  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl, docTitle } = input;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   // ── Header ──────────────────────────────────────────────────
@@ -68,7 +70,7 @@ export function generateInvoicePdf(input: InvoicePdfInput) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(ACCENT);
-  doc.text('TAX INVOICE', A4.w - MARGIN, 50, { align: 'right' });
+  doc.text(docTitle ?? 'TAX INVOICE', A4.w - MARGIN, 50, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
