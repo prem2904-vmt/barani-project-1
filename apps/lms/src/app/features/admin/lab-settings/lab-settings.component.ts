@@ -57,6 +57,58 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         </div>
       </pf-tile>
 
+      <!-- Patient ID format -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h3 class="pf-ls__title">Patient ID format</h3>
+            <p class="pf-ls__hint">
+              Choose how new patient IDs are generated. The running number is <strong>continuous</strong>
+              (never resets); the date is just a prefix. Existing patient IDs are never changed.
+            </p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="pidEnabled()">
+            <input type="checkbox" [checked]="pidEnabled()" (change)="pidEnabled.set($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
+
+        @if (pidEnabled()) {
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date prefix</span>
+              <select class="pf-input mt-1" [ngModel]="pidDate()" (ngModelChange)="pidDate.set($event)">
+                <option value="ddmmyy">DDMMYY</option>
+                <option value="mmyy">MMYY</option>
+                <option value="yy">YY</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator</span>
+              <input class="pf-input mt-1" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="-" />
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Number digits</span>
+              <input class="pf-input mt-1" type="number" min="1" max="10" [ngModel]="pidPad()" (ngModelChange)="pidPad.set(+$event)" />
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Prefix (optional)</span>
+              <input class="pf-input mt-1" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
+            </label>
+          </div>
+          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
+            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ pidPreview() }}</strong>
+          </p>
+        } @else {
+          <p class="pf-ls__hint mt-2">Using the built-in format (e.g. <span class="font-mono">DEL-2606-000042-7</span>).</p>
+        }
+        <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
+                style="background: var(--violet-600, #7c3aed);" [disabled]="pidSaving()" (click)="savePatientId()">
+          {{ pidSaving() ? 'Saving…' : 'Save format' }}
+        </button>
+      </pf-tile>
+
       <!-- No-scan override (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -259,9 +311,41 @@ export class LabSettingsComponent implements OnInit {
     ...this._roles().map(r => ({ value: r.id, label: r.name }))
   ]);
 
+  // ── Patient-ID format ──
+  protected readonly pidEnabled = signal(false);
+  protected readonly pidDate = signal('ddmmyy');
+  protected readonly pidSep = signal('-');
+  protected readonly pidPad = signal(4);
+  protected readonly pidPrefix = signal('');
+  protected readonly pidSaving = signal(false);
+  /** Live sample of what a new id looks like with today's date + seq 1. */
+  protected readonly pidPreview = computed(() => {
+    const n = new Date();
+    const dd = String(n.getDate()).padStart(2, '0');
+    const mm = String(n.getMonth() + 1).padStart(2, '0');
+    const yy = String(n.getFullYear() % 100).padStart(2, '0');
+    const date = this.pidDate() === 'ddmmyy' ? dd + mm + yy
+      : this.pidDate() === 'mmyy' ? mm + yy
+      : this.pidDate() === 'yy' ? yy : '';
+    const num = '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
+    const head = (this.pidPrefix() ?? '') + date;
+    const sep = this.pidSep() || '-';
+    return head.length ? `${head}${sep}${num}` : num;
+  });
+
   ngOnInit() {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
+    this.api.get<any>('/api/config/patient-id').subscribe({
+      next: c => {
+        if (!c) return;
+        this.pidEnabled.set(!!c.enabled);
+        this.pidDate.set(c.datePrefix ?? 'ddmmyy');
+        this.pidSep.set(c.separator ?? '-');
+        this.pidPad.set(c.padding ?? 4);
+        this.pidPrefix.set(c.prefix ?? '');
+      }
+    });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
@@ -270,6 +354,20 @@ export class LabSettingsComponent implements OnInit {
     });
     this.api.get<AutoAssignConfig[]>('/api/tenants/auto-assign-configs').subscribe({
       next: l => this._configs.set(l ?? [])
+    });
+  }
+
+  savePatientId() {
+    this.pidSaving.set(true);
+    this.api.post('/api/config/patient-id', {
+      enabled: this.pidEnabled(),
+      datePrefix: this.pidDate(),
+      separator: this.pidSep() || '-',
+      padding: this.pidPad(),
+      prefix: this.pidPrefix()?.trim() || null,
+    }).subscribe({
+      next: () => { this.pidSaving.set(false); this.toasts.success('Patient ID format saved'); },
+      error: () => { this.pidSaving.set(false); this.toasts.error('Could not save patient ID format'); },
     });
   }
 
