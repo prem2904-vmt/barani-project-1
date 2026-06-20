@@ -107,6 +107,11 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },
       {
+        path: 'admin/inventory',
+        canActivate: [permissionGuard('manage_inventory')],
+        loadComponent: () => import('./features/admin/inventory/inventory.component').then(m => m.InventoryComponent)
+      },
+      {
         path: 'admin/reports',
         canActivate: [permissionGuard(['manage_tenant', 'manage_tests'])],
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)

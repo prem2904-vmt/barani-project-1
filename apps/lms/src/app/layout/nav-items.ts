@@ -202,6 +202,10 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_billing_config']
   },
   {
+    id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
+    permissions: ['manage_inventory']
+  },
+  {
     id: 'reports-t', label: 'Report theme', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
     permissions: ['manage_report_template']
   },
