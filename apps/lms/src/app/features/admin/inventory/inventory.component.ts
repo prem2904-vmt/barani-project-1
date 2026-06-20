@@ -130,6 +130,35 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           </table>
         </div>
       }
+
+      <!-- Per-test consumables (BOM) — drives auto-deduction at collection -->
+      <div class="mt-8 p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
+        <div class="text-sm font-bold mb-1" style="color:var(--text-primary)">Per-test consumables</div>
+        <p class="text-sm mb-3" style="color:var(--text-tertiary)">Map which items a test consumes. These are auto-deducted (FEFO) from this branch's stock when a sample is collected.</p>
+        <select class="inp" style="max-width:340px" [ngModel]="bomTestId()" (ngModelChange)="selectTest($event)">
+          <option value="">Select a test…</option>
+          @for (t of tests(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }
+        </select>
+
+        @if (bomTestId()) {
+          <div class="mt-3 space-y-2" style="max-width:560px">
+            @for (line of bomLines(); track $index) {
+              <div class="flex items-center gap-2">
+                <select class="inp" [ngModel]="line.itemId" (ngModelChange)="setLine($index,'itemId',$event)">
+                  <option value="">Item…</option>
+                  @for (it of items(); track it.id) { <option [value]="it.id">{{ it.name }} ({{ it.uom }})</option> }
+                </select>
+                <input class="inp" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
+                <button class="text-sm px-2" style="color:var(--red)" (click)="removeLine($index)">✕</button>
+              </div>
+            }
+            <div class="flex gap-2 pt-1">
+              <button class="text-xs font-semibold" style="color:var(--violet-400)" (click)="addLine()">+ Add item</button>
+            </div>
+            <button class="mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
+          </div>
+        }
+      </div>
     </section>
   `,
   styles: [`
@@ -158,7 +187,43 @@ export class InventoryComponent implements OnInit {
 
   readonly canSave = computed(() => !!this.form().sku?.trim() && !!this.form().name?.trim());
 
-  async ngOnInit() { await Promise.all([this.load(), this.loadAlerts()]); }
+  // Per-test consumable BOM
+  readonly tests = signal<{ id: string; name: string }[]>([]);
+  readonly bomTestId = signal('');
+  readonly bomLines = signal<{ itemId: string; qtyPerTest: number }[]>([]);
+  readonly bomSaving = signal(false);
+
+  async ngOnInit() { await Promise.all([this.load(), this.loadAlerts(), this.loadTests()]); }
+
+  private async loadTests() {
+    try { this.tests.set(await firstValueFrom(this.api.get<{ id: string; name: string }[]>('/api/tests/')) ?? []); }
+    catch { /* */ }
+  }
+
+  async selectTest(id: string) {
+    this.bomTestId.set(id);
+    this.bomLines.set([]);
+    if (!id) return;
+    try {
+      const rows = await firstValueFrom(this.api.get<any[]>(`/api/inventory/tests/${id}/consumables`)) ?? [];
+      this.bomLines.set(rows.map(r => ({ itemId: r.itemId, qtyPerTest: r.qtyPerTest })));
+    } catch { /* */ }
+  }
+  addLine() { this.bomLines.update(l => [...l, { itemId: '', qtyPerTest: 1 }]); }
+  removeLine(i: number) { this.bomLines.update(l => l.filter((_, idx) => idx !== i)); }
+  setLine(i: number, field: 'itemId' | 'qtyPerTest', value: unknown) {
+    this.bomLines.update(l => l.map((ln, idx) => idx === i ? { ...ln, [field]: value } : ln));
+  }
+  async saveBom() {
+    const id = this.bomTestId(); if (!id) return;
+    this.bomSaving.set(true);
+    try {
+      const lines = this.bomLines().filter(l => l.itemId && l.qtyPerTest > 0);
+      await firstValueFrom(this.api.put(`/api/inventory/tests/${id}/consumables`, { lines }));
+      this.toasts.success('Consumables saved');
+    } catch { this.toasts.error('Save failed'); }
+    this.bomSaving.set(false);
+  }
 
   private async load() {
     this.loading.set(true);
