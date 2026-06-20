@@ -12,6 +12,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
+import { PatientDocumentsComponent } from './patient-documents.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -134,7 +135,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule],
+  imports: [DatePipe, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']

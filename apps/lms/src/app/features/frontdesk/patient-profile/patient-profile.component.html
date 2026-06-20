@@ -278,6 +278,17 @@
               </span>
             </span>
           </button>
+
+          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
+            [ngClass]="activeTab() === 'documents' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
+            (click)="activeTab.set('documents')">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>
+              </svg>
+              <span>Documents</span>
+            </span>
+          </button>
         </div>
 
         <!-- Dynamic Tab Content Views -->
@@ -1224,6 +1235,11 @@
                 </div>
               }
             </div>
+          }
+
+          <!-- TAB: DOCUMENTS -->
+          @if (activeTab() === 'documents' && patient(); as p) {
+            <pf-patient-documents [patientId]="p.id"></pf-patient-documents>
           }
 
         </div>
