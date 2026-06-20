@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { BranchRef } from '../../core/auth/mock-user';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
@@ -44,7 +45,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly process = inject(ProcessWorkflowService);
 
   readonly moduleLabel = 'LMS';
-  readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
+  /** Real branches this user may switch between (from /api/auth/me). */
+  readonly branches = computed(() => this.auth.user()?.branches ?? []);
+  /** Whether to show the switcher at all (more than one branch available). */
+  readonly canSwitchBranch = computed(() => this.branches().length > 1);
   private readonly visible = (items: NavItem[]): NavItem[] => {
     const cMode = this.labCfg.collectionMode();
     const bMode = this.labCfg.billingMode();
@@ -78,7 +82,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
     !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
   );
 
-  protected readonly branch = signal<string>('Chennai Main');
+  protected readonly branch = computed(() =>
+    this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? 'Branch');
+  protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
   protected readonly branchOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly profileOpen = signal(false);
@@ -138,8 +144,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit() {
-    const u = this.auth.user();
-    if (u?.branchName) this.branch.set(u.branchName);
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
     this.process.loadActive();
@@ -147,11 +151,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
   ngOnDestroy() { /* no-op */ }
 
   toggleBranch() {
+    if (!this.canSwitchBranch()) return;
     const next = !this.branchOpen();
     this.closeAll();
     this.branchOpen.set(next);
   }
-  selectBranch(b: string) { this.branch.set(b); this.branchOpen.set(false); }
+  selectBranch(b: BranchRef) { this.branchOpen.set(false); this.auth.setActiveBranch(b.id); }
 
   toggleMore() {
     const next = !this.moreOpen();

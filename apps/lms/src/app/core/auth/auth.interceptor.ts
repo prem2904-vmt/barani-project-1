@@ -14,9 +14,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     switchMap(() => {
       const token = auth.accessToken();
       if (!token) return next(req);
-      const authed = req.clone({
-        setHeaders: { Authorization: `Bearer ${token}` }
-      });
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      // Branch switcher: tell the backend which branch to scope this request to.
+      // The server validates it against the user's permitted branches.
+      const branch = auth.activeBranchId();
+      if (branch) headers['X-Active-Branch'] = branch;
+      const authed = req.clone({ setHeaders: headers });
       return next(authed);
     })
   );

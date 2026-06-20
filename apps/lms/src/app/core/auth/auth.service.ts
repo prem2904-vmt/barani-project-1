@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
 import { BranchLabConfigService } from '../services/branch-lab-config.service';
-import { CurrentUser } from './mock-user';
+import { BranchRef, CurrentUser } from './mock-user';
 import { supabase } from './supabase.client';
 
 interface MeResponse {
@@ -20,6 +20,7 @@ interface MeResponse {
   subBranchName?: string | null;
   roles: string[];
   permissions: string[];
+  branches?: BranchRef[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -54,6 +55,33 @@ export class AuthService {
     const next = [org, ...this.rememberedOrgs().filter(o => o.toLowerCase() !== org.toLowerCase())].slice(0, 8);
     this.rememberedOrgs.set(next);
     try { localStorage.setItem(AuthService.ORGS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  }
+
+  // Active branch for the branch switcher. The interceptor sends this as the
+  // X-Active-Branch header; the backend validates it against the user's
+  // permitted branches and falls back to their default if it isn't allowed.
+  private static readonly ACTIVE_BRANCH_KEY = 'pf.activeBranch';
+  private readonly _activeBranchId = signal<string | null>(
+    (() => { try { return localStorage.getItem(AuthService.ACTIVE_BRANCH_KEY); } catch { return null; } })()
+  );
+  readonly activeBranchId = this._activeBranchId.asReadonly();
+  /** The currently-active branch object (from the user's permitted list). */
+  readonly activeBranch = computed<BranchRef | null>(() => {
+    const id = this._activeBranchId();
+    const branches = this._user()?.branches ?? [];
+    return branches.find(b => b.id === id) ?? null;
+  });
+
+  /** Switch the active branch. Persists, then reloads so every branch-scoped
+   *  view re-fetches cleanly under the new scope (no stale state). */
+  setActiveBranch(branchId: string): void {
+    const allowed = (this._user()?.branches ?? []).some(b => b.id === branchId);
+    if (!allowed || branchId === this._activeBranchId()) return;
+    this._activeBranchId.set(branchId);
+    try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, branchId); } catch { /* private mode */ }
+    // Full reload is the most robust way to re-scope the many components that
+    // cache branch-scoped data in signals; the Supabase session survives it.
+    try { window.location.reload(); } catch { /* SSR/native guard */ }
   }
 
   constructor() {
@@ -279,8 +307,18 @@ export class AuthService {
         subBranchId: data.subBranchId ?? null,
         subBranchName: data.subBranchName ?? null,
         roles: data.roles ?? [],
-        permissions: data.permissions ?? []
+        permissions: data.permissions ?? [],
+        branches: data.branches ?? []
       });
+
+      // Seed / validate the active branch against what this user may access.
+      // Clear a stale stored branch so the header doesn't send a rejected id.
+      const branches = data.branches ?? [];
+      const stored = this._activeBranchId();
+      if (!stored || !branches.some(b => b.id === stored)) {
+        this._activeBranchId.set(data.branchId);
+        try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, data.branchId); } catch { /* private mode */ }
+      }
     } catch {
       this._user.set(null);
     }

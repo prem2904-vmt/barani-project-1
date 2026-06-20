@@ -15,4 +15,11 @@ export interface CurrentUser {
   subBranchName?: string | null;
   roles: string[];
   permissions: string[];
+  /** Branches this user may switch between (from their role grants). */
+  branches?: BranchRef[];
+}
+
+export interface BranchRef {
+  id: string;
+  name: string;
 }

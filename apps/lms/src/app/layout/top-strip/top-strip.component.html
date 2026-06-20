@@ -112,9 +112,10 @@
         <!-- Branch selector — kept on the top strip so route context stays
              visible without a second navbar. md+ only; mobile users use the
              dedicated branch settings screen. -->
-        <div class="relative hidden md:block">
+        <div class="relative hidden md:block" [class.pf-ts-branch--single]="!canSwitchBranch()">
           <button type="button" class="pf-ts-branch press"
                   [class.pf-ts-branch--open]="branchOpen()"
+                  [disabled]="!canSwitchBranch()"
                   [attr.aria-expanded]="branchOpen()"
                   [attr.aria-label]="'Switch branch — currently ' + branch()"
                   (click)="toggleBranch()">
@@ -138,12 +139,12 @@
                 <p class="pf-ts-branch__pop-current">{{ branch() }}</p>
               </div>
               <div class="pf-ts-branch__pop-divider"></div>
-              @for (b of branches; track b) {
+              @for (b of branches(); track b.id) {
                 <button type="button" class="pf-ts-branch__pop-item"
-                        [class.pf-ts-branch__pop-item--active]="b === branch()"
+                        [class.pf-ts-branch__pop-item--active]="b.id === activeBranchId()"
                         (click)="selectBranch(b)" role="menuitem">
-                  <span class="truncate">{{ b }}</span>
-                  @if (b === branch()) {
+                  <span class="truncate">{{ b.name }}</span>
+                  @if (b.id === activeBranchId()) {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="m5 12 4 4L19 6" />
