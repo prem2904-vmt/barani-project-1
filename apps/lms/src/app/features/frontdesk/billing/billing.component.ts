@@ -2,6 +2,7 @@ import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -62,7 +63,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    LoadingLogoComponent
+    LoadingLogoComponent,
+    BarcodeDisplayComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -121,6 +123,14 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
                   <p class="pf-bill-no">{{ invoiceNumber() }}</p>
+                  @if (trackToken()) {
+                    <div style="margin-top:10px;display:flex;align-items:center;gap:9px">
+                      <span style="width:62px;height:62px;display:inline-block">
+                        <pf-barcode-display [code]="trackUrl()" [showValue]="false"></pf-barcode-display>
+                      </span>
+                      <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Scan to track<br/>your report online</span>
+                    </div>
+                  }
                 </div>
                 <div class="flex items-center gap-3">
                   <button type="button" class="pf-bill-print-icon pf-no-print"
@@ -1313,6 +1323,13 @@ export class BillingComponent implements OnInit {
     return `${p.displayName} · ${p.phone ?? ''}`.trim();
   });
 
+  /** Public result-tracking token for the invoice QR (minted on load). */
+  readonly trackToken = signal<string | null>(null);
+  readonly trackUrl = computed(() => {
+    const t = this.trackToken();
+    return t ? `${window.location.origin}/track/${t}` : '';
+  });
+
   readonly invoiceNumber = computed(() => {
     const b = this._bill();
     if (!b) return '—';
@@ -1405,6 +1422,11 @@ export class BillingComponent implements OnInit {
     if (!orderId) { this.toasts.error('No order id'); this.router.navigateByUrl('/frontdesk'); return; }
 
     this.api.get<Order>(`/api/orders/${orderId}`).subscribe({ next: o => this._order.set(o) });
+    // Mint (or fetch) the public tracking token so the invoice can show a QR
+    // the patient scans to follow their report — best-effort, non-blocking.
+    this.api.get<{ token: string }>(`/api/orders/${orderId}/track-token`).subscribe({
+      next: r => { if (r?.token) this.trackToken.set(r.token); }, error: () => {}
+    });
     this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
       next: b => {
         this._bill.set(b);

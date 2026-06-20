@@ -35,6 +35,11 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/set-password/set-password.component').then(m => m.SetPasswordComponent)
   },
   {
+    // Public, no-login result tracking reached from the invoice QR.
+    path: 'track/:token',
+    loadComponent: () => import('./features/track/track.component').then(m => m.TrackComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],
