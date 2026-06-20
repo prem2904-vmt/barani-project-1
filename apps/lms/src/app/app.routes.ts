@@ -327,6 +327,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 
+      // Stores — the inventory operator work area (scan-first receive / issue /
+      // count). Gated on any inventory permission.
+      {
+        path: 'stores',
+        canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'])],
+        loadComponent: () => import('./features/stores/stores.component').then(m => m.StoresComponent)
+      },
+
       // Reports — only roles that actively deliver reports land here. Lab
       // techs hold view_report (so they can read a finalized result) but
       // shouldn't see the delivery queue. The viewer route stays slightly

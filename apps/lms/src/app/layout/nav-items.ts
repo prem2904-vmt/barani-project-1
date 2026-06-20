@@ -71,6 +71,13 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['enter_result', 'receive_sample']
   },
   {
+    id: 'stores',
+    label: 'Inventory',
+    href: '/stores',
+    iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
+    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']
+  },
+  {
     id: 'sample-collection',
     action: 'sample_collection',
     label: 'Collect',

@@ -13,6 +13,9 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
   { perm: 'enter_result', path: '/lab/my-work' },
   { perm: 'validate_result', path: '/pathologist' },
   { perm: 'collect_sample', path: '/sample-collection' },
+  { perm: 'inventory_receive', path: '/stores' },
+  { perm: 'inventory_issue', path: '/stores' },
+  { perm: 'inventory_count', path: '/stores' },
   { perm: 'view_tat_dashboard', path: '/dashboard' },
   { perm: 'view_dashboard', path: '/dashboard' }
 ];
