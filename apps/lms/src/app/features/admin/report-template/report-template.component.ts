@@ -10,12 +10,13 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
+import { TestLayoutEditorComponent } from './test-layout-editor.component';
 import { ImageUploadComponent } from './image-upload.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 
-type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'signoff';
+type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'testlayout' | 'signoff';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -33,6 +34,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     ToggleComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
+    TestLayoutEditorComponent,
     ImageUploadComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -332,6 +334,11 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               <pf-report-columns-editor></pf-report-columns-editor>
             }
 
+            <!-- ────────── PER-TEST LAYOUT (sections engine) ────────── -->
+            @case ('testlayout') {
+              <pf-test-layout-editor></pf-test-layout-editor>
+            }
+
             <!-- ────────── SIGN-OFF & FOOTER ────────── -->
             @case ('signoff') {
               <pf-tile tone="default" padding="lg" class="block">
@@ -444,7 +451,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
           }
         </div>
 
-        <!-- ── Right: live PDF preview ────────────────────────── -->
+        <!-- ── Right: live PDF preview (hidden on the per-test layout tab,
+                which has its own engine-resolved preview pane) ─────── -->
+        @if (tab() !== 'testlayout') {
         <aside class="lg:sticky lg:top-4 h-fit">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
              style="color: var(--text-muted);">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
@@ -462,6 +471,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             Preview uses a sample order. Save to apply this template to real reports.
           </p>
         </aside>
+        }
       </div>
     </section>
   `,
@@ -502,6 +512,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'patient',  label: 'Patient' },
     { value: 'datetime', label: 'Date & Time' },
     { value: 'columns',  label: 'Columns' },
+    { value: 'testlayout', label: 'Per-test layout' },
     { value: 'signoff',  label: 'Sign-off & Footer' },
   ];
   private readonly _tab = signal<Tab>('identity');
