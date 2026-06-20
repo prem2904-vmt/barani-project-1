@@ -129,6 +129,23 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         </div>
       </pf-tile>
 
+      <!-- Require payment before collection -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h3 class="pf-ls__title">Require payment before collection</h3>
+            <p class="pf-ls__hint">
+              When ON, a sample can't be collected until its order is <strong>paid in full</strong>.
+              Leave OFF to let collection and billing run independently (default).
+            </p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireBill()">
+            <input type="checkbox" [checked]="requireBill()" (change)="setRequireBill($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
+      </pf-tile>
+
       <!-- Auto-assign per department -->
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
@@ -333,9 +350,22 @@ export class LabSettingsComponent implements OnInit {
     return head.length ? `${head}${sep}${num}` : num;
   });
 
+  // Require-payment-before-collection toggle (branch lab config).
+  protected readonly requireBill = signal(false);
+  setRequireBill(v: boolean) {
+    this.requireBill.set(v);
+    this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
+      next: () => this.toasts.success(v ? 'Payment now required before collection' : 'Payment no longer required before collection'),
+      error: () => { this.requireBill.set(!v); this.toasts.error('Could not update setting'); }
+    });
+  }
+
   ngOnInit() {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
+    this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
+      next: c => this.requireBill.set(c?.requireBillBeforeCollection === true)
+    });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
         if (!c) return;
