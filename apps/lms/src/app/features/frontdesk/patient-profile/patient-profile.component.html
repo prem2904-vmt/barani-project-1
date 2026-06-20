@@ -29,8 +29,9 @@
                 {{ displayName() }}
               </h1>
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-400">
-                  MRN-{{ p.id.slice(-5).toUpperCase() }}
+                <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-400"
+                  [title]="p.mrn ? ('MRN: ' + p.mrn) : 'No MRN on file'">
+                  {{ p.mrn?.trim() || '—' }}
                 </span>
                 @if (p.isMinor) {
                   <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">

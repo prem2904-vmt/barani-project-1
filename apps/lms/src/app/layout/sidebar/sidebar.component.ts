@@ -122,7 +122,9 @@ export class SidebarComponent {
         { label: 'Notifications',     href: '/admin/notifications',  icon: '🔔', perms: ['manage_tenant', 'manage_branches'] },
         { label: 'Workflows',         href: '/admin/workflows',      icon: '🔧', perms: ['manage_workflows'] },
         { label: 'KPI cards',         href: '/admin/kpis',           icon: '📊', perms: ['manage_tenant', 'manage_branches'] },
-        { label: 'Vendor Wallets',    href: '/admin/vendors',        icon: '💼', perms: ['manage_tenant'] }
+        { label: 'Vendor Wallets',    href: '/admin/vendors',        icon: '💼', perms: ['manage_tenant'] },
+        // Catalog + per-test BOM config (distinct from the operational Stores desk below).
+        { label: 'Inventory Catalog', href: '/admin/inventory',      icon: '📦', perms: ['manage_inventory'] }
       ]
     },
     {
@@ -169,6 +171,15 @@ export class SidebarComponent {
         { label: 'Sample Collection', href: '/lab/collect',          icon: '🧫',
           perms: ['collect_sample'],
           visible: () => this.labCfg.collectionMode() === 'front_desk' }
+      ]
+    },
+    {
+      // Operational stock desk — scan-first receive / issue / count. A first-class
+      // work area like Front Desk and Lab (its own home hub picks the mode).
+      title: 'Inventory',
+      links: [
+        { label: 'Stores',            href: '/stores',               icon: '📦',
+          perms: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'] }
       ]
     },
     {
