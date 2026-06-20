@@ -4,6 +4,8 @@ export interface Bill {
   patientId: string;
   branchId: string;
   type: string;
+  /** Server-allocated invoice number (prefix + running counter). */
+  invoiceNumber?: string;
   supplierGstin?: string;
   placeOfSupply?: string;
   isInterstate: boolean;

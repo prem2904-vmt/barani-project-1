@@ -1316,6 +1316,9 @@ export class BillingComponent implements OnInit {
   readonly invoiceNumber = computed(() => {
     const b = this._bill();
     if (!b) return '—';
+    // Prefer the server-allocated number (from the tenant billing config's
+    // prefix + running counter); fall back to a short-id for legacy bills.
+    if (b.invoiceNumber) return b.invoiceNumber;
     const shortId = b.id.replace(/-/g, '').slice(-8).toUpperCase();
     return `INV-${shortId}`;
   });
