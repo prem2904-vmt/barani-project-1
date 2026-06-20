@@ -899,7 +899,7 @@ export class ReportQueueComponent implements OnInit {
    *  rows, paragraphs, charts). */
   async downloadPdf(r: Report) {
     try {
-      const [{ generateReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+      const [{ generateReportPdf, buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
         import('../../../shared/utils/report-pdf'),
         import('../../../core/services/report-layout.service'),
         import('../../../core/services/platform.service'),
@@ -941,6 +941,16 @@ export class ReportQueueComponent implements OnInit {
       const baseInput = { report: r, resolvedLayouts, template: template ?? null };
       const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
       generateReportPdf({ ...baseInput, imageCache });
+
+      // Archive the rendered PDF to object storage (Spaces) so finished results
+      // are stored and the patient's QR-tracking page can serve the exact file.
+      // Best-effort — never affects the download.
+      try {
+        const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
+        const fd = new FormData();
+        fd.append('file', blob, `${r.id}.pdf`);
+        this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
+      } catch { /* archive is best-effort */ }
     } catch (err) {
       console.error('[reports] download failed', err);
       this.toasts.error('Could not download report');

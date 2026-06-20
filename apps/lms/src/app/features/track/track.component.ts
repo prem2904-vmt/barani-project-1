@@ -8,7 +8,7 @@ import { environment } from '../../../environments/environment';
 interface Stage { key: string; label: string; done: boolean; }
 interface TrackResult {
   org?: string; patient?: string; status?: string; rejected?: boolean;
-  timeline?: Stage[]; reportReady?: boolean; reportToken?: string;
+  timeline?: Stage[]; reportReady?: boolean; reportToken?: string; reportPdfUrl?: string;
 }
 
 /**
@@ -46,8 +46,8 @@ interface TrackResult {
               </li>
             }
           </ol>
-          @if (result()!.reportReady && result()!.reportToken) {
-            <a class="btn" [href]="reportUrl(result()!.reportToken!)" target="_blank" rel="noopener">View report</a>
+          @if (result()!.reportReady && (result()!.reportPdfUrl || result()!.reportToken)) {
+            <a class="btn" [href]="result()!.reportPdfUrl || reportUrl(result()!.reportToken!)" target="_blank" rel="noopener">View report</a>
           } @else {
             <p class="sub" style="margin-top:14px">Your report isn't ready yet. Scan again later.</p>
           }

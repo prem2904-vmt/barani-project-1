@@ -27,6 +27,8 @@ export interface InvoicePdfInput {
     email?: string;
     gstin?: string;
   };
+  /** Optional QR (PNG data URL) linking to the public result-tracking page. */
+  qrDataUrl?: string;
 }
 
 const A4 = { w: 595.28, h: 841.89 }; // pt — jsPDF default
@@ -36,7 +38,7 @@ const TEXT_PRIMARY = '#0f172a';
 const TEXT_MUTED = '#64748b';
 
 export function generateInvoicePdf(input: InvoicePdfInput) {
-  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {} } = input;
+  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl } = input;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   // ── Header ──────────────────────────────────────────────────
@@ -197,6 +199,17 @@ export function generateInvoicePdf(input: InvoicePdfInput) {
     doc.setTextColor(TEXT_PRIMARY);
     doc.text(`Estimated report: ${tatLabel.replace('≈', '~').replace('to report', '').trim() || tatLabel}`,
              MARGIN, ty);
+  }
+
+  // ── Result-tracking QR (bottom-left) ────────────────────────
+  if (qrDataUrl) {
+    const qrSize = 70;
+    const qrY = A4.h - 24 - qrSize - 14;
+    try { doc.addImage(qrDataUrl, 'PNG', MARGIN, qrY, qrSize, qrSize); } catch { /* bad data url */ }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(TEXT_MUTED);
+    doc.text('Scan to track your report', MARGIN, qrY + qrSize + 10);
   }
 
   doc.setFont('helvetica', 'italic');

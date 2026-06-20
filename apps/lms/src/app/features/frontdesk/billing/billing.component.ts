@@ -1702,16 +1702,26 @@ export class BillingComponent implements OnInit {
    *  totals, footer) and trigger a download. Built client-side with
    *  jsPDF so we don't need a server round-trip; the structured output
    *  is sharper and more usable than a window.print() screenshot. */
-  printInvoice() {
+  async printInvoice() {
     const b = this._bill();
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {
+      // Render the result-tracking link as a QR (PNG) for the printed invoice.
+      let qrDataUrl: string | undefined;
+      const url = this.trackUrl();
+      if (url) {
+        try {
+          const QRCode = (await import('qrcode')).default;
+          qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+        } catch { /* QR is best-effort */ }
+      }
       generateInvoicePdf({
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
         effectivePayable: this.effectivePayable(),
-        tatLabel: this.tatLabel()
+        tatLabel: this.tatLabel(),
+        qrDataUrl,
       });
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);
