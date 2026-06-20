@@ -27,21 +27,41 @@
       <h1 class="pf-auth__title">Sign in</h1>
 
       <label class="pf-auth__field">
-        <span class="pf-auth__field-label">Email</span>
+        <span class="pf-auth__field-label">Organization</span>
         <span class="pf-auth__field-row">
           <input class="pf-auth__field-input"
-                 type="email"
-                 inputmode="email"
+                 type="text"
+                 list="pf-orgs"
+                 autocapitalize="off"
+                 autocorrect="off"
+                 spellcheck="false"
+                 enterkeyhint="next"
+                 required
+                 [ngModel]="org()"
+                 (ngModelChange)="org.set($event); error.set(null)"
+                 name="org"
+                 placeholder="Your organization" />
+          <datalist id="pf-orgs">
+            @for (o of orgs(); track o) { <option [value]="o"></option> }
+          </datalist>
+        </span>
+      </label>
+
+      <label class="pf-auth__field">
+        <span class="pf-auth__field-label">Username</span>
+        <span class="pf-auth__field-row">
+          <input class="pf-auth__field-input"
+                 type="text"
                  autocomplete="username"
                  autocapitalize="off"
                  autocorrect="off"
                  spellcheck="false"
                  enterkeyhint="next"
                  required
-                 [ngModel]="email()"
-                 (ngModelChange)="email.set($event); error.set(null)"
-                 name="email"
-                 placeholder="you@lab.example" />
+                 [ngModel]="username()"
+                 (ngModelChange)="username.set($event); error.set(null)"
+                 name="username"
+                 placeholder="your username" />
         </span>
       </label>
 

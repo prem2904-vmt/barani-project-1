@@ -40,6 +40,22 @@ export class AuthService {
   readonly accessToken = computed(() => this._session()?.access_token ?? null);
   readonly permissions = computed(() => this._user()?.permissions ?? []);
 
+  // Forced-password-change gate: when true, the app routes to /set-password.
+  private readonly _mustChangePassword = signal(false);
+  readonly mustChangePassword = this._mustChangePassword.asReadonly();
+
+  // Remembered organizations for the login dropdown (most-recent first).
+  private static readonly ORGS_KEY = 'pf.orgs';
+  readonly rememberedOrgs = signal<string[]>(AuthService.loadOrgs());
+  private static loadOrgs(): string[] {
+    try { return JSON.parse(localStorage.getItem(AuthService.ORGS_KEY) ?? '[]'); } catch { return []; }
+  }
+  private rememberOrg(org: string): void {
+    const next = [org, ...this.rememberedOrgs().filter(o => o.toLowerCase() !== org.toLowerCase())].slice(0, 8);
+    this.rememberedOrgs.set(next);
+    try { localStorage.setItem(AuthService.ORGS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  }
+
   constructor() {
     // Restore session on startup and subscribe to auth changes. A 3s watchdog
     // guarantees the auth guard never hangs on a stalled Supabase call — if
@@ -113,43 +129,56 @@ export class AuthService {
     return codes.some(c => this.hasEffectivePermission(c));
   }
 
-  async signIn(email: string, password: string): Promise<void> {
-    const timed = <T>(label: string, p: Promise<T>, ms: number): Promise<T> => Promise.race([
-      p,
-      new Promise<never>((_, rej) => setTimeout(
-        () => rej(new Error(`${label} timed out after ${ms}ms`)),
-        ms
-      ))
-    ]);
-
-    // Sign-in path: direct POST to Supabase's token endpoint. The supabase-js
-    // SDK's signInWithPassword was reliably hanging on cold page loads (the
-    // lib spins up realtime + a Lock-based refresh pipeline that can stall),
-    // and we've got a clean REST endpoint anyway. We only use the SDK to
-    // publish the session via setSession so onAuthStateChange + token refresh
-    // still work downstream.
-    const t0 = performance.now();
-    const session = await this.directTokenFetch(email, password, 6000);
-    console.info('[auth] directTokenFetch', Math.round(performance.now() - t0), 'ms');
-
-    // Publish to the SDK (non-fatal if it hangs — we already have the token).
-    try {
-      await timed('setSession',
-        supabase.auth.setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token
-        }), 2000);
-    } catch {
-      console.warn('[auth] setSession hung — continuing with local session');
+  /**
+   * Tenant-scoped sign-in: (organization, username, password). The backend
+   * resolves the tenant + user and performs the Supabase password grant against
+   * the user's synthetic auth email, returning tokens + mustChangePassword.
+   */
+  async signIn(org: string, username: string, password: string): Promise<void> {
+    const res = await fetch(`${environment.apiUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org, username, password }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => null);
+    const data = json?.data;
+    if (!res.ok || !json?.success || !data?.accessToken) {
+      throw new Error(json?.error?.message || json?.message || 'Invalid organization, username or password.');
     }
 
-    // Publish the session locally BEFORE calling loadProfile so it uses the
-    // fast path (reads from _session signal, no SDK round-trip).
-    this._session.set(session);
+    const session = {
+      access_token: data.accessToken,
+      refresh_token: data.refreshToken,
+    } as Session;
 
-    const t1 = performance.now();
-    await timed('loadProfile (/api/auth/me)', this.loadProfile(), 6000);
-    console.info('[auth] loadProfile', Math.round(performance.now() - t1), 'ms');
+    // Publish to the SDK so refresh + onAuthStateChange keep working (non-fatal).
+    try {
+      await Promise.race([
+        supabase.auth.setSession({ access_token: data.accessToken, refresh_token: data.refreshToken }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('setSession timed out')), 2000)),
+      ]);
+    } catch { console.warn('[auth] setSession hung — continuing with local session'); }
+
+    this._session.set(session);
+    this._mustChangePassword.set(!!data.mustChangePassword);
+    this.rememberOrg(data.tenant?.name ?? org);
+    await this.loadProfile();
+  }
+
+  /** Set a new password (forced-change gate + self-service). Clears the gate. */
+  async changePassword(newPassword: string): Promise<void> {
+    const token = await this.getAccessToken();
+    const res = await fetch(`${environment.apiUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ newPassword }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error?.message || json?.message || 'Could not update password.');
+    }
+    this._mustChangePassword.set(false);
   }
 
   /**

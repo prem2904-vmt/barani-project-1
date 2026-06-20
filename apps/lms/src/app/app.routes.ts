@@ -1,5 +1,7 @@
-import { Route } from '@angular/router';
+import { inject } from '@angular/core';
+import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { workflowGuard } from './core/auth/workflow.guard';
@@ -8,10 +10,29 @@ import { ShellComponent } from './layout/shell/shell.component';
 const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
 const adminGuard = permissionGuard(ADMIN_PERMS);
 
+// Gate for /set-password: must be signed in, and only relevant while a
+// password change is actually owed. Bounces signed-out users to /login and
+// already-settled users back to the app root (so the page can't be revisited).
+const setPasswordGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.waitForAuth();
+  if (!auth.isAuthenticated()) return router.createUrlTree(['/login']);
+  if (!auth.mustChangePassword()) return router.createUrlTree(['/']);
+  return true;
+};
+
 export const appRoutes: Route[] = [
   {
     path: 'login',
     loadComponent: () => import('./features/login/login.component').then(m => m.LoginComponent)
+  },
+  {
+    // Forced-password-change gate — top-level (outside the shell) so the rest
+    // of the app stays blocked until the temporary password is replaced.
+    path: 'set-password',
+    canActivate: [setPasswordGuard],
+    loadComponent: () => import('./features/set-password/set-password.component').then(m => m.SetPasswordComponent)
   },
   {
     path: '',

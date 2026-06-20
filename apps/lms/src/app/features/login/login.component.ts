@@ -38,11 +38,15 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private readonly platform = inject(PlatformService);
 
-  protected readonly email = signal('');
+  protected readonly org = signal(this.auth.rememberedOrgs()[0] ?? '');
+  protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly showPassword = signal(false);
+
+  /** Previously-used organizations for the login dropdown. */
+  protected readonly orgs = this.auth.rememberedOrgs;
 
   /** True when running inside Capacitor (iOS/Android), false on web. */
   protected readonly isNative = computed(() => this.platform.isCapacitor());
@@ -60,7 +64,7 @@ export class LoginComponent {
   });
 
   protected canSubmit(): boolean {
-    return this.email().trim().length > 3 && this.password().length >= 1;
+    return this.org().trim().length >= 1 && this.username().trim().length >= 1 && this.password().length >= 1;
   }
 
   private canVisit(url: string): boolean {
@@ -80,14 +84,15 @@ export class LoginComponent {
     // even if the network step hangs. Visible in Xcode's console
     // when running on simulator/device.
     console.info('[login] submit', {
-      hasEmail: this.email().length > 0,
+      hasOrg: this.org().length > 0,
+      hasUsername: this.username().length > 0,
       hasPassword: this.password().length > 0,
       native: this.isNative(),
       api: environment.apiUrl
     });
 
     if (!this.canSubmit()) {
-      this.error.set('Enter your email and password to continue.');
+      this.error.set('Enter your organization, username and password to continue.');
       return;
     }
 
@@ -95,12 +100,18 @@ export class LoginComponent {
     this.busy.set(true);
     try {
       await Promise.race([
-        this.auth.signIn(this.email().trim(), this.password()),
+        this.auth.signIn(this.org().trim(), this.username().trim(), this.password()),
         new Promise<never>((_, rej) => setTimeout(
           () => rej(new Error('Sign-in timed out — check your connection')),
           15_000
         ))
       ]);
+
+      // First login (or after an admin reset): force a password change.
+      if (this.auth.mustChangePassword()) {
+        await this.router.navigateByUrl('/set-password');
+        return;
+      }
 
       // Route by permission — first match wins. Honor returnUrl only if the
       // user can actually enter it; otherwise fall through to ROLE_LANDINGS.
@@ -137,7 +148,7 @@ export class LoginComponent {
     }
     // Supabase password errors land with a 400/401 status
     if (msg.includes('Invalid login credentials') || msg.includes('400')) {
-      return 'Wrong email or password. Try again.';
+      return 'Wrong organization, username or password. Try again.';
     }
     if (msg.includes('401')) {
       return 'Session expired. Try again.';
