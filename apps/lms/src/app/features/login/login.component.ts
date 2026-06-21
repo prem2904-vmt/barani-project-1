@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
@@ -40,6 +40,7 @@ export class LoginComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly platform = inject(PlatformService);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly org = signal(this.auth.rememberedOrgs()[0] ?? '');
   protected readonly username = signal('');
@@ -47,6 +48,17 @@ export class LoginComponent {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly showPassword = signal(false);
+
+  constructor() {
+    // Credentials-email deep link (…/login?org=<slug>&username=<u>): pre-fill
+    // org + username so the admin only enters the temp password, then the
+    // mustChangePassword gate routes them to /set-password.
+    const qp = this.route.snapshot.queryParamMap;
+    const org = qp.get('org');
+    const username = qp.get('username');
+    if (org) this.org.set(org);
+    if (username) this.username.set(username);
+  }
 
   /** Previously-used organizations for the login dropdown. */
   protected readonly orgs = this.auth.rememberedOrgs;

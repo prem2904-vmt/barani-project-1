@@ -1247,6 +1247,26 @@ html[data-theme="light"] .pf-vial__outline {
     size: A4 portrait;
     margin: 12mm;
   }
+
+  /* ── Label-only printing ──────────────────────────────────────────
+     When a screen prints a small barcode/QR label it adds
+     `pf-printing-label` to <body> and marks the label container with
+     `.pf-print-label`. Everything else is hidden so ONLY the label (the
+     code) lands on paper — used by the Stores desk, Admin Inventory and
+     the sample tube labels. Scoped to the body class so report/invoice
+     printing (which uses `.pf-printable`) is unaffected. */
+  body.pf-printing-label * { visibility: hidden !important; }
+  body.pf-printing-label .pf-print-label,
+  body.pf-printing-label .pf-print-label * { visibility: visible !important; }
+  body.pf-printing-label .pf-print-label {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    background: #ffffff !important;
+  }
 }
 /* ─────────────────────────────────────────────────────────────────
    MOBILE FOUNDATION

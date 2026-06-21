@@ -110,21 +110,32 @@ export class SidebarComponent {
   // public-to-staff items.
   private readonly sections: NavSection[] = [
     {
+      // Ordered by the same relevance taxonomy as the /admin/manage hub:
+      // Overview · (Catalog) · (People) · (Organization) · (Finance) · (Automation).
       title: 'Admin',
       links: [
-        { label: 'Dashboard',         href: '/admin',                icon: '🏠', perms: ADMIN_PERMS },
+        { label: 'Overview',          href: '/admin',                icon: '📈', perms: ADMIN_PERMS },
+        { label: 'Manage settings',   href: '/admin/manage',         icon: '🗂️', perms: ADMIN_PERMS },
+        // Catalog
+        { label: 'Tests & Packages',  href: '/admin/tests',          icon: '🧪', perms: ['manage_tests'] },
+        { label: 'Inventory',         href: '/admin/inventory',      icon: '📦', perms: ['manage_inventory'] },
+        { label: 'Report Template',   href: '/admin/reports',        icon: '📄', perms: ['manage_tests'] },
+        // People & Access
         { label: 'Users & Access',    href: '/admin/users',          icon: '👥', perms: ['manage_users'] },
-        { label: 'Tests',             href: '/admin/tests',          icon: '🧪', perms: ['manage_tests'] },
+        { label: 'Audit trail',       href: '/admin/audit',          icon: '🧾', perms: ['view_audit_log'] },
+        // Branches & Organization
         { label: 'Branches',          href: '/admin/branches',       icon: '🏢', perms: ['manage_branches'] },
         { label: 'Lab Settings',      href: '/admin/lab-settings',   icon: '⚙️', perms: ['manage_lab_settings', 'manage_branches'] },
+        { label: 'Appointments',      href: '/admin/appointments',   icon: '📅', perms: ['manage_branches', 'manage_tenant'] },
+        { label: 'Referring Network', href: '/admin/referring-network', icon: '🏥', perms: ['manage_tenant'] },
+        // Billing & Finance
         { label: 'Billing Config',    href: '/admin/billing',        icon: '💳', perms: ['manage_branches', 'manage_tenant'] },
-        { label: 'Report Template',   href: '/admin/reports',        icon: '📄', perms: ['manage_tests'] },
-        { label: 'Notifications',     href: '/admin/notifications',  icon: '🔔', perms: ['manage_tenant', 'manage_branches'] },
-        { label: 'Workflows',         href: '/admin/workflows',      icon: '🔧', perms: ['manage_workflows'] },
-        { label: 'KPI cards',         href: '/admin/kpis',           icon: '📊', perms: ['manage_tenant', 'manage_branches'] },
         { label: 'Vendor Wallets',    href: '/admin/vendors',        icon: '💼', perms: ['manage_tenant'] },
-        // Catalog + per-test BOM config (distinct from the operational Stores desk below).
-        { label: 'Inventory Catalog', href: '/admin/inventory',      icon: '📦', perms: ['manage_inventory'] }
+        // Workflow & Automation
+        { label: 'Process builder',   href: '/admin/process',        icon: '🔀', perms: ['manage_workflows'] },
+        { label: 'Form Flows',        href: '/admin/workflows',      icon: '🔧', perms: ['manage_workflows'] },
+        { label: 'Notifications',     href: '/admin/notifications',  icon: '🔔', perms: ['manage_tenant', 'manage_branches'] },
+        { label: 'KPI cards',         href: '/admin/kpis',           icon: '📊', perms: ['manage_tenant', 'manage_branches'] },
       ]
     },
     {
@@ -179,7 +190,9 @@ export class SidebarComponent {
       title: 'Inventory',
       links: [
         { label: 'Stores',            href: '/stores',               icon: '📦',
-          perms: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'] }
+          perms: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
+          // The Lab Settings master switch governs whether the desk appears.
+          visible: () => this.labCfg.inventoryEnabled() }
       ]
     },
     {

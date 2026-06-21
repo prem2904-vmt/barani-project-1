@@ -284,6 +284,22 @@ export class OrderCreateComponent implements OnInit {
     const pid = this.route.snapshot.queryParamMap.get('patientId');
     const fromOrderId = this.route.snapshot.queryParamMap.get('fromOrderId');
     const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
+
+    // EDIT mode: load the existing order, attach its patient, and pre-fill its
+    // current tests for add/remove. Saving PATCHes the order (not create).
+    const editOrderId = this.route.snapshot.queryParamMap.get('editOrderId');
+    if (editOrderId) {
+      this.editOrderId.set(editOrderId);
+      this.api.get<Order>(`/api/orders/${editOrderId}`).subscribe({
+        next: o => {
+          if (o?.patient) this._patient.set(o.patient);
+          this.preselectFromOrder(o as unknown as HistoryRow, true);
+        },
+        error: () => this.toasts.error('Could not load order')
+      });
+      return;
+    }
+
     if (pid) {
       this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
         next: res => {
@@ -386,7 +402,11 @@ export class OrderCreateComponent implements OnInit {
    * what carried over and what was dropped so the user has a clear
    * audit trail.
    */
-  private preselectFromOrder(prior: HistoryRow) {
+  /** Set when the screen is editing an existing order (?editOrderId=…) rather
+   *  than creating a new one. Drives the submit button + PATCH-vs-POST. */
+  readonly editOrderId = signal<string | null>(null);
+
+  private preselectFromOrder(prior: HistoryRow, isEdit = false) {
     const want = new Set<string>();
     for (const s of prior.samples ?? []) {
       for (const t of s.tests ?? []) {
@@ -408,7 +428,9 @@ export class OrderCreateComponent implements OnInit {
       const date = new Date(prior.createdAt);
       const human = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
       const dropped = want.size - ids.length;
-      if (dropped > 0) {
+      if (isEdit) {
+        this.toasts.info(`Editing order — ${ids.length} test${ids.length === 1 ? '' : 's'} loaded. Add or remove, then Update.`);
+      } else if (dropped > 0) {
         this.toasts.warning(`Repeated from ${human}: ${ids.length} carried over, ${dropped} no longer available`);
       } else {
         this.toasts.success(`Repeated from ${human}: ${ids.length} test${ids.length === 1 ? '' : 's'} added`);
@@ -521,6 +543,24 @@ export class OrderCreateComponent implements OnInit {
   submit() {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
+
+    // EDIT mode → PATCH the existing order's tests; the bill recomputes server-
+    // side and we route to billing to collect-the-difference / refund.
+    const editId = this.editOrderId();
+    if (editId) {
+      this._saving.set(true);
+      this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
+        testIds: this._selected(), reason: 'reception edit'
+      }).subscribe({
+        next: () => {
+          this._saving.set(false);
+          this.toasts.success('Order updated — reconcile payment');
+          this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: editId } });
+        },
+        error: e => { this._saving.set(false); this.toasts.error(e?.error?.error?.message ?? e?.message ?? 'Update failed'); }
+      });
+      return;
+    }
 
     // If we arrived from an appointment check-in (?appointmentId=…),
     // tag the order so it traces back. Source flips to 'appointment'

@@ -107,16 +107,28 @@ export class PostPaymentComponent implements OnInit {
   printOne(s: OrderSample) {
     this._printed.update(p => new Set([...p, s.id]));
     this._printingIds.set(new Set([s.id]));
-    window.addEventListener('afterprint', () => this._printingIds.set(new Set()), { once: true });
-    setTimeout(() => window.print(), 50);
+    this.runLabelPrint();
   }
 
   printSelected() {
     const ids = [...this._selected()];
     this._printed.update(p => new Set([...p, ...ids]));
     this._printingIds.set(new Set(ids));
-    window.addEventListener('afterprint', () => this._printingIds.set(new Set()), { once: true });
+    this.runLabelPrint();
+  }
+
+  /** Print only the selected tube labels — `pf-printing-label` makes the global
+   *  print stylesheet hide everything except the `.pf-print-label` grid. */
+  private runLabelPrint() {
+    document.body.classList.add('pf-printing-label');
+    const done = () => {
+      this._printingIds.set(new Set());
+      document.body.classList.remove('pf-printing-label');
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
     setTimeout(() => window.print(), 50);
+    setTimeout(done, 2000);
   }
 
   printReceipt() { this.toasts.success('Receipt print · coming soon'); }

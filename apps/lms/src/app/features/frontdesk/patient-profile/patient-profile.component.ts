@@ -291,6 +291,17 @@ export class PatientProfileComponent implements OnInit {
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
 
+  // ── Real KPIs derived from the patient's actual lab history ─────────
+  readonly realVisits = computed(() => this.history().length);
+  readonly realTotalSpent = computed(() =>
+    this.history().reduce((sum, o) => sum + (o.totalAmount ?? 0), 0));
+  readonly realTestsDone = computed(() =>
+    this.history().reduce((sum, o) => sum + this.orderTests(o).length, 0));
+  readonly realLastVisit = computed(() => {
+    const times = this.history().map(o => new Date(o.createdAt).getTime()).filter(n => !isNaN(n));
+    return times.length ? new Date(Math.max(...times)).toISOString() : null;
+  });
+
   ngOnInit() {
     this.route.paramMap.subscribe(map => {
       const id = map.get('id');

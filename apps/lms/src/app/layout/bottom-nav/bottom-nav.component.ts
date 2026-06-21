@@ -991,6 +991,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
       if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
+      // Inventory work area only appears when the branch has it enabled.
+      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
       // Hide a nav item whose action is switched off in /admin/process.
       if (i.action && !this.process.isEnabled(i.action)) return false;
       return true;
@@ -1006,7 +1008,17 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
-  readonly primary = computed(() => menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV));
+  readonly primary = computed(() => this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)));
+
+  /** Workflow-derived nav has no Stores work area; append it when inventory is
+   *  enabled and the user can use it (idempotent vs the PRIMARY_NAV fallback). */
+  private withInventory(items: NavItem[]): NavItem[] {
+    if (!this.labCfg.inventoryEnabled()) return items;
+    if (items.some(i => i.id === 'stores' || i.href === '/stores')) return items;
+    const inv = PRIMARY_NAV.find(i => i.id === 'stores');
+    if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;
+    return [...items, inv];
+  }
   /** More-popover items. On mobile/iPad the desktop top-strip is
    *  hidden (`xl:flex`), so the new top-strip Admin icon isn't
    *  reachable there. We prepend ADMIN_NAV into More so admins on

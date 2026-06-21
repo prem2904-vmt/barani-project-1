@@ -24,7 +24,17 @@ export interface Bill {
   status: string;
   items: BillItem[];
   payments?: BillPayment[];
+  refunds?: BillRefund[];
   createdAt: string;
+}
+
+export interface BillRefund {
+  id: string;
+  billId: string;
+  amount: number;
+  mode: string;
+  reason?: string;
+  refundedAt: string;
 }
 
 export interface BillItem {

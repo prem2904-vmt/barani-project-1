@@ -1,7 +1,9 @@
 import { Location } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
@@ -103,7 +105,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           <button actions type="button" class="pf-toolbar-btn pf-toolbar-btn--ghost pf-no-print"
                   (click)="discardDraft()" title="Discard saved draft">Discard</button>
         }
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+        <button actions type="button" class="pf-toolbar-btn pf-toolbar-btn--ghost pf-no-print"
+                (click)="cancel()" title="Leave without collecting payment">
+          Cancel
+        </button>
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()"
+                      [title]="paid() ? 'Back' : 'Back to the order to add or remove tests'">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m15 18-6-6 6-6"/>
@@ -123,18 +130,24 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
                   <p class="pf-bill-no">{{ invoiceNumber() }}</p>
-                  @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
-                    <div style="margin-top:10px;display:flex;align-items:center;gap:9px">
-                      <span style="width:62px;height:62px;display:inline-block">
-                        <pf-barcode-display [code]="trackUrl()" [showValue]="false"></pf-barcode-display>
-                      </span>
-                      <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Scan to track<br/>your report online</span>
+                  <div style="margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                    <!-- Invoice-number barcode (Code128) for counter scanning -->
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <pf-barcode-display [code]="invoiceNumber()" mode="barcode" [size]="40" [bare]="true" [showValue]="false"></pf-barcode-display>
+                      <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Invoice<br/>barcode</span>
                     </div>
-                  }
+                    <!-- Result-tracking QR for the patient's phone -->
+                    @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
+                      <div style="display:flex;align-items:center;gap:9px">
+                        <pf-barcode-display [code]="trackUrl()" mode="qr" [size]="56" [bare]="true" [showValue]="false"></pf-barcode-display>
+                        <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Scan to track<br/>your report online</span>
+                      </div>
+                    }
+                  </div>
                 </div>
                 <div class="flex items-center gap-3">
                   <button type="button" class="pf-bill-print-icon pf-no-print"
-                          (click)="printInvoice()" aria-label="Download invoice PDF" title="Download invoice PDF">
+                          (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
@@ -200,9 +213,34 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 </div>
                 <div class="pf-bill-line pf-bill-line--total">
                   <span>Total</span>
-                  <span class="tabular-nums">{{ effectivePayable() | inr }}</span>
+                  <span class="tabular-nums">{{ fullTotal() | inr }}</span>
                 </div>
+                @if (alreadyPaid() > 0) {
+                  <div class="pf-bill-line">
+                    <span>Already paid</span>
+                    <span class="tabular-nums">− {{ alreadyPaid() | inr }}</span>
+                  </div>
+                  <div class="pf-bill-line pf-bill-line--total">
+                    <span>{{ refundDue() > 0 ? 'Refund due' : 'Balance due' }}</span>
+                    <span class="tabular-nums">{{ (refundDue() > 0 ? refundDue() : effectivePayable()) | inr }}</span>
+                  </div>
+                }
               </div>
+
+              @if (refundDue() > 0) {
+                <div class="pf-refund">
+                  <p class="pf-refund__title">Overpaid by {{ refundDue() | inr }} — record a refund</p>
+                  <div class="pf-refund__modes">
+                    @for (m of refundModeDefs; track m.key) {
+                      <button type="button" class="pf-refund__chip" [class.pf-refund__chip--on]="refundMode() === m.key"
+                              (click)="refundMode.set(m.key)">{{ m.label }}</button>
+                    }
+                  </div>
+                  <button type="button" class="pf-refund__btn" [disabled]="refunding()" (click)="doRefund()">
+                    {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
+                  </button>
+                </div>
+              }
 
               @if (tatLabel()) {
                 <p class="pf-bill-tat-inline">
@@ -1214,6 +1252,18 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-wallet-change:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+    /* ── Refund panel (overpaid after a modify) ─────────────── */
+    .pf-refund { margin-top: 14px; padding: 14px; border-radius: 12px;
+      border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08); }
+    .pf-refund__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #fcd34d; }
+    .pf-refund__modes { display: flex; gap: 8px; margin-bottom: 10px; }
+    .pf-refund__chip { flex: 1; padding: 8px 0; border-radius: 9px; font-weight: 700; font-size: 12.5px;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: var(--glass-bg, rgba(255,255,255,0.03)); color: var(--text-secondary, rgba(255,255,255,0.72)); cursor: pointer; }
+    .pf-refund__chip--on { background: linear-gradient(135deg, #f59e0b, #fbbf24); border-color: transparent; color: #1a1a1a; }
+    .pf-refund__btn { width: 100%; padding: 11px; border-radius: 11px; border: 0; font-weight: 700;
+      background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #1a1a1a; cursor: pointer; }
+    .pf-refund__btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
     /* ── Print stylesheet ────────────────────────────────────
      * Print invoice button calls window.print(). Hide non-invoice
      * UI so the patient's paper / PDF copy is just the invoice. */
@@ -1227,6 +1277,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
 })
 export class BillingComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -1303,11 +1354,39 @@ export class BillingComponent implements OnInit {
     const base = b.subTotal + b.totalTax;
     return Math.max(0, Math.min(base, Math.round((base * raw) / 100)));
   });
-  readonly effectivePayable = computed(() => {
+  /** The full invoice total after the reception discount (no payments applied). */
+  readonly fullTotal = computed(() => {
     const b = this._bill();
     if (!b) return 0;
     return Math.max(0, b.totalPayable - this.discountNum());
   });
+  /** Amount already collected (payments − refunds), from the loaded bill. */
+  readonly alreadyPaid = computed(() => this._bill()?.totalPaid ?? 0);
+  /** Outstanding to collect — the difference after prior payments. */
+  readonly effectivePayable = computed(() => Math.max(0, this.fullTotal() - this.alreadyPaid()));
+  /** Overpayment to refund (e.g. a test was removed after the bill was paid). */
+  readonly refundDue = computed(() => Math.max(0, this.alreadyPaid() - this.fullTotal()));
+
+  readonly refundModeDefs = [{ key: 'cash', label: 'Cash' }, { key: 'upi', label: 'UPI' }, { key: 'card', label: 'Card' }];
+  readonly refundMode = signal('cash');
+  readonly refunding = signal(false);
+
+  /** Record a refund for the overpaid amount against this bill. */
+  doRefund() {
+    const b = this._bill();
+    const amt = this.refundDue();
+    if (!b || amt <= 0 || this.refunding()) return;
+    this.refunding.set(true);
+    this.api.post<Bill>(`/api/billing/${b.id}/refund`, { amount: amt, mode: this.refundMode(), reason: 'order modified — test removed' })
+      .subscribe({
+        next: updated => {
+          this.refunding.set(false);
+          this._bill.set(updated);
+          this.toasts.success(`Refunded ${amt}`);
+        },
+        error: e => { this.refunding.set(false); this.toasts.error(e?.error?.error?.message ?? 'Refund failed'); }
+      });
+  }
   readonly cashAmountNum = computed(() => {
     const n = parseInt(this._cash() || '0', 10);
     return Number.isNaN(n) ? 0 : n;
@@ -1701,6 +1780,10 @@ export class BillingComponent implements OnInit {
     else this.router.navigateByUrl('/frontdesk');
   }
 
+  /** Leave the collect-payment screen without taking payment. The order itself
+   *  is already saved; this just abandons billing and returns to the desk. */
+  cancel() { this.router.navigateByUrl('/frontdesk'); }
+
   /** Generate a properly-formatted A4 invoice PDF (header, items table,
    *  totals, footer) and trigger a download. Built client-side with
    *  jsPDF so we don't need a server round-trip; the structured output
@@ -1710,15 +1793,28 @@ export class BillingComponent implements OnInit {
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {
       const tpl = this.invoiceTpl();
-      // Render the result-tracking link as a QR (PNG) for the printed invoice —
-      // unless the tenant turned tracking QR off in the invoice template.
+      // Render the result-tracking link as a QR (PNG) for the printed invoice.
+      // Always attempt it — if the token wasn't minted yet at page-load (async
+      // race), fetch it inline now rather than dropping the QR silently.
       let qrDataUrl: string | undefined;
-      const url = this.trackUrl();
-      if (url && tpl?.showTrackingQr !== false) {
+      let token = this.trackToken();
+      if (!token) {
+        const oid = this._order()?.id ?? this.route.snapshot.queryParamMap.get('orderId');
+        if (oid) {
+          try {
+            const r = await firstValueFrom(this.api.get<{ token: string }>(`/api/orders/${oid}/track-token`));
+            if (r?.token) { token = r.token; this.trackToken.set(r.token); }
+          } catch { /* fall through — handled below */ }
+        }
+      }
+      if (token) {
         try {
+          const url = `${window.location.origin}/track/${token}`;
           const QRCode = (await import('qrcode')).default;
           qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
         } catch { /* QR is best-effort */ }
+      } else {
+        this.toasts.warning('Invoice ready, but the tracking QR could not be generated.');
       }
       // Document title: explicit mode, else auto from whether the bill carries tax
       // (most diagnostic services are GST-exempt → Bill of Supply).
@@ -1734,11 +1830,13 @@ export class BillingComponent implements OnInit {
         tatLabel: this.tatLabel(),
         qrDataUrl,
         docTitle,
-        practice: tpl ? {
-          name: tpl.labName || undefined, address: tpl.address || undefined,
-          phone: tpl.phone || undefined, email: tpl.email || undefined,
-          gstin: tpl.showGstin === false ? undefined : (tpl.gstin || undefined),
-        } : undefined,
+        practice: {
+          name: ((tpl?.labName) || this.auth.user()?.tenantName) || undefined,
+          address: tpl?.address || undefined,
+          phone: tpl?.phone || undefined, email: tpl?.email || undefined,
+          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+        },
+        action: 'print',
       });
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);
@@ -1755,7 +1853,7 @@ export class BillingComponent implements OnInit {
     const p = this._order()?.patient;
     if (!b) return;
     const lines = [
-      `Hi ${p?.displayName ?? ''}, your invoice from Prefrontal Lab:`,
+      `Hi ${p?.displayName ?? ''}, your invoice from ${this.auth.user()?.tenantName || 'our lab'}:`,
       `${this.invoiceNumber()} — Paid ₹${b.totalPayable}`,
     ];
     const tat = this.tatLabel();

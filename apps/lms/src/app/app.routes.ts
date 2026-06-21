@@ -54,6 +54,13 @@ export const appRoutes: Route[] = [
       {
         path: 'admin',
         canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
+      },
+      {
+        // The settings hub (relevance-grouped tiles) — reached from the
+        // overview's "Manage settings" + the sidebar "Manage" link.
+        path: 'admin/manage',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       },
       {

@@ -10,6 +10,9 @@ export interface BranchLabConfig {
   allowManualOverride: boolean;
   collectionMode: CollectionMode;
   billingMode: BillingMode;
+  /** Per-branch master switch for the inventory/Stores work area. When false
+   *  the Stores nav entry is hidden even for users holding inventory perms. */
+  inventoryEnabled?: boolean;
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

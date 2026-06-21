@@ -31,6 +31,12 @@ export interface InvoicePdfInput {
   qrDataUrl?: string;
   /** Document title — "TAX INVOICE" (default) or "BILL OF SUPPLY". */
   docTitle?: string;
+  /** 'save' downloads the PDF (default); 'print' opens the browser print
+   *  dialog (cancelable) via a hidden iframe; 'view' opens the PDF in a new
+   *  tab to read (with the browser's own download/print controls); 'blob'
+   *  renders the PDF and RETURNS its object-URL so the caller can embed it in
+   *  an in-app preview (no new tab/popup) — caller owns revoking the URL. */
+  action?: 'save' | 'print' | 'view' | 'blob';
 }
 
 const A4 = { w: 595.28, h: 841.89 }; // pt — jsPDF default
@@ -39,8 +45,8 @@ const ACCENT = '#8b5cf6';
 const TEXT_PRIMARY = '#0f172a';
 const TEXT_MUTED = '#64748b';
 
-export function generateInvoicePdf(input: InvoicePdfInput) {
-  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl, docTitle } = input;
+export function generateInvoicePdf(input: InvoicePdfInput): string | void {
+  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl, docTitle, action = 'save' } = input;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   // ── Header ──────────────────────────────────────────────────
@@ -66,18 +72,29 @@ export function generateInvoicePdf(input: InvoicePdfInput) {
     cursorY += 12;
   }
 
-  // Right-aligned: "INVOICE" badge + number + date
+  // Right-aligned: document-title pill + number + date
+  const title = (docTitle ?? 'TAX INVOICE').toUpperCase();
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(ACCENT);
-  doc.text(docTitle ?? 'TAX INVOICE', A4.w - MARGIN, 50, { align: 'right' });
+  doc.setFontSize(10);
+  const pillTextW = doc.getTextWidth(title);
+  const pillPadX = 10;
+  const pillW = pillTextW + pillPadX * 2;
+  const pillH = 20;
+  const pillX = A4.w - MARGIN - pillW;
+  const pillY = 36;
+  doc.setFillColor(ACCENT);
+  doc.roundedRect(pillX, pillY, pillW, pillH, 4, 4, 'F');
+  doc.setTextColor('#ffffff');
+  doc.text(title, pillX + pillW / 2, pillY + 13.5, { align: 'center' });
 
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(TEXT_PRIMARY);
+  doc.text(invoiceNumber, A4.w - MARGIN, pillY + pillH + 16, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.setTextColor(TEXT_PRIMARY);
-  doc.text(invoiceNumber, A4.w - MARGIN, 66, { align: 'right' });
   doc.setTextColor(TEXT_MUTED);
-  doc.text(formatDate(bill.createdAt), A4.w - MARGIN, 80, { align: 'right' });
+  doc.text(formatDate(bill.createdAt), A4.w - MARGIN, pillY + pillH + 30, { align: 'right' });
 
   // Divider
   doc.setDrawColor('#e2e8f0');
@@ -203,15 +220,23 @@ export function generateInvoicePdf(input: InvoicePdfInput) {
              MARGIN, ty);
   }
 
-  // ── Result-tracking QR (bottom-left) ────────────────────────
+  // ── Result-tracking QR (bottom-left, framed card) ───────────
   if (qrDataUrl) {
-    const qrSize = 70;
-    const qrY = A4.h - 24 - qrSize - 14;
-    try { doc.addImage(qrDataUrl, 'PNG', MARGIN, qrY, qrSize, qrSize); } catch { /* bad data url */ }
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(TEXT_MUTED);
-    doc.text('Scan to track your report', MARGIN, qrY + qrSize + 10);
+    const qrSize = 64;
+    const pad = 8;
+    const cardW = qrSize + pad * 2;
+    const cardH = qrSize + pad * 2 + 14;
+    const cardX = MARGIN;
+    const cardY = A4.h - 30 - cardH;
+    doc.setFillColor('#ffffff');
+    doc.setDrawColor('#e2e8f0');
+    doc.setLineWidth(0.6);
+    doc.roundedRect(cardX, cardY, cardW, cardH, 5, 5, 'FD');
+    try { doc.addImage(qrDataUrl, 'PNG', cardX + pad, cardY + pad, qrSize, qrSize); } catch { /* bad data url */ }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(ACCENT);
+    doc.text('SCAN TO TRACK YOUR REPORT', cardX + cardW / 2, cardY + cardH - 7, { align: 'center' });
   }
 
   doc.setFont('helvetica', 'italic');
@@ -220,7 +245,41 @@ export function generateInvoicePdf(input: InvoicePdfInput) {
   doc.text('This is a computer-generated invoice. No physical signature required.',
            A4.w / 2, A4.h - 24, { align: 'center' });
 
-  // ── Save ────────────────────────────────────────────────────
+  // ── Output ──────────────────────────────────────────────────
+  if (action === 'blob') {
+    // Render and hand back the object-URL so the caller can show the PDF in an
+    // in-app preview (iframe) rather than spawning a browser tab/popup.
+    return doc.output('bloburl') as unknown as string;
+  }
+  if (action === 'view') {
+    // Open the rendered PDF in a new tab to view (with the browser's built-in
+    // download/print controls). No forced download.
+    const blobUrl = doc.output('bloburl') as unknown as string;
+    window.open(blobUrl, '_blank');
+    return;
+  }
+  if (action === 'print') {
+    // Open the browser print dialog (cancelable) without downloading: load the
+    // PDF blob into an off-screen iframe and call print() on it. Falls back to
+    // opening the blob in a new tab if the iframe is blocked.
+    const blobUrl = doc.output('bloburl') as unknown as string;
+    const frame = document.createElement('iframe');
+    frame.style.position = 'fixed';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.width = '0';
+    frame.style.height = '0';
+    frame.style.border = '0';
+    frame.src = blobUrl;
+    frame.onload = () => {
+      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
+      catch { window.open(blobUrl, '_blank'); }
+      // Leave the frame mounted long enough for the dialog to read the doc.
+      setTimeout(() => frame.remove(), 60_000);
+    };
+    document.body.appendChild(frame);
+    return;
+  }
   doc.save(`${invoiceNumber}.pdf`);
 }
 

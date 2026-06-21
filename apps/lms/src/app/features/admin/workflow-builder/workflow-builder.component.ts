@@ -141,12 +141,10 @@ interface HistoryRow {
             <ul cdkDropList (cdkDropListDropped)="onStepDrop($event)" class="p-2 space-y-1.5">
               @for (s of wf.steps; track s.id) {
                 <li cdkDrag
-                    [cdkDragDisabled]="s.isStandard"
                     class="pf-step-item group"
                     [class.pf-step-selected]="builder.selectedStepId() === s.id"
                     (click)="builder.selectStep(s.id)">
-                  <span class="pf-drag-handle" cdkDragHandle
-                        [class.pf-drag-locked]="s.isStandard" aria-hidden="true">
+                  <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                       <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
                       <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
@@ -157,22 +155,13 @@ interface HistoryRow {
                     <p class="text-[13px] font-medium truncate" [attr.title]="s.title" style="color: var(--text-primary);">{{ s.title }}</p>
                     <p class="text-[11px] font-mono" style="color: var(--text-muted);">{{ s.type }} · {{ s.fields.length }} fields</p>
                   </div>
-                  @if (s.isStandard) {
-                    <span class="pf-lock" aria-label="Standard step">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect width="18" height="11" x="3" y="11" rx="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                      </svg>
-                    </span>
-                  } @else {
-                    <button type="button" class="pf-step-delete opacity-0 group-hover:opacity-100"
-                            (click)="$event.stopPropagation(); deleteStep(s.id)" aria-label="Delete step">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 6 6 18"/>
-                        <path d="m6 6 12 12"/>
-                      </svg>
-                    </button>
-                  }
+                  <button type="button" class="pf-step-delete opacity-0 group-hover:opacity-100"
+                          (click)="$event.stopPropagation(); deleteStep(s.id)" aria-label="Delete step">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18"/>
+                      <path d="m6 6 12 12"/>
+                    </svg>
+                  </button>
                 </li>
               }
             </ul>
@@ -195,7 +184,6 @@ interface HistoryRow {
                     <label class="pf-label">Name</label>
                     <input type="text" class="pf-input font-mono"
                           [ngModel]="step.name"
-                          [readonly]="step.isStandard"
                           (ngModelChange)="builder.updateStep(step.id, { name: $event })" />
                   </div>
                 </div>
@@ -205,7 +193,6 @@ interface HistoryRow {
                     <pf-select
                       [options]="stepTypeSelectOptions"
                       [value]="step.type"
-                      [disabled]="step.isStandard"
                       (valueChange)="builder.updateStep(step.id, { type: $any($event) })"></pf-select>
                   </div>
                   <div class="pf-toggle-row">
@@ -234,10 +221,9 @@ interface HistoryRow {
                   <ul cdkDropList (cdkDropListDropped)="onFieldDrop(step.id, $event)"
                       class="space-y-1.5">
                     @for (f of step.fields; track f.id) {
-                      <li cdkDrag [cdkDragDisabled]="f.isStandard"
+                      <li cdkDrag
                           class="pf-field-item group">
-                        <span class="pf-drag-handle" cdkDragHandle
-                              [class.pf-drag-locked]="f.isStandard" aria-hidden="true">
+                        <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
                             <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
@@ -258,14 +244,6 @@ interface HistoryRow {
                           </p>
                         </div>
                         <div class="flex items-center gap-1">
-                          @if (f.isStandard) {
-                            <span class="pf-lock" aria-label="Standard field">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect width="18" height="11" x="3" y="11" rx="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                              </svg>
-                            </span>
-                          }
                           <button type="button" class="pf-field-action opacity-0 group-hover:opacity-100"
                                   (click)="openEditField(step.id, f)" aria-label="Edit field">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -273,15 +251,13 @@ interface HistoryRow {
                               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                             </svg>
                           </button>
-                          @if (!f.isStandard) {
-                            <button type="button" class="pf-field-delete opacity-0 group-hover:opacity-100"
-                                    (click)="deleteField(step.id, f.id)" aria-label="Delete field">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M18 6 6 18"/>
-                                <path d="m6 6 12 12"/>
-                              </svg>
-                            </button>
-                          }
+                          <button type="button" class="pf-field-delete opacity-0 group-hover:opacity-100"
+                                  (click)="deleteField(step.id, f.id)" aria-label="Delete field">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M18 6 6 18"/>
+                              <path d="m6 6 12 12"/>
+                            </svg>
+                          </button>
                         </div>
                       </li>
                     } @empty {

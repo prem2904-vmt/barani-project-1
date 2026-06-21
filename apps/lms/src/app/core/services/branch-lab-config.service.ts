@@ -29,6 +29,10 @@ export class BranchLabConfigService {
   readonly billingMode = computed<BillingMode>(
     () => deriveModes(this.process.active())?.billingMode ?? this._config()?.billingMode ?? 'front_desk'
   );
+  /** Per-branch master switch for the inventory/Stores work area. The Stores
+   *  nav entry only renders when this is true (and the user holds an inventory
+   *  permission). Defaults to false until the config loads / if absent. */
+  readonly inventoryEnabled = computed<boolean>(() => this._config()?.inventoryEnabled ?? false);
 
   ensureLoaded(): void {
     if (this._loaded() || this._loading) return;

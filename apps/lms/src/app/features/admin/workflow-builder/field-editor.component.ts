@@ -101,7 +101,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
               </label>
               <input type="text" class="pf-input font-mono"
                      [ngModel]="draft().name"
-                     [readonly]="!isCustom() || mode() === 'edit'"
+                     [readonly]="mode() === 'edit'"
                      (ngModelChange)="patch({ name: $event })" />
             </div>
           </div>

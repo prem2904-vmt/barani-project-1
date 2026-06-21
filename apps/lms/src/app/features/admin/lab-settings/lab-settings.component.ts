@@ -78,15 +78,19 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date prefix</span>
               <select class="pf-input mt-1" [ngModel]="pidDate()" (ngModelChange)="pidDate.set($event)">
+                <option value="yymmdd">YYMMDD</option>
                 <option value="ddmmyy">DDMMYY</option>
+                <option value="mmdd">MMDD</option>
+                <option value="yymm">YYMM</option>
                 <option value="mmyy">MMYY</option>
                 <option value="yy">YY</option>
+                <option value="dd">DD</option>
                 <option value="none">None</option>
               </select>
             </label>
             <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator</span>
-              <input class="pf-input mt-1" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="-" />
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
+              <input class="pf-input mt-1" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Number digits</span>
@@ -376,12 +380,17 @@ export class LabSettingsComponent implements OnInit {
     const dd = String(n.getDate()).padStart(2, '0');
     const mm = String(n.getMonth() + 1).padStart(2, '0');
     const yy = String(n.getFullYear() % 100).padStart(2, '0');
-    const date = this.pidDate() === 'ddmmyy' ? dd + mm + yy
+    const date = this.pidDate() === 'yymmdd' ? yy + mm + dd
+      : this.pidDate() === 'ddmmyy' ? dd + mm + yy
+      : this.pidDate() === 'mmdd' ? mm + dd
+      : this.pidDate() === 'yymm' ? yy + mm
       : this.pidDate() === 'mmyy' ? mm + yy
-      : this.pidDate() === 'yy' ? yy : '';
+      : this.pidDate() === 'yy' ? yy
+      : this.pidDate() === 'dd' ? dd : '';
     const num = '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
     const head = (this.pidPrefix() ?? '') + date;
-    const sep = this.pidSep() || '-';
+    // Blank separator → no separator (e.g. mmdd000).
+    const sep = this.pidSep() ?? '';
     return head.length ? `${head}${sep}${num}` : num;
   });
 
@@ -391,8 +400,13 @@ export class LabSettingsComponent implements OnInit {
   protected readonly requireValidation = signal(false);
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
-      next: () => this.toasts.success(v ? 'Inventory enabled for this branch' : 'Inventory disabled'),
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
+      next: cfg => {
+        // Push the fresh config into the shared service so the Stores nav entry
+        // appears / disappears immediately (no reload needed).
+        if (cfg) this.labCfg.update(cfg);
+        this.toasts.success(v ? 'Inventory enabled for this branch' : 'Inventory disabled');
+      },
       error: () => { this.inventoryEnabled.set(!v); this.toasts.error('Could not update setting'); }
     });
   }
@@ -447,7 +461,7 @@ export class LabSettingsComponent implements OnInit {
     this.api.post('/api/config/patient-id', {
       enabled: this.pidEnabled(),
       datePrefix: this.pidDate(),
-      separator: this.pidSep() || '-',
+      separator: this.pidSep() ?? '',
       padding: this.pidPad(),
       prefix: this.pidPrefix()?.trim() || null,
     }).subscribe({

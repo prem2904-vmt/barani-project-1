@@ -4,6 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
+import { printLabelOnly } from '../../../shared/utils/print-label';
+
+type LabelMode = 'both' | 'barcode' | 'qr';
 
 interface InvItem {
   id: string; sku: string; name: string; category: string; uom: string;
@@ -19,7 +23,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe],
+  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl">
@@ -93,9 +97,10 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                   <td class="p-3 text-right font-mono">{{ it.onHand | number:'1.0-2' }} <span style="color:var(--text-muted)">{{ it.uom }}</span></td>
                   <td class="p-3 text-right font-mono" style="color:var(--text-muted)">{{ it.reorderLevel | number:'1.0-2' }}</td>
                   <td class="p-3 text-right whitespace-nowrap">
-                    <button class="text-xs font-semibold mr-3" style="color:var(--violet-400)" (click)="openReceive(it)">Receive</button>
-                    <button class="text-xs font-semibold mr-3" style="color:var(--text-tertiary)" (click)="toggleBatches(it)">Batches</button>
-                    <button class="text-xs font-semibold" style="color:var(--text-tertiary)" (click)="startEdit(it)">Edit</button>
+                    <button class="rowbtn rowbtn--accent" (click)="openReceive(it)">Receive</button>
+                    <button class="rowbtn" (click)="showLabel(it)">Label</button>
+                    <button class="rowbtn" (click)="toggleBatches(it)">Batches</button>
+                    <button class="rowbtn" (click)="startEdit(it)">Edit</button>
                   </td>
                 </tr>
                 @if (expandedId() === it.id) {
@@ -109,6 +114,28 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                         <button class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--green,#10b981)" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
                       </div>
                     }
+
+                    <!-- Barcode / QR label generator -->
+                    @if (labelCode() && expandedId() === it.id) {
+                      <div class="label-wrap">
+                        <div class="label-wrap__head">
+                          <span class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Label</span>
+                          <div class="seg">
+                            <button class="seg__i" [class.seg__i--on]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
+                            <button class="seg__i" [class.seg__i--on]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
+                            <button class="seg__i" [class.seg__i--on]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
+                          </div>
+                        </div>
+                        <div class="label-print pf-print-label">
+                          <pf-barcode-display [code]="labelCode()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
+                        </div>
+                        <div class="flex gap-3 mt-2">
+                          <button class="rowbtn rowbtn--accent" (click)="printLabel()">Print label</button>
+                          <button class="rowbtn" (click)="labelCode.set(null)">Hide</button>
+                        </div>
+                      </div>
+                    }
+
                     <div class="text-[11px] font-bold uppercase tracking-wider mb-1" style="color:var(--text-muted)">Batches (FEFO)</div>
                     @for (b of batches(); track b.id) {
                       <div class="flex items-center justify-between text-sm py-1 border-b" style="border-color:var(--glass-border)">
@@ -162,9 +189,20 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     </section>
   `,
   styles: [`
-    .lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:3px; }
-    .inp { width:100%; padding:7px 10px; border-radius:9px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13px; }
-    .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); }
+    .lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:4px; }
+    .inp { width:100%; padding:9px 11px; border-radius:10px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13.5px; }
+    .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); box-shadow:0 0 0 3px rgba(124,58,237,.16); }
+    table tbody tr:hover td { background:rgba(139,92,246,.06); }
+    thead th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    .rowbtn { font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; margin-left:6px; border:1px solid var(--glass-border); background:var(--glass-bg); color:var(--text-secondary); transition:color .14s, border-color .14s; }
+    .rowbtn:hover { color:var(--text-primary); border-color:var(--glass-border-hover); }
+    .rowbtn--accent { color:var(--violet-300); border-color:rgba(124,58,237,.4); background:rgba(124,58,237,.12); }
+    .seg { display:inline-flex; gap:2px; padding:2px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg); }
+    .seg__i { font-size:11px; font-weight:700; padding:4px 10px; border-radius:6px; border:0; background:transparent; color:var(--text-tertiary); }
+    .seg__i--on { color:#fff; background:var(--gradient-primary); }
+    .label-wrap { margin:4px 0 14px; padding:14px; border-radius:12px; border:1px solid var(--glass-border-hover); background:var(--bg-card-solid); }
+    .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
   `]
 })
 export class InventoryComponent implements OnInit {
@@ -184,6 +222,11 @@ export class InventoryComponent implements OnInit {
 
   readonly form = signal<Partial<InvItem>>({});
   readonly rcv = signal<{ lot: string; expiry: string; cost: number; qty: number }>({ lot: '', expiry: '', cost: 0, qty: 0 });
+
+  // Printable barcode/QR label — set after a receive (the lot barcode) or via
+  // the per-item "Label" action. `labelMode` lets the operator pick the symbology.
+  readonly labelCode = signal<string | null>(null);
+  readonly labelMode = signal<LabelMode>('both');
 
   readonly canSave = computed(() => !!this.form().sku?.trim() && !!this.form().name?.trim());
 
@@ -262,6 +305,14 @@ export class InventoryComponent implements OnInit {
     this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 0 });
     this.loadBatches(it.id);
   }
+  /** Show a printable barcode/QR label for the item itself (its barcode, or SKU
+   *  as a fallback). The lot label is shown automatically after a receive. */
+  showLabel(it: InvItem) {
+    this.expandedId.set(it.id);
+    this.labelCode.set((it as any).barcode || it.sku || it.id);
+    this.loadBatches(it.id);
+  }
+  printLabel() { printLabelOnly(); }
   private async loadBatches(itemId: string) {
     try { this.batches.set(await firstValueFrom(this.api.get<InvBatch[]>(`/api/inventory/items/${itemId}/batches`)) ?? []); }
     catch { this.batches.set([]); }
@@ -271,10 +322,12 @@ export class InventoryComponent implements OnInit {
     const r = this.rcv();
     if (r.qty <= 0) return;
     try {
-      await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
+      const res: any = await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
         lotNumber: r.lot || null, expiryDate: r.expiry ? r.expiry + 'T00:00:00Z' : null, unitCost: r.cost, qty: r.qty,
       }));
       this.toasts.success('Stock received'); this.receiveFor.set(null);
+      // Surface the freshly-minted lot barcode so the operator can print a label.
+      if (res?.lotBarcode) this.labelCode.set(res.lotBarcode);
       await Promise.all([this.loadBatches(it.id), this.load(), this.loadAlerts()]);
     } catch { this.toasts.error('Receive failed'); }
   }

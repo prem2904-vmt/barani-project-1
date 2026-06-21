@@ -3,7 +3,6 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
-import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.component';
 
 interface SeedSummary {
   tenants: number;
@@ -59,12 +58,10 @@ interface Category {
 @Component({
   selector: 'pf-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, KpiStripComponent],
+  imports: [RouterLink, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-admin-page">
-      <pf-kpi-strip screen="admin"></pf-kpi-strip>
-
       <header class="pf-admin-hdr">
         <div>
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
@@ -514,17 +511,25 @@ export class AdminDashboardComponent implements OnInit {
   // doubles as a quick status glance.
   readonly categories: Category[] = [
     {
-      id: 'identity',
-      label: 'Identity & Branding',
-      gradient: 'fuchsia',
-      iconPath: 'M12 2 4 5v7c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V5l-8-3Z',
-      blurb: 'How every printed and WhatsApp-delivered lab report looks to patients and referring doctors.',
+      id: 'catalog',
+      label: 'Tests & Catalog',
+      gradient: 'emerald',
+      iconPath: 'M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9',
+      iconExtra: 'M6 21h14M9 17h8',
+      blurb: 'The menu your lab offers and what it consumes — tests, packages, report layout, stock.',
       tips: [
-        'Upload your lab logo, signatures and NABL badge — used on every report PDF.',
-        'Pick the result-table column order per department (Result · Reference Value · Unit).',
-        'Switch between Drlogy, centered, banner or minimal letterhead presets with one click.'
+        'Add a test → set parameters, units, reference ranges (M/F segments supported).',
+        'Bundle tests into packages, and design the per-test report layout + columns.',
+        'Track consumable stock with batches, expiry alerts and per-test usage.'
       ],
       tiles: [
+        { title: 'Tests & Packages', href: '/admin/tests', gradient: 'emerald',
+          iconPath: 'M11 4h3v9M11 13h3M11 4v9c-4-1-4-7 0-9ZM14 7h2a3 3 0 0 1 3 3',
+          iconExtra: 'M6 21h14M9 17h8',
+          subtitle: () => `${this._summary()?.tests ?? '—'} tests configured` },
+        { title: 'Inventory', href: '/admin/inventory', gradient: 'amber',
+          iconPath: 'M3 7l9-4 9 4v10l-9 4-9-4V7Z', iconExtra: 'M12 3v18M3 7l9 4 9-4',
+          subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
         { title: 'Report Template',  href: '/admin/reports', gradient: 'fuchsia',
           iconPath: 'M4 4h11l5 5v11H4z', iconExtra: 'M15 4v5h5M8 14h8M8 18h6',
           subtitle: () => 'Branding, header, signatures, colours' },
@@ -534,49 +539,16 @@ export class AdminDashboardComponent implements OnInit {
       ]
     },
     {
-      id: 'setup',
-      label: 'Setup & Infrastructure',
-      gradient: 'sky',
-      iconPath: 'M4 21V7l8-4 8 4v14',
-      iconExtra: 'M9 21v-5h6v5',
-      blurb: 'The structural skeleton of your lab — branches, departments, collection modes, billing modes.',
-      tips: [
-        'Add new branches as you grow; each one gets its own GST + invoice prefix.',
-        'Toggle between front-desk vs dedicated-counter collection per branch.',
-        'Run the Setup wizard once when onboarding a brand-new branch.'
-      ],
-      tiles: [
-        { title: 'Branches',     href: '/admin/branches', gradient: 'sky',
-          iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
-          subtitle: () => `${this._summary()?.branches ?? '—'} branches · ${this._summary()?.departments ?? '—'} departments` },
-        { title: 'Lab settings', href: '/admin/lab-settings', gradient: 'teal',
-          iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z', iconExtra: 'M8 12h8',
-          subtitle: () => 'Collection mode, billing mode, patient ID format' },
-        { title: 'Inventory', href: '/admin/inventory', gradient: 'amber',
-          iconPath: 'M3 7l9-4 9 4v10l-9 4-9-4V7Z', iconExtra: 'M12 3v18M3 7l9 4 9-4',
-          subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
-        { title: 'Setup wizard', href: '/setup', gradient: 'violet',
-          iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', iconExtra: 'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z',
-          subtitle: () => 'First-time install · onboard a new branch' },
-        { title: 'Appointments & queue', href: '/admin/appointments', gradient: 'amber',
-          iconPath: 'M8 2v4M16 2v4M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', iconExtra: 'M3 10h18M8 14h.01M12 14h.01M16 14h.01',
-          subtitle: () => 'Queue mode · slots · priority engine' },
-        { title: 'Home-collection agents', href: '/admin/home-collection', gradient: 'teal',
-          iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', iconExtra: 'M9 21v-6h6v6',
-          subtitle: () => 'Agents · coverage areas · weightage' },
-      ]
-    },
-    {
-      id: 'access',
-      label: 'Users & Access',
+      id: 'people',
+      label: 'People & Access',
       gradient: 'violet',
       iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
       iconExtra: 'M2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-      blurb: 'Who can do what — invite staff, assign roles, scope them to branches or sub-branches.',
+      blurb: 'Who can do what — staff, roles and a full audit trail of every change.',
       tips: [
         'Invite new staff by email; they pick a password on first sign-in.',
         'Permissions are bundled into roles (Reception, Lab Tech, Pathologist…).',
-        'Sub-branch scoping limits what staff see in My Work and the sample queues.'
+        'The audit trail records every change — who, when, before → after.'
       ],
       tiles: [
         { title: 'Users & Access', href: '/admin/users', gradient: 'violet',
@@ -590,27 +562,42 @@ export class AdminDashboardComponent implements OnInit {
       ]
     },
     {
-      id: 'catalog',
-      label: 'Tests & Catalog',
-      gradient: 'emerald',
-      iconPath: 'M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9',
-      iconExtra: 'M6 21h14M9 17h8',
-      blurb: 'The menu of investigations your lab offers — individual tests, packages, parameters, ranges.',
+      id: 'org',
+      label: 'Branches & Organization',
+      gradient: 'sky',
+      iconPath: 'M4 21V7l8-4 8 4v14',
+      iconExtra: 'M9 21v-5h6v5',
+      blurb: 'The structure of your lab — branches, departments, collection/billing modes, queues, referrers.',
       tips: [
-        'Add a test → set parameters, units, reference ranges (M/F segments supported).',
-        'Bundle tests into packages with discounted pricing.',
-        'Per-test report layout: drag in grids, charts, interpretation paragraphs.'
+        'Add branches as you grow; toggle front-desk vs dedicated-counter collection per branch.',
+        'Configure queue modes, slots and home-collection agent coverage.',
+        'Maintain the referring hospitals + doctors that send you patients.'
       ],
       tiles: [
-        { title: 'Tests & Packages', href: '/admin/tests', gradient: 'emerald',
-          iconPath: 'M11 4h3v9M11 13h3M11 4v9c-4-1-4-7 0-9ZM14 7h2a3 3 0 0 1 3 3',
-          iconExtra: 'M6 21h14M9 17h8',
-          subtitle: () => `${this._summary()?.tests ?? '—'} tests configured` },
+        { title: 'Branches & Departments', href: '/admin/branches', gradient: 'sky',
+          iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
+          subtitle: () => `${this._summary()?.branches ?? '—'} branches · ${this._summary()?.departments ?? '—'} departments` },
+        { title: 'Lab settings', href: '/admin/lab-settings', gradient: 'teal',
+          iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z', iconExtra: 'M8 12h8',
+          subtitle: () => 'Collection mode, billing mode, patient ID format' },
+        { title: 'Appointments & queue', href: '/admin/appointments', gradient: 'amber',
+          iconPath: 'M8 2v4M16 2v4M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', iconExtra: 'M3 10h18M8 14h.01M12 14h.01M16 14h.01',
+          subtitle: () => 'Queue mode · slots · priority engine' },
+        { title: 'Home-collection agents', href: '/admin/home-collection', gradient: 'teal',
+          iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', iconExtra: 'M9 21v-6h6v6',
+          subtitle: () => 'Agents · coverage areas · weightage' },
+        { title: 'Referring Network', href: '/admin/referring-network', gradient: 'amber',
+          iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4',
+          iconExtra: 'M9 9h.01M9 13h.01M9 17h.01',
+          subtitle: () => 'Hospitals + doctors that send patients to your lab' },
+        { title: 'Setup wizard', href: '/setup', gradient: 'violet',
+          iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', iconExtra: 'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z',
+          subtitle: () => 'First-time install · onboard a new branch' },
       ]
     },
     {
-      id: 'billing',
-      label: 'Billing & Vendors',
+      id: 'finance',
+      label: 'Billing & Finance',
       gradient: 'amber',
       iconPath: 'M3 5h18v14H3z',
       iconExtra: 'M3 10h18M7 15h3',
@@ -628,26 +615,22 @@ export class AdminDashboardComponent implements OnInit {
           iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
           iconExtra: 'M17 14h.01',
           subtitle: () => 'B2B credit accounts · top-ups & usage' },
-        { title: 'Referring Network', href: '/admin/referring-network', gradient: 'amber',
-          iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4',
-          iconExtra: 'M9 9h.01M9 13h.01M9 17h.01',
-          subtitle: () => 'Hospitals + doctors that send patients to your lab' },
       ]
     },
     {
       id: 'automation',
-      label: 'Workflows & Automation',
+      label: 'Workflow & Automation',
       gradient: 'pink',
       iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z',
       iconExtra: 'M9 7h6M12 14V10',
-      blurb: 'Design the menus, actions and role access your staff see, the form fields they fill, and the alerts that fire.',
+      blurb: 'Design the menus and forms staff use, the alerts that fire, and the KPIs each screen shows.',
       tips: [
-        'Drag-build the workflow: which menus exist, what actions sit inside, and who can use them.',
-        'Drag-build the Patient Register, Order Create and Appointment Booking form fields.',
-        'Configure WhatsApp / SMS alerts on report-ready, payment-received, etc.'
+        'Process builder: which menus exist, what actions sit inside, and who can use them.',
+        'Form flows: drag-build the Patient Register, Order Create and Appointment fields.',
+        'Notifications + KPI cards: alerts on key events and the metrics pinned to each screen.'
       ],
       tiles: [
-        { title: 'Workflow',      href: '/admin/process', gradient: 'pink',
+        { title: 'Process builder', href: '/admin/process', gradient: 'pink',
           iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',
           subtitle: () => 'Menus, actions & role access — drives the live nav' },
         { title: 'Form Flows',    href: '/admin/workflows', gradient: 'pink',
@@ -656,23 +639,6 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Notifications', href: '/admin/notifications', gradient: 'rose',
           iconPath: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Z', iconExtra: 'M11 20a1 1 0 0 0 2 0',
           subtitle: () => 'Alerts, escalations, patient messages' },
-      ]
-    },
-    {
-      id: 'insights',
-      label: 'Insights & KPIs',
-      gradient: 'teal',
-      iconPath: 'M3 12h4l3-9 4 18 3-9h4',
-      blurb: 'Live operational health — TAT, throughput, exceptions — and the metrics shown to each role.',
-      tips: [
-        'TAT dashboard shows departmental sample turnaround in real time.',
-        'KPI cards let you pin specific numbers to each screen — admin, reception, lab.',
-        'Choose the KPI per screen so reception sees today’s collections, lab sees pending samples.'
-      ],
-      tiles: [
-        { title: 'TAT Dashboard', href: '/dashboard', gradient: 'teal',
-          iconPath: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
-          subtitle: () => 'Live turnaround tracking' },
         { title: 'KPI cards',     href: '/admin/kpis', gradient: 'violet',
           iconPath: 'M3 12h4l3-9 4 18 3-9h4',
           subtitle: () => 'Pick which KPIs show on each screen' },

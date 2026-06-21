@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import { skip } from 'rxjs/operators';
@@ -22,6 +23,7 @@ import { Appointment } from '../../../shared/models/appointment.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
+import { generateInvoicePdf } from '../billing/invoice-pdf';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -92,6 +94,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
   private readonly billingEvents = inject(BillingEventsService);
@@ -760,6 +763,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
+    this.closeInvoicePreview();
   }
 
   refresh() {
@@ -1230,7 +1234,178 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   reprintLabels(o: Order) {
     this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: o.id } });
   }
+
+  // ── Post-billing modify / cancel (supervisor-gated) ──────────────
+  readonly refundModes = [{ key: 'cash', label: 'Cash' }, { key: 'upi', label: 'UPI' }, { key: 'card', label: 'Card' }];
+  readonly cancelTarget = signal<Order | null>(null);
+  readonly cancelReason = signal('');
+  readonly cancelRefundMode = signal('cash');
+  readonly cancelling = signal(false);
+
+  /** Modify allowed at any live stage (the backend blocks removing a validated
+   *  test). Hidden once the order is cancelled. */
+  canModifyOrder(o: Order): boolean {
+    return this.auth.hasPermission('modify_order') && o.status !== 'cancelled';
+  }
+  canCancelOrder(o: Order): boolean {
+    return this.auth.hasPermission('cancel_order') && o.status !== 'cancelled';
+  }
+
+  /** Open the order-create screen in EDIT mode — same tests pre-filled, saving
+   *  recomputes the bill and routes to collect-the-difference / refund. */
+  modifyOrder(o: Order) {
+    if (!o.patientId) return;
+    this._selectedOrder.set(null);
+    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId, editOrderId: o.id } });
+  }
+
+  openCancel(o: Order) {
+    this.cancelReason.set('');
+    this.cancelRefundMode.set('cash');
+    this.cancelTarget.set(o);
+  }
+
+  confirmCancel() {
+    const o = this.cancelTarget();
+    if (!o || this.cancelling()) return;
+    this.cancelling.set(true);
+    this.api.patch(`/api/orders/${o.id}/cancel`, { reason: this.cancelReason().trim() || null, refundMode: this.cancelRefundMode() })
+      .subscribe({
+        next: () => {
+          this.cancelling.set(false);
+          this.cancelTarget.set(null);
+          this._selectedOrder.set(null);
+          this.toasts.success('Order cancelled — any payment refunded');
+          this.refresh();
+        },
+        error: (e: any) => {
+          this.cancelling.set(false);
+          this.toasts.error(e?.error?.error?.message ?? 'Could not cancel the order');
+        }
+      });
+  }
   /** Reception jumps into the billing screen for this order. */
+  /** Invoice is viewable both during billing (bill created, maybe unpaid — the
+   *  order is still 'created') and post-billing (paid and beyond). Hidden only
+   *  for an abandoned draft or a cancelled order. Opens the billing screen,
+   *  which shows the invoice (read/print state once paid). */
+  canViewInvoice(o: Order): boolean {
+    return o.status !== 'draft' && o.status !== 'cancelled';
+  }
+  // ── Invoice preview modal (in-app, no browser popup) ────────
+  /** Safe object-URL of the rendered PDF, bound to the preview iframe. */
+  protected readonly invoicePreviewUrl = signal<SafeResourceUrl | null>(null);
+  /** Raw blob URL — kept so we can revoke it and feed the print iframe. */
+  private invoiceBlobUrl: string | null = null;
+  protected readonly invoicePreviewNumber = signal('');
+  protected readonly invoiceLoading = signal(false);
+
+  /** Open the invoice in an in-app preview (fetches the bill + letterhead +
+   *  tracking QR and renders the A4 invoice) — distinct from collect-payment. */
+  async viewInvoice(o: Order) {
+    if (this.invoiceLoading()) return;
+    this.invoiceLoading.set(true);
+    try {
+      const bill = await firstValueFrom(
+        this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 })
+      );
+      let tpl: any = null;
+      try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); }
+      catch { /* letterhead is optional */ }
+      await this.emitInvoicePdf(o, bill, tpl);
+    } catch {
+      this.toasts.error('Could not load the invoice');
+    } finally {
+      this.invoiceLoading.set(false);
+    }
+  }
+
+  private async emitInvoicePdf(o: Order, bill: Bill, tpl: any) {
+    const mode = tpl?.documentMode ?? 'auto';
+    const docTitle = mode === 'bill_of_supply' ? 'BILL OF SUPPLY'
+      : mode === 'tax_invoice' ? 'TAX INVOICE'
+      : (bill.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+
+    // Result-tracking QR (PNG) — the user wants this on every invoice, so we
+    // always try to render it (no letterhead gate). If the token can't be
+    // minted or the QR fails, surface WHY rather than silently dropping it.
+    let qrDataUrl: string | undefined;
+    try {
+      const res = await firstValueFrom(
+        this.api.get<{ token: string }>(`/api/orders/${o.id}/track-token`)
+      );
+      if (res?.token) {
+        const url = `${window.location.origin}/track/${res.token}`;
+        const QRCode = (await import('qrcode')).default;
+        qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+      } else {
+        this.toasts.warning('Invoice ready, but the tracking QR could not be generated (no token returned).');
+      }
+    } catch (err: any) {
+      console.error('[invoice] tracking QR failed', err);
+      this.toasts.warning(`Invoice ready, but the tracking QR failed: ${err?.message ?? 'request error'}`);
+    }
+
+    try {
+      const blobUrl = generateInvoicePdf({
+        bill, order: o,
+        invoiceNumber: bill.invoiceNumber ?? '',
+        effectivePayable: bill.totalPayable,
+        tatLabel: '',
+        docTitle,
+        qrDataUrl,
+        // Always carry a name so the invoice never reads "Prefrontal Lab":
+        // configured letterhead first, else the tenant's own name.
+        practice: {
+          name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,
+          address: tpl?.address || undefined,
+          phone: tpl?.phone || undefined,
+          email: tpl?.email || undefined,
+          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+        },
+        action: 'blob',
+      });
+      if (!blobUrl) { this.toasts.error('Could not generate the invoice PDF'); return; }
+      this.closeInvoicePreview(); // revoke any prior blob first
+      this.invoiceBlobUrl = blobUrl;
+      this.invoicePreviewNumber.set(bill.invoiceNumber ?? 'Invoice');
+      this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
+    } catch { this.toasts.error('Could not generate the invoice PDF'); }
+  }
+
+  /** Download the previewed PDF (anchor on the same blob — no re-render). */
+  downloadInvoice() {
+    if (!this.invoiceBlobUrl) return;
+    const a = document.createElement('a');
+    a.href = this.invoiceBlobUrl;
+    a.download = `${this.invoicePreviewNumber() || 'invoice'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /** Open the browser print dialog for the previewed PDF via a hidden iframe. */
+  printInvoicePreview() {
+    const blobUrl = this.invoiceBlobUrl;
+    if (!blobUrl) return;
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    frame.src = blobUrl;
+    frame.onload = () => {
+      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
+      catch { /* ignore — preview already on screen */ }
+      setTimeout(() => frame.remove(), 60_000);
+    };
+    document.body.appendChild(frame);
+  }
+
+  closeInvoicePreview() {
+    if (this.invoiceBlobUrl) {
+      try { URL.revokeObjectURL(this.invoiceBlobUrl); } catch { /* noop */ }
+      this.invoiceBlobUrl = null;
+    }
+    this.invoicePreviewUrl.set(null);
+  }
   goToBilling(o: Order) {
     this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: o.id } });
   }

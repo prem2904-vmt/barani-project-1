@@ -31,6 +31,12 @@ export interface NavItem {
    * several actions as components gated inside the screen).
    */
   action?: string;
+  /**
+   * Only render when the current branch has the inventory module enabled
+   * (BranchLabConfig.inventoryEnabled). Used by the Stores entry so the
+   * admin toggle in Lab Settings actually surfaces / hides the work area.
+   */
+  requiresInventory?: boolean;
 }
 
 // Admin is intentionally NOT in the primary nav anymore — it's a
@@ -75,7 +81,8 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Inventory',
     href: '/stores',
     iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']
+    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
+    requiresInventory: true
   },
   {
     id: 'sample-collection',
@@ -185,6 +192,16 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
 
 export const MORE_NAV: NavItem[] = [
   {
+    id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
+    iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
+    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+  },
+  {
+    id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
+    iconPath: ['M4 6h16M4 12h16M4 18h16'],
+    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+  },
+  {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
     permissions: ['view_tat_dashboard', 'view_dashboard']
   },
@@ -213,7 +230,7 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_inventory']
   },
   {
-    id: 'reports-t', label: 'Report theme', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
+    id: 'reports-t', label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
     permissions: ['manage_report_template']
   },
   {
@@ -221,11 +238,11 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_notifications']
   },
   {
-    id: 'process', label: 'Workflow', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
+    id: 'process', label: 'Process builder', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
     permissions: ['manage_workflows']
   },
   {
-    id: 'workflows', label: 'Form flow', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
+    id: 'workflows', label: 'Form Flows', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
     permissions: ['manage_workflows']
   },
   {

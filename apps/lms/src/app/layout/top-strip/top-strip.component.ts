@@ -56,6 +56,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
       if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
       if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
+      // Inventory work area only appears when the branch has it enabled.
+      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
       // Workflow source-of-truth: hide a nav item whose action the admin
       // switched off in /admin/process (the screen itself is unchanged).
       if (i.action && !this.process.isEnabled(i.action)) return false;
@@ -72,7 +74,19 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
-  readonly primary = computed(() => menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV));
+  readonly primary = computed(() => this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)));
+
+  /** The workflow-derived nav is built from process categories and so never
+   *  contains the Stores work area. Append it when the branch has inventory
+   *  enabled and the user holds an inventory permission (idempotent — the
+   *  PRIMARY_NAV fallback already includes it). */
+  private withInventory(items: NavItem[]): NavItem[] {
+    if (!this.labCfg.inventoryEnabled()) return items;
+    if (items.some(i => i.id === 'stores' || i.href === '/stores')) return items;
+    const inv = PRIMARY_NAV.find(i => i.id === 'stores');
+    if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;
+    return [...items, inv];
+  }
   readonly more = computed(() => this.visible(MORE_NAV));
   /** Show the Admin icon-button (in the right cluster) only when the
    *  current user holds at least one manage_* permission. Mirrors the

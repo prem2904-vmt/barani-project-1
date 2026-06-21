@@ -148,7 +148,7 @@
 
       <!-- Label grid -->
       @if (order(); as o) {
-      <div class="pf-pp-grid">
+      <div class="pf-pp-grid pf-print-label">
         @for (s of o.samples; track s.id; let i = $index) {
           <pf-label-card
             [sample]="s"

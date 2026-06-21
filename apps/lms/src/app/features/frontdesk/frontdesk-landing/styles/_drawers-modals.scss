@@ -1299,4 +1299,171 @@
   justify-content: flex-end;
 }
 
-
+
+/* ── Modify / Cancel order actions ───────────────────────────── */
+.pf-drawer__reprint-btn--danger {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.pf-drawer__reprint-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+/* Cancel-order confirmation card (uses the shared .pf-drawer-bd backdrop). */
+.pf-cancel {
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 32px));
+  background: var(--bg-card-solid, #14141f);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+}
+.pf-cancel__title { margin: 0; font-size: 17px; font-weight: 800; color: var(--text-primary, #fff); }
+.pf-cancel__sub { margin: 3px 0 0; font-size: 12.5px; color: var(--text-tertiary, rgba(255, 255, 255, 0.55)); }
+.pf-cancel__note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); }
+.pf-cancel__label {
+  display: block;
+  margin: 16px 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+.pf-cancel__modes { display: flex; gap: 8px; }
+.pf-cancel__chip {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pf-cancel__chip--on {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  border-color: transparent;
+  color: #fff;
+}
+.pf-cancel__input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+  font-size: 13.5px;
+}
+.pf-cancel__input:focus { outline: none; border-color: var(--violet-500, #8b5cf6); }
+.pf-cancel__actions { display: flex; gap: 10px; margin-top: 20px; }
+.pf-cancel__keep {
+  flex: 1;
+  padding: 11px;
+  border-radius: 11px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-cancel__confirm {
+  flex: 1;
+  padding: 11px;
+  border-radius: 11px;
+  border: 0;
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-cancel__confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Invoice preview (in-app PDF, uses the shared .pf-drawer-bd backdrop). */
+.pf-inv-preview {
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  width: min(820px, calc(100vw - 32px));
+  height: min(92vh, 1040px);
+  background: var(--bg-card-solid, #14141f);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 28px 70px -20px rgba(0, 0, 0, 0.7);
+  animation: pf-fade 0.2s ease both;
+}
+.pf-inv-preview__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.02));
+}
+.pf-inv-preview__title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pf-inv-preview__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+.pf-inv-preview__num {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-inv-preview__actions { display: flex; align-items: center; gap: 8px; }
+.pf-inv-preview__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary, #fff);
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.pf-inv-preview__btn:hover {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+.pf-inv-preview__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  cursor: pointer;
+}
+.pf-inv-preview__close:hover { background: rgba(239, 68, 68, 0.14); color: #f87171; }
+.pf-inv-preview__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #525659; /* matches native PDF-viewer letterbox */
+}

@@ -52,7 +52,7 @@
             </div>
             <div>
               <span class="text-xs text-[var(--text-tertiary)] block">Blood Group</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ clinicalData()?.bloodGroup ?? '€”' }}</span>
+              <span class="font-semibold text-[var(--text-secondary)]">Not recorded</span>
             </div>
             @if (p.dateOfBirth) {
               <div>
@@ -123,69 +123,13 @@
           </div>
         </div>
 
-        <!-- Vitals Summary Card -->
-        @if (clinicalData(); as clinical) {
-          <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
-            <div class="flex items-center justify-between">
-              <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">
-                Current Vitals
-              </h3>
-              <span class="text-[10px] text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Stable
-              </span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <!-- Blood Pressure -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">BP (Syst/Diast)</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.bloodPressure }}</span>
-                <span class="text-[9px] text-[var(--text-muted)]">mmHg</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('bp', clinical.vitals.bloodPressure) + '-400'"></span>
-              </div>
-
-              <!-- Pulse Rate -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Heart Rate</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.pulseRate }}</span>
-                <span class="text-[9px] text-[var(--text-muted)]">bpm</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('heartRate', clinical.vitals.pulseRate) + '-400'"></span>
-              </div>
-
-              <!-- SpO2 -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Oxygen (SpO2)</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.spo2 }}%</span>
-                <span class="text-[9px] text-[var(--text-muted)]">Room Air</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('spo2', clinical.vitals.spo2) + '-400'"></span>
-              </div>
-
-              <!-- Temperature -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Temperature</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.temperature }}°F</span>
-                <span class="text-[9px] text-[var(--text-muted)]">Oral</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('temp', clinical.vitals.temperature) + '-400'"></span>
-              </div>
-
-              <!-- Respiratory Rate -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Resp. Rate</span>
-                <span class="font-mono text-base font-bold text-[var(--text-primary)]">{{ clinical.vitals.respiratoryRate }}</span>
-                <span class="text-[9px] text-[var(--text-muted)]">breaths/min</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('respRate', clinical.vitals.respiratoryRate) + '-400'"></span>
-              </div>
-
-              <!-- BMI -->
-              <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden">
-                <span class="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold">Weight / BMI</span>
-                <span class="font-mono text-sm font-bold text-[var(--text-primary)]">{{ clinical.vitals.weight }}kg ({{ clinical.vitals.bmi }})</span>
-                <span class="text-[9px] text-[var(--text-muted)]">Ht: {{ clinical.vitals.height }}cm</span>
-                <span class="absolute right-2 top-2 w-2 h-2 rounded-full" [ngClass]="'bg-' + getVitalStatus('bmi', clinical.vitals.bmi) + '-400'"></span>
-              </div>
-            </div>
-          </div>
-        }
+        <!-- Vitals Summary Card — not captured by the lab module (OPD/IPD intake). -->
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
+          <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">Current Vitals</h3>
+          <p class="text-xs text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3">
+            Not recorded — vitals are captured at OPD/IPD intake, not in the lab workflow.
+          </p>
+        </div>
 
       </div>
 
@@ -299,92 +243,40 @@
           @if (activeTab() === 'overview') {
             <div class="flex flex-col gap-6">
 
-              <!-- Clinical Health Summary: BMI Slider & Intake Analysis -->
-              @if (clinicalData(); as clinical) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-5">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <span class="p-1.5 rounded-lg bg-violet-500/10 text-violet-400">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/>
-                        </svg>
-                      </span>
-                      <div>
-                        <h3 class="text-base font-bold text-[var(--text-primary)]">Clinical Metrics & Analysis</h3>
-                        <p class="text-xs text-[var(--text-secondary)]">Intake body metrics and system assessment</p>
-                      </div>
-                    </div>
-                    <span class="text-[10px] text-emerald-400 font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1.5">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Intake Recorded
-                    </span>
-                  </div>
-
-                  <!-- BMI Visual Range Slider -->
-                  <div class="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] flex flex-col gap-4">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <span class="text-xs text-[var(--text-tertiary)] font-semibold">Body Mass Index (BMI) Status</span>
-                        <span class="text-xs text-[var(--text-secondary)] block mt-0.5">
-                          Weight: <strong class="font-mono text-violet-400">{{ clinical.vitals.weight }} kg</strong> · Height: <strong class="font-mono text-violet-400">{{ clinical.vitals.height }} cm</strong>
-                        </span>
-                      </div>
-                      <div class="text-right">
-                        <span class="text-xl font-bold text-[var(--text-primary)] font-mono leading-none">{{ clinical.vitals.bmi }}</span>
-                        <span class="block text-[10px] font-bold mt-0.5 px-2 py-0.5 rounded-full"
-                          [ngClass]="{
-                            'bg-sky-500/10 text-sky-400 border border-sky-500/20': clinical.vitals.bmi < 18.5,
-                            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': clinical.vitals.bmi >= 18.5 && clinical.vitals.bmi < 25,
-                            'bg-amber-500/10 text-amber-400 border border-amber-500/20': clinical.vitals.bmi >= 25 && clinical.vitals.bmi < 30,
-                            'bg-rose-500/10 text-rose-400 border border-rose-500/20': clinical.vitals.bmi >= 30
-                          }">
-                          {{ getBmiDetails(clinical.vitals.bmi).label }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Range slider track -->
-                    <div class="relative w-full h-2.5 rounded-full overflow-visible mt-2 bg-zinc-800">
-                      <!-- Underweight Segment (0-25%) -->
-                      <div class="absolute left-0 top-0 bottom-0 w-[25%] rounded-l-full bg-sky-500/40"></div>
-                      <!-- Normal Segment (25-50%) -->
-                      <div class="absolute left-[25%] top-0 bottom-0 w-[25%] bg-emerald-500/40"></div>
-                      <!-- Overweight Segment (50-75%) -->
-                      <div class="absolute left-[50%] top-0 bottom-0 w-[25%] bg-amber-500/40"></div>
-                      <!-- Obese Segment (75-100%) -->
-                      <div class="absolute left-[75%] top-0 bottom-0 w-[25%] rounded-r-full bg-rose-500/40"></div>
-
-                      <!-- The Sliding Indicator Pin -->
-                      <div class="absolute -top-3 w-6 h-6 rounded-full bg-[var(--surface-elevated)] border-2 flex items-center justify-center shadow-lg -ml-3 transition-all duration-300"
-                        [style.left.%]="getBmiDetails(clinical.vitals.bmi).pct"
-                        [style.border-color]="getBmiDetails(clinical.vitals.bmi).color">
-                        <span class="w-2.5 h-2.5 rounded-full" [style.background-color]="getBmiDetails(clinical.vitals.bmi).color"></span>
-                      </div>
-                    </div>
-
-                    <!-- Labels under the track -->
-                    <div class="grid grid-cols-4 text-[9px] text-[var(--text-tertiary)] font-bold text-center mt-1">
-                      <span class="text-left pl-1">Underweight (&lt;18.5)</span>
-                      <span>Normal (18.5-24.9)</span>
-                      <span>Overweight (25-29.9)</span>
-                      <span class="text-right pr-1">Obese (&gt;=30)</span>
-                    </div>
-                  </div>
-
-                  <!-- Clinician Intake Diagnostics Box -->
-                  <div class="p-4 rounded-xl border border-violet-500/10 bg-violet-500/5 relative overflow-hidden flex flex-col gap-2">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full blur-xl pointer-events-none"></div>
-                    <div class="flex items-center gap-2">
-                      <svg class="text-violet-400 shrink-0 animate-pulse" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                      <span class="text-xs font-bold text-violet-400 uppercase tracking-wider">Clinician Intake Diagnostics (System Analysis)</span>
-                    </div>
-                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed italic">
-                      "{{ healthStatusNotes() }}"
-                    </p>
-                  </div>
+              <!-- Real KPIs derived from the patient's actual lab activity. -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+                  <div class="text-2xl font-extrabold text-[var(--text-primary)] tabular-nums">{{ realVisits() }}</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Lab visits</div>
                 </div>
-              }
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+                  <div class="text-2xl font-extrabold text-[var(--text-primary)] tabular-nums">{{ realTestsDone() }}</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Tests ordered</div>
+                </div>
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+                  <div class="text-2xl font-extrabold text-violet-400 tabular-nums">{{ realTotalSpent() | inr }}</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Total billed</div>
+                </div>
+                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
+                  <div class="text-sm font-bold text-[var(--text-primary)]">{{ realLastVisit() ? (realLastVisit() | date:'mediumDate') : '—' }}</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Last visit</div>
+                </div>
+              </div>
+
+              <!-- Vitals are captured at clinical intake (OPD/IPD), which this lab
+                   module doesn't run — so we show an honest 'not recorded' state
+                   rather than fabricated values. -->
+              <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex items-center gap-3">
+                <span class="p-1.5 rounded-lg bg-[var(--glass-bg)] text-[var(--text-muted)]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                  </svg>
+                </span>
+                <div>
+                  <h3 class="text-sm font-bold text-[var(--text-primary)]">Vitals & BMI</h3>
+                  <p class="text-xs text-[var(--text-tertiary)]">Not recorded — vitals are captured at OPD/IPD intake.</p>
+                </div>
+              </div>
 
               <!-- 2-Column Row for Allergies/Precautions & ABHA Card -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -406,26 +298,9 @@
                         Active Allergies
                       </span>
                       
-                      @if (clinicalData()?.allergies?.length) {
-                        <div class="flex flex-col gap-2">
-                          @for (alg of clinicalData()?.allergies; track alg) {
-                            <div class="flex items-center justify-between p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-400 text-xs font-semibold">
-                              <span class="flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                {{ alg }} Allergy
-                              </span>
-                              <span class="text-[9px] uppercase tracking-wider bg-rose-500/10 px-1.5 py-0.5 rounded text-rose-400">Severe</span>
-                            </div>
-                          }
-                        </div>
-                      } @else {
-                        <div class="text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 flex items-center gap-2.5">
-                          <svg class="text-emerald-400 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                          No known drug, food, or environmental allergies on record.
-                        </div>
-                      }
+                      <div class="text-xs text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3">
+                        Not recorded — allergies are captured at clinical (OPD/IPD) intake.
+                      </div>
                     </div>
 
                     <div class="h-px bg-[var(--border-muted)]"></div>
@@ -460,19 +335,6 @@
                             </span>
                             <span class="font-bold text-[10px] text-amber-400 uppercase">Guardian Required</span>
                           </div>
-                        }
-
-                        <!-- BP Risk precaution -->
-                        @if (clinicalData(); as clinical) {
-                          @if (clinical.vitals.bloodPressure.startsWith('14') || clinical.vitals.bloodPressure.startsWith('15') || clinical.vitals.bloodPressure.startsWith('16')) {
-                            <div class="flex items-center justify-between p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-xs">
-                              <span class="text-rose-400 flex items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                Hypertensive Alert
-                              </span>
-                              <span class="font-bold text-[10px] text-rose-400 uppercase">Limit Sodium Intake</span>
-                            </div>
-                          }
                         }
 
                         <!-- General Isolation Precaution -->

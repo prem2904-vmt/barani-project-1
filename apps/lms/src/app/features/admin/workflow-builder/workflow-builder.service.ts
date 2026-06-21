@@ -175,11 +175,7 @@ export class WorkflowBuilderService {
     const index = current.steps.findIndex(s => s.id === stepId);
     if (index < 0) return;
     const step = current.steps[index];
-    if (step.isStandard) {
-      this._error.set('Standard steps cannot be deleted.');
-      return;
-    }
-
+    // Fully customisable: standard steps can be deleted like custom ones.
     this.mutateSteps(steps => steps.filter(s => s.id !== stepId));
     if (this._selectedStepId() === stepId) {
       this._selectedStepId.set(this._workflow()?.steps[0]?.id ?? null);
@@ -275,11 +271,7 @@ export class WorkflowBuilderService {
     const index = step.fields.findIndex(f => f.id === fieldId);
     if (index < 0) return;
     const field = step.fields[index];
-    if (field.isStandard) {
-      this._error.set('Standard fields cannot be deleted.');
-      return;
-    }
-
+    // Fully customisable: standard fields can be deleted like custom ones.
     this.mutateStep(stepId, s => ({ ...s, fields: s.fields.filter(f => f.id !== fieldId) }));
     if (this._selectedFieldId() === fieldId) this._selectedFieldId.set(null);
 
