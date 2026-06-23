@@ -1064,6 +1064,73 @@
   color: var(--text-primary);
 }
 
+/* Front-desk inline payment: give the right column a touch more room for the
+   payment-mode tiles + cash num-pad beside the test list. */
+@media (min-width: 1280px) {
+  .pf-page__body--billing { grid-template-columns: 1fr minmax(420px, 480px); }
+}
+
+/* Post-payment actions (Print / Show invoice / New order). */
+.pf-paid { display: flex; flex-direction: column; gap: 10px; }
+.pf-paid__msg { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #34d399; }
+.pf-paid__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pf-paid__btn {
+  padding: 10px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 13px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(217, 70, 239, 0.08));
+  color: #a78bfa;
+}
+.pf-paid__btn:hover { background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); color: #fff; border-color: transparent; }
+
+/* In-app invoice preview (Show invoice). */
+.pf-invprev { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.pf-invprev__bd { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.pf-invprev__panel {
+  position: relative; z-index: 1; display: flex; flex-direction: column;
+  width: min(820px, 100%); height: min(92vh, 1040px);
+  background: var(--bg-card-solid, #14141f); border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
+  border-radius: 18px; overflow: hidden; box-shadow: 0 28px 70px rgba(0,0,0,0.6);
+}
+.pf-invprev__hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.1)); font-weight: 800; color: var(--text-primary); }
+.pf-invprev__close { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: transparent; color: var(--text-secondary); cursor: pointer; }
+.pf-invprev__frame { flex: 1; width: 100%; border: 0; background: #525659; }
+
+/* Discount control in the cart summary */
+.pf-cart-disc { align-items: center; }
+.pf-cart-disc__ctl { display: flex; align-items: center; gap: 6px; }
+.pf-cart-disc__kind {
+  display: inline-flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+}
+.pf-cart-disc__kind button {
+  width: 24px;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+.pf-cart-disc__kind--on {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #fff;
+}
+.pf-cart-disc__input {
+  width: 72px;
+  height: 28px;
+  padding: 0 8px;
+  text-align: right;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pf-cart-disc__input:focus { outline: none; border-color: rgba(139, 92, 246, 0.6); }
+
 .pf-proceed {
   margin-top: 16px;
   width: 100%;

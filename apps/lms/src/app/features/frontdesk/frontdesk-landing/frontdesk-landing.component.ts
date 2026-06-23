@@ -1164,6 +1164,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
   searchFocus() { this.toasts.success('QR scanner · coming soon'); }
   openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
+  /** Order-drawer shortcut → the patient's profile page. */
+  openPatientProfile(o: Order) {
+    if (!o.patientId) { this.toasts.error('No patient linked to this order'); return; }
+    this.router.navigate(['/frontdesk/patients', o.patientId]);
+  }
   newOrderFor(p: Patient) {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
   }

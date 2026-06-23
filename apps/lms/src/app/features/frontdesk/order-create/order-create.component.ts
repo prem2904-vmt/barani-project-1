@@ -1,11 +1,14 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order } from '../../../shared/models/order.model';
+import { Bill } from '../../../shared/models/bill.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
@@ -13,6 +16,9 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { AuthService } from '../../../core/auth/auth.service';
+import { generateInvoicePdf } from '../billing/invoice-pdf';
+import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -27,12 +33,12 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, PatientSearchComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, PatientSearchComponent, InlinePaymentPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
 })
-export class OrderCreateComponent implements OnInit {
+export class OrderCreateComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -41,6 +47,8 @@ export class OrderCreateComponent implements OnInit {
   private readonly settings = inject(FrontdeskSettingsService);
   // Workflow is the source of truth for whether billing is a separate counter.
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly auth = inject(AuthService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
 
@@ -180,8 +188,31 @@ export class OrderCreateComponent implements OnInit {
       .map(id => this._tests().find(t => t.id === id)?.price ?? 0)
       .reduce((a, b) => a + b, 0)
   );
-  readonly gst = computed(() => Math.round(this.subtotal() * 0.18));
-  readonly total = computed(() => this.subtotal() + this.gst());
+  /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
+   *  backend bill, which bills at a zero slab → Bill of Supply). */
+  readonly gstEnabled = signal(true);
+  readonly gst = computed(() => this.gstEnabled() ? Math.round(this.subtotal() * 0.18) : 0);
+
+  // ── Discount (cart preview; carried into billing) ──────────────
+  /** Admin "Allow discounts" switch — hides the field entirely when off. */
+  readonly allowDiscounts = signal(true);
+  readonly maxDiscountPct = signal(100);
+  readonly discountValue = signal<string>('');   // raw input
+  readonly discountKind = signal<'flat' | 'percent'>('flat');
+  setDiscountKind(k: 'flat' | 'percent') { this.discountKind.set(k); }
+  setDiscountValue(v: string) { this.discountValue.set(v); }
+  /** Resolved ₹ discount, clamped to the pre-discount total and the admin cap. */
+  readonly discountAmount = computed(() => {
+    if (!this.allowDiscounts()) return 0;
+    const raw = parseFloat(this.discountValue() || '0');
+    if (!isFinite(raw) || raw <= 0) return 0;
+    const base = this.subtotal() + this.gst();
+    let amt = this.discountKind() === 'percent'
+      ? Math.round(base * Math.min(raw, this.maxDiscountPct()) / 100)
+      : raw;
+    return Math.max(0, Math.min(amt, base));
+  });
+  readonly total = computed(() => Math.max(0, this.subtotal() + this.gst() - this.discountAmount()));
 
   /** Slowest test in the cart drives the report ETA. Packages count as
    *  the max of their member tests' tatHours. */
@@ -264,6 +295,17 @@ export class OrderCreateComponent implements OnInit {
     this.api.get<Test[]>('/api/tests/').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+    });
+
+    // Honor the tenant GST + discount switches in the cart preview (best-effort).
+    this.api.get<{ gstEnabled?: boolean; allowDiscounts?: boolean; maxDiscountPct?: number }>('/api/config/billing').subscribe({
+      next: c => {
+        if (!c) return;
+        this.gstEnabled.set(c.gstEnabled !== false);
+        this.allowDiscounts.set(c.allowDiscounts !== false);
+        if (typeof c.maxDiscountPct === 'number') this.maxDiscountPct.set(c.maxDiscountPct);
+      },
+      error: () => { /* defaults: GST on, discounts on */ }
     });
 
     // Per-user pinned tests + recent test history. Both endpoints are
@@ -540,6 +582,132 @@ export class OrderCreateComponent implements OnInit {
     }
   }
 
+  /** Billing route params — carry the cart discount (resolved ₹) so the
+   *  billing screen opens with it pre-applied. */
+  private billingQueryParams(orderId: string): Record<string, string> {
+    const d = this.discountAmount();
+    return d > 0 ? { orderId, discount: String(d) } : { orderId };
+  }
+
+  // ── Inline payment (front_desk: live pay pane in the right column) ──
+  /** Show the live payment pane: billing is part of this workflow and we're
+   *  creating a fresh order (not editing). */
+  readonly showInlinePay = computed(() => this.labCfg.billingMode() === 'front_desk' && !this.editOrderId());
+  readonly confirming = signal(false);
+  /** Set once payment is taken → the pane swaps to Print / Show invoice. */
+  readonly paidOrderId = signal<string | null>(null);
+  private paidBill: Bill | null = null;
+
+  /** Called by the inline payment pane's Confirm: create the order, the bill
+   *  (with the cart discount), record the payment, then print the invoice. */
+  async confirmPayment(d: InlinePaymentResult) {
+    const p = this._patient();
+    if (!p || this.confirming() || this._selected().length === 0) return;
+    this.confirming.set(true);
+    try {
+      const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
+      const order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
+        patientId: p.id,
+        refDoctorName: this.refDoctorName().trim() || null,
+        refHospitalName: this.refHospitalName().trim() || null,
+        priority: this._priority(),
+        source: appointmentId ? 'appointment' : 'walkin',
+        collectionType: 'walkin',
+        testIds: this._selected(),
+        metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
+      }));
+      const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }));
+      if (d.mode !== 'later') {
+        if (d.mode === 'split' && d.splitParts?.length) {
+          for (const part of d.splitParts) {
+            await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
+          }
+        } else {
+          await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
+          }));
+        }
+      }
+      try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
+      this._hasDraft.set(false);
+      this.paidBill = bill;
+      this.paidOrderId.set(order.id);
+      this.toasts.success(d.mode === 'later' ? 'Order placed — payment pending' : 'Payment collected');
+      // Auto-open the invoice print dialog (best-effort).
+      this.printPaidInvoice();
+    } catch (e: any) {
+      this.toasts.error(e?.message ?? 'Could not complete payment');
+    } finally {
+      this.confirming.set(false);
+    }
+  }
+
+  /** Reset the screen for the next patient after a completed order. */
+  startNewOrder() {
+    this.paidOrderId.set(null);
+    this.paidBill = null;
+    this._selected.set([]);
+    this._patient.set(null);
+    this.discountValue.set('');
+    this.router.navigateByUrl('/frontdesk');
+  }
+
+  printPaidInvoice() { void this.emitPaidInvoice('print'); }
+  showPaidInvoice() { void this.emitPaidInvoice('blob'); }
+
+  /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
+   *  either print it or open it in the in-app preview. */
+  private async emitPaidInvoice(action: 'print' | 'blob') {
+    const bill = this.paidBill;
+    const oid = this.paidOrderId();
+    if (!bill || !oid) return;
+    let tpl: any = null;
+    try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
+    let qrDataUrl: string | undefined;
+    try {
+      const res = await firstValueFrom(this.api.get<{ token: string }>(`/api/orders/${oid}/track-token`));
+      if (res?.token) {
+        const url = `${window.location.origin}/track/${res.token}`;
+        const QRCode = (await import('qrcode')).default;
+        qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+      }
+    } catch { /* QR best-effort */ }
+    const mode = tpl?.documentMode ?? 'auto';
+    const docTitle = mode === 'bill_of_supply' ? 'BILL OF SUPPLY'
+      : mode === 'tax_invoice' ? 'TAX INVOICE'
+      : (bill.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+    const blobUrl = generateInvoicePdf({
+      bill,
+      order: ({ patient: this._patient() ?? undefined } as unknown as Order),
+      invoiceNumber: bill.invoiceNumber ?? '',
+      effectivePayable: bill.totalPayable,
+      tatLabel: '',
+      docTitle, qrDataUrl,
+      practice: {
+        name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,
+        address: tpl?.address || undefined,
+        phone: tpl?.phone || undefined,
+        email: tpl?.email || undefined,
+        gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+      },
+      action,
+    });
+    if (action === 'blob' && blobUrl) {
+      this.closeInvoicePreview();
+      this.invoiceBlobUrl = blobUrl;
+      this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
+    }
+  }
+
+  // In-app invoice preview (Show invoice) — iframe modal, no browser popup.
+  readonly invoicePreviewUrl = signal<SafeResourceUrl | null>(null);
+  private invoiceBlobUrl: string | null = null;
+  closeInvoicePreview() {
+    if (this.invoiceBlobUrl) { try { URL.revokeObjectURL(this.invoiceBlobUrl); } catch { /* noop */ } this.invoiceBlobUrl = null; }
+    this.invoicePreviewUrl.set(null);
+  }
+  ngOnDestroy() { this.closeInvoicePreview(); }
+
   submit() {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
@@ -555,7 +723,7 @@ export class OrderCreateComponent implements OnInit {
         next: () => {
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
-          this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: editId } });
+          this.router.navigate(['/frontdesk/billing'], { queryParams: this.billingQueryParams(editId) });
         },
         error: e => { this._saving.set(false); this.toasts.error(e?.error?.error?.message ?? e?.message ?? 'Update failed'); }
       });
@@ -590,15 +758,29 @@ export class OrderCreateComponent implements OnInit {
         // queue). When the workflow puts billing on a separate counter, raise
         // the request and reset for the next patient.
         if (this.labCfg.billingMode() === 'front_desk') {
-          this.toasts.success('Order created — enter billing');
-          this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: order.id } });
+          // Front-desk collects via the inline pay pane (Confirm payment), so
+          // submit() isn't the path here — fall back to the billing screen if
+          // it's ever reached (e.g. edit-mode proceed).
+          this.router.navigate(['/frontdesk/billing'], { queryParams: this.billingQueryParams(order.id) });
         } else {
-          // Billing lives on a separate counter — raise the request and
-          // return to Home for the next patient.
-          this.toasts.success('Order created — billing request raised');
+          // Billing lives on a separate counter. Generate the invoice HERE
+          // (allocates the invoice number + tracking QR) so the patient leaves
+          // with something to present; the standalone counter then scans the
+          // QR / enters the invoice number to collect payment. The order stays
+          // 'created' (awaiting payment) until the counter takes payment.
           this._selected.set([]);
           this._patient.set(null);
-          this.router.navigateByUrl('/frontdesk');
+          this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }).subscribe({
+            next: bill => {
+              this.toasts.success(`Invoice ${bill.invoiceNumber ?? ''} generated — send the patient to the billing counter`);
+              this.router.navigateByUrl('/frontdesk');
+            },
+            error: () => {
+              // Order still exists — the counter can bill it by patient/order id.
+              this.toasts.success('Order created — billing request raised');
+              this.router.navigateByUrl('/frontdesk');
+            }
+          });
         }
       },
       error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Order failed'); }

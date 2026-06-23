@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
@@ -40,12 +40,45 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
         subtitle="Search by name, phone, or order ID. Pick an unbilled order to process payment.">
       </pf-screen-header>
 
+      <!-- Scan the invoice QR or enter the invoice number / order id directly. -->
+      <pf-tile tone="default" padding="lg" class="block mb-3">
+        <label class="pf-label">Scan QR or enter invoice / order ID</label>
+        <div class="pf-lookup">
+          <input class="pf-input pf-lookup__input" type="search"
+                 placeholder="Invoice number or order ID"
+                 [ngModel]="lookupCode()" (ngModelChange)="lookupCode.set($event)"
+                 (keydown.enter)="resolveLookup()" />
+          <pf-touch-btn size="sm" variant="primary" [disabled]="resolving()" (pressed)="resolveLookup()">
+            {{ resolving() ? 'Finding…' : 'Open' }}
+          </pf-touch-btn>
+          <pf-touch-btn size="sm" variant="ghost" (pressed)="startScan()">
+            <span icon-left aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
+              </svg>
+            </span>
+            Scan QR
+          </pf-touch-btn>
+        </div>
+      </pf-tile>
+
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <label class="pf-label">Search patient</label>
-        <input class="pf-input" type="search" autofocus
+        <input class="pf-input" type="search"
                placeholder="Name · MRN · phone · order ID"
                [ngModel]="query()" (ngModelChange)="onSearch($event)" />
       </pf-tile>
+
+      @if (scanning()) {
+        <div class="pf-scan" role="dialog" aria-modal="true" aria-label="Scan invoice QR">
+          <div class="pf-scan__bd" (click)="stopScan()"></div>
+          <div class="pf-scan__panel">
+            <video #scanVideo class="pf-scan__video" muted playsinline></video>
+            <p class="pf-scan__hint">Point the camera at the invoice QR code</p>
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="stopScan()">Cancel</pf-touch-btn>
+          </div>
+        </div>
+      }
 
       @if (results().length === 0) {
         @if (query().trim().length > 0 && !searching()) {
@@ -157,12 +190,96 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
       text-align: left;
     }
     .hidden { display: none; }
+
+    .pf-lookup { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pf-lookup__input { flex: 1; min-width: 180px; }
+
+    .pf-scan { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .pf-scan__bd { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .pf-scan__panel {
+      position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px;
+      width: min(420px, 100%); padding: 16px;
+      background: var(--bg-card-solid, #14141f);
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
+      border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    }
+    .pf-scan__video {
+      width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+      border-radius: 14px; background: #000;
+      border: 2px solid rgba(168, 85, 247, 0.5);
+    }
+    .pf-scan__hint { font-size: 12.5px; color: var(--text-tertiary); text-align: center; }
   `]
 })
-export class BillingCounterComponent {
+export class BillingCounterComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+
+  // ── Scan / lookup (invoice number · order id · tracking QR) ──
+  protected readonly lookupCode = signal('');
+  protected readonly resolving = signal(false);
+  protected readonly scanning = signal(false);
+  protected readonly scanSupported = typeof (window as any).BarcodeDetector !== 'undefined';
+  private readonly scanVideo = viewChild<ElementRef<HTMLVideoElement>>('scanVideo');
+  private mediaStream: MediaStream | null = null;
+  private scanRaf = 0;
+
+  /** Resolve a typed/scanned code → order → open the collect-payment screen. */
+  resolveLookup(code?: string) {
+    const raw = (code ?? this.lookupCode()).trim();
+    if (!raw || this.resolving()) return;
+    this.resolving.set(true);
+    this.api.get<{ orderId: string }>(`/api/billing/lookup?code=${encodeURIComponent(raw)}`).subscribe({
+      next: r => {
+        this.resolving.set(false);
+        if (r?.orderId) this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: r.orderId } });
+        else this.toasts.error('No order matches that code');
+      },
+      error: () => { this.resolving.set(false); this.toasts.error('No order matches that code'); }
+    });
+  }
+
+  async startScan() {
+    if (!this.scanSupported) { this.toasts.warning('Camera scan is not supported on this browser — type the invoice number instead'); return; }
+    this.scanning.set(true);
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      // Wait a tick for the <video> to render, then attach + start detecting.
+      setTimeout(() => {
+        const video = this.scanVideo()?.nativeElement;
+        if (!video || !this.mediaStream) { this.stopScan(); return; }
+        video.srcObject = this.mediaStream;
+        video.play().catch(() => { /* autoplay quirks — user gesture already given */ });
+        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+        const tick = async () => {
+          if (!this.scanning()) return;
+          try {
+            const codes = await detector.detect(video);
+            if (codes && codes.length && codes[0].rawValue) {
+              const value = codes[0].rawValue as string;
+              this.stopScan();
+              this.resolveLookup(value);
+              return;
+            }
+          } catch { /* transient frame error — keep scanning */ }
+          this.scanRaf = requestAnimationFrame(tick);
+        };
+        this.scanRaf = requestAnimationFrame(tick);
+      }, 0);
+    } catch {
+      this.stopScan();
+      this.toasts.error('Could not access the camera');
+    }
+  }
+
+  stopScan() {
+    this.scanning.set(false);
+    if (this.scanRaf) { cancelAnimationFrame(this.scanRaf); this.scanRaf = 0; }
+    if (this.mediaStream) { this.mediaStream.getTracks().forEach(t => t.stop()); this.mediaStream = null; }
+  }
+
+  ngOnDestroy() { this.stopScan(); }
 
   protected readonly query = signal('');
   private readonly _results = signal<Patient[]>([]);

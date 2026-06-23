@@ -17,6 +17,7 @@ type GstScope = 'branch' | 'region' | 'tenant';
 interface TenantBillingConfig {
   id?: string;
   tenantId: string;
+  gstEnabled: boolean;
   gstScope: GstScope;
   filingFrequency: 'monthly' | 'quarterly';
   allowDiscounts: boolean;
@@ -75,7 +76,26 @@ interface GstRow {
       </div>
 
       @if (tab() === 'gst') {
-        <pf-tile tone="default" padding="lg" class="block">
+        <pf-tile tone="default" padding="lg" class="block mb-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-semibold text-[15px]" style="color: var(--text-primary);">Enable GST</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                Off → bills carry no tax and invoices print as <strong>Bill of Supply</strong> (most diagnostic
+                services are GST-exempt). On → each test's tax slab applies.
+              </p>
+            </div>
+            <pf-toggle
+              [checked]="config().gstEnabled"
+              size="md"
+              (checkedChange)="patch({ gstEnabled: $event })">
+            </pf-toggle>
+          </div>
+        </pf-tile>
+
+        <pf-tile tone="default" padding="lg" class="block"
+                 [style.opacity]="config().gstEnabled ? 1 : 0.5"
+                 [style.pointer-events]="config().gstEnabled ? 'auto' : 'none'">
           <div class="space-y-5">
             <div>
               <label class="pf-label">GST scope</label>
@@ -310,6 +330,7 @@ export class BillingConfigComponent implements OnInit {
 
   private readonly _config = signal<TenantBillingConfig>({
     tenantId: '',
+    gstEnabled: true,
     gstScope: 'branch',
     filingFrequency: 'monthly',
     allowDiscounts: true,
@@ -387,6 +408,7 @@ export class BillingConfigComponent implements OnInit {
   saveConfig() {
     const c = this._config();
     this.api.post('/api/config/billing', {
+      gstEnabled: c.gstEnabled,
       gstScope: c.gstScope, filingFrequency: c.filingFrequency,
       allowDiscounts: c.allowDiscounts, maxDiscountPct: c.maxDiscountPct,
       overrideDiscountPct: c.overrideDiscountPct, approvalThresholdPct: c.approvalThresholdPct,

@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -70,7 +70,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+    <section [class]="embedded ? 'pt-1 pb-2' : 'px-4 md:px-8 lg:px-10 pt-6 pb-10'">
+      @if (!embedded) {
       <pf-screen-header
         eyebrow="Frontdesk · Billing"
         title="Collect payment"
@@ -119,6 +120,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           Back
         </pf-touch-btn>
       </pf-screen-header>
+      }
 
       @if (bill(); as b) {
         <div class="pf-bill-grid">
@@ -470,8 +472,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
          finish (which routes to the post-payment / sample-collection
          flow). The pf-no-print class hides it during printing. -->
     @if (paymentDoneOpen()) {
-      <div class="pf-pay-modal pf-no-print" role="dialog" aria-modal="true" aria-label="Payment collected">
-        <div class="pf-pay-modal__backdrop" (click)="closePaymentDoneDialog()"></div>
+      <div class="pf-pay-modal pf-no-print" [class.pf-pay-modal--inline]="embedded" role="dialog" aria-modal="true" aria-label="Payment collected">
+        @if (!embedded) {
+          <div class="pf-pay-modal__backdrop" (click)="closePaymentDoneDialog()"></div>
+        }
         <div class="pf-pay-modal__shell">
           <div class="pf-pay-modal__icon" aria-hidden="true">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1043,6 +1047,14 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       display: flex; align-items: center; justify-content: center;
       padding: 5vh 24px 24px;
     }
+    /* Embedded in the order screen — render inline (no overlay/popup). */
+    .pf-pay-modal--inline {
+      position: static; inset: auto; z-index: auto;
+      padding: 0; margin-top: 12px;
+    }
+    .pf-pay-modal--inline .pf-pay-modal__shell {
+      max-width: none; box-shadow: none;
+    }
     .pf-pay-modal__backdrop {
       position: absolute; inset: 0;
       background:
@@ -1275,7 +1287,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
   `]
 })
-export class BillingComponent implements OnInit {
+export class BillingComponent implements OnInit, OnChanges {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
@@ -1284,6 +1296,33 @@ export class BillingComponent implements OnInit {
   private readonly location = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
   private readonly billingEvents = inject(BillingEventsService);
+
+  /** Embedded mode: render inline (e.g. inside the order screen) without the
+   *  page header. The orderId comes from {@link embeddedOrderId} instead of the
+   *  route; Back/Cancel emit {@link closed}; a successful payment emits
+   *  {@link paid} (the post-payment options dialog still appears for invoicing). */
+  @Input() embedded = false;
+  @Input() embeddedOrderId: string | null = null;
+  @Input() embeddedDiscount: number | null = null;
+  /** Bumped by the host (order screen) when the order's tests change → reload
+   *  the bill so the embedded panel reflects the new total. */
+  @Input() reloadTick = 0;
+  @Output() closed = new EventEmitter<void>();
+  @Output() paymentDone = new EventEmitter<void>();
+
+  ngOnChanges(ch: SimpleChanges): void {
+    if (ch['reloadTick'] && !ch['reloadTick'].firstChange && this.embedded) this.reloadBill();
+  }
+
+  /** Re-fetch the (server-rebuilt) bill after the order's tests changed. */
+  private reloadBill(): void {
+    const oid = this.embeddedOrderId ?? this._bill()?.orderId;
+    if (!oid || this.paid()) return;
+    this.api.post<Bill>('/api/billing/', { orderId: oid, discount: 0 }).subscribe({
+      next: b => this._bill.set(b),
+      error: () => { /* keep the current bill on a transient error */ }
+    });
+  }
 
   readonly collectsBilling = this.settings.collectsBilling;
   setCollectsBilling(v: boolean) { this.settings.setCollectsBilling(v); }
@@ -1499,8 +1538,11 @@ export class BillingComponent implements OnInit {
   });
 
   ngOnInit() {
-    const orderId = this.route.snapshot.queryParamMap.get('orderId');
-    if (!orderId) { this.toasts.error('No order id'); this.router.navigateByUrl('/frontdesk'); return; }
+    const orderId = this.embeddedOrderId ?? this.route.snapshot.queryParamMap.get('orderId');
+    if (!orderId) {
+      if (this.embedded) { this.closed.emit(); return; }
+      this.toasts.error('No order id'); this.router.navigateByUrl('/frontdesk'); return;
+    }
 
     this.api.get<Order>(`/api/orders/${orderId}`).subscribe({ next: o => this._order.set(o) });
     // Mint (or fetch) the public tracking token so the invoice can show a QR
@@ -1509,12 +1551,23 @@ export class BillingComponent implements OnInit {
       next: r => { if (r?.token) this.trackToken.set(r.token); }, error: () => {}
     });
     this.api.get<any>('/api/config/invoice-template').subscribe({ next: t => this.invoiceTpl.set(t), error: () => {} });
+    // A discount carried from the Build-an-order cart (resolved ₹) — via the
+    // route in standalone mode, or the input in embedded mode.
+    const carriedDiscount = this.embedded
+      ? (this.embeddedDiscount != null ? String(this.embeddedDiscount) : null)
+      : this.route.snapshot.queryParamMap.get('discount');
     this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
       next: b => {
         this._bill.set(b);
         // Restore any saved draft *after* the bill is loaded so the
         // discount cap clamping can use the real subTotal+totalTax.
         this.restoreDraftFor(orderId);
+        // A discount passed from the order-build cart wins over an old draft.
+        const d = parseInt(carriedDiscount ?? '', 10);
+        if (Number.isFinite(d) && d > 0) {
+          this.setDiscountKind('flat');
+          this.setDiscount(String(d));
+        }
       },
       error: e => this.toasts.error(e.message ?? 'Could not create bill')
     });
@@ -1747,10 +1800,10 @@ export class BillingComponent implements OnInit {
           this.clearDraft();
           this.toasts.success('Payment collected');
           this.billingEvents.notifyPaid();
-          // Open the post-payment options dialog so reception can pick
-          // what happens next: print invoice, WhatsApp it to the
-          // patient, or finish (which falls back to the post-payment
-          // flow that drives sample collection).
+          // Embedded (order screen): emit + auto-open the invoice print dialog;
+          // the post-pay actions then render INLINE (no popup). Standalone keeps
+          // the modal so reception picks print / WhatsApp / finish.
+          if (this.embedded) { this.paymentDone.emit(); this.printInvoice(); }
           this._paymentDoneOpen.set(true);
         },
         error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
@@ -1776,13 +1829,17 @@ export class BillingComponent implements OnInit {
    *  is from the order page, so Location.back() returns there. If
    *  history is empty (deep-linked tab), fall back to /frontdesk. */
   back() {
+    if (this.embedded) { this.closed.emit(); return; }
     if (window.history.length > 1) this.location.back();
     else this.router.navigateByUrl('/frontdesk');
   }
 
   /** Leave the collect-payment screen without taking payment. The order itself
    *  is already saved; this just abandons billing and returns to the desk. */
-  cancel() { this.router.navigateByUrl('/frontdesk'); }
+  cancel() {
+    if (this.embedded) { this.closed.emit(); return; }
+    this.router.navigateByUrl('/frontdesk');
+  }
 
   /** Generate a properly-formatted A4 invoice PDF (header, items table,
    *  totals, footer) and trigger a download. Built client-side with
@@ -1876,6 +1933,9 @@ export class BillingComponent implements OnInit {
    *  the queue takes over. */
   finishAfterPayment() {
     this._paymentDoneOpen.set(false);
+    // Embedded in the order screen → hand control back to the host (it resets
+    // for the next patient) instead of routing to the post-payment screen.
+    if (this.embedded) { this.closed.emit(); return; }
     const b = this._bill();
     if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
     else this.router.navigateByUrl('/frontdesk');
@@ -1885,6 +1945,7 @@ export class BillingComponent implements OnInit {
    *  on a paid-but-still-clickable billing page. */
   closePaymentDoneDialog() {
     this._paymentDoneOpen.set(false);
+    if (this.embedded) { this.closed.emit(); return; }
     const b = this._bill();
     if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
     else this.router.navigateByUrl('/frontdesk');

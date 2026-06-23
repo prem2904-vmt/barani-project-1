@@ -310,8 +310,17 @@ export class WorkflowRendererComponent implements OnChanges {
   private skipAsNeeded(index: number): number {
     const steps = this.visibleSteps();
     let i = index;
-    while (i < steps.length && this.evaluateRules(steps[i].skipWhen ?? [], 'AND')) i++;
+    while (i < steps.length && this.shouldSkipStep(steps[i])) i++;
     return i;
+  }
+
+  /** A step is auto-skipped only when it HAS skipWhen rules and they all pass.
+   *  A step with no skipWhen must never be skipped — otherwise every
+   *  unconditional step (e.g. "Additional Info") would be skipped, since
+   *  evaluateRules([]) is true by design (used for showWhen "always show"). */
+  private shouldSkipStep(step: WorkflowStep): boolean {
+    const rules = step.skipWhen ?? [];
+    return rules.length > 0 && this.evaluateRules(rules, 'AND');
   }
 
   // ── validation ─────────────────────────────────────────────────

@@ -93,14 +93,42 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
               <input class="pf-input mt-1" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
             </label>
             <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Number digits</span>
-              <input class="pf-input mt-1" type="number" min="1" max="10" [ngModel]="pidPad()" (ngModelChange)="pidPad.set(+$event)" />
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="pidPad.set(+$event)" />
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Prefix (optional)</span>
               <input class="pf-input mt-1" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
             </label>
           </div>
+
+          <!-- Letters are optional: ON → alphanumeric odometer, OFF → plain numbers. -->
+          <label class="pf-ls__inline-toggle mt-4">
+            <span class="pf-ls__inline-toggle-text">
+              <strong>Include letters</strong> <span style="opacity:.7">— alphanumeric IDs (a001 … then b, c …). Off = plain numbers.</span>
+            </span>
+            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="pidSerial() === 'alpha'">
+              <input type="checkbox" [checked]="pidSerial() === 'alpha'" (change)="pidSerial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
+              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+            </span>
+          </label>
+
+          @if (pidSerial() === 'alpha') {
+            <label class="block mt-4 max-w-[220px]">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
+              <select class="pf-input mt-1" [ngModel]="pidLetters()" (ngModelChange)="pidLetters.set(+$event)">
+                <option [ngValue]="1">A (1 letter)</option>
+                <option [ngValue]="2">AA (2 letters)</option>
+                <option [ngValue]="3">AAA (3 letters)</option>
+                <option [ngValue]="4">AAAA (4 letters)</option>
+              </select>
+            </label>
+            <p class="pf-ls__hint mt-3">
+              Alphanumeric odometer: the number runs up to <strong>6 digits</strong> (max 999999), then the
+              <strong>uppercase</strong> letters advance at the chosen fixed width. Example (AA):
+              <span class="font-mono">AA001 … AA999999, AB001 …, ZZ999999</span>.
+            </p>
+          }
           <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
             Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ pidPreview() }}</strong>
           </p>
@@ -288,6 +316,12 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
     .pf-ls__toggle--on .pf-ls__toggle-track { background: var(--gradient-primary); }
     .pf-ls__toggle--on .pf-ls__toggle-thumb { transform: translateX(20px); }
 
+    .pf-ls__inline-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; cursor: pointer;
+    }
+    .pf-ls__inline-toggle-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+
     .pf-ls__dept-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -373,6 +407,12 @@ export class LabSettingsComponent implements OnInit {
   protected readonly pidSep = signal('-');
   protected readonly pidPad = signal(4);
   protected readonly pidPrefix = signal('');
+  /** 'numeric' → zero-padded number; 'alpha' → alphanumeric odometer
+   *  ({LETTERS}{number}, number 1…999999 then the fixed-width uppercase
+   *  letters advance, e.g. width 2: AA001 … AA999999, AB001 …). */
+  protected readonly pidSerial = signal<'numeric' | 'alpha'>('numeric');
+  /** Fixed letter-block width for alpha mode (1–4 → A/AA/AAA/AAAA). */
+  protected readonly pidLetters = signal(2);
   protected readonly pidSaving = signal(false);
   /** Live sample of what a new id looks like with today's date + seq 1. */
   protected readonly pidPreview = computed(() => {
@@ -387,11 +427,15 @@ export class LabSettingsComponent implements OnInit {
       : this.pidDate() === 'mmyy' ? mm + yy
       : this.pidDate() === 'yy' ? yy
       : this.pidDate() === 'dd' ? dd : '';
-    const num = '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
+    // First id (seq 1): the fixed-width UPPERCASE letters + the number, padded
+    // to the configured min width (capped at 6 for alpha). e.g. AA001.
+    const serial = this.pidSerial() === 'alpha'
+      ? 'A'.repeat(Math.min(Math.max(this.pidLetters(), 1), 4)) + '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 6), '0')
+      : '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
     const head = (this.pidPrefix() ?? '') + date;
     // Blank separator → no separator (e.g. mmdd000).
     const sep = this.pidSep() ?? '';
-    return head.length ? `${head}${sep}${num}` : num;
+    return head.length ? `${head}${sep}${serial}` : serial;
   });
 
   // Branch lab-config toggles.
@@ -443,6 +487,8 @@ export class LabSettingsComponent implements OnInit {
         this.pidSep.set(c.separator ?? '-');
         this.pidPad.set(c.padding ?? 4);
         this.pidPrefix.set(c.prefix ?? '');
+        this.pidSerial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
+        this.pidLetters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
       }
     });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
@@ -464,6 +510,8 @@ export class LabSettingsComponent implements OnInit {
       separator: this.pidSep() ?? '',
       padding: this.pidPad(),
       prefix: this.pidPrefix()?.trim() || null,
+      serialMode: this.pidSerial(),
+      letterCount: this.pidLetters(),
     }).subscribe({
       next: () => { this.pidSaving.set(false); this.toasts.success('Patient ID format saved'); },
       error: () => { this.pidSaving.set(false); this.toasts.error('Could not save patient ID format'); },
