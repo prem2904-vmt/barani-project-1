@@ -176,7 +176,7 @@ function newFieldId(): string {
         <!-- Pricing + TAT — 1-col on lg (it's narrower), 3-col on smaller. -->
         <pf-tile tone="default" padding="lg" class="block">
           <h3 class="section-title">Pricing & TAT</h3>
-          <div class="grid grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
+          <div class="pf-pricing-grid grid grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
             <div><label class="pf-label">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
@@ -790,6 +790,87 @@ function newFieldId(): string {
       font-size: 11px;
       font-weight: 500;
       border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (>=1280)
+       and the base rules above are left byte-for-byte unchanged.
+       iOS zoom (16px inputs) + 44px tap targets are already enforced
+       globally at @media (max-width:640px) in styles.scss, so this
+       page only needs: (a) neutralise sticky :hover on touch devices,
+       (b) make a couple of icon-only affordances finger-friendly on
+       coarse pointers, (c) drop the dense range grid to fewer columns
+       on phones so 6 number inputs don't get crushed.
+       ───────────────────────────────────────────────────────────── */
+
+    /* (a) Touch devices keep no pointer to rest on, so the component's
+       hover states would stick after a tap. Re-assert resting visuals
+       when the primary pointer can't hover. */
+    @media (hover: none) {
+      .param-row:hover { border-color: var(--glass-border); }
+      .param-row--open:hover { border-color: rgba(168, 85, 247, 0.45); }
+      .param-row__summary:hover { background: transparent; }
+      .param-row:hover .param-remove { opacity: 0.45; }
+      .param-remove:hover {
+        background: transparent;
+        color: var(--text-muted);
+        border-color: transparent;
+        opacity: 0.45;
+      }
+      .pf-pkg-pick:hover { border-color: var(--glass-border); }
+      .pf-pkg-pick--on:hover { border-color: rgba(168, 85, 247, 0.55); }
+
+      /* The reference-range "+ Add range" and "×" remove buttons use Tailwind
+         hover: text-colour utilities, which can stick after a tap on a touch
+         device. Re-assert the resting colour when the pointer can't hover.
+         (Targeted by their Tailwind classes so no markup change is needed.) */
+      .text-violet-400.hover\\:text-violet-300:hover { color: rgb(167 139 250); }
+      .text-rose-400.hover\\:text-rose-300:hover { color: rgb(251 113 133); }
+    }
+
+    /* (b) On coarse pointers the dimmed remove icon is easy to miss and
+       hard to hit — keep it fully visible and give it a real touch box.
+       (Global rule already sets min-height:44px on role=button.) */
+    @media (pointer: coarse) {
+      .param-remove { opacity: 0.85; min-width: 44px; }
+    }
+
+    /* (c) Phone: the reference-range editor packs 6 inputs across at the
+       md breakpoint; on a phone that's far too tight. The Tailwind
+       grid-cols-2 base already kicks in below md (768px), but reinforce
+       a comfortable 2-up here and let the critical/plausible row match.
+       This rule only applies <=640px so iPad/desktop are untouched. */
+    @media (max-width: 640px) {
+      .param-row__body { padding-left: 10px; padding-right: 10px; }
+      .param-row__meta { max-width: 100%; }
+
+      /* Pricing & TAT is 3 number-inputs across at the grid-cols-3 base.
+         On a phone each cell shrinks to ~50px of usable field once the
+         stepper column + suffix are subtracted — legible but cramped and
+         awkward to type into. Stack them so each row gets full width.
+         (lg:grid-cols-1 already covers desktop; this only touches <=640px,
+         leaving iPad's 3-up untouched.) */
+      .pf-pricing-grid { grid-template-columns: 1fr; }
+    }
+
+    /* (d) WEB-BELOW-DESKTOP band (641–1279px: iPad + any browser narrower
+       than 1280). The reference-range editor uses Tailwind md:grid-cols-6
+       (kicks in at 768px), so from 768–1279 it packs SIX pf-number-inputs —
+       each with its own +/- stepper column — across one parameter row that
+       sits inside the full-width Parameters tile minus the 64px rail. At the
+       lower half of this band the cells crush to an unusable width. Drop the
+       six-up to a comfortable 3-up and the critical/plausible four-up to 2-up
+       so nothing overflows or squishes. Targeted by the literal Tailwind
+       column classes inside .param-row__ranges so no markup changes and the
+       grid-cols-2 phone base (<640) and md:grid-cols-6/4 desktop (>=1280)
+       both stay byte-identical. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .param-row__ranges .md\\:grid-cols-6 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .param-row__ranges .md\\:grid-cols-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   `]
 })

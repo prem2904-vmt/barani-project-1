@@ -336,3 +336,36 @@
   background: rgba(248, 113, 113, 0.18);
   color: #7f1d1d;
 }
+
+/* ── Touch sizing (coarse pointers only) ───────────────────────────
+   Additive override: on touch input the show/hide-password button
+   must meet the 44px minimum tap target. The base 40px stays for
+   mouse/desktop. Width grows; the field-row keeps the input flexible
+   so layout doesn't shift on wide viewports (this only fires on
+   pointer:coarse, i.e. phones/tablets). */
+@media (pointer: coarse) {
+  .pf-auth__eye {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ── Phone (<=640) ─────────────────────────────────────────────────
+   Additive, below-desktop only. Keep the form comfortably within the
+   small viewport: cap the card width to the available space and let
+   the stack scroll within dvh rather than the whole page if content
+   ever exceeds the viewport (e.g. error pill + env strip + keyboard).
+   Desktop (>=1280) is untouched. */
+@media (max-width: 640px) {
+  .pf-auth__stack {
+    max-width: 100%;
+  }
+}
+
+/* ── Electron (desktop shell) ───────────────────────────────────────
+   Electron is desktop-web; the only adjustment needed is guaranteeing
+   dynamic-viewport sizing for the frameless window. Base already uses
+   dvh, so this is a defensive no-op alias kept scoped to the page. */
+:host-context(html.electron) .pf-auth {
+  min-height: 100dvh;
+}

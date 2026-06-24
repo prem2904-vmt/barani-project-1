@@ -61,6 +61,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
 @Component({
   selector: 'pf-billing',
   standalone: true,
+  // Layout hook only: lets the non-scroll page rules target the standalone
+  // page (:host:not(.pf-embedded)) without affecting the inline/embedded use
+  // inside the order screen, which must keep flowing in normal document flow.
+  host: { '[class.pf-embedded]': 'embedded' },
   imports: [
     CurrencyInrPipe,
     NumPadComponent,
@@ -72,7 +76,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section [class]="embedded ? 'pt-1 pb-2' : 'px-4 md:px-8 lg:px-10 pt-6 pb-10'">
+    <section [class]="embedded ? 'pt-1 pb-2' : 'pf-bill-page px-4 md:px-8 lg:px-10 pt-6 pb-10'">
       @if (!embedded) {
       <pf-screen-header
         eyebrow="Frontdesk · Billing"
@@ -1070,7 +1074,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-pay-modal {
       position: fixed; inset: 0; z-index: 1100;
       display: flex; align-items: center; justify-content: center;
-      padding: 5vh 24px 24px;
+      padding: 5dvh 24px 24px;
     }
     /* Embedded in the order screen — render inline (no overlay/popup). */
     .pf-pay-modal--inline {
@@ -1137,9 +1141,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
 
     /* ── Equal-height balanced layout ────────────────────────
      * Two columns stay side-by-side from md (iPad portrait+); both
-     * tiles are capped at the visible viewport so the page itself
-     * never grows. Anything that overflows scrolls inside its tile,
-     * not the page. */
+     * tiles fill the available height so the page itself never grows.
+     * Anything that overflows scrolls inside its tile, not the page. */
     .pf-bill-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -1152,10 +1155,38 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-bill-col {
       min-width: 0;          /* lets grid children honour width: 100% */
       display: flex;
-      /* Cap to visible viewport minus header / toolbar / padding so
-       * the tile body scrolls instead of pushing the page. ~210px
-       * accounts for the screen header + outer padding. */
-      max-height: calc(100dvh - 210px);
+    }
+
+    /* ── Non-scroll WORK page (standalone only) ──────────────
+     * Fill the shell's main area and never scroll the whole page;
+     * the scroll lives inside each tile's body. The embedded use
+     * (:host.pf-embedded, inside the order screen) is intentionally
+     * excluded so it keeps flowing in normal document flow. */
+    :host { display: block; }
+    :host:not(.pf-embedded) { height: 100%; }
+    .pf-bill-page {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    /* Header / toolbar are fixed; they never scroll or shrink. */
+    .pf-bill-page pf-screen-header { flex: 0 0 auto; }
+    /* The grid is the content region: it takes the remaining height
+     * and its columns/tiles scroll internally. On phone (single
+     * column) the grid itself scrolls so both stacked tiles are
+     * reachable; from md the two columns sit side-by-side and each
+     * tile body scrolls. */
+    .pf-bill-page .pf-bill-grid {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    @media (min-width: 768px) {
+      .pf-bill-page .pf-bill-grid { overflow: hidden; }
+      .pf-bill-page .pf-bill-col { min-height: 0; }
     }
     .pf-bill-tile {
       flex: 1;
@@ -1300,6 +1331,112 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-refund__btn { width: 100%; padding: 11px; border-radius: 11px; border: 0; font-weight: 700;
       background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #1a1a1a; cursor: pointer; }
     .pf-refund__btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ════════════════════════════════════════════════════════
+     * CROSS-PLATFORM OVERRIDES (additive only).
+     * Desktop-web >=1280px is intentionally untouched. Every rule
+     * below is gated to a sub-desktop width, a touch pointer, or a
+     * native platform class, so it can never affect the desktop
+     * layout above.
+     * ════════════════════════════════════════════════════════ */
+
+    /* ── Phone (<=640): stop iOS zoom-on-focus on the inputs the
+     * user types into (font-size must be >=16px). Scoped to this
+     * page's own inputs — never the shared primitives. */
+    @media (max-width: 640px) {
+      .pf-discount__input { font-size: 16px; }
+      .pf-wallet-search { font-size: 16px; }
+      .pf-ref-input { font-size: 16px; }
+
+      /* Phone = single column. Rather than trap scroll inside two
+       * viewport-tall boxes, let each tile size to its content and let
+       * the GRID (the page's content region) scroll as one column. The
+       * page root itself still never scrolls (non-scroll WORK layout).
+       * pf-bill-items also stops being an inner scroller here so the
+       * whole invoice grows naturally inside the single scroll context. */
+      .pf-bill-col { flex: 0 0 auto; }
+      .pf-bill-tile { flex: 0 0 auto; overflow-y: visible; }
+      .pf-bill-items { overflow-y: visible; flex: 0 0 auto; }
+      .pf-bill-tile--noscroll .pf-pay-body { flex: 0 0 auto; }
+      .pf-wallet-list { overflow-y: visible; }
+
+      /* The mode picker is a 3-col grid on phone (base) — give the
+       * tap targets a comfortable touch height. */
+      .pf-mode--compact { min-height: 56px; }
+
+      /* Quick-cash chips and discount unit switch: enlarge to >=44px
+       * touch targets. */
+      .pf-cash2__quick button { min-height: 44px; }
+      .pf-discount__kind button { width: 34px; height: 34px; }
+      .pf-discount__input { height: 44px; }
+
+      /* Wallet rows are tappable list items — give them room. */
+      .pf-wallet-row { min-height: 48px; }
+
+      /* Post-payment dialog becomes a full-width bottom sheet so it
+       * sits in the thumb zone and clears the bottom-nav pill +
+       * safe-area. Not applied when embedded (already inline). */
+      .pf-pay-modal:not(.pf-pay-modal--inline) {
+        align-items: flex-end;
+        padding: 0;
+      }
+      .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+        max-width: none;
+        border-radius: 20px 20px 0 0;
+        /* --tab-nav-total-height already folds in env(safe-area-inset-bottom),
+         * so do NOT add the inset again here. */
+        padding-bottom: calc(22px + var(--tab-nav-total-height, 0px));
+      }
+    }
+
+    /* ── iPad (641–1279): the two-column grid already kicks in at
+     * 768px; below that (small landscape phones / narrow split view)
+     * keep a single column. Nothing extra needed for portrait iPad —
+     * it already uses both columns. Just ensure the modal stays a
+     * centred card (not a phone sheet) and clears safe-area. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+        margin-bottom: env(safe-area-inset-bottom);
+      }
+    }
+
+    /* ── Touch pointer (any size): the mode tiles use a hover-only
+     * background change; that's fine, but ensure pressed feedback is
+     * the primary affordance and tap targets are generous. */
+    @media (pointer: coarse) {
+      .pf-toolbar-btn,
+      .pf-wallet-change,
+      .pf-refund__chip,
+      .pf-pay-modal__btn { min-height: 44px; }
+      .pf-bill-print-icon { width: 40px; height: 40px; }
+    }
+
+    /* ── Hover-capable devices only: keep the existing hover styles.
+     * On touch they were applying on tap-and-hold; neutralise the
+     * sticky hover by gating the page's own hover rules. */
+    @media (hover: none) {
+      .pf-collect-toggle:hover,
+      .pf-mode:not(.pf-mode--on):hover,
+      .pf-toolbar-btn:hover:not([disabled]),
+      .pf-bill-print-icon:hover,
+      .pf-wallet-row:hover,
+      .pf-wallet-change:hover,
+      .pf-pay-modal__btn:hover,
+      .pf-cash2__quick button:hover,
+      .pf-cash-btn:hover { background: var(--glass-bg); }
+    }
+
+    /* ── Capacitor native: the post-payment dialog is this page's own
+     * fixed full-bleed chrome. Add the notch/home-indicator insets so
+     * it never collides with the status bar or home indicator. The
+     * global safe-area is absorbed on body, but a position:fixed
+     * overlay escapes that, so it needs its own insets. */
+    :host-context(html.cap-native) .pf-pay-modal:not(.pf-pay-modal--inline) {
+      padding-top: calc(5dvh + env(safe-area-inset-top));
+    }
+    :host-context(html.cap-native) .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+      padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    }
 
     /* ── Print stylesheet ────────────────────────────────────
      * Print invoice button calls window.print(). Hide non-invoice

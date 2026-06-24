@@ -369,6 +369,56 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
       text-transform: uppercase; color: var(--text-muted);
     }
+
+    /* ── Cross-platform overrides — additive only, never touch base rules ── */
+
+    /* Coarse-pointer (touch) sizing: make the toggle a >=44px tap target
+       without changing its visual track size. Scoped to this page's toggle. */
+    @media (pointer: coarse) {
+      :host .pf-ls__toggle { min-width: 44px; min-height: 44px; justify-content: flex-end; }
+      :host .pf-ls__inline-toggle .pf-ls__toggle { min-width: 0; }
+
+      /* This page's own action buttons (Save format / Edit in Workflow):
+         the toolbar primitives already meet 44px, but these inline buttons
+         are sized with small Tailwind padding — bump their hit area. */
+      :host button[type="button"] { min-height: 44px; }
+      :host .pf-ls__inline-toggle .pf-ls__toggle { min-height: 44px; align-items: center; }
+    }
+
+    /* Touch devices: the inline text buttons use Tailwind hover: classes which
+       otherwise stick after a tap. Gate the page's own hover affordances. */
+    @media (hover: none) {
+      :host .text-violet-400.hover\\:text-violet-300:hover { color: #a78bfa; }
+    }
+
+    /* Phone (<=640): keep iOS from auto-zooming form fields by ensuring
+       a >=16px font on this page's own controls. Targets element selectors
+       under :host so the shared .pf-input primitive is left untouched. */
+    @media (max-width: 640px) {
+      :host .px-4 { padding-left: 16px; padding-right: 16px; }
+      :host select,
+      :host input[type="text"],
+      :host input[type="number"],
+      :host input:not([type]) { font-size: 16px; }
+
+      /* Patient-ID grid: 2 cols can crowd narrow phones — go single column. */
+      :host .grid.grid-cols-2 { grid-template-columns: 1fr; }
+
+      /* Danger zone: stack the button full-width below the copy on phone. */
+      :host .pf-ls__danger { align-items: stretch; }
+      :host .pf-ls__danger > pf-touch-btn,
+      :host .pf-ls__danger pf-touch-btn button { width: 100%; }
+
+      /* Header rows: the title/copy + toggle stay on one row but allow
+         the copy to shrink so the toggle never gets pushed off-screen. */
+      :host .pf-ls__inline-toggle { align-items: flex-start; }
+    }
+
+    /* iPad (641–1279): use the width — show the patient-ID fields as a
+       2-up grid rather than the desktop 4-up, which would be too tight. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host .grid.grid-cols-2.md\\:grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+    }
   `]
 })
 export class LabSettingsComponent implements OnInit {

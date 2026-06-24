@@ -43,7 +43,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 
         <!-- Test picker + status -->
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 pf-test-pick">
             <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Test</label>
             <pf-select
@@ -337,8 +337,31 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-icon-btn--danger:hover:not(:disabled) { color: #f87171; border-color: rgba(244,63,94,0.5); }
 
     .pf-link-btn { background: transparent; border: 0; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: #c4b5fd; cursor: pointer; border-radius: 8px; }
-    .pf-link-btn:hover:not(:disabled) { background: rgba(168,85,247,0.1); }
     .pf-link-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Additive cross-platform overrides only — desktop-web (>=1280)
+         stays byte-identical. ──────────────────────────────────────── */
+
+    /* Gate hovers so touch taps don't stick. */
+    @media (hover: hover) {
+      .pf-link-btn:hover:not(:disabled) { background: rgba(168,85,247,0.1); }
+    }
+
+    /* Coarse pointers: 26px reorder/delete buttons and the small link
+       buttons fall below the 44px touch minimum — enlarge hit area only. */
+    @media (pointer: coarse) {
+      .pf-icon-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+      .pf-link-btn { min-height: 44px; display: inline-flex; align-items: center; }
+    }
+
+    /* Phone (<=640): test picker uses a fixed inline width (260px) that
+       can crowd the status pill — let its row wrap and the select fill
+       the line. Guard the preview table from pushing the page wide. */
+    @media (max-width: 640px) {
+      .pf-test-pick { flex: 1 1 100%; }
+      :host ::ng-deep .pf-test-pick pf-select { width: 100% !important; }
+      .pf-preview { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
 
     .pf-preview { font-size: 12.5px; }
     .pf-prev-sec { margin-top: 12px; }

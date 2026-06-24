@@ -131,7 +131,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
             <pf-tile tone="default" padding="lg" class="block">
               <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 mb-1">
+                  <div class="pf-vendor__name-row flex items-center gap-2 mb-1">
                     <h3 class="pf-vendor__name">{{ v.name }}</h3>
                     @if (v.code) { <span class="pf-vendor__code">{{ v.code }}</span> }
                     @if (!v.isActive) { <pf-chip tone="rose" size="sm">inactive</pf-chip> }
@@ -347,6 +347,67 @@ const EMPTY_DRAFT: NewVendorDraft = {
       font-size: 11px; color: var(--text-tertiary); text-align: right;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
+
+    /* ============================================================
+       RESPONSIVE OVERRIDES — additive only, never affect >=1280px
+       ============================================================ */
+
+    /* Phone (<=640): stop iOS zoom on focus, full-width balance,
+       and collapse the fixed 4-col transaction grid to a stacked card. */
+    @media (max-width: 640px) {
+      :host .pf-input {
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+
+      /* Balance block: don't force a 200px min on a narrow screen —
+         let it sit full-width under the vendor name, left-aligned. */
+      :host .pf-vendor__balance {
+        min-width: 0;
+        width: 100%;
+        text-align: left;
+      }
+
+      /* Long vendor names must truncate rather than shove the code chip /
+         inactive badge off-screen. The name row is a flex; give the name
+         a shrinkable box with ellipsis and keep the chip/badge intact. */
+      :host .pf-vendor__name-row { min-width: 0; }
+      :host .pf-vendor__name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      :host .pf-vendor__code { flex: 0 0 auto; }
+
+      /* Transaction row: the 90px/1fr/110px/130px grid (~340px) overflows
+         phones. Restack into label-amount header + reason + date. */
+      :host .pf-txn {
+        grid-template-columns: auto 1fr;
+        grid-template-areas:
+          "type amt"
+          "reason reason"
+          "when when";
+        row-gap: 4px;
+        column-gap: 10px;
+        padding: 10px 12px;
+      }
+      :host .pf-txn__type   { grid-area: type; justify-self: start; }
+      :host .pf-txn__amt    { grid-area: amt;  text-align: right; }
+      :host .pf-txn__reason { grid-area: reason; white-space: normal; }
+      :host .pf-txn__when   { grid-area: when; text-align: left; }
+    }
+
+    /* Touch devices: ensure transaction rows that are tappable feel
+       comfortable; no hover-only affordances exist on this page. */
+    @media (pointer: coarse) {
+      :host .pf-input { min-height: 44px; }
+    }
+
+    /* Capacitor / Electron native: this page has no fixed/sticky chrome
+       of its own (the section scrolls inside the shell), so the global
+       safe-area handling on body already covers it — no per-page insets
+       needed here. */
   `]
 })
 export class VendorsComponent implements OnInit {

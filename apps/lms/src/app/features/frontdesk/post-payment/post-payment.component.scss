@@ -37,7 +37,7 @@
   position: sticky;
   top: 16px;
   /* Prevent overflowing its grid column on very long pages */
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -722,6 +722,102 @@
 
 .pf-pp-back:hover { background: var(--glass-bg-hover); color: var(--text-secondary); }
 
+/* ════════════════════════════════════════════════════════════
+   CROSS-PLATFORM OVERRIDES (additive only — below desktop / native).
+   Desktop-web >=1280px is intentionally untouched by everything below.
+   ════════════════════════════════════════════════════════════ */
+
+/* Gate all hover affordances behind real hover (mouse) pointers so they
+   don't stick on touch. Desktop mice still get hover unchanged. */
+@media (hover: none) {
+  .pf-pp-action-btn:hover:not(:disabled),
+  .pf-pp-toolbar__clear:hover,
+  .pf-pp-toolbar__dl:hover,
+  .pf-pp-toolbar__print:hover:not(:disabled),
+  .pf-pp-back:hover {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    color: inherit;
+  }
+}
+
+/* ── Touch sizing: coarse pointers (phone/tablet) get >=44px tap targets.
+      Width-agnostic so it also covers touch laptops/iPad in any layout. ── */
+@media (pointer: coarse) {
+  :host .pf-pp-action-btn,
+  :host .pf-pp-toolbar__dl,
+  :host .pf-pp-toolbar__print {
+    min-height: 44px;
+  }
+  :host .pf-pp-toolbar__clear {
+    min-height: 40px;
+  }
+}
+
+/* ── iPad band (641–1279): use the width. Sidebar drops below main but
+      keep the label grid at 2 columns (base already does) and the inner
+      sidebar cards in a 2-up grid so we don't waste the tablet width. ── */
+@media (min-width: 641px) and (max-width: 1024px) {
+  :host .pf-pp-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+}
+
+/* ── Phone (<=640): single column everywhere, no horizontal overflow,
+      stacked payment banner, full-width action rows. ── */
+@media (max-width: 640px) {
+  :host .pf-pp-sidebar {
+    display: flex;
+  }
+
+  /* Payment banner: let the actions wrap to a full-width row of equal
+     buttons instead of being squeezed beside the amount. */
+  :host .pf-pp-pay {
+    align-items: flex-start;
+  }
+  :host .pf-pp-pay__actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  :host .pf-pp-pay__actions .pf-pp-action-btn {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  /* Toolbar: stack the action buttons full-width so Print is easy to hit. */
+  :host .pf-pp-toolbar__right {
+    width: 100%;
+  }
+  :host .pf-pp-toolbar__right .pf-pp-toolbar__dl,
+  :host .pf-pp-toolbar__right .pf-pp-toolbar__print {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  /* Order ID truncate cap is fine; just guarantee no overflow on dd cells. */
+  :host .pf-sb-dl__truncate {
+    max-width: 100%;
+  }
+}
+
+/* ── Clear the floating bottom-nav pill on tablet/phone layouts.
+      The shell shows the pill below desktop; reserve space so the last
+      label / bill card isn't hidden behind it. Desktop (>=1280) unaffected. ── */
+@media (max-width: 1024px) {
+  :host > section {
+    padding-bottom: var(--tab-nav-total-height);
+  }
+}
+
+/* ── Capacitor native: --tab-nav-total-height already folds in
+      env(safe-area-inset-bottom), and the global body absorbs the rest of
+      the safe area, so the max-width:1024px rule above already clears the
+      pill + home indicator. No extra native inset needed (adding another
+      env() here double-counted the bottom safe area). ── */
+
 /* ── Print media ──────────────────────────────────────────── */
 @media print {
   .pf-pp-sidebar,
@@ -735,4 +831,6 @@
     gap: 0;
   }
   .pf-pp { padding: 0; }
+  /* Drop the cross-platform bottom-nav clearance when printing. */
+  :host > section { padding-bottom: 0 !important; }
 }

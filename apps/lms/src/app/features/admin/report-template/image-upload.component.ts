@@ -45,9 +45,25 @@ import { ToastService } from '../../../core/services/toast.service';
     .pf-file-btn { display: inline-block; padding: 6px 12px; border-radius: 8px;
       background: rgba(168,85,247,0.12); color: #c4b5fd; cursor: pointer;
       font-size: 12px; font-weight: 600; border: 1px solid rgba(168,85,247,0.3); }
-    .pf-file-btn:hover { background: rgba(168,85,247,0.20); }
     .pf-remove-link { margin-left: 8px; background: transparent; border: none;
       color: #ef4444; cursor: pointer; font-size: 12px; text-decoration: underline; }
+
+    /* ── Additive cross-platform overrides only — desktop-web (>=1280)
+         stays byte-identical. ──────────────────────────────────────── */
+
+    /* Gate hover so taps on touch devices don't leave a stuck-hover. */
+    @media (hover: hover) {
+      .pf-file-btn:hover { background: rgba(168,85,247,0.20); }
+    }
+
+    /* Coarse pointers: give the upload/remove controls a >=44px tap
+       target without changing their look on mouse-driven desktop. */
+    @media (pointer: coarse) {
+      .pf-file-btn { min-height: 44px; display: inline-flex;
+        align-items: center; justify-content: center; }
+      .pf-remove-link { display: inline-flex; align-items: center;
+        min-height: 44px; }
+    }
   `]
 })
 export class ImageUploadComponent {

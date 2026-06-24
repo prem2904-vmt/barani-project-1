@@ -33,17 +33,17 @@ const OPERATORS: OperatorOption[] = [
     }
 
     @for (rule of rules(); let i = $index; track i) {
-      <div class="flex flex-wrap items-end gap-2 mb-2">
+      <div class="flex flex-wrap items-end gap-2 mb-2 cb-row">
         @if (i > 0) {
           <div class="w-full flex gap-1 text-[11px]">
             <button type="button"
-                    class="px-2 py-0.5 rounded border"
+                    class="px-2 py-0.5 rounded border cb-logic"
                     [class.bg-[var(--color-primary)]]="logic() === 'AND'"
                     [class.text-white]="logic() === 'AND'"
                     [class.border-slate-300]="logic() !== 'AND'"
                     (click)="setLogic('AND')">AND</button>
             <button type="button"
-                    class="px-2 py-0.5 rounded border"
+                    class="px-2 py-0.5 rounded border cb-logic"
                     [class.bg-[var(--color-primary)]]="logic() === 'OR'"
                     [class.text-white]="logic() === 'OR'"
                     [class.border-slate-300]="logic() !== 'OR'"
@@ -61,7 +61,7 @@ const OPERATORS: OperatorOption[] = [
             (valueChange)="patch(i, { field: $any($event) })"></pf-select>
         </div>
 
-        <div class="w-40">
+        <div class="w-40 cb-operator">
           <label class="text-[11px] text-slate-500">Operator</label>
           <pf-select
             [options]="operatorOptions"
@@ -71,7 +71,7 @@ const OPERATORS: OperatorOption[] = [
         </div>
 
         @if (needsValue(rule.operator)) {
-          <div class="w-40">
+          <div class="w-40 cb-value">
             <label class="text-[11px] text-slate-500">Value</label>
             <input type="text" class="pf-input"
                   [ngModel]="rule.value"
@@ -80,15 +80,58 @@ const OPERATORS: OperatorOption[] = [
         }
 
         <button type="button"
-                class="text-slate-400 hover:text-red-500 pb-1.5"
+                class="text-slate-400 hover:text-red-500 pb-1.5 cb-remove"
                 (click)="removeRow(i)" aria-label="Remove rule">✕</button>
       </div>
     }
 
     <button type="button"
-            class="text-xs text-[var(--color-primary)] hover:underline"
+            class="text-xs text-[var(--color-primary)] hover:underline cb-add"
             (click)="addRow()">+ Add condition</button>
-  `
+  `,
+  styles: [`
+    /* ===========================================================
+       CROSS-PLATFORM — additive only. Desktop layout untouched.
+       =========================================================== */
+    /* Touch sizing: give the small glyph buttons a real tap target
+       on coarse pointers without changing their visual box on
+       mouse-driven desktop. */
+    @media (pointer: coarse) {
+      .cb-remove {
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cb-add {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
+      /* AND / OR logic toggles are tiny px-2/py-0.5 pills on desktop;
+         give them a real tap target on touch without resizing the
+         glyph on mouse-driven screens. */
+      .cb-logic {
+        min-height: 44px;
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+    }
+
+    /* Phone (<=640): the operator and value fields are fixed at
+       w-40 (10rem). On narrow screens that overflows the row even
+       with flex-wrap, so let them shrink/grow fluidly. The field
+       picker (flex-1) keeps its priority. */
+    @media (max-width: 640px) {
+      .cb-row .cb-operator,
+      .cb-row .cb-value {
+        flex: 1 1 9rem;
+        width: auto;
+        min-width: 0;
+      }
+    }
+  `]
 })
 export class ConditionBuilderComponent {
   readonly rules = input<ConditionRule[]>([]);

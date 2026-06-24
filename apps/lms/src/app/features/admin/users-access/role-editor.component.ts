@@ -113,6 +113,72 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     }
     .perm-row.locked { cursor: not-allowed; opacity: 0.6; }
     .perm-row input[type="checkbox"] { margin-top: 2px; }
+
+    /* ----- Cross-platform overrides (additive only; desktop >=1280 untouched) ----- */
+
+    /* Touch devices: enlarge permission rows + checkboxes to >=44px tap targets */
+    @media (pointer: coarse) {
+      :host .perm-row {
+        min-height: 44px;
+        align-items: center;
+        padding: 12px 14px;
+      }
+      :host .perm-row input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        margin-top: 0;
+        flex: 0 0 auto;
+      }
+    }
+
+    /* Touch / no-hover: kill sticky hover highlight from base rule */
+    @media (hover: none) {
+      :host .perm-row:hover:not(.locked) {
+        border-color: var(--glass-border);
+        background: var(--glass-bg);
+      }
+    }
+
+    /* Phone (<=640): rows span full width; long permission codes must
+       truncate/wrap instead of pushing the row (and page) wider */
+    @media (max-width: 640px) {
+      :host .perm-row {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+      }
+      :host .perm-row > span {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      :host .perm-row > span > .font-mono {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    /* Web-below-desktop band (641-1279, incl. iPad + narrow browser):
+       the 2-col permission grid uses inline-flex rows whose default
+       min-width:auto lets a long mono permission code overflow its grid
+       track and push horizontal page scroll. Fill the track and let the
+       code truncate so the grid stays aligned with no page scroll. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host .perm-row {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+      }
+      :host .perm-row > span {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      :host .perm-row > span > .font-mono {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
   `]
 })
 export class RoleEditorComponent implements OnInit {

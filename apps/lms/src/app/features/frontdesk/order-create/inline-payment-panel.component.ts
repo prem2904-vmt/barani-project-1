@@ -194,6 +194,19 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
     .pf-ipp__confirm { width: 100%; padding: 13px; border-radius: 14px; border: 0; cursor: pointer;
       background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); color: #fff; font-weight: 700; font-size: 15px; }
     .pf-ipp__confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Cross-platform overrides (additive; sub-desktop / touch only) ── */
+    /* iOS zoom guard: text inputs <16px zoom Safari on focus. */
+    @media (max-width: 1279px) {
+      :host .pf-ipp__input { font-size: 16px; }
+    }
+    /* Touch sizing: grow small tap targets to ≥44px on coarse pointers. */
+    @media (pointer: coarse) {
+      :host .pf-ipp__input { padding-top: 12px; padding-bottom: 12px; }
+      :host .pf-cash__quick button { padding-top: 12px; padding-bottom: 12px; }
+      :host .pf-ipp__vrow { padding-top: 12px; padding-bottom: 12px; }
+      :host .pf-ipp__link { min-height: 40px; padding: 0 6px; }
+    }
   `]
 })
 export class InlinePaymentPanelComponent implements OnInit {

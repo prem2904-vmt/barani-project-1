@@ -22,7 +22,7 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
   imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './set-password.component.html',
-  styleUrl: '../login/login.component.scss',
+  styleUrls: ['../login/login.component.scss', './set-password.component.scss'],
 })
 export class SetPasswordComponent {
   private readonly auth = inject(AuthService);

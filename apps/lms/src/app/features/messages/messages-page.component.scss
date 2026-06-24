@@ -28,6 +28,12 @@
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  // WORK page: the page itself never scrolls — the rail list and the
+  // thread scroller each own their overflow. overflow:hidden here is the
+  // backstop that prevents a double/outer scrollbar if a child briefly
+  // overflows during layout. Identical on desktop (nothing overflows the
+  // grid there anyway).
+  overflow: hidden;
   gap: 0;
   background: var(--bg-secondary);
 
@@ -1425,7 +1431,11 @@
   border-radius: 18px;
   width: 100%;
   max-width: 480px;
-  max-height: min(86vh, 720px);
+  // dvh (not vh) so the centered modal accounts for mobile browser
+  // dynamic toolbars; on desktop/Electron dvh == vh so this is visually
+  // identical there. (Mobile sheets are governed by the shared .pf-sheet
+  // primitive, so this cap only bites on the tablet/desktop centered path.)
+  max-height: min(86dvh, 720px);
   display: flex;
   flex-direction: column;
   box-shadow: var(--glass-shadow-hover), var(--glass-glow);
@@ -1848,5 +1858,59 @@
 @media (hover: none) {
   .pf-msgs__bubble-row:not(.pf-msgs__bubble-row--actions-open) .pf-msgs__bubble-actions {
     display: none;
+  }
+}
+
+// ── Coarse-pointer touch targets (phones + tablets, incl. iPad) ──────
+// The phone (max-width:640px) block above already grows the composer/send
+// targets, but iPad and other large coarse-pointer devices are >640px and
+// fall through. This block guarantees a >=44px hit area for every tappable
+// control on ANY coarse pointer, independent of width. Pure additive: it
+// never changes the fine-pointer (mouse) desktop rendering.
+@media (pointer: coarse) {
+  .pf-msgs__icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  // The compact "--sm" icon buttons (call-row actions, banner close, pinned
+  // hide, search close) keep their tighter visual padding but still earn a
+  // full 44px hit area so taps land reliably.
+  .pf-msgs__icon-btn--sm {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .pf-msgs__send,
+  .pf-msgs__icon-btn--composer {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  // New-chat pill + tab strip — comfortable thumb height.
+  .pf-msgs__new-btn { min-height: 44px; }
+  .pf-msgs__tab     { min-height: 44px; }
+  .pf-msgs__sub-tab { min-height: 36px; }
+  // Bottom safe-area for the composer — the page's own bottom chrome. The
+  // phone block (max-width:640px) already handles this; scope here to
+  // tablets/large coarse devices (>640px) so we don't disturb the phone
+  // value. max() keeps the existing 14px when there's no inset.
+  @media (min-width: 641px) {
+    .pf-msgs__composer {
+      padding-bottom: max(14px, env(safe-area-inset-bottom));
+    }
+  }
+  // Modal action buttons — full thumb height on touch.
+  .pf-msgs__btn { min-height: 44px; }
+}
+
+// ── Gate the remaining decorative hovers behind a real hover pointer ──
+// Sticky :hover on touch leaves controls visually "stuck" after a tap.
+// The high-traffic cases (bubble actions, call-row actions) are already
+// gated above; this closes the loop on the primary composer/send + the
+// new-chat pill so a tap doesn't leave them in a hover state. Additive —
+// the hover rules themselves are unchanged, just scoped to hover:hover.
+@media (hover: none) {
+  .pf-msgs__new-btn:hover,
+  .pf-msgs__send:hover:not(:disabled) {
+    filter: none;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
   }
 }

@@ -462,6 +462,36 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       .pf-lc--printing .pf-lc__footer { display: none !important; }
       .pf-lc--printing .pf-lc__preview { margin: 0 !important; border-radius: 4px !important; }
     }
+
+    /* ── Cross-platform overrides (additive only) ──────────────
+       Desktop-web hover & sizing unchanged. */
+
+    /* Gate hover so touch devices don't get stuck hover states. */
+    @media (hover: none) {
+      .pf-lc__action-btn:hover { background: var(--glass-bg); color: var(--text-tertiary); }
+      .pf-lc__print-btn:hover { background: #0d9488; }
+    }
+
+    /* Touch sizing: coarse pointers get >=44px tap targets on the card
+       action buttons (icon buttons were 30px). */
+    @media (pointer: coarse) {
+      .pf-lc__action-btn { width: 44px; height: 44px; }
+      .pf-lc__print-btn { height: 44px; }
+      /* Selection checkbox stays visually 20px but gets a 44px tap target
+         via padding-box hit area so it's reliably tappable on touch. */
+      .pf-lc__chk {
+        position: relative;
+      }
+      .pf-lc__chk::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+      }
+    }
   `],
 })
 export class LabelCardComponent implements AfterViewInit, OnChanges {

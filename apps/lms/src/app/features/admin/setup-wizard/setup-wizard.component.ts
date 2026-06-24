@@ -286,20 +286,20 @@ interface DepartmentDraft {
               @for (b of branches(); let i = $index; track i) {
                 <div class="branch-row">
                   <div class="grid grid-cols-12 gap-2">
-                    <div class="col-span-12 md:col-span-3">
+                    <div class="col-span-12 md:col-span-6 lg:col-span-3">
                       <label class="pf-label">Name</label>
                       <input type="text" class="pf-input" [ngModel]="b.name"
                              (ngModelChange)="updateBranch(i, { name: $event })"
                              placeholder="Chennai Main" />
                     </div>
-                    <div class="col-span-6 md:col-span-2">
+                    <div class="col-span-6 md:col-span-6 lg:col-span-2">
                       <label class="pf-label">Code</label>
                       <input type="text" class="pf-input uppercase" [ngModel]="b.code"
                              (ngModelChange)="updateBranch(i, { code: $event.toUpperCase() })"
                              placeholder="MAIN" />
                     </div>
                     <!-- State first so City can filter to its cities. -->
-                    <div class="col-span-6 md:col-span-2">
+                    <div class="col-span-6 md:col-span-6 lg:col-span-2">
                       <label class="pf-label">State</label>
                       <pf-select size="md"
                                  [options]="stateSelectOptions"
@@ -308,7 +308,7 @@ interface DepartmentDraft {
                                  (valueChange)="onBranchStateChange(i, $event)">
                       </pf-select>
                     </div>
-                    <div class="col-span-6 md:col-span-2">
+                    <div class="col-span-6 md:col-span-6 lg:col-span-2">
                       <label class="pf-label">City</label>
                       @if (b.state) {
                         <pf-select size="md"
@@ -327,14 +327,14 @@ interface DepartmentDraft {
                                placeholder="Pick a state first" />
                       }
                     </div>
-                    <div class="col-span-4 md:col-span-2">
+                    <div class="col-span-4 md:col-span-4 lg:col-span-2">
                       <label class="pf-label">Pincode</label>
                       <input type="text" class="pf-input" inputmode="numeric"
                              maxlength="6" [ngModel]="b.pincode"
                              (ngModelChange)="updateBranch(i, { pincode: $event.replace(/\D/g, '').slice(0, 6) })"
                              placeholder="6 digits" />
                     </div>
-                    <div class="col-span-4 md:col-span-1 flex items-end justify-end">
+                    <div class="col-span-4 md:col-span-2 lg:col-span-1 flex items-end justify-end">
                       <button type="button" class="row-remove"
                               [disabled]="branches().length <= 1"
                               (click)="removeBranch(i)" aria-label="Remove branch">
@@ -442,12 +442,12 @@ interface DepartmentDraft {
                            (ngModelChange)="updateDept(i, { name: $event })"
                            placeholder="Department name" />
                   </div>
-                  <div class="col-span-4 md:col-span-4">
+                  <div class="col-span-3 md:col-span-4">
                     <input type="text" class="pf-input uppercase" [ngModel]="d.code"
                            (ngModelChange)="updateDept(i, { code: $event.toUpperCase() })"
                            placeholder="CODE" />
                   </div>
-                  <div class="col-span-1 flex items-center justify-end">
+                  <div class="col-span-2 md:col-span-1 flex items-center justify-end">
                     <button type="button" class="row-remove"
                             (click)="removeDept(i)" aria-label="Remove">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -734,6 +734,130 @@ interface DepartmentDraft {
       text-transform: uppercase;
     }
     .brand-preview__name--placeholder { color: #ec4899; letter-spacing: 0.14em; }
+
+    /* ════════════════════════════════════════════════════════════
+     * RESPONSIVE / CROSS-PLATFORM OVERRIDES (additive only).
+     * Desktop-web (>=1280px) is untouched: every rule below is gated
+     * to a sub-desktop width, a touch pointer, or a platform class.
+     * ════════════════════════════════════════════════════════════ */
+
+    /* ── Phone (<=640) ─────────────────────────────────────── */
+    @media (max-width: 640px) {
+      /* Sub-branch row: the fixed 50% name + flex code/type/remove is
+       * far too cramped on a phone — stack it into a readable column.
+       * The remove button stays inline at the end via its own line. */
+      .sub-branch-row {
+        flex-wrap: wrap;
+      }
+      .sub-branch-name {
+        flex: 1 1 100%;
+      }
+      .sub-branch-code,
+      .sub-branch-type {
+        flex: 1 1 calc(50% - 6px);
+      }
+
+      /* Branch-row card padding eases on small screens. */
+      .branch-row {
+        padding: 12px;
+      }
+
+      /* Stepper labels eat horizontal room and force a scroll; tighten
+       * connectors so the four steps fit more comfortably. */
+      .step-connector {
+        width: 20px;
+        margin: 0 4px;
+      }
+      .step-label {
+        font-size: 12px;
+      }
+
+      /* iOS zooms any input whose font-size < 16px on focus. Bump the
+       * scoped row-level inputs that don't inherit a 16px primitive.
+       * (Targets only inputs rendered inside this page.) */
+      :host input.pf-input {
+        font-size: 16px;
+      }
+
+      /* Tap targets: the round remove buttons must reach 44px on touch
+       * phones without disturbing their desktop 34px size. */
+      .row-remove {
+        width: 44px;
+        height: 44px;
+      }
+      .add-sub-link {
+        padding: 8px 0;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      /* The fixed 240px logo preview can exceed a narrow tile's inner
+       * width; cap it to the container so it never forces a sideways
+       * scroll on small phones. */
+      .brand-upload__preview {
+        max-width: 100%;
+      }
+    }
+
+    /* Touch pointers (covers phone + tablet) get larger remove hit areas
+     * regardless of exact width. */
+    @media (pointer: coarse) {
+      .row-remove {
+        min-width: 44px;
+        min-height: 44px;
+      }
+      /* Branding upload pills (Replace / Remove) and the inline "browse"
+       * link are well under a comfortable tap height by default. Grow the
+       * hit area on touch without changing their desktop look. */
+      .brand-upload__btn {
+        min-height: 44px;
+      }
+      .brand-upload__link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+      .add-sub-link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+    }
+
+    /* Only show the hover affordances on devices that actually hover, so
+     * touch devices don't get a stuck hover state after a tap. */
+    @media (hover: none) {
+      .row-remove:hover:not(:disabled) {
+        background: transparent;
+        color: var(--text-muted);
+        border-color: transparent;
+      }
+      .add-sub-link:hover { text-decoration: none; }
+      .brand-upload__link:hover { color: #c4b5fd; }
+      .brand-upload__btn:hover { background: var(--glass-bg); }
+      .brand-upload__btn--danger:hover { background: rgba(239, 68, 68, 0.08); }
+    }
+
+    /* ── iPad / mid (641–1279) ─────────────────────────────── */
+    /* The branch grid already collapses below md (768). Between 641 and
+     * 767 (large phone / small tablet portrait) the single-column branch
+     * inputs are fine. No desktop-affecting change needed here; the md:
+     * Tailwind classes carry tablet landscape correctly. */
+
+    /* ── Bottom-nav clearance (phone only) ─────────────────── */
+    /* At <=640px the layout's bottom-nav is a fixed floating pill
+     * (it becomes a left rail at >=641px, handled by the shell). This
+     * page's Back / Finish action row scrolls with content, so on phone
+     * it would slide under the pill. Reserve space below it. Applies to
+     * web + native + Electron at phone width; desktop (>=1280) is
+     * untouched. --tab-nav-total-height already folds in the bottom
+     * safe-area inset, so native notches are covered. */
+    @media (max-width: 640px) {
+      section {
+        padding-bottom: var(--tab-nav-total-height);
+      }
+    }
   `]
 })
 export class SetupWizardComponent {

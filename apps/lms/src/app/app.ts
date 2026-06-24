@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { CapacitorService } from './core/services/capacitor.service';
 import { PushService } from './core/services/push.service';
+import { PlatformService } from './core/services/platform.service';
 
 @Component({
   selector: 'app-root',
@@ -16,8 +17,15 @@ export class App implements OnInit {
   private readonly _theme = inject(ThemeService);
   private readonly _capacitor = inject(CapacitorService);
   private readonly _push = inject(PushService);
+  private readonly _platform = inject(PlatformService);
 
   async ngOnInit() {
+    // Electron (Windows/macOS) marker class so pages can fork CSS the same
+    // way Capacitor does with html.cap-native — e.g. ':host-context(html.electron) …'.
+    // Mirrors capacitor.service adding html.cap-native/cap-<platform>.
+    if (this._platform.isElectron()) {
+      document.documentElement.classList.add('electron');
+    }
     // Native macOS titlebar — no body class needed since the chrome
     // is owned by the OS, not the renderer.
     await this._capacitor.init();

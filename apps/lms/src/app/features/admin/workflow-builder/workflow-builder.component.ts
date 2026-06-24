@@ -173,7 +173,7 @@ interface HistoryRow {
               <div class="space-y-5">
 
                 <!-- Step header -->
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-3 pf-step-titlegrid">
                   <div>
                     <label class="pf-label">Title</label>
                     <input type="text" class="pf-input"
@@ -295,7 +295,7 @@ interface HistoryRow {
                   <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
                       style="color: var(--text-muted);">After this step</h3>
 
-                  <div class="grid grid-cols-[180px_1fr] gap-3 items-center mb-3">
+                  <div class="grid grid-cols-[180px_1fr] gap-3 items-center mb-3 pf-route-row">
                     <label class="text-[13px]" style="color: var(--text-secondary);">Default next step</label>
                     <pf-select
                       [options]="defaultNextOptions(step.id)"
@@ -324,7 +324,7 @@ interface HistoryRow {
                           emptyLabel="Add rules to trigger this route."
                           (rulesChange)="updateRouteConditions(step.id, i, $event)">
                         </pf-condition-builder>
-                        <div class="mt-2 grid grid-cols-[100px_1fr] items-center gap-2">
+                        <div class="mt-2 grid grid-cols-[100px_1fr] items-center gap-2 pf-goto-row">
                           <span class="text-[12px]" style="color: var(--text-tertiary);">Go to step</span>
                           <pf-select
                             [options]="goToStepOptions(step.id)"
@@ -369,7 +369,7 @@ interface HistoryRow {
 
       <!-- ──────── Preview modal ──────── -->
       @if (previewOpen()) {
-        <div class="fixed inset-0 z-40 flex items-center justify-center">
+        <div class="fixed inset-0 z-40 flex items-center justify-center pf-preview-overlay">
           <div class="absolute inset-0" style="background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);"
                (click)="closePreview()"></div>
           <div class="pf-preview-modal">
@@ -581,7 +581,7 @@ interface HistoryRow {
       position: relative;
       width: 100%;
       max-width: 56rem;
-      max-height: 85vh;
+      max-height: 85dvh;
       overflow: auto;
       border-radius: 20px;
       background: var(--bg-card-solid);
@@ -646,6 +646,129 @@ interface HistoryRow {
       border-top: 1px solid var(--border-muted);
       font-size: 11px;
       color: var(--text-muted);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CROSS-PLATFORM OVERRIDES — ADDITIVE ONLY.
+       Everything above (desktop-web base, >=1280px) is byte-for-byte
+       unchanged. These rules apply ONLY below desktop, on touch, or
+       under platform html classes — they cannot reach the wide view.
+       ════════════════════════════════════════════════════════════ */
+
+    /* --- Touch: reveal hover-gated row actions (edit / delete on steps
+       and fields) which are otherwise stuck at opacity:0 with no hover
+       to trigger them. Desktop hover behaviour is untouched. --- */
+    @media (hover: none), (pointer: coarse) {
+      :host .pf-step-delete,
+      :host .pf-field-action,
+      :host .pf-field-delete {
+        opacity: 1 !important;
+      }
+    }
+
+    /* --- Touch sizing: grow the small (24px) icon buttons and the drag
+       handles to a comfortable target without changing desktop visuals.
+       Scoped to this page's own controls only. --- */
+    @media (pointer: coarse) {
+      :host .pf-step-delete,
+      :host .pf-field-action,
+      :host .pf-field-delete,
+      :host .pf-close-btn {
+        min-width: 44px;
+        min-height: 44px;
+      }
+      :host .pf-drag-handle {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+      }
+      :host .pf-inline-link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+    }
+
+    /* --- Phone (<=640): stop iOS auto-zoom on focus by lifting this
+       page's inputs to >=16px. Scoped to :host so the shared .pf-input
+       primitive is unchanged elsewhere. --- */
+    @media (max-width: 640px) {
+      :host .pf-input { font-size: 16px; }
+
+      /* Collapse the fixed-width inner grids (step title pair + routing
+         rows) to a single column so they don't overflow the narrow
+         detail panel. Base grid-cols stay intact above this width. */
+      :host .pf-step-titlegrid { grid-template-columns: 1fr; }
+      :host .pf-route-row,
+      :host .pf-goto-row { grid-template-columns: 1fr; }
+      :host .pf-route-row > label { margin-bottom: 2px; }
+
+      /* Keep this page from introducing horizontal overflow on phones. */
+      :host section { overflow-x: clip; }
+    }
+
+    /* --- Web-below-desktop band (641–1279), two-pane sub-band: between
+       768–1023px the steps rail narrows to 200px (md:grid-cols-[200px_1fr]),
+       leaving the detail panel only ~440px wide. The detail panel's inner
+       fixed-width grids (step title pair, routing label columns) crowd at
+       that width, so collapse them to a single column here. The desktop
+       lg layout (1024px+ → 280px rail) keeps the multi-column grids, and
+       >=1280 stays byte-identical. Additive — base grid-cols are intact. */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      :host .pf-step-titlegrid { grid-template-columns: 1fr; }
+      :host .pf-route-row,
+      :host .pf-goto-row { grid-template-columns: 1fr; }
+      :host .pf-route-row > label,
+      :host .pf-goto-row > span { margin-bottom: 2px; }
+    }
+
+    /* --- Web-below-desktop band (641–1279): guard against this page
+       introducing horizontal page scroll (no element may push past the
+       64px left rail). Desktop >=1280 is unaffected. --- */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host section { overflow-x: clip; }
+    }
+
+    /* --- Undo toast sits at a fixed 100px above the bottom; on phones
+       that can collide with the bottom-nav pill. Lift it clear using the
+       global nav-height token (+ safe area is already inside the token). */
+    @media (max-width: 1023px) {
+      .pf-undo-toast {
+        bottom: calc(var(--tab-nav-total-height, 88px) + 12px);
+      }
+    }
+
+    /* --- Phone (<=640): the centred preview modal becomes a full-width
+       bottom sheet so it doesn't get squeezed; history slide-over already
+       spans full width below its 28rem cap. --- */
+    @media (max-width: 640px) {
+      :host .pf-preview-overlay { align-items: flex-end; }
+      .pf-preview-modal {
+        max-width: 100%;
+        max-height: 90dvh;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+    }
+
+    /* --- Capacitor native: keep the full-bleed overlays clear of the
+       notch / status bar and home indicator. The preview header is
+       sticky at the top of its own scroller and the history panel is a
+       full-height fixed pane, so both need their own insets here. --- */
+    :host-context(html.cap-native) .pf-history-header {
+      padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    }
+    :host-context(html.cap-native) .pf-history-footer {
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    :host-context(html.cap-native) .pf-preview-header {
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-preview-modal {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
     }
   `]
 })

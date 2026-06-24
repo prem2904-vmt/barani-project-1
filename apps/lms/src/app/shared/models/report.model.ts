@@ -100,8 +100,14 @@ export interface ReportTemplate {
   groupByDepartment: boolean;
   showCriticalFlag: boolean;
   /** Abnormal-flag styling in the results table:
-   *  'bold' (bold value + H/L letter) | 'bold_color' (also tints high red / low blue). */
+   *  'bold' (bold value + indicator) | 'bold_color' (also tints high/low). */
   flagStyle?: string;
+  /** Abnormal indicator glyph: 'letter' (H/L) | 'arrow' (↑/↓). */
+  flagIndicator?: string;
+  /** Colour for HIGH abnormals when flagStyle is 'bold_color' (hex). */
+  abnormalColor?: string;
+  /** Colour for LOW abnormals when flagStyle is 'bold_color' (hex). */
+  abnormalLowColor?: string;
 
   // ── Signatures & footer ──────────────────────────────────
   showPathologistName: boolean;

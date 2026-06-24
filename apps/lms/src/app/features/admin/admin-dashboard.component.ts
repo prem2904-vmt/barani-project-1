@@ -215,7 +215,7 @@ interface Category {
        left. */
     .pf-admin-page {
       padding: 20px 24px;
-      min-height: calc(100vh - var(--top-strip-h, 64px));
+      min-height: calc(100dvh - var(--top-strip-h, 64px));
       display: flex; flex-direction: column;
     }
     @media (max-width: 768px) {
@@ -494,6 +494,80 @@ interface Category {
     .pf-admin-tips__bullet[data-g='emerald'] { background: #10b981; }
     .pf-admin-tips__bullet[data-g='teal']    { background: #2dd4bf; }
     .pf-admin-tips__bullet[data-g='sky']     { background: #38bdf8; }
+
+    /* ─────────────────────────────────────────────────────────────
+       CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (>=1280,
+       fine pointer) is untouched by everything below.
+       ───────────────────────────────────────────────────────────── */
+
+    /* Touch devices: the desktop :hover styles (lift transforms, colour
+       shifts, chevron reveal) get stuck after a tap on coarse pointers.
+       Neutralise them only where there's no true hover — this cannot
+       reach a desktop mouse (hover:hover). */
+    @media (hover: none) {
+      .pf-admin-rail__btn:hover {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+      .pf-admin-rail__btn--on:hover {
+        background: linear-gradient(135deg, rgba(168, 85, 247, 0.20), rgba(236, 72, 153, 0.10));
+        color: var(--text-primary);
+      }
+      .pf-admin-rail__btn:hover .pf-admin-rail__chev { opacity: 0; }
+      .pf-admin-rail__btn--on:hover .pf-admin-rail__chev { opacity: 1; }
+      .pf-admin-tile:hover {
+        border-color: var(--glass-border);
+        background: rgba(255, 255, 255, 0.02);
+        transform: none;
+      }
+      .pf-admin-tile:hover .pf-admin-tile__arrow {
+        color: var(--text-muted);
+        transform: none;
+      }
+    }
+
+    /* Coarse-pointer sizing: guarantee the rail buttons and tiles meet
+       the 44px touch target on phone/tablet. Cannot affect a fine
+       desktop pointer. */
+    @media (pointer: coarse) {
+      .pf-admin-rail__btn { min-height: 44px; }
+      .pf-admin-tile__arrow { width: 36px; height: 36px; }
+    }
+
+    /* Phone (<=640): single column already falls out of the 340px grid
+       min + the 768px rail collapse, but tighten the search field so it
+       can't push horizontal overflow, and give the horizontal rail row
+       momentum scrolling without a scrollbar gutter. Cannot affect
+       desktop. */
+    @media (max-width: 640px) {
+      .pf-admin-search { max-width: 100%; }
+      .pf-admin-rail {
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .pf-admin-rail::-webkit-scrollbar { display: none; }
+      .pf-admin-rail__btn { min-width: 160px; }
+      .pf-admin-tile { padding: 16px; gap: 12px; min-height: 96px; }
+    }
+
+    /* iPad / tablet band (641–1279): keep the two-pane layout — the
+       768px collapse to a single column wastes the width on portrait
+       iPad. Restore the rail + pane split and let tiles go 2-up.
+       Bounded so it can never touch desktop (>=1280) or phone (<=640). */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-admin-layout {
+        grid-template-columns: 200px minmax(0, 1fr);
+        gap: 14px;
+      }
+      .pf-admin-rail { flex-direction: column; overflow-x: visible; padding: 10px; }
+      /* Undo the <=768 horizontal-row sizing leaking into 641–768 so
+         buttons go back to full-width column items. */
+      .pf-admin-rail__btn { flex: 0 0 auto; width: 100%; min-width: 0; }
+      .pf-admin-rail__chev { display: block; }
+      .pf-admin-pane__grid {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      }
+    }
   `]
 })
 export class AdminDashboardComponent implements OnInit {

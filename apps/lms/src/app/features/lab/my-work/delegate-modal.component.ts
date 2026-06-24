@@ -119,6 +119,36 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-dl__empty {
       padding: 16px; text-align: center; font-size: 12.5px; color: var(--text-muted);
     }
+
+    /* ── Cross-platform overrides (additive; desktop >=1024px untouched) ── */
+
+    /* Phone: stop iOS focus-zoom on the search input (needs >=16px) and
+       give the dialog a little vertical room with its scrollable list,
+       sized to dvh rather than letting the card outgrow the screen. */
+    @media (max-width: 640px) {
+      .pf-dl__input { font-size: 16px; }
+      .pf-dl__card { max-height: calc(100dvh - 32px); display: flex; flex-direction: column; }
+      .pf-dl__list { max-height: none; flex: 1 1 auto; min-height: 0; }
+    }
+
+    /* Touch: bump the small close button to a comfortable tap target. */
+    @media (pointer: coarse) {
+      .pf-dl__close { width: 44px; height: 44px; }
+    }
+
+    /* Touch: neutralise sticky hover after tap. */
+    @media (hover: none) {
+      .pf-dl__close:hover { background: transparent; color: var(--text-muted); }
+      .pf-dl__item:hover { background: transparent; }
+    }
+
+    /* Capacitor native: the dialog is full-bleed fixed; keep its padded
+       bounds clear of the notch / home indicator so the card and its
+       list never sit under the status bar or bottom inset. */
+    :host-context(html.cap-native) .pf-dl {
+      padding-top: calc(16px + env(safe-area-inset-top));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
   `]
 })
 export class DelegateModalComponent implements OnInit {

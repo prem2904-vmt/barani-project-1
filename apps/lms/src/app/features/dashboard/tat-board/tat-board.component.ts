@@ -37,30 +37,33 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="tat-page px-4 md:px-8 pt-6">
 
-      <pf-kpi-strip screen="tat_board"></pf-kpi-strip>
+      <div class="tat-chrome">
+        <pf-kpi-strip screen="tat_board"></pf-kpi-strip>
 
-      <pf-screen-header
-        eyebrow="Live dashboard"
-        title="TAT Board"
-        subtitle="Turnaround health across in-flight tests. Auto-refresh every 30s.">
-        <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
-          <span icon-left aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
-              <path d="M3 21v-5h5"/>
-            </svg>
-          </span>
-          Refresh
-        </pf-touch-btn>
-      </pf-screen-header>
+        <pf-screen-header
+          eyebrow="Live dashboard"
+          title="TAT Board"
+          subtitle="Turnaround health across in-flight tests. Auto-refresh every 30s.">
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+            <span icon-left aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+            </span>
+            Refresh
+          </pf-touch-btn>
+        </pf-screen-header>
+      </div>
 
       <!-- Hard-coded KPI tiles removed — admin-configurable KPIs render
            via <pf-kpi-strip screen="tat_board"> at the top of the page. -->
 
+      <div class="tat-scroll pb-10">
       @for (level of levels; track level) {
         @let rowsForLevel = rowsFor(level);
         @if (rowsForLevel.length > 0) {
@@ -110,6 +113,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
           </div>
         </pf-tile>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -139,6 +143,38 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
     .urg-urgent { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
     .urg-high   { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); }
     .urg-normal { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+
+    /* ---- WORK page: non-scroll app layout on all sizes ----
+       The page fills the shell main area exactly; the outer page never
+       scrolls. The KPI strip + screen-header are fixed chrome; only the
+       level groups scroll, inside .tat-scroll. Works the same at phone,
+       iPad and desktop (rows already stack via flex-wrap md:flex-nowrap
+       + min-w-0 + truncate, so no horizontal overflow). */
+    :host {
+      display: block;
+      height: 100%;
+    }
+    .tat-page {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    .tat-chrome {
+      flex: 0 0 auto;
+    }
+    .tat-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* No bottom-nav / safe-area padding here: the shell's .shell-main
+       resolves :host height against its content box (it already reserves
+       --tab-nav-total-height + safe-area as its own padding-bottom), so
+       this page fits exactly above the nav. The inner .pb-10 on .tat-scroll
+       gives the last row breathing room without double-padding. */
   `]
 })
 export class TatBoardComponent implements OnInit, OnDestroy {

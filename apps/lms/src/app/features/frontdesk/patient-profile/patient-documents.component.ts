@@ -35,6 +35,19 @@ const DOC_TYPES = [
   standalone: true,
   imports: [FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // Layout-only, scoped to :host. Touch devices have no hover, so the
+  // hover-revealed delete button would be unreachable — reveal it on
+  // coarse pointers and enlarge it to a >=44px tap target. Mouse-driven
+  // desktop keeps its hover-to-reveal behaviour unchanged.
+  styles: [`
+    @media (pointer: coarse) {
+      :host .group button[title="Delete"] {
+        opacity: 1;
+        width: 44px;
+        height: 44px;
+      }
+    }
+  `],
   template: `
     <div class="space-y-4">
       <div class="flex flex-wrap items-end gap-3 p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">

@@ -18,12 +18,12 @@
         </pf-touch-btn>
       </pf-screen-header>
 
-      <!-- Body: single column on everything except desktop (xl+), which gets
-           the sticky cart sidebar. Tablet/phone use the cart icon toggle.
+      <!-- Body: single column below 1024; iPad-landscape + desktop (lg+) get
+           the cart side column. iPad-portrait/phone use the cart icon toggle.
            max-w-screen-2xl prevents the picker from stretching edge-to-edge
            on >1600px monitors (was making the search bar feel oversized and
            the rail cards drift past the right margin). -->
-      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-5 max-w-screen-2xl mx-auto w-full"
+      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5 max-w-screen-2xl mx-auto w-full"
            [class.pf-page__body--billing]="showInlinePay()">
 
         <!-- LEFT COLUMN. min-w-0 is critical: without it, the grid track
@@ -368,10 +368,10 @@
           </div>
         </div>
 
-        <!-- RIGHT: sticky cart — desktop (xl+) only. Tablets + phones use the drawer.
+        <!-- RIGHT: cart side column — lg+ (iPad-landscape & up). Narrow screens use the drawer.
              When billing is part of this workflow and the order is placed, the
              right column turns into the full billing panel (no popup). -->
-        <aside class="pf-cart hidden xl:block">
+        <aside class="pf-cart hidden lg:block">
           <div class="pf-cart__card">
             <ng-container *ngTemplateOutlet="cartBody"></ng-container>
           </div>
@@ -379,10 +379,10 @@
 
       </div>
 
-      <!-- Floating cart button — bottom-right, visible on mobile + tablet + iPad.
-           Hidden on desktop (xl+) where the sticky sidebar is the cart. -->
+      <!-- Floating cart button — bottom-right, visible on phone + iPad-portrait.
+           Hidden at lg+ where the cart side column is shown. -->
       <button type="button"
-              class="pf-cart-fab press xl:hidden"
+              class="pf-cart-fab press lg:hidden"
               [class.pf-cart-fab--open]="cartOpen()"
               (click)="toggleCart()"
               [attr.aria-label]="'Cart · ' + selected().length + ' tests'">
@@ -397,8 +397,8 @@
 
       <!-- Mobile/tablet: cart drawer + backdrop -->
       @if (cartOpen()) {
-        <div class="pf-cart-backdrop xl:hidden" (click)="closeCart()"></div>
-        <aside class="pf-cart-drawer xl:hidden">
+        <div class="pf-cart-backdrop lg:hidden" (click)="closeCart()"></div>
+        <aside class="pf-cart-drawer lg:hidden">
           <header class="pf-cart-drawer__head">
             <span class="pf-eyebrow">{{ showInlinePay() ? 'Cart & payment' : 'Cart' }}</span>
             <button type="button" class="pf-cart-drawer__close press" (click)="closeCart()" aria-label="Close cart">

@@ -238,6 +238,82 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .cdk-drag-animating { transition: transform 220ms cubic-bezier(0.2,0.8,0.2,1); }
     .pb-lane-list.cdk-drop-list-dragging .pb-action:not(.cdk-drag-placeholder),
     .pb-palette-list.cdk-drop-list-dragging .pb-chip:not(.cdk-drag-placeholder) { transition: transform 220ms cubic-bezier(0.2,0.8,0.2,1); }
+
+    /* ───────────────────────────────────────────────────────────────
+       CROSS-PLATFORM OVERRIDES (additive only — desktop-web >=1280px
+       and the existing <=820px column layout are left untouched).
+       ─────────────────────────────────────────────────────────────── */
+
+    /* Touch pointers: suppress hover-only transforms so taps don't leave
+       elements stuck in a hovered/translated state on mobile + tablet. */
+    @media (hover: none) {
+      .pb-lane:hover { transform: none; box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 18px 40px -28px rgba(0,0,0,0.7); }
+      .pb-chip:hover { transform: none; }
+      .pb-action:hover { transform: none; }
+      .pb-btn:hover:not(:disabled) { transform: none; }
+      .pb-btn--primary:hover:not(:disabled) { box-shadow: 0 6px 16px -6px rgba(124,58,237,0.7); }
+    }
+
+    /* Coarse pointers (touch): grow the small icon controls to a >=44px
+       tappable area without changing their visual footprint on desktop. */
+    @media (pointer: coarse) {
+      /* lane header icon controls: full 44px hit area; let the row wrap so the
+         enlarged controls never clip the lane-name input on a narrow lane. */
+      .pb-lane-hd { flex-wrap: wrap; }
+      .pb-lane-tools { gap: 4px; }
+      .pb-mini { min-width: 44px; min-height: 44px; width: 44px; height: 44px; flex-shrink: 0; }
+      .pb-color { width: 44px; height: 44px; }
+      .pb-toggle { min-width: 44px; min-height: 28px; width: 44px; height: 26px; border-radius: 13px; }
+      .pb-toggle::after { width: 20px; height: 20px; top: 3px; left: 3px; }
+      .pb-toggle.on::after { transform: translateX(18px); }
+      .pb-role, .pb-role-add, .pb-role-add--done { min-height: 32px; padding-top: 6px; padding-bottom: 6px; }
+      /* grip is a drag affordance, not a tap target, but give it a real touch
+         box so it's draggable on touch; flex-shrink so it never collapses. */
+      .pb-grip { padding: 8px 4px; flex-shrink: 0; }
+      /* toolbar + name-row controls: full 44px tappable height. */
+      .pb-btn, .pb-select, .pb-name { min-height: 44px; }
+    }
+
+    /* iPad / tablet (641–1279px): put the Available-actions palette on top as
+       a horizontal strip (covers iPad portrait widths like 810–834 that the
+       820px breakpoint missed), then tile the work-area lanes into a grid that
+       auto-fills the full width (2-up portrait, 3-up landscape) instead of a
+       side-rail + uneven flex-wrap. Desktop (>=1280) keeps its side-rail board. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pb-board { flex-direction: column; }
+      .pb-palette { width: 100%; position: static; }
+      .pb-palette-list { flex-direction: row; flex-wrap: wrap; }
+      .pb-palette-list .pb-chip { flex: 0 1 auto; }
+      .pb-lanes {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 14px;
+        flex: initial;
+        overflow-x: visible;
+      }
+      .pb-lane { flex: initial; min-width: 0; max-width: none; width: auto; }
+      .pb-add-lane { width: auto; writing-mode: horizontal-tb; min-height: 56px; }
+    }
+
+    /* Phone (<=640px): single-column board, no horizontal overflow,
+       16px form fields to stop iOS auto-zoom, and clearance for the
+       floating bottom-nav pill so the preview isn't hidden behind it. */
+    @media (max-width: 640px) {
+      .pb { padding-bottom: calc(48px + var(--tab-nav-total-height, 0px)); }
+      .pb-bar-actions { width: 100%; }
+      .pb-bar-actions .pb-btn { flex: 1 1 auto; text-align: center; min-height: 44px; }
+      .pb-select, .pb-select--scope { max-width: none; flex: 1 1 100%; min-height: 44px; font-size: 16px; }
+      .pb-name { width: 100%; min-width: 0; font-size: 16px; }
+      .pb-lane-name { font-size: 16px; }
+      .pb-board { gap: 12px; }
+      .pb-lanes { gap: 12px; }
+      .pb-preview { padding: 12px; }
+    }
+
+    /* Capacitor native: the sticky palette is the only page-owned chrome
+       that can ride under the device top inset; nudge it clear of the
+       status bar / notch (global body inset covers the page body). */
+    :host-context(html.cap-native) .pb-palette { top: calc(8px + env(safe-area-inset-top)); }
   `]
 })
 export class ProcessBuilderComponent implements OnInit {

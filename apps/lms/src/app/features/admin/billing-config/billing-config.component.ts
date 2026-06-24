@@ -138,20 +138,20 @@ interface GstRow {
             } @else {
               <div class="space-y-2">
                 @for (b of branches(); track b.id) {
-                  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2 items-stretch md:items-center pf-gst-row">
-                    <div class="md:col-span-4 min-w-0">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-stretch lg:items-center pf-gst-row">
+                    <div class="lg:col-span-4 min-w-0">
                       <p class="text-[14px] font-medium truncate" style="color: var(--text-primary);">{{ b.name }}</p>
                       <p class="text-[11px] font-mono" style="color: var(--text-muted);">{{ b.code }}</p>
                     </div>
-                    <div class="md:col-span-4">
+                    <div class="lg:col-span-4">
                       <input type="text" class="pf-input w-full" placeholder="GSTIN"
                              [ngModel]="gstinFor(b.id)" (ngModelChange)="setGstin(b.id, $event)" />
                     </div>
-                    <div class="md:col-span-3">
+                    <div class="lg:col-span-3">
                       <input type="text" class="pf-input w-full" placeholder="State code"
                              [ngModel]="stateCodeFor(b.id)" (ngModelChange)="setStateCode(b.id, $event)" />
                     </div>
-                    <div class="md:col-span-1 md:text-right">
+                    <div class="sm:col-span-2 lg:col-span-1 lg:text-right">
                       <pf-touch-btn size="sm" variant="ghost"
                                      [disabled]="!hasGstinFor(b.id)"
                                      (pressed)="saveGstin(b.id)">Save</pf-touch-btn>
@@ -221,7 +221,7 @@ interface GstRow {
         <div class="grid grid-cols-1 xl:grid-cols-[1fr_minmax(380px,460px)] gap-5 items-start">
         <div class="min-w-0">
         <pf-tile tone="default" padding="lg" class="block">
-          <div class="grid grid-cols-2 gap-3 mb-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             <div>
               <label class="pf-label">Invoice prefix</label>
               <input type="text" class="pf-input"
@@ -253,17 +253,17 @@ interface GstRow {
           <p class="text-[13px] mb-4" style="color: var(--text-tertiary);">Shown on the invoice / receipt PDF. Most diagnostic services are GST-exempt — use Bill of Supply (or Auto).</p>
 
           <label class="pf-label">Template style</label>
-          <div class="flex gap-2 mb-4">
+          <div class="flex flex-wrap gap-2 mb-4">
             @for (s of templateStyles; track s.value) {
               <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="(tpl().template ?? 'classic') === s.value"
                       (click)="patchTpl({ template: s.value })">{{ s.label }}</button>
             }
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label class="pf-label">Lab name</label><input class="pf-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
             <div><label class="pf-label">GSTIN</label><input class="pf-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
-            <div class="col-span-2"><label class="pf-label">Address</label><input class="pf-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Address</label><input class="pf-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></div>
             <div><label class="pf-label">Phone</label><input class="pf-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
             <div><label class="pf-label">Email</label><input class="pf-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
             <div><label class="pf-label">Document type</label>
@@ -275,36 +275,36 @@ interface GstRow {
             </div>
             <div><label class="pf-label">Accent colour</label><input class="pf-input" type="color" [ngModel]="tpl().accentColor || '#1B3A6B'" (ngModelChange)="patchTpl({ accentColor: $event })" style="height:38px;padding:4px"/></div>
             <div><label class="pf-label">Signatory label</label><input class="pf-input" [ngModel]="tpl().signatureLabel" (ngModelChange)="patchTpl({ signatureLabel: $event })" placeholder="Authorised Signatory"/></div>
-            <div class="col-span-2">
+            <div class="col-span-1 sm:col-span-2">
               <label class="pf-label">Logo — upload or paste a URL</label>
               <pf-image-upload [url]="tpl().logoUrl" (urlChange)="patchTpl({ logoUrl: $event })"></pf-image-upload>
               <input class="pf-input mt-2" [ngModel]="tpl().logoUrl" (ngModelChange)="patchTpl({ logoUrl: $event })" placeholder="https://…/logo.png  (or upload above)"/>
             </div>
             <div><label class="pf-label">Jurisdiction</label><input class="pf-input" [ngModel]="tpl().jurisdiction" (ngModelChange)="patchTpl({ jurisdiction: $event })" placeholder="e.g. Chennai"/></div>
-            <div class="col-span-2"><label class="pf-label">Bank details</label><input class="pf-input" [ngModel]="tpl().bankDetails" (ngModelChange)="patchTpl({ bankDetails: $event })" placeholder="A/c · IFSC · Bank"/></div>
-            <div class="col-span-2"><label class="pf-label">Declaration</label><input class="pf-input" [ngModel]="tpl().declaration" (ngModelChange)="patchTpl({ declaration: $event })" placeholder="Certified that the particulars given above are true and correct."/></div>
-            <div class="col-span-2"><label class="pf-label">Footer / terms</label><input class="pf-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Bank details</label><input class="pf-input" [ngModel]="tpl().bankDetails" (ngModelChange)="patchTpl({ bankDetails: $event })" placeholder="A/c · IFSC · Bank"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Declaration</label><input class="pf-input" [ngModel]="tpl().declaration" (ngModelChange)="patchTpl({ declaration: $event })" placeholder="Certified that the particulars given above are true and correct."/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Footer / terms</label><input class="pf-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></div>
           </div>
           <div class="flex flex-wrap gap-5 mt-3">
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showLogo !== false" (ngModelChange)="patchTpl({ showLogo: $event })"/> Show logo</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showGstin !== false" (ngModelChange)="patchTpl({ showGstin: $event })"/> Show GSTIN</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showTrackingQr !== false" (ngModelChange)="patchTpl({ showTrackingQr: $event })"/> Show result-tracking QR</label>
           </div>
-          <button class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white" style="background: var(--violet-600, #7c3aed);" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save letterhead' }}</button>
+          <button class="pf-save-letterhead mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white" style="background: var(--violet-600, #7c3aed);" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save letterhead' }}</button>
         </pf-tile>
         </div>
 
         <!-- Live invoice preview (right) -->
         <pf-tile tone="default" padding="lg" class="block xl:sticky xl:top-4">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h3 class="text-sm font-bold" style="color: var(--text-primary);">Live preview</h3>
-            <div class="flex gap-1">
+            <div class="flex flex-wrap gap-1">
               <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="previewMode() === 'bill_of_supply'" (click)="setPreviewMode('bill_of_supply')">Bill of Supply</button>
               <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="previewMode() === 'tax_invoice'" (click)="setPreviewMode('tax_invoice')">Tax Invoice</button>
             </div>
           </div>
           @if (invoicePreviewUrl(); as src) {
-            <iframe [src]="src" title="Invoice preview" style="width:100%;height:62vh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
+            <iframe [src]="src" title="Invoice preview" class="pf-invoice-iframe" style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
           } @else {
             <div class="text-[13px] py-10 text-center" style="color: var(--text-tertiary);">Rendering preview…</div>
           }
@@ -354,6 +354,61 @@ interface GstRow {
       border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary);
     }
     .pf-tpl-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
+
+    /* ── Cross-platform additive overrides (scoped to this page only) ── */
+
+    /* Phone: stop iOS auto-zoom on focus by keeping form text >= 16px.
+       Scoped under :host so the shared .pf-input primitive is untouched globally. */
+    @media (max-width: 640px) {
+      :host .pf-input,
+      :host input[type="text"],
+      :host input[type="color"],
+      :host select {
+        font-size: 16px;
+      }
+      /* Cap the live-preview iframe so it never dominates the small viewport. */
+      :host .pf-invoice-iframe {
+        height: 48dvh;
+      }
+    }
+
+    /* Touch devices: ensure tap targets are comfortably >= 44px. */
+    @media (pointer: coarse) {
+      :host .pf-tpl-chip {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+      :host .pf-scope-card {
+        min-height: 44px;
+      }
+      /* The "Save letterhead" raw button is a plain element, not a pf-touch-btn,
+         so give it a comfortable touch target on coarse pointers. */
+      :host .pf-save-letterhead {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* The colour swatch carries an inline 38px height; lift it to a tappable
+         size on touch (the inline style still wins on desktop precise pointers). */
+      :host input[type="color"] {
+        min-height: 44px;
+      }
+      /* Native checkbox toggles get a roomier tap area without changing layout. */
+      :host input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    /* Touch hover guard: the scope-card hover border is harmless on touch,
+       but keep the lift transition crisp on coarse pointers. */
+    @media (hover: none) {
+      :host .pf-scope-card:hover {
+        border-color: var(--glass-border);
+      }
+    }
   `]
 })
 export class BillingConfigComponent implements OnInit, OnDestroy {

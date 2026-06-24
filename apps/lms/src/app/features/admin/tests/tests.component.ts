@@ -77,7 +77,7 @@ const UNASSIGNED = 'Unassigned';
       @if (tab() === 'individual' && selectedDept() && !searching()) {
         <div class="flex items-center gap-2 mb-3">
           <button type="button"
-                  class="text-[13px] font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                  class="pf-tests-breadcrumb-back text-[13px] font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1"
                   (click)="clearDept()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             All departments
@@ -96,10 +96,10 @@ const UNASSIGNED = 'Unassigned';
             </div>
           </pf-tile>
         } @else {
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          <div class="pf-dept-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
             @for (d of departments(); track d.name) {
               <button type="button" class="text-left w-full" (click)="selectDept(d.name)">
-                <pf-tile tone="default" padding="md" class="block h-full transition hover:brightness-110">
+                <pf-tile tone="default" padding="md" class="pf-dept-card block h-full transition hover:brightness-110">
                   <div class="flex items-start gap-3">
                     <div class="pf-test-icon">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -198,7 +198,7 @@ const UNASSIGNED = 'Unassigned';
                   </p>
                 </div>
 
-                <div class="flex items-center gap-3">
+                <div class="pf-test-row-actions flex items-center gap-3">
                   <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ t.price | inr }}</p>
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="openEdit(t)">Edit</pf-touch-btn>
                 </div>
@@ -221,6 +221,50 @@ const UNASSIGNED = 'Unassigned';
       border: 1px solid rgba(168, 85, 247, 0.3);
       color: #c4b5fd;
       flex-shrink: 0;
+    }
+
+    /* ── Cross-platform overrides — ADDITIVE only, below desktop / touch.
+       Desktop-web (>=1280px) and base rules above are untouched. ── */
+
+    /* Prevent this page introducing horizontal overflow on small screens. */
+    @media (max-width: 1279px) {
+      :host { display: block; max-width: 100%; }
+      :host section { overflow-x: clip; }
+    }
+
+    /* Touch devices: give the text-only breadcrumb back button a 44px tap
+       target without altering its visual size on desktop. */
+    @media (pointer: coarse) {
+      :host .pf-tests-breadcrumb-back {
+        min-height: 44px;
+        padding-block: 4px;
+      }
+    }
+
+    /* Hover affordance on department tiles only where a real hover pointer
+       exists, so it does not stick on touch taps. */
+    @media (hover: none) {
+      :host .pf-dept-card.hover\\:brightness-110:hover { filter: none; }
+    }
+
+    /* Below desktop: when the individual-test row wraps, keep the price +
+       Edit action cluster from collapsing/squishing against the truncating
+       test name. Desktop (>=1280) uses md:flex-nowrap and is untouched. */
+    @media (max-width: 1279px) {
+      :host .pf-test-row-actions { flex-shrink: 0; flex-wrap: wrap; }
+    }
+
+    /* Web-below-desktop band shares the viewport with the fixed 64px left icon
+       rail, which eats horizontal room the Tailwind lg: cols don't account for.
+       lg:grid-cols-4 fires at 1024px and squishes the department cards (icon +
+       truncated name + code chip) into ~210px cells once the rail is deducted.
+       Cap the department grid at 3 columns in the 1024–1279px sub-band so cards
+       keep a readable width. The 641–1023px base (2/3 cols) is already fine and
+       is left untouched; desktop (>=1280px) keeps the 4-up lg: layout. */
+    @media (min-width: 1024px) and (max-width: 1279px) {
+      :host .pf-dept-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
   `]
 })

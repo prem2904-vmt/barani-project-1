@@ -33,7 +33,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 
       <!-- Department picker + status pill -->
       <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 pf-dept-pick">
           <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
                  style="color: var(--text-muted);">Department</label>
           <pf-select
@@ -288,7 +288,33 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
       cursor: pointer;
       border-radius: 8px;
     }
-    .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); }
+
+    /* ── Additive cross-platform overrides only — desktop-web (>=1280)
+         stays byte-identical. ──────────────────────────────────────── */
+
+    /* Gate hovers so touch taps don't stick. */
+    @media (hover: hover) {
+      .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); }
+    }
+
+    /* Coarse pointers: 26px reorder/lock/delete buttons and the link
+       button are below the 44px touch minimum. Bump hit area only. */
+    @media (pointer: coarse) {
+      .pf-icon-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+      .pf-link-btn { min-height: 44px; display: inline-flex; align-items: center; }
+    }
+
+    /* Phone (<=640): the department picker uses a fixed inline width
+       (220px) that can crowd the status pill; let the row wrap and the
+       select fill the line. The header label row is keyed to the
+       single-line desktop row — once rows wrap on phone it no longer
+       lines up, so hide it and let each row's controls stand alone. */
+    @media (max-width: 640px) {
+      .pf-cols-header { display: none; }
+      :host ::ng-deep .pf-col-row pf-select { width: 100% !important; }
+      :host ::ng-deep .pf-dept-pick pf-select { width: 100% !important; }
+      .pf-dept-pick { flex: 1 1 100%; }
+    }
   `]
 })
 export class ReportColumnsEditorComponent implements OnInit {

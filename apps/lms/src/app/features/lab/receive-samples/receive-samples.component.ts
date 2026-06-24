@@ -36,27 +36,32 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded">
+    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded"
+             [class.pf-rs-page]="!embedded">
 
       @if (!embedded) {
-        <pf-kpi-strip screen="receive_samples"></pf-kpi-strip>
-        <pf-screen-header
-          eyebrow="Lab intake"
-          title="Receive samples"
-          subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
-            <span icon-left aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
-                <path d="M21 3v5h-5"/>
-                <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
-                <path d="M3 21v-5h5"/>
-              </svg>
-            </span>
-            Refresh
-          </pf-touch-btn>
-        </pf-screen-header>
+        <div class="pf-rs-chrome">
+          <pf-kpi-strip screen="receive_samples"></pf-kpi-strip>
+          <pf-screen-header
+            eyebrow="Lab intake"
+            title="Receive samples"
+            subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
+            <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+              <span icon-left aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+              </span>
+              Refresh
+            </pf-touch-btn>
+          </pf-screen-header>
+        </div>
       }
+
+      <div [class.pf-rs-scroll]="!embedded">
 
       <!-- Scan hero — hidden when embedded (the parent pane header
            hosts a camera-icon shortcut that opens the same scanner via
@@ -65,7 +70,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       <pf-tile tone="violet" padding="lg" class="block mb-6">
         <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
                style="color: var(--text-muted);">Scan barcode</label>
-        <div class="flex gap-2">
+        <div class="flex gap-2 pf-rs-scanrow">
           <div class="scan-field">
             <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
@@ -113,7 +118,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             Bulk receive · 1 scan handles many orders
           </span>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 pf-rs-scanrow pf-rs-scanrow--pkg">
           <div class="scan-field">
             <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -405,6 +410,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           }
         </div>
       }
+
+      </div><!-- /pf-rs-scroll -->
     </section>
 
     @if (pkgScannerOpen()) {
@@ -643,6 +650,92 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     .seq-hint {
       font-size: 12px; color: var(--text-muted);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * NON-SCROLL WORK LAYOUT (applies on ALL sizes — approved desktop
+     * change). The page fills the shell's main area exactly; the page
+     * itself never scrolls. The screen chrome (KPI strip + header) is
+     * fixed; scrolling happens inside .pf-rs-scroll only. Gated to the
+     * standalone (non-embedded) page via .pf-rs-page so the embedded
+     * tab inside my-work keeps flowing in its host.
+     * ─────────────────────────────────────────────────────────────── */
+    /* Only the standalone page fills the shell's main area. When embedded
+     * (no .pf-rs-page child) the host keeps its default auto height so it
+     * flows naturally inside the my-work Lab Intake pane body. */
+    :host:has(.pf-rs-page) { display: block; height: 100%; }
+
+    section.pf-rs-page {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      min-height: 0;
+      /* The base section uses pt-6/pb-10 utilities; in non-scroll mode
+       * the vertical padding moves onto the inner regions so the column
+       * math (chrome + scroll = 100%) stays exact. The element selector
+       * out-specifies the Tailwind pt-6/pb-10 single-class utilities. */
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .pf-rs-page .pf-rs-chrome {
+      flex: 0 0 auto;
+      padding-top: 24px;          /* replaces pt-6 */
+    }
+    .pf-rs-page .pf-rs-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* breathing room at the bottom of the scroll region + safe-area
+       * for this page's own scroll chrome on notched devices. */
+      padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+      /* smooth momentum scrolling inside the panel on touch devices */
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * CROSS-PLATFORM ADDITIVE OVERRIDES (do not touch base rules above)
+     * Desktop-web >=1280px is unaffected: every rule below is gated by a
+     * max-width media query, a touch/pointer query, or a hover query.
+     * ─────────────────────────────────────────────────────────────── */
+
+    /* Touch & coarse-pointer: gate the decorative hover states so they
+     * don't "stick" on tap, and grow the small inline tap targets. */
+    @media (hover: none) {
+      .pf-rs-row:hover { background: var(--glass-bg); border-color: var(--glass-border); }
+      .pf-rs-row__btn:hover { filter: none; }
+      .scan-field:hover { border-color: var(--glass-border); }
+      .manual-link:hover { color: var(--text-secondary); }
+    }
+    @media (pointer: coarse) {
+      .pf-rs-row__btn { min-height: 44px; padding: 8px 18px; }
+      .pf-rs-row__chip { min-height: 32px; display: inline-flex; align-items: center; }
+      .manual-link { min-height: 44px; display: inline-flex; align-items: center; }
+      .pf-check-box { width: 24px; height: 24px; }
+      .seg--input { padding: 10px 10px; }
+    }
+
+    /* iPad / mid-width (641–1279): scan rows have room — keep the inline
+     * layout. No change needed beyond the phone fixes below. */
+
+    /* Phone (<=640): stack the scan rows so the input + buttons don't
+     * overflow horizontally, and lift input font to 16px to stop iOS
+     * auto-zoom on focus. */
+    @media (max-width: 640px) {
+      .scan-field input { font-size: 16px; }
+      .seg--input { font-size: 16px; }
+      /* The scan/package action rows are .flex.gap-2 wrappers with an
+       * input + one or more buttons. Stack them so the buttons (esp. the
+       * package row's two buttons) don't squeeze the input or overflow. */
+      .pf-rs-scanrow { flex-direction: column; align-items: stretch; }
+      .pf-rs-scanrow .scan-field { width: 100%; }
+      /* Make the action buttons within these rows fill the width when
+       * stacked (scoped to this page's rows only). */
+      .pf-rs-scanrow pf-touch-btn { width: 100%; }
+      .scan-field { height: 52px; }
+      .pkg-preview__row { flex-wrap: wrap; }
+      .pkg-preview__meta { width: 100%; }
     }
   `]
 })

@@ -21,6 +21,45 @@ const MODES: ModeOption[] = [
   standalone: true,
   imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    /* Page is fluid; guard against any accidental horizontal overflow only. */
+    :host { display: block; width: 100%; }
+
+    /* Touch: give the native "Open 24×7" checkbox a comfortable hit target
+       without changing its painted size or affecting desktop/mouse users. The
+       wrapping label becomes a >=44px tap zone while the painted box grows
+       modestly for easier toggling. */
+    @media (pointer: coarse) {
+      :host input[type='checkbox'] {
+        min-width: 22px;
+        min-height: 22px;
+      }
+      :host .pf-check-row {
+        min-height: 44px;
+      }
+    }
+
+    /* Touch: each mode tile is a full-row choice; ensure a tall enough tap
+       target on coarse pointers without altering its desktop appearance. */
+    @media (pointer: coarse) {
+      :host .pf-mode-btn { min-height: 44px; }
+    }
+
+    /* Hover affordances only where a real pointer can hover, so taps don't
+       leave sticky hover states on touch devices. */
+    @media (hover: hover) {
+      :host .pf-mode-btn:hover { opacity: 0.95; }
+    }
+
+    /* Phone (<=640): the 2-col priority grid can get tight on very narrow
+       devices — collapse to a single column below 380px only. Desktop and
+       iPad are unaffected (they already use sm:grid-cols-3). */
+    @media (max-width: 379px) {
+      :host .pf-priority-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+    }
+  `],
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 max-w-3xl">
       <pf-screen-header
@@ -40,7 +79,7 @@ const MODES: ModeOption[] = [
           <h3 class="pf-section-title mb-3">Queue mode</h3>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             @for (m of modes; track m.value) {
-              <button type="button" class="text-left" (click)="setMode(m.value)">
+              <button type="button" class="pf-mode-btn text-left" (click)="setMode(m.value)">
                 <pf-tile [tone]="cfg()!.queueMode === m.value ? 'violet' : 'default'" padding="md" class="block h-full">
                   <p class="font-semibold text-[14px]" style="color: var(--text-primary);">{{ m.label }}</p>
                   <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">{{ m.desc }}</p>
@@ -64,7 +103,7 @@ const MODES: ModeOption[] = [
               <pf-number-input [value]="cfg()!.maxConcurrentSlots" [step]="1" [min]="1"
                 (valueChange)="patch({ maxConcurrentSlots: $event ?? 1 })"></pf-number-input>
             </label>
-            <label class="flex items-center gap-2 mt-6">
+            <label class="pf-check-row flex items-center gap-2 sm:mt-6">
               <input type="checkbox" [checked]="cfg()!.open24h" (change)="patch({ open24h: $any($event.target).checked })" />
               <span class="text-[13px]" style="color: var(--text-secondary);">Open 24×7</span>
             </label>
@@ -77,7 +116,7 @@ const MODES: ModeOption[] = [
           <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
             Higher score = called sooner. score = base(type) + minutes&nbsp;waited × weight − late penalty; urgent jumps to the top.
           </p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div class="pf-priority-grid grid grid-cols-2 sm:grid-cols-3 gap-3">
             @for (f of optionFields; track f.key) {
               <label class="flex flex-col gap-1">
                 <span class="pf-label">{{ f.label }}</span>

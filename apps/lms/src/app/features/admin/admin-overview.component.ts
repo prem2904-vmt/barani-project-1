@@ -25,7 +25,7 @@ interface SeedSummary {
   template: `
     <section class="pf-ov">
       <header class="pf-ov__hdr">
-        <div>
+        <div class="pf-ov__hdr-l">
           <p class="pf-ov__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <h1 class="pf-ov__title">Overview · <span class="text-gradient">{{ userName() }}</span></h1>
         </div>
@@ -75,11 +75,13 @@ interface SeedSummary {
     @media (min-width: 768px) { .pf-ov { padding: 28px 32px 48px; } }
     .pf-ov__hdr { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
     .pf-ov__eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--text-muted); margin: 0; }
-    .pf-ov__title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 0; color: var(--text-primary); }
+    .pf-ov__hdr-l { min-width: 0; }
+    .pf-ov__title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 0; color: var(--text-primary); overflow-wrap: anywhere; }
     .text-gradient { background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
     .pf-ov__manage { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 11px; font-size: 13px; font-weight: 700;
       border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); }
-    .pf-ov__manage:hover { color: #fff; border-color: var(--glass-border-hover); }
+    .pf-ov__manage svg { flex-shrink: 0; }
+    @media (hover: hover) { .pf-ov__manage:hover { color: #fff; border-color: var(--glass-border-hover); } }
 
     .pf-ov__stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 18px 0 8px; }
     @media (min-width: 720px) { .pf-ov__stats { grid-template-columns: repeat(6, 1fr); } }
@@ -100,6 +102,34 @@ interface SeedSummary {
     .pf-ov__card-ic[data-g="automation"] { background: rgba(236,72,153,.14); color: #f9a8d4; }
     .pf-ov__card-t { font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .pf-ov__card-s { font-size: 12.5px; color: var(--text-tertiary); }
+
+    /* ---- Touch / non-hover overrides (additive; never affect desktop hover) ---- */
+    /* On touch devices, neutralize hover transforms/border so they don't stick after a tap. */
+    @media (hover: none) {
+      .pf-ov__card:hover { transform: none; border-color: var(--glass-border); }
+      .pf-ov__card:active { transform: translateY(-1px); border-color: var(--violet-500, #8b5cf6); }
+      .pf-ov__stat--link:hover { border-color: var(--glass-border); }
+    }
+    /* Coarse pointers: guarantee >=44px tap targets without changing the desktop look. */
+    @media (pointer: coarse) {
+      .pf-ov__manage { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
+      .pf-ov__stat--link, .pf-ov__card { min-height: 44px; }
+    }
+
+    /* ---- Phone (<=640): ensure stat link / cards remain comfortable single-/two-up ---- */
+    @media (max-width: 640px) {
+      .pf-ov__title { font-size: 21px; }
+      /* Header action goes full-width so it isn't cramped beside the title. */
+      .pf-ov__manage { width: 100%; justify-content: center; }
+    }
+
+    /* ---- Web-below-desktop band (641-1279, incl. iPad + narrow browsers) ----
+       The 6-up stat grid (which kicks in at >=720px) is too cramped beside the
+       64px left rail at the lower end of this band. Drop to 3-up so the 6 stats
+       form a tidy 2x3 with the title sitting above the same left edge. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-ov__stats { grid-template-columns: repeat(3, 1fr); }
+    }
   `]
 })
 export class AdminOverviewComponent implements OnInit {

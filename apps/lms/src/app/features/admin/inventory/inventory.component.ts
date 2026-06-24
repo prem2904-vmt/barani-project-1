@@ -42,13 +42,13 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           <div class="p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
             <div class="text-[11px] font-bold uppercase tracking-wider mb-2" style="color:var(--amber,#f59e0b)">Low stock ({{ lowStock().length }})</div>
             @for (l of lowStock(); track l.id) {
-              <div class="flex justify-between text-sm py-0.5"><span>{{ l.name }}</span><span class="font-mono" style="color:var(--text-tertiary)">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
+              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ l.name }}</span><span class="font-mono" style="color:var(--text-tertiary)">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
             } @empty { <p class="text-sm" style="color:var(--text-muted)">All good.</p> }
           </div>
           <div class="p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
             <div class="text-[11px] font-bold uppercase tracking-wider mb-2" style="color:var(--red,#ef4444)">Expiring soon ({{ expiring().length }})</div>
             @for (e of expiring(); track e.id) {
-              <div class="flex justify-between text-sm py-0.5"><span>{{ e.item }} <span style="color:var(--text-muted)">{{ e.lotNumber }}</span></span><span class="font-mono" [style.color]="e.daysLeft < 0 ? 'var(--red)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
+              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ e.item }} <span style="color:var(--text-muted)">{{ e.lotNumber }}</span></span><span class="font-mono" [style.color]="e.daysLeft < 0 ? 'var(--red)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
             } @empty { <p class="text-sm" style="color:var(--text-muted)">Nothing expiring.</p> }
           </div>
         </div>
@@ -81,7 +81,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       <!-- Items -->
       @if (loading()) { <p class="text-sm" style="color:var(--text-tertiary)">Loading…</p> }
       @else {
-        <div class="rounded-xl border overflow-hidden" style="border-color:var(--glass-border)">
+        <div class="rounded-xl border overflow-hidden inv-table-wrap" style="border-color:var(--glass-border)">
           <table class="w-full text-sm">
             <thead><tr style="background:var(--glass-bg);color:var(--text-muted)">
               <th class="text-left p-3">Item</th><th class="text-left p-3">Category</th>
@@ -143,8 +143,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                           @if (b.expired) { <span class="ml-1 text-[10px]" style="color:var(--red)">expired</span> }</span>
                         <span class="flex items-center gap-3 font-mono">
                           <span>{{ b.qtyOnHand | number:'1.0-2' }}</span>
-                          <button class="text-xs" style="color:var(--text-tertiary)" (click)="adjust(b, -1)">−</button>
-                          <button class="text-xs" style="color:var(--text-tertiary)" (click)="adjust(b, 1)">＋</button>
+                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, -1)">−</button>
+                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, 1)">＋</button>
                         </span>
                       </div>
                     } @empty { <p class="text-sm" style="color:var(--text-muted)">No batches yet — receive stock.</p> }
@@ -170,17 +170,17 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
         @if (bomTestId()) {
           <div class="mt-3 space-y-2" style="max-width:560px">
             @for (line of bomLines(); track $index) {
-              <div class="flex items-center gap-2">
-                <select class="inp" [ngModel]="line.itemId" (ngModelChange)="setLine($index,'itemId',$event)">
+              <div class="flex items-center gap-2 bom-line">
+                <select class="inp bom-line__item" [ngModel]="line.itemId" (ngModelChange)="setLine($index,'itemId',$event)">
                   <option value="">Item…</option>
                   @for (it of items(); track it.id) { <option [value]="it.id">{{ it.name }} ({{ it.uom }})</option> }
                 </select>
-                <input class="inp" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
-                <button class="text-sm px-2" style="color:var(--red)" (click)="removeLine($index)">✕</button>
+                <input class="inp bom-line__qty" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
+                <button class="text-sm px-2 iconbtn" style="color:var(--red)" (click)="removeLine($index)">✕</button>
               </div>
             }
             <div class="flex gap-2 pt-1">
-              <button class="text-xs font-semibold" style="color:var(--violet-400)" (click)="addLine()">+ Add item</button>
+              <button class="text-xs font-semibold touch-link" style="color:var(--violet-400)" (click)="addLine()">+ Add item</button>
             </div>
             <button class="mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
           </div>
@@ -203,6 +203,61 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     .label-wrap { margin:4px 0 14px; padding:14px; border-radius:12px; border:1px solid var(--glass-border-hover); background:var(--bg-card-solid); }
     .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
+
+    /* ---------- Cross-platform additive overrides (do not touch desktop >=1280) ---------- */
+
+    /* The items table is dense (4 row actions + numeric columns). Below desktop, let it
+       scroll horizontally inside its own card instead of forcing page-wide overflow. */
+    @media (max-width: 1279px) {
+      :host .inv-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      :host .inv-table-wrap table { min-width: 640px; }
+    }
+
+    /* Phone: keep inputs at >=16px so iOS doesn't zoom on focus. Slightly larger
+       row-action tap targets. Reduce wasted horizontal padding so the table fits.
+       Let the header "New item" button keep its size and wrap the BOM line. */
+    @media (max-width: 640px) {
+      :host .inp { font-size: 16px; padding: 11px 12px; }
+      :host .rowbtn { padding: 9px 12px; }
+      :host .label-wrap__head { flex-wrap: wrap; }
+      /* BOM editor row: stop the two selects + qty input from crushing each other.
+         Let the item select take the row, with qty + remove sitting beside it. */
+      :host .bom-line { flex-wrap: wrap; }
+      :host .bom-line__item { flex: 1 1 100%; min-width: 0; }
+      :host .bom-line__qty { width: 120px !important; }
+    }
+
+    /* The item select is a flex child whose option text can be long; allow it to
+       shrink instead of overflowing the BOM row at any width below desktop.
+       Same for alert rows: gap + min-width:0 so a long item/lot name truncates
+       instead of colliding with the right-aligned mono value. */
+    @media (max-width: 1279px) {
+      :host .bom-line__item { min-width: 0; }
+      :host .alert-row { gap: 12px; }
+      :host .alert-row__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
+
+    /* Touch devices (any width): give every interactive element a comfortable
+       >=44px hit area without changing the visual padding on hover/pointer devices. */
+    @media (pointer: coarse) {
+      :host .rowbtn { min-height: 44px; display: inline-flex; align-items: center; }
+      :host .seg__i { min-height: 44px; display: inline-flex; align-items: center; }
+      /* Icon-only batch +/- and remove-line ✕ buttons need a real hit area. */
+      :host .iconbtn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+      /* Primary/secondary padded action buttons (New item, Save, Cancel, Add stock,
+         Save consumables) — guarantee a 44px tall hit target on touch. */
+      :host button.rounded-xl, :host button.rounded-lg {
+        min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+      }
+      /* Inline text actions ("+ Add item") get a tappable height without changing look. */
+      :host .touch-link { min-height: 44px; display: inline-flex; align-items: center; }
+    }
+
+    /* Hover affordances only where a real pointer exists (prevents sticky :hover on touch). */
+    @media (hover: none) {
+      :host table tbody tr:hover td { background: transparent; }
+      :host .rowbtn:hover { color: var(--text-secondary); border-color: var(--glass-border); }
+    }
   `]
 })
 export class InventoryComponent implements OnInit {

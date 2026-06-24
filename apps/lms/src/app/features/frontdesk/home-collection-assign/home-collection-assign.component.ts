@@ -52,12 +52,12 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                   <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">{{ a.slotTime || '—' }} @if (a.patient; as patient) { @if (patient.phone) { · {{ patient.phone }} } }</p>
                 </div>
                 <div class="flex items-center gap-2 pt-2 border-t border-slate-700/30">
-                  <div class="flex-1">
+                  <div class="flex-1 min-w-0">
                     <pf-select [options]="agentOptions()" [value]="pick()[a.id]"
                       placeholder="Choose agent" size="sm"
                       (valueChange)="setPick(a.id, $any($event))"></pf-select>
                   </div>
-                  <pf-touch-btn size="sm" variant="primary" [disabled]="!pick()[a.id]" (pressed)="assign(a)">Assign</pf-touch-btn>
+                  <pf-touch-btn size="sm" variant="primary" class="shrink-0" [disabled]="!pick()[a.id]" (pressed)="assign(a)">Assign</pf-touch-btn>
                 </div>
               </div>
             </pf-tile>

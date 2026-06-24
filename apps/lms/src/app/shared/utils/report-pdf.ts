@@ -100,10 +100,14 @@ interface ResolvedTheme {
   showReported: boolean;
   // Patient block toggles
   showBarcode: boolean;
-  // Results — abnormal-flag styling. 'bold' = bold black value + H/L
-  // letter (most NABL/Drlogy reports); 'bold_color' = additionally tint
-  // high red / low blue. Admin-configurable.
+  // Results — abnormal-flag styling. 'bold' = bold black value + indicator;
+  // 'bold_color' = additionally tint high/low. Admin-configurable.
   flagStyle: 'bold' | 'bold_color';
+  // Abnormal indicator glyph: 'letter' = H/L, 'arrow' = ↑/↓.
+  flagIndicator: 'letter' | 'arrow';
+  // Colours used when flagStyle === 'bold_color' (admin picks). High + low.
+  abnormalColor: string;
+  abnormalLowColor: string;
   // Group the continuous results table by department band as well as
   // panel. Off by default → panel/profile headers only (no department).
   groupByDepartment: boolean;
@@ -220,7 +224,7 @@ function defaultTheme(): ResolvedTheme {
     font: PDF_FONT, fontScale: 1,
     headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     tableStyle: 'plain', zebraRows: false,
-    flagStyle: 'bold', groupByDepartment: false,
+    flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb', groupByDepartment: false,
     dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
     showRegistered: true, showCollected: true, showReported: true,
     showBarcode: true,
@@ -272,6 +276,9 @@ function resolveTheme(
   t.tableStyle      = (tpl.tableStyle as 'plain'|'bordered'|'striped') ?? 'plain';
   t.zebraRows       = tpl.zebraRows ?? (tpl.tableStyle === 'striped');
   t.flagStyle       = tpl.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
+  t.flagIndicator   = tpl.flagIndicator === 'arrow' ? 'arrow' : 'letter';
+  t.abnormalColor   = pickColor(tpl.abnormalColor, '#dc2626');
+  t.abnormalLowColor = pickColor(tpl.abnormalLowColor, '#2563eb');
   t.groupByDepartment = tpl.groupByDepartment ?? false;
   t.dateFormat      = tpl.dateFormat ?? t.dateFormat;
   t.timeFormat      = (tpl.timeFormat as 'none'|'12h'|'24h') ?? '12h';
@@ -1129,15 +1136,17 @@ function buildPanelGroup(
           continue;
         }
         const label = flagLabel(r);
+        const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
+        const letter = (label === 'High' ? 'H' : label === 'Low' ? 'L' : '') || rc.flag;
         group.rows.push({
           kind: 'param',
           name: humanize(r.parameterName ?? ''),
-          result: resultSrc ? (r.cells[resultSrc.name] ?? '') : '',
-          range: rangeSrc ? (r.cells[rangeSrc.name] ?? '') : '',
-          unit: unitSrc ? (r.cells[unitSrc.name] ?? '') : '',
-          flag: label === 'High' ? 'H' : label === 'Low' ? 'L' : '',
-          isLow: label === 'Low',
-          abnormal: !!r.color,
+          result: rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : ''),
+          range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
+          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : ''),
+          flag: letter,
+          isLow: letter === 'L',
+          abnormal: !!r.color || (!!rc.flag && rc.flag !== 'N'),
         });
       }
     }
@@ -1213,6 +1222,10 @@ function renderContinuousTable(
   ]];
 
   const body: Cell[][] = [];
+  // Parallel to `body` — carries the arrow indicator to draw in the result
+  // column for abnormal rows (jsPDF standard fonts can't render ↑/↓ glyphs,
+  // so we draw a small triangle in didDrawCell). null = no arrow on that row.
+  const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string } | null> = [];
   for (const g of groups) {
     // Panel / profile header band — bold, full width.
     body.push([{
@@ -1220,6 +1233,7 @@ function renderContinuousTable(
       colSpan: 5,
       styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
     }]);
+    bodyMeta.push(null);
 
     // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
     const sub: string[] = [];
@@ -1231,6 +1245,7 @@ function renderContinuousTable(
         colSpan: 5,
         styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
       }]);
+      bodyMeta.push(null);
     }
 
     let firstParam = true;
@@ -1241,14 +1256,22 @@ function renderContinuousTable(
           colSpan: 5,
           styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
         }]);
+        bodyMeta.push(null);
         continue;
       }
+      // Colour for an abnormal value when colour mode is on: high → admin
+      // colour, low → blue.
+      const abnColor = r.isLow ? theme.abnormalLowColor : theme.abnormalColor;
       const resultStyles: Record<string, unknown> = { halign: 'left', textColor: BLACK };
       if (r.abnormal) {
         resultStyles['fontStyle'] = 'bold';
-        if (theme.flagStyle === 'bold_color') resultStyles['textColor'] = r.isLow ? FLAG_BLUE : FLAG_RED;
+        if (theme.flagStyle === 'bold_color') resultStyles['textColor'] = abnColor;
       }
-      const resultContent = r.flag ? `${r.result ?? ''}  ${r.flag}` : (r.result ?? '');
+      // Letter mode appends H/L text; arrow mode draws a triangle (see
+      // didDrawCell) so no text glyph is appended here.
+      const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L');
+      const glyph = (r.flag && !useArrow) ? r.flag : '';
+      const resultContent = glyph ? `${r.result ?? ''}  ${glyph}` : (r.result ?? '');
       const specimenCell = firstParam ? (g.specimen ?? '') : '';
       firstParam = false;
       body.push([
@@ -1258,6 +1281,7 @@ function renderContinuousTable(
         { content: r.unit ?? '', styles: { textColor: TEXT_DIM } },
         { content: specimenCell, styles: { textColor: TEXT_DIM, fontSize: 8 } },
       ]);
+      bodyMeta.push(useArrow ? { arrow: r.isLow ? 'down' : 'up', color: theme.flagStyle === 'bold_color' ? abnColor : BLACK } : null);
     }
   }
 
@@ -1278,7 +1302,20 @@ function renderContinuousTable(
       3: { cellWidth: W.unit, halign: 'left' },
       4: { cellWidth: W.specimen, halign: 'left' },
     } as unknown as Record<number, { cellWidth: number }>,
-  });
+    // Arrow indicator: draw a small ▲/▼ triangle at the right of the result
+    // cell for abnormal rows (standard PDF fonts can't render ↑/↓ glyphs).
+    didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number } }) => {
+      if (d.section !== 'body' || d.column.index !== 1) return;
+      const m = bodyMeta[d.row.index];
+      if (!m) return;
+      const s = 3.2;
+      const cx = d.cell.x + d.cell.width - 9;
+      const cy = d.cell.y + d.cell.height / 2;
+      doc.setFillColor(m.color);
+      if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
+      else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
+    },
+  } as unknown as Parameters<typeof autoTable>[1]);
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 }
 
@@ -1399,7 +1436,9 @@ function renderGridSection(
 
     const dataCells: RowCell[] = canon.map(c => {
       const src = srcOf(c.type);
-      const value = src ? (r.cells[src.name] ?? '') : '';
+      // Unwrap an enriched value-object cell ({value,flag,…}) to its text so
+      // the PDF never prints raw JSON.
+      const value = src ? coerceCellText(r.cells[src.name]) : '';
       const styles: Record<string, unknown> = {};
       if (c.type === 'result') {
         // The value is the focal point: bold, coloured red(high)/blue(low) by the
@@ -1708,7 +1747,14 @@ function renderCultureSection(
     'M - Intermediate (may be effective at higher dose or in concentrated body sites)',
     'Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.',
   ];
-  legend.forEach(l => { doc.text(doc.splitTextToSize(l, A4.w - 2 * MARGIN_X), MARGIN_X, y); y += 10; });
+  // Advance by the ACTUAL wrapped-line count — the last legend line wraps to
+  // two lines, so a fixed 10px step left the next block ("Resistance pattern")
+  // overlapping it.
+  legend.forEach(l => {
+    const lines = doc.splitTextToSize(l, A4.w - 2 * MARGIN_X) as string[];
+    doc.text(lines, MARGIN_X, y);
+    y += lines.length * 10;
+  });
   y += 4;
 
   line('Resistance pattern', c.resistancePattern);
@@ -1964,6 +2010,30 @@ function titleCaseHeader(label: string): string {
   return label
     .toLowerCase()
     .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** A resolved 'result' cell sometimes arrives as the whole enriched value
+ *  object JSON ({value,flag,range,unit,segment}) instead of just the value
+ *  (layout engine put the object in the result column). Unwrap value + flag. */
+function coerceResultCell(raw: unknown): { value: string; flag: string } {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (s.startsWith('{') && s.includes('"value"')) {
+    try {
+      const o = JSON.parse(s) as { value?: unknown; flag?: string };
+      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase() };
+    } catch { /* fall through */ }
+  }
+  return { value: s, flag: '' };
+}
+
+/** Unwrap any cell to its .value text when it's an enriched object JSON. */
+function coerceCellText(raw: unknown): string {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (s.startsWith('{') && s.includes('"value"')) {
+    try { const o = JSON.parse(s) as { value?: unknown }; return o.value == null ? '' : String(o.value); }
+    catch { /* fall through */ }
+  }
+  return s;
 }
 
 function flagLabel(r: ResolvedRow): string {

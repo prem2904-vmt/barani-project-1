@@ -115,7 +115,7 @@ interface PatientTemplate {
                 <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ alertLabel(e.eventType) }}</p>
                 <pf-touch-btn size="sm" variant="primary" (pressed)="saveEscalation(e)">Save</pf-touch-btn>
               </div>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="pf-escalation-grid grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <label class="pf-label">Reminder</label>
                   <pf-number-input
@@ -198,6 +198,50 @@ interface PatientTemplate {
       border-radius: 10px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
+    }
+
+    /* ===== Phone overrides (<=640px) — additive only, never touch desktop ===== */
+    @media (max-width: 640px) {
+      /* iOS zooms any input/textarea whose font-size < 16px on focus.
+         Scope strictly to this page's textarea so the shared .pf-input
+         primitive is not restyled globally. */
+      :host textarea {
+        font-size: 16px;
+      }
+      /* Channel toggle cells stack label over control: keeps "WhatsApp" from
+         being squeezed in a 3-up grid and gives each toggle room to tap. */
+      :host .pf-channel-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-height: 44px;
+        justify-content: center;
+      }
+    }
+
+    /* ===== Web-below-desktop band (641–1279px): iPad + narrow browsers =====
+       The escalations grid uses md:grid-cols-4, which packs four
+       number-inputs (label + field + steppers + suffix) across a tile.
+       Below desktop that crams each cell to ~140–180px and the "Escalate
+       after"/"Critical after" controls look squeezed. Hold the grid to two
+       columns in this band; desktop (>=1280px) keeps the 4-up layout. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host .pf-escalation-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    /* ===== Coarse-pointer (touch) sizing — phone + tablet ===== */
+    @media (pointer: coarse) {
+      :host .pf-channel-cell {
+        min-height: 44px;
+      }
+      /* Block horizontal drag-resize so the template textarea can never push
+         the page sideways on touch; vertical grow still works. */
+      :host textarea {
+        resize: vertical;
+        max-width: 100%;
+      }
     }
   `]
 })

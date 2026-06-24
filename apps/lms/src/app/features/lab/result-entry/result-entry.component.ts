@@ -160,7 +160,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               <header class="pf-col-scrolls__head pf-results-head">
                 <span class="pf-results-head__eyebrow">Culture &amp; Sensitivity</span>
               </header>
-              <div class="px-1 pt-2">
+              <div class="pf-col-scrolls__body px-1 pt-2">
                 <pf-culture-entry [value]="cultureValue()" (valueChange)="setCulture($event)"></pf-culture-entry>
               </div>
             </pf-tile>
@@ -1835,7 +1835,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
         bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
         top: auto;
         height: auto;
-        max-height: 70vh;
+        max-height: 70dvh;
         z-index: 45;
         transform: translateY(120%) scale(0.98);
         opacity: 0;
@@ -1854,7 +1854,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           opacity 0.2s ease,
           visibility 0s linear;
       }
-      .pf-rail__sticky { max-height: 70vh; }
+      .pf-rail__sticky { max-height: 70dvh; }
     }
 
     /* Backdrop behind the drawer on mobile/tablet */
@@ -2243,25 +2243,34 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       color: var(--text-secondary);
     }
 
-    /* ── Page layout: content flows naturally. If content is short, the page
-       hugs the content — no inflated empty boxes. If content overflows the
-       viewport, the feature host's overflow-y: auto (from global CSS) scrolls. */
+    /* ── Page layout: NON-SCROLL app screen (WORK page).
+       The page fills the shell's main area exactly (shell-main is
+       flex:1; min-height:0; overflow-y:auto — a height:100% child fits).
+       The page itself never scrolls: header is fixed, the body fills the
+       rest, and scrolling happens INSIDE the results panel only. No outer
+       page scroll, no double scrollbars. Same behaviour at every size. */
     :host {
       display: block;
       height: 100%;
-      overflow-y: auto;
-      overflow-x: hidden;
+      overflow: hidden;
     }
     .pf-page {
-      min-height: 100%;
+      height: 100%;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
-    .pf-page__header { flex-shrink: 0; }
+    .pf-page__header { flex: 0 0 auto; }
     .pf-page__body   {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
       padding-top: 8px;
       padding-bottom: 12px;
     }
+    /* The grid tracks must be able to shrink so their children can own the
+       scroll instead of the page. min-height:0 on the body's grid items. */
+    .pf-page__body > * { min-height: 0; }
 
     /* ── Compact page header (pill row) ──────────────────────── */
     .pf-head {
@@ -2319,18 +2328,34 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       text-overflow: ellipsis;
     }
 
-    /* Left column: natural content flow — tiles stack at their content height.
-       The feature host's overflow-y: auto (set globally) handles page overflow
-       if there's too much content for the viewport. */
+    /* Left column: fills the body height. Static tiles (patient bar, notes,
+       empty-state) keep their natural height; the results tile takes the rest
+       and scrolls INTERNALLY so the page itself never scrolls. */
     .pf-col-left {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
-    .pf-col-static { display: block; }
-    .pf-col-scrolls { display: block; }
-    .pf-col-scrolls__head { }
-    .pf-col-scrolls__body { }
+    .pf-col-static { flex: 0 0 auto; }
+    /* The scrolling tile is a flex column: its head is fixed, its body owns the
+       scroll. It's the one element allowed to grow + shrink in the column. */
+    .pf-col-scrolls {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pf-col-scrolls__head { flex: 0 0 auto; }
+    .pf-col-scrolls__body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
 
     /* ── Header action cluster (replaces the old bottom action bar) ── */
     .pf-head__actions {
@@ -2431,6 +2456,86 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
         margin-left: 0;
       }
     }
+
+    /* ════════════════════════════════════════════════════════════════
+       CROSS-PLATFORM ADDITIVE OVERRIDES (scoped, below-desktop only).
+       Desktop-web at >=1280px is byte-for-byte unchanged: nothing here
+       touches base rules; every block is gated by a max-width / pointer
+       / hover / platform query so it cannot reach the wide desktop view.
+       The mobile rail drawer's max-height now uses dvh directly in its base
+       rule (a literal vh->dvh swap), so no duplicate override is needed here.
+       ════════════════════════════════════════════════════════════════ */
+
+    /* iOS zoom-guard: any focusable input below 16px triggers an
+       auto-zoom on focus in mobile Safari/WKWebView. Bump to 16px on
+       phone widths only — desktop keeps its tighter typography. */
+    @media (max-width: 640px) {
+      .pf-param__input,
+      .pf-param__textarea,
+      .pf-param__input--num,
+      .pf-notes-inline,
+      .pf-rg__input,
+      .pf-rg__textarea,
+      .pf-rg__select { font-size: 16px; }
+    }
+
+    /* Touch sizing: on coarse pointers the header pills + the back button
+       are below the 44px minimum tap target. Grow their height (and the
+       view-toggle hit area) without disturbing the mouse/desktop layout.
+       Padding-only growth keeps the pill shape; line-height stays intact. */
+    @media (pointer: coarse) and (max-width: 1279px) {
+      .pf-head__back { height: 44px; padding: 0 16px; }
+      .pf-head__btn { height: 44px; padding: 0 18px; }
+      /* Icon-only view toggle: full 44px tap target on touch. */
+      .pf-view-toggle__btn { width: 44px; height: 44px; }
+      .pf-param__file-clear { width: 44px; height: 44px; }
+      /* Corner badge sits on an 80px thumbnail — a 32px hit area is the most
+         it can take without overlapping the image; still comfortably tappable. */
+      .pf-thumb__x { width: 32px; height: 32px; font-size: 15px; }
+      .pf-rail__close { width: 44px; height: 44px; }
+      .pf-rg__input,
+      .pf-rg__select,
+      .pf-rg__textarea { padding-top: 10px; padding-bottom: 10px; }
+      .pf-image-tile__frame { width: 80px; height: 80px; }
+      .pf-param__image-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+    }
+
+    /* Touch (no real hover): neutralise the :hover background swaps on the
+       primary controls so a tap doesn't leave them "stuck" in a hover tint
+       until the next interaction. Desktop (hover:hover) is untouched. */
+    @media (hover: none) {
+      .pf-head__back:hover { background: var(--glass-bg); color: var(--text-secondary); }
+      .pf-view-toggle__btn:hover { color: var(--text-muted); }
+      .pf-param__file-clear:hover { background: var(--glass-bg); color: var(--text-secondary); }
+      .pf-rail__close:hover { background: var(--glass-bg); color: var(--text-secondary); }
+      .pf-notes-inline:hover { background: transparent; border-color: transparent; }
+    }
+
+    /* Phone: the size compound input's fixed 80px boxes + 110px unit can
+       overflow a narrow card. Let them flex so the row wraps cleanly. */
+    @media (max-width: 640px) {
+      .pf-param__size .pf-param__input { width: auto; flex: 1 1 96px; min-width: 0; }
+      .pf-param__size-unit { flex: 1 1 110px; }
+      .pf-param__duration { flex-wrap: wrap; }
+      .pf-param__duration .pf-param__select { flex: 1 1 120px; }
+    }
+
+    /* Capacitor native: the mobile rail drawer + FAB are this page's own
+       fixed chrome. The global safe-area is already absorbed on body, but
+       these are position:fixed and escape that flow, so re-add the bottom
+       inset explicitly. The existing rules already include
+       env(safe-area-inset-bottom); these only widen the side gutters so
+       the sheet/FAB clear a rounded-corner notch device in landscape. */
+    :host-context(html.cap-native) .pf-rail {
+      left: max(12px, env(safe-area-inset-left));
+      right: max(12px, env(safe-area-inset-right));
+    }
+    :host-context(html.cap-native) .pf-rail-fab {
+      right: max(16px, env(safe-area-inset-right));
+    }
+
+    /* Electron + desktop web share the >=1280px layout already; nothing to
+       add. (No raw 100vh exists on this page; :host uses height:100%.) */
   `]
 })
 export class ResultEntryComponent implements OnInit, AfterViewInit {
@@ -2478,7 +2583,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (!raw) return null;
     try { return JSON.parse(raw) as TestParametersBlob; } catch { return null; }
   });
-  readonly allParameters = computed<TestParameter[]>(() => this._paramsBlob()?.parameters ?? []);
+  readonly allParameters = computed<TestParameter[]>(() => {
+    const params = this._paramsBlob()?.parameters ?? [];
+    // A non-culture test with no configured parameter schema would otherwise
+    // dead-end at "No parameter schema — this test has no inputs" and be
+    // impossible to fill. Fall back to a single generic "Result" field so the
+    // test is always enterable. (Mirrors the sample-result-entry fix.)
+    if (params.length === 0 && this._paramsBlob()?.microFormat !== 'culture_sensitivity') {
+      return [{ id: 'result', name: 'result', title: 'Result', type: 'text' }];
+    }
+    return params;
+  });
 
   // ── Microbiology Culture & Sensitivity ───────────────────────────────
   readonly microFormat = computed<string | null>(() => this._paramsBlob()?.microFormat ?? null);

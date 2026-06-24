@@ -1211,6 +1211,116 @@ const COUNTERS: CounterSpec[] = [
       }
       .pf-tube-reject__test::after { content: ''; }
     }
+
+    /* ════════════════════════════════════════════════════════════
+       CROSS-PLATFORM OVERRIDES — additive only. Everything below is
+       scoped to :host and gated to BELOW desktop (<1024px) or to
+       touch/native so the >=1280px desktop-web layout is untouched.
+       ════════════════════════════════════════════════════════════ */
+
+    /* ── Stacked layout (phone + iPad portrait, <1024px) ──────────
+       In the column-direction split the LEFT pane carries an inline
+       flex-basis:33% (the desktop drag value) which would otherwise
+       lock the Lab Intake pane to a third of the viewport HEIGHT and
+       crush the workbench. Neutralise it and let each pane size to a
+       sensible share with its own scroll. The host already owns the
+       page height (height:100%, overflow:hidden) so the panes scroll
+       internally within dvh, not the whole page. */
+    @media (max-width: 1023px) {
+      .pf-mw-split { gap: 14px; }
+      /* Reset the inline flex-basis (desktop drag value) so the pane
+         isn't pinned to 33% of the column height. */
+      .pf-mw-pane:first-of-type {
+        flex: 1 1 0 !important;
+        flex-basis: 0 !important;
+        min-height: 220px;
+      }
+      .pf-mw-pane:not(:first-of-type) {
+        flex: 1 1 0;
+        min-height: 280px;
+      }
+      /* Header scan bar no longer needs its desktop max-width cap when
+         it wraps under the title. */
+      .pf-mw-scan { max-width: none; }
+    }
+
+    /* ── iPad portrait / small tablet (641–1023px): panes are still
+       stacked (side-by-side only kicks in at >=1024px), so give Lab
+       Intake a touch more vertical room than on a phone. */
+    @media (min-width: 641px) and (max-width: 1023px) {
+      .pf-mw-pane:first-of-type { min-height: 260px; }
+    }
+
+    /* ── No iOS focus-zoom: the two scan inputs sit below 16px which
+       triggers Safari auto-zoom on focus. Bump to 16px on phones/
+       tablet only — desktop keeps its tighter type. */
+    @media (max-width: 1023px) {
+      .pf-scan__input,
+      .pf-mw-scan__input { font-size: 16px; }
+    }
+
+    /* ── Touch tap targets (coarse pointer): grow this page's own
+       icon/text controls toward the 44px minimum without disturbing
+       pointer-fine desktop sizing. */
+    @media (pointer: coarse) {
+      .pf-scan__camera,
+      .pf-scan__manual { min-height: 44px; }
+      .pf-scan__camera { width: 44px; height: 44px; }
+      /* The intake scan pill grows to a 48px row so the camera button
+         inside it can clear 44px without overflowing the pill. */
+      .pf-mw-scan { height: 48px; }
+      .pf-mw-scan__cam { width: 44px; height: 44px; }
+      .pf-mw-scan__btn { min-height: 44px; }
+      .pf-mw-tab { min-height: 44px; }
+      .pf-counter { min-height: 44px; }
+      .pf-delegate-btn,
+      .pf-scan-hint--btn { min-height: 44px; }
+      .pf-tube-tile { padding: 12px; }
+    }
+
+    /* ── Hover only where a hover-capable pointer exists. Re-declares
+       the page's hover effects under (hover:none) to neutralise them
+       on touch so :hover doesn't latch after a tap. Desktop
+       (hover:hover) is unaffected. */
+    @media (hover: none) {
+      .pf-mw-scan__cam:hover { background: transparent; color: var(--text-muted); }
+      .pf-mw-scan__btn:hover { filter: none; }
+      .pf-mw-tab:hover { color: var(--text-secondary); }
+      .pf-mw-tab--on:hover { color: #fff; }
+      .pf-delegate-btn:hover { background: transparent; color: var(--text-secondary); }
+      .pf-scan-hint--btn:hover {
+        background: rgba(236, 72, 153, 0.08);
+        border-color: rgba(236, 72, 153, 0.35);
+      }
+      .pf-scan__manual:hover {
+        background: transparent;
+        color: var(--text-tertiary);
+        border-color: transparent;
+      }
+      .pf-scan__camera:hover {
+        background: transparent;
+        color: var(--text-secondary);
+        border-color: transparent;
+      }
+      .pf-tube-tile:hover {
+        border-color: var(--glass-border) !important;
+        box-shadow: none;
+      }
+      .pf-counter:hover:not(.pf-counter--on) { background: transparent; }
+    }
+
+    /* ── Capacitor native: this page renders inside the shell which
+       already absorbs the global top/bottom safe-area on body. This
+       page owns no fixed/full-bleed chrome of its own, so only a
+       defensive bottom inset on the workbench scroll pane keeps the
+       final tube action clear of the home indicator / bottom-nav pill
+       when that pane is the bottom-most scroll surface. */
+    :host-context(html.cap-native) .pf-mw-pane__body {
+      scroll-padding-bottom: env(safe-area-inset-bottom);
+    }
+    :host-context(html.cap-native) .pf-mw-pane:not(:first-of-type) .pf-mw-pane__body {
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {

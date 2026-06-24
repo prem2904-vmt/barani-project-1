@@ -1098,7 +1098,7 @@
     right: 0;
     bottom: 0;
     width: 100vw;
-    max-height: 80vh;
+    max-height: 80dvh;
     border-left: none;
     border-top: 1px solid var(--glass-border);
     border-radius: 16px 16px 0 0;
@@ -1177,7 +1177,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 5vh 24px 24px;
+  padding: 5dvh 24px 24px;
 }
 
 .pf-pkg-modal__backdrop {
@@ -1451,7 +1451,7 @@
   display: flex;
   flex-direction: column;
   width: min(820px, calc(100vw - 32px));
-  height: min(92vh, 1040px);
+  height: min(92dvh, 1040px);
   background: var(--bg-card-solid, #14141f);
   border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
   border-radius: 18px;

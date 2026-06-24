@@ -55,6 +55,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
         }
       </nav>
 
+      <div class="content">
       @if (mode() === 'home') {
         <!-- KPI strip -->
         <div class="kpis">
@@ -214,6 +215,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
           </div>
         }
       }
+      </div>
     </section>
 
     @if (scanning()) {
@@ -222,8 +224,16 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     }
   `,
   styles: [`
-    .wrap { padding: 24px 16px 48px; max-width: 1180px; margin: 0 auto; }
-    @media (min-width: 768px) { .wrap { padding: 28px 32px 48px; } }
+    /* WORK page: fill the shell's main area and scroll inside the content
+       panel, not the page. :host fills the flex:1 shell-main; .wrap is a
+       flex column whose header + tabs are fixed and whose .content scrolls. */
+    :host { display: block; height: 100%; }
+    .wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden;
+      padding: 24px 16px 0; max-width: 1180px; margin: 0 auto; }
+    @media (min-width: 768px) { .wrap { padding: 28px 32px 0; } }
+    .head, .tabs { flex: 0 0 auto; }
+    .content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding-bottom: max(24px, env(safe-area-inset-bottom)); }
 
     /* KPI strip */
     .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -353,6 +363,87 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     .pick:hover { border-color: var(--violet-500); }
     .pick__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); min-width: 0; }
     .pick__v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+
+    /* ─────────────────────────────────────────────────────────────────
+       CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (≥1280px) is
+       intentionally untouched; every rule below is gated to a sub-desktop
+       width or a touch/native context and scoped under .wrap, so it can
+       never alter the established desktop layout. The shell's .shell-main
+       already reserves --tab-nav-total-height and the iPad left-rail gap,
+       so this page adds no bottom-nav clearance of its own.
+       ───────────────────────────────────────────────────────────────── */
+
+    /* Phone (≤640px) */
+    @media (max-width: 640px) {
+      /* Stock table can't reflow to one column meaningfully — let it scroll
+         horizontally inside its own card instead of forcing page overflow. */
+      .wrap .tablecard { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .wrap table.stock { min-width: 520px; }
+
+      /* Header can wrap so the "Listening" pill drops below the title. */
+      .wrap .head { flex-wrap: wrap; align-items: flex-start; }
+
+      /* Tabs/chips: comfortable tap targets, allow horizontal scroll rather
+         than wrapping into a tall stack. */
+      .wrap .tabs { display: flex; flex-wrap: nowrap; overflow-x: auto;
+        -webkit-overflow-scrolling: touch; max-width: 100%; }
+      .wrap .tab { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; }
+      .wrap .filters { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .wrap .chip { min-height: 38px; padding: 8px 14px; }
+
+      /* Toolbar: search takes the full width above the filter chips. */
+      .wrap .toolbar { flex-direction: column; align-items: stretch; }
+      .wrap .searchfield { max-width: none; }
+
+      /* Scan bar: keep the input on its own row, action buttons below at
+         full reach. Camera button gets a real tap target. */
+      .wrap .scanbar { flex-wrap: wrap; }
+      .wrap .scanfield { flex: 1 1 100%; }
+      .wrap .scanbar .btn { flex: 1 1 auto; justify-content: center; min-height: 48px; }
+      .wrap .scanbar .btn--ghost { flex: 0 0 auto; min-width: 48px; }
+
+      /* Result header stacks so the on-hand figure sits under the name. */
+      .wrap .result__head { flex-direction: column; align-items: flex-start; }
+      .wrap .onhand { text-align: left; }
+
+      /* Issue/count rows: the fixed inline widths overflow narrow screens —
+         override to fluid. (Inline style:width set in template; this beats it
+         only because it is more specific via .wrap and !important.) */
+      .wrap .form-row { flex-direction: column; align-items: stretch; }
+      .wrap .form-row .inp,
+      .wrap .batch .inp { width: 100% !important; }
+      .wrap .form-row .btn { width: 100%; justify-content: center; min-height: 48px; }
+      .wrap .batch { flex-direction: column; align-items: stretch; gap: 8px; }
+      .wrap .batch__act { width: 100%; }
+      .wrap .batch__act .inp { flex: 1 1 auto; }
+
+      /* iOS zooms any focused input under 16px — lift every field to 16px on
+         phone only so the page never auto-zooms on tap. */
+      .wrap .scanfield__in,
+      .wrap .searchfield input,
+      .wrap .inp { font-size: 16px; }
+    }
+
+    /* iPad band (641–1279px): the layout already uses available width well
+       (KPIs 5-up ≥720, alerts 2-up ≥768, form4 4-up ≥768). Just make sure
+       the wide stock table never forces page-level horizontal scroll. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .wrap .tablecard { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
+
+    /* Touch (coarse pointer): give the small inline action targets — Save
+       links, label-mode segments — a usable hit area without changing look
+       on mouse-driven desktops. */
+    @media (pointer: coarse) {
+      .wrap .link { min-height: 44px; display: inline-flex; align-items: center; }
+      .wrap .lseg__i { min-height: 44px; }
+      /* Camera-scan icon-only button needs a full 44px hit area. */
+      .wrap .scanbar .btn--ghost { min-width: 44px; min-height: 44px; justify-content: center; }
+      /* Filter chips reach a comfortable tap target. */
+      .wrap .chip { min-height: 44px; }
+      /* Save links inside count batches sit on their own touchable row. */
+      .wrap .batch__act .link { min-width: 44px; justify-content: center; }
+    }
   `]
 })
 export class StoresComponent implements OnInit, AfterViewInit {

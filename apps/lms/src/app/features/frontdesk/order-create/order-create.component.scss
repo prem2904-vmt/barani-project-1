@@ -110,7 +110,7 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
 }
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .pf-rail {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -326,10 +326,61 @@
   color: var(--color-primary, #7c3aed);
 }
 
-:host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
-.pf-page { min-height: 100%; display: flex; flex-direction: column; }
+/* WORK page → non-scroll app layout: the page fills the shell main area
+   and never scrolls itself; scrolling happens INSIDE the left rail column
+   and the cart column. */
+:host { display: block; height: 100%; overflow: hidden; }
+.pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .pf-page__header { flex-shrink: 0; }
-.pf-page__body { padding-top: 8px; padding-bottom: 16px; }
+/* pf-screen-header is the fixed top chrome → never shrinks/scrolls. */
+:host > .pf-page > pf-screen-header { flex: 0 0 auto; }
+/* The grid body fills remaining height; columns scroll internally. */
+.pf-page__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 16px;
+  overflow: hidden;
+}
+/* Left rail column scrolls internally (controls + search + tabs/rail). */
+.pf-col {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+}
+.pf-col::-webkit-scrollbar { width: 6px; }
+.pf-col::-webkit-scrollbar-track { background: transparent; }
+.pf-col::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.32); border-radius: 999px; }
+
+/* Cart side column (≥1024) scrolls internally instead of sticky-paging the
+   whole document, so the page stays non-scroll. */
+@media (min-width: 1024px) {
+  .pf-cart {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  .pf-cart__card {
+    position: static;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+  }
+  .pf-cart__card::-webkit-scrollbar { width: 6px; }
+  .pf-cart__card::-webkit-scrollbar-track { background: transparent; }
+  .pf-cart__card::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.32); border-radius: 999px; }
+}
+
+/* Phone / iPad-portrait (<1024): single column. The left column still scrolls
+   internally; the cart lives in the FAB-triggered bottom-sheet drawer. */
+@media (max-width: 1023px) {
+  .pf-page__body { grid-template-rows: minmax(0, 1fr); }
+}
 
 /* ── Compact page header ─────────────────────────────────── */
 .pf-head {
@@ -449,7 +500,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pf-cart-fab { animation: none; }
 }
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .pf-cart-fab { display: none; }
 }
 
@@ -865,7 +916,7 @@
   left: 12px;
   right: 12px;
   bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
-  max-height: 75vh;
+  max-height: 75dvh;
   padding: 18px;
   border-radius: 22px;
   background: var(--bg-card);
@@ -1066,7 +1117,7 @@
 
 /* Front-desk inline payment: give the right column a touch more room for the
    payment-mode tiles + cash num-pad beside the test list. */
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .pf-page__body--billing { grid-template-columns: 1fr minmax(420px, 480px); }
 }
 
@@ -1087,7 +1138,7 @@
 .pf-invprev__bd { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .pf-invprev__panel {
   position: relative; z-index: 1; display: flex; flex-direction: column;
-  width: min(820px, 100%); height: min(92vh, 1040px);
+  width: min(820px, 100%); height: min(92dvh, 1040px);
   background: var(--bg-card-solid, #14141f); border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
   border-radius: 18px; overflow: hidden; box-shadow: 0 28px 70px rgba(0,0,0,0.6);
 }
@@ -1216,3 +1267,74 @@
 .pf-cart-draft:hover:not([disabled]) { background: var(--bg-hover); }
 .pf-cart-draft[disabled] { opacity: 0.45; cursor: not-allowed; }
 .pf-cart-draft--ghost { flex: 0 0 auto; color: var(--text-secondary); }
+
+/* ════════════════════════════════════════════════════════════════════
+   CROSS-PLATFORM OVERRIDES (additive only — desktop-web ≥1280 untouched)
+   Every rule below is scoped under :host and gated to sub-desktop widths,
+   coarse pointers, or capacitor/electron html classes, so it can never
+   alter the desktop-web layout or leak into another page.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* --- iOS zoom guard: any focused input <16px makes Safari zoom the page.
+       Bump the page's own text inputs to 16px below desktop only. --- */
+@media (max-width: 1279px) {
+  :host .pf-search__input,
+  :host .pf-refdoc__input,
+  :host .pf-refdoc__pop-item,
+  :host .pf-cart-disc__input {
+    font-size: 16px;
+  }
+}
+
+/* --- Drawer/preview heights: use dvh so the mobile browser URL bar
+       collapsing doesn't clip the sheet. Sub-desktop only. --- */
+@media (max-width: 1279px) {
+  :host .pf-cart-drawer { max-height: 75dvh; }
+  :host .pf-invprev__panel { height: min(92dvh, 1040px); }
+}
+
+/* --- Phone (≤640): the cart drawer becomes a true full-width bottom
+       sheet and must clear the floating bottom-nav pill. --- */
+@media (max-width: 640px) {
+  :host .pf-cart-drawer {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 82dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: calc(18px + var(--tab-nav-total-height, 0px));
+  }
+  /* Tabs may overflow horizontally — keep them swipeable, edge-to-edge. */
+  :host .pf-tabs__btn { min-width: 96px; }
+}
+
+/* --- Touch sizing: grow small tap targets to ≥44px on coarse pointers
+       (phones/tablets) without changing the dense mouse-driven desktop. --- */
+@media (pointer: coarse) {
+  :host .pf-tabs__btn { min-height: 44px; }
+  :host .pf-rail-card__star { width: 40px; height: 40px; }
+  :host .pf-cart-remove { width: 40px; height: 40px; }
+  :host .pf-cart-drawer__close { width: 40px; height: 40px; }
+  :host .pf-cart-clear { height: 36px; }
+  :host .pf-patient__change,
+  :host .pf-patient__cancel { min-height: 40px; }
+  :host .pf-cart-disc__kind button { width: 34px; height: 36px; }
+  :host .pf-cart-disc__input { height: 38px; }
+  :host .pf-pkg-suggest__apply { min-height: 40px; }
+  :host .pf-refdoc__clear,
+  :host .pf-search__clear { width: 32px; height: 32px; }
+}
+
+/* --- Capacitor native: the FAB and the bottom-sheet are this page's own
+       fixed chrome — keep them clear of the home-indicator / notch.
+       (Global body already absorbs top/bottom safe-area; these are the
+       page-OWNED fixed elements that still need explicit insets.) --- */
+:host-context(html.cap-native) .pf-cart-fab {
+  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 640px) {
+  :host-context(html.cap-native) .pf-cart-drawer {
+    padding-bottom: calc(18px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+}

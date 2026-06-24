@@ -23,6 +23,13 @@ interface BulkSubmitResponse {
   }>;
 }
 
+/** Generic single-value field used when a (non-culture) test has no parameter
+ *  schema configured, so the tech can still enter and submit a result. Stored
+ *  under the `result` key — humanises to "Result" in the report. */
+function defaultResultParam(): TestParameter {
+  return { id: 'result', name: 'result', title: 'Result', type: 'text' };
+}
+
 /**
  * Sample-level result entry. One barcode scan loads ALL tests on the
  * tube; tech enters every value in one screen and submits once. Backend
@@ -40,7 +47,7 @@ interface BulkSubmitResponse {
     <!-- Full-width container matching FD/collect screens — was centered
          to 880px which left huge empty gutters on lab terminals. -->
     <section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
-      <header class="pf-sre__hdr">
+      <header class="pf-sre__hdr pf-sre__hdr--sticky">
         <button type="button" class="pf-sre__back" (click)="back()" aria-label="Back">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -482,11 +489,24 @@ interface BulkSubmitResponse {
       background: rgba(168, 85, 247, 0.04);
     }
 
-    :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
+    /* WORK page (non-scroll app layout). The host fills the shell's main
+       area; the PAGE itself never scrolls. Scrolling happens INSIDE the
+       single .pf-sre panel below — header & footer stick to its edges so
+       only the test cards move. Holds at phone / iPad / desktop. */
+    :host { display: block; height: 100%; min-height: 0; overflow: hidden; }
     /* Full-width like FD/collect — Tailwind utility classes on the
        outer section provide the responsive padding; no max-width or
-       margin auto here so the screen actually fills the lab terminal. */
-    .pf-sre { width: 100%; }
+       margin auto here so the screen actually fills the lab terminal.
+       This is the lone scroll panel: height:100% + overflow-y:auto so
+       the inner content scrolls, not the window. */
+    .pf-sre {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
 
     /* Mobile breakpoint — phones (<640px). Tighter every-thing so
        the form fits a 5" screen without horizontal scroll, and the
@@ -512,6 +532,18 @@ interface BulkSubmitResponse {
       display: flex; align-items: flex-start; gap: 14px;
       padding-bottom: 18px; margin-bottom: 18px;
       border-bottom: 1px solid var(--glass-border);
+    }
+    /* Pin the header to the top of the scroll panel so test cards scroll
+       beneath it. Backdrop blur keeps the title legible over scrolling
+       cards; safe-area padding clears the notch on native iOS. */
+    .pf-sre__hdr--sticky {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding-top: env(safe-area-inset-top, 0px);
+      background: var(--bg-primary, rgba(12, 14, 20, 0.82));
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
     .pf-sre__back {
       display: inline-flex; align-items: center; gap: 4px;
@@ -751,7 +783,12 @@ interface BulkSubmitResponse {
       border: 1px solid var(--glass-border);
     }
 
-    .pf-sre__footer { position: sticky; bottom: 0; padding: 16px 0 0; 
+    .pf-sre__footer {
+      position: sticky; bottom: 0; padding: 16px 0 0;
+      /* Backdrop so scrolling test cards don't bleed under the submit
+         bar now that the panel (not the window) is the scroll context. */
+      background: linear-gradient(180deg, transparent, var(--bg-primary, rgba(12, 14, 20, 0.92)) 40%);
+      margin-top: 4px;
      }
     /* Mobile: lift the sticky Submit bar above the floating bottom-nav
        pill so the violet avatar doesn't peek out from behind the button.
@@ -819,6 +856,68 @@ interface BulkSubmitResponse {
       font-size: 12.5px;
     }
     .pf-sre__flag--crit { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+
+    /* ── Cross-platform overrides (additive, scoped) ──────────────────
+       All rules below ONLY apply below desktop, to touch pointers, or
+       under platform html classes. Desktop-web (>=1280px, fine pointer)
+       falls through every guard unchanged. */
+
+    /* Phone: stop iOS Safari/Capacitor WKWebView from auto-zooming when a
+       field gains focus. Any text-entry control under ~16px triggers it,
+       so bump every input/select/textarea to 16px on the small breakpoint.
+       Desktop keeps its tighter 13.5px since this is width-gated. */
+    @media (max-width: 640px) {
+      .pf-sre__input,
+      .pf-sre__input--ta,
+      .pf-sre__ginput,
+      .pf-sre__ginput--num,
+      .pf-sre__ginput--ta {
+        font-size: 16px;
+      }
+      :host ::ng-deep .pf-sre__test select,
+      :host ::ng-deep .pf-sre__test input,
+      :host ::ng-deep .pf-sre__test textarea {
+        font-size: 16px;
+      }
+    }
+
+    /* Touch devices (coarse pointer, any width incl. iPad): grow the
+       small header controls to a >=44px tap target. These are visual-
+       only size bumps; the desktop fine-pointer path is untouched. */
+    @media (pointer: coarse) {
+      .pf-sre__back { min-height: 44px; }
+      .pf-sre__view-btn { min-height: 36px; padding: 8px 14px; }
+      .pf-sre__note-btn { min-height: 36px; padding: 8px 12px; }
+      .pf-sre__submit { min-height: 52px; }
+      .pf-sre__cb { width: 22px; height: 22px; }
+    }
+
+    /* Hover affordances only where a hover-capable pointer exists, so
+       touch taps don't leave sticky hover states. Mirror (not replace)
+       the base hovers — base rules stay intact for fine-pointer/legacy. */
+    @media (hover: none) {
+      .pf-sre__back:hover { color: var(--text-secondary); }
+      .pf-sre__view-btn:hover { color: var(--text-muted); }
+      .pf-sre__submit:hover:not(:disabled) { transform: none; box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35); }
+      .pf-sre__grow:hover td { background: inherit; }
+      .pf-sre__note-btn:hover { background: rgba(168, 85, 247, 0.10); border-color: rgba(168, 85, 247, 0.30); }
+      .pf-sre__note-btn--has:hover { background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); }
+    }
+
+    /* Capacitor native: the sticky Submit footer is this page's own
+       bottom chrome. The width-gated rule above already lifts it over
+       the floating bottom-nav + safe-area on phones; on native iPad
+       (coarse pointer, >640px) the bottom-nav is hidden, so only honour
+       the home-indicator inset there. */
+    :host-context(html.cap-native) .pf-sre__footer {
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-sre__footer {
+        bottom: calc(72px + 12px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: 12px;
+      }
+    }
   `]
 })
 export class SampleResultEntryComponent {
@@ -877,13 +976,21 @@ export class SampleResultEntryComponent {
     if (!s) return out;
     for (const t of s.tests ?? []) {
       const raw = t.test?.parameters;
-      if (!raw) { out.set(t.id, []); continue; }
-      try {
-        const blob = JSON.parse(raw) as TestParametersBlob;
-        out.set(t.id, blob.parameters ?? []);
-      } catch {
-        out.set(t.id, []);
+      let params: TestParameter[] = [];
+      let isCulture = false;
+      if (raw) {
+        try {
+          const blob = JSON.parse(raw) as TestParametersBlob;
+          params = blob.parameters ?? [];
+          isCulture = blob.microFormat === 'culture_sensitivity';
+        } catch { params = []; }
       }
+      // A non-culture test with no configured parameter schema would otherwise
+      // dead-end at "No parameter schema — this test has no inputs" and be
+      // impossible to fill (this is why a multi-dept order where one dept's
+      // tests had no schema couldn't be entered). Fall back to a single generic
+      // "Result" field so EVERY non-culture test is always enterable.
+      out.set(t.id, (params.length === 0 && !isCulture) ? [defaultResultParam()] : params);
     }
     return out;
   });

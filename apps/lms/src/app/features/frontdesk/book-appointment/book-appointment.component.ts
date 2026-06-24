@@ -59,7 +59,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-4 pb-10 flex flex-col gap-3">
+    <section class="book-appt-page px-4 md:px-8 pt-4 pb-10 flex flex-col gap-3">
 
       <pf-screen-header
         eyebrow="Frontdesk · Appointments"
@@ -76,7 +76,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       </pf-screen-header>
 
       <!-- Grid Layout Container for Desktop (3 columns) -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full">
+      <div class="book-appt-grid grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full">
         
         <!-- CARD 1: Patient Selection & Date Picker (Spans 1 column on desktop) -->
         <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4 h-full overflow-hidden">
@@ -667,6 +667,86 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
         .flatpickr-prev-month:hover svg,
         .flatpickr-next-month:hover svg {
           fill: var(--color-primary) !important;
+        }
+      }
+
+      /* ──────────────────────────────────────────────────────────
+         CROSS-PLATFORM RESPONSIVE OVERRIDES (additive only).
+         Desktop-web ≥1280px is intentionally untouched: every rule
+         below is gated to a sub-desktop width or to coarse pointers.
+         All selectors are scoped to this page (:host / page-root).
+         ────────────────────────────────────────────────────────── */
+
+      /* iPad band (641–1279px): the page only had grid-cols-1 until the
+         lg breakpoint (1024px), so 641–1023px rendered a single tall
+         column and wasted the tablet width. Use two columns here so
+         Card 1 + Card 2 sit side-by-side and Card 3 (summary) spans the
+         full width beneath them. Does not affect ≥1280px (3-col lg). */
+      @media (min-width: 641px) and (max-width: 1023px) {
+        :host .book-appt-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        /* Summary/actions card spans the full row under the two cards. */
+        :host .book-appt-grid > :nth-child(3) {
+          grid-column: 1 / -1 !important;
+        }
+        /* Cards no longer need to stretch to a shared row height when
+           the summary is full-width below — let them size to content. */
+        :host .book-appt-grid {
+          align-items: start !important;
+        }
+      }
+
+      /* Phone (≤640px): single column already (grid-cols-1). Stop iOS
+         from auto-zooming on focus by ensuring form controls are ≥16px.
+         (Note: input font-size guards are global, but the inputs here are
+         text-xs, so we keep an explicit page-scoped guard.) These element
+         selectors are scoped under :host so they cannot leak to shared
+         primitives or other pages. */
+      @media (max-width: 640px) {
+        :host input[type='text'],
+        :host input[type='number'],
+        :host textarea {
+          font-size: 16px !important;
+        }
+        /* The card paddings (p-6) eat a lot of width on a narrow phone;
+           trim them so content isn't cramped. Scoped to this page. */
+        :host .book-appt-grid > * {
+          padding: 1rem !important;
+        }
+        :host .book-appt-grid {
+          gap: 1rem !important;
+        }
+        /* Segmented period control: 4 labels ("Morning/Afternoon/Evening/
+           Night" + count) cannot fit a narrow phone row, so each child is
+           crushed and the count text overlaps the label. Wrap to 2x2 and
+           give each pill a min-width so labels stay legible. */
+        :host .book-appt-grid .flex.p-1.gap-1 {
+          flex-wrap: wrap !important;
+        }
+        :host .book-appt-grid .flex.p-1.gap-1 > button {
+          flex: 1 1 calc(50% - 0.25rem) !important;
+        }
+      }
+
+      /* Touch devices (coarse pointer, any size): give the primary,
+         block-level tap targets a comfortable ≥44px hit area without
+         changing their visual size on mouse/desktop. Inline affordances
+         (chip-remove X, "Change", patient-row actions) are intentionally
+         left alone so a 44px box doesn't distort the rows that contain
+         them. Scoped to this page only via :host + page-root class. */
+      @media (pointer: coarse) {
+        /* Segmented period control (direct children of the .flex p-1 row),
+           the slot grid cells, collection-type pills, and the bottom
+           action bar (Cancel / Book): all are block buttons that own their
+           row, safe to enlarge. We DON'T target the patient "Change" row
+           (.flex.items-center.gap-4 > button) which would push the avatar
+           row to 44px and distort it. */
+        :host .book-appt-grid .grid > button,
+        :host .book-appt-grid .flex.p-1.gap-1 > button,
+        :host .book-appt-grid .flex.gap-2 > button,
+        :host .book-appt-grid .flex.gap-2\\.5 > button {
+          min-height: 44px;
         }
       }
     `

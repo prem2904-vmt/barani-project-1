@@ -118,7 +118,7 @@ const EMPTY: LabDraft = {
                     </div>
                   }
                 </div>
-                <div class="flex gap-2 flex-wrap">
+                <div class="flex gap-2 flex-wrap pf-rl-actions">
                   <pf-touch-btn size="sm" variant="ghost" (pressed)="edit(l)">Edit</pf-touch-btn>
                   <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleActive(l)">{{ l.isActive ? 'Deactivate' : 'Reactivate' }}</pf-touch-btn>
                 </div>
@@ -140,6 +140,37 @@ const EMPTY: LabDraft = {
     .pf-rl__code { padding: 2px 8px; background: rgba(168, 85, 247, 0.18); color: #c4b5fd; border-radius: 9999px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; }
     .pf-rl__meta { margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); }
     .pf-rl__dept { padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+
+    /* ===== Additive cross-platform overrides (do not affect desktop-web >=1280px) ===== */
+
+    /* Touch devices: enlarge dept chips to a comfortable >=44px tap target (incl. iPad/tablet
+       where the pointer is coarse but the viewport is wide) without changing the desktop look. */
+    @media (pointer: coarse) {
+      .pf-dept-chip { padding: 10px 14px; min-height: 44px; display: inline-flex; align-items: center; }
+    }
+
+    /* Phone (<=640): prevent iOS focus-zoom (needs >=16px) and give the form action row room.
+       The page itself has no fixed chrome; only widen tap targets and stop zoom. */
+    @media (max-width: 640px) {
+      .pf-input { font-size: 16px; padding: 10px 12px; }
+      .pf-dept-chip { min-height: 44px; }
+      /* Card header: action buttons drop to their own full-width row under the meta block. */
+      .pf-rl-actions { width: 100%; }
+      /* Long lab names + code chip must wrap, not overflow, in the narrow card header. */
+      .pf-rl__name { overflow-wrap: anywhere; word-break: break-word; }
+      .pf-rl__code { flex-shrink: 0; }
+    }
+
+    /* Web-below-desktop band (641–1279px): /admin renders with the fixed 64px left
+       icon rail and no top chrome. The section's px-4 md:px-8 gutter already aligns
+       the screen-header and the body to the same left edge, so no container fix is
+       needed here. Only safeguard against a long, unbreakable lab name overflowing
+       its flex column in the card header (which would otherwise push card width and
+       force horizontal scroll against the rail). */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-rl__name { overflow-wrap: anywhere; word-break: break-word; }
+      .pf-rl__code { flex-shrink: 0; }
+    }
   `]
 })
 export class ReferralLabsComponent implements OnInit {

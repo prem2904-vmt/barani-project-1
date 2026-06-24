@@ -29,12 +29,13 @@ const TYPE_COLOR: Record<string, string> = {
   imports: [NgTemplateOutlet, PatientSearchComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="pf-page px-4 md:px-8 pt-6">
       <pf-screen-header
+        class="pf-page__header"
         eyebrow="Front desk"
         title="Collection Queue"
         [subtitle]="modeLabel()">
-        <div actions class="flex items-center gap-2">
+        <div actions class="flex items-center gap-2 flex-wrap justify-end">
           <span class="text-[12px] font-mono" style="color: var(--text-tertiary);">
             {{ waitingCount() }} waiting · ~{{ avgWait() }}m avg
           </span>
@@ -45,6 +46,7 @@ const TYPE_COLOR: Record<string, string> = {
         </div>
       </pf-screen-header>
 
+      <div class="pf-page__body">
       @if (walkInOpen()) {
         <pf-tile tone="violet" padding="lg" class="block mb-4">
           <h3 class="pf-section-title mb-2">Add a walk-in to the queue</h3>
@@ -103,12 +105,13 @@ const TYPE_COLOR: Record<string, string> = {
           </div>
         }
       }
+      </div>
     </section>
 
     <!-- ── Row template ── -->
     <ng-template #row let-q="q">
       <pf-tile tone="default" padding="md" class="block">
-        <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
+        <div class="pf-row flex items-center gap-3 flex-wrap md:flex-nowrap">
           <div class="pf-token" [style.borderColor]="typeColor(q.type)">
             <span class="text-[10px] uppercase" style="color: var(--text-tertiary);">Token</span>
             <span class="text-[18px] font-bold leading-none">{{ q.tokenNumber ?? '—' }}</span>
@@ -142,7 +145,7 @@ const TYPE_COLOR: Record<string, string> = {
             </div>
           }
 
-          <div class="flex items-center gap-1.5 flex-wrap justify-end">
+          <div class="pf-row-actions flex items-center gap-1.5 flex-wrap justify-end">
             @switch (q.status) {
               @case ('booked') {
                 <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.checkIn(q.id))">Check in</pf-touch-btn>
@@ -169,6 +172,27 @@ const TYPE_COLOR: Record<string, string> = {
     </ng-template>
   `,
   styles: [`
+    /* ── Non-scroll WORK layout: the page fills the shell main area and the
+       scroll happens INSIDE the body, not on the page itself. ── */
+    :host { display: block; height: 100%; }
+    .pf-page {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    .pf-page__header { flex: 0 0 auto; }
+    .pf-page__body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* breathing room at the bottom of the inner scroll, + safe-area for
+         this page's own scroll edge on notched devices. */
+      padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+      -webkit-overflow-scrolling: touch;
+    }
+
     .pf-token {
       width: 60px; min-height: 48px; border-radius: 12px;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -188,6 +212,28 @@ const TYPE_COLOR: Record<string, string> = {
     }
     .pf-score__n { font-size: 15px; font-weight: 700; line-height: 1; color: #c4b5fd; }
     .pf-score__l { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary); }
+
+    /* ── Phone (<=640): keep the row legible & tappable.
+       Additive only — desktop/iPad rows are untouched. ── */
+    @media (max-width: 640px) {
+      /* The name block keeps its line; the action cluster drops onto its
+         own full-width row and left-aligns so buttons get real estate
+         instead of crowding into the right gutter. */
+      :host .pf-row { row-gap: 10px; }
+      :host .pf-row-actions {
+        flex-basis: 100%;
+        justify-content: flex-start;
+        gap: 8px;
+      }
+      /* The priority chip should never push the name block to nothing. */
+      :host .pf-score { min-width: 48px; }
+    }
+
+    /* Touch devices of any width: ensure the help-cursor chip isn't
+       relying on a hover tooltip to be understood (label already shown). */
+    @media (pointer: coarse) {
+      :host .pf-score { cursor: default; }
+    }
   `]
 })
 export class CollectionQueueComponent implements OnInit {

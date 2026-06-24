@@ -117,7 +117,7 @@ export interface WorkflowStepCompleteEvent {
         <p class="mt-3 text-xs text-red-600">{{ err }}</p>
       }
 
-      <div class="mt-5 flex justify-between items-center">
+      <div class="mt-5 flex flex-wrap gap-3 justify-between items-center">
         <button type="button" class="pf-btn pf-btn-ghost"
                 [disabled]="currentIndex() === 0"
                 (click)="back()">← Back</button>

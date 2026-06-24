@@ -1,8 +1,75 @@
 :host {
   display: block;
   height: 100%;
+  overflow: hidden;
+}
+
+/* ── WORK page: non-scroll app layout ───────────────────────────────────
+   The page fills the shell's main area exactly and never scrolls as a
+   whole — scrolling happens INSIDE the panels. Applies on all sizes
+   (intentional, approved desktop change for a WORK screen). */
+.pf-pp__root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The patient-branch grid is the flex:1 content region. */
+.pf-pp__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Loading-skeleton and empty-state branches: fill the remaining height and
+   scroll internally rather than overflow-clipping under the hidden root. */
+.pf-pp__fill {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Phone / iPad-portrait (single column, below Tailwind lg=1024): the whole
+   stacked column scrolls as ONE region — no double scrollbars. */
+@media (max-width: 1023.98px) {
+  .pf-pp__grid {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* breathing room above the home-indicator / soft nav on touch shells */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Desktop / iPad-landscape (2-col grid at lg+): the grid itself does not
+   scroll; each column scrolls independently inside its own min-height:0
+   track. */
+@media (min-width: 1024px) {
+  .pf-pp__grid {
+    overflow: hidden;
+    /* Stretch both columns to the grid's full height so each can own its
+       own scroll track (overrides the template's `items-start`). */
+    align-items: stretch;
+  }
+  .pf-pp__col {
+    min-width: 0;       /* allow flex/grid children to truncate */
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Right column keeps its tab bar pinned and scrolls only the tab body. */
+  .pf-pp__col--right {
+    overflow: hidden;   /* inner .pf-pp__tab-content owns the scroll */
+  }
+  .pf-pp__col--right .pf-pp__tabbar {
+    flex: 0 0 auto;
+  }
+  .pf-pp__col--right .pf-pp__tab-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .scrollbar-none::-webkit-scrollbar {
@@ -115,4 +182,51 @@
 @keyframes pf-pp-pop {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to   { opacity: 1; transform: none; }
+}
+
+/* ── Cross-platform additive overrides (scoped to :host) ─────────────────
+   Desktop-web (>=1280) is intentionally untouched: every rule below is
+   gated by a below-desktop @media query or by pointer/hover capability. */
+
+/* Touch sizing — coarse pointers (touch screens). The horizontal tab bar
+   buttons are ~38px tall by default; lift them to a >=44px tap target.
+   Width-independent so it applies on touch iPad as well, but never on a
+   mouse-driven desktop. */
+@media (pointer: coarse) {
+  :host .scrollbar-none > button {
+    min-height: 44px;
+  }
+  /* Colleague-picker rows need a comfortable touch target too. */
+  :host .pf-pp__chat-pick-row {
+    min-height: 48px;
+  }
+  :host .pf-pp__chat-pick-close {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Hover affordances only where a real hover pointer exists, so touch
+   devices don't get sticky :hover states after a tap. */
+@media (hover: none) {
+  :host .pf-pp__chat-pick-row:hover:not(:disabled) { background: transparent; }
+  :host .pf-pp__chat-pick-close:hover {
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+  }
+}
+
+/* Momentum scrolling for the horizontally scrollable tab bar on touch. */
+@media (pointer: coarse) {
+  :host .scrollbar-none {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Phone (<=640): the colleague-picker search input must be >=16px to stop
+   iOS Safari from auto-zooming the viewport on focus. Default is 13px. */
+@media (max-width: 640px) {
+  :host .pf-pp__chat-pick-search input {
+    font-size: 16px;
+  }
 }

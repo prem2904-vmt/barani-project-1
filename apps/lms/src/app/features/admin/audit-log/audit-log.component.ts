@@ -31,6 +31,55 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
   standalone: true,
   imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
+       flex row; let it wrap and reflow the meta (user/time) so it never forces
+       horizontal overflow. Desktop layout (>=641) is untouched. */
+    @media (max-width: 640px) {
+      :host .audit-row {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+        column-gap: 0.5rem;
+        min-height: 44px;          /* comfortable tap target */
+      }
+      /* Drop the ml-auto push so meta wraps onto its own line instead of being
+         squeezed; keep it left-aligned under the badge/type. */
+      :host .audit-row .audit-user {
+        margin-left: 0;
+      }
+      :host .audit-row .audit-when {
+        margin-left: auto;          /* time sits at the end of the wrapped line */
+      }
+      /* Stack the field-diff: a fixed 140px label column is too wide on a
+         ~320px screen — let label + value stack full-width. */
+      :host .audit-diff {
+        grid-template-columns: 1fr;
+        row-gap: 0.125rem;
+      }
+      /* Long diff values (JSON blobs, free text) and the full entity id must
+         break instead of forcing the card/page to scroll sideways on phone. */
+      :host .audit-diff-row { overflow-wrap: anywhere; word-break: break-word; }
+      :host .audit-full-id  { overflow-wrap: anywhere; word-break: break-all; }
+      /* Pagination footer: let the range label + buttons wrap on narrow phones
+         instead of crowding into one line. */
+      :host .audit-pager { flex-wrap: wrap; row-gap: 0.5rem; }
+    }
+    /* Touch devices of any width (iPad/touch laptops): the collapsible log row
+       is the primary control — guarantee a 44px tap target without altering the
+       mouse/desktop layout. */
+    @media (pointer: coarse) {
+      :host .audit-row { min-height: 44px; }
+    }
+    /* Web-below-desktop band (641–1279, behind the 64px icon rail): at >=1024
+       Tailwind's lg:grid-cols-5 packs all 5 filters into one row, which leaves
+       the date inputs cramped next to the rail. Cap at 3 columns so the filter
+       fields reflow with comfortable widths; desktop (>=1280) keeps 5-up. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host .audit-filter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  `],
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
       <pf-screen-header
@@ -41,7 +90,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 
       <!-- Filters -->
       <pf-tile tone="default" padding="lg" class="block mb-4">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="audit-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label class="pf-label">Record type</label>
             <select class="pf-input" [ngModel]="filters().entityType"
@@ -100,7 +149,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
         <div class="space-y-2">
           @for (log of logs(); track log.id) {
             <pf-tile tone="default" padding="md" class="block">
-              <button type="button" class="w-full flex items-center gap-3 text-left"
+              <button type="button" class="audit-row w-full flex items-center gap-3 text-left"
                       (click)="toggle(log.id)">
                 <span class="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
                       [style.background]="badgeBg(log.action)"
@@ -108,13 +157,13 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                   {{ actionLabel(log.action) }}
                 </span>
                 <span class="text-[13px] font-semibold shrink-0">{{ typeLabel(log.entityType) }}</span>
-                <span class="text-[12px] font-mono truncate" style="color: var(--text-tertiary);">
+                <span class="text-[12px] font-mono truncate min-w-0" style="color: var(--text-tertiary);">
                   {{ shortId(log.entityId) }}
                 </span>
-                <span class="ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
+                <span class="audit-user ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
                   {{ log.userName || 'System' }}
                 </span>
-                <span class="text-[11px] shrink-0" style="color: var(--text-tertiary);">
+                <span class="audit-when text-[11px] shrink-0" style="color: var(--text-tertiary);">
                   {{ when(log.at) }}
                 </span>
               </button>
@@ -126,7 +175,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                   } @else {
                     <div class="space-y-1.5">
                       @for (d of diff(log); track d.field) {
-                        <div class="grid grid-cols-[140px_1fr] gap-2 text-[12px]">
+                        <div class="audit-diff grid grid-cols-[140px_1fr] gap-2 text-[12px] audit-diff-row">
                           <span class="font-mono font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
                           @if (d.kind === 'change') {
                             <span>
@@ -141,7 +190,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                       }
                     </div>
                   }
-                  <p class="mt-2 text-[11px] font-mono" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
+                  <p class="audit-full-id mt-2 text-[11px] font-mono" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
                 </div>
               }
             </pf-tile>
@@ -149,7 +198,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
         </div>
 
         <!-- Pagination -->
-        <div class="mt-4 flex items-center justify-between text-[12px]" style="color: var(--text-secondary);">
+        <div class="audit-pager mt-4 flex items-center justify-between text-[12px]" style="color: var(--text-secondary);">
           <span>{{ rangeLabel() }} of {{ total() }}</span>
           <div class="flex gap-2">
             <pf-touch-btn size="sm" variant="ghost" [disabled]="page() <= 1" (pressed)="prev()">Previous</pf-touch-btn>

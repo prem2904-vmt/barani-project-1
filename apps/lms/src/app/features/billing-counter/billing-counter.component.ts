@@ -32,42 +32,48 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
-      <pf-kpi-strip screen="billing_counter"></pf-kpi-strip>
-      <pf-screen-header
-        eyebrow="Billing · Counter"
-        title="Billing counter"
-        subtitle="Search by name, phone, or order ID. Pick an unbilled order to process payment.">
-      </pf-screen-header>
+    <section class="pf-page">
+      <!-- Fixed (non-scrolling) top zone: KPIs, header, lookup + search. -->
+      <div class="pf-page__top px-4 md:px-8 lg:px-10 pt-6">
+        <pf-kpi-strip screen="billing_counter"></pf-kpi-strip>
+        <pf-screen-header
+          eyebrow="Billing · Counter"
+          title="Billing counter"
+          subtitle="Search by name, phone, or order ID. Pick an unbilled order to process payment.">
+        </pf-screen-header>
 
-      <!-- Scan the invoice QR or enter the invoice number / order id directly. -->
-      <pf-tile tone="default" padding="lg" class="block mb-3">
-        <label class="pf-label">Scan QR or enter invoice / order ID</label>
-        <div class="pf-lookup">
-          <input class="pf-input pf-lookup__input" type="search"
-                 placeholder="Invoice number or order ID"
-                 [ngModel]="lookupCode()" (ngModelChange)="lookupCode.set($event)"
-                 (keydown.enter)="resolveLookup()" />
-          <pf-touch-btn size="sm" variant="primary" [disabled]="resolving()" (pressed)="resolveLookup()">
-            {{ resolving() ? 'Finding…' : 'Open' }}
-          </pf-touch-btn>
-          <pf-touch-btn size="sm" variant="ghost" (pressed)="startScan()">
-            <span icon-left aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
-              </svg>
-            </span>
-            Scan QR
-          </pf-touch-btn>
-        </div>
-      </pf-tile>
+        <!-- Scan the invoice QR or enter the invoice number / order id directly. -->
+        <pf-tile tone="default" padding="lg" class="block mb-3">
+          <label class="pf-label">Scan QR or enter invoice / order ID</label>
+          <div class="pf-lookup">
+            <input class="pf-input pf-lookup__input" type="search"
+                   placeholder="Invoice number or order ID"
+                   [ngModel]="lookupCode()" (ngModelChange)="lookupCode.set($event)"
+                   (keydown.enter)="resolveLookup()" />
+            <pf-touch-btn size="sm" variant="primary" [disabled]="resolving()" (pressed)="resolveLookup()">
+              {{ resolving() ? 'Finding…' : 'Open' }}
+            </pf-touch-btn>
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="startScan()">
+              <span icon-left aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
+                </svg>
+              </span>
+              Scan QR
+            </pf-touch-btn>
+          </div>
+        </pf-tile>
 
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <label class="pf-label">Search patient</label>
-        <input class="pf-input" type="search"
-               placeholder="Name · MRN · phone · order ID"
-               [ngModel]="query()" (ngModelChange)="onSearch($event)" />
-      </pf-tile>
+        <pf-tile tone="default" padding="lg" class="block">
+          <label class="pf-label">Search patient</label>
+          <input class="pf-input" type="search"
+                 placeholder="Name · MRN · phone · order ID"
+                 [ngModel]="query()" (ngModelChange)="onSearch($event)" />
+        </pf-tile>
+      </div>
+
+      <!-- Scrollable content zone: results + selected patient orders. -->
+      <div class="pf-page__body px-4 md:px-8 lg:px-10 pb-10">
 
       @if (scanning()) {
         <div class="pf-scan" role="dialog" aria-modal="true" aria-label="Scan invoice QR">
@@ -150,9 +156,27 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
           </ul>
         }
       }
+      </div>
     </section>
   `,
   styles: [`
+    /* ── WORK page: fill the shell's main area and scroll INSIDE the body
+       panel only — no outer page scroll, no double scrollbars. Applies on
+       every size (intentional, approved non-scroll app layout). ── */
+    :host { display: block; height: 100%; }
+    .pf-page {
+      display: flex; flex-direction: column;
+      height: 100%; min-height: 0; overflow: hidden;
+    }
+    /* Fixed top chrome: KPIs, header, lookup + search. */
+    .pf-page__top { flex: 0 0 auto; min-height: 0; }
+    /* Scrollable content: results + unbilled orders. */
+    .pf-page__body {
+      flex: 1 1 auto; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding-top: 8px;
+    }
+
     .pf-section {
       margin: 14px 0 8px;
       font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -173,7 +197,15 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
     @media (min-width: 640px) {
       .pf-row { flex-direction: row; align-items: center; gap: 14px; }
     }
-    .pf-row:hover { border-color: rgba(168, 85, 247, 0.45); background: rgba(168, 85, 247, 0.04); }
+    /* Keep the row's leading avatar / trailing chevron + action from being
+       squished by the flexible text column. */
+    .pf-row > pf-avatar,
+    .pf-row > svg,
+    .pf-row > pf-touch-btn { flex-shrink: 0; }
+    /* Hover affordance only on devices that truly hover (not touch). */
+    @media (hover: hover) {
+      .pf-row:hover { border-color: rgba(168, 85, 247, 0.45); background: rgba(168, 85, 247, 0.04); }
+    }
     .pf-row__id {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 11.5px; font-weight: 700;
@@ -183,11 +215,15 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
       border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
     }
-    .pf-row__name { margin: 0; font-weight: 600; font-size: 14.5px; color: var(--text-primary); text-align: left; }
+    .pf-row__name {
+      margin: 0; font-weight: 600; font-size: 14.5px; color: var(--text-primary); text-align: left;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .pf-row__meta {
       margin: 2px 0 0; font-size: 11px; color: var(--text-tertiary);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       text-align: left;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .hidden { display: none; }
 
@@ -209,6 +245,29 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
       border: 2px solid rgba(168, 85, 247, 0.5);
     }
     .pf-scan__hint { font-size: 12.5px; color: var(--text-tertiary); text-align: center; }
+
+    /* ── Phone (<=640): make the scan dialog a full-bleed bottom sheet that
+       scrolls within the viewport and keeps its actions reachable above the
+       bottom-nav pill. Desktop layout untouched. ── */
+    @media (max-width: 640px) {
+      .pf-scan { align-items: flex-end; padding: 12px; }
+      .pf-scan__panel {
+        width: 100%;
+        max-height: 88dvh; overflow-y: auto;
+        border-radius: 18px 18px 14px 14px;
+        padding-bottom: calc(16px + var(--tab-nav-total-height, 0px));
+      }
+    }
+
+    /* ── Capacitor native: the scan dialog is this page's own full-bleed
+       fixed chrome, so absorb the notch/status-bar + home-indicator insets
+       (global body insets don't reach position:fixed children). ── */
+    :host-context(html.cap-native) .pf-scan {
+      padding-top: calc(20px + env(safe-area-inset-top));
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      padding-left: calc(20px + env(safe-area-inset-left));
+      padding-right: calc(20px + env(safe-area-inset-right));
+    }
   `]
 })
 export class BillingCounterComponent implements OnDestroy {

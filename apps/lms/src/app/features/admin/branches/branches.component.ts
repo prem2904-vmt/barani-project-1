@@ -42,7 +42,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
         <pf-tile tone="violet" padding="lg" class="block mb-4">
           <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
               style="color: var(--text-muted);">New branch</h3>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-3 pf-branch-grid">
             <div><label class="pf-label">Name</label>
               <input type="text" class="pf-input" [ngModel]="newBranch().name" (ngModelChange)="patchNewBranch({ name: $event })" /></div>
             <div><label class="pf-label">Code</label>
@@ -72,11 +72,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
               <button type="button"
                       class="pf-branch-toggle"
                       (click)="toggle(b.id)">
-                <div class="flex items-center gap-3 text-left">
+                <div class="flex items-center gap-3 text-left pf-branch-titlewrap">
                   <span class="pf-branch-badge">{{ codeInitials(b.code) }}</span>
-                  <div>
-                    <p class="text-[15px] font-semibold" style="color: var(--text-primary);">{{ b.name }}</p>
-                    <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                  <div class="pf-branch-titlecol">
+                    <p class="text-[15px] font-semibold pf-trunc" style="color: var(--text-primary);">{{ b.name }}</p>
+                    <p class="text-[12px] mt-0.5 pf-trunc" style="color: var(--text-tertiary);">
                       {{ b.city ?? '—' }} · {{ b.code }}
                     </p>
                   </div>
@@ -121,14 +121,14 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                     <div class="space-y-2 mb-3">
                       @for (sb of subBranchesFor(b.id); track sb.id) {
                         <div class="pf-sub-card">
-                          <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
+                          <div class="flex items-center justify-between pf-sub-row">
+                            <div class="flex items-center gap-2 pf-sub-titlewrap">
                               <span class="pf-sub-badge">{{ codeInitials(sb.code) }}</span>
-                              <div>
-                                <p class="text-[14px] font-semibold" style="color: var(--text-primary);">
+                              <div class="pf-sub-titlecol">
+                                <p class="text-[14px] font-semibold pf-trunc" style="color: var(--text-primary);">
                                   → {{ sb.name }}
                                 </p>
-                                <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">
+                                <p class="text-[11px] font-mono mt-0.5 pf-trunc" style="color: var(--text-muted);">
                                   {{ sb.code }} · {{ sb.type }}
                                 </p>
                               </div>
@@ -179,7 +179,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
                   @if (addingSubBranchFor() === b.id) {
                     <div class="pf-sub-form">
-                      <div class="grid grid-cols-2 gap-2">
+                      <div class="grid grid-cols-2 gap-2 pf-branch-grid">
                         <input type="text" class="pf-input" placeholder="Sub-branch name"
                                [ngModel]="subBranchDraft().name" (ngModelChange)="patchSubBranchDraft({ name: $event })" />
                         <input type="text" class="pf-input uppercase" placeholder="CODE"
@@ -278,7 +278,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       cursor: pointer;
       transition: background 0.15s ease;
     }
-    .pf-branch-toggle:hover { background: var(--bg-hover); }
+    @media (hover: hover) {
+      .pf-branch-toggle:hover { background: var(--bg-hover); }
+    }
 
     .pf-branch-badge {
       display: inline-flex;
@@ -358,7 +360,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       line-height: 1;
       cursor: pointer;
     }
-    .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
+    @media (hover: hover) {
+      .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
+    }
 
     .pf-mini-select {
       appearance: none;
@@ -406,6 +410,90 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     .pf-dot-off {
       width: 8px; height: 8px; border-radius: 9999px;
       background: var(--text-muted); opacity: 0.4;
+    }
+
+    /* ── Touch sizing: larger tap target for the inline unassign control ── */
+    @media (pointer: coarse) {
+      .pf-unassign {
+        position: relative;
+        width: 28px;
+        height: 28px;
+        font-size: 16px;
+      }
+      /* Extend the tappable region to >=44px without changing visual size */
+      .pf-unassign::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    /* ── Below desktop (<1280): keep long branch/sub-branch names from
+       overflowing the header row; truncate with ellipsis. Desktop >=1280
+       stays byte-identical. ── */
+    @media (max-width: 1279px) {
+      .pf-branch-titlewrap { min-width: 0; flex: 1 1 auto; }
+      .pf-branch-titlecol { min-width: 0; }
+      .pf-sub-titlewrap { min-width: 0; flex: 1 1 auto; }
+      .pf-sub-titlecol { min-width: 0; }
+      .pf-trunc {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+      /* Keep badges/chevron from being squished by the flexible title column */
+      .pf-branch-badge,
+      .pf-sub-badge,
+      .pf-chevron { flex-shrink: 0; }
+
+      /* Keep the right-hand meta cluster (PF Box chip + count + chevron) on a
+         single line beside the truncating title instead of wrapping/crowding */
+      .pf-branch-toggle > div:last-child { flex-shrink: 0; white-space: nowrap; }
+      .pf-sub-row > div:last-child { flex-shrink: 0; }
+    }
+
+    /* ── Phone (<=640): single-column forms, no horizontal overflow ── */
+    @media (max-width: 640px) {
+      /* New-branch + sub-branch forms: stack fields */
+      .pf-branch-grid { grid-template-columns: 1fr !important; }
+
+      /* Branch header row: let the right cluster wrap instead of overflowing */
+      .pf-branch-toggle {
+        padding: 12px 14px;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .pf-branch-toggle > div:last-child {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .pf-branch-body { padding: 14px 14px 16px; }
+
+      /* Sub-branch dept assignment + branch dept assignment selects:
+         stop fixed pixel widths from forcing overflow */
+      .pf-sub-deps pf-select,
+      .pf-dept-row pf-select { width: 100% !important; }
+
+      /* Sub-branch card inner header: allow controls to wrap */
+      .pf-sub-card .pf-sub-row { flex-wrap: wrap; gap: 8px; }
+
+      /* Department rows: stack name above the assign/status controls */
+      .pf-dept-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      .pf-dept-row > div:last-child {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
     }
   `]
 })

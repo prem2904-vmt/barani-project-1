@@ -584,6 +584,94 @@ const CATEGORY_LABELS: Record<string, string> = {
       color: var(--text-tertiary);
       font-size: 13px;
     }
+
+    /* ═══════════════════════════════════════════════════════════
+       CROSS-PLATFORM OVERRIDES — additive only.
+       Desktop-web (>=1280px) is untouched by everything below.
+       ═══════════════════════════════════════════════════════════ */
+
+    /* Gate hover affordances so touch devices don't get sticky hover
+       states. Desktop (hover-capable) keeps its existing base hovers. */
+    @media (hover: none) {
+      .pf-kpi-screen-tab:hover { color: var(--text-secondary); background: var(--glass-bg); }
+      .pf-kpi-screen-tab--on:hover { color: white; background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18)); }
+      .pf-kpi-cat__row:hover:not(:disabled) { background: transparent; }
+      .pf-kpi-tile:hover { border-color: var(--glass-border); }
+      .pf-kpi-btn--ghost:hover:not([disabled]) { background: transparent; color: var(--text-secondary); }
+      .pf-kpi-btn--primary:hover:not([disabled]) { filter: none; }
+      .pf-kpi-tile__x:hover { background: transparent; color: var(--text-muted); }
+    }
+
+    /* Coarse pointers (touch): enlarge interactive controls to >=44px. */
+    @media (pointer: coarse) {
+      .pf-kpi-tile__x { width: 44px; height: 44px; }
+      .pf-kpi-tile__toggle { width: 46px; height: 28px; }
+      .pf-kpi-tile__toggle span::after { width: 22px; height: 22px; top: 2px; left: 2px; }
+      .pf-kpi-tile__toggle input:checked + span::after { left: 20px; }
+      .pf-kpi-cat__row { padding-top: 11px; padding-bottom: 11px; }
+      .pf-kpi-tile__grip { font-size: 18px; padding: 4px 0; }
+    }
+
+    /* Below desktop (<=1279): guard long KPI labels/names from overflowing
+       their grid cells. Desktop-web (>=1280) keeps its existing rendering. */
+    @media (max-width: 1279px) {
+      .pf-kpi-cat__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .pf-kpi-tile__label,
+      .pf-kpi-tile__meta {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    /* iPad / tablet (641–1279): keep the two-column workshop where it fits.
+       The base rule collapses to one column below 900px; for the 901–1279
+       band the base two-column layout already applies, so nothing extra is
+       needed there. Below 900 we tune spacing for the stacked layout. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-kpi-page { padding-top: 20px; }
+    }
+
+    /* Phone (<=640): single-column everything, no horizontal overflow,
+       16px inputs to stop iOS zoom, comfortable tap targets, and an action
+       row that wraps instead of crowding. */
+    @media (max-width: 640px) {
+      .pf-kpi-page {
+        padding: 16px 14px;
+        gap: 16px;
+      }
+      .pf-kpi-control { max-width: none; }
+
+      /* Stack screen tabs full-width so each is an easy tap target.
+         Reserve room on the right so the count badge never sits on the text. */
+      .pf-kpi-screens { grid-template-columns: 1fr; }
+      .pf-kpi-screen-tab { padding: 12px 40px 12px 14px; min-height: 48px; }
+
+      /* Workshop already collapses to one column via the 900px base rule.
+         Cap the catalog height so it doesn't push the assigned list far
+         down — scroll within itself rather than the whole page. */
+      .pf-kpi-workshop { gap: 14px; }
+      .pf-kpi-catalog {
+        max-height: 50dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .pf-kpi-catalog__hdr { position: sticky; top: 0; z-index: 1; background: var(--bg-card-solid); }
+      .pf-kpi-search { font-size: 16px; }
+
+      /* Assigned header: let title + actions stack and the buttons fill. */
+      .pf-kpi-assigned__hdr {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      .pf-kpi-assigned__actions { width: 100%; }
+      .pf-kpi-assigned__actions .pf-kpi-btn { flex: 1; min-height: 44px; }
+
+      /* Catalog rows comfortable to tap. */
+      .pf-kpi-cat__row { min-height: 48px; align-content: center; }
+    }
   `]
 })
 export class KpiConfigComponent implements OnInit {

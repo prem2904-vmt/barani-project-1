@@ -53,7 +53,8 @@ interface PrelimOrder {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="pf-rq-page px-4 md:px-8 pt-6">
+     <div class="pf-rq-chrome">
       <pf-kpi-strip screen="report_queue"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Delivery queue"
@@ -133,7 +134,9 @@ interface PrelimOrder {
           (valueChange)="setFilter($event)">
         </pf-segmented>
       </div>
+     </div>
 
+     <div class="pf-rq-body">
       @if (loading() && items().length === 0) {
         <div class="space-y-2.5">
           @for (i of [0,1,2,3]; track i) {
@@ -317,9 +320,44 @@ interface PrelimOrder {
           }
         </div>
       }
+     </div>
     </section>
   `,
   styles: [`
+    /* ───────────────────────────────────────────────────────────────
+       NON-SCROLL WORK LAYOUT (all sizes — approved desktop change).
+       The page fills the shell's main area exactly and never scrolls
+       as a whole; the header chrome (kpi strip, screen header, stat
+       bar, search, filter) is fixed and only the results body scrolls
+       internally. dvh, not vh, for any height. No double scrollbars.
+       ─────────────────────────────────────────────────────────────── */
+    :host {
+      display: block;
+      height: 100%;
+    }
+    .pf-rq-page {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .pf-rq-chrome {
+      flex: 0 0 auto;
+      min-height: 0;
+    }
+    .pf-rq-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* Bottom breathing room (was pb-10 on the page) + safe-area for
+         devices with a home indicator / phone tab nav. */
+      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+      /* Smooth momentum scroll inside the panel on touch. */
+      -webkit-overflow-scrolling: touch;
+    }
+
     /* Segmented stat bar — full width, each stat owns an equal slice
      * with a hairline divider between. Reads as one structural row,
      * not 5 floating items spread thin on a wide page. */
@@ -531,8 +569,8 @@ interface PrelimOrder {
       text-align: left;
     }
     .pf-prelim-card__head:hover { background: var(--glass-bg); }
-    .pf-prelim-card__name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .pf-prelim-card__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-prelim-card__name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-prelim-card__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-prelim-card__count {
       flex-shrink: 0;
       font-size: 11px; font-weight: 700;
@@ -633,7 +671,7 @@ interface PrelimOrder {
     }
     @media (max-width: 639px) {
       .pf-prelim-card__actions { justify-content: stretch; }
-      .pf-prelim-card__actions > * { flex: 1; }
+      .pf-prelim-card__actions > * { flex: 1 1 0; }
     }
 
     @media (max-width: 639px) {
@@ -647,6 +685,84 @@ interface PrelimOrder {
       .pf-prelim-card__row-range { grid-area: range; }
       .pf-prelim-card__row-flag  { grid-area: flag; align-self: center; }
     }
+
+    /* ───────────────────────────────────────────────────────────────
+       CROSS-PLATFORM ADDITIVE OVERRIDES — phone / iPad / touch only.
+       Desktop-web (>=1280px) is intentionally untouched: every rule
+       below is gated behind a max-width / pointer / hover query so the
+       base layout above never changes on desktop. No new logic.
+       ─────────────────────────────────────────────────────────────── */
+
+    /* PHONE (<=640px): the report row is icon + info + a 4-button action
+       cluster. On a narrow phone the cluster + content can't fit on one
+       line, so let the row wrap and push the actions onto their own full
+       line. The action cluster then stretches edge-to-edge with each
+       button taking an equal slice — easy to thumb. */
+    @media (max-width: 640px) {
+      .pf-rq-row {
+        flex-wrap: wrap;
+        row-gap: 10px;
+      }
+      .pf-rq-actions {
+        margin-left: 0;
+        width: 100%;
+      }
+      .pf-rq-iconbtn {
+        flex: 1 1 0;
+        justify-content: center;
+        min-height: 44px;          /* >=44px tap target */
+        padding: 11px 8px;
+      }
+      /* Keep the search clear button thumb-friendly. */
+      .pf-results-search__clear {
+        width: 32px; height: 32px;
+        font-size: 20px;
+      }
+    }
+
+    /* TOUCH SIZING (coarse pointer, any width): the dense desktop icon
+       buttons are too small to tap reliably. Bump min height without
+       affecting mouse/desktop. */
+    @media (pointer: coarse) {
+      .pf-rq-iconbtn { min-height: 44px; }
+      .pf-prelim-card__head { min-height: 52px; }
+      .pf-results-search__clear { width: 32px; height: 32px; }
+    }
+
+    /* HOVER GATING: the row / button / stat hover affordances were
+       written unconditionally and "stick" after a tap on touch devices.
+       Re-assert them only where a real hover pointer exists. The base
+       rules above stay intact for desktop; these just stop the sticky
+       hover state on touch by not re-applying — but since the base
+       rules already apply, we instead neutralise them on coarse-only
+       pointers below. */
+    @media (hover: none) {
+      .pf-rq-row:hover {
+        background: var(--glass-bg);
+        border-color: var(--glass-border);
+      }
+      .pf-rq-iconbtn:hover {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+      .pf-rq-iconbtn--wa:hover {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+      .pf-prelim-card__head:hover { background: transparent; }
+      .pf-results-search__clear:hover {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+    }
+
+    /* iPad / mid-width (641–1279px): the page already uses the full
+       width well (stat bar segments, single-column rows that span the
+       width). Nothing needs to collapse here — the row layout that
+       works on desktop reads fine at tablet widths. Content already
+       clears the 64px left rail via the shell. No overrides required;
+       this comment documents the deliberate no-op so a future editor
+       doesn't "fix" a band that isn't broken. */
   `]
 })
 export class ReportQueueComponent implements OnInit {

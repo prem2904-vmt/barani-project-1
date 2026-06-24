@@ -360,7 +360,7 @@ interface Doctor {
     }
     .pf-rn-search:focus { border-color: rgba(168, 85, 247, 0.55); }
 
-    .pf-rn-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow-y: auto; }
+    .pf-rn-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 60dvh; overflow-y: auto; }
     .pf-rn-row {
       display: flex; align-items: center; gap: 10px;
       width: 100%; padding: 10px 12px;
@@ -412,7 +412,7 @@ interface Doctor {
     .pf-rn-modal {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 51; width: calc(100% - 32px); max-width: 560px;
-      max-height: calc(100vh - 32px);
+      max-height: calc(100dvh - 32px);
       display: flex; flex-direction: column;
       background: var(--bg-card-solid, #14142a);
       border: 1px solid var(--glass-border);
@@ -457,6 +457,79 @@ interface Doctor {
       display: flex; align-items: center; gap: 8px;
       padding: 12px 16px;
       border-top: 1px solid var(--glass-border);
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+       Cross-platform overrides — ADDITIVE ONLY.
+       Desktop-web (>=1280) is intentionally untouched above.
+       ─────────────────────────────────────────────────────────────── */
+
+    /* Hover affordances: only on real pointers (no sticky :hover on touch). */
+    @media (hover: none) {
+      .pf-rn-row:hover { background: transparent; }
+      .pf-rn-doc__btn:hover { background: transparent; color: var(--text-secondary); }
+      .pf-rn-doc__btn--danger:hover { color: var(--text-secondary); border-color: var(--glass-border); }
+      .pf-rn-modal__close:hover { background: transparent; color: var(--text-secondary); }
+    }
+
+    /* Touch pointers: grow tap targets to >=44px without shifting desktop. */
+    @media (pointer: coarse) {
+      .pf-rn-doc__btn { width: 44px; height: 44px; }
+      .pf-rn-modal__close { width: 44px; height: 44px; }
+      .pf-rn-row { padding-top: 12px; padding-bottom: 12px; }
+    }
+
+    /* iPad / mid-width (641–1279): two-column doctor cards use the width;
+       the two-pane grid still kicks in at 1024 (unchanged). */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .pf-rn-doc-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+    }
+
+    /* iPad/tablet (641–1279): centered modal sizes to the *visible* viewport
+       so browser/keyboard chrome can't clip it (raw vh stays for >=1280). */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-rn-modal { max-height: calc(100dvh - 32px); }
+    }
+
+    /* Phone (<=640): full-width bottom-sheet modal, list/modal scroll in
+       dvh, inputs at 16px to stop iOS auto-zoom, footer clears bottom-nav. */
+    @media (max-width: 640px) {
+      .pf-rn-list { max-height: 50dvh; }
+
+      /* Right-pane header (title + Edit hospital + Add doctor) wraps instead
+         of crowding/overflowing on narrow phones; title keeps full width. */
+      .pf-rn-pane__hdr { flex-wrap: wrap; }
+      .pf-rn-pane__hdr > .min-w-0 { flex-basis: 100%; }
+
+      .pf-rn-modal {
+        top: auto; left: 0; right: 0; bottom: 0;
+        transform: none;
+        width: 100%; max-width: none;
+        max-height: 88dvh;
+        border-radius: 18px 18px 0 0;
+      }
+      .pf-rn-modal__body { max-height: 60dvh; }
+      .pf-rn-fld input, .pf-rn-fld textarea { font-size: 16px; }
+      .pf-rn-search { font-size: 16px; }
+      .pf-rn-modal__ftr {
+        padding-bottom: calc(12px + var(--tab-nav-total-height, 0px));
+        flex-wrap: wrap;
+      }
+    }
+
+    /* Capacitor native: bottom-sheet modal must clear the home-indicator /
+       gesture bar in addition to the in-app bottom-nav. */
+    :host-context(html.cap-native) .pf-rn-modal {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-rn-modal__ftr {
+        padding-bottom: calc(12px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom));
+      }
     }
   `]
 })

@@ -65,7 +65,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="px-4 md:px-8 pt-6 pb-10 field-editor-page">
 
       <pf-screen-header
         [eyebrow]="eyebrow()"
@@ -183,7 +183,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
                 Reference ranges
               </p>
               @for (range of draft().referenceRanges ?? []; let i = $index; track i) {
-                <div class="flex gap-2 items-end mb-2">
+                <div class="flex gap-2 items-end mb-2 range-row">
                   <div class="flex-1">
                     <label class="text-[11px]" style="color: var(--text-muted);">Segment</label>
                     <input type="text" class="pf-input"
@@ -243,7 +243,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
           <h3 class="section-title">Options</h3>
           <div class="mt-4 space-y-3">
             @for (opt of draft().options ?? []; let i = $index; track i) {
-              <div class="flex gap-2 items-end">
+              <div class="flex gap-2 items-end option-row">
                 <div class="flex-1">
                   <label class="text-[11px]" style="color: var(--text-muted);">Label</label>
                   <input type="text" class="pf-input"
@@ -353,6 +353,60 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       background: rgba(239, 68, 68, 0.15);
       color: #fca5a5;
       border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    /* ===========================================================
+       CROSS-PLATFORM — additive only. Desktop-web (>=1280) and
+       the base rules above are intentionally left untouched.
+       =========================================================== */
+
+    /* Gate the hover affordance so touch devices don't get a
+       stuck hover state on the remove button. */
+    @media (hover: none) {
+      .field-editor-page .field-remove:hover {
+        background: transparent;
+        color: var(--text-muted);
+        border-color: transparent;
+      }
+    }
+
+    /* Touch sizing: bump the remove button to a 44px tap target
+       on coarse pointers (phones / tablets). */
+    @media (pointer: coarse) {
+      .field-editor-page .field-remove {
+        width: 44px;
+        height: 44px;
+      }
+    }
+
+    /* Phone (<=640): the inline editor rows (reference ranges,
+       options) pack a flex-1 field plus fixed-width fields plus a
+       remove button into one line. Below 640 that overflows, so
+       wrap to a fluid two-up / stacked layout. The remove button
+       stays inline and pinned to the right. */
+    @media (max-width: 640px) {
+      .field-editor-page .range-row,
+      .field-editor-page .option-row {
+        flex-wrap: wrap;
+      }
+      /* let the labelled inputs grow instead of staying at their
+         fixed w-24 / w-36 desktop widths */
+      .field-editor-page .range-row > div,
+      .field-editor-page .option-row > div {
+        flex: 1 1 8rem;
+        width: auto;
+        min-width: 0;
+      }
+      /* segment / label field takes a full row of its own */
+      .field-editor-page .range-row > div:first-child,
+      .field-editor-page .option-row > div:first-child {
+        flex-basis: 100%;
+      }
+      /* remove button hangs to the right of the wrapped row */
+      .field-editor-page .range-row > .field-remove,
+      .field-editor-page .option-row > .field-remove {
+        margin-left: auto;
+      }
     }
   `]
 })

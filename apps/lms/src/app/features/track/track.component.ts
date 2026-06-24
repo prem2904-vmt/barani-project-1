@@ -57,9 +57,9 @@ interface TrackResult {
     </div>
   `,
   styles: [`
-    :host { display:block; min-height:100vh; background:#0a0a15; color:#fff;
+    :host { display:block; min-height:100dvh; background:#0a0a15; color:#fff;
       font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
-    .wrap { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:14px;
+    .wrap { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:14px;
       background:radial-gradient(680px 420px at 12% -8%, rgba(124,58,237,.18), transparent 70%), radial-gradient(560px 380px at 96% 2%, rgba(236,72,153,.12), transparent 70%); }
     .card { width:100%; max-width:420px; background:#14141f; border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:30px 26px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); }
     .brand { font-weight:800; letter-spacing:-.01em; background:linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
@@ -73,11 +73,34 @@ interface TrackResult {
     .err { color:#fca5a5; font-size:13px; margin:6px 0 0; }
     .timeline { list-style:none; padding:0; margin:10px 0 0; }
     .timeline li { display:flex; align-items:center; gap:12px; padding:9px 0; color:rgba(255,255,255,.5); }
+    .timeline .lbl { min-width:0; overflow-wrap:anywhere; }
     .timeline li.done { color:#fff; }
     .timeline .dot { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-size:13px; flex-shrink:0;
       background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); }
     .timeline li.done .dot { background:linear-gradient(135deg,#7c3aed,#ec4899); border:none; }
     .foot { color:rgba(255,255,255,.3); font-size:11px; }
+
+    /* ── Cross-platform additive overrides (do not touch base/desktop rules) ── */
+    /* Capacitor native: this public page is full-bleed chrome of its own, so absorb the notch/home-indicator. */
+    :host-context(html.cap-native) .wrap {
+      padding-top:calc(24px + env(safe-area-inset-top));
+      padding-bottom:calc(24px + env(safe-area-inset-bottom));
+      padding-left:calc(24px + env(safe-area-inset-left));
+      padding-right:calc(24px + env(safe-area-inset-right));
+    }
+    /* Phone: prevent iOS auto-zoom on input focus (needs >=16px) and ensure comfortable tap targets. */
+    @media (max-width:640px) {
+      .inp { font-size:16px; }
+      .btn { min-height:48px; }
+      .timeline .dot { width:28px; height:28px; }
+    }
+    /* Touch devices (incl. iPad >640px): comfortable tap targets + 16px input to block focus-zoom. */
+    @media (pointer:coarse) {
+      .btn { min-height:48px; }
+      .inp { min-height:48px; font-size:16px; }
+    }
+    /* Taps shouldn't leave a sticky highlight on touch. */
+    .btn { -webkit-tap-highlight-color:transparent; }
   `]
 })
 export class TrackComponent {

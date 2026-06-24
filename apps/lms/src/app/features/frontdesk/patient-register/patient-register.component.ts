@@ -26,7 +26,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="px-3 sm:px-4 md:px-8 pt-5 sm:pt-6 pb-10">
 
       <pf-screen-header
         eyebrow="Frontdesk · Registration"

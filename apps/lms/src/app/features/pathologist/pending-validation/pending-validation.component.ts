@@ -44,34 +44,37 @@ interface ResultSnapshot {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
-      <pf-screen-header
-        eyebrow="Validation queue"
-        title="Pending validation"
-        subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
-        <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
-          <span icon-left aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
-              <path d="M3 21v-5h5"/>
-            </svg>
-          </span>
-          Refresh
-        </pf-touch-btn>
-      </pf-screen-header>
+    <section class="pv-page px-4 md:px-8 pt-6">
+      <div class="pv-head">
+        <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
+        <pf-screen-header
+          eyebrow="Validation queue"
+          title="Pending validation"
+          subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+            <span icon-left aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+            </span>
+            Refresh
+          </pf-touch-btn>
+        </pf-screen-header>
 
-      <div class="mb-5">
-        <pf-segmented
-          [options]="tabOptions"
-          [value]="tab()"
-          size="md"
-          (valueChange)="setTab($event)">
-        </pf-segmented>
+        <div class="mb-5">
+          <pf-segmented
+            [options]="tabOptions"
+            [value]="tab()"
+            size="md"
+            (valueChange)="setTab($event)">
+          </pf-segmented>
+        </div>
       </div>
 
+      <div class="pv-scroll pb-10">
       @if (loading() && rows().length === 0) {
         <div class="space-y-2.5">
           @for (i of [0,1,2,3]; track i) {
@@ -130,9 +133,9 @@ interface ResultSnapshot {
                     </svg>
                   </button>
                   @if (expanded(g.orderId)) {
-                    <ul class="mt-3 space-y-2 pl-12">
+                    <ul class="pv-result-list mt-3 space-y-2 pl-12">
                       @for (t of g.items; track t.id) {
-                        <li class="flex items-center gap-2 py-2 px-3 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                        <li class="pv-result-row flex items-center gap-2 py-2 px-3 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                           <span class="text-[13.5px] font-medium flex-1 truncate" style="color: var(--text-primary);">
                             {{ t.test?.name }}
                             @if (isCritical(t)) { <span class="text-[10px] ml-1" style="color:#fb7185;">CRITICAL</span> }
@@ -140,9 +143,11 @@ interface ResultSnapshot {
                           <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">
                             entered {{ t.resultedAt ? (t.resultedAt | date:'shortTime') : '—' }}
                           </span>
-                          <pf-touch-btn size="sm" variant="ghost" (pressed)="openReject(t)">Reject</pf-touch-btn>
-                          <pf-touch-btn size="sm" variant="secondary" (pressed)="reassign(t)">Reassign</pf-touch-btn>
-                          <pf-touch-btn size="sm" variant="primary" (pressed)="openValidate(t)">Validate</pf-touch-btn>
+                          <span class="pv-result-actions inline-flex items-center gap-2">
+                            <pf-touch-btn size="sm" variant="ghost" (pressed)="openReject(t)">Reject</pf-touch-btn>
+                            <pf-touch-btn size="sm" variant="secondary" (pressed)="reassign(t)">Reassign</pf-touch-btn>
+                            <pf-touch-btn size="sm" variant="primary" (pressed)="openValidate(t)">Validate</pf-touch-btn>
+                          </span>
                         </li>
                       }
                     </ul>
@@ -163,10 +168,35 @@ interface ResultSnapshot {
           </div>
         </pf-tile>
       }
+      </div>
     </section>
 
   `,
   styles: [`
+    /* ===== WORK page: non-scroll app layout on all sizes =====
+       :host fills the shell's main area; the page is a flex column whose
+       header (KPI + title + tabs) is fixed and the queue scrolls internally,
+       so there is no outer page scroll / double scrollbar. */
+    :host {
+      display: block;
+      height: 100%;
+    }
+    .pv-page {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pv-head {
+      flex: 0 0 auto;
+    }
+    .pv-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
     .pv-grp-count {
       font-size: 10.5px; font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -197,6 +227,67 @@ interface ResultSnapshot {
       box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
     }
 
+    /* ===== Phone (<=640): stack expanded result rows so 3 actions don't overflow ===== */
+    @media (max-width: 640px) {
+      :host .pv-result-list {
+        /* tighten the avatar-aligned indent so result rows aren't squeezed */
+        padding-left: 0.5rem;
+      }
+      :host .pv-result-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      /* test name takes the first line full width */
+      :host .pv-result-row > span:first-child {
+        flex: 1 1 100%;
+        min-width: 0;
+      }
+      /* action group drops to its own line and spreads the 3 buttons evenly */
+      :host .pv-result-actions {
+        display: flex;
+        width: 100%;
+        gap: 0.5rem;
+      }
+      :host .pv-result-actions > * {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+    }
+
+    /* ===== iPad (641-1279): keep one indented column, ensure no horizontal overflow ===== */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      :host .pv-result-row {
+        flex-wrap: wrap;
+      }
+      :host .pv-result-actions {
+        flex-shrink: 0;
+      }
+    }
+
+    /* ===== Narrow phone (<=400): 3 sm buttons crush at equal width — let them
+       wrap onto a second line instead of squeezing below a tappable width ===== */
+    @media (max-width: 400px) {
+      :host .pv-result-actions {
+        flex-wrap: wrap;
+      }
+      :host .pv-result-actions > * {
+        flex: 1 1 calc(50% - 0.25rem);
+      }
+    }
+
+    /* ===== Touch input: guarantee a 44px tap target on the patient-group toggle
+       (a real <button> owned by this page) without altering pointer/desktop. The
+       inline Reject/Reassign/Validate are <pf-touch-btn> shared primitives — they
+       own their own coarse-pointer sizing, so we only ensure they don't collapse. */
+    @media (pointer: coarse) {
+      /* The only raw <button> this page renders is the patient-group toggle;
+         give it a 44px tap target. The inline Reject/Reassign/Validate are
+         <pf-touch-btn size="sm"> which the shared primitive already fixes at
+         44px, so they need no help here. */
+      :host button[type="button"] {
+        min-height: 44px;
+      }
+    }
   `]
 })
 export class PendingValidationComponent implements OnInit {

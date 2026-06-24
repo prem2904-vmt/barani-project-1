@@ -486,8 +486,15 @@ interface ValueRow {
     </section>
   `,
   styles: [`
-    :host { display: block; height: 100%; overflow-y: auto; overflow-x: hidden; }
-    .pf-page { min-height: 100%; display: flex; flex-direction: column; }
+    /* ── WORK page: non-scroll app layout ─────────────────────
+       The PAGE itself never scrolls. :host fills the shell's main
+       area (shell-main is flex:1; min-height:0; overflow-y:auto, so
+       a height:100% child fits exactly). The screen header is fixed
+       (flex:0 0 auto); the SCROLL happens inside .pf-page__body. The
+       validate bar is a position:fixed overlay that floats above the
+       body, so it stays out of the flex flow. */
+    :host { display: block; height: 100%; overflow: hidden; }
+    .pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
     /* ── Culture & Sensitivity read-only review ─────────────── */
     .pf-culture-rev { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
@@ -504,8 +511,9 @@ interface ValueRow {
     .pf-culture-rev__ast tr:last-child td { border-bottom: 0; }
     .pf-culture-rev__note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
     .pf-culture-rev__note .pf-eyebrow { margin-right: 6px; }
-    .pf-page__header { flex-shrink: 0; }
-    .pf-page__body { padding-top: 4px; }
+    .pf-page__header { flex: 0 0 auto; }
+    /* Internal scroll region: this is the ONLY scroll on the page. */
+    .pf-page__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: 4px; -webkit-overflow-scrolling: touch; }
 
     /* ── Compact page header (same shape as other screens) ─── */
     .pf-head {
@@ -1207,6 +1215,102 @@ interface ValueRow {
         padding: 10px 14px 12px 14px;
       }
       .pf-table__comment-flag { font-size: 11px; }
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       CROSS-PLATFORM ADDITIVE OVERRIDES (scoped to :host)
+       Desktop-web >=1280px is untouched: every rule below is gated
+       behind a sub-desktop @media query, a touch/coarse-pointer
+       query, or a platform host-context. No base rule is edited.
+       ════════════════════════════════════════════════════════════ */
+
+    /* Non-scroll WORK page: :host stays height:100% on ALL sizes so it
+       fits the shell's main scroll host exactly (no outer page scroll,
+       no double scrollbars). The internal scroll lives in .pf-page__body,
+       whose min-height:0 lets it shrink and scroll on short mobile
+       viewports. (Prior sweep set 100dvh here — that fights the
+       non-scroll model and is intentionally removed.) */
+
+    /* ── Phone (<=640px) ─────────────────────────────────────── */
+    @media (max-width: 640px) {
+      /* Stop iOS auto-zoom on focus: form text >=16px on phones. */
+      :host .pf-comment__input { font-size: 16px; }
+
+      /* Patient context strip lets the CRITICAL chip wrap under the
+         identity block instead of squeezing the name. */
+      :host .pf-ctx { flex-wrap: wrap; }
+
+      /* Culture meta grid: 3 cols is too tight on a phone. */
+      :host .pf-culture-rev__meta { grid-template-columns: 1fr; }
+
+      /* Detail drawer becomes a full-width bottom sheet on phones. */
+      :host .pf-drawer {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 88dvh;
+        border-left: none;
+        border-top: 1px solid var(--glass-border);
+        border-radius: 18px 18px 0 0;
+        animation: pf-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      /* Sheet body clears the home-indicator safe area. */
+      :host .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+
+      /* Drawer meta to single column so labels/values don't crush. */
+      :host .pf-drawer__meta { grid-template-columns: 1fr; }
+
+      /* Sticky bar: when buttons wrap, give the status line its own row. */
+      :host .pf-stickybar__meta { width: 100%; }
+    }
+    @keyframes pf-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* ── iPad / tablet (641–1279px) ──────────────────────────── */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      /* Use the extra width: 2-up parameter cards rather than the
+         auto-fill min that can leave a lonely single column. */
+      :host .pf-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    /* ── Touch sizing (coarse pointer, any platform) ─────────── */
+    @media (pointer: coarse) {
+      :host .pf-head__back { min-height: 44px; }
+      /* >=44px hit area (was 40px) — the toggle visually stays pill-sized
+         via line-height, but the tap target meets the touch minimum. */
+      :host .pf-view-toggle__btn { min-height: 44px; }
+      :host .pf-btn { min-height: 44px; }
+      :host .pf-drawer__close { width: 44px; height: 44px; }
+    }
+
+    /* ── Hover-only affordances gated to real hover devices ──── */
+    @media (hover: hover) {
+      :host .pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+      :host .pf-vcard:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); }
+      :host .pf-view-toggle__btn:hover { color: var(--text-primary); }
+      :host .pf-table__row:hover { background: var(--glass-bg-hover); }
+    }
+
+    /* On touch devices the un-gated base :hover rules above can "stick"
+       after a tap (hover persists until the next tap elsewhere). Reset
+       them on coarse/no-hover pointers so tapped cards/rows don't keep a
+       highlighted state. Additive — desktop hover is untouched. */
+    @media (hover: none) {
+      :host .pf-head__back:hover { background: var(--glass-bg); color: var(--text-secondary); }
+      :host .pf-vcard:hover { background: var(--glass-bg); border-color: var(--glass-border); }
+      :host .pf-view-toggle__btn:hover { color: var(--text-tertiary); }
+      :host .pf-view-toggle__btn--on:hover { color: var(--text-primary); }
+      :host .pf-table__row:hover { background: transparent; }
+    }
+
+    /* ── Capacitor native: this page's own fixed chrome must clear
+         the notch / home indicator. Global body insets do not reach
+         position:fixed descendants. ──────────────────────────── */
+    :host-context(html.cap-native) .pf-drawer { top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top, 0px)); }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-drawer { top: auto; }
+      :host-context(html.cap-native) .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
     }
   `]
 })

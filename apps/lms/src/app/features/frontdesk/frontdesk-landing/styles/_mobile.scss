@@ -208,6 +208,37 @@
   .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) {
     display: none !important;
   }
+
+  /* ── Dynamic-viewport heights for full-bleed mobile chrome ──────────
+        On mobile browsers `vh` is measured against the LARGEST viewport
+        (URL bar collapsed), so a bottom-sheet sized in `vh` overshoots
+        the visible area and its lower edge hides behind the address bar
+        / home indicator. Re-express the mobile-only sheets in `dvh` so
+        they track the *visible* viewport. Desktop/iPad never hit this
+        block (it only fires ≤640px), so their behaviour is unchanged. */
+  .pf-q-drawer {
+    max-height: 80dvh;
+  }
+  .pf-staff-sheet {
+    max-height: 70dvh;
+  }
+  /* Full-screen modals: cap the inner shell to the visible viewport so
+     the header/scroll body stay reachable on a short mobile viewport. */
+  .pf-pkg-modal__shell {
+    max-height: calc(100dvh - 28px);
+  }
+  .pf-inv-preview {
+    height: min(92dvh, 1040px);
+  }
+
+  /* ── Bottom-sheet drawer pins to bottom:0 on phones, so its scroll body
+        ends right at the home indicator / browser toolbar. Pad it by the
+        device safe-area so the last row + any footer stay tappable. This
+        fires on every phone (web Safari, Capacitor, Electron) — env()
+        resolves to 0 where there is no inset, so it's a no-op there. */
+  .pf-q-drawer__body {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */

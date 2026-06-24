@@ -10,7 +10,7 @@ import { ReportLayoutService } from '../../../core/services/report-layout.servic
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
-import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
+import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
@@ -71,6 +71,32 @@ interface ViewPanelGroup {
   rows: ViewPanelRow[];
 }
 
+/** A resolved 'result' cell sometimes arrives as the WHOLE enriched value
+ *  object JSON — `{"value":8,"flag":"H","range":"...","unit":"..."}` — instead
+ *  of just the value (the layout engine put the object in the result column).
+ *  Unwrap it to the value + flag so the report never shows raw JSON. */
+function coerceResultCell(raw: unknown): { value: string; flag: string } {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (s.startsWith('{') && s.includes('"value"')) {
+    try {
+      const o = JSON.parse(s) as { value?: unknown; flag?: string };
+      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase() };
+    } catch { /* fall through to raw */ }
+  }
+  return { value: s, flag: '' };
+}
+
+/** Same unwrap for any cell — returns the .value when the cell is an enriched
+ *  object JSON, else the text as-is. */
+function coerceCellText(raw: unknown): string {
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (s.startsWith('{') && s.includes('"value"')) {
+    try { const o = JSON.parse(s) as { value?: unknown }; return o.value == null ? '' : String(o.value); }
+    catch { /* fall through */ }
+  }
+  return s;
+}
+
 @Component({
   selector: 'pf-report-viewer',
   standalone: true,
@@ -86,8 +112,9 @@ interface ViewPanelGroup {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-12 pf-report-section">
+    <section class="pf-report-section">
       <pf-screen-header
+        class="pf-rv-header"
         eyebrow="Reports"
         title="Report viewer"
         [subtitle]="subtitle()">
@@ -165,6 +192,7 @@ interface ViewPanelGroup {
         </div>
       }
 
+      <div class="pf-rv-scroll">
       @if (report(); as r) {
         <!-- Status strip -->
         <div class="pf-rv-status">
@@ -335,7 +363,7 @@ interface ViewPanelGroup {
                                     [style.color]="row.color || null"
                                     [style.font-weight]="row.isBold ? '700' : null">
                                   @for (c of visibleColumns(pv, sec); track c.id) {
-                                    <td>{{ row.cells[c.name] }}</td>
+                                    <td>{{ displayCell(row, c.name) }}</td>
                                   }
                                 </tr>
                               }
@@ -423,7 +451,7 @@ interface ViewPanelGroup {
                 <tr>
                   <td class="pf-rt-invest pf-rt-pname">{{ row.name }}</td>
                   <td [style.color]="resultColor(row)" [style.font-weight]="row.abnormal ? '700' : null">
-                    {{ row.result }}@if (row.flag) { <span class="pf-rt-flag">{{ row.flag }}</span> }
+                    {{ row.result }}@if (row.flag) { <span class="pf-rt-flag">{{ flagDisplay(row) }}</span> }
                   </td>
                   <td class="pf-rt-muted">{{ row.range }}</td>
                   <td class="pf-rt-muted">{{ row.unit }}</td>
@@ -464,9 +492,41 @@ interface ViewPanelGroup {
                            [showText]="true" text="Loading report…"></pf-loading-logo>
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
+    /* ── WORK page: non-scroll app layout on every size ──
+       :host fills the shell's main area; the page itself never scrolls.
+       The screen header is fixed; the report/loading content scrolls
+       inside .pf-rv-scroll. */
+    :host {
+      display: block;
+      height: 100%;
+    }
+    .pf-report-section {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      padding: 24px 16px 0;
+      gap: 16px;
+    }
+    @media (min-width: 768px) {
+      .pf-report-section { padding: 24px 32px 0; }
+    }
+    .pf-rv-header { flex: 0 0 auto; }
+    .pf-rv-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* breathing room at the bottom of the inner scroll + safe-area for
+         devices with a home indicator under our own scroll chrome. */
+      padding-bottom: calc(48px + env(safe-area-inset-bottom));
+      -webkit-overflow-scrolling: touch;
+    }
+
     .pf-rv-status {
       display: flex;
       align-items: center;
@@ -872,8 +932,21 @@ interface ViewPanelGroup {
       :host {
         background: #ffffff !important;
         display: block;
+        height: auto !important;
       }
-      .pf-report-section { padding: 0 !important; max-width: none !important; }
+      /* Undo the non-scroll viewport clamp so the full report paginates
+         across pages instead of being clipped to one screen. */
+      .pf-report-section {
+        padding: 0 !important;
+        max-width: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      .pf-rv-scroll {
+        overflow: visible !important;
+        padding-bottom: 0 !important;
+      }
       .pf-rv-status,
       .pf-rv-loading,
       pf-screen-header { display: none !important; }
@@ -898,7 +971,7 @@ interface ViewPanelGroup {
       border: 1px solid var(--glass-border-hover);
       border-radius: 14px;
       width: 100%; max-width: 440px;
-      max-height: min(80vh, 560px);
+      max-height: min(80dvh, 560px);
       display: flex; flex-direction: column;
       box-shadow: var(--glass-shadow-hover);
       color: var(--text-primary);
@@ -950,6 +1023,89 @@ interface ViewPanelGroup {
     .pf-rv-share-name { font-size: 13px; font-weight: 600; }
     .pf-rv-share-email { font-size: 11px; color: var(--text-tertiary); }
     .pf-rv-share-empty { padding: 20px 16px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+
+    /* ───────────────────────────────────────────────────────────────
+       CROSS-PLATFORM OVERRIDES — additive only.
+       Desktop-web (>=1280) is untouched: every rule below is gated to
+       a sub-desktop width, a coarse pointer, or a platform html class.
+       ─────────────────────────────────────────────────────────────── */
+
+    /* iOS input-zoom guard: the share-search input is 13px which trips
+       Safari's auto-zoom on focus. Bump to 16px on touch devices only;
+       desktop keeps the original compact size. */
+    @media (pointer: coarse) {
+      .pf-rv-share-search input { font-size: 16px; }
+      /* Close button must be a real 44px tap target on touch. */
+      .pf-rv-share-close { width: 44px; height: 44px; }
+      .pf-rv-share-row { padding-top: 12px; padding-bottom: 12px; min-height: 44px; }
+    }
+
+    /* Touch devices: neutralize sticky :hover backgrounds that linger
+       after a tap (hover styles belong to real pointers only). */
+    @media (hover: none) {
+      .pf-rv-share-close:hover { background: var(--glass-bg); color: var(--text-secondary); }
+      .pf-rv-share-row:hover:not(:disabled) { background: transparent; }
+    }
+
+    /* Use dynamic viewport height so the share sheet isn't clipped under
+       mobile browser chrome (the static 80vh undershoots/overshoots). */
+    @supports (height: 100dvh) {
+      .pf-rv-share-modal { max-height: min(80dvh, 560px); }
+    }
+
+    /* ── Phone (<=640): single-column, no horizontal overflow ── */
+    @media (max-width: 640px) {
+      /* Status strip: chips + meta stack instead of cramping. */
+      .pf-rv-status {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      /* Tighter paper so the printable doesn't waste the narrow width. */
+      .pf-paper { padding: 20px 16px; }
+      .pf-paper__masthead { flex-wrap: wrap; }
+
+      /* Wide 5-column results tables can't shrink below their content;
+         let them scroll horizontally WITHIN the paper rather than blow
+         the whole page out. The page itself never scrolls sideways. */
+      .pf-paper__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pf-paper__rtable,
+      .pf-paper__test > .pf-paper__table,
+      .pf-paper__rs .pf-paper__table { min-width: 460px; }
+
+      /* Footer: signature + QR stack and left-align on a narrow page. */
+      .pf-paper__footer { flex-direction: column; align-items: stretch; gap: 20px; }
+      .pf-paper__sig { min-width: 0; }
+      .pf-paper__sig-line { text-align: left; }
+      .pf-paper__sig-rule { margin-left: 0; }
+      .pf-paper__qr { text-align: left; }
+
+      /* Share picker becomes a bottom sheet rather than a centred dialog. */
+      .pf-rv-share-backdrop { align-items: flex-end; padding: 0; }
+      .pf-rv-share-modal {
+        max-width: none;
+        width: 100%;
+        max-height: 86dvh;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        /* Clear the home-indicator / device gesture area. */
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+    }
+
+    /* ── iPad (641–1279): keep the spacious paper, just ensure the share
+       picker stays a comfortable centred dialog and tables never overflow
+       the paper edge. No base changes — these only widen sub-desktop. ── */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-paper__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
+
+    /* Capacitor native: the share sheet is full-bleed fixed chrome, so it
+       owns its own safe-area bottom inset on phone. */
+    :host-context(html.cap-native) .pf-rv-share-modal {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
   `]
 })
 export class ReportViewerComponent implements OnInit {
@@ -1038,12 +1194,30 @@ export class ReportViewerComponent implements OnInit {
   flagStyle(): 'bold' | 'bold_color' {
     return this.tpl()?.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
   }
+  /** Indicator glyph mode: H/L letters or ↑/↓ arrows. */
+  flagIndicator(): 'letter' | 'arrow' {
+    return this.tpl()?.flagIndicator === 'arrow' ? 'arrow' : 'letter';
+  }
+  /** Admin-chosen colours for abnormals (high / low). */
+  private abnormalColor(): string { return this.tpl()?.abnormalColor || '#dc2626'; }
+  private abnormalLowColor(): string { return this.tpl()?.abnormalLowColor || '#2563eb'; }
 
   /** Result-cell colour: only tinted when style is bold_color AND the value
-   *  is abnormal (red high / blue low); otherwise default ink (bold alone). */
+   *  is abnormal (admin high / low colour); otherwise default ink. */
   resultColor(row: ViewPanelRow): string | null {
     if (!row.abnormal || this.flagStyle() !== 'bold_color') return null;
-    return row.isLow ? '#2563eb' : '#dc2626';
+    return row.isLow ? this.abnormalLowColor() : this.abnormalColor();
+  }
+
+  /** The flag glyph to show beside the value: ↑/↓ in arrow mode, H/L/C/A in
+   *  letter mode. */
+  flagDisplay(row: ViewPanelRow): string {
+    if (!row.flag) return '';
+    if (this.flagIndicator() === 'arrow') {
+      if (row.flag === 'H') return '↑';
+      if (row.flag === 'L') return '↓';
+    }
+    return row.flag;
   }
 
   /** Classify tests + build the continuous-table panel groups. Mirrors the
@@ -1096,16 +1270,18 @@ export class ReportViewerComponent implements OnInit {
             if (note) g.rows.push({ kind: 'note', note });
             continue;
           }
-          const letter = this.hueFlag(r.color);
+          const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
+          const colorWord = this.hueFlag(r.color);
+          const flag = rc.flag || (colorWord === 'High' ? 'H' : colorWord === 'Low' ? 'L' : '');
           g.rows.push({
             kind: 'param',
             name: this.humanize(r.parameterName ?? ''),
-            result: resultSrc ? (r.cells[resultSrc.name] ?? '') : '',
-            range: rangeSrc ? (r.cells[rangeSrc.name] ?? '') : '',
-            unit: unitSrc ? (r.cells[unitSrc.name] ?? '') : '',
-            flag: letter === 'High' ? 'H' : letter === 'Low' ? 'L' : '',
-            isLow: letter === 'Low',
-            abnormal: !!r.color || r.isBold,
+            result: rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : ''),
+            range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
+            unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : ''),
+            flag,
+            isLow: flag === 'L',
+            abnormal: !!r.color || r.isBold || (!!rc.flag && rc.flag !== 'N'),
           });
         }
       }
@@ -1134,6 +1310,10 @@ export class ReportViewerComponent implements OnInit {
     if (firstParam) firstParam.specimen = g.specimen;
     return g;
   }
+
+  /** Template helper: render a resolved grid cell, unwrapping the enriched
+   *  value object JSON to its `.value` so the report never shows raw JSON. */
+  displayCell(row: ResolvedRow, name: string): string { return coerceCellText(row.cells?.[name]); }
 
   /** Map a resolved-row colour to a High/Low flag word (same heuristic as the
    *  PDF's flagLabel). */

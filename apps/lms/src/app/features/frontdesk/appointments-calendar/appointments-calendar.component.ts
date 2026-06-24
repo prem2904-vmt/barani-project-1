@@ -306,6 +306,9 @@ const STATUS_CLASS: Record<string, string> = {
   styles: [`
     :host {
       display: block;
+      /* WORK page: fill the shell's main area exactly so the PAGE itself
+       * never scrolls — scrolling happens inside the calendar grid. */
+      height: 100%;
       /* Theme-aware grid line. Dark mode: faint white. Light mode (set
        * via :host-context below): a soft slate so lines stay visible on
        * the light lavender background. */
@@ -318,11 +321,16 @@ const STATUS_CLASS: Record<string, string> = {
     }
     .pf-cal-page {
       padding: 20px clamp(16px, 3vw, 32px);
-      display: flex; flex-direction: column; gap: 16px; min-height: 100%;
+      display: flex; flex-direction: column; gap: 16px;
+      /* Non-scroll app screen: fill the host and clip — the only scroll
+       * lives inside the calendar grid (.pf-cal-time__body). position
+       * anchors the floating loading badge. */
+      height: 100%; min-height: 0; overflow: hidden; position: relative;
     }
     .pf-cal-hdr {
       display: flex; align-items: center; justify-content: flex-start;
       gap: 16px; flex-wrap: wrap;
+      flex: 0 0 auto;
     }
     .pf-cal-hdr__l { flex: 1; min-width: 0; }
     .pf-cal-hdr__l h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
@@ -365,6 +373,7 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-cal-toolbar {
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px; flex-wrap: wrap;
+      flex: 0 0 auto;
     }
     .pf-cal-views {
       display: inline-flex; padding: 3px;
@@ -420,10 +429,18 @@ const STATUS_CLASS: Record<string, string> = {
       background: var(--glass-bg); border: 1px solid var(--glass-border);
       border-radius: 16px; backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      overflow: hidden; min-height: 60vh; display: flex; flex-direction: column;
+      overflow: hidden; display: flex; flex-direction: column;
+      /* Non-scroll: the frame takes the remaining height of the page and
+       * lets its inner grid scroll. min-height:0 is required so the flex
+       * child can shrink below its content size. */
+      flex: 1 1 auto; min-height: 0;
     }
     .pf-cal-loading {
+      /* Float over the frame instead of taking flow space, so the
+       * non-scroll page height stays exact while loading. */
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
       padding: 12px; text-align: center; font-size: 12.5px; color: var(--text-tertiary);
+      pointer-events: none; z-index: 4;
     }
     .pf-cal-past { opacity: 0.5; filter: saturate(0.6); }
 
@@ -634,6 +651,10 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-cal-month__grid {
       flex: 1; min-height: 0;
       display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr;
+      /* Non-scroll page: if the 6 rows can't all fit the frame height
+       * (short viewports / iPad split), scroll INSIDE the grid rather
+       * than pushing the page. min-height:0 above lets this shrink. */
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .pf-cal-month__cell {
       border-right: 1px solid var(--pf-cal-grid);
@@ -724,6 +745,117 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-appt-btn:hover { filter: brightness(1.15); }
     .pf-appt-btn--primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
     .pf-appt-btn--danger { color: #f43f5e; border-color: rgba(244,63,94,0.4); }
+
+    /* ═══════════════════════════════════════════════════════════
+     * CROSS-PLATFORM OVERRIDES (additive only)
+     * Desktop-web (>=1280px) is untouched: every rule below is
+     * gated by a max-width / pointer / platform query so it can
+     * never reach the desktop layout.
+     * ═══════════════════════════════════════════════════════════ */
+
+    /* (Non-scroll layout: the frame is now flex:1 and fills the page's
+     * remaining height on every size, so no explicit min-height is
+     * needed — that also removes the old 60vh mobile-chrome clip.) */
+
+    /* ── Touch affordances: only enable hover tint where a real hover
+     * pointer exists; on touch these were causing sticky highlights. */
+    @media (hover: none) {
+      .pf-cal-back:hover,
+      .pf-cal-book:hover,
+      .pf-cal-views button:hover,
+      .pf-cal-nav__btn:hover,
+      .pf-cal-nav__jump:hover,
+      .pf-cal-time__slot:hover,
+      .pf-cal-event:hover,
+      .pf-cal-month__cell:hover,
+      .pf-cal-month__pill:hover,
+      .pf-appt-btn:hover,
+      .pf-appt-x:hover { filter: none; }
+      .pf-cal-time__slot:hover { background: transparent; }
+      .pf-cal-event:hover { filter: none; z-index: auto; }
+      .pf-cal-month__cell:hover { background: transparent; }
+    }
+
+    /* ── Coarse pointer: bump small tap targets to >=44px without
+     * changing their visual box on desktop. */
+    @media (pointer: coarse) {
+      .pf-cal-back { min-height: 44px; }
+      .pf-cal-book { min-height: 44px; }
+      .pf-cal-nav__btn { width: 44px; height: 44px; }
+      .pf-cal-nav__today { width: auto; min-width: 44px; height: 44px; }
+      .pf-cal-nav__jump { height: 44px; }
+      .pf-cal-views button { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
+      .pf-cal-month__pill { min-height: 32px; padding-top: 7px; padding-bottom: 7px; }
+      .pf-appt-x { width: 44px; height: 44px; }
+      .pf-appt-btn { min-height: 44px; }
+    }
+
+    /* ── iPad band (641–1279): the time grid stays comfortable, but
+     * keep week columns from collapsing too far; month cells a touch
+     * shorter so the grid fits the viewport height. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-cal-time__head,
+      .pf-cal-time__body { min-width: 0; }
+      .pf-cal-month__cell { min-height: 76px; }
+    }
+
+    /* ── Phone (<=640): single-column, no horizontal overflow,
+     * full-width bottom sheet for the action card. */
+    @media (max-width: 640px) {
+      .pf-cal-page { padding: 14px 12px; gap: 12px; }
+
+      /* Header: keep the back/title/book on a compact wrapping row. */
+      .pf-cal-hdr { gap: 10px; }
+      .pf-cal-hdr__l h1 { font-size: 19px; }
+      .pf-cal-hdr__l p { font-size: 12px; }
+      .pf-cal-book { width: 100%; justify-content: center; padding: 11px 1rem; }
+      .pf-cal-hdr__r { width: 100%; }
+
+      /* Toolbar stacks: view switcher full width, nav row below. */
+      .pf-cal-toolbar { gap: 8px; }
+      .pf-cal-views { width: 100%; justify-content: space-between; }
+      .pf-cal-views button { flex: 1; text-align: center; }
+      .pf-cal-nav { width: 100%; flex-wrap: wrap; }
+      .pf-cal-nav__title {
+        margin-left: 0; width: 100%; order: 5;
+        font-size: 13px; text-align: center;
+      }
+
+      /* Day / Week grid: narrower time rail + allow the 7-day week to
+       * scroll horizontally instead of crushing columns to nothing.
+       * Each day column gets a sensible min so events stay readable. */
+      .pf-cal-time__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pf-cal-time__head,
+      .pf-cal-time__body {
+        grid-template-columns: 44px repeat(var(--col-count, 7), minmax(64px, 1fr));
+      }
+      .pf-cal-time__overlay { left: 44px; }
+      .pf-cal-time__hour > span { right: 5px; font-size: 9.5px; }
+      .pf-cal-time__col-hdr { padding: 10px 6px; }
+
+      /* Event chips: stack time over name so short columns still read. */
+      .pf-cal-event { font-size: 11px; padding: 3px 6px; }
+      .pf-cal-event__time { font-size: 10px; }
+
+      /* Month grid: trim cell padding/height so all 6 rows fit. */
+      .pf-cal-month__dows { padding: 8px 6px; }
+      .pf-cal-month__cell { padding: 5px 4px 3px; min-height: 56px; }
+      .pf-cal-month__pill { padding: 3px 7px; font-size: 10px; gap: 4px; }
+      .pf-cal-month__label { display: none; }
+
+      /* Action card → bottom sheet that clears the bottom-nav pill and
+       * the home-indicator safe area on notched phones. */
+      .pf-appt-overlay { align-items: flex-end; padding: 0; }
+      .pf-appt-card {
+        max-width: 100%;
+        border-radius: 18px 18px 0 0;
+        padding-bottom: calc(16px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
+        max-height: 85dvh; overflow-y: auto;
+      }
+      /* iOS: 16px+ inputs to stop auto-zoom on focus. */
+      .pf-appt-card .pf-input { font-size: 16px; }
+      .pf-appt-btn { padding: 9px 14px; }
+    }
   `]
 })
 export class AppointmentsCalendarComponent {

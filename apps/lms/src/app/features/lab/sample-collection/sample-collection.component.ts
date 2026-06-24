@@ -532,6 +532,45 @@ interface OrderGroup {
     }
   `,
   styles: [`
+    /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
+     * The page fills the shell's main area exactly: header / KPI strip /
+     * scan strip / section heading are fixed (flex:0 0 auto) and the
+     * pending-queue list (or empty / loading stub) is the ONLY thing that
+     * scrolls, internally. No outer page scroll, no double scrollbars.
+     * The drawer + reject modal are position:fixed siblings of the section
+     * and are unaffected by this flex column. */
+    :host {
+      display: block;
+      height: 100%;
+      min-height: 0;
+    }
+    :host > section {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Fixed (non-scrolling) chrome at the top of the page. */
+    :host > section > pf-kpi-strip,
+    :host > section > pf-screen-header,
+    :host > section > .pf-scan,
+    :host > section > pf-barcode-scanner-modal,
+    :host > section > .pf-sc__section {
+      flex: 0 0 auto;
+    }
+    /* The queue list / empty state / loading stub is the single scroll
+     * region. min-height:0 lets it shrink inside the flex column so the
+     * scrollbar lives here, not on the page. */
+    :host > section > .pf-sc__list,
+    :host > section > .pf-sc__empty,
+    :host > section > .pf-sc__loading {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
     /* ─── Scan strip ─────────────────────────────────────────
      * Designed as the primary action: big icon, bold label, wide input.
      * A real vacutainer scanner just types the code into the focused field,
@@ -619,7 +658,7 @@ interface OrderGroup {
     .pf-sc__loading {
       display: flex; align-items: center; justify-content: center;
       padding: 64px 24px;
-      min-height: 60vh;
+      min-height: 60dvh;
     }
 
     /* Responsive grid: 1 / 2 / 3 columns depending on width. Matches the
@@ -1375,6 +1414,91 @@ interface OrderGroup {
         width: auto !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
+      }
+    }
+
+    /* ─── Cross-platform additive overrides (ADD ONLY — desktop ≥1280px
+       and the existing rules above are untouched) ───────────────────── */
+
+    /* Phone: the scan strip packs an icon button, the input body, a "Scan"
+       button and a "Find" button into one non-wrapping flex row. Below
+       ~440px those four children fight for room and the input collapses or
+       the action buttons overflow the card edge. Re-flow into two rows:
+       icon + input on top, the two actions stretched underneath as full
+       44px+ tap targets. Desktop/iPad row layout is unaffected. */
+    @media (max-width: 640px) {
+      .pf-scan {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px;
+      }
+      .pf-scan__icon-btn { align-self: center; }
+      .pf-scan__body { flex: 1 1 140px; }
+      .pf-scan__cam,
+      .pf-scan__btn {
+        flex: 1 1 auto;
+        align-self: stretch;
+        height: 46px;            /* >=44px touch target */
+        justify-content: center;
+      }
+      /* Push the two actions onto their own row below the input. */
+      .pf-scan__cam { order: 2; }
+      .pf-scan__btn { order: 3; min-width: 0; }
+      .pf-scan__icon-btn { order: 0; }
+      .pf-scan__body { order: 1; }
+
+      /* Loading stub: use dynamic viewport height so it doesn't jump when
+         mobile browser chrome shows/hides. */
+      .pf-sc__loading { min-height: 60dvh; }
+    }
+
+    /* Touch (coarse pointer): make the order-card tap target comfortable and
+       keep the reject chips at a 44px touch height. Pointer-fine desktop is
+       unaffected. */
+    @media (pointer: coarse) {
+      .pf-sc__card { padding-top: 14px; padding-bottom: 14px; }
+      .pf-rej__chip { padding-top: 12px; padding-bottom: 12px; }
+      /* Keep textarea at 16px so iOS Safari doesn't zoom the viewport on
+         focus (the shared .pf-input may set a smaller size). */
+      .pf-rej__note { font-size: 16px; }
+      /* Drawer close button: 40px is below the 44px touch minimum. */
+      .pf-drawer__close { width: 44px; height: 44px; }
+    }
+
+    /* Touch devices with no real hover: neutralise the lift/translate hover
+       states so they don't "stick" after a tap (the card/tube keep their
+       :active + :focus-visible feedback, which is what matters on touch).
+       Desktop with a real pointer keeps the full hover treatment. */
+    @media (hover: none) {
+      .pf-sc__card:hover {
+        border-color: var(--glass-border);
+        background: var(--glass-bg);
+        box-shadow: none;
+      }
+      .pf-tube:hover:not([disabled]) {
+        transform: none;
+        border-color: var(--glass-border);
+        box-shadow: none;
+      }
+      .pf-tube:hover:not([disabled])::before { opacity: 0.08; }
+    }
+
+    /* Capacitor native: the collect drawer is teleported to <body> and is
+       position:fixed with its own top offset (var(--navbar-height)). The
+       global top safe-area is absorbed on body, but this page's own fixed
+       chrome still needs the notch inset so the close button / patient name
+       don't sit under the status bar. Add it only on native. */
+    :host-context(html.cap-native) .pf-drawer {
+      top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top));
+    }
+    :host-context(html.cap-native) .pf-drawer__head {
+      padding-left: calc(48px + env(safe-area-inset-left));
+      padding-right: calc(48px + env(safe-area-inset-right));
+    }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-drawer__head {
+        padding-left: calc(20px + env(safe-area-inset-left));
+        padding-right: calc(20px + env(safe-area-inset-right));
       }
     }
 

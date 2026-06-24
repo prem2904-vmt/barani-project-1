@@ -247,9 +247,37 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       (valueChange)="patch({ flagStyle: $event })">
                     </pf-segmented>
                     <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                      How out-of-range results are emphasised. NABL reports typically use bold (with an H/L letter); colour is optional.
+                      How out-of-range results are emphasised. NABL reports typically use bold; colour is optional.
                     </p>
                   </div>
+                  <div>
+                    <label class="pf-label">Abnormal indicator</label>
+                    <pf-segmented
+                      [options]="flagIndicatorOptions"
+                      [value]="tpl().flagIndicator ?? 'letter'"
+                      size="sm"
+                      (valueChange)="patch({ flagIndicator: $event })">
+                    </pf-segmented>
+                    <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
+                      Mark high/low with H&nbsp;/&nbsp;L letters or ↑&nbsp;/&nbsp;↓ arrows.
+                    </p>
+                  </div>
+                  @if ((tpl().flagStyle ?? 'bold') === 'bold_color') {
+                    <div class="pf-toggle-row">
+                      <span class="text-[14px]" style="color: var(--text-primary);">High value colour</span>
+                      <input type="color"
+                             style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
+                             [ngModel]="tpl().abnormalColor || '#dc2626'"
+                             (ngModelChange)="patch({ abnormalColor: $event })" />
+                    </div>
+                    <div class="pf-toggle-row">
+                      <span class="text-[14px]" style="color: var(--text-primary);">Low value colour</span>
+                      <input type="color"
+                             style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
+                             [ngModel]="tpl().abnormalLowColor || '#2563eb'"
+                             (ngModelChange)="patch({ abnormalLowColor: $event })" />
+                    </div>
+                  }
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
                     <pf-toggle [checked]="tpl().groupByDepartment ?? false"
@@ -519,7 +547,31 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-add-btn { width: 100%; padding: 10px; border-radius: 10px;
       background: rgba(168,85,247,0.08); border: 1px dashed rgba(168,85,247,0.5);
       color: #c4b5fd; cursor: pointer; font-weight: 600; font-size: 13px; }
-    .pf-add-btn:hover { background: rgba(168,85,247,0.14); }
+
+    /* ── Additive cross-platform overrides only — desktop-web (>=1280)
+         is intentionally untouched. ──────────────────────────────── */
+
+    /* Hover affordances gated to real pointers so touch devices don't
+       get stuck-hover states. */
+    @media (hover: hover) {
+      .pf-add-btn:hover { background: rgba(168,85,247,0.14); }
+    }
+
+    /* Touch sizing: color pickers + small action buttons get >=44px
+       tap targets on coarse pointers without changing visual size on
+       mouse-driven desktop. */
+    @media (pointer: coarse) {
+      .pf-color-picker { min-height: 44px; }
+      .pf-link-btn { min-height: 44px; padding: 6px 4px; }
+    }
+
+    /* Phone (<=640): the live-preview pane sits below the form as a tall
+       block. Cap its height so it doesn't dominate the scroll, and let
+       the placeholder match. Cannot affect desktop — width-gated. */
+    @media (max-width: 640px) {
+      .pf-pdf-iframe { height: 70dvh; min-height: 360px; max-height: 560px; }
+      .pf-add-btn { padding: 12px; }
+    }
   `],
 })
 export class ReportTemplateComponent implements OnInit, OnDestroy {
@@ -566,6 +618,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'plain',    label: 'Plain'    },
     { value: 'bordered', label: 'Bordered' },
     { value: 'striped',  label: 'Striped'  },
+  ];
+  readonly flagIndicatorOptions: SegmentedOption<string>[] = [
+    { value: 'letter', label: 'H / L' },
+    { value: 'arrow',  label: '↑ / ↓' },
   ];
   readonly flagStyleOptions: SegmentedOption<string>[] = [
     { value: 'bold',       label: 'Bold (H/L)'   },
@@ -658,7 +714,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
       showRegistered: true, showCollectionDate: true, showReportDate: true,
       showMethod: false, showInstrument: false,
-      groupByDepartment: false, showCriticalFlag: true, flagStyle: 'bold',
+      groupByDepartment: false, showCriticalFlag: true, flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb',
       showPathologistName: true, showSignature: true,
       signatureUrl: '', signaturesJson: '[]',
       disclaimer: 'Test results should be correlated clinically.',

@@ -130,6 +130,23 @@ interface InviteForm {
     .pf-method-choices { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
     .pf-radio { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
     .pf-radio input { cursor: pointer; }
+
+    /* ===== Cross-platform overrides (additive only; desktop >=1280 untouched) ===== */
+
+    /* Phone: give radio rows comfortable >=44px tap targets and keep the
+       circle pinned to the top while long labels wrap (16px input font is a
+       global guard, so it is intentionally not re-declared here). */
+    @media (max-width: 640px) {
+      :host .pf-radio { min-height: 44px; padding: 6px 0; align-items: flex-start; line-height: 1.35; }
+      :host .pf-radio span { min-width: 0; }
+      :host .pf-method-choices { gap: 2px; }
+    }
+
+    /* Coarse pointers (touch on any size): enlarge the native radio control so
+       the hit area is finger-friendly without affecting mouse/desktop. */
+    @media (pointer: coarse) {
+      :host .pf-radio input { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; }
+    }
   `]
 })
 export class UserInviteComponent implements OnInit {

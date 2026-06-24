@@ -30,6 +30,15 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
   standalone: true,
   imports: [FormsModule, ChipComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    /* Phone-only (<=640px): keep this page's OWN text input at >=16px so iOS
+       Safari does not auto-zoom on focus. Scoped to this component's instances
+       only — does not restyle the global .pf-input primitive elsewhere.
+       Desktop-web (>=1280px) and iPad are byte-for-byte unchanged. */
+    @media (max-width: 640px) {
+      :host input.pf-input { font-size: 16px; }
+    }
+  `],
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
       <pf-screen-header
@@ -108,8 +117,8 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
             <pf-tile tone="default" padding="md" class="block h-full">
               <div class="flex flex-col justify-between h-full gap-3">
                 <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-semibold text-[14px] truncate" style="color: var(--text-primary);">{{ agentName(a) }}</p>
+                  <div class="flex items-center gap-2 flex-wrap min-w-0">
+                    <p class="font-semibold text-[14px] truncate min-w-0" style="color: var(--text-primary);">{{ agentName(a) }}</p>
                     <pf-chip tone="violet" size="sm">weight {{ a.weightage }}</pf-chip>
                     @if (!a.isActive) { <pf-chip tone="default" size="sm">inactive</pf-chip> }
                   </div>
