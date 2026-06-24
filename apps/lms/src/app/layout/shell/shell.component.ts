@@ -27,6 +27,9 @@ import { ChatService } from "../../core/services/chat.service";
 // pull below boots it lazily without ever being read).
 import { WebrtcService } from "../../core/services/webrtc.service";
 import { AuthService } from "../../core/auth/auth.service";
+import { ScanService } from "../../core/services/scan.service";
+import { ApiService } from "../../core/services/api.service";
+import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
 
 @Component({
   selector: "pf-shell",
@@ -40,6 +43,7 @@ import { AuthService } from "../../core/auth/auth.service";
     PatientProfileModalComponent,
     CallOverlayComponent,
     PeopleDrawerComponent,
+    BarcodeScannerModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -88,6 +92,19 @@ import { AuthService } from "../../core/auth/auth.service";
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
       <pf-patient-profile-modal></pf-patient-profile-modal>
+
+      <!-- Global order-QR scanner. Rendered HERE (shell root), not in the
+           top-strip: the top-strip sits inside .pf-chrome whose backdrop-filter
+           becomes the containing block for position:fixed, which squashed the
+           modal into the navbar. At root it overlays the full viewport.
+           @defer keeps the @zxing reader out of the eager shell bundle. -->
+      @if (scan.scanning()) {
+        @defer (on immediate) {
+          <pf-barcode-scanner-modal title="Scan order QR"
+                                    (matched)="onScanOrder($event)"
+                                    (cancelled)="scan.close()"></pf-barcode-scanner-modal>
+        }
+      }
 
 
 
@@ -352,8 +369,20 @@ import { AuthService } from "../../core/auth/auth.service";
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);
+  readonly scan = inject(ScanService);
+  private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+
+  /** A scanned order QR / barcode → resolve to an order and open it. The
+   *  backend strips the id out of a full /o/{id} or /track/{token} URL. */
+  onScanOrder(code: string) {
+    this.scan.close();
+    this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
+      next: r => { if (r?.orderId) this.router.navigate(['/o', r.orderId]); },
+      error: () => { /* no match — silently ignore */ }
+    });
+  }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
   // Boots the WebRTC service so it subscribes to signaling events.

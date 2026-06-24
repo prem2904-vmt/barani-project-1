@@ -254,6 +254,10 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_tenant']
   },
   {
+    id: 'referral-labs', label: 'Referral labs', href: '/admin/referral-labs', iconPath: ['M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9'],
+    permissions: ['manage_tests']
+  },
+  {
     id: 'appts', label: 'Appointments', href: '/admin/appointments',
     iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
     permissions: ['manage_branches', 'manage_tenant']

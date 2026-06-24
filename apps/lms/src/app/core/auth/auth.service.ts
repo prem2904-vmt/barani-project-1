@@ -141,7 +141,10 @@ export class AuthService {
    * roles still pass.
    */
   hasEffectivePermission(code: string): boolean {
-    if (code === 'collect_sample' && this.labCfg.collectionMode() === 'dedicated_counter') {
+    // Suppress FD collection only when collection runs at a dedicated counter and
+    // is NOT also placed at the front desk (multi-placement: if FD collects too,
+    // reception keeps the perm).
+    if (code === 'collect_sample' && this.labCfg.hasDedicatedCollection() && !this.labCfg.collectsAtFrontdesk()) {
       const roles = this._user()?.roles ?? [];
       const otherCollectorRole =
         roles.includes('Sample Collector') ||

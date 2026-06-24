@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../shared/models/branch-lab-config.model';
 import { ApiService } from './api.service';
 import { ProcessWorkflowService } from './process-workflow.service';
-import { deriveModes } from '../../shared/models/process-workflow.model';
+import { deriveModes, collectionLocations, collectsAtFrontdesk, hasDedicatedCollection } from '../../shared/models/process-workflow.model';
 
 /**
  * Singleton for the current branch's lab config. Nav items, reception
@@ -29,6 +29,18 @@ export class BranchLabConfigService {
   readonly billingMode = computed<BillingMode>(
     () => deriveModes(this.process.active())?.billingMode ?? this._config()?.billingMode ?? 'front_desk'
   );
+  /** Multi-placement collection: which menus collection sits in, and whether it
+   *  includes the frontdesk and/or a dedicated (non-frontdesk) location. When no
+   *  workflow has loaded yet, fall back to the legacy single mode. */
+  readonly collectionLocations = computed<string[]>(() => collectionLocations(this.process.active()));
+  readonly collectsAtFrontdesk = computed<boolean>(() => {
+    const cfg = this.process.active();
+    return cfg ? collectsAtFrontdesk(cfg) : (this._config()?.collectionMode ?? 'front_desk') === 'front_desk';
+  });
+  readonly hasDedicatedCollection = computed<boolean>(() => {
+    const cfg = this.process.active();
+    return cfg ? hasDedicatedCollection(cfg) : (this._config()?.collectionMode ?? 'front_desk') === 'dedicated_counter';
+  });
   /** Per-branch master switch for the inventory/Stores work area. The Stores
    *  nav entry only renders when this is true (and the user holds an inventory
    *  permission). Defaults to false until the config loads / if absent. */

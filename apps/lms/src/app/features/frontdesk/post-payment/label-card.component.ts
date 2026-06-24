@@ -64,6 +64,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
         <span class="pf-lc__title">
           Label {{ num }}
           <span class="pf-lc__dept">· {{ deptName }}</span>
+          @if (isOutsourced) {
+            <span class="pf-lc__out">⇗ {{ vendorName || 'OUTSOURCED' }}</span>
+          }
         </span>
         <span class="pf-lc__tube-chip" [attr.data-color]="spec.color">
           <span class="pf-lc__tube-dot"></span>
@@ -331,6 +334,18 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       color: #64748b;
       letter-spacing: 0.04em;
     }
+    .pf-lc__out {
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 9999px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(236, 72, 153, 0.16);
+      color: #ec4899;
+      border: 1px solid rgba(236, 72, 153, 0.4);
+      white-space: nowrap;
+    }
 
     /* ── Tests section ───────────────────────────────────── */
     .pf-lc__tests-hdr {
@@ -455,6 +470,8 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   @Input() index = 0;
   @Input() selected = false;
   @Input() printing = false;
+  /** Resolved referral-lab name for an outsourced vial (parent looks it up). */
+  @Input() vendorName: string | null | undefined;
 
   @Output() selectToggle = new EventEmitter<void>();
   @Output() printRequest = new EventEmitter<void>();
@@ -469,6 +486,7 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   get deptName(): string { return (this.sample.department?.name ?? 'Sample').toUpperCase(); }
   get deptCode(): string { return (this.sample.department?.code ?? '').toUpperCase(); }
   get barcode(): string { return this.sample.barcode ?? this.sample.id; }
+  get isOutsourced(): boolean { return !!this.sample.outsourcedVendorId; }
   get patientName(): string { return this.patient?.displayName ?? 'Patient'; }
 
   get agesex(): string {

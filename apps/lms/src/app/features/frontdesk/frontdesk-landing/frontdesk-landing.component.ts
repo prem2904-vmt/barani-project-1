@@ -23,7 +23,7 @@ import { Appointment } from '../../../shared/models/appointment.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
-import { generateInvoicePdf } from '../billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -1219,7 +1219,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // not enough — re-prompting collection on a partially or fully collected
   // order would let users overwrite drawn tubes.
   showCollectOn(o: Order): boolean {
-    if (this.labCfg.collectionMode() !== 'front_desk') return false;
+    if (!this.labCfg.collectsAtFrontdesk()) return false;
     if (!this.auth.hasPermission('collect_sample')) return false;
     if (o.status !== 'billed') return false;
     const samples = o.samples ?? [];
@@ -1335,22 +1335,25 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // always try to render it (no letterhead gate). If the token can't be
     // minted or the QR fails, surface WHY rather than silently dropping it.
     let qrDataUrl: string | undefined;
+    let orderQrDataUrl: string | undefined;
     try {
+      const QRCode = (await import('qrcode')).default;
       const res = await firstValueFrom(
         this.api.get<{ token: string }>(`/api/orders/${o.id}/track-token`)
       );
       if (res?.token) {
-        const url = `${window.location.origin}/track/${res.token}`;
-        const QRCode = (await import('qrcode')).default;
-        qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+        qrDataUrl = await QRCode.toDataURL(`${window.location.origin}/track/${res.token}`, { margin: 1, width: 220 });
       } else {
         this.toasts.warning('Invoice ready, but the tracking QR could not be generated (no token returned).');
       }
+      // Staff order QR — scan to open the order.
+      orderQrDataUrl = await QRCode.toDataURL(`${window.location.origin}/o/${o.id}`, { margin: 1, width: 220 });
     } catch (err: any) {
       console.error('[invoice] tracking QR failed', err);
       this.toasts.warning(`Invoice ready, but the tracking QR failed: ${err?.message ?? 'request error'}`);
     }
 
+    const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
     try {
       const blobUrl = generateInvoicePdf({
         bill, order: o,
@@ -1358,7 +1361,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         effectivePayable: bill.totalPayable,
         tatLabel: '',
         docTitle,
-        qrDataUrl,
+        qrDataUrl, orderQrDataUrl, logoDataUrl,
+        cashierName: this.auth.user()?.displayName || undefined,
+        ...invoiceTemplateFieldsFrom(tpl),
         // Always carry a name so the invoice never reads "Prefrontal Lab":
         // configured letterhead first, else the tenant's own name.
         practice: {

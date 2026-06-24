@@ -6,6 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
@@ -17,7 +18,8 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { generateInvoicePdf } from '../billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
 
 type Priority = 'Normal' | 'Urgent';
@@ -47,6 +49,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   private readonly settings = inject(FrontdeskSettingsService);
   // Workflow is the source of truth for whether billing is a separate counter.
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly process = inject(ProcessWorkflowService);
   private readonly auth = inject(AuthService);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -197,21 +200,37 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   /** Admin "Allow discounts" switch — hides the field entirely when off. */
   readonly allowDiscounts = signal(true);
   readonly maxDiscountPct = signal(100);
+  readonly overrideDiscountPct = signal(100);
   readonly discountValue = signal<string>('');   // raw input
   readonly discountKind = signal<'flat' | 'percent'>('flat');
   setDiscountKind(k: 'flat' | 'percent') { this.discountKind.set(k); }
   setDiscountValue(v: string) { this.discountValue.set(v); }
-  /** Resolved ₹ discount, clamped to the pre-discount total and the admin cap. */
+
+  /** The discount % this user may grant, by their role's permission tier:
+   *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */
+  readonly discountCapPct = computed(() => {
+    if (this.auth.hasPermission('override_discount')) return this.overrideDiscountPct();
+    if (this.auth.hasPermission('give_discount')) return this.maxDiscountPct();
+    return 0;
+  });
+  /** Resolved ₹ discount from the raw input — NOT clamped to the cap (so we can
+   *  flag over-cap rather than silently apply the max). Still ≤ the bill total. */
   readonly discountAmount = computed(() => {
     if (!this.allowDiscounts()) return 0;
     const raw = parseFloat(this.discountValue() || '0');
     if (!isFinite(raw) || raw <= 0) return 0;
     const base = this.subtotal() + this.gst();
-    let amt = this.discountKind() === 'percent'
-      ? Math.round(base * Math.min(raw, this.maxDiscountPct()) / 100)
-      : raw;
+    const amt = this.discountKind() === 'percent' ? Math.round(base * raw / 100) : raw;
     return Math.max(0, Math.min(amt, base));
   });
+  /** Entered discount as a % of the pre-discount total. */
+  readonly discountPct = computed(() => {
+    const base = this.subtotal() + this.gst();
+    return base > 0 ? (this.discountAmount() / base) * 100 : 0;
+  });
+  /** True when the entered discount exceeds this user's cap → block + notify. */
+  readonly discountOverCap = computed(() =>
+    this.allowDiscounts() && this.discountAmount() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
   readonly total = computed(() => Math.max(0, this.subtotal() + this.gst() - this.discountAmount()));
 
   /** Slowest test in the cart drives the report ETA. Packages count as
@@ -298,12 +317,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     });
 
     // Honor the tenant GST + discount switches in the cart preview (best-effort).
-    this.api.get<{ gstEnabled?: boolean; allowDiscounts?: boolean; maxDiscountPct?: number }>('/api/config/billing').subscribe({
+    this.api.get<{ gstEnabled?: boolean; allowDiscounts?: boolean; maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing').subscribe({
       next: c => {
         if (!c) return;
         this.gstEnabled.set(c.gstEnabled !== false);
         this.allowDiscounts.set(c.allowDiscounts !== false);
         if (typeof c.maxDiscountPct === 'number') this.maxDiscountPct.set(c.maxDiscountPct);
+        if (typeof c.overrideDiscountPct === 'number') this.overrideDiscountPct.set(c.overrideDiscountPct);
       },
       error: () => { /* defaults: GST on, discounts on */ }
     });
@@ -603,6 +623,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   async confirmPayment(d: InlinePaymentResult) {
     const p = this._patient();
     if (!p || this.confirming() || this._selected().length === 0) return;
+    if (this.discountOverCap()) {
+      this.toasts.error(`Discount ${this.discountPct().toFixed(0)}% exceeds your limit of ${this.discountCapPct()}%. Reduce it to continue.`);
+      return;
+    }
     this.confirming.set(true);
     try {
       const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
@@ -642,6 +666,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Show "Collect sample" after payment when collection happens at the front
+   *  desk (in this workflow) and the user can collect. */
+  readonly canCollectHere = computed(() =>
+    this.labCfg.collectsAtFrontdesk() &&
+    this.process.isEnabled('sample_collection') &&
+    this.auth.hasPermission('collect_sample'));
+  collectPaidSample() {
+    const oid = this.paidOrderId();
+    if (!oid) return;
+    this.router.navigate(['/lab/collect'], { queryParams: { orderId: oid, from: '/frontdesk/order' } });
+  }
+
   /** Reset the screen for the next patient after a completed order. */
   startNewOrder() {
     this.paidOrderId.set(null);
@@ -664,25 +700,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     let tpl: any = null;
     try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
     let qrDataUrl: string | undefined;
+    let orderQrDataUrl: string | undefined;
     try {
+      const QRCode = (await import('qrcode')).default;
       const res = await firstValueFrom(this.api.get<{ token: string }>(`/api/orders/${oid}/track-token`));
       if (res?.token) {
-        const url = `${window.location.origin}/track/${res.token}`;
-        const QRCode = (await import('qrcode')).default;
-        qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
+        qrDataUrl = await QRCode.toDataURL(`${window.location.origin}/track/${res.token}`, { margin: 1, width: 220 });
       }
+      // Staff order QR — open the order to collect, etc.
+      orderQrDataUrl = await QRCode.toDataURL(`${window.location.origin}/o/${oid}`, { margin: 1, width: 220 });
     } catch { /* QR best-effort */ }
     const mode = tpl?.documentMode ?? 'auto';
     const docTitle = mode === 'bill_of_supply' ? 'BILL OF SUPPLY'
       : mode === 'tax_invoice' ? 'TAX INVOICE'
       : (bill.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+    const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
     const blobUrl = generateInvoicePdf({
       bill,
       order: ({ patient: this._patient() ?? undefined } as unknown as Order),
       invoiceNumber: bill.invoiceNumber ?? '',
       effectivePayable: bill.totalPayable,
       tatLabel: '',
-      docTitle, qrDataUrl,
+      docTitle, qrDataUrl, orderQrDataUrl, logoDataUrl,
+      cashierName: this.auth.user()?.displayName || undefined,
+      ...invoiceTemplateFieldsFrom(tpl),
       practice: {
         name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,
         address: tpl?.address || undefined,

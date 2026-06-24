@@ -3,6 +3,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
@@ -11,6 +14,7 @@ import { LabelCardComponent, tubeSpec } from './label-card.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { waLink } from '../../../shared/utils/whatsapp';
 
 @Component({
   selector: 'pf-post-payment',
@@ -33,13 +37,22 @@ export class PostPaymentComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route  = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly labCfg  = inject(BranchLabConfigService);
+  private readonly process = inject(ProcessWorkflowService);
+  private readonly auth    = inject(AuthService);
 
   private readonly _order       = signal<Order | null>(null);
   private readonly _bill        = signal<Bill | null>(null);
   private readonly _selected    = signal<Set<string>>(new Set());
   private readonly _printed     = signal<Set<string>>(new Set());
   private readonly _printingIds = signal<Set<string>>(new Set());
+  private readonly _referralLabs = signal<Record<string, string>>({});
   readonly waSent = signal(false);
+
+  /** Referral-lab name for an outsourced vial (for its label badge). */
+  vendorNameFor(s: OrderSample): string | null {
+    return s.outsourcedVendorId ? (this._referralLabs()[s.outsourcedVendorId] ?? null) : null;
+  }
 
   readonly order = this._order.asReadonly();
   readonly bill  = this._bill.asReadonly();
@@ -60,6 +73,19 @@ export class PostPaymentComponent implements OnInit {
     };
   });
 
+  /** Show "Collect sample" when collection happens at the front desk in this
+   *  workflow and the user can collect, with samples still pending. */
+  readonly canCollectHere = computed(() =>
+    this.labCfg.collectsAtFrontdesk() &&
+    this.process.isEnabled('sample_collection') &&
+    this.auth.hasPermission('collect_sample') &&
+    (this._order()?.samples ?? []).some(s => s.status === 'pending'));
+  collectSample() {
+    const o = this._order();
+    if (!o) return;
+    this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id, from: '/frontdesk/post-payment' } });
+  }
+
   /** SVG ring stroke-dashoffset: 0 = full arc, 125.66 = empty. */
   ringOffset(): number {
     const total = this.totalCount();
@@ -68,6 +94,12 @@ export class PostPaymentComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.labCfg.ensureLoaded();
+    this.process.ensureLoaded();
+    this.api.get<{ id: string; name: string }[]>('/api/referral-labs?includeInactive=true').subscribe({
+      next: labs => this._referralLabs.set(Object.fromEntries((labs ?? []).map(l => [l.id, l.name]))),
+      error: () => { /* badges fall back to "OUTSOURCED" */ }
+    });
     const id = this.route.snapshot.queryParamMap.get('orderId');
     if (!id) { this.router.navigateByUrl('/frontdesk'); return; }
 
@@ -135,9 +167,23 @@ export class PostPaymentComponent implements OnInit {
 
   downloadPdf() { this.toasts.success('PDF download · coming soon'); }
 
+  /** Open WhatsApp (wa.me) pre-filled with a payment confirmation for the
+   *  patient. The Meta API isn't wired up yet, so this is the click-to-chat
+   *  fallback — wa.me can't auto-attach the invoice, so we keep it to a
+   *  confirmation message. */
   sendWhatsApp() {
+    const o = this._order();
+    const b = this._bill();
+    const p = o?.patient;
+    const lab = this.auth.user()?.tenantName || 'our lab';
+    const lines = [
+      p?.displayName ? `Hi ${p.displayName},` : 'Hi,',
+      `Thank you for your payment at ${lab}.`,
+    ];
+    if (b) lines.push(`Order #${b.orderId.slice(0, 8)} — Paid ₹${b.totalPayable}.`);
+    lines.push('Your report will be shared here once it is ready.');
+    window.open(waLink(p?.phone, lines.join('\n\n')), '_blank', 'noopener');
     this.waSent.set(true);
-    this.toasts.success('WhatsApp confirmation queued');
   }
 
   copyBarcode(barcode: string) {

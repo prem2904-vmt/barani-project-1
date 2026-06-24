@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -11,6 +11,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
+import { waLink } from '../../../shared/utils/whatsapp';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -28,10 +29,46 @@ interface ReportData {
     name?: string;
     department?: string;
     status?: string;
-    result?: { values?: Record<string, unknown>; note?: string; flags?: { critical?: boolean } };
+    result?: { values?: Record<string, unknown>; note?: string; flags?: { critical?: boolean }; microFormat?: string };
     resultedAt?: string;
     validatedAt?: string;
+    /** Specimen / sample type for the Specimen column. */
+    sampleType?: string | null;
+    /** NABL scope — false ⇒ segregated into "Tests not under NABL scope". */
+    nablScope?: boolean;
+    /** Referral / subcontracted lab — printed as "Tested at: …". */
+    referralLab?: string | null;
+    /** Analytical method — printed as a dim sub-line under the panel. */
+    method?: string | null;
   }>;
+}
+
+/** One row in the continuous results table — mirrors the PDF's PanelRowData. */
+interface ViewPanelRow {
+  kind: 'param' | 'note';
+  name?: string;
+  result?: string;
+  range?: string;
+  unit?: string;
+  specimen?: string;
+  /** 'H' | 'L' | 'C' | 'A' | '' */
+  flag?: string;
+  abnormal?: boolean;
+  isLow?: boolean;
+  note?: string;
+}
+
+/** A test rendered as a panel header + its parameter rows. */
+interface ViewPanelGroup {
+  testId: string;
+  testName: string;
+  specimen?: string;
+  method?: string;
+  referralLab?: string;
+  critical?: boolean;
+  /** undefined ⇒ in NABL scope (no claim either way). */
+  inScope?: boolean;
+  rows: ViewPanelRow[];
 }
 
 @Component({
@@ -39,6 +76,7 @@ interface ReportData {
   standalone: true,
   imports: [
     DatePipe,
+    NgTemplateOutlet,
     BarcodeDisplayComponent,
     ChipComponent,
     LogoMarkComponent,
@@ -213,149 +251,187 @@ interface ReportData {
           </dl>
 
           <div class="pf-paper__body">
-            @for (group of groupedTests(); track group.department) {
-              <section class="pf-paper__group">
-                <h3 class="pf-paper__dept" [style.border-color]="tpl()?.primaryColor ?? '#1B3A6B'">
-                  {{ group.department }}
-                </h3>
+            <!-- ONE continuous results table — panel/profile headers only
+                 (no department bands), a single column band, abnormal values
+                 bold (+ optional colour) with an H/L letter. Mirrors the PDF
+                 download exactly. -->
+            @if (panels().inScope.length > 0) {
+              <table class="pf-paper__rtable">
+                <thead>
+                  <tr [style.background]="tpl()?.tableHeaderBg ?? '#ffffff'"
+                      [style.color]="tpl()?.tableHeaderText ?? '#0f172a'">
+                    <th class="pf-rt-invest">Investigation</th>
+                    <th>Result</th>
+                    <th>Reference Range</th>
+                    <th>Unit</th>
+                    <th>Specimen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of panels().inScope; track g.testId) {
+                    <ng-container *ngTemplateOutlet="panelBlock; context: { $implicit: g }"></ng-container>
+                  }
+                </tbody>
+              </table>
+            }
 
-                @for (t of group.tests; track t.testId) {
-                  <div class="pf-paper__test">
-                    <div class="flex items-baseline justify-between flex-wrap gap-2">
-                      <p class="pf-paper__test-name">{{ t.name }}</p>
-                      @if (t.result?.flags?.critical) {
-                        <span class="pf-paper__crit-chip">CRITICAL</span>
-                      }
-                      @if (t.validatedAt) {
-                        <span class="pf-paper__test-meta">
-                          Validated {{ t.validatedAt | date:'shortDate' }}
-                        </span>
-                      }
-                    </div>
+            @if (panels().outScope.length > 0) {
+              <h3 class="pf-paper__scope">Tests not under NABL scope</h3>
+              <table class="pf-paper__rtable">
+                <thead>
+                  <tr [style.background]="tpl()?.tableHeaderBg ?? '#ffffff'"
+                      [style.color]="tpl()?.tableHeaderText ?? '#0f172a'">
+                    <th class="pf-rt-invest">Investigation</th>
+                    <th>Result</th>
+                    <th>Reference Range</th>
+                    <th>Unit</th>
+                    <th>Specimen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of panels().outScope; track g.testId) {
+                    <ng-container *ngTemplateOutlet="panelBlock; context: { $implicit: g }"></ng-container>
+                  }
+                </tbody>
+              </table>
+            }
 
-                    <!-- Dynamic resolved layout — when admin has configured
-                         per-test sections, the engine returns a fully-resolved
-                         view-model and we render that. Falls through to the
-                         default parameter table when nothing's configured. -->
-                    @if (resolvedFor(t.testId); as pv) {
-                      @for (sec of pv.sections; track sec.id) {
-                        <div class="pf-paper__rs" [attr.data-type]="sec.type">
-                          @if (sec.label) {
-                            <h4 class="pf-paper__rs-label">{{ sec.label }}</h4>
-                          }
-
-                          @if (sec.type === 'grid' && sec.rows) {
-                            <!-- Visible columns = layout columns minus any whose cells
-                                 are empty across every body row. Drops the unused
-                                 "Specimen" column at render time so the table doesn't
-                                 leave a blank column behind. -->
-                            <table class="pf-paper__table">
-                              <thead>
-                                <tr>
-                                  @for (c of visibleColumns(pv, sec); track c.id) {
-                                    <th [style.width.%]="c.width"
-                                        [style.background]="tpl()?.tableHeaderBg ?? '#1B3A6B'"
-                                        [style.color]="tpl()?.tableHeaderText ?? '#ffffff'">{{ drlogyLabelFor(c) }}</th>
-                                  }
-                                </tr>
-                              </thead>
-                              <tbody>
-                                @for (row of sec.rows; track row.id) {
-                                  @if (row.isMerged) {
-                                    <tr class="pf-paper__row pf-paper__row--merged">
-                                      <td [attr.colspan]="visibleColumns(pv, sec).length">{{ row.mergeContent }}</td>
-                                    </tr>
-                                  } @else {
-                                    <tr class="pf-paper__row"
-                                        [style.color]="row.color || null"
-                                        [style.font-weight]="row.isBold ? '700' : null">
-                                      @for (c of visibleColumns(pv, sec); track c.id) {
-                                        <td>{{ row.cells[c.name] }}</td>
-                                      }
-                                    </tr>
-                                  }
-                                }
-                              </tbody>
-                            </table>
-                          }
-
-                          @if (sec.type === 'paragraph') {
-                            <p class="pf-paper__note pf-paper__rs-para">{{ sec.content }}</p>
-                          }
-
-                          @if (sec.type === 'image') {
-                            @if (sec.imageUrls && sec.imageUrls.length > 0) {
-                              <div class="pf-paper__rs-images">
-                                @for (u of sec.imageUrls; track u) {
-                                  <img [src]="u" alt="" />
-                                }
-                              </div>
-                            }
-                          }
-
-                          @if (sec.type === 'chart' && sec.chart) {
-                            <div class="pf-paper__rs-chart">
-                              <div class="pf-paper__rs-chart-bar">
-                                @for (z of sec.chart.zones; track z.from) {
-                                  <span class="pf-paper__rs-chart-zone"
-                                        [style.left.%]="zonePctLeft(sec.chart, z)"
-                                        [style.width.%]="zonePctWidth(sec.chart, z)"
-                                        [style.background]="zoneHex(z.color)"></span>
-                                }
-                                @if (sec.chart.value !== null && sec.chart.value !== undefined) {
-                                  <span class="pf-paper__rs-chart-marker"
-                                        [style.left.%]="markerPct(sec.chart)"></span>
-                                }
-                              </div>
-                              <div class="pf-paper__rs-chart-axis">
-                                <span>{{ sec.chart.min }}</span>
-                                <span>{{ sec.chart.value ?? '–' }}</span>
-                                <span>{{ sec.chart.max }}</span>
-                              </div>
-                            </div>
-                          }
-                        </div>
-                      }
-                      @if (pv.sections.length === 0) {
-                        <p class="pf-paper__empty">No values recorded.</p>
-                      }
-                    } @else {
-                      <!-- Fallback: simple parameter table when no layout configured. -->
-                      @if (paramRows(t).length > 0) {
+            <!-- Narrative / image / chart / microbiology tests keep their own
+                 block format, rendered after the columnar results. -->
+            @for (t of panels().special; track t.testId) {
+              <div class="pf-paper__test">
+                <div class="flex items-baseline justify-between flex-wrap gap-2">
+                  <p class="pf-paper__test-name">{{ t.name }}</p>
+                  @if (t.result?.flags?.critical) {
+                    <span class="pf-paper__crit-chip">CRITICAL</span>
+                  }
+                  @if (t.validatedAt) {
+                    <span class="pf-paper__test-meta">Validated {{ t.validatedAt | date:'shortDate' }}</span>
+                  }
+                </div>
+                @if (resolvedFor(t.testId); as pv) {
+                  @for (sec of pv.sections; track sec.id) {
+                    <div class="pf-paper__rs" [attr.data-type]="sec.type">
+                      @if (sec.label) { <h4 class="pf-paper__rs-label">{{ sec.label }}</h4> }
+                      @if (sec.type === 'grid' && sec.rows) {
                         <table class="pf-paper__table">
                           <thead>
                             <tr>
-                              <th>Parameter</th>
-                              <th class="text-right">Value</th>
+                              @for (c of visibleColumns(pv, sec); track c.id) {
+                                <th [style.width.%]="c.width"
+                                    [style.background]="tpl()?.tableHeaderBg ?? '#1B3A6B'"
+                                    [style.color]="tpl()?.tableHeaderText ?? '#ffffff'">{{ drlogyLabelFor(c) }}</th>
+                              }
                             </tr>
                           </thead>
                           <tbody>
-                            @for (p of paramRows(t); track p.name) {
-                              <tr>
-                                <td>{{ p.name }}</td>
-                                <td class="text-right pf-mono"
-                                    [class.pf-paper__val--crit]="t.result?.flags?.critical && tpl()?.showCriticalFlag !== false">
-                                  {{ p.value }}
-                                </td>
-                              </tr>
+                            @for (row of sec.rows; track row.id) {
+                              @if (row.isMerged) {
+                                <tr class="pf-paper__row pf-paper__row--merged">
+                                  <td [attr.colspan]="visibleColumns(pv, sec).length">{{ row.mergeContent }}</td>
+                                </tr>
+                              } @else {
+                                <tr class="pf-paper__row"
+                                    [style.color]="row.color || null"
+                                    [style.font-weight]="row.isBold ? '700' : null">
+                                  @for (c of visibleColumns(pv, sec); track c.id) {
+                                    <td>{{ row.cells[c.name] }}</td>
+                                  }
+                                </tr>
+                              }
                             }
                           </tbody>
                         </table>
-                      } @else {
-                        <p class="pf-paper__empty">No values recorded.</p>
                       }
-                    }
-
-                    @if (t.result?.note) {
-                      <p class="pf-paper__note">{{ t.result?.note }}</p>
-                    }
-                  </div>
+                      @if (sec.type === 'paragraph') {
+                        <p class="pf-paper__note pf-paper__rs-para">{{ sec.content }}</p>
+                      }
+                      @if (sec.type === 'image') {
+                        @if (sec.imageUrls && sec.imageUrls.length > 0) {
+                          <div class="pf-paper__rs-images">
+                            @for (u of sec.imageUrls; track u) { <img [src]="u" alt="" /> }
+                          </div>
+                        }
+                      }
+                      @if (sec.type === 'chart' && sec.chart) {
+                        <div class="pf-paper__rs-chart">
+                          <div class="pf-paper__rs-chart-bar">
+                            @for (z of sec.chart.zones; track z.from) {
+                              <span class="pf-paper__rs-chart-zone"
+                                    [style.left.%]="zonePctLeft(sec.chart, z)"
+                                    [style.width.%]="zonePctWidth(sec.chart, z)"
+                                    [style.background]="zoneHex(z.color)"></span>
+                            }
+                            @if (sec.chart.value !== null && sec.chart.value !== undefined) {
+                              <span class="pf-paper__rs-chart-marker" [style.left.%]="markerPct(sec.chart)"></span>
+                            }
+                          </div>
+                          <div class="pf-paper__rs-chart-axis">
+                            <span>{{ sec.chart.min }}</span>
+                            <span>{{ sec.chart.value ?? '–' }}</span>
+                            <span>{{ sec.chart.max }}</span>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                } @else if (paramRows(t).length > 0) {
+                  <table class="pf-paper__table">
+                    <thead><tr><th>Parameter</th><th class="text-right">Value</th></tr></thead>
+                    <tbody>
+                      @for (p of paramRows(t); track p.name) {
+                        <tr><td>{{ p.name }}</td>
+                          <td class="text-right pf-mono"
+                              [class.pf-paper__val--crit]="t.result?.flags?.critical && tpl()?.showCriticalFlag !== false">{{ p.value }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <p class="pf-paper__empty">No values recorded.</p>
                 }
-              </section>
-            } @empty {
+                @if (t.result?.note) { <p class="pf-paper__note">{{ t.result?.note }}</p> }
+              </div>
+            }
+
+            @if (panels().inScope.length === 0 && panels().outScope.length === 0 && panels().special.length === 0) {
               <p class="pf-paper__empty">No tests on this report.</p>
             }
           </div>
+
+          <!-- Reusable panel block (header row + method/referral sub-row + parameter rows). -->
+          <ng-template #panelBlock let-g>
+            <tr class="pf-rt-panel" [style.color]="tpl()?.primaryColor ?? '#1B3A6B'">
+              <td colspan="5">
+                {{ g.testName }}
+                @if (g.critical) { <span class="pf-rt-crit">CRITICAL</span> }
+              </td>
+            </tr>
+            @if (g.method || g.referralLab) {
+              <tr class="pf-rt-sub">
+                <td colspan="5">
+                  @if (g.method) { <span>Method: {{ g.method }}</span> }
+                  @if (g.method && g.referralLab) { <span class="pf-rt-dot">·</span> }
+                  @if (g.referralLab) { <span>Tested at: {{ g.referralLab }}</span> }
+                </td>
+              </tr>
+            }
+            @for (row of g.rows; track $index) {
+              @if (row.kind === 'note') {
+                <tr class="pf-rt-note"><td colspan="5">{{ row.note }}</td></tr>
+              } @else {
+                <tr>
+                  <td class="pf-rt-invest pf-rt-pname">{{ row.name }}</td>
+                  <td [style.color]="resultColor(row)" [style.font-weight]="row.abnormal ? '700' : null">
+                    {{ row.result }}@if (row.flag) { <span class="pf-rt-flag">{{ row.flag }}</span> }
+                  </td>
+                  <td class="pf-rt-muted">{{ row.range }}</td>
+                  <td class="pf-rt-muted">{{ row.unit }}</td>
+                  <td class="pf-rt-muted">{{ row.specimen }}</td>
+                </tr>
+              }
+            }
+          </ng-template>
 
           <footer class="pf-paper__footer">
             @if (tpl()?.showSignature !== false) {
@@ -587,6 +663,82 @@ interface ReportData {
     .pf-paper__table tbody tr:last-child td { border-bottom: 0; }
     .text-right { text-align: right; }
     .pf-paper__val--crit { color: #b91c1c; font-weight: 700; }
+
+    /* ── Continuous results table (matches the PDF download) ── */
+    .pf-paper__rtable {
+      width: 100%;
+      margin-top: 4px;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .pf-paper__rtable th {
+      text-align: left;
+      padding: 7px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #0f172a;
+      border-top: 1px solid #334155;
+      border-bottom: 1px solid #334155;
+    }
+    .pf-paper__rtable td {
+      padding: 5px 8px;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+      vertical-align: top;
+    }
+    .pf-rt-invest { width: 32%; }
+    .pf-rt-pname { font-weight: 700; }
+    .pf-rt-muted { color: #64748b; }
+    .pf-paper__rtable tr.pf-rt-panel td {
+      padding: 7px 8px 5px;
+      background: #eef2f7;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .pf-rt-crit {
+      margin-left: 8px;
+      padding: 1px 7px;
+      border-radius: 9999px;
+      font-size: 9px;
+      font-weight: 700;
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      vertical-align: middle;
+    }
+    .pf-paper__rtable tr.pf-rt-sub td {
+      padding: 2px 8px 6px;
+      font-size: 11px;
+      font-style: italic;
+      color: #64748b;
+    }
+    .pf-rt-sub .pf-rt-dot { margin: 0 6px; }
+    .pf-paper__rtable tr.pf-rt-note td {
+      padding: 6px 8px;
+      background: #f8fafc;
+      font-style: italic;
+      font-size: 11.5px;
+      color: #475569;
+    }
+    .pf-rt-flag {
+      margin-left: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      vertical-align: super;
+    }
+    .pf-paper__scope {
+      margin: 22px 0 0;
+      padding-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #334155;
+      border-bottom: 1px solid #cbd5e1;
+    }
 
     /* Resolved-layout sections (when admin has configured a per-test layout) */
     .pf-paper__rs { margin: 10px 0; }
@@ -882,6 +1034,124 @@ export class ReportViewerComponent implements OnInit {
     return Array.from(map.entries()).map(([department, tests]) => ({ department, tests }));
   });
 
+  /** Effective abnormal-flag style — mirrors the PDF theme. */
+  flagStyle(): 'bold' | 'bold_color' {
+    return this.tpl()?.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
+  }
+
+  /** Result-cell colour: only tinted when style is bold_color AND the value
+   *  is abnormal (red high / blue low); otherwise default ink (bold alone). */
+  resultColor(row: ViewPanelRow): string | null {
+    if (!row.abnormal || this.flagStyle() !== 'bold_color') return null;
+    return row.isLow ? '#2563eb' : '#dc2626';
+  }
+
+  /** Classify tests + build the continuous-table panel groups. Mirrors the
+   *  PDF's buildPanelGroup / scope segregation so the on-screen view and the
+   *  download are structurally identical. */
+  readonly panels = computed<{ inScope: ViewPanelGroup[]; outScope: ViewPanelGroup[]; special: NonNullable<ReportData['tests']> }>(() => {
+    const tests = this.data()?.tests ?? [];
+    const resolved = this._resolved();
+    const tabular: ViewPanelGroup[] = [];
+    const special: NonNullable<ReportData['tests']> = [];
+
+    for (const t of tests) {
+      const layout = resolved[t.testId];
+      const isCulture = t.result?.microFormat === 'culture_sensitivity';
+      const hasNonGrid = !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid');
+      if (isCulture || hasNonGrid) { special.push(t); continue; }
+      const g = this.buildViewGroup(t, layout);
+      if (g.rows.length > 0) tabular.push(g); else special.push(t);
+    }
+
+    const claimsNabl = !!this.tpl()?.nablAccredited;
+    const outScope = claimsNabl ? tabular.filter(g => g.inScope === false) : [];
+    const inScope = outScope.length > 0 ? tabular.filter(g => g.inScope !== false) : tabular;
+    return { inScope, outScope, special };
+  });
+
+  /** Build a panel group (header + parameter rows) from a test + its resolved
+   *  layout. Reads the same grid columns / legacy values as the PDF. */
+  private buildViewGroup(t: NonNullable<ReportData['tests']>[number], layout: ResolvedReportLayout | undefined): ViewPanelGroup {
+    const g: ViewPanelGroup = {
+      testId: t.testId,
+      testName: t.name ?? layout?.testName ?? 'Test',
+      specimen: ((t.sampleType ?? layout?.sampleType) ?? '').trim() || undefined,
+      method: (t.method ?? '').trim() || undefined,
+      referralLab: (t.referralLab ?? '').trim() || undefined,
+      critical: !!t.result?.flags?.critical,
+      inScope: t.nablScope,
+      rows: [],
+    };
+
+    const gridSections = (layout?.sections ?? []).filter(s => s.isVisible && s.type === 'grid');
+    if (gridSections.length > 0) {
+      const cols = layout!.columns;
+      const srcOf = (type: string) => cols.find(c => c.type === type);
+      const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
+      for (const sec of gridSections) {
+        for (const r of sec.rows ?? []) {
+          if (r.isMerged) {
+            const note = (r.mergeContent ?? '').trim();
+            if (note) g.rows.push({ kind: 'note', note });
+            continue;
+          }
+          const letter = this.hueFlag(r.color);
+          g.rows.push({
+            kind: 'param',
+            name: this.humanize(r.parameterName ?? ''),
+            result: resultSrc ? (r.cells[resultSrc.name] ?? '') : '',
+            range: rangeSrc ? (r.cells[rangeSrc.name] ?? '') : '',
+            unit: unitSrc ? (r.cells[unitSrc.name] ?? '') : '',
+            flag: letter === 'High' ? 'H' : letter === 'Low' ? 'L' : '',
+            isLow: letter === 'Low',
+            abnormal: !!r.color || r.isBold,
+          });
+        }
+      }
+    } else {
+      const values = (t.result?.values ?? {}) as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string } | unknown>;
+      for (const [name, raw] of Object.entries(values)) {
+        const v = (raw ?? {}) as { value?: unknown; flag?: string; range?: string; unit?: string };
+        const isObj = v && typeof v === 'object' && !Array.isArray(v);
+        const flag = (isObj ? (v.flag ?? '') : '').toUpperCase();
+        const letter = ['H', 'L', 'C', 'A'].includes(flag) ? flag : '';
+        g.rows.push({
+          kind: 'param',
+          name: this.humanize(name),
+          result: isObj ? String(v.value ?? '—') : String(raw ?? '—'),
+          range: isObj ? (v.range ?? '') : '',
+          unit: isObj ? (v.unit ?? '') : '',
+          flag: letter,
+          isLow: flag === 'L',
+          abnormal: !!letter,
+        });
+      }
+    }
+
+    // Specimen shown once, on the first parameter row.
+    const firstParam = g.rows.find(r => r.kind === 'param');
+    if (firstParam) firstParam.specimen = g.specimen;
+    return g;
+  }
+
+  /** Map a resolved-row colour to a High/Low flag word (same heuristic as the
+   *  PDF's flagLabel). */
+  private hueFlag(color: string | null | undefined): string {
+    if (!color) return '';
+    const c = color.toLowerCase();
+    if (c.includes('dc26') || c.includes('ef44') || c.includes('red') || c.includes('b91c')) return 'High';
+    if (c.includes('2563') || c.includes('3b82') || c.includes('blue')) return 'Low';
+    return '';
+  }
+
+  /** "hemoglobin_a1c" → "Hemoglobin A1c" (mirrors the PDF). */
+  private humanize(s: string): string {
+    if (!s) return '—';
+    if (/\s/.test(s) || /^[A-Z]/.test(s)) return s;
+    return s.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^\w/, c => c.toUpperCase());
+  }
+
   paramRows(t: { result?: { values?: Record<string, unknown> } }) {
     const vals = t.result?.values ?? {};
     return Object.entries(vals).map(([name, value]) => ({
@@ -1072,12 +1342,31 @@ export class ReportViewerComponent implements OnInit {
 
   print() { window.print(); }
 
+  /** Deliver via WhatsApp using the click-to-chat deep link (wa.me). The
+   *  Meta WhatsApp API isn't wired up yet, so we open WhatsApp Web / app
+   *  with the patient's number and a pre-filled message that carries the
+   *  report's QR verify link — the recipient taps it to open & download the
+   *  PDF. (wa.me cannot auto-attach files, so the link stands in for the
+   *  attachment.) We still record the delivery best-effort so the queue
+   *  reflects it. */
   deliverWhatsApp() {
     const r = this._report();
+    const d = this.data();
     if (!r) return;
-    this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: null }).subscribe({
-      next: () => this.toasts.success('Delivered via WhatsApp'),
-      error: e => this.toasts.error(e.message ?? 'Delivery failed')
+    const lab = this.tpl()?.labName || 'our lab';
+    const name = d?.patient?.name ?? '';
+    const link = r.qrToken ? this.verifyCode(r.qrToken) : '';
+    const lines = [
+      name ? `Hi ${name},` : 'Hi,',
+      `Your lab report from ${lab} is ready.`,
+    ];
+    if (link) lines.push(`View & download your report:\n${link}`);
+    lines.push('Please contact us if you have any questions.');
+    const url = waLink(d?.patient?.phone, lines.join('\n\n'));
+    window.open(url, '_blank', 'noopener');
+    this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
+      next: () => this.toasts.success('Opened WhatsApp with the report link'),
+      error: () => this.toasts.info('Opened WhatsApp with the report link'),
     });
   }
 }

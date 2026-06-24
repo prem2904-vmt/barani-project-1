@@ -16,6 +16,8 @@ import { PatientProfileService } from '../../core/services/patient-profile.servi
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { ScanService } from '../../core/services/scan.service';
+import { ApiService } from '../../core/services/api.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
 @Component({
@@ -43,6 +45,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly patientProfile = inject(PatientProfileService);
   private readonly appointmentBooking = inject(AppointmentBookingService);
   private readonly process = inject(ProcessWorkflowService);
+  protected readonly scan = inject(ScanService);
+  private readonly api = inject(ApiService);
 
   readonly moduleLabel = 'LMS';
   /** Real branches this user may switch between (from /api/auth/me). */
@@ -88,6 +92,19 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return [...items, inv];
   }
   readonly more = computed(() => this.visible(MORE_NAV));
+
+  /** Global "scan an order QR" — for staff who can collect, whenever collection
+   *  is enabled in the workflow. */
+  readonly canScan = computed(() =>
+    this.process.isEnabled('sample_collection') && this.auth.hasPermission('collect_sample'));
+  /** A scanned order QR / barcode → resolve to an order and open it. */
+  onScanOrder(code: string) {
+    this.scan.close();
+    this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
+      next: r => { if (r?.orderId) this.router.navigate(['/o', r.orderId]); },
+      error: () => { /* no match — silently ignore */ }
+    });
+  }
   /** Show the Admin icon-button (in the right cluster) only when the
    *  current user holds at least one manage_* permission. Mirrors the
    *  permission gate from ADMIN_NAV so admins still get one click to

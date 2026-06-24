@@ -1,7 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { generateInvoicePdf, loadImageDataUrl, InvoiceTemplateStyle } from '../../frontdesk/billing/invoice-pdf';
+import { Bill } from '../../../shared/models/bill.model';
+import { Order } from '../../../shared/models/order.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -10,6 +14,8 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ImageUploadComponent } from '../report-template/image-upload.component';
+import { environment } from '../../../../environments/environment';
 
 type Tab = 'gst' | 'discounts' | 'invoice';
 type GstScope = 'branch' | 'region' | 'tenant';
@@ -45,7 +51,8 @@ interface GstRow {
     SelectComponent,
     TileComponent,
     ToggleComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    ImageUploadComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -211,7 +218,9 @@ interface GstRow {
       }
 
       @if (tab() === 'invoice') {
-        <pf-tile tone="default" padding="lg" class="block max-w-2xl">
+        <div class="grid grid-cols-1 xl:grid-cols-[1fr_minmax(380px,460px)] gap-5 items-start">
+        <div class="min-w-0">
+        <pf-tile tone="default" padding="lg" class="block">
           <div class="grid grid-cols-2 gap-3 mb-5">
             <div>
               <label class="pf-label">Invoice prefix</label>
@@ -239,9 +248,18 @@ interface GstRow {
         </pf-tile>
 
         <!-- Letterhead & document type -->
-        <pf-tile tone="default" padding="lg" class="block max-w-2xl mt-5">
+        <pf-tile tone="default" padding="lg" class="block mt-5">
           <h3 class="text-sm font-bold mb-1" style="color: var(--text-primary);">Letterhead &amp; document</h3>
           <p class="text-[13px] mb-4" style="color: var(--text-tertiary);">Shown on the invoice / receipt PDF. Most diagnostic services are GST-exempt — use Bill of Supply (or Auto).</p>
+
+          <label class="pf-label">Template style</label>
+          <div class="flex gap-2 mb-4">
+            @for (s of templateStyles; track s.value) {
+              <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="(tpl().template ?? 'classic') === s.value"
+                      (click)="patchTpl({ template: s.value })">{{ s.label }}</button>
+            }
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div><label class="pf-label">Lab name</label><input class="pf-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
             <div><label class="pf-label">GSTIN</label><input class="pf-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
@@ -255,14 +273,43 @@ interface GstRow {
                 <option value="bill_of_supply">Bill of Supply</option>
               </select>
             </div>
+            <div><label class="pf-label">Accent colour</label><input class="pf-input" type="color" [ngModel]="tpl().accentColor || '#1B3A6B'" (ngModelChange)="patchTpl({ accentColor: $event })" style="height:38px;padding:4px"/></div>
+            <div><label class="pf-label">Signatory label</label><input class="pf-input" [ngModel]="tpl().signatureLabel" (ngModelChange)="patchTpl({ signatureLabel: $event })" placeholder="Authorised Signatory"/></div>
+            <div class="col-span-2">
+              <label class="pf-label">Logo — upload or paste a URL</label>
+              <pf-image-upload [url]="tpl().logoUrl" (urlChange)="patchTpl({ logoUrl: $event })"></pf-image-upload>
+              <input class="pf-input mt-2" [ngModel]="tpl().logoUrl" (ngModelChange)="patchTpl({ logoUrl: $event })" placeholder="https://…/logo.png  (or upload above)"/>
+            </div>
+            <div><label class="pf-label">Jurisdiction</label><input class="pf-input" [ngModel]="tpl().jurisdiction" (ngModelChange)="patchTpl({ jurisdiction: $event })" placeholder="e.g. Chennai"/></div>
+            <div class="col-span-2"><label class="pf-label">Bank details</label><input class="pf-input" [ngModel]="tpl().bankDetails" (ngModelChange)="patchTpl({ bankDetails: $event })" placeholder="A/c · IFSC · Bank"/></div>
+            <div class="col-span-2"><label class="pf-label">Declaration</label><input class="pf-input" [ngModel]="tpl().declaration" (ngModelChange)="patchTpl({ declaration: $event })" placeholder="Certified that the particulars given above are true and correct."/></div>
             <div class="col-span-2"><label class="pf-label">Footer / terms</label><input class="pf-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></div>
           </div>
           <div class="flex flex-wrap gap-5 mt-3">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showLogo !== false" (ngModelChange)="patchTpl({ showLogo: $event })"/> Show logo</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showGstin !== false" (ngModelChange)="patchTpl({ showGstin: $event })"/> Show GSTIN</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" [ngModel]="tpl().showTrackingQr !== false" (ngModelChange)="patchTpl({ showTrackingQr: $event })"/> Show result-tracking QR</label>
           </div>
           <button class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white" style="background: var(--violet-600, #7c3aed);" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save letterhead' }}</button>
         </pf-tile>
+        </div>
+
+        <!-- Live invoice preview (right) -->
+        <pf-tile tone="default" padding="lg" class="block xl:sticky xl:top-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold" style="color: var(--text-primary);">Live preview</h3>
+            <div class="flex gap-1">
+              <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="previewMode() === 'bill_of_supply'" (click)="setPreviewMode('bill_of_supply')">Bill of Supply</button>
+              <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="previewMode() === 'tax_invoice'" (click)="setPreviewMode('tax_invoice')">Tax Invoice</button>
+            </div>
+          </div>
+          @if (invoicePreviewUrl(); as src) {
+            <iframe [src]="src" title="Invoice preview" style="width:100%;height:62vh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
+          } @else {
+            <div class="text-[13px] py-10 text-center" style="color: var(--text-tertiary);">Rendering preview…</div>
+          }
+        </pf-tile>
+        </div>
       }
     </section>
   `,
@@ -302,11 +349,17 @@ interface GstRow {
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(236, 72, 153, 0.05));
       border: 1px solid rgba(168, 85, 247, 0.25);
     }
+    .pf-tpl-chip {
+      padding: 6px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary);
+    }
+    .pf-tpl-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
   `]
 })
-export class BillingConfigComponent implements OnInit {
+export class BillingConfigComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'gst',       label: 'GST Setup' },
@@ -315,7 +368,10 @@ export class BillingConfigComponent implements OnInit {
   ];
   private readonly _tab = signal<Tab>('gst');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); }
+  setTab(t: Tab) {
+    this._tab.set(t);
+    if (t === 'invoice' && !this.invoicePreviewUrl()) setTimeout(() => this.renderInvoicePreview(), 50);
+  }
 
   readonly scopes: Array<{ label: string; value: GstScope; hint: string }> = [
     { label: 'Per branch', value: 'branch', hint: 'Each branch files separately' },
@@ -355,9 +411,16 @@ export class BillingConfigComponent implements OnInit {
   });
 
   // Invoice letterhead/template
-  private readonly _tpl = signal<any>({ documentMode: 'auto', showGstin: true, showTrackingQr: true });
+  private readonly TPL_DEFAULTS = { documentMode: 'auto', showGstin: true, showTrackingQr: true, template: 'classic', accentColor: '#1B3A6B', showLogo: true };
+  private readonly _tpl = signal<any>({ ...this.TPL_DEFAULTS });
   readonly tpl = this._tpl.asReadonly();
   readonly savingTpl = signal(false);
+  readonly templateStyles: Array<{ value: InvoiceTemplateStyle; label: string }> = [
+    { value: 'classic', label: 'Classic' },
+    { value: 'modern', label: 'Modern' },
+    { value: 'letterhead', label: 'Letterhead' },
+    { value: 'cashbill', label: 'Cash Bill' },
+  ];
   patchTpl(p: Record<string, unknown>) { this._tpl.set({ ...this._tpl(), ...p }); }
   saveTpl() {
     this.savingTpl.set(true);
@@ -367,12 +430,119 @@ export class BillingConfigComponent implements OnInit {
     });
   }
 
+  // ── Live invoice preview (right pane) ──────────────────────────
+  readonly previewMode = signal<'tax_invoice' | 'bill_of_supply'>('bill_of_supply');
+  readonly invoicePreviewUrl = signal<SafeResourceUrl | null>(null);
+  private previewBlob: string | null = null;
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    // Re-render the preview (debounced) whenever the template or mode changes.
+    effect(() => {
+      const t = this._tpl();
+      const mode = this.previewMode();
+      if (this._tab() !== 'invoice') return;
+      void t; void mode;
+      if (this.renderTimer) clearTimeout(this.renderTimer);
+      this.renderTimer = setTimeout(() => this.renderInvoicePreview(), 300);
+    });
+  }
+
+  setPreviewMode(m: 'tax_invoice' | 'bill_of_supply') { this.previewMode.set(m); }
+
+  // Sample QR data URLs so the preview shows the tracking + order QRs the
+  // real invoice carries. Generated once, lazily.
+  private _sampleQrs: { qr: string; orderQr: string } | null = null;
+  private async sampleQrs(): Promise<{ qr: string; orderQr: string }> {
+    if (this._sampleQrs) return this._sampleQrs;
+    const QRCode = (await import('qrcode')).default;
+    const [qr, orderQr] = await Promise.all([
+      QRCode.toDataURL('https://example.lab/track/SAMPLE', { margin: 1, width: 220 }),
+      QRCode.toDataURL('https://example.lab/o/SAMPLE', { margin: 1, width: 220 }),
+    ]);
+    this._sampleQrs = { qr, orderQr };
+    return this._sampleQrs;
+  }
+
+  private async renderInvoicePreview() {
+    const t = this._tpl();
+    const taxMode = this.previewMode() === 'tax_invoice';
+    const { bill, order } = this.sampleBill(taxMode);
+    const logoDataUrl = t.showLogo === false ? undefined : await loadImageDataUrl(t.logoUrl || undefined, environment.apiUrl);
+    const qrs = await this.sampleQrs();
+    try {
+      const blob = generateInvoicePdf({
+        bill, order,
+        invoiceNumber: `${this._config().invoicePrefix}/${new Date().getFullYear()}/${this._config().invoiceStartNumber}`,
+        effectivePayable: bill.totalPayable,
+        tatLabel: '~ 1 day to report',
+        docTitle: taxMode ? 'TAX INVOICE' : 'BILL OF SUPPLY',
+        practice: { name: t.labName || 'Prefrontal Lab', address: t.address, phone: t.phone, email: t.email, gstin: t.gstin },
+        template: (t.template ?? 'classic') as InvoiceTemplateStyle,
+        accentColor: t.accentColor, logoDataUrl,
+        qrDataUrl: qrs.qr, orderQrDataUrl: qrs.orderQr,
+        tagline: t.tagline, footerText: t.footerText, bankDetails: t.bankDetails,
+        signatureLabel: t.signatureLabel, jurisdiction: t.jurisdiction, declaration: t.declaration,
+        cashierName: 'sathyapriya',
+        action: 'blob',
+      }) as string | undefined;
+      if (!blob) return;
+      if (this.previewBlob) { try { URL.revokeObjectURL(this.previewBlob); } catch { /* noop */ } }
+      this.previewBlob = blob;
+      this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blob));
+    } catch { /* preview is best-effort */ }
+  }
+
+  /** Sample bill for the preview. With tax for the Tax-Invoice preview, exempt
+   *  (no tax) for the Bill-of-Supply preview. */
+  private sampleBill(withTax: boolean): { bill: Bill; order: Order } {
+    const items = [
+      { name: 'Complete Blood Count (CBC)', hsn: '999316', price: 350 },
+      { name: 'Lipid Profile', hsn: '999316', price: 600 },
+    ];
+    const slab = withTax ? 18 : 0;
+    const billItems = items.map((it, i) => {
+      const taxable = it.price;
+      const tax = Math.round(taxable * slab / 100);
+      const half = Math.round(tax / 2);
+      return {
+        id: `i${i}`, billId: 'b', testId: `t${i}`, testName: it.name, hsnSacCode: it.hsn,
+        price: it.price, discount: 0, taxableAmount: taxable, taxSlab: slab,
+        cgstRate: slab / 2, sgstRate: slab / 2, igstRate: 0,
+        cgstAmount: half, sgstAmount: tax - half, igstAmount: 0, total: taxable + tax,
+      };
+    });
+    const subTotal = billItems.reduce((s, i) => s + i.price, 0);
+    const totalTax = billItems.reduce((s, i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
+    const bill = {
+      id: 'b', orderId: 'o', patientId: 'p', branchId: 'br', type: withTax ? 'tax_invoice' : 'bill_of_supply',
+      invoiceNumber: 'PREVIEW', supplierGstin: this._tpl().gstin, placeOfSupply: 'Tamil Nadu (33)', isInterstate: false,
+      subTotal, overrideDiscount: 0, totalDiscount: 0, totalTaxable: subTotal,
+      totalCgst: billItems.reduce((s, i) => s + i.cgstAmount, 0), totalSgst: billItems.reduce((s, i) => s + i.sgstAmount, 0),
+      totalIgst: 0, totalTax, totalPayable: subTotal + totalTax, totalPaid: subTotal + totalTax, balance: 0,
+      status: 'paid', items: billItems as Bill['items'], createdAt: new Date().toISOString(),
+      payments: [{ id: 'pay1', billId: 'b', amount: subTotal + totalTax, mode: 'online', referenceNo: 'B255173', paidAt: new Date().toISOString() }],
+    } as Bill;
+    const order = {
+      id: 'order-26057734', refDoctorName: 'Dr. D. Satheesh Kumar MD',
+      patient: { mrn: 'TRY00928929', displayName: 'Aarav Sharma', age: 32, sex: 'Male', phone: '98765 43210' },
+      samples: [{ barcode: '26057734' }],
+    } as unknown as Order;
+    return { bill, order };
+  }
+
+  closeInvoicePreview() {
+    if (this.previewBlob) { try { URL.revokeObjectURL(this.previewBlob); } catch { /* noop */ } this.previewBlob = null; }
+    this.invoicePreviewUrl.set(null);
+  }
+  ngOnDestroy() { if (this.renderTimer) clearTimeout(this.renderTimer); this.closeInvoicePreview(); }
+
   ngOnInit() {
     this.api.get<TenantBillingConfig>('/api/config/billing').subscribe({
       next: c => { if (c) this._config.set({ ...this._config(), ...c }); }
     });
     this.api.get<any>('/api/config/invoice-template').subscribe({
-      next: t => { if (t) this._tpl.set({ documentMode: 'auto', showGstin: true, showTrackingQr: true, ...t }); }
+      next: t => { this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) }); }
     });
     this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => this._branches.set(l ?? [])

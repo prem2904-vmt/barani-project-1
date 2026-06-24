@@ -178,11 +178,46 @@ export function deriveModes(cfg: ProcessWorkflowConfig | null | undefined):
   { collectionMode: 'front_desk' | 'dedicated_counter'; billingMode: 'front_desk' | 'separate_counter' } | null {
   if (!cfg?.actions?.length) return null;
   const menuOf = (type: string) => cfg.actions.find(a => a.type === type && a.enabled)?.categoryId;
-  const fd = menuOf('patient_registration') ?? menuOf('walk_in_order') ?? menuOf('appointment');
-  const coll = menuOf('sample_collection');
+  const fd = frontdeskMenu(cfg);
+  const coll = collectionLocations(cfg);
   const bill = menuOf('billing');
   return {
-    collectionMode: coll && coll !== fd ? 'dedicated_counter' : 'front_desk',
+    // Backward-compatible projection: any non-frontdesk placement → counter.
+    collectionMode: hasDedicatedCollection(cfg) ? 'dedicated_counter' : 'front_desk',
     billingMode: bill && bill !== fd ? 'separate_counter' : 'front_desk',
   };
+}
+
+/** Actions that may be placed in MORE THAN ONE menu at once (e.g. sample
+ *  collection at the front desk AND a dedicated counter AND the lab). The
+ *  builder keeps these in the palette after a drop and mints a fresh instance
+ *  per placement. */
+export const REPEATABLE_ACTIONS = new Set<string>(['sample_collection']);
+export function isRepeatable(type: string): boolean { return REPEATABLE_ACTIONS.has(type); }
+
+/** The categoryId of the "frontdesk" menu (where registration/order live). */
+export function frontdeskMenu(cfg: ProcessWorkflowConfig | null | undefined): string | undefined {
+  const menuOf = (type: string) => cfg?.actions?.find(a => a.type === type && a.enabled)?.categoryId;
+  return menuOf('patient_registration') ?? menuOf('walk_in_order') ?? menuOf('appointment');
+}
+
+/** All menus (categoryIds) where an ENABLED `sample_collection` instance sits —
+ *  supports the action being placed in several menus at once. */
+export function collectionLocations(cfg: ProcessWorkflowConfig | null | undefined): string[] {
+  return [...new Set((cfg?.actions ?? [])
+    .filter(a => a.type === 'sample_collection' && a.enabled)
+    .map(a => a.categoryId))];
+}
+
+/** True when collection is placed in the frontdesk menu. */
+export function collectsAtFrontdesk(cfg: ProcessWorkflowConfig | null | undefined): boolean {
+  const fd = frontdeskMenu(cfg);
+  return !!fd && collectionLocations(cfg).includes(fd);
+}
+
+/** True when collection is placed in any non-frontdesk menu (a dedicated counter
+ *  or the lab). */
+export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undefined): boolean {
+  const fd = frontdeskMenu(cfg);
+  return collectionLocations(cfg).some(m => m !== fd);
 }

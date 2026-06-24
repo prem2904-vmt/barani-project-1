@@ -238,6 +238,30 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (checkedChange)="patch({ zebraRows: $event })">
                     </pf-toggle>
                   </div>
+                  <div>
+                    <label class="pf-label">Abnormal value style</label>
+                    <pf-segmented
+                      [options]="flagStyleOptions"
+                      [value]="tpl().flagStyle ?? 'bold'"
+                      size="sm"
+                      (valueChange)="patch({ flagStyle: $event })">
+                    </pf-segmented>
+                    <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
+                      How out-of-range results are emphasised. NABL reports typically use bold (with an H/L letter); colour is optional.
+                    </p>
+                  </div>
+                  <div class="pf-toggle-row">
+                    <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
+                    <pf-toggle [checked]="tpl().groupByDepartment ?? false"
+                               (checkedChange)="patch({ groupByDepartment: $event })">
+                    </pf-toggle>
+                  </div>
+                  <div class="pf-toggle-row">
+                    <span class="text-[14px]" style="color: var(--text-primary);">Show method line</span>
+                    <pf-toggle [checked]="tpl().showMethod ?? false"
+                               (checkedChange)="patch({ showMethod: $event })">
+                    </pf-toggle>
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -543,6 +567,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'bordered', label: 'Bordered' },
     { value: 'striped',  label: 'Striped'  },
   ];
+  readonly flagStyleOptions: SegmentedOption<string>[] = [
+    { value: 'bold',       label: 'Bold (H/L)'   },
+    { value: 'bold_color', label: 'Bold + colour' },
+  ];
   readonly patientLayoutOptions: SegmentedOption<string>[] = [
     { value: 'three-col',     label: '3-column (Drlogy)' },
     { value: 'four-col-grid', label: '4-column grid'     },
@@ -630,7 +658,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
       showRegistered: true, showCollectionDate: true, showReportDate: true,
       showMethod: false, showInstrument: false,
-      groupByDepartment: true, showCriticalFlag: true,
+      groupByDepartment: false, showCriticalFlag: true, flagStyle: 'bold',
       showPathologistName: true, showSignature: true,
       signatureUrl: '', signaturesJson: '[]',
       disclaimer: 'Test results should be correlated clinically.',
@@ -726,19 +754,26 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
                  refDoctorName: 'Dr. A. Sharma' },
       type: 'final',
       tests: [
-        { testId: 'd1', name: 'CREATININE', department: 'Biochemistry',
-          sampleType: 'Serum',
-          result: { values: { 'Creatinine': { value: '0.9', unit: 'mg/dL', range: '0.55 – 1.02' } } } },
-        { testId: 'd2', name: 'HEMOGLOBIN', department: 'Hematology',
-          sampleType: 'EDTA Whole Blood',
-          result: { values: { 'Hemoglobin': { value: '14.2', unit: 'g/dL', range: '12 – 16' } } } },
-        { testId: 'd3', name: 'LIPID PROFILE', department: 'Biochemistry',
-          sampleType: 'Serum',
+        { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Hematology',
+          sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
+          result: { values: {
+            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L' },
+            'RBC Count':    { value: '4.6',  unit: 'mill/cmm',  range: '3.8 – 4.8' },
+            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H' },
+            'Platelets':    { value: '240000', unit: '/cmm',    range: '150000 – 410000' },
+          } } },
+        { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry',
+          sampleType: 'Serum', method: 'Photometry',
           result: { values: {
             'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H' },
-            'HDL':               { value: '52',  unit: 'mg/dL', range: '> 40' },
-            'LDL':               { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
+            'HDL Cholesterol':   { value: '52',  unit: 'mg/dL', range: '> 40' },
+            'LDL Cholesterol':   { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
             'Triglycerides':     { value: '120', unit: 'mg/dL', range: '< 150' },
+          } } },
+        { testId: 'd3', name: 'Vitamin D (25-OH)', department: 'Biochemistry',
+          sampleType: 'Serum', nablScope: false, referralLab: 'Reference Labs Pvt. Ltd., Mumbai',
+          result: { values: {
+            '25-Hydroxy Vitamin D': { value: '18', unit: 'ng/mL', range: '30 – 100', flag: 'L' },
           } } },
       ],
     });

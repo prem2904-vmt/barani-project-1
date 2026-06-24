@@ -157,6 +157,17 @@
         </div>
       }
 
+      <!-- Scan an order QR (any lab staff who can collect). Opens the order. -->
+      @if (canScan()) {
+        <button type="button" class="pf-icon-btn press" (click)="scan.open()"
+                aria-label="Scan order QR" title="Scan order QR">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
+          </svg>
+        </button>
+      }
+
       <!-- Admin (settings) — icon button next to the bell. Only renders
            for users with at least one manage_* permission so reception
            / lab techs don't see it. Replaces the previous top-nav
@@ -264,3 +275,9 @@
       </div>
     </div><!-- /right cluster -->
 </div>
+
+<!-- The global order-QR scanner modal is rendered by the shell (root level),
+     NOT here: the top-strip lives inside .pf-chrome which has a backdrop-filter,
+     and a backdrop-filtered ancestor becomes the containing block for
+     position:fixed — which squashed the modal into the navbar box. The Scan
+     button still toggles it via the shared ScanService. -->

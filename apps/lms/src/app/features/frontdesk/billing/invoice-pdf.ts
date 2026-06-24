@@ -4,22 +4,21 @@ import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 
 /**
- * Generate a properly-laid-out PDF invoice and trigger a browser
- * download. We render structured elements (header, patient block, item
- * table, totals, footer) directly with jsPDF rather than rasterising
- * the on-screen tile — that way the output is sharp, searchable,
- * paginates cleanly, and fits an A4 page regardless of viewport.
- *
- * No backend round-trip required; jsPDF is bundled client-side.
+ * Generate a professional A4 PDF invoice directly with jsPDF (sharp, searchable,
+ * paginates cleanly). Three letterhead STYLES (classic / modern / letterhead) and
+ * two GST document MODES (Tax Invoice — CGST Rule 46 full particulars; Bill of
+ * Supply — Rule 49, no tax columns / reverse-charge / place-of-supply). All
+ * letterhead + footer content is template-driven so admins can customise it.
  */
+export type InvoiceTemplateStyle = 'classic' | 'modern' | 'letterhead' | 'cashbill';
+
 export interface InvoicePdfInput {
   bill: Bill;
   order: Order | null;
   invoiceNumber: string;
   effectivePayable: number;
   tatLabel: string;
-  /** Display constants for the lab letterhead. Pull from a real
-   *  practice-config endpoint once we have one. */
+  /** Lab letterhead, from the invoice-template config. */
   practice?: {
     name?: string;
     address?: string;
@@ -27,266 +26,573 @@ export interface InvoicePdfInput {
     email?: string;
     gstin?: string;
   };
-  /** Optional QR (PNG data URL) linking to the public result-tracking page. */
+  /** Patient result-tracking QR (PNG data URL) → /track/{token}. */
   qrDataUrl?: string;
-  /** Document title — "TAX INVOICE" (default) or "BILL OF SUPPLY". */
+  /** Staff order QR (PNG data URL) → /o/{orderId}. */
+  orderQrDataUrl?: string;
+  /** "TAX INVOICE" (default) or "BILL OF SUPPLY". */
   docTitle?: string;
-  /** 'save' downloads the PDF (default); 'print' opens the browser print
-   *  dialog (cancelable) via a hidden iframe; 'view' opens the PDF in a new
-   *  tab to read (with the browser's own download/print controls); 'blob'
-   *  renders the PDF and RETURNS its object-URL so the caller can embed it in
-   *  an in-app preview (no new tab/popup) — caller owns revoking the URL. */
+  // ── Template customisation ──
+  template?: InvoiceTemplateStyle;
+  accentColor?: string;
+  logoDataUrl?: string;
+  tagline?: string;
+  footerText?: string;
+  bankDetails?: string;
+  signatureLabel?: string;
+  jurisdiction?: string;
+  declaration?: string;
+  /** Cashier / counter staff name — printed in the Cash Bill footer. */
+  cashierName?: string;
   action?: 'save' | 'print' | 'view' | 'blob';
 }
 
-const A4 = { w: 595.28, h: 841.89 }; // pt — jsPDF default
-const MARGIN = 36;                    // ~½ inch
-const ACCENT = '#8b5cf6';
+const A4 = { w: 595.28, h: 841.89 }; // pt
+const MARGIN = 40;
 const TEXT_PRIMARY = '#0f172a';
 const TEXT_MUTED = '#64748b';
+const HAIR = '#e2e8f0';
 
 export function generateInvoicePdf(input: InvoicePdfInput): string | void {
-  const { bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {}, qrDataUrl, docTitle, action = 'save' } = input;
+  const {
+    bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {},
+    qrDataUrl, orderQrDataUrl, docTitle, action = 'save',
+    template = 'classic', accentColor = '#1B3A6B', logoDataUrl,
+    tagline, footerText, bankDetails, signatureLabel = 'Authorised Signatory',
+    jurisdiction, declaration,
+  } = input;
+
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const accent = accentColor || '#1B3A6B';
+  const title = (docTitle ?? 'TAX INVOICE').toUpperCase();
+  const isTaxInvoice = title.includes('TAX');
+  const right = A4.w - MARGIN;
 
-  // ── Header ──────────────────────────────────────────────────
-  doc.setFillColor(ACCENT);
-  doc.rect(0, 0, A4.w, 6, 'F');
-
-  doc.setTextColor(TEXT_PRIMARY);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text(practice.name ?? 'Prefrontal Lab', MARGIN, 50);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(TEXT_MUTED);
-  const addressLines = [
-    practice.address ?? '',
-    [practice.phone, practice.email].filter(Boolean).join(' · '),
-    practice.gstin ? `GSTIN: ${practice.gstin}` : ''
-  ].filter(Boolean);
-  let cursorY = 66;
-  for (const line of addressLines) {
-    doc.text(line, MARGIN, cursorY);
-    cursorY += 12;
+  // ── Cash Bill style — a self-contained monochrome layout that
+  //    mirrors the classic Indian diagnostic "CASH BILL" receipt
+  //    (centered header, S.No/Test/Qty/Amount table, Mode-of-Pay +
+  //    Total/Net Payable/Collected block, amount-in-words, Due-Amount
+  //    box). Rendered end-to-end here, then output below. ──────────
+  if (template === 'cashbill') {
+    drawCashBill(doc, input, isTaxInvoice);
+    return finishInvoice(doc, input);
   }
 
-  // Right-aligned: document-title pill + number + date
-  const title = (docTitle ?? 'TAX INVOICE').toUpperCase();
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  const pillTextW = doc.getTextWidth(title);
-  const pillPadX = 10;
-  const pillW = pillTextW + pillPadX * 2;
-  const pillH = 20;
-  const pillX = A4.w - MARGIN - pillW;
-  const pillY = 36;
-  doc.setFillColor(ACCENT);
-  doc.roundedRect(pillX, pillY, pillW, pillH, 4, 4, 'F');
-  doc.setTextColor('#ffffff');
-  doc.text(title, pillX + pillW / 2, pillY + 13.5, { align: 'center' });
+  // ── Header (per template style) ─────────────────────────────
+  let y = drawHeader(doc, template, accent, practice, tagline, logoDataUrl);
 
+  // Document-title + meta block (right-aligned), drawn just under the header.
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(TEXT_PRIMARY);
-  doc.text(invoiceNumber, A4.w - MARGIN, pillY + pillH + 16, { align: 'right' });
+  doc.setFontSize(13);
+  doc.setTextColor(accent);
+  doc.text(title, right, y, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
+  doc.setTextColor(TEXT_PRIMARY);
+  let metaY = y + 15;
+  doc.text(`Invoice No: ${invoiceNumber}`, right, metaY, { align: 'right' }); metaY += 12;
   doc.setTextColor(TEXT_MUTED);
-  doc.text(formatDate(bill.createdAt), A4.w - MARGIN, pillY + pillH + 30, { align: 'right' });
+  doc.text(`Date: ${formatDate(bill.createdAt)}`, right, metaY, { align: 'right' }); metaY += 12;
+  if (isTaxInvoice && bill.placeOfSupply) {
+    doc.text(`Place of supply: ${bill.placeOfSupply}`, right, metaY, { align: 'right' }); metaY += 12;
+  }
 
-  // Divider
-  doc.setDrawColor('#e2e8f0');
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, 110, A4.w - MARGIN, 110);
-
-  // ── Bill-to block ───────────────────────────────────────────
+  // ── Bill-to block (left) ────────────────────────────────────
   const patient = order?.patient;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(TEXT_MUTED);
-  doc.text('BILL TO', MARGIN, 130);
-
+  doc.text('BILL TO', MARGIN, y);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(12.5);
   doc.setTextColor(TEXT_PRIMARY);
-  doc.text(patient?.displayName ?? '—', MARGIN, 148);
-
+  doc.text(patient?.displayName ?? '—', MARGIN, y + 16);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(TEXT_MUTED);
-  const patientLines: string[] = [];
-  const ageSex = [patient?.age != null ? `${patient.age}y` : '', patient?.sex ?? '']
-    .filter(Boolean).join(' · ');
-  if (ageSex) patientLines.push(ageSex);
-  if (patient?.phone) patientLines.push(`Phone: ${patient.phone}`);
-  let py = 162;
-  for (const line of patientLines) { doc.text(line, MARGIN, py); py += 12; }
+  let by = y + 30;
+  const ageSex = [patient?.age != null ? `${patient.age}y` : '', patient?.sex ?? ''].filter(Boolean).join(' · ');
+  if (ageSex) { doc.text(ageSex, MARGIN, by); by += 12; }
+  if (patient?.phone) { doc.text(`Phone: ${patient.phone}`, MARGIN, by); by += 12; }
 
-  // ── Items table ─────────────────────────────────────────────
-  const rows = bill.items.map(item => [
-    item.testName,
-    item.hsnSacCode ?? '—',
-    formatMoney(item.price),
-    item.discount > 0 ? `−${formatMoney(item.discount)}` : '—',
-    `${(item.cgstRate + item.sgstRate + item.igstRate).toFixed(0)}%`,
-    formatMoney(item.total)
-  ]);
+  y = Math.max(metaY, by) + 14;
 
-  autoTable(doc, {
-    startY: 200,
-    head: [['Test', 'HSN/SAC', 'Price', 'Discount', 'GST', 'Amount']],
-    body: rows,
-    margin: { left: MARGIN, right: MARGIN },
-    styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 7, textColor: TEXT_PRIMARY },
-    headStyles: {
-      fillColor: '#f5f3ff',
-      textColor: ACCENT,
-      fontStyle: 'bold',
-      fontSize: 8.5,
-      halign: 'left'
-    },
-    bodyStyles: { fillColor: '#ffffff' },
-    alternateRowStyles: { fillColor: '#fafafa' },
-    columnStyles: {
-      0: { cellWidth: 'auto' },
-      1: { cellWidth: 65 },
-      2: { cellWidth: 60, halign: 'right' },
-      3: { cellWidth: 60, halign: 'right' },
-      4: { cellWidth: 38, halign: 'right' },
-      5: { cellWidth: 70, halign: 'right', fontStyle: 'bold' }
-    }
-  });
+  // ── Items table (columns depend on document mode) ───────────
+  y = drawItemsTable(doc, bill, isTaxInvoice, accent, template, y);
 
-  // ── Totals (right-aligned) ──────────────────────────────────
-  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 14;
-  const labelX = A4.w - MARGIN - 130;
-  const valueX = A4.w - MARGIN;
-  let ty = finalY;
+  // ── Totals (right-aligned; tax split only for Tax Invoice) ──
+  y = drawTotals(doc, bill, effectivePayable, isTaxInvoice, accent, y);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(TEXT_MUTED);
-  doc.text('Subtotal', labelX, ty);
-  doc.setTextColor(TEXT_PRIMARY);
-  doc.text(formatMoney(bill.subTotal), valueX, ty, { align: 'right' });
-  ty += 16;
-
-  if (bill.totalTax > 0) {
+  // Reverse-charge declaration (Tax Invoice only — CGST Rule 46).
+  if (isTaxInvoice) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
     doc.setTextColor(TEXT_MUTED);
-    doc.text('GST', labelX, ty);
-    doc.setTextColor(TEXT_PRIMARY);
-    doc.text(formatMoney(bill.totalTax), valueX, ty, { align: 'right' });
-    ty += 16;
+    doc.text('Tax payable on reverse charge: No', MARGIN, y);
+    y += 14;
   }
 
-  const flatDiscount = (bill.subTotal + bill.totalTax) - effectivePayable;
-  if (flatDiscount > 0) {
-    doc.setTextColor(TEXT_MUTED);
-    doc.text('Discount', labelX, ty);
-    doc.setTextColor('#059669');
-    doc.text(`−${formatMoney(flatDiscount)}`, valueX, ty, { align: 'right' });
-    ty += 16;
-  }
-
-  // Total bar
-  ty += 4;
-  doc.setDrawColor(ACCENT);
-  doc.setLineWidth(0.8);
-  doc.line(labelX, ty, valueX, ty);
-  ty += 18;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(TEXT_PRIMARY);
-  doc.text('Total', labelX, ty);
-  doc.setTextColor(ACCENT);
-  doc.text(formatMoney(effectivePayable), valueX, ty, { align: 'right' });
-
-  // Paid / balance line below
-  ty += 16;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
-  doc.setTextColor(TEXT_MUTED);
-  doc.text(bill.balance <= 0 ? 'Paid in full' : `Balance ${formatMoney(bill.balance)}`,
-           valueX, ty, { align: 'right' });
-
-  // ── Footer ──────────────────────────────────────────────────
   if (tatLabel) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9.5);
+    doc.setFontSize(9);
     doc.setTextColor(TEXT_PRIMARY);
-    doc.text(`Estimated report: ${tatLabel.replace('≈', '~').replace('to report', '').trim() || tatLabel}`,
-             MARGIN, ty);
+    doc.text(`Estimated report: ${tatLabel.replace('≈', '~').replace('to report', '').trim() || tatLabel}`, MARGIN, y);
+    y += 14;
   }
 
-  // ── Result-tracking QR (bottom-left, framed card) ───────────
-  if (qrDataUrl) {
-    const qrSize = 64;
-    const pad = 8;
-    const cardW = qrSize + pad * 2;
-    const cardH = qrSize + pad * 2 + 14;
-    const cardX = MARGIN;
-    const cardY = A4.h - 30 - cardH;
-    doc.setFillColor('#ffffff');
-    doc.setDrawColor('#e2e8f0');
-    doc.setLineWidth(0.6);
-    doc.roundedRect(cardX, cardY, cardW, cardH, 5, 5, 'FD');
-    try { doc.addImage(qrDataUrl, 'PNG', cardX + pad, cardY + pad, qrSize, qrSize); } catch { /* bad data url */ }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(ACCENT);
-    doc.text('SCAN TO TRACK YOUR REPORT', cardX + cardW / 2, cardY + cardH - 7, { align: 'center' });
-  }
+  // ── Footer: declaration · bank · signatory · QR · note ──────
+  drawFooter(doc, { accent, footerText, bankDetails, signatureLabel, jurisdiction, declaration, practice, qrDataUrl, orderQrDataUrl });
 
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.setTextColor(TEXT_MUTED);
-  doc.text('This is a computer-generated invoice. No physical signature required.',
-           A4.w / 2, A4.h - 24, { align: 'center' });
+  return finishInvoice(doc, input);
+}
 
-  // ── Output ──────────────────────────────────────────────────
-  if (action === 'blob') {
-    // Render and hand back the object-URL so the caller can show the PDF in an
-    // in-app preview (iframe) rather than spawning a browser tab/popup.
-    return doc.output('bloburl') as unknown as string;
-  }
-  if (action === 'view') {
-    // Open the rendered PDF in a new tab to view (with the browser's built-in
-    // download/print controls). No forced download.
-    const blobUrl = doc.output('bloburl') as unknown as string;
-    window.open(blobUrl, '_blank');
-    return;
-  }
+/** Emit the built document per the requested action. */
+function finishInvoice(doc: jsPDF, input: InvoicePdfInput): string | void {
+  const action = input.action ?? 'save';
+  if (action === 'blob') return doc.output('bloburl') as unknown as string;
+  if (action === 'view') { window.open(doc.output('bloburl') as unknown as string, '_blank'); return; }
   if (action === 'print') {
-    // Open the browser print dialog (cancelable) without downloading: load the
-    // PDF blob into an off-screen iframe and call print() on it. Falls back to
-    // opening the blob in a new tab if the iframe is blocked.
     const blobUrl = doc.output('bloburl') as unknown as string;
     const frame = document.createElement('iframe');
-    frame.style.position = 'fixed';
-    frame.style.right = '0';
-    frame.style.bottom = '0';
-    frame.style.width = '0';
-    frame.style.height = '0';
-    frame.style.border = '0';
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
     frame.src = blobUrl;
     frame.onload = () => {
       try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
       catch { window.open(blobUrl, '_blank'); }
-      // Leave the frame mounted long enough for the dialog to read the doc.
       setTimeout(() => frame.remove(), 60_000);
     };
     document.body.appendChild(frame);
     return;
   }
-  doc.save(`${invoiceNumber}.pdf`);
+  doc.save(`${input.invoiceNumber}.pdf`);
+}
+
+/** Draw the letterhead in the chosen style; returns the Y where body starts. */
+function drawHeader(
+  doc: jsPDF, style: InvoiceTemplateStyle, accent: string,
+  practice: NonNullable<InvoicePdfInput['practice']>, tagline?: string, logo?: string,
+): number {
+  const name = practice.name ?? 'Prefrontal Lab';
+  const contact: string[] = [practice.address ?? '', [practice.phone, practice.email].filter(Boolean).join(' · '),
+    practice.gstin ? `GSTIN: ${practice.gstin}` : ''].filter((l): l is string => !!l);
+
+  if (style === 'letterhead') {
+    // Pre-printed stationery — leave whitespace for the printed letterhead.
+    return 120;
+  }
+
+  if (style === 'modern') {
+    // Accent band with the lab identity reversed out in white.
+    const bandH = 78;
+    doc.setFillColor(accent);
+    doc.rect(0, 0, A4.w, bandH, 'F');
+    let tx = MARGIN;
+    if (logo) { try { doc.addImage(logo, 'PNG', MARGIN, 16, 46, 46); tx = MARGIN + 58; } catch { /* ignore */ } }
+    doc.setTextColor('#ffffff');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
+    doc.text(name, tx, 34);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    let cy = 48;
+    if (tagline) { doc.text(tagline, tx, cy); cy += 11; }
+    for (const line of contact) { doc.text(line, tx, cy); cy += 11; }
+    return bandH + 26;
+  }
+
+  // classic — black-on-white, thin rules, the most "serious" look.
+  doc.setFillColor(accent);
+  doc.rect(0, 0, A4.w, 4, 'F'); // slim accent strip
+  let tx = MARGIN;
+  if (logo) { try { doc.addImage(logo, 'PNG', MARGIN, 24, 44, 44); tx = MARGIN + 56; } catch { /* ignore */ } }
+  doc.setTextColor(TEXT_PRIMARY);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(21);
+  doc.text(name, tx, 46);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  doc.setTextColor(TEXT_MUTED);
+  let cy = 60;
+  if (tagline) { doc.text(tagline, tx, cy); cy += 11; }
+  for (const line of contact) { doc.text(line, tx, cy); cy += 11; }
+  const ruleY = Math.max(cy + 2, 78);
+  doc.setDrawColor(accent); doc.setLineWidth(1);
+  doc.line(MARGIN, ruleY, A4.w - MARGIN, ruleY);
+  return ruleY + 22;
+}
+
+/** Items table. Tax Invoice shows HSN/SAC + GST%; Bill of Supply omits tax. */
+function drawItemsTable(doc: jsPDF, bill: Bill, isTaxInvoice: boolean, accent: string, style: InvoiceTemplateStyle, startY: number): number {
+  const head = isTaxInvoice
+    ? [['#', 'Particulars', 'HSN/SAC', 'Taxable', 'GST %', 'Amount']]
+    : [['#', 'Particulars', 'HSN/SAC', 'Amount']];
+  const body = bill.items.map((it, i) => isTaxInvoice
+    ? [String(i + 1), it.testName, it.hsnSacCode ?? '—', formatMoney(it.taxableAmount ?? it.price - it.discount),
+       `${(it.cgstRate + it.sgstRate + it.igstRate).toFixed(0)}%`, formatMoney(it.total)]
+    : [String(i + 1), it.testName, it.hsnSacCode ?? '—', formatMoney(it.total)]);
+
+  const lightAccent = style === 'classic' ? '#f1f5f9' : tint(accent);
+  autoTable(doc, {
+    startY,
+    head, body,
+    margin: { left: MARGIN, right: MARGIN },
+    theme: style === 'classic' ? 'grid' : 'plain',
+    styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 6, textColor: TEXT_PRIMARY, lineColor: HAIR, lineWidth: style === 'classic' ? 0.4 : 0 },
+    headStyles: { fillColor: lightAccent, textColor: style === 'classic' ? TEXT_PRIMARY : accent, fontStyle: 'bold', fontSize: 8.5, halign: 'left', lineColor: HAIR, lineWidth: style === 'classic' ? 0.4 : { top: 0, right: 0, bottom: 0.6, left: 0 } as unknown as number },
+    bodyStyles: { fillColor: '#ffffff' },
+    columnStyles: isTaxInvoice
+      ? { 0: { cellWidth: 22, halign: 'right' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 60 }, 3: { cellWidth: 64, halign: 'right' }, 4: { cellWidth: 42, halign: 'right' }, 5: { cellWidth: 70, halign: 'right', fontStyle: 'bold' } }
+      : { 0: { cellWidth: 22, halign: 'right' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 80 }, 3: { cellWidth: 80, halign: 'right', fontStyle: 'bold' } },
+  });
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 14;
+}
+
+/** Totals block (right-aligned). Tax Invoice splits CGST/SGST or IGST. */
+function drawTotals(doc: jsPDF, bill: Bill, payable: number, isTaxInvoice: boolean, accent: string, startY: number): number {
+  const labelX = A4.w - MARGIN - 150;
+  const valueX = A4.w - MARGIN;
+  let ty = startY;
+  const line = (label: string, value: string, opts?: { bold?: boolean; color?: string }) => {
+    doc.setFont('helvetica', opts?.bold ? 'bold' : 'normal');
+    doc.setFontSize(opts?.bold ? 11 : 9.5);
+    doc.setTextColor(TEXT_MUTED);
+    doc.text(label, labelX, ty);
+    doc.setTextColor(opts?.color ?? TEXT_PRIMARY);
+    doc.text(value, valueX, ty, { align: 'right' });
+    ty += opts?.bold ? 18 : 15;
+  };
+
+  line('Subtotal', formatMoney(bill.subTotal));
+  if (bill.totalDiscount > 0) line('Discount', `−${formatMoney(bill.totalDiscount)}`, { color: '#059669' });
+  if (isTaxInvoice && bill.totalTax > 0) {
+    line('Taxable value', formatMoney(bill.totalTaxable));
+    if (bill.isInterstate && bill.totalIgst > 0) {
+      line('IGST', formatMoney(bill.totalIgst));
+    } else {
+      line('CGST', formatMoney(bill.totalCgst));
+      line('SGST', formatMoney(bill.totalSgst));
+    }
+  }
+  ty += 2;
+  doc.setDrawColor(accent); doc.setLineWidth(0.8);
+  doc.line(labelX, ty, valueX, ty);
+  ty += 16;
+  line('Total', formatMoney(payable), { bold: true, color: accent });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.setTextColor(TEXT_MUTED);
+  doc.text(bill.balance <= 0 ? 'Paid in full' : `Balance ${formatMoney(bill.balance)}`, valueX, ty, { align: 'right' });
+  return ty + 18;
+}
+
+interface FooterOpts {
+  accent: string; footerText?: string; bankDetails?: string; signatureLabel: string;
+  jurisdiction?: string; declaration?: string;
+  practice: NonNullable<InvoicePdfInput['practice']>;
+  qrDataUrl?: string; orderQrDataUrl?: string;
+}
+function drawFooter(doc: jsPDF, o: FooterOpts): void {
+  // QR cards (bottom): patient tracking (left) + staff order (right of centre).
+  const drawQrCard = (data: string, cardX: number, caption: string) => {
+    const qrSize = 58, pad = 7;
+    const cardW = qrSize + pad * 2, cardH = qrSize + pad * 2 + 13;
+    const cardY = A4.h - 28 - cardH;
+    doc.setFillColor('#ffffff'); doc.setDrawColor(HAIR); doc.setLineWidth(0.6);
+    doc.roundedRect(cardX, cardY, cardW, cardH, 5, 5, 'FD');
+    try { doc.addImage(data, 'PNG', cardX + pad, cardY + pad, qrSize, qrSize); } catch { /* ignore */ }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(o.accent);
+    doc.text(caption, cardX + cardW / 2, cardY + cardH - 6, { align: 'center' });
+  };
+  if (o.qrDataUrl) drawQrCard(o.qrDataUrl, MARGIN, 'SCAN TO TRACK REPORT');
+  if (o.orderQrDataUrl) drawQrCard(o.orderQrDataUrl, MARGIN + 96, 'STAFF: OPEN ORDER');
+
+  // Left text column: declaration + footer terms + bank details.
+  let fy = A4.h - 120;
+  const colRight = A4.w - MARGIN;
+  doc.setFontSize(8); doc.setTextColor(TEXT_MUTED);
+  const declaration = o.declaration ?? 'Certified that the particulars given above are true and correct.';
+  doc.setFont('helvetica', 'italic');
+  for (const l of doc.splitTextToSize(declaration, 260)) { doc.text(l, A4.w / 2 + 30, fy); fy += 10; }
+  if (o.bankDetails) {
+    doc.setFont('helvetica', 'normal');
+    for (const l of doc.splitTextToSize(`Bank: ${o.bankDetails}`, 260)) { doc.text(l, A4.w / 2 + 30, fy); fy += 10; }
+  }
+
+  // Signatory block (right).
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(TEXT_PRIMARY);
+  doc.text(`For ${o.practice.name ?? 'Prefrontal Lab'}`, colRight, A4.h - 92, { align: 'right' });
+  doc.setDrawColor(HAIR); doc.setLineWidth(0.5);
+  doc.line(colRight - 130, A4.h - 56, colRight, A4.h - 56);
+  doc.setFontSize(8); doc.setTextColor(TEXT_MUTED);
+  doc.text(o.signatureLabel, colRight, A4.h - 46, { align: 'right' });
+
+  // Footer terms + jurisdiction + computer-generated note (centred, bottom).
+  const notes = [
+    o.footerText,
+    o.jurisdiction ? `Subject to ${o.jurisdiction} jurisdiction.` : '',
+    'This is a computer-generated invoice.',
+  ].filter(Boolean).join('  ·  ');
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(TEXT_MUTED);
+  doc.text(notes, A4.w / 2, A4.h - 16, { align: 'center', maxWidth: A4.w - 2 * MARGIN });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Cash Bill — monochrome diagnostic-receipt layout
+// ──────────────────────────────────────────────────────────────
+
+const CB_INK = '#111111';
+const CB_GREY = '#444444';
+const CB_RULE = '#333333';
+
+function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
+  const { bill, order, invoiceNumber, effectivePayable, practice = {}, logoDataUrl, tagline, footerText, bankDetails, cashierName, qrDataUrl, orderQrDataUrl } = input;
+  const patient = order?.patient;
+  const cx = A4.w / 2;
+  const rightX = A4.w - MARGIN;
+
+  // ── Header — logo at left, identity centred ──
+  if (logoDataUrl) { try { doc.addImage(logoDataUrl, 'PNG', MARGIN, 30, 50, 50); } catch { /* ignore */ } }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(CB_INK);
+  doc.text(practice.name ?? 'Diagnostic Centre', cx, 42, { align: 'center' });
+  let hy = 56;
+  if (tagline) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(CB_GREY);
+    doc.text(tagline, cx, hy, { align: 'center' }); hy += 11;
+  }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(CB_GREY);
+  if (practice.address) {
+    for (const l of doc.splitTextToSize(practice.address, A4.w - 220)) { doc.text(l, cx, hy, { align: 'center' }); hy += 11; }
+  }
+  const contactLine = [practice.phone ? `Phone: ${practice.phone}` : '', practice.email ?? '', practice.gstin ? `GSTIN: ${practice.gstin}` : '']
+    .filter(Boolean).join('    ');
+  if (contactLine) { doc.text(contactLine, cx, hy, { align: 'center' }); hy += 11; }
+
+  let y = Math.max(hy, 92) + 4;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7); doc.line(MARGIN, y, rightX, y);
+  y += 22;
+
+  // ── Title ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(CB_INK);
+  doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' });
+  y += 24;
+
+  // ── Patient / meta block — two columns with aligned colons ──
+  const colL = MARGIN, colR = cx + 16;
+  const labGap = 80;
+  const kv = (x: number, yy: number, label: string, value: string) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
+    doc.text(label, x, yy);
+    doc.text(':', x + labGap, yy);
+    doc.setTextColor(CB_INK);
+    doc.text(value || '—', x + labGap + 6, yy);
+  };
+  const ageSex = [patient?.age != null ? String(patient.age) : '', patient?.sex ?? ''].filter(Boolean).join(' / ');
+  const nameLine = patient?.displayName
+    ? (ageSex ? `${patient.displayName} (${ageSex})` : patient.displayName)
+    : '—';
+  let ly = y;
+  kv(colL, ly, 'Patient No', patient?.mrn ?? shortId(order?.id));
+  kv(colR, ly, 'Sample ID', cashSampleId(order)); ly += 16;
+  kv(colL, ly, 'Patient Name', nameLine);
+  kv(colR, ly, 'Date', formatDateTime(bill.createdAt)); ly += 16;
+  kv(colL, ly, 'Mobile No', patient?.phone ?? '—'); ly += 16;
+  if (order?.refDoctorName) { kv(colL, ly, 'Consultant', order.refDoctorName); ly += 16; }
+  y = ly + 8;
+
+  // ── Items table: S.No | Test Name | Quantity | Amount ──
+  autoTable(doc, {
+    startY: y,
+    head: [['S.No', 'Test Name', 'Quantity', 'Amount']],
+    body: bill.items.map((it, i) => [String(i + 1), it.testName, '1', plain(it.total)]),
+    margin: { left: MARGIN, right: MARGIN },
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, textColor: CB_INK, lineWidth: 0 },
+    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, halign: 'left', lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
+    bodyStyles: { fillColor: '#ffffff' },
+    columnStyles: { 0: { cellWidth: 44 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 84, halign: 'right' }, 3: { cellWidth: 84, halign: 'right' } },
+  });
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7); doc.line(MARGIN, y, rightX, y);
+  y += 18;
+
+  // ── Mode of Pay (left) + totals (right) ──
+  const blockTop = y;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
+  doc.text('Mode Of Pay:', MARGIN, y);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(CB_INK);
+  let py = y + 14;
+  const payments = bill.payments ?? [];
+  if (payments.length > 0) {
+    for (const p of payments) {
+      const ref = p.referenceNo ? `   (${p.referenceNo})` : '';
+      doc.text(`${(p.mode || 'PAID').toUpperCase()} : ${p.amount.toFixed(2)}${ref}`, MARGIN, py);
+      py += 13;
+    }
+  } else {
+    doc.text('—', MARGIN, py); py += 13;
+  }
+
+  const tLabelX = cx + 16, tColonX = rightX - 78;
+  let ty = blockTop;
+  const tot = (label: string, value: string, bold = false) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(10); doc.setTextColor(CB_INK);
+    doc.text(label, tLabelX, ty);
+    doc.text(':', tColonX, ty);
+    doc.text(value, rightX, ty, { align: 'right' });
+    ty += 17;
+  };
+  tot('Total', plain(bill.totalPayable));
+  tot('Net Payable', plain(effectivePayable), true);
+  tot('Collected Amount', plain(bill.totalPaid));
+  y = Math.max(py, ty) + 6;
+
+  // ── Amount in words ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(CB_INK);
+  const words = numberToWordsINR(Math.round(effectivePayable));
+  for (const l of doc.splitTextToSize(`(Amount in words: ${words} Only)`, cx + 10 - MARGIN)) { doc.text(l, MARGIN, y); y += 14; }
+  y += 6;
+
+  // ── Due Amount box (right) ──
+  const boxX = rightX - 230;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7);
+  doc.line(boxX, y, rightX, y);
+  doc.line(boxX, y + 26, rightX, y + 26);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(CB_INK);
+  doc.text('Due Amount', boxX + 4, y + 17);
+  doc.text(':', tColonX, y + 17);
+  doc.text(plain(Math.max(0, bill.balance)), rightX, y + 17, { align: 'right' });
+  y += 26 + 26;
+
+  // ── Footer ──
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
+  const favour = bankDetails || practice.name;
+  if (favour) { doc.text(`Chq / DD : Favour Of ${favour}`, MARGIN, y); y += 14; }
+  const ded = [footerText || tagline, formatDateTime(bill.createdAt)].filter(Boolean).join('        ');
+  if (ded) { doc.text(ded, MARGIN, y); }
+
+  // Cashier (right, aligned with the favour/dedication lines).
+  doc.setTextColor(CB_INK);
+  doc.text('Cashier', rightX, y - 14, { align: 'right' });
+  if (cashierName) { doc.setFont('helvetica', 'normal'); doc.text(cashierName, rightX, y, { align: 'right' }); }
+
+  // ── Verification QRs (bottom) — report-status tracking + staff order.
+  //    Pinned above the closing note with a single-line caption so they
+  //    never collide with it. ──
+  const qrSize = 46, qrTop = A4.h - qrSize - 54;
+  let qx = MARGIN;
+  const drawQr = (data: string | undefined, caption: string) => {
+    if (!data) return;
+    try { doc.addImage(data, 'PNG', qx, qrTop, qrSize, qrSize); } catch { return; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
+    doc.text(caption, qx + qrSize / 2, qrTop + qrSize + 8, { align: 'center' });
+    qx += qrSize + 34;
+  };
+  drawQr(qrDataUrl, 'TRACK REPORT');
+  drawQr(orderQrDataUrl, 'STAFF ORDER');
+
+  // Computer-generated note (very bottom).
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor('#555555');
+  doc.text('This is a computerized bill and does not require signature', MARGIN, A4.h - 22);
+  doc.text(`Invoice No: ${invoiceNumber}`, rightX, A4.h - 22, { align: 'right' });
+}
+
+/** Plain rupee amount with Indian grouping, no currency symbol — matches
+ *  the cash-bill style ("2,570" / "2,570.00"). */
+function plain(n: number): string {
+  const v = n ?? 0;
+  const whole = Math.round(v) === v;
+  return v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+}
+
+/** First sample barcode, else a short uppercase order id. */
+function cashSampleId(order: Order | null | undefined): string {
+  const bc = order?.samples?.find(s => !!s.barcode)?.barcode;
+  return bc || shortId(order?.id);
+}
+
+function shortId(id: string | undefined | null): string {
+  if (!id) return '—';
+  return id.replace(/-/g, '').slice(-8).toUpperCase();
+}
+
+function formatDateTime(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Integer rupees → English words, Indian numbering (lakh/crore). */
+function numberToWordsINR(num: number): string {
+  if (!isFinite(num) || num <= 0) return 'Zero';
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const twoDigits = (n: number): string => {
+    if (n < 20) return ones[n];
+    return `${tens[Math.floor(n / 10)]}${n % 10 ? ' ' + ones[n % 10] : ''}`;
+  };
+  const threeDigits = (n: number): string => {
+    const h = Math.floor(n / 100), r = n % 100;
+    return `${h ? ones[h] + ' Hundred' + (r ? ' ' : '') : ''}${r ? twoDigits(r) : ''}`;
+  };
+  let n = Math.floor(num);
+  const parts: string[] = [];
+  const crore = Math.floor(n / 10000000); n %= 10000000;
+  const lakh = Math.floor(n / 100000); n %= 100000;
+  const thousand = Math.floor(n / 1000); n %= 1000;
+  const hundred = n;
+  if (crore) parts.push(`${threeDigits(crore)} Crore`);
+  if (lakh) parts.push(`${twoDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${twoDigits(thousand)} Thousand`);
+  if (hundred) parts.push(threeDigits(hundred));
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Lighten a hex accent toward white for table-head fills (modern style). */
+function tint(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return '#eef2f7';
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const mix = (c: number) => Math.round(c + (255 - c) * 0.88);
+  return `#${[mix(r), mix(g), mix(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Map an invoice-template config row → the template fields `generateInvoicePdf`
+ *  consumes. Reused by every caller so the admin's choices apply everywhere. */
+export function invoiceTemplateFieldsFrom(tpl: Record<string, unknown> | null | undefined): Partial<InvoicePdfInput> {
+  if (!tpl) return {};
+  return {
+    template: (tpl['template'] as InvoiceTemplateStyle) || 'classic',
+    accentColor: (tpl['accentColor'] as string) || undefined,
+    tagline: (tpl['tagline'] as string) || undefined,
+    footerText: (tpl['footerText'] as string) || undefined,
+    bankDetails: (tpl['bankDetails'] as string) || undefined,
+    signatureLabel: (tpl['signatureLabel'] as string) || undefined,
+    jurisdiction: (tpl['jurisdiction'] as string) || undefined,
+    declaration: (tpl['declaration'] as string) || undefined,
+  };
+}
+
+/** Fetch an image URL and return a PNG/JPEG data URL for jsPDF.addImage (which
+ *  can't take a remote URL). Server-relative paths ("/uploads/…") are resolved
+ *  against `baseUrl` (the API origin) so uploaded logos load in dev + prod.
+ *  Returns undefined on any failure (logo optional). */
+export async function loadImageDataUrl(url: string | null | undefined, baseUrl?: string): Promise<string | undefined> {
+  if (!url) return undefined;
+  if (url.startsWith('data:')) return url;
+  const abs = /^https?:\/\//i.test(url) ? url : `${(baseUrl ?? '').replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+  try {
+    const res = await fetch(abs);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch { return undefined; }
 }
 
 function formatMoney(n: number): string {
-  // Indian locale grouping; jsPDF can't render the ₹ glyph reliably with
-  // its default Helvetica, so prefix Rs. instead.
-  return `Rs. ${n.toLocaleString('en-IN')}`;
+  return `Rs. ${(n ?? 0).toLocaleString('en-IN')}`;
 }
 
 function formatDate(iso: string | undefined | null): string {

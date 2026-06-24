@@ -5,6 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Department } from '../../../shared/models/tenant.model';
 import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { ReferralLab } from '../../../shared/models/referral-lab.model';
 import {
   ConditionEditorComponent,
   FieldOption,
@@ -43,6 +44,10 @@ interface DraftTest {
   parametersJson: string;
   conditionsJson: string;
   isActive: boolean;
+  /** Outsourcing: referral lab this test is subcontracted to ('' = in-house). */
+  outsourcedVendorId: string;
+  /** Department-at-vendor for outsourced vial grouping ('' = use the test's department). */
+  outsourcedDepartmentId: string;
 }
 
 function makeEmptyDraft(): DraftTest {
@@ -51,7 +56,8 @@ function makeEmptyDraft(): DraftTest {
     price: 0, taxSlab: 0,
     departmentId: '', tatHours: 24, sampleType: '',
     parametersJson: '', conditionsJson: '[]',
-    isActive: true
+    isActive: true,
+    outsourcedVendorId: '', outsourcedDepartmentId: ''
   };
 }
 
@@ -185,6 +191,31 @@ function newFieldId(): string {
             </div>
           </div>
         </pf-tile>
+
+        <!-- Outsourcing — subcontract this test to a referral lab. Outsourced
+             tests form their own vials per (lab + department) at collection. -->
+        @if (d.type !== 'package') {
+          <pf-tile tone="default" padding="lg" class="block">
+            <h3 class="section-title">Outsourcing</h3>
+            <div class="space-y-3 mt-4">
+              <div><label class="pf-label">Outsource to</label>
+                <pf-select [options]="referralLabOptions()" [value]="d.outsourcedVendorId"
+                           placeholder="— In-house (not outsourced) —"
+                           (valueChange)="patch({ outsourcedVendorId: $event, outsourcedDepartmentId: '' })"></pf-select>
+              </div>
+              @if (isOutsourced()) {
+                <div><label class="pf-label">Department at vendor</label>
+                  <pf-select [options]="outsourcedDeptOptions()" [value]="selectedOutsourcedDeptName()"
+                             placeholder="— Same as test department —"
+                             (valueChange)="onOutsourcedDeptPicked($event)"></pf-select>
+                  <p class="text-[11px] mt-1" style="color: var(--text-tertiary);">
+                    Used to group the outsourced sample into its own vial. Leave blank to use the test's department above.
+                  </p>
+                </div>
+              }
+            </div>
+          </pf-tile>
+        }
       </div>
 
       <!-- Packages have a totally different body — a member-test picker
@@ -814,6 +845,47 @@ export class TestEditorComponent implements OnInit {
     this.patch({ departmentId: id });
   }
 
+  // ── Outsourcing ───────────────────────────────────────────────
+  private readonly _referralLabs = signal<ReferralLab[]>([]);
+  readonly referralLabs = this._referralLabs.asReadonly();
+  readonly referralLabOptions = computed<PfSelectOption<string>[]>(() => {
+    const opts: PfSelectOption<string>[] = [{ value: '', label: '— In-house (not outsourced) —' }];
+    for (const l of this._referralLabs()) opts.push({ value: l.id, label: l.code ? `${l.name} (${l.code})` : l.name });
+    return opts;
+  });
+  readonly isOutsourced = computed(() => !!this._draft().outsourcedVendorId);
+
+  /** Department picker for the outsourced lab. Scoped to the selected lab's
+   *  declared department codes when present; otherwise all departments. */
+  readonly outsourcedDeptOptions = computed<PfSelectOption<string>[]>(() => {
+    const lab = this._referralLabs().find(l => l.id === this._draft().outsourcedVendorId);
+    let codes: string[] = [];
+    if (lab?.departmentCodesJson) {
+      try { const a = JSON.parse(lab.departmentCodesJson); if (Array.isArray(a)) codes = a; } catch { /* ignore */ }
+    }
+    const seen = new Set<string>();
+    const opts: PfSelectOption<string>[] = [{ value: '', label: '— Same as test department —' }];
+    for (const d of this._departments()) {
+      const name = (d.name ?? '').trim();
+      const code = (d.code ?? '').trim().toUpperCase();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      if (codes.length > 0 && code && !codes.includes(code)) continue;
+      seen.add(name.toLowerCase());
+      opts.push({ value: name, label: name });
+    }
+    return opts;
+  });
+  readonly selectedOutsourcedDeptName = computed<string>(() => {
+    const id = this._draft().outsourcedDepartmentId;
+    if (!id) return '';
+    return (this._departments().find(d => d.id === id)?.name ?? '').trim();
+  });
+  onOutsourcedDeptPicked(name: string) {
+    if (!name) { this.patch({ outsourcedDepartmentId: '' }); return; }
+    const id = this._departments().find(d => (d.name ?? '').trim() === name)?.id ?? '';
+    this.patch({ outsourcedDepartmentId: id });
+  }
+
   private readonly _draft = signal<DraftTest>(makeEmptyDraft());
   readonly draft = this._draft.asReadonly();
 
@@ -924,6 +996,9 @@ export class TestEditorComponent implements OnInit {
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
+    this.api.get<ReferralLab[]>('/api/referral-labs').subscribe({
+      next: l => this._referralLabs.set(l ?? [])
+    });
     // Load the full individual-test catalog so the package picker has
     // something to pick from. Filter happens client-side via the search box.
     this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
@@ -954,7 +1029,9 @@ export class TestEditorComponent implements OnInit {
       departmentId: t.departmentId ?? '', tatHours: t.tatHours,
       sampleType: t.sampleType ?? '',
       parametersJson: t.parameters ?? '', conditionsJson: t.conditions ?? '[]',
-      isActive: t.isActive
+      isActive: t.isActive,
+      outsourcedVendorId: t.outsourcedVendorId ?? '',
+      outsourcedDepartmentId: t.outsourcedDepartmentId ?? ''
     });
     this._fields.set(this.loadParameters(t.parameters ?? ''));
     // Packages store member-test ids under `items` in the same JSON blob.
@@ -1178,6 +1255,10 @@ export class TestEditorComponent implements OnInit {
       ? JSON.stringify({ items: this._packageItems() })
       : (d.parametersJson || undefined);
 
+    // Outsourcing: only individual tests can be outsourced. When a vendor is
+    // set we send it + the department-at-vendor; when cleared on an existing
+    // test we send clearOutsource so the PATCH detaches it.
+    const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;
     const body = {
       name: d.name, type: d.type, flow: d.flow,
       price: d.price, taxSlab: d.taxSlab,
@@ -1185,7 +1266,10 @@ export class TestEditorComponent implements OnInit {
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
       parametersJson,
       conditionsJson: d.conditionsJson || undefined,
-      isActive: d.isActive
+      isActive: d.isActive,
+      outsourcedVendorId: outsourced ? d.outsourcedVendorId : undefined,
+      outsourcedDepartmentId: outsourced ? (d.outsourcedDepartmentId || undefined) : undefined,
+      clearOutsource: (d.id && !outsourced) ? true : undefined
     };
 
     this._saving.set(true);

@@ -100,6 +100,13 @@ interface ResolvedTheme {
   showReported: boolean;
   // Patient block toggles
   showBarcode: boolean;
+  // Results — abnormal-flag styling. 'bold' = bold black value + H/L
+  // letter (most NABL/Drlogy reports); 'bold_color' = additionally tint
+  // high red / low blue. Admin-configurable.
+  flagStyle: 'bold' | 'bold_color';
+  // Group the continuous results table by department band as well as
+  // panel. Off by default → panel/profile headers only (no department).
+  groupByDepartment: boolean;
   // Chrome
   endOfReportText: string;
   showSampleBand: boolean;
@@ -152,13 +159,24 @@ interface ReportSnapshot {
     department?: string;
     departmentCode?: string;
     /** Specimen / sample type — pulled from TestEntity.Parameters JSON
-     *  during snapshot build. Rendered once below each test name; we
-     *  no longer carry it as a per-row column. */
+     *  during snapshot build. Rendered in the continuous results table's
+     *  Specimen column (once, on the test's first parameter row). */
     sampleType?: string | null;
     status?: string;
     result?: Record<string, unknown> | null;
     resultedAt?: string;
     validatedAt?: string;
+    /** NABL accreditation scope for this test. When `false`, the test is
+     *  segregated into a separate "Tests not under NABL scope" section
+     *  (NABL 133 — non-accredited tests must be separated, not asterisked).
+     *  Undefined ⇒ treated as in-scope so we never make a false claim. */
+    nablScope?: boolean;
+    /** Referral / subcontracted lab name. When present we print
+     *  "Tested at: {referralLab}" under the panel header (ISO 15189 7.4.1.6). */
+    referralLab?: string | null;
+    /** Analytical method (e.g. "Photometry"). Rendered as a dim sub-line
+     *  under the panel header when the template's `showMethod` is on. */
+    method?: string | null;
   }>;
 }
 
@@ -202,6 +220,7 @@ function defaultTheme(): ResolvedTheme {
     font: PDF_FONT, fontScale: 1,
     headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     tableStyle: 'plain', zebraRows: false,
+    flagStyle: 'bold', groupByDepartment: false,
     dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
     showRegistered: true, showCollected: true, showReported: true,
     showBarcode: true,
@@ -252,6 +271,8 @@ function resolveTheme(
   t.topAccentBar    = tpl.topAccentBar ?? true;
   t.tableStyle      = (tpl.tableStyle as 'plain'|'bordered'|'striped') ?? 'plain';
   t.zebraRows       = tpl.zebraRows ?? (tpl.tableStyle === 'striped');
+  t.flagStyle       = tpl.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
+  t.groupByDepartment = tpl.groupByDepartment ?? false;
   t.dateFormat      = tpl.dateFormat ?? t.dateFormat;
   t.timeFormat      = (tpl.timeFormat as 'none'|'12h'|'24h') ?? '12h';
   t.dateTimeSeparator = tpl.dateTimeSeparator ?? t.dateTimeSeparator;
@@ -356,40 +377,64 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     }
   }
 
-  // ── Body — grouped by department ───────────────────────────────
+  // ── Body — ONE continuous results table, grouped by panel/profile ──
+  // Each tabular test becomes a bold full-width "panel" header row
+  // followed by its parameter rows under a single header band
+  // (Investigation · Result · Reference Range · Unit · Specimen). Tests
+  // with a narrative/image layout (histopathology, cytology) and
+  // microbiology culture reports keep their own block format and render
+  // after the table. No department strips — panel headers only (NABL /
+  // reference-report style); department banding is opt-in via the template.
   const tests = snap.tests ?? [];
-  const byDept = groupBy(tests, t => t.department ?? 'Tests');
+  const tabular: typeof tests = [];
+  const special: typeof tests = [];
+  for (const t of tests) {
+    const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
+    if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
+      special.push(t);
+    } else if (layout && layout.sections.some(s => s.isVisible && s.type !== 'grid')) {
+      // Narrative / image / chart content can't live in the columnar table.
+      special.push(t);
+    } else {
+      tabular.push(t);
+    }
+  }
 
-  // Canonical columns for the whole report — the typed columns that appear in
-  // ANY test's layout, in Drlogy order. Every grid renders against these so the
-  // columns align down the page (the per-test column variance was the cause of
-  // the ragged look).
+  // Build panel groups (panel header + its parameter rows) for the table.
+  const groups = tabular
+    .map(t => buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined))
+    .filter(g => g.rows.length > 0);
+
+  // NABL 133 — segregate non-accredited tests into their own section
+  // (separated, never asterisked). Only when the lab is NABL-accredited
+  // AND at least one test is explicitly marked out-of-scope; otherwise we
+  // render a single table and make no scope claim.
+  const claimsNabl = !!template?.nablAccredited;
+  const outScope = claimsNabl ? groups.filter(g => g.inScope === false) : [];
+  const inScope = outScope.length > 0 ? groups.filter(g => g.inScope !== false) : groups;
+
+  if (inScope.length > 0) {
+    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null);
+  }
+  if (outScope.length > 0) {
+    cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
+    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null);
+  }
+
+  // Narrative + microbiology blocks after the columnar results.
+  // Canonical columns feed any grid section embedded in a narrative test.
   CANON_COLS = buildCanonicalColumns(resolvedLayouts);
-
-  for (const [dept, rows] of byDept.entries()) {
+  for (const t of special) {
+    const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
-    // Drlogy doesn't use coloured dept strips — they just put the dept
-    // name as small uppercase blue text above the test, OR omit it
-    // entirely. Use a thin blue label so multi-dept reports stay readable.
-    if (byDept.size > 1) {
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(BLUE);
-      doc.text(dept.toUpperCase(), MARGIN_X, cursorY);
-      cursorY += 12;
+    if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
+      cursorY = renderCultureSection(doc, t, cursorY, practice);
+    } else if (layout && layout.sections.length > 0) {
+      cursorY = renderResolvedTest(doc, t, layout, cursorY, practice);
+    } else {
+      cursorY = renderLegacyTest(doc, t, cursorY, practice);
     }
-
-    for (const t of rows) {
-      const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
-      if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
-        cursorY = renderCultureSection(doc, t, cursorY, practice);
-      } else if (layout && layout.sections.length > 0) {
-        cursorY = renderResolvedTest(doc, t, layout, cursorY, practice);
-      } else {
-        cursorY = renderLegacyTest(doc, t, cursorY, practice);
-      }
-      cursorY += 10;
-    }
+    cursorY += 10;
   }
 
   // ── Pending-depts banner (preliminary only) ────────────────────
@@ -1022,6 +1067,219 @@ function drawBarcodePlaceholder(doc: jsPDF, x: number, y: number, w: number, h: 
     cx += bw + gap;
     i++;
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Continuous results table — panel/profile grouping, single header
+// band (Investigation · Result · Reference Range · Unit · Specimen).
+// This is the primary results renderer; every tabular test's rows are
+// merged into ONE table so the column header is drawn once (and repeats
+// only on page breaks), matching professional NABL / reference reports.
+// ──────────────────────────────────────────────────────────────
+
+interface PanelRowData {
+  kind: 'param' | 'note';
+  name?: string;
+  result?: string;
+  range?: string;
+  unit?: string;
+  /** Display letter: 'H' | 'L' | 'C' | 'A' | '' */
+  flag?: string;
+  isLow?: boolean;
+  abnormal?: boolean;
+  note?: string;
+}
+
+interface PanelGroup {
+  testName: string;
+  specimen?: string;
+  method?: string;
+  referralLab?: string | null;
+  /** undefined ⇒ treated as in NABL scope (no claim either way). */
+  inScope?: boolean;
+  rows: PanelRowData[];
+}
+
+/** Extract a test's parameter rows into a panel group for the continuous
+ *  table. Uses the resolved grid layout when present, else the legacy
+ *  `result.values` map. */
+function buildPanelGroup(
+  t: NonNullable<ReportSnapshot['tests']>[number],
+  layout: ResolvedReportLayout | undefined
+): PanelGroup {
+  const group: PanelGroup = {
+    testName: t.name ?? layout?.testName ?? 'Test',
+    specimen: ((t.sampleType ?? layout?.sampleType) ?? '').trim() || undefined,
+    method: (t.method ?? '').trim() || undefined,
+    referralLab: (t.referralLab ?? '').trim() || undefined,
+    inScope: t.nablScope,
+    rows: [],
+  };
+
+  const gridSections = (layout?.sections ?? []).filter(s => s.isVisible && s.type === 'grid');
+  if (gridSections.length > 0) {
+    const cols = layout!.columns;
+    const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
+    const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
+    for (const sec of gridSections) {
+      for (const r of sec.rows ?? []) {
+        if (r.isMerged) {
+          const note = (r.mergeContent ?? '').trim();
+          if (note) group.rows.push({ kind: 'note', note });
+          continue;
+        }
+        const label = flagLabel(r);
+        group.rows.push({
+          kind: 'param',
+          name: humanize(r.parameterName ?? ''),
+          result: resultSrc ? (r.cells[resultSrc.name] ?? '') : '',
+          range: rangeSrc ? (r.cells[rangeSrc.name] ?? '') : '',
+          unit: unitSrc ? (r.cells[unitSrc.name] ?? '') : '',
+          flag: label === 'High' ? 'H' : label === 'Low' ? 'L' : '',
+          isLow: label === 'Low',
+          abnormal: !!r.color,
+        });
+      }
+    }
+    return group;
+  }
+
+  // Legacy values map.
+  const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string }> | undefined;
+  for (const [paramName, v] of Object.entries(values ?? {})) {
+    const flag = (v?.flag ?? '').toUpperCase();
+    const letter = ['H', 'L', 'C', 'A'].includes(flag) ? flag : '';
+    group.rows.push({
+      kind: 'param',
+      name: humanize(paramName),
+      result: String(v?.value ?? '—'),
+      range: v?.range ?? '',
+      unit: v?.unit ?? '',
+      flag: letter,
+      isLow: flag === 'L',
+      abnormal: !!letter,
+    });
+  }
+  return group;
+}
+
+/** A thin uppercase section heading + rule — used for the
+ *  "Tests not under NABL scope" segregation band. */
+function renderScopeHeading(
+  doc: jsPDF,
+  text: string,
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>
+): number {
+  let y = startY;
+  if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(theme.primary);
+  doc.text(text, MARGIN_X, y + 10);
+  doc.setDrawColor(HAIR);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, y + 14, A4.w - MARGIN_X, y + 14);
+  return y + 18;
+}
+
+/** Render all panel groups as ONE continuous autoTable. */
+function renderContinuousTable(
+  doc: jsPDF,
+  groups: PanelGroup[],
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>,
+  _title: string | null
+): number {
+  if (groups.length === 0) return startY;
+  if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
+
+  const usable = A4.w - 2 * MARGIN_X;
+  const W = {
+    invest: 0.32 * usable,
+    result: 0.16 * usable,
+    range: 0.24 * usable,
+    unit: 0.12 * usable,
+    specimen: 0.16 * usable,
+  };
+
+  type Cell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
+  const head: Cell[][] = [[
+    { content: 'Investigation', styles: { halign: 'left' } },
+    { content: 'Result', styles: { halign: 'left' } },
+    { content: 'Reference Range', styles: { halign: 'left' } },
+    { content: 'Unit', styles: { halign: 'left' } },
+    { content: 'Specimen', styles: { halign: 'left' } },
+  ]];
+
+  const body: Cell[][] = [];
+  for (const g of groups) {
+    // Panel / profile header band — bold, full width.
+    body.push([{
+      content: g.testName.toUpperCase(),
+      colSpan: 5,
+      styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
+    }]);
+
+    // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
+    const sub: string[] = [];
+    if (g.method) sub.push(`Method: ${g.method}`);
+    if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
+    if (sub.length > 0) {
+      body.push([{
+        content: sub.join('       '),
+        colSpan: 5,
+        styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+      }]);
+    }
+
+    let firstParam = true;
+    for (const r of g.rows) {
+      if (r.kind === 'note') {
+        body.push([{
+          content: r.note ?? '',
+          colSpan: 5,
+          styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
+        }]);
+        continue;
+      }
+      const resultStyles: Record<string, unknown> = { halign: 'left', textColor: BLACK };
+      if (r.abnormal) {
+        resultStyles['fontStyle'] = 'bold';
+        if (theme.flagStyle === 'bold_color') resultStyles['textColor'] = r.isLow ? FLAG_BLUE : FLAG_RED;
+      }
+      const resultContent = r.flag ? `${r.result ?? ''}  ${r.flag}` : (r.result ?? '');
+      const specimenCell = firstParam ? (g.specimen ?? '') : '';
+      firstParam = false;
+      body.push([
+        { content: r.name ?? '', styles: { fontStyle: 'bold', textColor: BLACK } },
+        { content: resultContent, styles: resultStyles },
+        { content: r.range ?? '', styles: { textColor: TEXT_DIM } },
+        { content: r.unit ?? '', styles: { textColor: TEXT_DIM } },
+        { content: specimenCell, styles: { textColor: TEXT_DIM, fontSize: 8 } },
+      ]);
+    }
+  }
+
+  autoTable(doc, {
+    startY,
+    head: head as unknown as Array<Array<string | Cell>>,
+    body: body as unknown as Array<Array<string | Cell>>,
+    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM },
+    theme: 'plain',
+    styles: tableBodyStyles(),
+    headStyles: tableHeadStyles(),
+    bodyStyles: { fillColor: '#ffffff' },
+    alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
+    columnStyles: {
+      0: { cellWidth: W.invest, halign: 'left' },
+      1: { cellWidth: W.result, halign: 'left' },
+      2: { cellWidth: W.range, halign: 'left' },
+      3: { cellWidth: W.unit, halign: 'left' },
+      4: { cellWidth: W.specimen, halign: 'left' },
+    } as unknown as Record<number, { cellWidth: number }>,
+  });
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 }
 
 // ──────────────────────────────────────────────────────────────

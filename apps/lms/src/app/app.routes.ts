@@ -49,6 +49,13 @@ export const appRoutes: Route[] = [
       // to /frontdesk, not /admin (which would then 403).
       { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
 
+      // Scanned order QR (`/o/:id`) → opens the order (collection drawer if the
+      // user can collect, else the patient profile).
+      {
+        path: 'o/:id',
+        loadComponent: () => import('./features/order-open/order-open.component').then(m => m.OrderOpenComponent)
+      },
+
       // Admin — gated: hidden from nav + blocked at route level if the user
       // doesn't hold any admin permission (manage_tests/users/workflows/branches).
       {
@@ -107,6 +114,11 @@ export const appRoutes: Route[] = [
         path: 'admin/vendors',
         canActivate: [permissionGuard('manage_tenant')],
         loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)
+      },
+      {
+        path: 'admin/referral-labs',
+        canActivate: [permissionGuard('manage_tests')],
+        loadComponent: () => import('./features/admin/referral-labs/referral-labs.component').then(m => m.ReferralLabsComponent)
       },
       {
         path: 'admin/lab-settings',

@@ -118,6 +118,7 @@ export class SidebarComponent {
         { label: 'Manage settings',   href: '/admin/manage',         icon: '🗂️', perms: ADMIN_PERMS },
         // Catalog
         { label: 'Tests & Packages',  href: '/admin/tests',          icon: '🧪', perms: ['manage_tests'] },
+        { label: 'Referral Labs',     href: '/admin/referral-labs',  icon: '🔬', perms: ['manage_tests'] },
         { label: 'Inventory',         href: '/admin/inventory',      icon: '📦', perms: ['manage_inventory'] },
         { label: 'Report Template',   href: '/admin/reports',        icon: '📄', perms: ['manage_tests'] },
         // People & Access

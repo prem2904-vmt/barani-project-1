@@ -167,7 +167,8 @@ interface OrderGroup {
                     <span class="pf-sc__chip"
                           [style.background]="tube(s).color"
                           [class.pf-sc__chip--done]="s.status !== 'pending'"
-                          [title]="tube(s).label"></span>
+                          [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
+                          [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
                   }
                 </div>
                 <div class="pf-sc__card-tail">
@@ -692,6 +693,12 @@ interface OrderGroup {
       box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
     }
     .pf-sc__chip--done { opacity: 0.3; }
+    /* Outsourced vials carry a pink outline so collectors spot the
+       send-out tubes at a glance in the rack. */
+    .pf-sc__chip--out {
+      width: 7px;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1.5px #ec4899;
+    }
 
     .pf-sc__card-tail { display: inline-flex; align-items: center; gap: 8px; }
     .pf-sc__count {
@@ -1540,6 +1547,31 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   openOrder(id: string) { this._openOrderId.set(id); }
+
+  /** Open a specific order's collection drawer (e.g. from a scanned order QR).
+   *  Best-effort merges the order's samples in case they aren't in the pending
+   *  list (already collected / different lifecycle). */
+  async openOrderById(id: string) {
+    this._openOrderId.set(id);
+    this.scanValue.set('');
+    try {
+      const order = await firstValueFrom(this.api.get<Order>(`/api/orders/${id}`));
+      if (order?.samples?.length) {
+        const have = new Set(this._pending().map(s => s.id));
+        const extras = order.samples.filter(s => !have.has(s.id)).map(s => ({ ...s, order } as OrderSample));
+        if (extras.length) this._pending.update(cur => [...cur, ...extras]);
+      }
+    } catch { /* drawer still shows any pending samples for this order */ }
+  }
+
+  /** Resolve a scanned order QR / URL / GUID / invoice number to an order and
+   *  open it. Uses the collector-accessible resolve endpoint. */
+  private resolveOrderCode(code: string) {
+    this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
+      next: r => { if (r?.orderId) this.openOrderById(r.orderId); else this.toasts.warning('No matching order for that scan.'); },
+      error: () => this.toasts.warning('No matching order for that scan.')
+    });
+  }
   close() {
     this._openOrderId.set(null);
     // Deep-linked from another screen (FD "Collect Sample") — return there
@@ -1592,14 +1624,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // No in-list match — try exact barcode lookup as a fallback.
-    if (matches.length === 0 && this.looksLikeBarcode(raw)) {
-      this.findByBarcode();
-      return;
-    }
-
     if (matches.length === 0) {
-      this.toasts.warning('No matching patient or barcode in the queue.');
+      // Sample vial barcode (PF-… / long digits) → exact barcode lookup.
+      if (this.looksLikeBarcode(raw)) { this.findByBarcode(); return; }
+      // Otherwise treat it as an order QR / URL / GUID / invoice number.
+      this.resolveOrderCode(raw);
+      return;
     }
     // Multiple in-list matches → user keeps typing; the live filter is
     // surfaced via filteredGroups() in the template.

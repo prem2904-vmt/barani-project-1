@@ -11,7 +11,9 @@ import { ToastService } from '../../../core/services/toast.service';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
-import { generateInvoicePdf } from './invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
+import { environment } from '../../../../environments/environment';
+import { waLink } from '../../../shared/utils/whatsapp';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -188,7 +190,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </div>
                 }
                 <div class="pf-bill-line pf-bill-line--discount">
-                  <span>Discount</span>
+                  <span>Discount @if (discountCapPct() < 100) { <span class="pf-discount__cap">(max {{ discountCapPct() }}%)</span> }</span>
                   <div class="pf-discount">
                     <div class="pf-discount__kind" role="tablist" aria-label="Discount unit">
                       <button type="button" role="tab"
@@ -203,6 +205,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            min="0"
                            step="1"
                            [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
+                           [class.pf-discount__input--err]="discountOverCap()"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
                            (keydown)="blockDiscountChars($event)"
@@ -213,6 +216,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     }
                   </div>
                 </div>
+                @if (discountOverCap()) {
+                  <p class="pf-discount__err">Discount {{ discountPct().toFixed(0) }}% exceeds your {{ discountCapPct() }}% limit — reduce it to confirm.</p>
+                }
                 <div class="pf-bill-line pf-bill-line--total">
                   <span>Total</span>
                   <span class="tabular-nums">{{ fullTotal() | inr }}</span>
@@ -321,25 +327,23 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </div>
                 }
                 @case ('cash') {
-                  <div class="flex flex-col h-full min-h-0">
-                    <!-- Tendered / Due / Change at the top, then the
-                         numpad fills the rest. Quick-add chips removed
-                         per UX request — reception types the amount. -->
-                    <div class="grid grid-cols-3 gap-2 items-center mb-2">
-                      <div class="pf-cash-chip">
-                        <p class="pf-cash-chip__label">Tendered</p>
-                        <p class="pf-cash-chip__value">{{ cashAmountNum() | inr }}</p>
-                      </div>
-                      <div class="pf-cash-chip">
-                        <p class="pf-cash-chip__label">Due</p>
-                        <p class="pf-cash-chip__value">{{ effectivePayable() | inr }}</p>
-                      </div>
-                      <div class="pf-cash-chip" [attr.data-kind]="changeAmount() >= 0 ? 'ok' : 'short'">
-                        <p class="pf-cash-chip__label">{{ changeAmount() >= 0 ? 'Change' : 'Short' }}</p>
-                        <p class="pf-cash-chip__value">{{ changeAbs() | inr }}</p>
-                      </div>
+                  <div class="flex flex-col h-full min-h-0 gap-2">
+                    <!-- Enter what the patient handed over; the change to return
+                         is shown prominently. Quick chips: exact, or + a note. -->
+                    <div class="pf-cash2__head">
+                      <span class="pf-cash2__label">Cash received</span>
+                      <span class="pf-cash2__amt" [class.pf-cash2__amt--empty]="cashAmountNum() === 0">{{ cashAmountNum() | inr }}</span>
                     </div>
-
+                    <div class="pf-cash2__quick">
+                      <button type="button" (click)="setExactCash()">Exact</button>
+                      @for (n of cashNotes; track n) { <button type="button" (click)="addCash(n)">+{{ n }}</button> }
+                    </div>
+                    <div class="pf-cash2__change" [attr.data-kind]="cashAmountNum() === 0 ? 'idle' : (changeAmount() > 0 ? 'change' : (changeAmount() === 0 ? 'exact' : 'short'))">
+                      @if (cashAmountNum() === 0) { <span>Enter the amount received · due {{ effectivePayable() | inr }}</span> }
+                      @else if (changeAmount() > 0) { <span>Return to patient</span><strong>{{ changeAbs() | inr }}</strong> }
+                      @else if (changeAmount() === 0) { <span>Exact — no change due</span> }
+                      @else { <span>Short by</span><strong>{{ changeAbs() | inr }}</strong> }
+                    </div>
                     <pf-num-pad
                       [value]="cashAmount()"
                       [allowDecimal]="false"
@@ -655,6 +659,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       border-color: rgba(168, 85, 247, 0.55);
       box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
+    .pf-discount__input--err, .pf-discount__input--err:focus { border-color: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18); }
+    .pf-discount__cap { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+    .pf-discount__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: #f87171; }
     .pf-discount__rupee {
       position: absolute;
       right: 10px;
@@ -822,6 +829,24 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
     }
+    /* Clearer cash flow: received → change to return. */
+    .pf-cash2__head { display: flex; align-items: baseline; justify-content: space-between; }
+    .pf-cash2__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .pf-cash2__amt { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-cash2__amt--empty { color: var(--text-muted); }
+    .pf-cash2__quick { display: flex; gap: 6px; }
+    .pf-cash2__quick button { flex: 1; padding: 8px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); }
+    .pf-cash2__quick button:hover { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.4); color: var(--text-primary); }
+    .pf-cash2__change { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border); }
+    .pf-cash2__change span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .pf-cash2__change strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pf-cash2__change[data-kind="change"] { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.4); }
+    .pf-cash2__change[data-kind="change"] span, .pf-cash2__change[data-kind="change"] strong { color: #34d399; }
+    .pf-cash2__change[data-kind="exact"] { background: rgba(52,211,153,0.06); border-color: rgba(52,211,153,0.25); }
+    .pf-cash2__change[data-kind="exact"] span { color: #34d399; }
+    .pf-cash2__change[data-kind="short"] { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.4); }
+    .pf-cash2__change[data-kind="short"] span, .pf-cash2__change[data-kind="short"] strong { color: #f87171; }
     .pf-cash-chip__label {
       margin: 0;
       font-size: 10.5px;
@@ -1500,8 +1525,27 @@ export class BillingComponent implements OnInit, OnChanges {
     return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${enc}`;
   });
 
+  // ── Per-role discount cap (notify rather than silently clamp) ──
+  private readonly _maxDiscountPct = signal(100);
+  private readonly _overrideDiscountPct = signal(100);
+  /** Discount % this user may grant by permission tier. */
+  readonly discountCapPct = computed(() =>
+    this.auth.hasPermission('override_discount') ? this._overrideDiscountPct()
+    : this.auth.hasPermission('give_discount') ? this._maxDiscountPct()
+    : 0);
+  /** Entered discount as a % of the bill's pre-discount total. */
+  readonly discountPct = computed(() => {
+    const b = this._bill();
+    const base = b ? b.subTotal + b.totalTax : 0;
+    return base > 0 ? (this.discountNum() / base) * 100 : 0;
+  });
+  /** True when the entered discount exceeds the user's cap → block + notify. */
+  readonly discountOverCap = computed(() =>
+    this.discountNum() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
+
   readonly canConfirm = computed(() => {
     if (this._paid()) return false; // already paid — never let it re-fire
+    if (this.discountOverCap()) return false; // discount above this user's limit
     const m = this._mode();
     if (m === 'cash') return this.cashAmountNum() >= this.effectivePayable();
     if (m === 'wallet') {
@@ -1551,6 +1595,14 @@ export class BillingComponent implements OnInit, OnChanges {
       next: r => { if (r?.token) this.trackToken.set(r.token); }, error: () => {}
     });
     this.api.get<any>('/api/config/invoice-template').subscribe({ next: t => this.invoiceTpl.set(t), error: () => {} });
+    // Per-role discount caps (Level-1 give_discount / Level-2 override_discount).
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing').subscribe({
+      next: c => {
+        if (typeof c?.maxDiscountPct === 'number') this._maxDiscountPct.set(c.maxDiscountPct);
+        if (typeof c?.overrideDiscountPct === 'number') this._overrideDiscountPct.set(c.overrideDiscountPct);
+      },
+      error: () => { /* default 100% cap */ }
+    });
     // A discount carried from the Build-an-order cart (resolved ₹) — via the
     // route in standalone mode, or the input in embedded mode.
     const carriedDiscount = this.embedded
@@ -1671,7 +1723,9 @@ export class BillingComponent implements OnInit, OnChanges {
     });
   }
   setCash(v: string) { this._cash.set(v); }
-  addCash(n: number) { this._cash.update(cur => String((parseInt(cur || '0', 10) || 0) + n)); }
+  readonly cashNotes = [100, 500, 2000];
+  setExactCash() { this._cash.set(String(this.effectivePayable())); }
+  addCash(n: number) { this._cash.set(String(this.cashAmountNum() + n)); }
   setCashExact() { this._cash.set(String(this.effectivePayable())); }
   clearCash() { this._cash.set(''); }
 
@@ -1864,29 +1918,32 @@ export class BillingComponent implements OnInit, OnChanges {
           } catch { /* fall through — handled below */ }
         }
       }
-      if (token) {
-        try {
-          const url = `${window.location.origin}/track/${token}`;
-          const QRCode = (await import('qrcode')).default;
-          qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 220 });
-        } catch { /* QR is best-effort */ }
-      } else {
-        this.toasts.warning('Invoice ready, but the tracking QR could not be generated.');
-      }
+      let orderQrDataUrl: string | undefined;
+      const oidForQr = this._order()?.id ?? this.route.snapshot.queryParamMap.get('orderId');
+      try {
+        const QRCode = (await import('qrcode')).default;
+        if (token) qrDataUrl = await QRCode.toDataURL(`${window.location.origin}/track/${token}`, { margin: 1, width: 220 });
+        else this.toasts.warning('Invoice ready, but the tracking QR could not be generated.');
+        // Staff order QR.
+        if (oidForQr) orderQrDataUrl = await QRCode.toDataURL(`${window.location.origin}/o/${oidForQr}`, { margin: 1, width: 220 });
+      } catch { /* QR is best-effort */ }
       // Document title: explicit mode, else auto from whether the bill carries tax
       // (most diagnostic services are GST-exempt → Bill of Supply).
       const mode = tpl?.documentMode ?? 'auto';
       const docTitle = mode === 'bill_of_supply' ? 'BILL OF SUPPLY'
         : mode === 'tax_invoice' ? 'TAX INVOICE'
         : (b.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+      const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
       generateInvoicePdf({
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
         effectivePayable: this.effectivePayable(),
         tatLabel: this.tatLabel(),
-        qrDataUrl,
+        qrDataUrl, orderQrDataUrl, logoDataUrl,
+        cashierName: this.auth.user()?.displayName || undefined,
         docTitle,
+        ...invoiceTemplateFieldsFrom(tpl),
         practice: {
           name: ((tpl?.labName) || this.auth.user()?.tenantName) || undefined,
           address: tpl?.address || undefined,
@@ -1916,17 +1973,7 @@ export class BillingComponent implements OnInit, OnChanges {
     const tat = this.tatLabel();
     if (tat) lines.push(tat);
     lines.push('Thank you for choosing us.');
-    const msg = encodeURIComponent(lines.join('\n'));
-    const phone = (p?.phone ?? '').replace(/[^\d]/g, '');
-    // wa.me strips the leading + and accepts a country-code-prefixed
-    // number. Indian-numbers default to 91 if 10 digits with no prefix.
-    const target = phone
-      ? (phone.length === 10 ? `91${phone}` : phone)
-      : '';
-    const url = target
-      ? `https://wa.me/${target}?text=${msg}`
-      : `https://wa.me/?text=${msg}`;
-    window.open(url, '_blank', 'noopener');
+    window.open(waLink(p?.phone, lines.join('\n')), '_blank', 'noopener');
   }
 
   /** Close the dialog and return to the FD landing — payment is done,

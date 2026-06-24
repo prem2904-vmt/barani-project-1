@@ -65,15 +65,26 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
             </div>
           }
           @case ('cash') {
-            <div class="pf-ipp__cashchips">
-              <div class="pf-ipp__chip"><span>Tendered</span><strong>{{ cashNum() | inr }}</strong></div>
-              <div class="pf-ipp__chip"><span>Due</span><strong>{{ amount() | inr }}</strong></div>
-              <div class="pf-ipp__chip" [attr.data-kind]="change() >= 0 ? 'ok' : 'short'">
-                <span>{{ change() >= 0 ? 'Change' : 'Short' }}</span><strong>{{ changeAbs() | inr }}</strong>
+            <div class="pf-cash">
+              <div class="pf-cash__head">
+                <span class="pf-cash__label">Cash received</span>
+                <span class="pf-cash__amt" [class.pf-cash__amt--empty]="cashNum() === 0">{{ cashNum() | inr }}</span>
               </div>
+              <!-- Quick set: exact, or add a note the patient handed over. -->
+              <div class="pf-cash__quick">
+                <button type="button" (click)="setExactCash()">Exact</button>
+                @for (n of cashNotes; track n) { <button type="button" (click)="addCash(n)">+{{ n }}</button> }
+              </div>
+              <!-- The whole point: how much to hand back. -->
+              <div class="pf-cash__change" [attr.data-kind]="cashNum() === 0 ? 'idle' : (change() > 0 ? 'change' : (change() === 0 ? 'exact' : 'short'))">
+                @if (cashNum() === 0) { <span>Enter the amount received · due {{ amount() | inr }}</span> }
+                @else if (change() > 0) { <span>Return to patient</span><strong>{{ changeAbs() | inr }}</strong> }
+                @else if (change() === 0) { <span>Exact — no change due</span> }
+                @else { <span>Short by</span><strong>{{ changeAbs() | inr }}</strong> }
+              </div>
+              <pf-num-pad [value]="cash()" [allowDecimal]="false" [compact]="true"
+                          (valueChange)="cash.set($event)"></pf-num-pad>
             </div>
-            <pf-num-pad [value]="cash()" [allowDecimal]="false" [compact]="true"
-                        (valueChange)="cash.set($event)"></pf-num-pad>
           }
           @case ('wallet') {
             <div class="pf-ipp__wallet">
@@ -121,7 +132,7 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
         }
       </div>
 
-      <button type="button" class="pf-ipp__confirm" [disabled]="busy() || !canConfirm()" (click)="emit()">
+      <button type="button" class="pf-ipp__confirm" [disabled]="busy() || blocked() || !canConfirm()" (click)="emit()">
         @if (mode() === 'later') { Place order (pay later) }
         @else { {{ busy() ? 'Processing…' : ('Confirm payment · ' + (amount() | inr)) }} }
       </button>
@@ -150,12 +161,25 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
     .pf-ipp__hint { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); }
     .pf-ipp__input { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
       background: var(--glass-bg, rgba(255,255,255,0.04)); color: var(--text-primary); font-size: 13px; }
-    .pf-ipp__cashchips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-    .pf-ipp__chip { padding: 8px 10px; border-radius: 10px; background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); text-align: center; }
-    .pf-ipp__chip span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
-    .pf-ipp__chip strong { font-size: 14px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .pf-ipp__chip[data-kind="ok"] strong { color: #34d399; }
-    .pf-ipp__chip[data-kind="short"] strong { color: #f87171; }
+    .pf-cash { display: flex; flex-direction: column; gap: 10px; }
+    .pf-cash__head { display: flex; align-items: baseline; justify-content: space-between; }
+    .pf-cash__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .pf-cash__amt { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-cash__amt--empty { color: var(--text-muted); }
+    .pf-cash__quick { display: flex; gap: 6px; }
+    .pf-cash__quick button { flex: 1; padding: 8px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); background: var(--glass-bg, rgba(255,255,255,0.04)); color: var(--text-secondary); }
+    .pf-cash__quick button:hover { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.4); color: var(--text-primary); }
+    .pf-cash__change { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); }
+    .pf-cash__change span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .pf-cash__change strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pf-cash__change[data-kind="change"] { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.4); }
+    .pf-cash__change[data-kind="change"] span, .pf-cash__change[data-kind="change"] strong { color: #34d399; }
+    .pf-cash__change[data-kind="exact"] { background: rgba(52,211,153,0.06); border-color: rgba(52,211,153,0.25); }
+    .pf-cash__change[data-kind="exact"] span { color: #34d399; }
+    .pf-cash__change[data-kind="short"] { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.4); }
+    .pf-cash__change[data-kind="short"] span, .pf-cash__change[data-kind="short"] strong { color: #f87171; }
     .pf-ipp__wallet, .pf-ipp__split { display: flex; flex-direction: column; gap: 8px; }
     .pf-ipp__vendor { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); }
     .pf-ipp__link { background: none; border: 0; color: var(--color-primary, #a78bfa); font-weight: 600; cursor: pointer; font-size: 12px; }
@@ -178,6 +202,8 @@ export class InlinePaymentPanelComponent implements OnInit {
   readonly amount = input<number>(0);
   readonly patientPhone = input<string | undefined>(undefined);
   readonly busy = input<boolean>(false);
+  /** Host blocks Confirm (e.g. discount over the user's cap). */
+  readonly blocked = input<boolean>(false);
   readonly confirm = output<InlinePaymentResult>();
 
   readonly modes: ModeDef[] = [
@@ -196,6 +222,9 @@ export class InlinePaymentPanelComponent implements OnInit {
   readonly cashNum = computed(() => parseInt(this.cash() || '0', 10) || 0);
   readonly change = computed(() => this.cashNum() - this.amount());
   readonly changeAbs = computed(() => Math.abs(this.change()));
+  readonly cashNotes = [100, 500, 2000];
+  setExactCash() { this.cash.set(String(this.amount())); }
+  addCash(n: number) { this.cash.set(String(this.cashNum() + n)); }
 
   // Card ref
   readonly refNo = signal('');

@@ -4,7 +4,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from 
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiService } from '../../../core/services/api.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
-import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, actionHome, requiresOf } from '../../../shared/models/process-workflow.model';
+import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -335,7 +335,9 @@ export class ProcessBuilderComponent implements OnInit {
     this.healLocks(lanes);
     this.healDeps(lanes);
     const placed = new Set(lanes.flatMap(l => l.items.map(i => i.type)));
-    this.palette.set(ACTION_CATALOG.filter(a => !placed.has(a.type)));
+    // Repeatable actions stay in the palette even once placed, so they can be
+    // dropped into several work-areas.
+    this.palette.set(ACTION_CATALOG.filter(a => isRepeatable(a.type) || !placed.has(a.type)));
     this.lanes.set(lanes);
     this.dirty.set(dirty);
   }
@@ -399,7 +401,8 @@ export class ProcessBuilderComponent implements OnInit {
     } else if (ev.previousContainer.id === 'palette') {
       const entry = this.palette()[ev.previousIndex];
       ev.container.data.splice(ev.currentIndex, 0, { id: crypto.randomUUID(), type: entry.type, enabled: true });
-      this.palette.update(p => p.filter((_, i) => i !== ev.previousIndex));
+      // Repeatable actions remain available in the palette for another placement.
+      if (!isRepeatable(entry.type)) this.palette.update(p => p.filter((_, i) => i !== ev.previousIndex));
       addedType = entry.type;
     } else {
       const moving = (ev.previousContainer.data as LaneItem[])[ev.previousIndex];
@@ -421,7 +424,8 @@ export class ProcessBuilderComponent implements OnInit {
     if (isLocked(item.type)) { this.toasts.info(`${this.labelFor(item)} can't be removed`); return; }
     prev.splice(ev.previousIndex, 1);
     const entry = catalogFor(item.type);
-    if (entry) this.palette.update(p => [...p, entry]);
+    // Repeatable types are already kept in the palette — don't add a duplicate.
+    if (entry && !isRepeatable(item.type)) this.palette.update(p => [...p, entry]);
     // Removing an action cascades off its dependents + coupled partner (e.g. drop
     // dispatch → lab intake off; drop collection → dispatch/results off).
     const { desired } = this.cascade(item.type, false);

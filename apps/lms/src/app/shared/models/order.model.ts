@@ -24,6 +24,8 @@ export interface OrderSample {
   id: string;
   orderId: string;
   departmentId: string;
+  /** When set, this vial is destined for an outsourced/referral lab (null = in-house). */
+  outsourcedVendorId?: string | null;
   status: string;
   barcode?: string;
   qrCode?: string;

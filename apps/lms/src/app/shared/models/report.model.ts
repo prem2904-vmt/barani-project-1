@@ -99,6 +99,9 @@ export interface ReportTemplate {
   showInstrument: boolean;
   groupByDepartment: boolean;
   showCriticalFlag: boolean;
+  /** Abnormal-flag styling in the results table:
+   *  'bold' (bold value + H/L letter) | 'bold_color' (also tints high red / low blue). */
+  flagStyle?: string;
 
   // ── Signatures & footer ──────────────────────────────────
   showPathologistName: boolean;

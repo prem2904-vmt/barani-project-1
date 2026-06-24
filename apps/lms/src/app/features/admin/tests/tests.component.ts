@@ -183,6 +183,9 @@ const UNASSIGNED = 'Unassigned';
                     @if (!t.isActive) {
                       <pf-chip tone="default" size="sm">inactive</pf-chip>
                     }
+                    @if (t.outsourcedVendorId) {
+                      <pf-chip tone="violet" size="sm">outsourced</pf-chip>
+                    }
                   </div>
                   <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
                     @if (tab() === 'individual') {

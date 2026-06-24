@@ -2,6 +2,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report } from '../../../shared/models/report.model';
@@ -13,6 +14,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { waLink } from '../../../shared/utils/whatsapp';
 
 type Filter = 'all' | 'partial' | 'pending' | 'delivered' | 'failed';
 
@@ -653,6 +655,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
   private readonly injector = inject(Injector);
+  private readonly auth = inject(AuthService);
 
   // "Completed" = lab work signed off, report generated, awaiting
   // delivery. Backed by deliveryStatus === 'pending' on the report row
@@ -958,8 +961,25 @@ export class ReportQueueComponent implements OnInit {
   }
 
   deliver(r: Report, via: string) {
-    this.api.post(`/api/reports/${r.id}/deliver`, { via, note: null }).subscribe({
-      next: () => { this.toasts.success(`Delivered via ${via}`); this.refresh(); }
+    // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
+    // (wa.me) pre-filled with the patient's number + a message carrying the
+    // report's QR verify link. wa.me can't auto-attach the PDF, so the link
+    // stands in for it. Then record the delivery best-effort.
+    if (via === 'whatsapp') {
+      const lab = this.auth.user()?.tenantName || 'our lab';
+      const name = r.order?.patient?.displayName ?? '';
+      const link = r.qrToken ? `${window.location.origin}/reports/public/${r.qrToken}` : '';
+      const lines = [
+        name ? `Hi ${name},` : 'Hi,',
+        `Your lab report from ${lab} is ready.`,
+      ];
+      if (link) lines.push(`View & download your report:\n${link}`);
+      lines.push('Please contact us if you have any questions.');
+      window.open(waLink(r.order?.patient?.phone, lines.join('\n\n')), '_blank', 'noopener');
+    }
+    this.api.post(`/api/reports/${r.id}/deliver`, { via, note: via === 'whatsapp' ? 'wa.me link' : null }).subscribe({
+      next: () => { if (via !== 'whatsapp') this.toasts.success(`Delivered via ${via}`); this.refresh(); },
+      error: () => { /* best-effort; the wa.me window already opened */ }
     });
   }
 

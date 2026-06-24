@@ -1526,10 +1526,24 @@ export class MyWorkComponent implements OnInit {
     return true;
   }
 
+  /** A scanned order QR encodes a full URL (`http://host/o/<id>`), not a tube
+   *  barcode. Detect an order/track URL (or a bare `/o/<id>` path) and route to
+   *  the canonical opener instead of trying to match a result row. Returns true
+   *  when it handled (and routed) the scan. */
+  private routeIfOrderUrl(text: string): boolean {
+    const order = text.match(/\/o\/([0-9a-fA-F-]{6,})/);
+    if (order) { this._scan.set(''); this.router.navigate(['/o', order[1]]); return true; }
+    const track = text.match(/\/track\/([^/?#\s]+)/);
+    if (track) { this._scan.set(''); this.router.navigate(['/track', track[1]]); return true; }
+    return false;
+  }
+
   /** Try to resolve a scanned barcode/OrderTest id → jump to result entry. */
   scanSubmit() {
     const q = this._scan().trim();
     if (!q) return;
+    // Scanned order QR (a /o/<id> URL) → open the order, don't tube-match.
+    if (this.routeIfOrderUrl(q)) return;
     // Look for a row whose barcode/id matches the scan. We route through
     // /claim-by-scan so the backend enforces (a) this user is the
     // assignee and (b) the scanned code actually matches the sample —

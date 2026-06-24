@@ -17,6 +17,10 @@ export interface Test {
   sampleType?: string;
   tatHours: number;
   isActive: boolean;
+  /** When set, this test is subcontracted to a referral lab (null = in-house). */
+  outsourcedVendorId?: string | null;
+  /** Department-at-vendor used for outsourced vial grouping (falls back to departmentId). */
+  outsourcedDepartmentId?: string | null;
   department?: { id: string; name: string; code: string };
   createdAt: string;
 }
