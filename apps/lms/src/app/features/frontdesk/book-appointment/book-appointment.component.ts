@@ -482,7 +482,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
               [disabled]="!canSubmit() || saving()"
               (click)="submit()"
             >
-              {{ saving() ? "Booking…" : "Book + Send WhatsApp" }}
+              {{ saving() ? "Booking…" : "Book" }}
             </button>
           </div>
         </section>

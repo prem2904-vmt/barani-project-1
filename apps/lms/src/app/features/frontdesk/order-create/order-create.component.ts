@@ -1,5 +1,5 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -40,7 +40,7 @@ interface HistoryRow {
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
 })
-export class OrderCreateComponent implements OnInit, OnDestroy {
+export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -54,6 +54,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  readonly patientSearch = viewChild<PatientSearchComponent>('patientSearch');
 
   focusSearchInput() {
     setTimeout(() => {
@@ -71,7 +72,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
 
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
-  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('all');
+  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('recent');
   /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
   readonly favouriteIds = signal<Set<string>>(new Set());
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
@@ -308,6 +309,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     // Cheapest-first per the user's preference: low value → high value.
     return out.sort((a, b) => a.package.price - b.package.price);
   });
+
+  ngAfterViewInit() {
+    const hasPatientId = this.route.snapshot.queryParamMap.has('patientId');
+    const hasEditOrderId = this.route.snapshot.queryParamMap.has('editOrderId');
+    if (!hasPatientId && !hasEditOrderId && !this.patient()) {
+      setTimeout(() => {
+        this.patientSearch()?.focus();
+      }, 0);
+    }
+  }
 
   ngOnInit() {
     this.labCfg.ensureLoaded();
@@ -658,7 +669,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
       this.paidOrderId.set(order.id);
       this.toasts.success(d.mode === 'later' ? 'Order placed — payment pending' : 'Payment collected');
       // Auto-open the invoice print dialog (best-effort).
-      this.printPaidInvoice();
+      //this.printPaidInvoice();
     } catch (e: any) {
       this.toasts.error(e?.message ?? 'Could not complete payment');
     } finally {
@@ -687,7 +698,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     this._selected.set([]);
     this._patient.set(null);
     this.discountValue.set('');
-    this.router.navigateByUrl('/frontdesk');
+    this.router.navigateByUrl('/frontdesk/order');
+    setTimeout(() => {
+      this.patientSearch()?.focus();
+    }, 0);
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }

@@ -64,6 +64,7 @@
                 }
               } @else {
                 <pf-patient-search
+                  #patientSearch
                   placeholder="Search patient by name, phone, MRN, ABHA…"
                   (picked)="attachPatient($event)"
                 ></pf-patient-search>
@@ -418,7 +419,7 @@
             <p class="pf-eyebrow">Order summary</p>
             <p class="pf-cart-head">Cart · {{ selected().length }}</p>
           </div>
-          @if (selected().length > 0) {
+          @if (selected().length > 0 && !paidOrderId()) {
             <button type="button" (click)="clearCart()" class="pf-cart-clear press">Clear</button>
           }
         </div>
@@ -437,11 +438,13 @@
                   }
                 </div>
                 <span class="pf-cart-amount">{{ t.price | inr }}</span>
-                <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 6l12 12M18 6 6 18"/>
-                  </svg>
-                </button>
+                 @if (!paidOrderId()) {
+                  <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 6l12 12M18 6 6 18"/>
+                    </svg>
+                  </button>
+                }
               </li>
             }
           }
