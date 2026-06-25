@@ -158,9 +158,11 @@ export class PatientProfileComponent implements OnInit {
   readonly loading = this._loading.asReadonly();
   readonly displayName = computed(() => patientDisplayName(this._patient()));
 
-  /** "37y" — uses the stored age, else computes from DOB, else "—". */
+  /** "37y" — a DOB (real or synthesized from an entered age, anchored to the
+   *  registration date) always wins so the age stays live and increments; falls
+   *  back to a stored static age, else "—". */
   ageLabel(p: Patient): string {
-    const yrs = p.age ?? this.ageFromDob(p.dateOfBirth);
+    const yrs = p.dateOfBirth ? this.ageFromDob(p.dateOfBirth) : (p.age ?? null);
     return yrs == null ? '—' : `${yrs}y`;
   }
   private ageFromDob(dob: string | undefined): number | null {
@@ -208,14 +210,23 @@ export class PatientProfileComponent implements OnInit {
     this.savingEdit.set(true);
     // Empty-string clears (sent as null where the API treats null = no-change,
     // so for clearable text we send '' which the patch applies verbatim).
+    // Hybrid DOB/age: a DOB wins; an age-only entry becomes a synthetic DOB
+    // anchored to today so the displayed age increments over time.
+    let dobIso = d.dateOfBirth ? new Date(d.dateOfBirth).toISOString() : undefined;
+    let ageOut: number | undefined = d.age != null && `${d.age}` !== '' ? Number(d.age) : undefined;
+    if (!dobIso && ageOut != null && Number.isFinite(ageOut) && ageOut >= 0 && ageOut < 150) {
+      const a = new Date(); a.setHours(0, 0, 0, 0); a.setFullYear(a.getFullYear() - ageOut);
+      dobIso = a.toISOString();
+    }
+    if (dobIso) ageOut = undefined; // DOB present → recompute age from it (stays live)
     const body = {
       firstName: d.firstName.trim(),
       fathersName: d.fathersName.trim(),
       phone: d.phone.trim(),
       email: d.email.trim(),
       sex: d.sex || undefined,
-      dateOfBirth: d.dateOfBirth ? new Date(d.dateOfBirth).toISOString() : undefined,
-      age: d.age != null && `${d.age}` !== '' ? Number(d.age) : undefined,
+      dateOfBirth: dobIso,
+      age: ageOut,
       bloodGroup: d.bloodGroup ?? '',
     };
     try {

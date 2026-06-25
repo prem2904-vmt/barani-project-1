@@ -85,7 +85,24 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
                     [ngModel]="value" (ngModelChange)="emit($event)"></textarea>
         }
         @case ('date') {
-          <input type="date" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          @if (isDobField()) {
+            <!-- Hybrid DOB / Age: enter an exact date OR just an age — both
+                 sit together (no step switch). Age is anchored to today so it
+                 increments over time; either way the field's value is a DOB. -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <input type="date" class="pf-input" style="flex:1 1 160px"
+                     [ngModel]="value" (ngModelChange)="emit($event)" />
+              <span class="text-xs" style="color: var(--text-tertiary);">or</span>
+              <input type="number" class="pf-input" style="flex:0 0 116px" min="0" max="150"
+                     placeholder="Age (yrs)"
+                     [ngModel]="ageFromValue()" (ngModelChange)="onHybridAge($event)" />
+            </div>
+            <p class="text-[11px]" style="color: var(--text-tertiary);">
+              Date of birth, or just an age — age is anchored to today and stays live.
+            </p>
+          } @else {
+            <input type="date" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
         }
         @case ('datetime') {
           <input type="datetime-local" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
@@ -575,6 +592,33 @@ export class DynamicInputComponent {
   emit(v: unknown) {
     this._value.set(v);
     this.valueChange.emit(v);
+  }
+
+  // ── Hybrid DOB / Age ──────────────────────────────────────────────
+  /** A date field that represents date-of-birth → render the DOB/Age hybrid. */
+  readonly isDobField = computed(() => /(^|_)dob$|date_of_birth|birth_?date/i.test(this._field()?.name ?? ''));
+
+  /** Age implied by the current DOB value (so the age box mirrors the date). */
+  readonly ageFromValue = computed<number | null>(() => {
+    const v = this._value();
+    if (!v) return null;
+    const d = new Date(String(v));
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    let a = now.getFullYear() - d.getFullYear();
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
+    return a < 0 || a > 150 ? null : a;
+  });
+
+  /** Age typed in the hybrid → synthesize a DOB anchored to today (so the age
+   *  increments over time) and emit it as the field's value (a DOB). */
+  onHybridAge(raw: unknown) {
+    if (raw == null || `${raw}` === '') { this.emit(null); return; }
+    const age = Math.floor(Number(raw));
+    if (!Number.isFinite(age) || age < 0 || age > 150) return;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    d.setFullYear(d.getFullYear() - age);
+    this.emit(d.toISOString().slice(0, 10)); // yyyy-MM-dd for <input type=date>
   }
 
   /** Normalise options to `{value,label}` regardless of whether strings or objects are passed. */
