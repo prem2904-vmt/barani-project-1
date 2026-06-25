@@ -338,6 +338,7 @@ function drawFooter(doc: jsPDF, o: FooterOpts): void {
 const CB_INK = '#111111';
 const CB_GREY = '#444444';
 const CB_RULE = '#333333';
+const CB_PAID = '#15803d';   // green — paid status accent + stamp
 
 function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
   const { bill, order, invoiceNumber, effectivePayable, practice = {}, logoDataUrl, tagline, footerText, bankDetails, cashierName, qrDataUrl, orderQrDataUrl } = input;
@@ -402,9 +403,11 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     margin: { left: MARGIN, right: MARGIN },
     theme: 'plain',
     styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, textColor: CB_INK, lineWidth: 0 },
-    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, halign: 'left', lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
+    // No halign here — let columnStyles set per-column alignment so the header
+    // label and its body cells share the same edge (was: head left / body right).
+    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
     bodyStyles: { fillColor: '#ffffff' },
-    columnStyles: { 0: { cellWidth: 44 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 84, halign: 'right' }, 3: { cellWidth: 84, halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 44, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 84, halign: 'center' }, 3: { cellWidth: 84, halign: 'right' } },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7); doc.line(MARGIN, y, rightX, y);
@@ -423,6 +426,10 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
       doc.text(`${(p.mode || 'PAID').toUpperCase()} : ${p.amount.toFixed(2)}${ref}`, MARGIN, py);
       py += 13;
     }
+  } else if (bill.totalPaid > 0) {
+    // Bill is settled but the payment breakdown wasn't supplied — show the
+    // collected total so the mode line isn't blank on a paid invoice.
+    doc.text(`PAID : ${bill.totalPaid.toFixed(2)}`, MARGIN, py); py += 13;
   } else {
     doc.text('—', MARGIN, py); py += 13;
   }
@@ -447,16 +454,28 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   for (const l of doc.splitTextToSize(`(Amount in words: ${words} Only)`, cx + 10 - MARGIN)) { doc.text(l, MARGIN, y); y += 14; }
   y += 6;
 
-  // ── Due Amount box (right) ──
+  // ── Paid / Due box (right) — label + colour follow the actual status ──
+  const isPaid = bill.balance <= 0;
   const boxX = rightX - 230;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7);
   doc.line(boxX, y, rightX, y);
   doc.line(boxX, y + 26, rightX, y + 26);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(CB_INK);
-  doc.text('Due Amount', boxX + 4, y + 17);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+  doc.setTextColor(isPaid ? CB_PAID : CB_INK);
+  doc.text(isPaid ? 'Amount Paid' : 'Due Amount', boxX + 4, y + 17);
   doc.text(':', tColonX, y + 17);
-  doc.text(plain(Math.max(0, bill.balance)), rightX, y + 17, { align: 'right' });
+  doc.text(plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)), rightX, y + 17, { align: 'right' });
   y += 26 + 26;
+
+  // ── "PAID" stamp — angled green badge over the totals area on a settled bill ──
+  if (isPaid) {
+    doc.saveGraphicsState();
+    doc.setDrawColor(CB_PAID); doc.setTextColor(CB_PAID); doc.setLineWidth(2);
+    const sx = cx + 40, sy = blockTop + 2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
+    doc.text('PAID', sx, sy, { align: 'center', angle: 12 });
+    doc.restoreGraphicsState();
+  }
 
   // ── Footer ──
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
@@ -499,10 +518,12 @@ function plain(n: number): string {
   return v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
-/** First sample barcode, else a short uppercase order id. */
+/** First sample barcode. Falls back to '—' (NOT the order id) so the Sample ID
+ *  field never duplicates the Patient No, which already uses the order id when
+ *  no MRN is present. */
 function cashSampleId(order: Order | null | undefined): string {
   const bc = order?.samples?.find(s => !!s.barcode)?.barcode;
-  return bc || shortId(order?.id);
+  return bc || '—';
 }
 
 function shortId(id: string | undefined | null): string {

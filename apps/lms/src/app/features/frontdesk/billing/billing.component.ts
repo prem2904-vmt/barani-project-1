@@ -1949,7 +1949,8 @@ export class BillingComponent implements OnInit, OnChanges {
               amount, mode: 'wallet',
               referenceNo: this._referenceNo() || vendor.code || vendor.name
             }).subscribe({
-              next: () => {
+              next: (updated) => {
+                if (updated) this._bill.set(updated);
                 this._saving.set(false);
                 this._paid.set(true);
                 this.clearDraft();
@@ -1985,7 +1986,11 @@ export class BillingComponent implements OnInit, OnChanges {
         mode: this._mode(),
         referenceNo: this._referenceNo() || undefined
       }).subscribe({
-        next: () => {
+        next: (updated) => {
+          // Adopt the post-payment bill (balance→0, totalPaid set, payments[]
+          // populated) so the printed invoice reads "Paid" with the real mode
+          // of payment — not the stale pre-payment "Due" snapshot.
+          if (updated) this._bill.set(updated);
           this._saving.set(false);
           this._paid.set(true); // lock — Confirm is now disabled forever
           this.clearDraft();
