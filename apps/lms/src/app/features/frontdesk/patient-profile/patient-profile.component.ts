@@ -433,6 +433,17 @@ export class PatientProfileComponent implements OnInit {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
   }
 
+  /** Re-order the same tests from a prior order. Routes through order-create
+   *  with `?fromOrderId=…` (preselectFromOrder seeds the cart), where the
+   *  receptionist confirms/edits before creating the order → billing. */
+  repeatOrder(o: Order) {
+    const patientId = (o as { patientId?: string }).patientId || this.patient()?.id;
+    if (!patientId) return;
+    this.router.navigate(['/frontdesk/order'], {
+      queryParams: { patientId, fromOrderId: o.id }
+    });
+  }
+
   bookAppointment(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
   }

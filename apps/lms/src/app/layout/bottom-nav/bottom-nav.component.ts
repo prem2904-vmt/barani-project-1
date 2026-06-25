@@ -146,16 +146,18 @@ const DRAG_THRESHOLD_PX = 4;
               <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
             </svg>
           </button>
-          <button type="button" class="pf-rail-action press"
-                  (click)="onMorePeople()" aria-label="People">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </button>
+          @if (canMessages()) {
+            <button type="button" class="pf-rail-action press"
+                    (click)="onMorePeople()" aria-label="People">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </button>
+          }
         }
 
         <!-- "More" trigger. Phone: PF glyph pill at the end of the row.
@@ -218,17 +220,19 @@ const DRAG_THRESHOLD_PX = 4;
               </svg>
               <span>Notifications</span>
             </button>
-            <button type="button" role="menuitem" class="pf-more-item press"
-                    (click)="onMorePeople()">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-              <span>People</span>
-            </button>
+            @if (canMessages()) {
+              <button type="button" role="menuitem" class="pf-more-item press"
+                      (click)="onMorePeople()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span>People</span>
+              </button>
+            }
           }
           <!-- Theme: cycles System → Light → Dark. "System" follows the
                OS appearance live; Light/Dark pin an explicit choice. -->
@@ -984,6 +988,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   // ─── Visible nav lists ───────────────────────────────────────────
   private readonly process = inject(ProcessWorkflowService);
+  /** People (contacts + chat + calls) is part of the Messages capability —
+   *  hide its rail/menu button when the Messages work-area is disabled. */
+  readonly canMessages = computed(() => this.process.isEnabled('messages'));
   private readonly visible = (items: NavItem[]): NavItem[] => {
     const cMode = this.labCfg.collectionMode();
     const bMode = this.labCfg.billingMode();
