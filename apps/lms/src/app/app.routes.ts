@@ -40,6 +40,12 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/track/track.component').then(m => m.TrackComponent)
   },
   {
+    // Public, no-login report viewer reached from the WhatsApp/QR report link.
+    // DOB/phone step-up only — must never bounce through the staff login.
+    path: 'reports/public/:token',
+    loadComponent: () => import('./features/reports/public-report/public-report.component').then(m => m.PublicReportComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],
