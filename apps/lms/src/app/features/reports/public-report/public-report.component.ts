@@ -8,6 +8,8 @@ import { environment } from '../../../../environments/environment';
 
 interface PublicReportResult {
   org?: string; patient?: string; reportReady?: boolean; reportPdfUrl?: string;
+  report?: { id: string; type: string; createdAt?: string; data?: string | null };
+  template?: unknown;
 }
 
 /**
@@ -111,10 +113,15 @@ export class PublicReportComponent {
         this.result.set(res.data);
         const url = res.data.reportPdfUrl as string | undefined;
         if (url) {
+          // Best case: serve the exact archived PDF.
           this.rawPdfUrl.set(url);
           this.pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+        } else if (res.data.report?.data) {
+          // No archived PDF — render it client-side from the snapshot so the
+          // patient still sees their report (same renderer as the staff app).
+          await this.renderFromSnapshot(res.data);
         } else {
-          this.error.set('Your report is verified but the PDF is not available yet. Please contact the lab.');
+          this.error.set('Your report is verified but is not available yet. Please contact the lab.');
         }
       } else {
         this.error.set(res?.error?.message ?? 'Could not verify. Check the details and try again.');
@@ -123,6 +130,29 @@ export class PublicReportComponent {
       this.error.set(e?.error?.error?.message ?? 'Could not verify. Try again in a moment.');
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  /** Render the report PDF client-side from the snapshot returned by verify,
+   *  for reports that were never archived to storage. Uses the same renderer
+   *  as the staff app with the legacy per-test table fallback (no
+   *  authenticated layout resolution available on this public page). */
+  private async renderFromSnapshot(data: PublicReportResult) {
+    try {
+      const { buildReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
+      const baseInput = {
+        report: data.report as { id: string; type: string; createdAt?: string; data?: string | null },
+        template: (data.template ?? null) as never,
+        resolvedLayouts: {},
+      };
+      const imageCache = await preloadReportImages(baseInput, environment.apiUrl);
+      const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
+      const url = URL.createObjectURL(blob);
+      this.rawPdfUrl.set(url);
+      this.pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+    } catch (e) {
+      console.error('[public-report] client render failed', e);
+      this.error.set('Your report is verified but could not be displayed. Please contact the lab.');
     }
   }
 }
