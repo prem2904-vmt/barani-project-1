@@ -428,10 +428,39 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     <p class="text-[13px] mt-2 max-w-[280px]" style="color: var(--text-tertiary);">
                       @switch (mode()) {
                         @case ('split')  { Collect each portion on the terminal, then confirm below. }
-                        @case ('later')  { Mark as pending. Invoice will be sent on the report. }
+                        @case ('later')  { Mark as pending. The balance can be collected anytime before the report is delivered. }
                         @default { Follow on-screen prompts to complete the payment. }
                       }
                     </p>
+                    @if (mode() === 'later') {
+                      <!-- Advance payment (optional): collect a partial amount now;
+                           the remainder stays outstanding and can be settled later. -->
+                      <div class="pf-adv">
+                        <div class="pf-adv__head">
+                          <span class="pf-adv__title">Advance payment</span>
+                          <span class="pf-adv__opt">optional</span>
+                        </div>
+                        <div class="pf-adv__row">
+                          <span class="pf-adv__cur">₹</span>
+                          <input type="number" inputmode="numeric" min="0" [attr.max]="effectivePayable()"
+                                 class="pf-adv__input" [value]="advance()"
+                                 (input)="setAdvance(asInput($event))" placeholder="0"/>
+                          <button type="button" class="pf-adv__max" (click)="setAdvanceFull()">Full</button>
+                        </div>
+                        <div class="pf-adv__tenders">
+                          @for (t of advanceModes; track t.id) {
+                            <button type="button" class="pf-adv__tender"
+                                    [class.pf-adv__tender--on]="advanceMode() === t.id"
+                                    (click)="setAdvanceMode(t.id)">{{ t.label }}</button>
+                          }
+                        </div>
+                        @if (advanceNum() > 0) {
+                          <p class="pf-adv__hint">Collect <strong>{{ advanceNum() | inr }}</strong> now · <strong>{{ (effectivePayable() - advanceNum()) | inr }}</strong> stays outstanding</p>
+                        } @else {
+                          <p class="pf-adv__hint pf-adv__hint--muted">No advance — the full {{ effectivePayable() | inr }} is due on the report.</p>
+                        }
+                      </div>
+                    }
                     @if (mode() === 'split') {
                       <label class="pf-ref-row mt-6">
                         <span>Reference no.</span>
@@ -457,7 +486,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   </svg>
                 </span>
                 @if (paid()) { Payment received · {{ effectivePayable() | inr }} }
-                @else if (mode() === 'later') { Mark as pay-later · {{ effectivePayable() | inr }} }
+                @else if (mode() === 'later') {
+                  @if (advanceNum() > 0) { Collect advance · {{ advanceNum() | inr }} }
+                  @else { Mark as pay-later · {{ effectivePayable() | inr }} }
+                }
                 @else { Confirm payment · {{ effectivePayable() | inr }} }
               </pf-touch-btn>
             </pf-tile>
@@ -1050,6 +1082,54 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
 
+    /* ── Advance payment (optional, inside Pay later) ──────── */
+    .pf-adv {
+      width: 100%; max-width: 320px; margin-top: 22px;
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 14px; border-radius: 14px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+    }
+    .pf-adv__head { display: flex; align-items: center; justify-content: space-between; }
+    .pf-adv__title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .pf-adv__opt {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--text-tertiary); background: var(--bg-hover);
+      padding: 2px 7px; border-radius: 9999px;
+    }
+    .pf-adv__row { display: flex; align-items: center; gap: 8px; }
+    .pf-adv__cur { font-size: 16px; font-weight: 700; color: var(--text-secondary); }
+    .pf-adv__input {
+      flex: 1; min-width: 0; height: 44px; padding: 0 12px;
+      border-radius: 12px; background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border); color: var(--text-primary);
+      font-size: 16px; font-weight: 700; outline: none; text-align: right;
+    }
+    .pf-adv__input:focus {
+      border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+    }
+    .pf-adv__max {
+      flex-shrink: 0; height: 44px; padding: 0 12px; border-radius: 12px;
+      background: transparent; border: 1px solid var(--glass-border);
+      color: var(--text-secondary); font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .pf-adv__max:hover { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.4); }
+    .pf-adv__tenders { display: flex; gap: 6px; }
+    .pf-adv__tender {
+      flex: 1; height: 36px; border-radius: 10px;
+      background: transparent; border: 1px solid var(--glass-border);
+      color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background .12s ease, color .12s ease, border-color .12s ease;
+    }
+    .pf-adv__tender--on {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      border-color: rgba(168, 85, 247, 0.5); color: var(--text-primary);
+    }
+    .pf-adv__hint { margin: 0; font-size: 11.5px; color: var(--text-secondary); text-align: left; }
+    .pf-adv__hint strong { color: var(--text-primary); font-weight: 700; }
+    .pf-adv__hint--muted { color: var(--text-tertiary); }
+    @media (pointer: coarse) { .pf-adv__input { font-size: 16px; } .pf-adv__tender { min-height: 40px; } }
+
     /* ── Save / discard draft buttons ──────────────────────── */
     .pf-bill-draftrow {
       margin-top: 10px;
@@ -1503,6 +1583,12 @@ export class BillingComponent implements OnInit, OnChanges {
   /** 'flat' = ₹ amount, 'percent' = % of subtotal+tax. */
   private readonly _discountKind = signal<'flat' | 'percent'>('flat');
   private readonly _referenceNo = signal<string>('');
+  /** Pay-later advance: an OPTIONAL partial amount collected up-front while the
+   *  rest stays outstanding. Empty / 0 ⇒ pure pay-later. The remaining balance
+   *  can be settled anytime later (before report delivery) by reopening billing
+   *  for the order, which shows effectivePayable = the outstanding amount. */
+  private readonly _advance = signal<string>('');
+  private readonly _advanceMode = signal<'cash' | 'upi' | 'card'>('cash');
   /** Test catalogue — used to compute the report TAT estimate from
    *  bill-item testIds. Loaded once on mount. */
   private readonly _tests = signal<Test[]>([]);
@@ -1543,6 +1629,22 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly discount = this._discount.asReadonly();
   readonly discountKind = this._discountKind.asReadonly();
   readonly referenceNo = this._referenceNo.asReadonly();
+  readonly advance = this._advance.asReadonly();
+  readonly advanceMode = this._advanceMode.asReadonly();
+  readonly advanceModes = [
+    { id: 'cash' as const, label: 'Cash' },
+    { id: 'upi' as const, label: 'UPI' },
+    { id: 'card' as const, label: 'Card' },
+  ];
+  /** Entered advance, clamped to [0, amount still due]. */
+  readonly advanceNum = computed(() => {
+    const n = Math.floor(Number(this._advance() || '0'));
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.min(n, this.effectivePayable());
+  });
+  setAdvance(v: string) { this._advance.set(v); }
+  setAdvanceFull() { this._advance.set(String(this.effectivePayable())); }
+  setAdvanceMode(m: 'cash' | 'upi' | 'card') { this._advanceMode.set(m); }
 
   /** Resolved ₹ value of the discount: either the entered flat amount,
    *  or the entered percent applied to the bill's pre-discount total. */
@@ -1920,6 +2022,45 @@ export class BillingComponent implements OnInit, OnChanges {
     // open with balance == totalPayable, and the FD landing's
     // payments-due drawer surfaces it.
     if (this._mode() === 'later') {
+      const adv = this.advanceNum();
+      if (adv > 0) {
+        // Collect the optional advance now; the remainder stays outstanding so
+        // the order still flows as a pay-later (balance recorded, collectible
+        // anytime before report delivery).
+        const collectAdvance = (bill: Bill) => {
+          this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount: adv,
+            mode: this._advanceMode(),
+            referenceNo: this._referenceNo() || undefined
+          }).subscribe({
+            next: (updated) => {
+              if (updated) this._bill.set(updated);
+              this._saving.set(false);
+              this._paid.set(true);
+              this.clearDraft();
+              const rest = Math.max(0, this.fullTotal() - (updated?.totalPaid ?? adv));
+              this.toasts.success(rest > 0
+                ? `Advance collected — ₹${rest} stays outstanding (Pay later)`
+                : 'Payment collected in full');
+              this.billingEvents.notifyPayLater();
+              if (this.embedded) { this.paymentDone.emit(); }
+              this._paymentDoneOpen.set(true);
+            },
+            error: e => { this._saving.set(false); this.toasts.error(e?.error?.message ?? e?.message ?? 'Advance payment failed'); }
+          });
+        };
+        const d = this.discountNum();
+        if (d > 0) {
+          this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: d, reason: 'Reception discount' })
+            .subscribe({
+              next: updated => { this._bill.set(updated); collectAdvance(updated); },
+              error: e => { this._saving.set(false); this.toasts.error(e?.message ?? 'Could not apply discount'); }
+            });
+        } else {
+          collectAdvance(b);
+        }
+        return;
+      }
       this._saving.set(false);
       this._paid.set(true);
       this.clearDraft();
