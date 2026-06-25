@@ -75,13 +75,15 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 <span class="pf-sc__seg-sep">·</span>
                 <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.year }}</span>
                 <span class="pf-sc__seg-sep">·</span>
-                <input class="pf-sc__seg-part pf-sc__seg-input"
+                <input #manualInput
+                       class="pf-sc__seg-part pf-sc__seg-input"
                        inputmode="numeric"
                        pattern="[0-9]*"
                        maxlength="5"
                        placeholder="00000"
                        [ngModel]="manualSeq()"
-                       (ngModelChange)="onManualSeqChange($event)" />
+                       (ngModelChange)="onManualSeqChange($event)"
+                       (keydown.enter)="submitManual()" />
                 <span class="pf-sc__seg-sep">·</span>
                 <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.dept }}</span>
               </div>
@@ -95,7 +97,8 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                     (valueChange)="onManualSeqChange($event)"></pf-num-pad>
                 </div>
               }
-              <button type="button"
+              <button #confirmBtn
+                      type="button"
                       class="pf-sc__manual-confirm press"
                       [disabled]="manualSeq().length !== 5"
                       (click)="submitManual()">
@@ -344,6 +347,8 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @Output() cancelled = new EventEmitter<void>();
 
   @ViewChild('video') videoEl!: ElementRef<HTMLVideoElement>;
+  @ViewChild('manualInput') manualInputEl?: ElementRef<HTMLInputElement>;
+  @ViewChild('confirmBtn') confirmBtnEl?: ElementRef<HTMLButtonElement>;
 
   private reader: BrowserMultiFormatReader | null = null;
   private controls: IScannerControls | null = null;
@@ -407,6 +412,17 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onKey(ev: KeyboardEvent) {
+    if (this.manualMode() && ev.key === 'Enter') {
+      if (this.manualSeq().length === 5) {
+        ev.preventDefault();
+        this.submitManual();
+        return;
+      }
+    }
+
+    const target = ev.target as HTMLElement;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+
     // Ignore modifier-only keys and typical navigation keys.
     if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
 
@@ -458,6 +474,9 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     if (next) {
       try { this.controls?.stop(); } catch { /* ignore */ }
       this.cameraReady.set(false);
+      setTimeout(() => {
+        this.manualInputEl?.nativeElement.focus();
+      }, 50);
     } else {
       // Reattach the camera if the user goes back to scanning.
       this.restartCamera();
@@ -472,6 +491,10 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     const p = this.parsedExpected();
     if (!p) return;
     if (this.manualSeq().length !== 5) return;
+
+    // Focus confirm button to show active/focus state
+    this.confirmBtnEl?.nativeElement.focus();
+
     const assembled = `PF-${p.vendor}-${p.year}-${this.manualSeq().padStart(5, '0')}-${p.dept}`;
     // Same path as scan/HID — the mismatch-flash logic still applies if
     // the typed seq doesn't match the expected one, so we never claim the
