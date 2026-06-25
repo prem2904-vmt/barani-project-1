@@ -53,7 +53,7 @@ const PAY_MODES: PayModeDef[] = [
   { id: 'cash',   label: 'Cash',      hint: 'Collect note',   iconPath: 'M3 6h18v12H3zM7 12a5 3 0 0 1 10 0 5 3 0 0 1-10 0Z' },
   { id: 'wallet', label: 'Wallet',    hint: 'Paytm/PhonePe',  iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01' },
   { id: 'split',  label: 'Split',     hint: 'Mixed modes',    iconPath: 'M6 3v18M18 3v18M3 12h18' },
-  { id: 'later',  label: 'Pay later', hint: 'On report',      iconPath: 'M12 6v6l4 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
+  // { id: 'later',  label: 'Pay later', hint: 'On report',      iconPath: 'M12 6v6l4 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
 ];
 
 const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
@@ -134,26 +134,17 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           <!-- LEFT: invoice preview -->
           <div class="pf-bill-col">
             <pf-tile tone="default" padding="lg" class="pf-bill-tile">
-              <div class="flex items-center justify-between mb-4">
+              <!-- Header: Invoice Number & Due Amount -->
+              <div class="flex items-start justify-between mb-4">
                 <div>
                   <p class="pf-eyebrow">Invoice</p>
                   <p class="pf-bill-no">{{ invoiceNumber() }}</p>
-                  <div style="margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                    <!-- Invoice-number barcode (Code128) for counter scanning -->
-                    <div style="display:flex;align-items:center;gap:9px">
-                      <pf-barcode-display [code]="invoiceNumber()" mode="barcode" [size]="40" [bare]="true" [showValue]="false"></pf-barcode-display>
-                      <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Invoice<br/>barcode</span>
-                    </div>
-                    <!-- Result-tracking QR for the patient's phone -->
-                    @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
-                      <div style="display:flex;align-items:center;gap:9px">
-                        <pf-barcode-display [code]="trackUrl()" mode="qr" [size]="56" [bare]="true" [showValue]="false"></pf-barcode-display>
-                        <span style="font-size:10.5px;line-height:1.35;color:var(--text-muted)">Scan to track<br/>your report online</span>
-                      </div>
-                    }
-                  </div>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4">
+                  <div class="text-right">
+                    <p class="pf-eyebrow">Due</p>
+                    <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
+                  </div>
                   <button type="button" class="pf-bill-print-icon pf-no-print"
                           (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -161,11 +152,34 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
                     </svg>
                   </button>
-                  <div class="text-right">
-                    <p class="pf-eyebrow">Due</p>
-                    <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
+                </div>
+              </div>
+
+              <!-- Barcode & QR Code Section -->
+              <div class="pf-invoice-badges mb-6">
+                <!-- Invoice-number barcode (Code128) for counter scanning -->
+                <div class="pf-scanner-tag">
+                  <div class="pf-scanner-tag__code">
+                    <pf-barcode-display [code]="invoiceNumber()" mode="barcode" [size]="36" [bare]="true" [showValue]="false"></pf-barcode-display>
+                  </div>
+                  <div class="pf-scanner-tag__meta">
+                    <span class="pf-scanner-tag__label">Invoice Barcode</span>
+                    <span class="pf-scanner-tag__action">Scan to search</span>
                   </div>
                 </div>
+
+                <!-- Result-tracking QR for the patient's phone -->
+                @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
+                  <div class="pf-scanner-tag">
+                    <div class="pf-scanner-tag__code">
+                      <pf-barcode-display [code]="trackUrl()" mode="qr" [size]="36" [bare]="true" [showValue]="false"></pf-barcode-display>
+                    </div>
+                    <div class="pf-scanner-tag__meta">
+                      <span class="pf-scanner-tag__label">Patient Portal QR</span>
+                      <span class="pf-scanner-tag__action">Scan to track report</span>
+                    </div>
+                  </div>
+                }
               </div>
 
               <ul class="pf-bill-items">
@@ -615,6 +629,53 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       min-height: 0;
       overflow-y: auto;
       scrollbar-width: thin;
+      align-content: start;
+    }
+
+    /* Scanner tags in the Invoice header */
+    .pf-invoice-badges {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pf-scanner-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      flex: 1;
+      min-width: 180px;
+    }
+    .pf-scanner-tag__code {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      padding: 4px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .pf-scanner-tag__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pf-scanner-tag__label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.25;
+    }
+    .pf-scanner-tag__action {
+      font-size: 9px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      line-height: 1.2;
     }
     /* On wider viewports show two test rows side-by-side so the invoice
      * doesn't tower vertically when there are >5 tests. */
@@ -932,12 +993,16 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* UPI QR */
     .pf-qr {
       width: 100%;
-      max-width: 160px;
+      max-width: 180px;
       aspect-ratio: 1 / 1;
-      padding: 12px;
-      border-radius: 20px;
+      padding: 16px;
+      border-radius: 24px;
       background: #ffffff;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-primary);
+      box-shadow: 0 12px 32px rgba(124, 58, 237, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .pf-qr__img {
       width: 100%;
@@ -997,7 +1062,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       height: auto;
       border-radius: 20px;
       background: linear-gradient(135deg, #7c3aed, #ec4899);
-      box-shadow: 0 20px 60px rgba(124, 58, 237, 0.45);
+      box-shadow: 0 16px 40px rgba(124, 58, 237, 0.25);
       padding: 20px;
       color: #ffffff;
       display: flex;
