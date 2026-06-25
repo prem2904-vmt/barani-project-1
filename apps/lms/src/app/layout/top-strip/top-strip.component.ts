@@ -97,6 +97,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  is enabled in the workflow. */
   readonly canScan = computed(() =>
     this.process.isEnabled('sample_collection') && this.auth.hasPermission('collect_sample'));
+  /** The People drawer (tenant contacts + 1:1 chat + calls) is part of the
+   *  Messages capability, so hide its nav button when the Messages work-area
+   *  is disabled in the active workflow — mirrors the Messages screen going away. */
+  readonly canMessages = computed(() => this.process.isEnabled('messages'));
   /** A scanned order QR / barcode → resolve to an order and open it. */
   onScanOrder(code: string) {
     this.scan.close();
