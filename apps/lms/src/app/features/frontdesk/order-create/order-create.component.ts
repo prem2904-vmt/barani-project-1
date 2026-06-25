@@ -1,5 +1,5 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -40,7 +40,7 @@ interface HistoryRow {
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
 })
-export class OrderCreateComponent implements OnInit, OnDestroy {
+export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -54,6 +54,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  readonly patientSearch = viewChild<PatientSearchComponent>('patientSearch');
 
   focusSearchInput() {
     setTimeout(() => {
@@ -71,7 +72,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
 
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
-  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('all');
+  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('recent');
+  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'all' = 'recent';
   /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
   readonly favouriteIds = signal<Set<string>>(new Set());
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
@@ -107,7 +109,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   readonly cartOpen = this._cartOpen.asReadonly();
 
   readonly individualTests = computed(() => this._tests().filter(t => t.type !== 'package'));
-  readonly packages = computed(() => this._tests().filter(t => t.type === 'package'));
+  readonly packages = computed(() => {
+    const list = this._tests().filter(t => t.type === 'package');
+    return this.filterTestList(list, this._query());
+  });
 
   // ── Category-aware test lists ────────────────────────────────────
 
@@ -116,7 +121,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     const ids = this.favouriteIds();
     if (ids.size === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
-    return Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+    const list = Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+    return this.filterTestList(list, this._query());
   });
 
   /** Tests this user has ordered in the past, most-recent first. */
@@ -124,21 +130,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     const ids = this.recentIds();
     if (ids.length === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
-    return ids.map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+    const list = ids.map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
+    return this.filterTestList(list, this._query());
   });
 
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
-  readonly filteredTests = computed(() => {
-    const q = this._query().trim().toLowerCase();
-    const list = this.individualTests();
-    if (!q) return list;
-    // Common spelling divergences. US "hematology" wouldn't match the
-    // British "haematology" stored in the dept catalogue otherwise; same
-    // for paediatric / pediatric, anaesthesia / anesthesia. Expand the
-    // query into all known variants and match if ANY hit.
-    const variants = this.spellingVariants(q);
+  readonly filteredTests = computed(() => this.filterTestList(this.individualTests(), this._query()));
+
+  private filterTestList(list: Test[], q: string): Test[] {
+    const query = q.trim().toLowerCase();
+    if (!query) return list;
+    const variants = this.spellingVariants(query);
     return list.filter(t => {
       const hay = [
         t.name,
@@ -147,7 +151,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
       ].join(' ').toLowerCase();
       return variants.some(v => hay.includes(v));
     });
-  });
+  }
 
   /** Generate US/UK spelling variants of a search string so the catalogue
    *  matches regardless of which spelling the lab catalogue or the user
@@ -308,6 +312,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     // Cheapest-first per the user's preference: low value → high value.
     return out.sort((a, b) => a.package.price - b.package.price);
   });
+
+  ngAfterViewInit() {
+    const hasPatientId = this.route.snapshot.queryParamMap.has('patientId');
+    const hasEditOrderId = this.route.snapshot.queryParamMap.has('editOrderId');
+    if (!hasPatientId && !hasEditOrderId && !this.patient()) {
+      setTimeout(() => {
+        this.patientSearch()?.focus();
+      }, 0);
+    }
+  }
 
   ngOnInit() {
     this.labCfg.ensureLoaded();
@@ -514,7 +528,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   }
 
   setPriority(p: Priority) { this._priority.set(p); }
-  setQuery(q: string) { this._query.set(q); }
+  setQuery(q: string) {
+    this._query.set(q);
+    const queryStr = q.trim();
+    if (queryStr !== '') {
+      if (this.categoryTab() !== 'all') {
+        this.preSearchTab = this.categoryTab();
+        this.categoryTab.set('all');
+      }
+    } else {
+      this.categoryTab.set(this.preSearchTab);
+    }
+  }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   isSelected(id: string): boolean { return this._selected().includes(id); }
@@ -658,7 +683,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
       this.paidOrderId.set(order.id);
       this.toasts.success(d.mode === 'later' ? 'Order placed — payment pending' : 'Payment collected');
       // Auto-open the invoice print dialog (best-effort).
-      this.printPaidInvoice();
+      //this.printPaidInvoice();
     } catch (e: any) {
       this.toasts.error(e?.message ?? 'Could not complete payment');
     } finally {
@@ -687,7 +712,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
     this._selected.set([]);
     this._patient.set(null);
     this.discountValue.set('');
-    this.router.navigateByUrl('/frontdesk');
+    this.router.navigateByUrl('/frontdesk/order');
+    setTimeout(() => {
+      this.patientSearch()?.focus();
+    }, 0);
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }
@@ -862,6 +890,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
 
   setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'all'): void {
     this.categoryTab.set(tab);
+    this.preSearchTab = tab;
   }
 
   // ── Ref hospital ─────────────────────────────────────────────────
