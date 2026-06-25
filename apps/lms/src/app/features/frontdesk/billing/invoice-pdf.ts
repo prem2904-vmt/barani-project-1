@@ -338,7 +338,6 @@ function drawFooter(doc: jsPDF, o: FooterOpts): void {
 const CB_INK = '#111111';
 const CB_GREY = '#444444';
 const CB_RULE = '#333333';
-const CB_PAID = '#15803d';   // green — paid status accent + stamp
 
 function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
   const { bill, order, invoiceNumber, effectivePayable, practice = {}, logoDataUrl, tagline, footerText, bankDetails, cashierName, qrDataUrl, orderQrDataUrl } = input;
@@ -460,22 +459,11 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7);
   doc.line(boxX, y, rightX, y);
   doc.line(boxX, y + 26, rightX, y + 26);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
-  doc.setTextColor(isPaid ? CB_PAID : CB_INK);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(CB_INK);
   doc.text(isPaid ? 'Amount Paid' : 'Due Amount', boxX + 4, y + 17);
   doc.text(':', tColonX, y + 17);
   doc.text(plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)), rightX, y + 17, { align: 'right' });
   y += 26 + 26;
-
-  // ── "PAID" stamp — angled green badge over the totals area on a settled bill ──
-  if (isPaid) {
-    doc.saveGraphicsState();
-    doc.setDrawColor(CB_PAID); doc.setTextColor(CB_PAID); doc.setLineWidth(2);
-    const sx = cx + 40, sy = blockTop + 2;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
-    doc.text('PAID', sx, sy, { align: 'center', angle: 12 });
-    doc.restoreGraphicsState();
-  }
 
   // ── Footer ──
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
