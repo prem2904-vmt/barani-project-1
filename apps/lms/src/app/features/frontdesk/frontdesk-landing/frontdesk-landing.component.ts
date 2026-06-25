@@ -19,7 +19,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
-import { Appointment } from '../../../shared/models/appointment.model';
+import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/appointment.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -364,6 +364,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly openQueue = this._openQueue.asReadonly();
 
   private readonly _appointments = signal<Appointment[]>([]);
+  private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
   readonly homeCollections = this._homeCollections.asReadonly();
@@ -786,6 +787,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       });
     }
 
+    // Fetch Queue items to get correct tokens for checked-in/completed patients
+    this.api.get<QueueResponse>('/api/appointments/queue').subscribe({
+      next: r => this._queueItems.set(r?.items ?? []),
+      error: () => this._queueItems.set([])
+    });
+
     // Fetch Orders based on workBounds
     const workB = this.workBounds();
     if (workB.isToday) {
@@ -806,7 +813,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
 
     // Fetch Bills (always global)
-    this.api.get<Bill[]>('/api/billing/').subscribe({
+    this.api.get<Bill[]>('/api/billing/lookup?code=1223').subscribe({
       next: l => this._bills.set(l ?? []),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
@@ -2115,11 +2122,96 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return '';
     }
   }
+  readonly patientTokens = computed(() => {
+    const tokens = new Map<string, number>();
+    
+    // Collect all unique patient visits today with their earliest timestamp
+    const patientVisits: Array<{ patientId: string; time: number; existingToken?: number }> = [];
+    const seenPatients = new Set<string>();
+
+    // 1. Process queue items
+    for (const q of this._queueItems()) {
+      if (q.patientId && !seenPatients.has(q.patientId)) {
+        seenPatients.add(q.patientId);
+        const time = q.checkedInAt ? new Date(q.checkedInAt).getTime() : new Date(q.appointmentDate).getTime();
+        patientVisits.push({ patientId: q.patientId, time, existingToken: q.tokenNumber });
+      }
+    }
+
+    // 2. Process appointments
+    for (const a of this._appointments()) {
+      if (a.patientId && !seenPatients.has(a.patientId)) {
+        seenPatients.add(a.patientId);
+        const time = a.checkedInAt ? new Date(a.checkedInAt).getTime() : new Date(a.appointmentDate).getTime();
+        patientVisits.push({ patientId: a.patientId, time, existingToken: a.tokenNumber });
+      }
+    }
+
+    // 3. Process orders
+    for (const o of this._orders()) {
+      if (o.patientId && !seenPatients.has(o.patientId)) {
+        seenPatients.add(o.patientId);
+        const time = new Date(o.createdAt).getTime();
+        patientVisits.push({ patientId: o.patientId, time });
+      }
+    }
+
+    // Sort visits chronologically
+    patientVisits.sort((a, b) => a.time - b.time);
+
+    // Assign sequential tokens
+    let nextToken = 1;
+    for (const visit of patientVisits) {
+      if (visit.existingToken && Number.isFinite(visit.existingToken)) {
+        tokens.set(visit.patientId, visit.existingToken);
+        if (visit.existingToken >= nextToken) {
+          nextToken = visit.existingToken + 1;
+        }
+      } else {
+        tokens.set(visit.patientId, nextToken);
+        nextToken++;
+      }
+    }
+
+    return tokens;
+  });
+
   getAppointmentForOrder(o: Order): Appointment | null {
+    if (!o.patientId) return null;
+    const token = this.patientTokens().get(o.patientId);
+    
+    // Find any existing appointment/queue item to copy other properties (type, slotTime etc)
+    const queue = this._queueItems();
+    const qItem = queue.find(q => q.patientId === o.patientId);
+    if (qItem) {
+      return {
+        id: qItem.id,
+        patientId: qItem.patientId,
+        type: qItem.type,
+        tokenNumber: token ?? qItem.tokenNumber,
+        status: qItem.status,
+        appointmentDate: qItem.appointmentDate,
+        slotTime: qItem.slotTime
+      } as Appointment;
+    }
+
     const list = this._appointments();
-    const active = list.find(a => a.patientId === o.patientId && a.status !== 'booked' && a.status !== 'cancelled' && a.status !== 'no_show');
-    if (active) return active;
-    return list.find(a => a.patientId === o.patientId) ?? null;
+    const appt = list.find(a => a.patientId === o.patientId);
+    if (appt) {
+      return {
+        ...appt,
+        tokenNumber: token ?? appt.tokenNumber
+      };
+    }
+
+    return {
+      id: '',
+      patientId: o.patientId,
+      type: 'walkin',
+      tokenNumber: token,
+      status: 'completed',
+      appointmentDate: o.createdAt
+    } as unknown as Appointment;
   }
   typeColor(type?: string): string {
     const TYPE_COLOR: Record<string, string> = {

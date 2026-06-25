@@ -1266,5 +1266,5 @@ export class SampleResultEntryComponent {
     }
   }
 
-  back() { this.router.navigate(['/lab']); }
+  back() { this.router.navigate(['/lab/my-work']); }
 }
