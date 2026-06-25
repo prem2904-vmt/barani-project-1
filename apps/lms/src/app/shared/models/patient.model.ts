@@ -14,6 +14,8 @@ export interface Patient {
   dateOfBirth?: string;
   age?: number;
   sex?: string;
+  /** ABO/Rh blood group, e.g. "O+". Optional. */
+  bloodGroup?: string;
   isMinor: boolean;
   guardianName?: string;
   guardianPhone?: string;

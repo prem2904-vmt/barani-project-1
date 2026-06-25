@@ -1,4 +1,5 @@
 import { DatePipe, Location, CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -135,7 +136,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -156,6 +157,78 @@ export class PatientProfileComponent implements OnInit {
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly displayName = computed(() => patientDisplayName(this._patient()));
+
+  /** "37y" — uses the stored age, else computes from DOB, else "—". */
+  ageLabel(p: Patient): string {
+    const yrs = p.age ?? this.ageFromDob(p.dateOfBirth);
+    return yrs == null ? '—' : `${yrs}y`;
+  }
+  private ageFromDob(dob: string | undefined): number | null {
+    if (!dob) return null;
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    let a = now.getFullYear() - d.getFullYear();
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
+    return Math.max(0, a);
+  }
+
+  // ── Edit patient info ─────────────────────────────────────────────
+  readonly canEdit = computed(() => this.auth.hasAnyPermission(['edit_patient', 'register_patient']));
+  readonly bloodGroups = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+  private readonly _editDraft = signal<{
+    firstName: string; fathersName: string; phone: string; email: string;
+    sex: string; dateOfBirth: string; age: number | null; bloodGroup: string;
+  } | null>(null);
+  readonly editDraft = this._editDraft.asReadonly();
+  readonly savingEdit = signal(false);
+
+  openEdit(p: Patient) {
+    this._editDraft.set({
+      firstName: p.firstName ?? '',
+      fathersName: p.fathersName ?? '',
+      phone: p.phone ?? '',
+      email: p.email ?? '',
+      sex: p.sex ?? '',
+      dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
+      age: p.age ?? null,
+      bloodGroup: p.bloodGroup ?? '',
+    });
+  }
+  patchEdit(patch: Partial<NonNullable<ReturnType<typeof this.editDraft>>>) {
+    this._editDraft.update(d => d ? { ...d, ...patch } : d);
+  }
+  closeEdit() { this._editDraft.set(null); }
+
+  async saveEdit() {
+    const d = this._editDraft();
+    const p = this._patient();
+    if (!d || !p || this.savingEdit()) return;
+    if (!d.firstName.trim()) { this.toasts.warning('First name is required'); return; }
+    this.savingEdit.set(true);
+    // Empty-string clears (sent as null where the API treats null = no-change,
+    // so for clearable text we send '' which the patch applies verbatim).
+    const body = {
+      firstName: d.firstName.trim(),
+      fathersName: d.fathersName.trim(),
+      phone: d.phone.trim(),
+      email: d.email.trim(),
+      sex: d.sex || undefined,
+      dateOfBirth: d.dateOfBirth ? new Date(d.dateOfBirth).toISOString() : undefined,
+      age: d.age != null && `${d.age}` !== '' ? Number(d.age) : undefined,
+      bloodGroup: d.bloodGroup ?? '',
+    };
+    try {
+      const updated = await firstValueFrom(this.api.patch<Patient>(`/api/patients/${p.id}`, body));
+      if (updated) this._patient.set(updated);
+      this.toasts.success('Patient updated');
+      this._editDraft.set(null);
+    } catch (e) {
+      this.toasts.error((e as Error)?.message ?? 'Could not update patient');
+    } finally {
+      this.savingEdit.set(false);
+    }
+  }
 
   // Active Tab state
   protected readonly activeTab = signal<string>('overview');

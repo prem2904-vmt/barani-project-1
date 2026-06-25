@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
@@ -458,7 +459,8 @@ interface OrderGroup {
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m5 12 4 4L19 6"/>
                       </svg>
-                      {{ s.collectedAt | date:'shortTime' }}
+                      @if (s.status === 'collected') { {{ s.collectedAt | date:'shortTime' }} }
+                      @else { Dispatched }
                     </span>
                   } @else {
                     <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
@@ -469,8 +471,21 @@ interface OrderGroup {
           </div>
 
           <footer class="pf-drawer__foot">
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)">Can't collect</button>
-            @if (g.collected === g.totalVials) {
+            @if (isDispatched(g)) {
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="undispatchOrder(g)" [disabled]="dispatching()">
+                {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)">Can't collect</button>
+            }
+            @if (isDispatched(g)) {
+              <span class="pf-drawer__done-stamp">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11v12M14 9h4l3 3v5a1 1 0 0 1-1 1h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/>
+                </svg>
+                Dispatched to lab
+              </span>
+            } @else if (g.collected === g.totalVials) {
               <span class="pf-drawer__done-stamp">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                   <path d="m5 12 4 4L19 6"/>
@@ -480,8 +495,15 @@ interface OrderGroup {
             } @else {
               <span class="pf-drawer__remaining">{{ g.totalVials - g.collected }} remaining</span>
             }
-            <button type="button" class="pf-btn pf-btn-primary" (click)="close()"
-                    [disabled]="g.collected < g.totalVials">
+            <!-- Dispatch right here once everything's drawn (FD/collector handoff
+                 to the lab) — only if the user can dispatch and it's not already. -->
+            @if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
+              <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()">
+                {{ dispatching() ? 'Dispatching…' : 'Dispatch' }}
+              </button>
+            }
+            <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
+                    (click)="close()" [disabled]="g.collected < g.totalVials">
               {{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}
             </button>
           </footer>
@@ -1506,8 +1528,56 @@ interface OrderGroup {
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+
+  /** Whether this user can dispatch (hand collected tubes to the lab). */
+  readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
+  private readonly _dispatching = signal(false);
+  readonly dispatching = this._dispatching.asReadonly();
+
+  /** True once every tube on the order has moved past 'collected' (dispatched
+   *  or further) — used to flip the UI from "collected" to "dispatched". */
+  isDispatched(g: OrderGroup): boolean {
+    const done = ['dispatched', 'picked_up', 'received', 'completed'];
+    return g.samples.length > 0 && g.samples.every(s => done.includes(s.status));
+  }
+
+  /** Mark every collected tube on this order as dispatched to the lab. */
+  async dispatchOrder(g: OrderGroup) {
+    if (this._dispatching()) return;
+    this._dispatching.set(true);
+    try {
+      await firstValueFrom(this.api.patch(`/api/orders/${g.orderId}/dispatch`, {}));
+      // Reflect dispatched status locally so the drawer shows "Dispatched"
+      // without a round-trip (pending-collection wouldn't return these anymore).
+      this._pending.update(list => list.map(s =>
+        s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
+      this.toasts.success('Dispatched to lab');
+    } catch {
+      this.toasts.error('Could not dispatch — try again');
+    } finally {
+      this._dispatching.set(false);
+    }
+  }
+
+  /** Undo dispatch — revert dispatched tubes back to collected (only while the
+   *  lab hasn't received them). */
+  async undispatchOrder(g: OrderGroup) {
+    if (this._dispatching()) return;
+    this._dispatching.set(true);
+    try {
+      await firstValueFrom(this.api.patch(`/api/orders/${g.orderId}/undispatch`, {}));
+      this._pending.update(list => list.map(s =>
+        s.orderId === g.orderId && s.status === 'dispatched' ? { ...s, status: 'collected' } : s));
+      this.toasts.success('Dispatch undone');
+    } catch {
+      this.toasts.error('Could not undo — the lab may have received it');
+    } finally {
+      this._dispatching.set(false);
+    }
+  }
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   // Set when the user lands here from another screen via ?orderId=… (e.g. FD's

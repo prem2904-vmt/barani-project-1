@@ -40,6 +40,16 @@
                 }
               </div>
             </div>
+            @if (canEdit()) {
+              <button type="button" title="Edit patient info"
+                      class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40 transition-colors cursor-pointer"
+                      (click)="openEdit(p)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+                </svg>
+                Edit
+              </button>
+            }
           </div>
 
           <div class="h-px bg-[var(--border-muted)]"></div>
@@ -48,11 +58,11 @@
           <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span class="text-xs text-[var(--text-tertiary)] block">Age / Gender</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ p.age ?? '€”' }}y · {{ p.sex ?? '€”' }}</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ ageLabel(p) }} · {{ p.sex || '—' }}</span>
             </div>
             <div>
               <span class="text-xs text-[var(--text-tertiary)] block">Blood Group</span>
-              <span class="font-semibold text-[var(--text-secondary)]">Not recorded</span>
+              <span class="font-semibold text-[var(--text-secondary)]">{{ p.bloodGroup || 'Not recorded' }}</span>
             </div>
             @if (p.dateOfBirth) {
               <div>
@@ -434,7 +444,7 @@
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA Address</span>
                             <span class="font-mono text-emerald-400 font-bold truncate block text-[10px]">
-                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : '€”' }}
+                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : '—' }}
                             </span>
                           </div>
                         </div>
@@ -442,7 +452,7 @@
                         <div class="grid grid-cols-2 gap-2">
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">Gender / YOB</span>
-                            <span class="font-semibold block text-[11px]">{{ p.sex || '€”' }} · {{ (p.dateOfBirth | date:'yyyy') || '€”' }}</span>
+                            <span class="font-semibold block text-[11px]">{{ p.sex || '—' }} · {{ (p.dateOfBirth | date:'yyyy') || '—' }}</span>
                           </div>
                           <div>
                             <span class="text-[8px] text-white/40 block uppercase tracking-wider">Security Code</span>
@@ -733,7 +743,7 @@
                                 <div>
                                   <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Period</span>
                                   <p class="text-[var(--text-secondary)] mt-1 font-semibold">
-                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} €” Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
+                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} — Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
                                   </p>
                                 </div>
                                 <div>
@@ -1197,6 +1207,51 @@
         <line x1="9" y1="17" x2="13" y2="17"/>
       </svg>
       Patient record not found.
+    </div>
+  }
+
+  <!-- ── Edit patient info modal ─────────────────────────────────────── -->
+  @if (editDraft(); as d) {
+    <div class="pf-pp-edit-backdrop" (click)="closeEdit()">
+      <div class="pf-pp-edit" (click)="$event.stopPropagation()">
+        <header class="pf-pp-edit__head">
+          <h3>Edit patient info</h3>
+          <button type="button" class="pf-pp-edit__x" (click)="closeEdit()" aria-label="Close">✕</button>
+        </header>
+        <div class="pf-pp-edit__body">
+          <div class="pf-pp-edit__grid">
+            <label>First name
+              <input type="text" [ngModel]="d.firstName" (ngModelChange)="patchEdit({ firstName: $event })" /></label>
+            <label>Father's name
+              <input type="text" [ngModel]="d.fathersName" (ngModelChange)="patchEdit({ fathersName: $event })" /></label>
+            <label>Phone
+              <input type="tel" [ngModel]="d.phone" (ngModelChange)="patchEdit({ phone: $event })" /></label>
+            <label>Email
+              <input type="email" [ngModel]="d.email" (ngModelChange)="patchEdit({ email: $event })" /></label>
+            <label>Sex
+              <select [ngModel]="d.sex" (ngModelChange)="patchEdit({ sex: $event })">
+                <option value="">—</option><option value="Male">Male</option>
+                <option value="Female">Female</option><option value="Other">Other</option>
+              </select></label>
+            <label>Date of birth
+              <input type="date" [ngModel]="d.dateOfBirth" (ngModelChange)="patchEdit({ dateOfBirth: $event })" /></label>
+            <label>Age
+              <input type="number" min="0" max="150" [ngModel]="d.age" (ngModelChange)="patchEdit({ age: $event })"
+                     placeholder="auto from DOB" /></label>
+            <label>Blood group
+              <select [ngModel]="d.bloodGroup" (ngModelChange)="patchEdit({ bloodGroup: $event })">
+                <option value="">Not recorded</option>
+                @for (bg of bloodGroups; track bg) { <option [value]="bg">{{ bg }}</option> }
+              </select></label>
+          </div>
+        </div>
+        <footer class="pf-pp-edit__foot">
+          <button type="button" class="pf-btn pf-btn-ghost" (click)="closeEdit()">Cancel</button>
+          <button type="button" class="pf-btn pf-btn-primary" (click)="saveEdit()" [disabled]="savingEdit() || !d.firstName.trim()">
+            {{ savingEdit() ? 'Saving…' : 'Save changes' }}
+          </button>
+        </footer>
+      </div>
     </div>
   }
 

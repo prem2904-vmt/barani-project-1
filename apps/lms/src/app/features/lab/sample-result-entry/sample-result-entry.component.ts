@@ -358,10 +358,19 @@ function defaultResultParam(): TestParameter {
         }
 
         <footer class="pf-sre__footer">
+          @if (hasReopenable()) {
+            <!-- Submitted, awaiting validation — pull it back to edit + resubmit.
+                 Every reopen is recorded in the result's audit trail. -->
+            <button type="button" class="pf-sre__reopen"
+                    [disabled]="submitting()"
+                    (click)="reopenSample()">
+              {{ submitting() ? 'Reopening…' : '↺ Undo submit & edit' }}
+            </button>
+          }
           <button type="button" class="pf-sre__submit"
-                  [disabled]="submitting()"
+                  [disabled]="submitting() || !hasWritable()"
                   (click)="submitAll()">
-            {{ submitting() ? 'Submitting…' : 'Submit All Results' }}
+            {{ submitting() ? 'Submitting…' : (hasReopenable() && !hasWritable() ? 'Submitted — awaiting validation' : 'Submit All Results') }}
           </button>
         </footer>
 
@@ -789,7 +798,17 @@ function defaultResultParam(): TestParameter {
          bar now that the panel (not the window) is the scroll context. */
       background: linear-gradient(180deg, transparent, var(--bg-primary, rgba(12, 14, 20, 0.92)) 40%);
       margin-top: 4px;
+      display: flex; align-items: stretch; gap: 10px;
      }
+    .pf-sre__reopen {
+      flex: 0 0 auto;
+      padding: 0 18px; border-radius: 14px; cursor: pointer;
+      font-size: 14px; font-weight: 600;
+      background: var(--glass-bg); color: var(--text-secondary);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-sre__reopen:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
+    .pf-sre__reopen:disabled { opacity: 0.55; cursor: not-allowed; }
     /* Mobile: lift the sticky Submit bar above the floating bottom-nav
        pill so the violet avatar doesn't peek out from behind the button.
        The pill body sits ~72px tall + safe-area; we add 16px breathing
@@ -809,7 +828,7 @@ function defaultResultParam(): TestParameter {
       .pf-sre__test table th, .pf-sre__test table td { white-space: nowrap; padding-inline: 8px; }
     }
     .pf-sre__submit {
-      width: 100%;
+      flex: 1 1 auto;
       min-height: 48px;
       border-radius: 12px;
       background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
@@ -936,6 +955,43 @@ export class SampleResultEntryComponent {
   readonly sample = this._sample.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
+
+  /** A submitted (awaiting-validation) test exists → can be re-opened to edit. */
+  readonly hasReopenable = computed(() =>
+    (this._sample()?.tests ?? []).some(t => t.status === 'entered'));
+  /** At least one test is in an editable/submittable state. */
+  readonly hasWritable = computed(() =>
+    (this._sample()?.tests ?? []).some(t =>
+      t.status !== 'entered' && t.status !== 'validated' && t.status !== 'rejected'));
+
+  /** Load each test's last saved values into the form (used on first load and
+   *  after a re-open, so the prior submitted values come back for editing). */
+  private prefillValues(sample: OrderSample | null) {
+    if (!sample?.tests) { this._values.set({}); return; }
+    const init: Record<string, Record<string, unknown>> = {};
+    for (const t of sample.tests) {
+      if (!t.currentResult) continue;
+      try { init[t.id] = (JSON.parse(t.currentResult)?.values) ?? {}; } catch { /* ignore */ }
+    }
+    this._values.set(init);
+  }
+
+  /** Retrieve & edit a submitted tube: reopen on the server (audited), then
+   *  reload the values so the tech can change them and re-submit. */
+  async reopenSample() {
+    const s = this._sample();
+    if (!s || this._submitting()) return;
+    this._submitting.set(true);
+    try {
+      const updated = await firstValueFrom(this.api.post<OrderSample>(`/api/samples/${s.id}/reopen`, {}));
+      if (updated) { this._sample.set(updated); this.prefillValues(updated); }
+      this.toasts.success('Reopened — edit and submit again');
+    } catch (e) {
+      this.toasts.error((e as Error)?.message ?? 'Could not reopen — it may already be validated');
+    } finally {
+      this._submitting.set(false);
+    }
+  }
   readonly lastFlags = this._flags.asReadonly();
 
   /** Tests on this sample that the pathologist sent back for re-entry. */
@@ -1097,17 +1153,7 @@ export class SampleResultEntryComponent {
       this._sample.set(sample ?? null);
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
-      if (sample?.tests) {
-        const init: Record<string, Record<string, unknown>> = {};
-        for (const t of sample.tests) {
-          if (!t.currentResult) continue;
-          try {
-            const parsed = JSON.parse(t.currentResult);
-            init[t.id] = parsed?.values ?? {};
-          } catch { /* ignore malformed */ }
-        }
-        this._values.set(init);
-      }
+      this.prefillValues(sample ?? null);
       await this.loadComments();
     } catch (e) {
       this.toasts.error('Could not load sample');

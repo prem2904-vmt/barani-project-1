@@ -498,14 +498,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  third FD pane next to In Progress so reception can see at a
    *  glance which patients are ready to hand over. */
   readonly completedOrders = computed(() =>
-    this._orders().filter(o =>
-      this.inWorkRange(o.createdAt) && (
-        o.status === 'validated' ||
-        o.status === 'partially_validated' ||
-        o.status === 'delivered' ||
-        o.status === 'completed'
-      )
-    )
+    this._orders().filter(o => {
+      const done = o.status === 'validated' || o.status === 'partially_validated'
+        || o.status === 'delivered' || o.status === 'completed';
+      if (!done) return false;
+      // A report completed TODAY for an order created on an earlier day must
+      // still surface for hand-over. The Today feed includes such orders (see
+      // ListTodayAsync), so don't gate completed work by creation date in the
+      // today view; only constrain by creation date for historical ranges.
+      return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
+    })
   );
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
@@ -1441,6 +1443,20 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       completed: 'Completed'
     };
     return map[status] ?? status;
+  }
+
+  /** Chip label that reflects the tubes' real state: the order status can lag
+   *  at 'sample_collected' after the FD dispatches (the backend keeps it there
+   *  until the lab receives), so when the order reads collected but the tubes
+   *  have actually been dispatched / received, show the further-along state.
+   *  Past the lab (validated/delivered/etc.) the raw status wins. */
+  effectiveStatusLabel(o: Order): string {
+    if (o.status === 'sample_collected' || o.status === 'collected') {
+      const ss = this.sampleStatus(o);
+      if (ss === 'received') return 'In Lab';
+      if (ss === 'dispatched') return 'Dispatched';
+    }
+    return this.statusLabel(o.status);
   }
   /** All tubes drawn but none has left for the lab yet — read-only badge. */
   isFullyCollected(o: Order): boolean {

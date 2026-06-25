@@ -230,3 +230,46 @@
     font-size: 16px;
   }
 }
+
+/* ── Edit patient info modal ─────────────────────────────────────── */
+.pf-pp-edit-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(2, 4, 16, 0.7); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.pf-pp-edit {
+  width: 100%; max-width: 520px; max-height: 90dvh; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg-card-solid); border: 1px solid var(--glass-border);
+  border-radius: 16px; box-shadow: 0 30px 90px rgba(0,0,0,0.5);
+}
+.pf-pp-edit__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--border-muted);
+  h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); }
+}
+.pf-pp-edit__x {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--glass-border);
+  background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; font-size: 13px;
+  &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+}
+.pf-pp-edit__body { padding: 18px; overflow-y: auto; }
+.pf-pp-edit__grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  @media (max-width: 540px) { grid-template-columns: 1fr; }
+  label {
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-tertiary);
+  }
+  input, select {
+    padding: 9px 11px; border-radius: 9px; font-size: 14px;
+    background: var(--input-bg, var(--glass-bg)); border: 1px solid var(--input-border, var(--glass-border));
+    color: var(--input-text, var(--text-primary)); outline: none;
+    &:focus { border-color: var(--input-border-focus, rgba(139,92,246,0.6)); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
+  }
+}
+.pf-pp-edit__foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 18px; border-top: 1px solid var(--border-muted);
+}

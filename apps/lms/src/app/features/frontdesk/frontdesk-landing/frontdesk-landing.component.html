@@ -694,7 +694,7 @@
                               </div>
                             }
                           </div>
-                          <pf-chip [tone]="orderTone(o)" size="sm">{{ statusLabel(o.status) }}</pf-chip>
+                          <pf-chip [tone]="orderTone(o)" size="sm">{{ effectiveStatusLabel(o) }}</pf-chip>
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
                             @if (o.status === 'created' && showCreateBillOn(o)) {
                               <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
@@ -743,7 +743,7 @@
                           <div class="min-w-0 flex-1">
                             <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
                             <p class="pf-card__meta">
-                              {{ o.patient?.mrn || '—' }} · {{ statusLabel(o.status) }}
+                              {{ o.patient?.mrn || '—' }} · {{ effectiveStatusLabel(o) }}
                               · {{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }}
                             </p>
                           </div>
@@ -813,7 +813,7 @@
         <p class="pf-drawer__hdr-name">{{ so.patient?.displayName ?? 'Patient' }}</p>
       </div>
       <div class="pf-drawer__hdr-actions">
-        <pf-chip [tone]="orderTone(so)" size="sm">{{ statusLabel(so.status) }}</pf-chip>
+        <pf-chip [tone]="orderTone(so)" size="sm">{{ effectiveStatusLabel(so) }}</pf-chip>
         <button type="button" class="pf-drawer__close" (click)="closeOrder()" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">

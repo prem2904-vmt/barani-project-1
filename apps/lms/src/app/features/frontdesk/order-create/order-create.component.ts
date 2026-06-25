@@ -675,7 +675,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy {
   collectPaidSample() {
     const oid = this.paidOrderId();
     if (!oid) return;
-    this.router.navigate(['/lab/collect'], { queryParams: { orderId: oid, from: '/frontdesk/order' } });
+    // After collection, return to the frontdesk landing (not back to the
+    // build-order screen).
+    this.router.navigate(['/lab/collect'], { queryParams: { orderId: oid, from: '/frontdesk' } });
   }
 
   /** Reset the screen for the next patient after a completed order. */

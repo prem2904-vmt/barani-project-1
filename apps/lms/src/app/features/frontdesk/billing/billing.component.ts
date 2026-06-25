@@ -1991,10 +1991,10 @@ export class BillingComponent implements OnInit, OnChanges {
           this.clearDraft();
           this.toasts.success('Payment collected');
           this.billingEvents.notifyPaid();
-          // Embedded (order screen): emit + auto-open the invoice print dialog;
-          // the post-pay actions then render INLINE (no popup). Standalone keeps
-          // the modal so reception picks print / WhatsApp / finish.
-          if (this.embedded) { this.paymentDone.emit(); this.printInvoice(); }
+          // Embedded (order screen): emit so the post-pay actions render INLINE.
+          // Do NOT auto-print — printing is a deliberate click on the
+          // "Print invoice" button (the auto-open print dialog was unwanted).
+          if (this.embedded) { this.paymentDone.emit(); }
           this._paymentDoneOpen.set(true);
         },
         error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
