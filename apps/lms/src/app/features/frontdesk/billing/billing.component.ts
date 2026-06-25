@@ -2121,8 +2121,10 @@ export class BillingComponent implements OnInit, OnChanges {
     // for the next patient) instead of routing to the post-payment screen.
     if (this.embedded) { this.closed.emit(); return; }
     const b = this._bill();
-    if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
-    else this.router.navigateByUrl('/frontdesk');
+    // if (b) this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: b.orderId } });
+    // else this.router.navigateByUrl('/frontdesk');
+
+    this.router.navigateByUrl('/frontdesk');
   }
   /** Backdrop / Esc close: payment is already done, so we still route
    *  forward to the post-payment screen instead of stranding the user
