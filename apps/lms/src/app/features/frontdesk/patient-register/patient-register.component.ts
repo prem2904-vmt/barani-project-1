@@ -144,6 +144,13 @@ export class PatientRegisterComponent implements OnInit {
       body['attributes'] = JSON.stringify(metadata);
     }
 
+    // Hybrid DOB / age: registration captures EITHER an exact date of birth OR
+    // an approximate age. When only age is given, anchor a synthetic DOB to the
+    // registration date (today − age years) so the displayed age increments over
+    // time (30 today → 31 next year). DOB always wins; once a DOB exists we drop
+    // the static age so age is recomputed from DOB everywhere (and stays live).
+    this.applyHybridDob(body);
+
     this._saving.set(true);
     this.api.post<Patient>('/api/patients/', body).subscribe({
       next: patient => {
@@ -168,6 +175,23 @@ export class PatientRegisterComponent implements OnInit {
 
   private toCamelCase(snake: string): string {
     return snake.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+  }
+
+  /** Hybrid DOB/age on the patient body: if only an age is given, derive a DOB
+   *  anchored to today (registration date) so the age increments over time;
+   *  whenever a DOB exists, drop the static age so it's recomputed from DOB. */
+  private applyHybridDob(body: Record<string, unknown>): void {
+    const dob = body['dateOfBirth'];
+    const ageRaw = body['age'];
+    if ((dob === undefined || dob === null || dob === '') && ageRaw != null && `${ageRaw}` !== '') {
+      const age = Math.floor(Number(ageRaw));
+      if (Number.isFinite(age) && age >= 0 && age < 150) {
+        const d = new Date(); d.setHours(0, 0, 0, 0);
+        d.setFullYear(d.getFullYear() - age);
+        body['dateOfBirth'] = d.toISOString();
+      }
+    }
+    if (body['dateOfBirth']) delete body['age'];
   }
 
   private yearsBetween(dobIso: string, now: Date): number {
