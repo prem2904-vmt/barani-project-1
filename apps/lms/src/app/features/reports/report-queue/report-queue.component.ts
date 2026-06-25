@@ -1018,62 +1018,78 @@ export class ReportQueueComponent implements OnInit {
    *  rows, paragraphs, charts). */
   async downloadPdf(r: Report) {
     try {
-      const [{ generateReportPdf, buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
-        import('../../../core/services/report-layout.service'),
-        import('../../../core/services/platform.service'),
-      ]);
-      const svc = this.injector.get(ReportLayoutService);
-      const platform = this.injector.get(PlatformService);
-      const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-
-      let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
-      let patient: { sex?: string | null; age?: number | null } | undefined;
-      try {
-        const snap = JSON.parse(r.data ?? '{}');
-        tests = snap?.tests ?? [];
-        patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-      } catch { /* malformed snapshot — render PDF without layouts */ }
-
-      // Fetch the tenant's template + resolved layouts in parallel.
-      // The template carries all the admin-tunable chrome (colors, logo,
-      // signatures, date format, etc.) — without it the PDF would
-      // render with the hardcoded Drlogy defaults instead of the
-      // saved customization.
-      const [template] = await Promise.all([
-        this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-        ...tests.map(async t => {
-          if (!t.testId) return;
-          try {
-            resolvedLayouts[t.testId] = await svc.preview(
-              t.testId,
-              (t.result?.values ?? {}) as Record<string, unknown>,
-              [],
-              patient
-            );
-          } catch { /* test without a configured layout — fallback table */ }
-        }),
-      ]);
-
-      // Preload uploaded images (logo / NABL / signatures) as data URLs
-      // so jsPDF can embed them — the sync renderer can't fetch on its own.
-      const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+      const { generateReportPdf, buildReportPdf } = await import('../../../shared/utils/report-pdf');
+      const { baseInput, imageCache } = await this.buildReportRender(r);
       generateReportPdf({ ...baseInput, imageCache });
-
       // Archive the rendered PDF to object storage (Spaces) so finished results
-      // are stored and the patient's QR-tracking page can serve the exact file.
-      // Best-effort — never affects the download.
-      try {
-        const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
-        const fd = new FormData();
-        fd.append('file', blob, `${r.id}.pdf`);
-        this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
-      } catch { /* archive is best-effort */ }
+      // are stored and the patient's public report / QR-tracking page can serve
+      // the exact file. Best-effort — never affects the download.
+      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache }).output('blob'));
     } catch (err) {
       console.error('[reports] download failed', err);
       this.toasts.error('Could not download report');
     }
+  }
+
+  /** Resolve the tenant template + per-test layouts + images needed to render a
+   *  report PDF from its stored snapshot. Shared by download and archive.
+   *  The template carries the admin-tunable chrome (colours, logo, signatures);
+   *  without it the PDF falls back to the hardcoded Drlogy defaults. */
+  private async buildReportRender(r: Report) {
+    const [{ preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+      import('../../../shared/utils/report-pdf'),
+      import('../../../core/services/report-layout.service'),
+      import('../../../core/services/platform.service'),
+    ]);
+    const svc = this.injector.get(ReportLayoutService);
+    const platform = this.injector.get(PlatformService);
+    const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
+
+    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let patient: { sex?: string | null; age?: number | null } | undefined;
+    try {
+      const snap = JSON.parse(r.data ?? '{}');
+      tests = snap?.tests ?? [];
+      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
+    } catch { /* malformed snapshot — render PDF without layouts */ }
+
+    const [template] = await Promise.all([
+      this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
+      ...tests.map(async t => {
+        if (!t.testId) return;
+        try {
+          resolvedLayouts[t.testId] = await svc.preview(
+            t.testId,
+            (t.result?.values ?? {}) as Record<string, unknown>,
+            [],
+            patient
+          );
+        } catch { /* test without a configured layout — fallback table */ }
+      }),
+    ]);
+
+    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
+    const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+    return { baseInput, imageCache };
+  }
+
+  /** Upload a rendered report PDF blob to storage (best-effort). */
+  private uploadReportPdf(r: Report, blob: Blob) {
+    try {
+      const fd = new FormData();
+      fd.append('file', blob, `${r.id}.pdf`);
+      this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
+    } catch { /* archive is best-effort */ }
+  }
+
+  /** Render + archive the report PDF (no local download) so the public
+   *  /reports/public/{qrToken} link resolves to a real file when shared. */
+  private async archiveReportPdf(r: Report) {
+    try {
+      const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+      const { baseInput, imageCache } = await this.buildReportRender(r);
+      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache }).output('blob'));
+    } catch { /* best-effort */ }
   }
 
   deliver(r: Report, via: string) {
@@ -1082,6 +1098,11 @@ export class ReportQueueComponent implements OnInit {
     // report's QR verify link. wa.me can't auto-attach the PDF, so the link
     // stands in for it. Then record the delivery best-effort.
     if (via === 'whatsapp') {
+      // Ensure the public link resolves to a real file: render + archive the
+      // PDF now (best-effort, in the background) so /reports/public/{qrToken}
+      // can serve it by the time the patient opens the message. Fire before the
+      // synchronous window.open so the popup isn't blocked.
+      if (r.qrToken) this.archiveReportPdf(r);
       const lab = this.auth.user()?.tenantName || 'our lab';
       const name = r.order?.patient?.displayName ?? '';
       const link = r.qrToken ? `${window.location.origin}/reports/public/${r.qrToken}` : '';

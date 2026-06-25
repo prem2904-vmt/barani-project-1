@@ -1,5 +1,5 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -1115,6 +1115,7 @@ export class ReportViewerComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly chat = inject(ChatService);
   private readonly auth = inject(AuthService);
+  private readonly injector = inject(Injector);
 
   private readonly _report = signal<Report | null>(null);
   private readonly _tpl = signal<ReportTemplate | null>(null);
@@ -1542,11 +1543,55 @@ export class ReportViewerComponent implements OnInit {
     ];
     if (link) lines.push(`View & download your report:\n${link}`);
     lines.push('Please contact us if you have any questions.');
+    // Render + archive the PDF (best-effort, background) so the public link
+    // resolves to a real file when the patient opens it. Fire before the
+    // synchronous window.open so the popup isn't blocked.
+    if (r.qrToken) this.archiveReportPdf(r);
     const url = waLink(d?.patient?.phone, lines.join('\n\n'));
     window.open(url, '_blank', 'noopener');
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
       next: () => this.toasts.success('Opened WhatsApp with the report link'),
       error: () => this.toasts.info('Opened WhatsApp with the report link'),
     });
+  }
+
+  /** Render + archive the report PDF to storage (best-effort, no download) so
+   *  the public /reports/public/{qrToken} link resolves to a real file. */
+  private async archiveReportPdf(r: Report) {
+    try {
+      const [{ buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+        import('../../../shared/utils/report-pdf'),
+        import('../../../core/services/report-layout.service'),
+        import('../../../core/services/platform.service'),
+      ]);
+      const svc = this.injector.get(ReportLayoutService);
+      const platform = this.injector.get(PlatformService);
+      const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
+
+      let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+      let patient: { sex?: string | null; age?: number | null } | undefined;
+      try {
+        const snap = JSON.parse(r.data ?? '{}');
+        tests = snap?.tests ?? [];
+        patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
+      } catch { /* malformed snapshot — render without layouts */ }
+
+      const [template] = await Promise.all([
+        this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
+        ...tests.map(async t => {
+          if (!t.testId) return;
+          try {
+            resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
+          } catch { /* fallback table */ }
+        }),
+      ]);
+
+      const baseInput = { report: r, resolvedLayouts, template: template ?? null };
+      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+      const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
+      const fd = new FormData();
+      fd.append('file', blob, `${r.id}.pdf`);
+      this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
+    } catch { /* best-effort */ }
   }
 }
