@@ -1204,20 +1204,21 @@ function renderContinuousTable(
   if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
   const usable = A4.w - 2 * MARGIN_X;
+  // No dedicated Unit column — the unit is appended to the Result value
+  // ("11.4 g/dL") so the freed width goes to the other columns.
   const W = {
-    invest: 0.32 * usable,
-    result: 0.16 * usable,
-    range: 0.24 * usable,
-    unit: 0.12 * usable,
-    specimen: 0.16 * usable,
+    invest: 0.34 * usable,
+    result: 0.22 * usable,
+    range: 0.26 * usable,
+    specimen: 0.18 * usable,
   };
+  const COLSPAN = 4;
 
   type Cell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const head: Cell[][] = [[
     { content: 'Investigation', styles: { halign: 'left' } },
     { content: 'Result', styles: { halign: 'left' } },
     { content: 'Reference Range', styles: { halign: 'left' } },
-    { content: 'Unit', styles: { halign: 'left' } },
     { content: 'Specimen', styles: { halign: 'left' } },
   ]];
 
@@ -1230,7 +1231,7 @@ function renderContinuousTable(
     // Panel / profile header band — bold, full width.
     body.push([{
       content: g.testName.toUpperCase(),
-      colSpan: 5,
+      colSpan: COLSPAN,
       styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
     }]);
     bodyMeta.push(null);
@@ -1242,7 +1243,7 @@ function renderContinuousTable(
     if (sub.length > 0) {
       body.push([{
         content: sub.join('       '),
-        colSpan: 5,
+        colSpan: COLSPAN,
         styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
       }]);
       bodyMeta.push(null);
@@ -1253,32 +1254,38 @@ function renderContinuousTable(
       if (r.kind === 'note') {
         body.push([{
           content: r.note ?? '',
-          colSpan: 5,
+          colSpan: COLSPAN,
           styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
         }]);
         bodyMeta.push(null);
         continue;
       }
+      // A 'N' (normal) flag is never abnormal — keep it plain black, never
+      // bold/coloured, even if the row carried a stray colour.
+      const isNormal = !r.abnormal || r.flag === 'N';
       // Colour for an abnormal value when colour mode is on: high → admin
       // colour, low → blue.
       const abnColor = r.isLow ? theme.abnormalLowColor : theme.abnormalColor;
       const resultStyles: Record<string, unknown> = { halign: 'left', textColor: BLACK };
-      if (r.abnormal) {
+      if (!isNormal) {
         resultStyles['fontStyle'] = 'bold';
         if (theme.flagStyle === 'bold_color') resultStyles['textColor'] = abnColor;
       }
-      // Letter mode appends H/L text; arrow mode draws a triangle (see
-      // didDrawCell) so no text glyph is appended here.
+      // Unit now lives next to the value ("11.4 g/dL") — the Unit column was
+      // removed to save width.
+      const valueWithUnit = [r.result ?? '', r.unit ?? ''].map(s => s.trim()).filter(Boolean).join(' ');
+      // Letter mode appends the flag letter; arrow mode draws a triangle (see
+      // didDrawCell) so no text glyph is appended here. A normal 'N' is shown
+      // only as plain black text.
       const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L');
       const glyph = (r.flag && !useArrow) ? r.flag : '';
-      const resultContent = glyph ? `${r.result ?? ''}  ${glyph}` : (r.result ?? '');
+      const resultContent = glyph ? `${valueWithUnit}  ${glyph}` : valueWithUnit;
       const specimenCell = firstParam ? (g.specimen ?? '') : '';
       firstParam = false;
       body.push([
         { content: r.name ?? '', styles: { fontStyle: 'bold', textColor: BLACK } },
         { content: resultContent, styles: resultStyles },
         { content: r.range ?? '', styles: { textColor: TEXT_DIM } },
-        { content: r.unit ?? '', styles: { textColor: TEXT_DIM } },
         { content: specimenCell, styles: { textColor: TEXT_DIM, fontSize: 8 } },
       ]);
       bodyMeta.push(useArrow ? { arrow: r.isLow ? 'down' : 'up', color: theme.flagStyle === 'bold_color' ? abnColor : BLACK } : null);
@@ -1299,8 +1306,7 @@ function renderContinuousTable(
       0: { cellWidth: W.invest, halign: 'left' },
       1: { cellWidth: W.result, halign: 'left' },
       2: { cellWidth: W.range, halign: 'left' },
-      3: { cellWidth: W.unit, halign: 'left' },
-      4: { cellWidth: W.specimen, halign: 'left' },
+      3: { cellWidth: W.specimen, halign: 'left' },
     } as unknown as Record<number, { cellWidth: number }>,
     // Arrow indicator: draw a small ▲/▼ triangle at the right of the result
     // cell for abnormal rows (standard PDF fonts can't render ↑/↓ glyphs).
