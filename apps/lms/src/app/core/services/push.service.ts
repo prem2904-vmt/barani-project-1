@@ -206,20 +206,40 @@ export class PushService {
     }
   }
 
+  /** Guards against overlapping registration runs (the auth effect can fire
+   *  several times in quick succession on boot/login). */
+  private _registering = false;
+
   /** Send both tokens (if present) to the backend. Idempotent: server
-   *  upserts on (userId, platform). */
+   *  upserts on (userId, platform).
+   *
+   *  A failed registration means the backend keeps a STALE token and pushes go
+   *  nowhere — exactly the "no push when the app is closed" symptom — so a
+   *  transient network blip on boot (the observed `status 0`) must not be
+   *  swallowed. Retry with backoff until it lands. */
   private async postTokensToBackend(): Promise<void> {
     if (!this.appToken() && !this.voipToken()) return;
+    if (this._registering) return;
+    this._registering = true;
+    const delays = [0, 2000, 5000, 10000, 20000]; // ~37s of attempts
     try {
-      await firstValueFrom(this.api.post('/api/devices/register', {
-        platform: this.detectPlatform(),
-        appToken: this.appToken(),
-        voipToken: this.voipToken(),
-        appVersion: this.appVersion()
-      }));
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[push] register-with-backend failed', err);
+      for (let i = 0; i < delays.length; i++) {
+        if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
+        try {
+          await firstValueFrom(this.api.post('/api/devices/register', {
+            platform: this.detectPlatform(),
+            appToken: this.appToken(),
+            voipToken: this.voipToken(),
+            appVersion: this.appVersion()
+          }));
+          return; // landed
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(`[push] register-with-backend failed (attempt ${i + 1}/${delays.length})`, err);
+        }
+      }
+    } finally {
+      this._registering = false;
     }
   }
 
