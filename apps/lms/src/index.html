@@ -30,10 +30,26 @@
     <link rel="manifest" href="favicon_io/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Load the web fonts WITHOUT blocking render. On a cold/throttled launch
+      inside WKWebView (esp. when relaunched by a push) the network process can
+      take several seconds to come up; a render-blocking remote stylesheet
+      starves the local chunk requests and contributes to a blank-screen boot.
+      The media="print"→onload swap fetches the CSS asynchronously; native body
+      text falls back to the system stack until it arrives.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      />
+    </noscript>
     <!--
       Apply theme BEFORE Angular boots to prevent flash of wrong theme.
       Priority: localStorage override > prefers-color-scheme > dark.
@@ -55,6 +71,63 @@
           document.documentElement.setAttribute('data-theme', 'dark');
           document.documentElement.setAttribute('data-theme-mode', 'system');
         }
+      })();
+    </script>
+    <!--
+      Cold-launch chunk self-heal. Inside WKWebView a cold/background relaunch
+      (e.g. when iOS wakes the app for a VoIP/push) can ABORT a dynamic module
+      (chunk-XXXX.js) request while the WebContent process is still spinning up,
+      leaving a permanent blank screen — exactly the "closed app → nothing
+      works" symptom. We register these listeners BEFORE the module scripts run,
+      so a failed chunk load triggers a single self-healing reload (the asset is
+      present in the bundle; the request just lost a startup race). A
+      sessionStorage counter caps retries so a genuinely-missing asset can't
+      loop. The counter is cleared once <app-root> actually renders.
+    -->
+    <script>
+      (function () {
+        function isChunkError(s) {
+          return /chunk-[A-Z0-9]+\.js|dynamically imported module|Importing a module script failed|module script failed|Request failed/i.test(
+            String(s || '')
+          );
+        }
+        var MAX = 2;
+        function recover() {
+          try {
+            var n = parseInt(sessionStorage.getItem('pf-chunk-reloads') || '0', 10);
+            if (n >= MAX) return;
+            sessionStorage.setItem('pf-chunk-reloads', String(n + 1));
+          } catch (e) {}
+          // Let the WebView settle a beat before re-requesting.
+          setTimeout(function () { try { location.reload(); } catch (e) {} }, 500);
+        }
+        // Resource (script/link) load failures don't bubble — listen in capture.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            var url = t && (t.src || t.href);
+            if (url && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+              if (isChunkError(url)) recover();
+            } else if (e && isChunkError(e.message)) {
+              recover();
+            }
+          },
+          true
+        );
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e && e.reason;
+          if (isChunkError(r && (r.message || r))) recover();
+        });
+        // Once the app has actually mounted, clear the counter so a future
+        // transient failure can recover again.
+        var poll = setInterval(function () {
+          var root = document.querySelector('app-root');
+          if (root && root.children.length > 0) {
+            try { sessionStorage.removeItem('pf-chunk-reloads'); } catch (e) {}
+            clearInterval(poll);
+          }
+        }, 1000);
       })();
     </script>
   </head>
