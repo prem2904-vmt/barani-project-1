@@ -230,6 +230,10 @@ export interface ResolvedRow {
    *  already display the parameter name itself. */
   parameterName?: string;
   cells: Record<string, string>;
+  /** The parameter's unit (e.g. "g/dL"), always populated from the test
+   *  parameter metadata even when the layout has no Unit column — so the
+   *  renderer can show the unit for every department. */
+  unit?: string;
   isMerged: boolean;
   mergeType?: 'paragraph' | 'image';
   mergeContent?: string;

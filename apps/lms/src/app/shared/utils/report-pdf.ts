@@ -1143,7 +1143,9 @@ function buildPanelGroup(
           name: humanize(r.parameterName ?? ''),
           result: rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : ''),
           range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
-          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : ''),
+          // Prefer the Unit column when present; otherwise fall back to the
+          // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL").
+          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '') || (r.unit ?? ''),
           flag: letter,
           isLow: letter === 'L',
           abnormal: !!r.color || (!!rc.flag && rc.flag !== 'N'),
