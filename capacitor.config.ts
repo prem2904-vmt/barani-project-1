@@ -9,7 +9,7 @@ import { CapacitorConfig } from '@capacitor/cli';
  * cap:sync npm script which does both).
  */
 const config: CapacitorConfig = {
-  appId: 'health.prefrontal.lab',
+  appId: 'health.prefrontal.app',
   appName: 'Prefrontal',
   webDir: 'dist/apps/lms/browser',
   server: {
@@ -41,7 +41,11 @@ const config: CapacitorConfig = {
       backgroundColor: '#1B3A6B'
     },
     Keyboard: {
-      resize: 'body',
+      // 'native' resizes the whole WebView to the area above the keyboard, so
+      // dvh/vh layouts shrink and a bottom-anchored composer sits ABOVE the
+      // keyboard. ('body' only pads <body>, which does nothing against our
+      // dvh-based shell — the composer stayed hidden behind the keyboard.)
+      resize: 'native',
       style: 'dark',
       resizeOnFullScreen: true
     },
@@ -58,6 +62,14 @@ const config: CapacitorConfig = {
     }
   },
   ios: {
+    // Dark native background so the status-bar / safe-area inset region shows
+    // the app's dark colour instead of a white flash/bar — the WebView
+    // background defaults to white, which was what showed as the white strip
+    // once the keyboard used native resize.
+    backgroundColor: '#0a0a15',
+    // KEEP 'always': WKWebView insets content below the notch / Dynamic Island
+    // (the app is laid out for this). 'never' pushed content up under the
+    // status bar. With backgroundColor set, the inset region is dark, not white.
     contentInset: 'always',
     limitsNavigationsToAppBoundDomains: true
   },

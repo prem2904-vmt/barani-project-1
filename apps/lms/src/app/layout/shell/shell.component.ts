@@ -235,6 +235,18 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
         .pf-chrome { display: none !important; }
       }
 
+      /* Native (Capacitor) is always a touch device — never show the desktop
+         top-strip, even on a wide iPad Pro (1366pt ≥ 1280). The bottom-nav
+         rail owns navigation at every native width. Web/Electron desktop is
+         unaffected (this is scoped to html.cap-native). */
+      :host-context(html.cap-native) .pf-chrome { display: none !important; }
+      @media (min-width: 641px) {
+        :host-context(html.cap-native) .shell-main {
+          padding-left: 64px;   /* clear the full-height left rail */
+          padding-bottom: 16px; /* slim gap; no bottom pill on tablet */
+        }
+      }
+
       .shell-main {
         flex: 1;
         min-height: 0;

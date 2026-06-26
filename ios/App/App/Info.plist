@@ -62,5 +62,13 @@
 	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>voip</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

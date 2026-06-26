@@ -1,7 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { Keyboard } from '@capacitor/keyboard';
 import { Network } from '@capacitor/network';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
@@ -13,7 +12,7 @@ import { PlatformService } from './platform.service';
  * Capacitor-side services.
  *
  *   - Network status drives the offline banner in the top strip.
- *   - Keyboard listeners pad the body so inputs aren't covered.
+ *   - Keyboard avoidance is delegated to Capacitor's native resize mode.
  *   - Android back-button collapses one route at a time, exits at root.
  *   - Camera wraps native QR/barcode scanning (replaces the @zxing
  *     web flow on devices).
@@ -61,14 +60,11 @@ export class CapacitorService {
       Network.addListener('networkStatusChange', s => this.isOnline.set(s.connected));
     } catch { /* Network plugin missing on this build — non-fatal */ }
 
-    try {
-      Keyboard.addListener('keyboardWillShow', info => {
-        document.body.style.paddingBottom = `${info.keyboardHeight}px`;
-      });
-      Keyboard.addListener('keyboardWillHide', () => {
-        document.body.style.paddingBottom = '0';
-      });
-    } catch { /* Keyboard plugin not present on web */ }
+    // Keyboard avoidance is handled by Capacitor's `resize: 'native'` (see
+    // capacitor.config.ts) — the WebView itself shrinks to the area above the
+    // keyboard, so dvh layouts reflow and bottom-anchored composers rise above
+    // it. We intentionally do NOT pad <body> here: that double-counts against
+    // the native resize (gap/over-scroll) and didn't work against our dvh shell.
 
     try {
       // Android hardware back: collapse one history entry, exit at root.

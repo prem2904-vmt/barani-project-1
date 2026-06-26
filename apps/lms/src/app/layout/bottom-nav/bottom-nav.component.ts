@@ -309,6 +309,13 @@ const DRAG_THRESHOLD_PX = 4;
       max-width: calc(100vw - 16px);
     }
 
+    /* Native (Capacitor) tablet keeps the rail visible even ≥1280px (a 12.9"
+       iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows
+       instead of the desktop top-strip. Web/Electron desktop is unaffected. */
+    :host-context(html.cap-native) .pf-bottom-nav {
+      display: block !important;
+    }
+
     /* ── Rail mode (iPad band, 641–1279px) — a full-height sidebar
        docked flush to the left edge. Runs top→bottom.
        top starts at the safe-area inset, NOT 0: a panel that ran
@@ -801,6 +808,12 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private computeRailMode(): boolean {
     if (typeof window === 'undefined') return false;
     const w = window.innerWidth;
+    // Native (Capacitor) is always a touch device — never the desktop
+    // top-strip. So any tablet-width native build (incl. a 12.9" iPad Pro at
+    // 1366pt, which is ≥1280) uses the left rail, not the desktop layout.
+    const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+      .Capacitor?.isNativePlatform?.();
+    if (isNative) return w >= 641;
     return w >= 641 && w < 1280;
   }
 
