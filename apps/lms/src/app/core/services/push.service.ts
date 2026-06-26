@@ -2,12 +2,14 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PushNotifications, type Token, type PushNotificationSchema, type ActionPerformed } from '@capacitor/push-notifications';
 import { CallKitVoip, type CallToken, type CallData } from 'capacitor-plugin-callkit-voip';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Router } from '@angular/router';
 import { PlatformService } from './platform.service';
 import { ApiService } from './api.service';
 import { ToastService } from './toast.service';
 import { AuthService } from '../auth/auth.service';
 import { WebrtcService } from './webrtc.service';
+import { ChatService } from './chat.service';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -38,6 +40,7 @@ export class PushService {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly webrtc = inject(WebrtcService);
+  private readonly chat = inject(ChatService);
 
   constructor() {
     // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
@@ -125,11 +128,34 @@ export class PushService {
       this.handleIncomingPayload(n.data ?? {}, /*opened=*/ false, n.title, n.body);
     });
 
-    // ── (4) Cold-start / background tap — user pressed the notification
+    // ── (4) Cold-start / background tap OR inline reply ────────────────
     PushNotifications.addListener('pushNotificationActionPerformed', (a: ActionPerformed) => {
-      this.handleIncomingPayload(a.notification?.data ?? {}, /*opened=*/ true,
-        a.notification?.title, a.notification?.body);
+      const data = a.notification?.data ?? {};
+      const reply = (a as ActionPerformed & { inputValue?: string }).inputValue;
+      // WhatsApp-style inline reply: the user typed into the notification's
+      // Reply action and hit send — deliver it WITHOUT opening the app.
+      if (a.actionId === 'REPLY' && reply && data['kind'] === 'chat-message' && data['conversationId']) {
+        void (async () => {
+          await this.auth.waitForAuth();
+          await this.chat.sendMessage(data['conversationId'], reply);
+        })().catch(err => console.warn('[push] inline reply failed', err));
+        return;
+      }
+      // Otherwise it's a tap on the notification body — route into the app.
+      this.handleIncomingPayload(data, /*opened=*/ true, a.notification?.title, a.notification?.body);
     });
+
+    // Register the chat-message notification category so iOS shows an inline
+    // "Reply" text field on the lockscreen/banner. Shares the system
+    // UNUserNotificationCenter, so it matches the APNs aps.category we send.
+    try {
+      await LocalNotifications.registerActionTypes({
+        types: [{
+          id: 'CHAT_MESSAGE',
+          actions: [{ id: 'REPLY', title: 'Reply', input: true, inputButtonTitle: 'Send', inputPlaceholder: 'Message…' }],
+        }],
+      });
+    } catch (err) { console.warn('[push] registerActionTypes failed', err); }
 
     try {
       await PushNotifications.register();
