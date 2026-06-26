@@ -45,6 +45,58 @@ export class AuthService {
   private readonly _mustChangePassword = signal(false);
   readonly mustChangePassword = this._mustChangePassword.asReadonly();
 
+  // Persisted session tokens. The SDK's setSession() hangs on native
+  // (WKWebView Web-Locks / refresh), so it never writes the session to
+  // storage — meaning the user was signed out on every cold start. We own
+  // persistence here instead: store the tokens on login, restore on boot.
+  private static readonly SESSION_KEY = 'pf.session';
+  private persistSession(s: Session | null): void {
+    try {
+      if (s?.access_token) {
+        localStorage.setItem(AuthService.SESSION_KEY, JSON.stringify({
+          access_token: s.access_token,
+          refresh_token: s.refresh_token,
+        }));
+      } else {
+        localStorage.removeItem(AuthService.SESSION_KEY);
+      }
+    } catch { /* private mode */ }
+  }
+  private restorePersistedSession(): Session | null {
+    try {
+      const raw = localStorage.getItem(AuthService.SESSION_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      return s?.access_token ? (s as Session) : null;
+    } catch { return null; }
+  }
+  /** Exchange the stored refresh token for a fresh access token, straight
+   *  against Supabase's token endpoint (the SDK refresh flow hangs on native).
+   *  Updates + persists the session. Returns false if there's no refresh token
+   *  or the exchange fails. */
+  private async refreshAccessToken(): Promise<boolean> {
+    const refresh = this._session()?.refresh_token;
+    if (!refresh) return false;
+    const ctrl = new AbortController();
+    const killer = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: environment.auth.supabaseAnonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refresh }),
+        cache: 'no-store',
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return false;
+      const s = await res.json() as Session;
+      if (!s?.access_token) return false;
+      this._session.set(s);
+      this.persistSession(s);
+      return true;
+    } catch { return false; }
+    finally { clearTimeout(killer); }
+  }
+
   // Remembered organizations for the login dropdown (most-recent first).
   private static readonly ORGS_KEY = 'pf.orgs';
   readonly rememberedOrgs = signal<string[]>(AuthService.loadOrgs());
@@ -91,27 +143,33 @@ export class AuthService {
     const settle = () => { this._isReady.set(true); this._readyResolver(); };
     const watchdog = setTimeout(() => {
       if (!this._isReady()) {
-        console.warn('[auth] getSession timed out; booting as signed-out');
+        console.warn('[auth] session restore timed out; booting as signed-out');
         settle();
       }
-    }, 3000);
+    }, 4000);
 
-    supabase.auth.getSession()
-      .then(async ({ data }) => {
-        this._session.set(data.session ?? null);
-        if (data.session) {
-          await this.loadProfile();
-        }
-      })
-      .catch(err => console.error('[auth] getSession failed', err))
+    // Restore from OUR persisted tokens first (survives SDK setSession hangs).
+    // Falls back to the SDK's storage if we have nothing of our own.
+    const stored = this.restorePersistedSession();
+    const restore = stored
+      ? (async () => { this._session.set(stored); await this.loadProfile(); })()
+      : supabase.auth.getSession().then(async ({ data }) => {
+          this._session.set(data.session ?? null);
+          if (data.session) await this.loadProfile();
+        });
+    restore
+      .catch(err => console.error('[auth] session restore failed', err))
       .finally(() => { clearTimeout(watchdog); settle(); });
 
     supabase.auth.onAuthStateChange(async (_event, session) => {
-      this._session.set(session ?? null);
+      // Only ADOPT a real SDK session (e.g. a successful background refresh).
+      // Ignore null/SIGNED_OUT events: our session is owned locally (custom
+      // login + persisted tokens) and signOut() clears it explicitly — letting
+      // the SDK's empty state null us out would sign the user out on boot.
       if (session) {
+        this._session.set(session);
+        this.persistSession(session);
         await this.loadProfile();
-      } else {
-        this._user.set(null);
       }
     });
   }
@@ -192,6 +250,7 @@ export class AuthService {
     } catch { console.warn('[auth] setSession hung — continuing with local session'); }
 
     this._session.set(session);
+    this.persistSession(session);   // survive cold start regardless of the SDK
     this._mustChangePassword.set(!!data.mustChangePassword);
     this.rememberOrg(data.tenant?.name ?? org);
     await this.loadProfile();
@@ -251,9 +310,10 @@ export class AuthService {
   }
 
   async signOut(): Promise<void> {
-    await supabase.auth.signOut();
+    this.persistSession(null);   // clear our stored tokens
     this._session.set(null);
     this._user.set(null);
+    try { await supabase.auth.signOut(); } catch { /* SDK may hang on native — already cleared locally */ }
   }
 
   async getAccessToken(): Promise<string | null> {
@@ -273,7 +333,7 @@ export class AuthService {
     }
   }
 
-  private async loadProfile(): Promise<void> {
+  private async loadProfile(retried = false): Promise<void> {
     const token = await this.getAccessToken();
     if (!token) { this._user.set(null); return; }
 
@@ -287,9 +347,15 @@ export class AuthService {
         cache: 'no-store'
       });
       if (!res.ok) {
-        // Token valid but user not provisioned — sign out to force a clean login.
-        await supabase.auth.signOut();
-        this._user.set(null);
+        // 401 on a restored session usually means the cached access token
+        // expired (they're ~1h). Refresh once with the stored refresh token,
+        // then retry — so the user stays logged in across longer gaps instead
+        // of being bounced to the login screen.
+        if (res.status === 401 && !retried && await this.refreshAccessToken()) {
+          return this.loadProfile(true);
+        }
+        // Couldn't authenticate — sign out cleanly (clears persisted tokens).
+        await this.signOut();
         return;
       }
       const json = await res.json();
