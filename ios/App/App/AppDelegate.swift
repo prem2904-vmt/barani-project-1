@@ -11,6 +11,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // Forward the REAL APNs remote-notification token to @capacitor/push-notifications.
+    // The plugin ONLY listens on this NotificationCenter event (PushNotificationsPlugin.load());
+    // Capacitor does not swizzle this UIKit callback, so without forwarding it here the
+    // plugin's `registration` event never fires, appToken stays null, and message/alert
+    // pushes silently skip the device (the VoIP/PushKit token registers via its own path).
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications,
+                                        object: deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications,
+                                        object: error)
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.

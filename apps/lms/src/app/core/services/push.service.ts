@@ -60,6 +60,9 @@ export class PushService {
   readonly permission = signal<'prompt' | 'granted' | 'denied' | 'prompt-with-rationale'>('prompt');
 
   private _initialised = false;
+  /** Epoch ms of the last CallKit answer — used to ignore the plugin's
+   *  immediately-following callEnded (which is a CallKit hand-off, not a hangup). */
+  private _answeredAt = 0;
 
   /** Wire up listeners + request permission. Safe to call multiple times. */
   async init(): Promise<void> {
@@ -132,13 +135,17 @@ export class PushService {
         // a query param didn't actually connect the call (the param had no
         // consumer). webrtc.acceptBySessionId connects signaling + sets up media;
         // the always-mounted call-overlay then shows the in-call UI.
+        this._answeredAt = Date.now();
         void this.webrtc.acceptBySessionId(call.id).catch(err =>
           console.warn('[callkit] accept failed', err));
       });
 
       await CallKitVoip.addListener('callEnded', (_call: CallData) => {
-        // CallKit's red button — propagate to our WebRTC layer (callOverlay
-        // listens for the same event channel and disconnects peers).
+        // The callkit-voip plugin fires callEnded IMMEDIATELY after callAnswered
+        // (it ends the CallKit session so our in-app UI takes over) — that is
+        // NOT a hangup, so we must NOT tear down the call we just joined. Only a
+        // callEnded WITHOUT a recent answer is a real decline / red-button.
+        if (Date.now() - this._answeredAt < 3000) return;
         window.dispatchEvent(new CustomEvent('pf-callkit-ended'));
       });
 
