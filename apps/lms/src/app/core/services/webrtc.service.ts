@@ -81,6 +81,32 @@ export class WebrtcService implements OnDestroy {
   private iceServers: IceServer[] = [];
   private iceTtlExpires = 0;
   private subs: Subscription[] = [];
+  /** Looping silent audio kept playing during a call to stop iOS suspending the
+   *  WKWebView WebContent process when the screen locks (which kills WebRTC). */
+  private _keepAlive: HTMLAudioElement | null = null;
+
+  private startKeepAlive(): void {
+    if (this._keepAlive || typeof Audio === 'undefined') return;
+    try {
+      const sampleRate = 8000, numSamples = sampleRate; // 1s of silence
+      const buf = new ArrayBuffer(44 + numSamples * 2);
+      const v = new DataView(buf);
+      const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+      w(0, 'RIFF'); v.setUint32(4, 36 + numSamples * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
+      v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, numSamples * 2, true);
+      const a = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+      a.loop = true;
+      (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      void a.play().catch(() => undefined);
+      this._keepAlive = a;
+    } catch { /* best-effort */ }
+  }
+
+  private stopKeepAlive(): void {
+    if (this._keepAlive) { try { this._keepAlive.pause(); } catch { /* ignore */ } this._keepAlive = null; }
+  }
   private currentSource: string | undefined;
 
   /** Tracks whether we've already shown the 60-sec warning for this call. */
@@ -100,6 +126,13 @@ export class WebrtcService implements OnDestroy {
         else if (this.incomingCall()) void this.rejectIncoming();
         else if (this.inCall() || this.sessionId()) void this.leaveCall();
         else this.teardown('idle');
+      });
+      // iOS freezes the WKWebView WebContent process when the app backgrounds
+      // (screen lock) — which kills the in-webview WebRTC call. A continuously
+      // PLAYING audio element gives iOS a reason to keep the process awake.
+      // Re-prime when we return to the foreground (WebAudio can stall on resume).
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this._keepAlive) void this._keepAlive.play().catch(() => undefined);
       });
     }
 
@@ -648,6 +681,7 @@ export class WebrtcService implements OnDestroy {
   private markActive() {
     this.status.set('active');
     if (!this.callStartedAt()) this.callStartedAt.set(Date.now());
+    this.startKeepAlive();
   }
 
   private assertIdle() {
@@ -666,6 +700,7 @@ export class WebrtcService implements OnDestroy {
   }
 
   private teardown(nextStatus: CallStatus) {
+    this.stopKeepAlive();
     for (const id of Array.from(this.peers.keys())) this.tearDownPeer(id);
     this.pendingIceCandidates.clear();
     this.localStream?.getTracks().forEach(t => t.stop());
