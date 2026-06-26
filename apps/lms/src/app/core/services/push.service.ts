@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PushNotifications, type Token, type PushNotificationSchema, type ActionPerformed } from '@capacitor/push-notifications';
 import { CallKitVoip, type CallToken, type CallData } from 'capacitor-plugin-callkit-voip';
@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { PlatformService } from './platform.service';
 import { ApiService } from './api.service';
 import { ToastService } from './toast.service';
+import { AuthService } from '../auth/auth.service';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -34,6 +35,20 @@ export class PushService {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+
+  constructor() {
+    // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
+    // in, so the first POST /api/devices/register returns 401 and the backend
+    // never gets the token. Re-post whenever we're authenticated AND hold a
+    // token (idempotent server-side: upsert on userId+platform). Covers login,
+    // session restore, and account switches.
+    effect(() => {
+      const authed = !!this.auth.user();
+      const hasToken = !!(this.appToken() || this.voipToken());
+      if (authed && hasToken) void this.postTokensToBackend();
+    });
+  }
 
   /** Last APNs/FCM token we registered. */
   readonly appToken = signal<string | null>(null);
