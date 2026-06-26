@@ -668,6 +668,12 @@ export class WebrtcService implements OnDestroy {
     this.usingTurnRelay.set(false);
     this.micMuted.set(false);
     this.status.set(nextStatus);
+    // Call fully ended — dismiss the native CallKit UI (kept alive during the
+    // call so background audio works). push.service owns the CallKitVoip plugin
+    // and listens for this. No-op on web / if no CallKit call is active.
+    if (nextStatus === 'idle' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pf-end-callkit'));
+    }
   }
 
   private handleFatal(err: unknown, where: string) {

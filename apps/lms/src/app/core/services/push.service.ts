@@ -60,9 +60,18 @@ export class PushService {
   readonly permission = signal<'prompt' | 'granted' | 'denied' | 'prompt-with-rationale'>('prompt');
 
   private _initialised = false;
-  /** Epoch ms of the last CallKit answer — used to ignore the plugin's
-   *  immediately-following callEnded (which is a CallKit hand-off, not a hangup). */
-  private _answeredAt = 0;
+  /** Session id of a CallKit answer awaiting audio-session activation before we
+   *  join WebRTC (so mic capture routes correctly on a background answer). */
+  private _pendingAcceptId: string | null = null;
+
+  /** Join the pending answered call exactly once (whichever of
+   *  audioSessionActivated / the 1s fallback fires first). */
+  private flushPendingAccept(): void {
+    const id = this._pendingAcceptId;
+    if (!id) return;
+    this._pendingAcceptId = null;
+    void this.webrtc.acceptBySessionId(id).catch(err => console.warn('[callkit] accept failed', err));
+  }
 
   /** Wire up listeners + request permission. Safe to call multiple times. */
   async init(): Promise<void> {
@@ -130,24 +139,29 @@ export class PushService {
       });
 
       await CallKitVoip.addListener('callAnswered', (call: CallData) => {
-        // User pressed the green "Accept" on the lockscreen ringer. Join the
-        // WebRTC session DIRECTLY by id — routing to lazy /messages and reading
-        // a query param didn't actually connect the call (the param had no
-        // consumer). webrtc.acceptBySessionId connects signaling + sets up media;
-        // the always-mounted call-overlay then shows the in-call UI.
-        this._answeredAt = Date.now();
-        void this.webrtc.acceptBySessionId(call.id).catch(err =>
-          console.warn('[callkit] accept failed', err));
+        // Answered on the lockscreen ringer. Do NOT join WebRTC yet — wait for
+        // the CallKit audio session to activate (audioSessionActivated) so the
+        // mic capture routes correctly in the background. 1s fallback covers the
+        // case where activation already happened (foreground answer).
+        this._pendingAcceptId = call.id;
+        setTimeout(() => this.flushPendingAccept(), 1000);
+      });
+
+      await CallKitVoip.addListener('audioSessionActivated', () => {
+        this.flushPendingAccept();
       });
 
       await CallKitVoip.addListener('callEnded', (_call: CallData) => {
-        // The callkit-voip plugin fires callEnded IMMEDIATELY after callAnswered
-        // (it ends the CallKit session so our in-app UI takes over) — that is
-        // NOT a hangup, so we must NOT tear down the call we just joined. Only a
-        // callEnded WITHOUT a recent answer is a real decline / red-button.
-        if (Date.now() - this._answeredAt < 3000) return;
+        // With the patched plugin, the CallKit call is kept alive through the
+        // whole call, so callEnded now means a REAL end (red button or our own
+        // endCall). Tear the WebRTC call down.
+        this._pendingAcceptId = null;
         window.dispatchEvent(new CustomEvent('pf-callkit-ended'));
       });
+
+      // When our WebRTC call fully ends (any path), dismiss the native CallKit
+      // UI that we kept alive for background audio.
+      window.addEventListener('pf-end-callkit', () => { void CallKitVoip.endCall().catch(() => undefined); });
 
       await CallKitVoip.register();
     } catch (err) {

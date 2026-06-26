@@ -11,6 +11,7 @@
   "main": "electron/main.js",
   "homepage": "./",
   "scripts": {
+    "postinstall": "patch-package",
     "build": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
     "start": "nx serve lms",
     "electron": "electron .",
@@ -77,6 +78,8 @@
   },
   "private": true,
   "devDependencies": {
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "@angular-devkit/core": "~21.2.0",
     "@angular-devkit/schematics": "~21.2.0",
     "@angular/build": "~21.2.0",

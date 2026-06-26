@@ -1,0 +1,140 @@
+diff --git a/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts b/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
+index 93e5bc5..618b1b6 100644
+--- a/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
++++ b/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
+@@ -1,10 +1,14 @@
+ import type { PluginListenerHandle } from '@capacitor/core';
+ export interface CallKitVoipPlugin {
+     register(): Promise<void>;
++    /** End the active CallKit call (dismiss the native UI) — call when the real call ends. */
++    endCall(): Promise<void>;
+     addListener(eventName: 'registration', listenerFunc: (token: CallToken) => void): Promise<PluginListenerHandle> & PluginListenerHandle;
+     addListener(eventName: 'callAnswered', listenerFunc: (callData: CallData) => void): Promise<PluginListenerHandle> & PluginListenerHandle;
+     addListener(eventName: 'callStarted', listenerFunc: (callData: CallData) => void): Promise<PluginListenerHandle> & PluginListenerHandle;
+     addListener(eventName: 'callEnded', listenerFunc: (callData: CallData) => void): Promise<PluginListenerHandle> & PluginListenerHandle;
++    /** Fired once CallKit has activated the audio session — safe to start getUserMedia. */
++    addListener(eventName: 'audioSessionActivated', listenerFunc: () => void): Promise<PluginListenerHandle> & PluginListenerHandle;
+ }
+ export declare type CallType = 'video' | 'audio';
+ export interface CallToken {
+diff --git a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
+index 8225bcf..1135703 100644
+--- a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
++++ b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
+@@ -5,5 +5,6 @@
+ // each method the plugin supports using the CAP_PLUGIN_METHOD macro.
+ CAP_PLUGIN(CallKitVoipPlugin, "CallKitVoip",
+            CAP_PLUGIN_METHOD(register, CAPPluginReturnPromise);
++           CAP_PLUGIN_METHOD(endCall, CAPPluginReturnPromise);
+ )
+ 
+diff --git a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
+index 911588c..070525b 100644
+--- a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
++++ b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
+@@ -3,6 +3,7 @@ import Capacitor
+ import UIKit
+ import CallKit
+ import PushKit
++import AVFoundation
+ 
+ /**
+  *  CallKit Voip Plugin provides native PushKit functionality with apple CallKit to capacitor
+@@ -13,6 +14,21 @@ public class CallKitVoipPlugin: CAPPlugin {
+     private var provider: CXProvider?
+     private let voipRegistry            = PKPushRegistry(queue: nil)
+     private var connectionIdRegistry : [UUID: CallConfig] = [:]
++    // The currently-active CallKit call. Kept alive for the whole call so the
++    // VoIP audio session stays active in the background (answering from the
++    // lockscreen). Cleared only when the call genuinely ends.
++    private var currentCallUUID: UUID?
++
++    /// Emit an event WITHOUT tearing down the registry mapping — the call lives
++    /// on after `callAnswered`, so the config must persist until it really ends.
++    private func emit(_ eventName: String, uuid: UUID) {
++        if let config = connectionIdRegistry[uuid] {
++            notifyListeners(eventName, data: [
++                "id": config.id, "media": config.media,
++                "name": config.name, "duration": config.duration,
++            ])
++        }
++    }
+ 
+     @objc func register(_ call: CAPPluginCall) {
+         voipRegistry.delegate = self
+@@ -51,6 +67,7 @@ public class CallKitVoipPlugin: CAPPlugin {
+         update.supportsUngrouping       = false
+         let uuid = UUID()
+         connectionIdRegistry[uuid] = .init(id: id, media: media, name: name, duration: duration)
++        currentCallUUID = uuid
+         self.provider?.reportNewIncomingCall(with: uuid, update: update, completion: { (_) in })
+     }
+ 
+@@ -62,7 +79,12 @@ public class CallKitVoipPlugin: CAPPlugin {
+         let transaction = CXTransaction(action: CXEndCallAction(call: uuid));controller.request(transaction,completion: { error in })
+     }
+ 
+-
++    /// JS-callable: end the active CallKit call (dismiss the native UI) when the
++    /// real WebRTC call ends. No-op if there's no active call.
++    @objc func endCall(_ call: CAPPluginCall) {
++        if let uuid = currentCallUUID { endCall(uuid: uuid) }
++        call.resolve()
++    }
+ 
+ }
+ 
+@@ -72,24 +94,47 @@ public class CallKitVoipPlugin: CAPPlugin {
+ extension CallKitVoipPlugin: CXProviderDelegate {
+ 
+     public func providerDidReset(_ provider: CXProvider) {
+-
++        connectionIdRegistry.removeAll()
++        currentCallUUID = nil
+     }
+ 
+     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+-        // Answers an incoming call
++        // Answer the incoming call. CRITICALLY, do NOT end the CallKit call here:
++        // ending it tears down the VoIP audio session before didActivate can
++        // configure it, which silenced WebRTC audio on lockscreen answers. We
++        // keep the call alive; the JS app ends it (CallKitVoip.endCall) when the
++        // real WebRTC call finishes.
+         print("CXAnswerCallAction answers an incoming call")
+-        notifyEvent(eventName: "callAnswered", uuid: action.callUUID)
+-        endCall(uuid: action.callUUID)
++        emit("callAnswered", uuid: action.callUUID)
+         action.fulfill()
+     }
+ 
+     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+-        // End the call
++        // Genuine end (red button, or our JS endCall bridge).
+         print("CXEndCallAction represents ending call")
+-        notifyEvent(eventName: "callEnded", uuid: action.callUUID)
++        emit("callEnded", uuid: action.callUUID)
++        connectionIdRegistry[action.callUUID] = nil
++        if currentCallUUID == action.callUUID { currentCallUUID = nil }
+         action.fulfill()
+     }
+ 
++    // Audio-session lifecycle. CallKit activates the session for us; we elevate
++    // it to a voice call session so the (backgrounded) WKWebView WebRTC capture
++    // routes correctly, then tell JS it's safe to start getUserMedia.
++    public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
++        do {
++            try audioSession.setCategory(.playAndRecord, mode: .voiceChat,
++                                         options: [.allowBluetooth, .allowBluetoothA2DP])
++        } catch {
++            print("AVAudioSession config failed: \(error)")
++        }
++        notifyListeners("audioSessionActivated", data: [:])
++    }
++
++    public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
++        try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
++    }
++
+     public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+         // Report connection started
+         print("CXStartCallAction represents initiating an outgoing call")
