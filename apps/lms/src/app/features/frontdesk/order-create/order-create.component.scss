@@ -542,25 +542,30 @@
 }
 .pf-patient__change:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
 
-.pf-patient__cancel {
+.pf-patient__cancel-btn {
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
+  justify-content: center;
   border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.22);
   color: #fca5a5;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
+  padding: 0;
 }
-.pf-patient__cancel:hover {
-  background: rgba(239, 68, 68, 0.22);
+.pf-patient__cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.45);
   color: #ffffff;
+  transform: scale(1.05);
 }
+.pf-patient__cancel-btn:active {
+  transform: scale(0.95);
+}
+
 
 .pf-controls-row {
   display: grid;
