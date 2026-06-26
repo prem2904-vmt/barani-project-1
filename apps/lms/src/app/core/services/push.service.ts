@@ -9,7 +9,6 @@ import { ApiService } from './api.service';
 import { ToastService } from './toast.service';
 import { AuthService } from '../auth/auth.service';
 import { WebrtcService } from './webrtc.service';
-import { ChatService } from './chat.service';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -40,7 +39,6 @@ export class PushService {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly webrtc = inject(WebrtcService);
-  private readonly chat = inject(ChatService);
 
   constructor() {
     // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
@@ -137,7 +135,10 @@ export class PushService {
       if (a.actionId === 'REPLY' && reply && data['kind'] === 'chat-message' && data['conversationId']) {
         void (async () => {
           await this.auth.waitForAuth();
-          await this.chat.sendMessage(data['conversationId'], reply);
+          // HTTP send (not SignalR) — reliable from a backgrounded app where the
+          // hub can't be trusted to connect for a one-shot reply.
+          await firstValueFrom(this.api.post(
+            `/api/chat/conversations/${data['conversationId']}/messages`, { body: reply }));
         })().catch(err => console.warn('[push] inline reply failed', err));
         return;
       }
