@@ -70,7 +70,14 @@ export class PushService {
     const id = this._pendingAcceptId;
     if (!id) return;
     this._pendingAcceptId = null;
-    void this.webrtc.acceptBySessionId(id).catch(err => console.warn('[callkit] accept failed', err));
+    void (async () => {
+      // On a cold launch the session may still be restoring — don't connect
+      // SignalR with no/expired token (the hub handshake would 401 and drop).
+      await this.auth.waitForAuth();
+      await this.webrtc.acceptBySessionId(id);
+      // Release the native background task now that the WebRTC call is up.
+      try { await CallKitVoip.callConnected(); } catch { /* ignore */ }
+    })().catch(err => console.warn('[callkit] accept failed', err));
   }
 
   /** Wire up listeners + request permission. Safe to call multiple times. */
@@ -141,10 +148,11 @@ export class PushService {
       await CallKitVoip.addListener('callAnswered', (call: CallData) => {
         // Answered on the lockscreen ringer. Do NOT join WebRTC yet — wait for
         // the CallKit audio session to activate (audioSessionActivated) so the
-        // mic capture routes correctly in the background. 1s fallback covers the
-        // case where activation already happened (foreground answer).
+        // mic capture routes correctly. The fallback is a long safety net (the
+        // app may still be foregrounding/booting on a cold launch); the real
+        // trigger is audioSessionActivated.
         this._pendingAcceptId = call.id;
-        setTimeout(() => this.flushPendingAccept(), 1000);
+        setTimeout(() => this.flushPendingAccept(), 4000);
       });
 
       await CallKitVoip.addListener('audioSessionActivated', () => {

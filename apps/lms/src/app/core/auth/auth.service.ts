@@ -321,6 +321,13 @@ export class AuthService {
     // getSession() occasionally hangs on cold starts waiting on the Web-Locks
     // refresh flow. Fall back to SDK only if we haven't cached one yet.
     const local = this._session()?.access_token;
+    // On a cold launch the cached token is often expired; hand SignalR an
+    // expired token and the hub handshake 401s and the call silently drops.
+    // Refresh first when it's expired/near-expiry.
+    if (local && this.isExpiringSoon(local)) {
+      if (await this.refreshAccessToken()) return this._session()?.access_token ?? local;
+      return local; // refresh failed — return what we have rather than nothing
+    }
     if (local) return local;
     try {
       const { data } = await Promise.race([
@@ -331,6 +338,14 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  /** True if the JWT is expired or within 60s of expiring. */
+  private isExpiringSoon(jwt: string, skewMs = 60_000): boolean {
+    try {
+      const exp = (JSON.parse(atob(jwt.split('.')[1])).exp as number) * 1000;
+      return Date.now() >= exp - skewMs;
+    } catch { return true; }
   }
 
   private async loadProfile(retried = false): Promise<void> {
