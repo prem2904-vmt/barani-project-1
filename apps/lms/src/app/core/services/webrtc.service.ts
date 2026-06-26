@@ -91,6 +91,18 @@ export class WebrtcService implements OnDestroy {
   constructor() {
     this.wireSignalingHandlers();
 
+    // CallKit red-button / system-ended a call (push.service dispatches this on
+    // the PushKit callEnded event). Tear down whatever call state we're in so
+    // peers disconnect and the UI clears.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pf-callkit-ended', () => {
+        if (this.status() === 'outgoing') void this.cancelOutgoing();
+        else if (this.incomingCall()) void this.rejectIncoming();
+        else if (this.inCall() || this.sessionId()) void this.leaveCall();
+        else this.teardown('idle');
+      });
+    }
+
     // Beacon cleanup so the server tears the call down if the tab dies.
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => {
@@ -230,6 +242,27 @@ export class WebrtcService implements OnDestroy {
     if (!info) return;
     try { await this.signaling.rejectCall(info.sessionId); }
     finally { this.incomingCall.set(null); }
+  }
+
+  /** Accept a call identified ONLY by its session id — the path taken when the
+   *  user answers via the iOS CallKit lockscreen ringer. On a cold launch from
+   *  a VoIP push the in-app incomingCall() signal may not be populated, so we
+   *  accept the session directly (signaling.acceptCall awaits connect()). */
+  async acceptBySessionId(sessionId: string): Promise<void> {
+    const info = this.incomingCall();
+    if (info && info.sessionId === sessionId) { await this.acceptIncoming(); return; }
+    this.status.set('connecting');
+    try {
+      await this.acquireLocalStream();
+      await this.refreshIceServers();
+      const res = await this.signaling.acceptCall(sessionId);
+      this.sessionId.set(res.sessionId);
+      this.remoteParticipants.set(res.participants);
+      this.incomingCall.set(null);
+    } catch (err) {
+      this.handleFatal(err, 'acceptBySessionId');
+      throw err;
+    }
   }
 
   // ── In-call controls ─────────────────────────────────────────────

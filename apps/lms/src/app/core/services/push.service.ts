@@ -7,6 +7,7 @@ import { PlatformService } from './platform.service';
 import { ApiService } from './api.service';
 import { ToastService } from './toast.service';
 import { AuthService } from '../auth/auth.service';
+import { WebrtcService } from './webrtc.service';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -36,6 +37,7 @@ export class PushService {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly webrtc = inject(WebrtcService);
 
   constructor() {
     // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
@@ -125,10 +127,13 @@ export class PushService {
       });
 
       await CallKitVoip.addListener('callAnswered', (call: CallData) => {
-        // User pressed the green "Accept" button on the lockscreen ringer.
-        // Take them to the in-app call screen so audio/video can attach.
-        // The backend has already set up the call; CallKit just needs the UI.
-        void this.router.navigate(['/messages'], { queryParams: { acceptCall: call.id } });
+        // User pressed the green "Accept" on the lockscreen ringer. Join the
+        // WebRTC session DIRECTLY by id — routing to lazy /messages and reading
+        // a query param didn't actually connect the call (the param had no
+        // consumer). webrtc.acceptBySessionId connects signaling + sets up media;
+        // the always-mounted call-overlay then shows the in-call UI.
+        void this.webrtc.acceptBySessionId(call.id).catch(err =>
+          console.warn('[callkit] accept failed', err));
       });
 
       await CallKitVoip.addListener('callEnded', (_call: CallData) => {
