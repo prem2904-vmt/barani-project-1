@@ -221,6 +221,12 @@ interface Category {
     @media (max-width: 768px) {
       .pf-admin-page { padding: 14px; }
     }
+    /* Native (Capacitor): add the top safe-area inset so the "Admin" header
+       clears the status bar / Dynamic Island — and the taller status bar shown
+       during an active call — instead of being clipped at the top edge. */
+    :host-context(html.cap-native) .pf-admin-page {
+      padding-top: calc(14px + env(safe-area-inset-top));
+    }
 
     /* Compact header — was a tall greeting card. */
     .pf-admin-hdr {
