@@ -491,13 +491,18 @@ export class WebrtcService implements OnDestroy {
   }
 
   private async onReconnected() {
-    // After a hub reconnect, ask the server whether we had an active call;
-    // if so, peers will continue exchanging ICE through the new connection.
+    // After a hub reconnect, ask the server whether we had an active call.
+    // CRITICAL: a connected P2P call survives a signaling reconnect, and on a
+    // lockscreen answer our socket often drops mid-accept so the server's
+    // session map no longer lists us — tearing down here killed a call that was
+    // actually connected (the lockscreen-answer bug). Only abandon if we have
+    // NO live peer connection.
     try {
       const active = await this.signaling.getActiveSession();
-      if (!active) {
-        if (this.inCall()) this.teardown('idle');
-      }
+      if (active) return;
+      const hasLivePeer = Array.from(this.peers.values()).some(p =>
+        p.pc.connectionState === 'connected' || p.pc.connectionState === 'connecting');
+      if (this.inCall() && !hasLivePeer) this.teardown('idle');
     } catch { /* ignore */ }
   }
 
