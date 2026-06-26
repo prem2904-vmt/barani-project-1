@@ -38,16 +38,16 @@
               @if (patient(); as p) {
                 @if (isChangingPatient()) {
                   <div class="pf-patient-search-inline">
-                    <div class="flex items-center gap-2 mb-1.5 justify-between">
-                      <span class="text-[10px] font-bold text-purple-400">CHANGE PATIENT</span>
-                      <button type="button" class="pf-patient__cancel press" (click)="cancelChangePatient()">
-                        Cancel
-                      </button>
-                    </div>
                     <pf-patient-search
                       placeholder="Search by name, MRN, phone, ABHA…"
                       (picked)="attachPatient($event)"
-                    ></pf-patient-search>
+                    >
+                      <button trailing type="button" class="pf-patient__cancel-btn press" (click)="cancelChangePatient()" aria-label="Cancel change patient">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M18 6 6 18M6 6l12 12"/>
+                        </svg>
+                      </button>
+                    </pf-patient-search>
                   </div>
                 } @else {
                   <div class="pf-patient-inline">

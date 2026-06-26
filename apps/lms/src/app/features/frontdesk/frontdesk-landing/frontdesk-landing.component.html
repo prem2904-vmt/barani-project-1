@@ -287,7 +287,11 @@
                             </button>
                             @if (apptDateRange() === 'custom' && apptCustomStart()) {
                               <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom(); closeDateFilters()"
-                                aria-label="Clear custom range">×</button>
+                                aria-label="Clear custom range">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M18 6 6 18M6 6l12 12"/>
+                                </svg>
+                              </button>
                             }
                           } @else {
                             <button type="button" class="pf-hdr-date-pill"
@@ -322,7 +326,7 @@
                 </div>
 
                 <!-- Date filters for Left Pane -->
-                @if (leftTab() === 'appt') {
+                @if (leftTab() === 'appt' || leftTab() === 'home') {
                   <div class="pf-hdr-date-pills" (click)="$event.stopPropagation()">
                     @for (opt of apptDateOptions; track opt.id) {
                       @if (opt.id === 'custom') {
@@ -334,7 +338,11 @@
                         </button>
                         @if (apptDateRange() === 'custom' && apptCustomStart()) {
                           <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom()"
-                            aria-label="Clear custom range">×</button>
+                            aria-label="Clear custom range">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M18 6 6 18M6 6l12 12"/>
+                            </svg>
+                          </button>
                         }
                       } @else {
                         <button type="button" class="pf-hdr-date-pill"

@@ -543,6 +543,7 @@
   border-radius: 9999px;
   background: rgba(0, 0, 0, 0.18);
   border: 1px solid var(--glass-border);
+  flex-shrink: 0;
 }
 .pf-tabs__btn {
   display: inline-flex;
