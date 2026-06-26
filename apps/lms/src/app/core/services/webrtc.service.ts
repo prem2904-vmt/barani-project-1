@@ -249,13 +249,21 @@ export class WebrtcService implements OnDestroy {
    *  a VoIP push the in-app incomingCall() signal may not be populated, so we
    *  accept the session directly (signaling.acceptCall awaits connect()). */
   async acceptBySessionId(sessionId: string): Promise<void> {
-    const info = this.incomingCall();
-    if (info && info.sessionId === sessionId) { await this.acceptIncoming(); return; }
     this.status.set('connecting');
     try {
       await this.acquireLocalStream();
       await this.refreshIceServers();
-      const res = await this.signaling.acceptCall(sessionId);
+      // Cold / lockscreen answer: the SignalR connection is usually mid-
+      // (re)connect as the app foregrounds, so the first AcceptCall can fail
+      // ("connection disconnected"). connect() now drives to Connected; retry a
+      // few times to ride out the transition instead of dropping the call.
+      let res: { sessionId: string; participants: string[] } | null = null;
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try { res = await this.signaling.acceptCall(sessionId); break; }
+        catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 800)); }
+      }
+      if (!res) throw lastErr ?? new Error('acceptCall failed after retries');
       this.sessionId.set(res.sessionId);
       this.remoteParticipants.set(res.participants);
       this.incomingCall.set(null);

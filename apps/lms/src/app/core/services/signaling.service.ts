@@ -61,11 +61,36 @@ export class SignalingService implements OnDestroy {
   async connect(): Promise<void> {
     if (this.connection?.state === signalR.HubConnectionState.Connected) return;
     if (this.connecting) return this.connecting;
-    if (this.connection?.state === signalR.HubConnectionState.Connecting ||
-        this.connection?.state === signalR.HubConnectionState.Reconnecting) return;
-
-    this.connecting = this._connect();
+    this.connecting = this.ensureConnected();
     try { await this.connecting; } finally { this.connecting = null; }
+  }
+
+  /** Drive the connection to Connected. A connection that is mid-(re)connect —
+   *  e.g. after a background/lockscreen stall when answering a call — is given a
+   *  few seconds to settle; if it's stuck, it's dropped and rebuilt fresh.
+   *  Without this, callers invoked hub methods on a Reconnecting connection and
+   *  the invoke threw "connection disconnected". */
+  private async ensureConnected(): Promise<void> {
+    const S = signalR.HubConnectionState;
+    if (this.connection && this.connection.state !== S.Disconnected) {
+      if (await this.waitForConnected(6000)) return;
+      try { await this.connection.stop(); } catch { /* ignore */ }
+      this.connection = null;
+    }
+    await this._connect();
+  }
+
+  private waitForConnected(timeoutMs: number): Promise<boolean> {
+    const S = signalR.HubConnectionState;
+    return new Promise<boolean>(resolve => {
+      const start = Date.now();
+      const tick = () => {
+        if (this.connection?.state === S.Connected) { resolve(true); return; }
+        if (Date.now() - start > timeoutMs) { resolve(false); return; }
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
   }
 
   private async _connect(): Promise<void> {
