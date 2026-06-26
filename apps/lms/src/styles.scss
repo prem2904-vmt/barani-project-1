@@ -2073,3 +2073,13 @@ html.cap-android .pf-bottom-nav:not(.pf-bottom-nav--rail) {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Scanner modal open: hide the floating bottom-nav pill ────────────
+   The barcode-scanner modal is rendered inside a page, so its fixed
+   positioning is trapped by the page's containing block and can't cover
+   the root-level bottom-nav. While the scanner is open (body gets
+   .pf-scanner-open from the modal), hide the nav so its pill doesn't
+   poke through at the bottom — a modal should own the screen. */
+body.pf-scanner-open pf-bottom-nav {
+  display: none !important;
+}

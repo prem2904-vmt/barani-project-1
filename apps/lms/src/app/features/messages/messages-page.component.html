@@ -542,7 +542,11 @@
                       (keydown)="onComposerKeyDown($event)"
                       (paste)="onComposerPaste($event)"></textarea>
             @if (draft().trim() || pendingAttachment()) {
-              <button class="pf-msgs__send" type="button" (click)="sendDraft()" title="Send">
+              <!-- (mousedown) preventDefault keeps focus on the textarea so the
+                   on-screen keyboard stays up after a tap-send (iOS won't
+                   reopen it via programmatic focus once blurred) — keyboard
+                   only dismisses when the user taps elsewhere. -->
+              <button class="pf-msgs__send" type="button" (mousedown)="$event.preventDefault()" (click)="sendDraft()" title="Send">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
             } @else {

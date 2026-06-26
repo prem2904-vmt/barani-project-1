@@ -384,6 +384,11 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   });
 
   async ngAfterViewInit() {
+    // Mark the scanner as open so the shell can hide the floating bottom-nav
+    // pill while it's up (the modal is rendered inside a page, so its fixed
+    // positioning can't cover the root-level nav — hide it instead). Removed
+    // again in ngOnDestroy. The component only exists while open (@if).
+    try { document.body.classList.add('pf-scanner-open'); } catch { /* SSR */ }
     try {
       this.reader = new BrowserMultiFormatReader();
       // decodeFromVideoDevice(null, …) picks the default / back camera.
@@ -408,6 +413,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     try { this.controls?.stop(); } catch { /* ignore */ }
+    try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
   }
 
   @HostListener('document:keydown', ['$event'])
