@@ -1,7 +1,7 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
-  ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild,
+  ChangeDetectionStrategy, Component, ElementRef, OnInit, OnDestroy, ViewChild,
   computed, effect, inject, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -46,7 +46,7 @@ type CallFilter = 'all' | 'missed';
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
 })
-export class MessagesPageComponent implements OnInit {
+export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
   protected readonly webrtc = inject(WebrtcService);
@@ -426,6 +426,43 @@ export class MessagesPageComponent implements OnInit {
         this.pinnedMessages.set([...pinned, ...fromServer]);
       }
     });
+
+    // WhatsApp-style immersive thread on phone: while a conversation is open,
+    // hide the floating bottom-nav (the composer owns the bottom) by tagging
+    // <html>. Shell + bottom-nav react to .pf-chat-immersive (phone-scoped CSS).
+    effect(() => {
+      const open = !!this.chat.activeConversationId();
+      const phone = typeof window !== 'undefined'
+        && window.matchMedia('(max-width: 640px)').matches;
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('pf-chat-immersive', open && phone);
+      }
+    });
+
+    // Auto-grow the composer (single line → grows → caps → scrolls) whenever the
+    // draft changes — covers typing AND programmatic resets (send/edit/cancel).
+    effect(() => {
+      this.draft();                                   // track
+      queueMicrotask(() => this.autoGrowComposer());
+    });
+  }
+
+  /** Resize the composer textarea to fit its content (WhatsApp-style):
+   *  reset to auto, grow to scrollHeight capped at a max, scroll past the cap. */
+  private autoGrowComposer(): void {
+    const ta = this.composerEl?.nativeElement;
+    if (!ta) return;
+    const MAX = 140;   // matches the textarea's CSS max-height
+    ta.style.height = 'auto';
+    const next = Math.min(ta.scrollHeight, MAX);
+    ta.style.height = next + 'px';
+    ta.style.overflowY = ta.scrollHeight > MAX ? 'auto' : 'hidden';
+  }
+
+  ngOnDestroy(): void {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('pf-chat-immersive');
+    }
   }
 
   private async refreshPinned(conversationId: string): Promise<void> {

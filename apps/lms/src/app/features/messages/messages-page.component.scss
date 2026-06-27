@@ -1421,6 +1421,8 @@
     resize: none;
     min-height: 40px;
     max-height: 140px;
+    overflow-y: hidden;   /* auto-grow (JS) manages height; scroll only past max */
+    box-sizing: border-box;
     padding: 10px 14px;
     border-radius: 22px;
     border: 1px solid var(--input-border);
@@ -1881,34 +1883,22 @@
   .pf-msgs__scroller    { padding: 14px 12px 8px; }
   // The messages thread is an immersive full-height view, so its composer sits
   // at the very bottom of the viewport — directly under the floating bottom-nav
-  // Nav clearance is owned by .shell-main (padding-bottom:
-  // var(--tab-nav-total-height)), and it collapses to 0 when the keyboard is up
-  // (.shell-main--kbd). So the composer must NOT add its own nav clearance —
-  // doing so stacked a second gap below it (a big dead space above the nav when
-  // idle, and above the keyboard when typing). Just a snug 8px here.
-  .pf-msgs__composer    { padding: 8px 10px 8px; gap: 8px;
-    // The textarea has no JS auto-grow, so its height is fixed at min-height
-    // until the user types enough to wrap. On a narrow phone the placeholder
-    // "Type a message (try @ to mention)" already wraps to TWO lines — at the
-    // old 44px min-height the second line ("(try @ to mention)") was clipped
-    // off the bottom edge. Size the resting box to fit two lines of the hint
-    // (2 × 1.4 × 13.5px + 20px vertical padding ≈ 58px) so the hint is never
-    // cut off; it still grows to max-height (140px) as the message gets longer.
-    textarea { min-height: 60px; }
+  // WhatsApp model: in an open thread the nav is hidden (html.pf-chat-immersive)
+  // and shell-main drops its padding, so the composer sits at the true bottom.
+  // padding-bottom = the home-indicator inset, which COLLAPSES to 0 when the
+  // keyboard is up (WKWebView resize:native shrinks the viewport so there's no
+  // home indicator there) → the composer rides flush on the keys, zero gap.
+  .pf-msgs__composer { padding: 8px 10px env(safe-area-inset-bottom, 0px); gap: 8px;
+    // Single-line by default; JS auto-grow (autoGrowComposer) expands it up to
+    // its max-height as the message wraps, WhatsApp-style.
+    textarea { min-height: 40px; overflow-y: hidden; }
   }
-  // Typing: nav pill is hidden + the WebView is resized to sit above the
-  // keyboard, so the composer rides flush on top of the keys — zero gap.
-  // overflow:visible is a backstop so the (now taller) composer's hint can
-  // never be clipped by the wrapper at the very bottom of the immersive view.
-  .pf-msgs--kbd .pf-msgs__composer { padding-bottom: 0; }
-  .pf-msgs--kbd .pf-msgs__composer-wrap { overflow: visible; }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
   // Phone composer: collapse the 3 inline icons into the single "+" so the
   // text box gets the freed width (a bigger, more usable field).
   .pf-msgs__composer-icon { display: none; }
   .pf-msgs__plus { display: inline-flex; }
-  .pf-msgs__composer textarea { min-height: 60px; }
   // Bubble actions on touch devices: visible row UNDER the bubble when
   // the row has the actions-open class (set by tap-toggle). Glass pill,
   // larger taps. Hover-only (desktop) keeps the absolute positioning.

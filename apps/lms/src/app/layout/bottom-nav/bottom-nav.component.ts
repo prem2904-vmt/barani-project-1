@@ -328,6 +328,12 @@ const DRAG_THRESHOLD_PX = 4;
     .pf-bottom-nav--kbd,
     :host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--kbd { display: none !important; }
 
+    /* WhatsApp-style: inside an open chat thread (phone) the composer owns the
+       bottom, so the floating nav is hidden entirely. The compound native
+       selector (0,3,0) out-specifies the cap-native display:block (0,2,0). */
+    :host-context(html.pf-chat-immersive) .pf-bottom-nav,
+    :host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
+
     /* Native (Capacitor) tablet keeps the rail visible even ≥1280px (a 12.9"
        iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows
        instead of the desktop top-strip. Web/Electron desktop is unaffected. */

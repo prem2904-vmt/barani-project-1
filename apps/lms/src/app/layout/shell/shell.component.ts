@@ -258,6 +258,11 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
       /* Soft keyboard up → the floating nav is hidden, so its reserved space
          must collapse or it leaves a gap between content and the keyboard. */
       .shell-main--kbd { padding-bottom: 0 !important; }
+      /* WhatsApp-style immersive chat thread (phone): the bottom-nav is hidden
+         in-thread, so shell-main drops its nav-clearance padding and the
+         composer reaches the true bottom — flush above the keyboard, and just
+         the home-indicator inset above the screen edge when idle. */
+      :host-context(html.pf-chat-immersive) .shell-main { padding-bottom: 0 !important; }
 
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
