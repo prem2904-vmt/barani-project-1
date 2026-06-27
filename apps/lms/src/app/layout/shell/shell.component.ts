@@ -28,6 +28,7 @@ import { ChatService } from "../../core/services/chat.service";
 import { WebrtcService } from "../../core/services/webrtc.service";
 import { AuthService } from "../../core/auth/auth.service";
 import { ScanService } from "../../core/services/scan.service";
+import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
 
@@ -58,7 +59,7 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative">
+      <main class="shell-main relative" [class.shell-main--kbd]="kbd.visible()">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages
@@ -254,6 +255,9 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
         overflow-x: hidden;
         padding-bottom: var(--tab-nav-total-height, 0px);
       }
+      /* Soft keyboard up → the floating nav is hidden, so its reserved space
+         must collapse or it leaves a gap between content and the keyboard. */
+      .shell-main--kbd { padding-bottom: 0 !important; }
 
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
@@ -382,6 +386,10 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
 export class ShellComponent {
   readonly toasts = inject(ToastService);
   readonly scan = inject(ScanService);
+  /** When the soft keyboard is up the bottom-nav hides, so shell-main drops its
+   *  nav-clearance padding — otherwise that reserved space becomes a dead gap
+   *  between the content (e.g. the chat composer) and the keyboard. */
+  protected readonly kbd = inject(KeyboardService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);

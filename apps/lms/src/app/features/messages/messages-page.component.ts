@@ -96,6 +96,10 @@ export class MessagesPageComponent implements OnInit {
   protected readonly isTouchDevice =
     typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
   protected readonly emojiOpen = signal(false);
+  /** Phone composer "+" menu: collapses Attach / Patient / Emoji into one
+   *  popover so the text box can be wider. */
+  protected readonly composerMenuOpen = signal(false);
+  protected toggleComposerMenu(): void { this.composerMenuOpen.set(!this.composerMenuOpen()); }
   /** Staged attachment: uploaded to server, waiting for the user to hit send. */
   protected readonly pendingAttachment = signal<{ url: string; name: string; contentType: string; size: number } | null>(null);
   protected readonly attachmentUploading = signal(false);

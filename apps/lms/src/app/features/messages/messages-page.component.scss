@@ -1375,6 +1375,40 @@
 .pf-msgs__icon-btn--active { background: var(--bg-active); border-color: rgba(139, 92, 246, 0.4); color: var(--color-violet-300); }
 
 // ── Composer ─────────────────────────────────────────────────────────
+/* Composer "+" menu — phone only (the @media block flips .pf-msgs__plus to
+   inline-flex and hides .pf-msgs__composer-icon). Default-hidden so desktop
+   keeps its three inline icons. The popover opens UPWARD from the + button. */
+.pf-msgs__plus { display: none; position: relative; flex: 0 0 auto; }
+.pf-msgs__plus-bd { position: fixed; inset: 0; z-index: 39; background: transparent; }
+.pf-msgs__plus-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 41;
+  min-width: 196px;
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  border-radius: 14px;
+  background: var(--bg-card-solid, rgba(15, 15, 25, 0.96));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+.pf-msgs__plus-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px;
+  border: 0; border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-msgs__plus-item:hover { background: var(--bg-hover, rgba(255, 255, 255, 0.06)); }
+.pf-msgs__plus-item svg { flex-shrink: 0; color: var(--text-tertiary); }
+.pf-msgs__plus-item:disabled { opacity: 0.5; }
+
 .pf-msgs__composer {
   display: flex;
   align-items: flex-end;
@@ -1847,11 +1881,12 @@
   .pf-msgs__scroller    { padding: 14px 12px 8px; }
   // The messages thread is an immersive full-height view, so its composer sits
   // at the very bottom of the viewport — directly under the floating bottom-nav
-  // pill, which would crop it. Pad the bottom to clear the pill (pill height +
-  // its safe-area offset). When the keyboard is up the pill is hidden (see
-  // .pf-msgs--kbd below) so we drop back to a snug inset and the composer rides
-  // just above the keyboard.
-  .pf-msgs__composer    { padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 72px); gap: 8px;
+  // Nav clearance is owned by .shell-main (padding-bottom:
+  // var(--tab-nav-total-height)), and it collapses to 0 when the keyboard is up
+  // (.shell-main--kbd). So the composer must NOT add its own nav clearance —
+  // doing so stacked a second gap below it (a big dead space above the nav when
+  // idle, and above the keyboard when typing). Just a snug 8px here.
+  .pf-msgs__composer    { padding: 8px 10px 8px; gap: 8px;
     // The textarea has no JS auto-grow, so its height is fixed at min-height
     // until the user types enough to wrap. On a narrow phone the placeholder
     // "Type a message (try @ to mention)" already wraps to TWO lines — at the
@@ -1869,6 +1904,11 @@
   .pf-msgs--kbd .pf-msgs__composer-wrap { overflow: visible; }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
+  // Phone composer: collapse the 3 inline icons into the single "+" so the
+  // text box gets the freed width (a bigger, more usable field).
+  .pf-msgs__composer-icon { display: none; }
+  .pf-msgs__plus { display: inline-flex; }
+  .pf-msgs__composer textarea { min-height: 60px; }
   // Bubble actions on touch devices: visible row UNDER the bubble when
   // the row has the actions-open class (set by tap-toggle). Glass pill,
   // larger taps. Hover-only (desktop) keeps the absolute positioning.
