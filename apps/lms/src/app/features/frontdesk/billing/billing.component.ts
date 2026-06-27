@@ -116,7 +116,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 (click)="cancel()" title="Leave without collecting payment">
           Cancel
         </button>
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()"
+        <pf-touch-btn actions class="pf-bill-back-desktop" size="sm" variant="ghost" (pressed)="back()"
                       [title]="paid() ? 'Back' : 'Back to the order to add or remove tests'">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1488,6 +1488,13 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* ── Phone (<=640): stop iOS zoom-on-focus on the inputs the
      * user types into (font-size must be >=16px). Scoped to this
      * page's own inputs — never the shared primitives. */
+    /* The shared pf-screen-header now renders a leading back chevron on phone
+       (<768px). Hide this page's own header Back pill there so there's a single
+       back affordance per viewport; desktop/iPad (>=768px) keep the pill. */
+    @media (max-width: 767.98px) {
+      .pf-bill-back-desktop { display: none; }
+    }
+
     @media (max-width: 640px) {
       .pf-discount__input { font-size: 16px; }
       .pf-wallet-search { font-size: 16px; }
@@ -2294,7 +2301,7 @@ export class BillingComponent implements OnInit, OnChanges {
         : mode === 'tax_invoice' ? 'TAX INVOICE'
         : (b.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
       const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
-      generateInvoicePdf({
+      const input = {
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
@@ -2310,12 +2317,42 @@ export class BillingComponent implements OnInit, OnChanges {
           phone: tpl?.phone || undefined, email: tpl?.email || undefined,
           gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
         },
-        action: 'print',
-      });
+      };
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: the hidden-iframe window.print() is a no-op and
+        // doc.save() can't download. Render to a blob and hand it to the native
+        // iOS/Android share sheet (Print, Save to Files, AirDrop…) via the Web
+        // Share API — same approach as the report queue, no plugin needed.
+        const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+        const blob = await (await fetch(blobUrl)).blob();
+        try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+        const file = new File([blob], `${this.invoiceNumber() || 'invoice'}.pdf`, { type: 'application/pdf' });
+        if (navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Invoice', text: `Invoice ${this.invoiceNumber()}` });
+          } catch (err) {
+            if ((err as { name?: string })?.name !== 'AbortError') throw err;
+          }
+          return;
+        }
+        // No file-share support — fall back to opening the PDF so the user can
+        // use the system viewer's own print/save controls.
+        generateInvoicePdf({ ...input, action: 'view' });
+        return;
+      }
+      // Web/desktop: the browser print dialog works.
+      generateInvoicePdf({ ...input, action: 'print' });
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);
       this.toasts.error('Could not generate invoice PDF');
     }
+  }
+
+  /** True inside the Capacitor native shell (iOS/Android), where web blob
+   *  downloads and window.print() are no-ops. */
+  private isNativePlatform(): boolean {
+    return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+      .Capacitor?.isNativePlatform?.();
   }
 
   /** Post-payment "Send via WhatsApp" — opens wa.me with a pre-filled

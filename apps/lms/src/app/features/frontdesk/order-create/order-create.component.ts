@@ -852,7 +852,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       : mode === 'tax_invoice' ? 'TAX INVOICE'
       : (bill.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
     const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
-    const blobUrl = generateInvoicePdf({
+    const input = {
       bill,
       order: ({ patient: this._patient() ?? undefined } as unknown as Order),
       invoiceNumber: bill.invoiceNumber ?? '',
@@ -868,13 +868,52 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         email: tpl?.email || undefined,
         gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
       },
-      action,
-    });
+    };
+
+    // Print on native: the hidden-iframe window.print() is a no-op in the
+    // Capacitor WKWebView, so render to a blob and hand it to the native share
+    // sheet (Print, Save to Files, AirDrop…) via the Web Share API.
+    if (action === 'print' && this.isNativePlatform()) {
+      const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+      if (!blobUrl) return;
+      const blob = await (await fetch(blobUrl)).blob();
+      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+      const file = new File([blob], `${bill.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Invoice', text: `Invoice ${bill.invoiceNumber ?? ''}` });
+        } catch (err) {
+          if ((err as { name?: string })?.name !== 'AbortError') throw err;
+        }
+        return;
+      }
+      // No file-share support — fall back to the in-app preview instead.
+      action = 'blob';
+    }
+
+    const blobUrl = generateInvoicePdf({ ...input, action });
     if (action === 'blob' && blobUrl) {
       this.closeInvoicePreview();
       this.invoiceBlobUrl = blobUrl;
       this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
     }
+  }
+
+  /** True inside the Capacitor native shell (iOS/Android), where window.print()
+   *  and web blob downloads are no-ops. */
+  private isNativePlatform(): boolean {
+    return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+      .Capacitor?.isNativePlatform?.();
+  }
+
+  /** Fit-to-width scale for the phone "Show invoice" preview. The PDF iframe
+   *  renders the A4 page at its intrinsic ~794px CSS width; on a narrow screen
+   *  we scale it down to the sheet width so the whole invoice is visible with
+   *  nothing clipped. Capped at 1 (never upscales); only consumed by the
+   *  <=640px CSS. */
+  invoicePreviewScale(): number {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 794;
+    return Math.min(1, Math.max(0.1, w / 794));
   }
 
   // In-app invoice preview (Show invoice) — iframe modal, no browser popup.

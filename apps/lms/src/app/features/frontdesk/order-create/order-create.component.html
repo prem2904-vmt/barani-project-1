@@ -664,7 +664,8 @@
 
     <!-- Show invoice — in-app PDF preview (no browser popup/tab). -->
     @if (invoicePreviewUrl(); as src) {
-      <div class="pf-invprev" role="dialog" aria-modal="true" aria-label="Invoice">
+      <div class="pf-invprev" role="dialog" aria-modal="true" aria-label="Invoice"
+           [style.--pf-inv-scale]="invoicePreviewScale()">
         <div class="pf-invprev__bd" (click)="closeInvoicePreview()"></div>
         <div class="pf-invprev__panel">
           <header class="pf-invprev__hdr">
@@ -673,7 +674,11 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </header>
-          <iframe class="pf-invprev__frame" [src]="src" title="Invoice PDF"></iframe>
+          <div class="pf-invprev__viewport">
+            <div class="pf-invprev__stage">
+              <iframe class="pf-invprev__frame" [src]="src" title="Invoice PDF"></iframe>
+            </div>
+          </div>
         </div>
       </div>
     }
