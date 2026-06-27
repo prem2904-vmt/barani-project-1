@@ -1,5 +1,6 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -1349,7 +1350,9 @@ export class ReportViewerComponent implements OnInit {
   }
 
   verifyCode(token: string): string {
-    return `${window.location.origin}/reports/public/${token}`;
+    // Use the canonical public web origin, NOT window.location.origin — in the
+    // native app the latter is capacitor://localhost, which a patient can't open.
+    return `${environment.reportPublicBaseUrl}/reports/public/${token}`;
   }
 
   deliveryTone(status: string | undefined): ChipTone {

@@ -1,5 +1,6 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -1392,7 +1393,7 @@ export class ReportQueueComponent implements OnInit {
       if (r.qrToken) this.archiveReportPdf(r);
       const lab = this.auth.user()?.tenantName || 'our lab';
       const name = r.order?.patient?.displayName ?? '';
-      const link = r.qrToken ? `${window.location.origin}/reports/public/${r.qrToken}` : '';
+      const link = r.qrToken ? `${environment.reportPublicBaseUrl}/reports/public/${r.qrToken}` : '';
       const lines = [
         name ? `Hi ${name},` : 'Hi,',
         `Your lab report from ${lab} is ready.`,

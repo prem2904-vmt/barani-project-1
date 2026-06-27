@@ -5,7 +5,10 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="flex items-start justify-between gap-4 mb-2 md:mb-3">
+    <!-- Phone: stack the title above the actions (flex-col) so a wide actions
+         cluster can't squeeze the title down to a 1-char-per-line vertical
+         column. md:+ keeps the original side-by-side row. -->
+    <header class="flex flex-col md:flex-row md:items-start md:justify-between gap-2 md:gap-4 mb-2 md:mb-3">
       <div class="min-w-0 flex-1">
         <!--
         @if (eyebrow) {
@@ -37,7 +40,7 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
         }
         -->
       </div>
-      <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+      <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end max-w-full overflow-x-auto">
         <ng-content select="[actions]"></ng-content>
       </div>
     </header>
