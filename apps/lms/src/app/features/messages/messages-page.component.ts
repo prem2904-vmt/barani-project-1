@@ -63,7 +63,13 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  leaving /messages (the thread is signal-driven, not a route). */
   private readonly navBack = inject(NavBackService);
   private readonly closeThreadBack = (): boolean => {
-    if (this.chat.activeConversationId()) { this.chat.closeConversation(); return true; }
+    if (this.chat.activeConversationId()) {
+      // Drop the keyboard first so swiping back from a focused composer doesn't
+      // leave the soft keyboard (and the hidden bottom-nav) stranded.
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      this.chat.closeConversation();
+      return true;
+    }
     return false;
   };
 
@@ -452,6 +458,13 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
         this.navBack.registerBackInterceptor(this.closeThreadBack);
       } else {
         this.navBack.clearBackInterceptor(this.closeThreadBack);
+      }
+      // When the thread closes, force the keyboard latches down — iOS can drop
+      // keyboardWillHide, which would otherwise leave the bottom-nav hidden
+      // (--kbd) on the conversation list we just returned to.
+      if (!open) {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        this.kbd.reset();
       }
     });
 

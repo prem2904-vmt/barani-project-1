@@ -175,6 +175,23 @@ export class KeyboardService {
     }
   }
 
+  /**
+   * Force every latch down and re-commit. Call when a view that owns an input
+   * tears down (e.g. a chat thread closes): iOS sometimes never fires
+   * keyboardWillHide, leaving `capUp` stuck true → `visible` stuck true → the
+   * bottom-nav stays hidden on the screen you returned to. This guarantees a
+   * clean "keyboard down" state; if a field is genuinely still focused the
+   * focus/viewport signals will immediately raise it again.
+   */
+  reset(): void {
+    if (this.blurTimer) { clearTimeout(this.blurTimer); this.blurTimer = null; }
+    this.capUp = false;
+    this.vvUp = false;
+    this.focusUp = false;
+    if (typeof window !== 'undefined') this.baseInnerH = window.innerHeight;
+    this.commit();
+  }
+
   // ── Commit ─────────────────────────────────────────────────────────────
   /**
    * Keyboard is "up" if ANY signal says so, "down" only when all agree. Re-enter

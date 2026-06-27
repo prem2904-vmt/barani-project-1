@@ -1882,6 +1882,25 @@
   // get the global html safe-area pad), so the head owns the status-bar inset
   // itself — otherwise the avatar/name slide under the notch / Dynamic Island.
   .pf-msgs__thread-head { padding: max(12px, env(safe-area-inset-top, 12px)) 12px 10px; }
+
+  /* ── Ambient glass: let the shell's flowing background + glow show through the
+        messages surfaces (so it matches the rest of the app — report queue etc.)
+        instead of a flat opaque pane. The thread header stays frosted glass, the
+        conversation rows / chat bubbles keep their own glass fills, and the
+        composer stays solid (for the keyboard blend); only the PAGE-level
+        backgrounds go transparent so the ambient flows behind them. ── */
+  .pf-msgs { background: transparent; }
+  .pf-msgs__rail {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .pf-msgs__thread { background: transparent; }
+  .pf-msgs__scroller {
+    background:
+      radial-gradient(circle at 80% -10%, rgba(139, 92, 246, 0.08), transparent 50%),
+      radial-gradient(circle at -10% 110%, rgba(236, 72, 153, 0.06), transparent 50%);
+  }
   // Sticky pinned strip + reconnect — so they don't scroll away as the
   // thread grows. Glass effect for legibility against bubbles below.
   .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;
