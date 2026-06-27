@@ -80,8 +80,8 @@ interface HistoryRow {
                     </svg>
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ prettify(r.screenName) }}</p>
+                    <div class="pf-wf-titlerow flex items-center gap-2 flex-wrap">
+                      <p class="pf-wf-name font-semibold text-[15px] min-w-0 truncate" style="color: var(--text-primary);">{{ prettify(r.screenName) }}</p>
                       @if (r.status === 'published') {
                         <pf-chip tone="emerald" size="sm">published</pf-chip>
                       } @else {
@@ -755,18 +755,32 @@ interface HistoryRow {
          chevron (added app-wide) already returns to the workflow list. */
       :host .pf-tab-back { display: none; }
 
-      /* Editor title: with the icon-only actions cluster sharing the row, give
-         the title a slightly smaller size on phone so a long name ("Appointment
-         Booking") wraps at word boundaries to two clean lines rather than
-         breaking mid-word. Phone-only + scoped to this page's header. */
-      :host ::ng-deep .pf-builder-hdr h1 { font-size: 18px !important; }
+      /* Editor header (form flows): the title + the icon actions can't share one
+         row on a phone without crushing the title into a vertical sliver. Stack
+         them — title (with the leading chevron) on its own line, the action
+         icons in a row directly BELOW it. Scoped to .pf-builder-hdr via ng-deep
+         so only the form-flow editor changes; every other screen is untouched. */
+      :host ::ng-deep .pf-builder-hdr header { flex-wrap: wrap; }
+      :host ::ng-deep .pf-builder-hdr header > div:last-child {
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 10px;
+      }
+      :host ::ng-deep .pf-builder-hdr h1 { font-size: 22px !important; }
 
       /* Workflow list rows: the whole card is tappable to edit on phone, so
          drop the decorative grid icon and the separate Edit button — just the
-         name + status remain. */
+         name + status remain. Name pinned left, status chip pushed to the right
+         edge of the card. */
       :host .pf-wf-icon { display: none; }
       :host .pf-wf-edit { display: none; }
       :host .pf-wf-row { cursor: pointer; }
+      :host .pf-wf-titlerow {
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      :host .pf-wf-titlerow pf-chip { flex: 0 0 auto; }
 
       /* The actions cluster wraps under the title on phone; trim the section's
          top padding so the STEPS panel starts reasonably high (kills the big
