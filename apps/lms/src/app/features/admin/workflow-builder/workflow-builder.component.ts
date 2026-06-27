@@ -757,16 +757,49 @@ interface HistoryRow {
 
       /* Editor header (form flows): the title + the icon actions can't share one
          row on a phone without crushing the title into a vertical sliver. Stack
-         them — title (with the leading chevron) on its own line, the action
-         icons in a row directly BELOW it. Scoped to .pf-builder-hdr via ng-deep
-         so only the form-flow editor changes; every other screen is untouched. */
+         them — title (with the leading chevron) on its own line, and BELOW it a
+         single segmented action bar (one bordered box, icons split into equal
+         divided cells) — the same look as the report-queue download/view/share/
+         print bar. Scoped to .pf-builder-hdr via ng-deep so only the form-flow
+         editor changes; every other screen is untouched. */
       :host ::ng-deep .pf-builder-hdr header { flex-wrap: wrap; }
+      :host ::ng-deep .pf-builder-hdr h1 { font-size: 22px !important; }
+      /* The actions cluster becomes the segmented bar. */
       :host ::ng-deep .pf-builder-hdr header > div:last-child {
         width: 100%;
-        justify-content: flex-start;
-        margin-top: 10px;
+        margin-top: 12px;
+        gap: 0 !important;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        border: 1px solid var(--glass-border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.18);
       }
-      :host ::ng-deep .pf-builder-hdr h1 { font-size: 22px !important; }
+      /* Each action = an equal divided cell. */
+      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn {
+        flex: 1 1 0;
+        display: flex;
+        border-right: 1px solid var(--glass-border);
+      }
+      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn:last-child {
+        border-right: 0;
+      }
+      /* Keep the in-page Back out of the bar (the shared chevron covers it). */
+      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn.pf-tab-back {
+        display: none !important;
+      }
+      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn button {
+        width: 100%;
+        min-width: 0;
+        height: 44px;
+        padding: 0;
+        gap: 0;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
 
       /* Workflow list rows: the whole card is tappable to edit on phone, so
          drop the decorative grid icon and the separate Edit button — just the

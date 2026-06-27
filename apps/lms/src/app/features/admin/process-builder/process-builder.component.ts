@@ -304,28 +304,19 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     @media (max-width: 640px) {
       .pb-lane-expand { display: inline-flex; }
       .pb-lane-count { display: inline-flex; }
-      /* The header reads name on the left, count + chevron on the right; the
-         edit tools (colour/move/delete) only matter once expanded. */
-      .pb-lane--collapsed .pb-lane-tools { display: none; }
-      .pb-lane--collapsed .pb-roles { display: none; }
-      .pb-lane--collapsed .pb-lane-list { min-height: 0; padding: 6px 10px; }
-      .pb-lane--collapsed .pb-lane-list .pb-action { display: none; }
-      /* When expanded, the chevron flips to point up. */
+      /* COLLAPSED = header only. Hide the whole body (edit tools, roles, action
+         list) and don't let the card grow — it shrinks to just its header so a
+         long flow is a short stack of taps. */
+      .pb-lane--collapsed { flex: 0 0 auto; }
+      .pb-lane--collapsed .pb-lane-hd { border-bottom: 0; }
+      .pb-lane--collapsed .pb-lane-tools,
+      .pb-lane--collapsed .pb-roles,
+      .pb-lane--collapsed .pb-lane-list { display: none; }
+      /* EXPANDED = fills the screen: the one open lane grows tall so its actions
+         + drop area dominate. The count badge is redundant once open. */
+      .pb-lane:not(.pb-lane--collapsed) { flex: 1 1 auto; min-height: 62vh; }
+      .pb-lane:not(.pb-lane--collapsed) .pb-lane-count { display: none; }
       .pb-lane:not(.pb-lane--collapsed) .pb-lane-chev { transform: rotate(180deg); }
-      /* Drop hint on a collapsed lane so it reads as a drag target. */
-      .pb-lane--collapsed .pb-lane-list::after {
-        content: 'Drop action here';
-        display: block;
-        font-size: 11px;
-        color: var(--text-tertiary);
-        text-align: center;
-        padding: 8px 4px;
-        border: 1px dashed var(--glass-border);
-        border-radius: 9px;
-      }
-      /* Collapsed lane with no items already shows its own .pb-empty — hide the
-         duplicate ::after hint there. */
-      .pb-lane--collapsed .pb-lane-list:has(.pb-empty)::after { display: none; }
     }
 
     /* iPad / tablet (641–1279px): put the Available-actions palette on top as
