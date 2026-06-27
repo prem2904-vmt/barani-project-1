@@ -1461,9 +1461,10 @@ const COUNTERS: CounterSpec[] = [
          selected pane (the other carries .pf-mobile-hide). */
       .pf-mw-split { gap: 0; }
 
-      /* Redundant on phones — the top segmented control now drives the
-         My Work / Queue switch, so hide the in-pane pill cluster. */
-      .pf-mw-tabs { display: none; }
+      /* Redundant on phones — the top segmented control (.pf-mtabs) already
+         drives the My Work / Queue switch, so hide the WHOLE in-pane tabs
+         header (the duplicate pill + the "N ITEMS" meta). */
+      .pf-mw-pane__hdr--tabs { display: none !important; }
 
       /* Stats icon + popover — same size/shape as the Refresh button beside it
          and the same pattern as the Report queue stats button. */
