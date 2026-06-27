@@ -121,14 +121,14 @@ interface PrelimOrder {
           }
         </div>
 
-        <pf-touch-btn actions size="sm" variant="primary" (pressed)="promptGenerate()">
+        <pf-touch-btn actions size="sm" variant="primary" (pressed)="promptGenerate()" aria-label="Generate">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 5v14"/>
               <path d="M5 12h14"/>
             </svg>
           </span>
-          Generate
+          <span class="pf-rq-btn-label">Generate</span>
         </pf-touch-btn>
       </pf-screen-header>
 

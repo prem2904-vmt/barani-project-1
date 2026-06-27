@@ -62,25 +62,38 @@ const COUNTERS: CounterSpec[] = [
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
-        <div actions>
-          <!-- Phone-only (<=640px) Stats toggle — sits next to Refresh in the
-               header actions; collapses the KPI counter chips below. Hidden
-               above 640px (the chips always show there). -->
-          <button type="button" class="pf-kpi-toggle press"
-                  aria-label="Stats"
-                  [attr.aria-expanded]="kpiOpen()"
-                  (click)="kpiOpen.set(!kpiOpen())">
-            <svg class="pf-kpi-toggle__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/>
-            </svg>
-            <span class="pf-kpi-toggle__text">Stats</span>
-            <svg class="pf-kpi-toggle__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-          </button>
-          <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()" aria-label="Refresh">
+        <div actions class="pf-mw-actions">
+          <!-- Phone-only (<=640px) Stats icon — sits next to Refresh, matched
+               in size/shape. Tapping opens a popover with the counters (same
+               style + behaviour as the Report queue stats button). Hidden
+               above 640px, where the inline counter chips show instead. -->
+          <div class="pf-kpi-statbtn-m">
+            <button type="button" class="pf-kpi-statbtn"
+                    [class.is-open]="kpiOpen()"
+                    aria-label="Stats"
+                    [attr.aria-expanded]="kpiOpen()"
+                    (click)="kpiOpen.set(!kpiOpen())">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </button>
+            @if (kpiOpen()) {
+              <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
+              <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats">
+                @for (c of counters; track c.id) {
+                  <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
+                          [attr.data-tone]="c.tone"
+                          (click)="setCounter(c.id); kpiOpen.set(false)">
+                    <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
+                    <span class="pf-kpi-stat__label">{{ c.label }}</span>
+                    <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          <pf-touch-btn variant="secondary" size="sm" (pressed)="refresh()" aria-label="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
               <path d="M21 3v5h-5"/>
@@ -1433,7 +1446,7 @@ const COUNTERS: CounterSpec[] = [
 
     /* Hidden everywhere by default; revealed only on phones. */
     .pf-mtabs { display: none; }
-    .pf-kpi-toggle { display: none; }
+    .pf-kpi-statbtn-m { display: none; }
     /* Phone-only intake search magnifier — never shown >=641px, where the
        Lab Intake inline search stays inline and unchanged. */
     .pf-intake-search-toggle { display: none; }
@@ -1442,7 +1455,9 @@ const COUNTERS: CounterSpec[] = [
       /* Phone visibility helpers — only take effect here so desktop
          ignores them entirely. */
       .pf-mobile-hide { display: none !important; }
-      .pf-counter-row.pf-kpi-collapsed { display: none !important; }
+      /* Stats live behind the header icon's popover on phone, so the inline
+         counter chips are always hidden here. */
+      .pf-counter-row { display: none !important; }
 
       /* The split is just a stacked container on phones; show only the
          selected pane (the other carries .pf-mobile-hide). */
@@ -1452,26 +1467,52 @@ const COUNTERS: CounterSpec[] = [
          My Work / Queue switch, so hide the in-pane pill cluster. */
       .pf-mw-tabs { display: none; }
 
-      /* KPI counter collapse toggle — icon-only on phone (a small bar-chart
-         glyph). Text label + chevron dropped; aria-label carries the name.
-         Square 44px tap target. */
-      .pf-kpi-toggle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0;
-        min-width: 44px;
-        min-height: 44px;
-        padding: 8px;
-        border-radius: 9999px;
+      /* Stats icon + popover — same size/shape as the Refresh button beside it
+         and the same pattern as the Report queue stats button. */
+      .pf-kpi-statbtn-m { display: inline-flex; position: relative; }
+      .pf-kpi-statbtn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 40px; height: 40px;
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
+        border-radius: 10px;
         color: var(--text-secondary);
         cursor: pointer;
       }
-      .pf-kpi-toggle__icon { color: #a78bfa; flex-shrink: 0; }
-      .pf-kpi-toggle__text { display: none; }
-      .pf-kpi-toggle__chev { display: none; }
+      .pf-kpi-statbtn.is-open {
+        border-color: rgba(168, 85, 247, 0.55);
+        color: #c4b5fd;
+        background: rgba(124, 58, 247, 0.16);
+      }
+      .pf-kpi-pop__backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; }
+      .pf-kpi-pop {
+        position: absolute; top: calc(100% + 8px); right: 0;
+        z-index: 41;
+        display: flex; flex-direction: column; gap: 2px;
+        min-width: 180px;
+        padding: 8px;
+        background: var(--bg-card-solid, rgba(20, 22, 30, 0.96));
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      }
+      .pf-kpi-stat {
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 8px;
+        border: 0; border-radius: 8px;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        text-align: left;
+      }
+      .pf-kpi-stat.is-on { background: rgba(124, 58, 247, 0.18); color: var(--text-primary); }
+      .pf-kpi-stat__dot { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; background: var(--text-tertiary); }
+      .pf-kpi-stat[data-tone="amber"]   .pf-kpi-stat__dot { background: #f59e0b; }
+      .pf-kpi-stat[data-tone="rose"]    .pf-kpi-stat__dot { background: #f43f5e; }
+      .pf-kpi-stat[data-tone="violet"]  .pf-kpi-stat__dot { background: #a855f7; }
+      .pf-kpi-stat[data-tone="emerald"] .pf-kpi-stat__dot { background: #10b981; }
+      .pf-kpi-stat__label { flex: 1 1 auto; font-size: 12px; }
+      .pf-kpi-stat__value { font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
       /* Top segmented control: Intake / My Work / Queue. Matches the
          existing .pf-mw-tabs pill language (pill track + gradient on the
