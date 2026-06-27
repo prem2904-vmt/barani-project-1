@@ -207,11 +207,94 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** Scroll the first department whose name starts with `letter` to the top of
    *  the scrolling left column. Presentational only — no data changes. The
-   *  groups render in alpha order, so the first match is the right anchor. */
-  jumpToLetter(letter: string): void {
+   *  groups render in alpha order, so the first match is the right anchor.
+   *  `behavior` is 'smooth' for taps and 'auto' for live scrubbing so the list
+   *  tracks the finger frame-by-frame (smooth queues animations that lag a drag). */
+  jumpToLetter(letter: string, behavior: ScrollBehavior = 'smooth'): void {
     const root: ParentNode = this.searchInput()?.nativeElement?.ownerDocument ?? document;
     const el = root.querySelector(`[data-dept-letter="${letter}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el?.scrollIntoView({ block: 'start', behavior });
+  }
+
+  // ── iOS-Contacts-style A–Z scrubber (phone ≤640 only) ─────────────
+  // The index strip is a single continuous touch target: press anywhere on it
+  // and slide — the finger's Y position maps proportionally to a letter (iOS
+  // divides the strip uniformly by letter count, ignoring per-glyph heights),
+  // and the list scrolls live to that department. A magnified callout shows the
+  // current letter while dragging. Presentational + view-state only.
+
+  /** The letter currently under the finger while scrubbing — drives the big
+   *  callout bubble. `null` when not dragging (callout hidden). */
+  readonly scrubLetter = signal<string | null>(null);
+  /** True between pointer/touch-down and up on the index strip. */
+  private scrubbing = false;
+  /** Latch so the touch* fallback no-ops on devices that fire Pointer Events
+   *  (which also synthesise compatibility touch events — we'd double-handle). */
+  private scrubPointerActive = false;
+
+  onScrubPointerDown(ev: PointerEvent): void {
+    this.scrubPointerActive = true;
+    const strip = ev.currentTarget as HTMLElement;
+    // Keep tracking even if the finger drifts off the narrow strip.
+    try { strip.setPointerCapture(ev.pointerId); } catch { /* unsupported */ }
+    this.beginScrub(strip, ev.clientY);
+    ev.preventDefault();
+  }
+  onScrubPointerMove(ev: PointerEvent): void {
+    if (!this.scrubbing) return;
+    this.scrubToY(ev.currentTarget as HTMLElement, ev.clientY);
+    ev.preventDefault();
+  }
+  onScrubPointerUp(ev: PointerEvent): void {
+    const strip = ev.currentTarget as HTMLElement;
+    try { strip.releasePointerCapture(ev.pointerId); } catch { /* unsupported */ }
+    this.endScrub();
+  }
+
+  // Touch fallback for browsers without Pointer Events.
+  onScrubTouchStart(ev: TouchEvent): void {
+    if (this.scrubPointerActive) return;
+    const t = ev.touches[0];
+    if (!t) return;
+    this.beginScrub(ev.currentTarget as HTMLElement, t.clientY);
+    ev.preventDefault();
+  }
+  onScrubTouchMove(ev: TouchEvent): void {
+    if (this.scrubPointerActive || !this.scrubbing) return;
+    const t = ev.touches[0];
+    if (!t) return;
+    this.scrubToY(ev.currentTarget as HTMLElement, t.clientY);
+    ev.preventDefault();
+  }
+  onScrubTouchEnd(): void {
+    if (this.scrubPointerActive) return;
+    this.endScrub();
+  }
+
+  private beginScrub(strip: HTMLElement, clientY: number): void {
+    this.scrubbing = true;
+    this.scrubToY(strip, clientY);
+  }
+  private endScrub(): void {
+    if (!this.scrubbing) return;
+    this.scrubbing = false;
+    this.scrubLetter.set(null);
+  }
+
+  /** Map a Y coordinate over the strip to a letter and scroll there live.
+   *  Only acts when the letter changes → one scroll per crossed section. */
+  private scrubToY(strip: HTMLElement, clientY: number): void {
+    const letters = this.deptLetters();
+    if (letters.length === 0) return;
+    const rect = strip.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    const ratio = (clientY - rect.top) / rect.height;
+    const idx = Math.max(0, Math.min(letters.length - 1, Math.floor(ratio * letters.length)));
+    const letter = letters[idx];
+    if (letter !== this.scrubLetter()) {
+      this.scrubLetter.set(letter);
+      this.jumpToLetter(letter, 'auto');
+    }
   }
 
   readonly subtotal = computed(() =>

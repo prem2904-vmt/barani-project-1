@@ -1394,6 +1394,8 @@
    below turns them on, so ≥641 never sees them. */
 .pf-tabs__icon { display: none; }
 .pf-az-index { display: none; }
+/* Scrub callout never shows above phone (the strip can't be touched there). */
+.pf-az-callout { display: none; }
 
 @media (max-width: 640px) {
   /* --- FIX 1: test cards → single-column full-width vertical list (no
@@ -1441,7 +1443,11 @@
     font-size: 9.5px;
   }
 
-  /* --- FIX 3: iOS-Contacts-style A–Z index pinned to the right edge. --- */
+  /* --- FIX 3: iOS-Contacts-style A–Z index pinned to the right edge. The
+         strip is one continuous touch scrubber — press and slide and the list
+         tracks the finger. `touch-action: none` stops the browser from panning
+         /zooming the page while you drag; user-select:none avoids text-select
+         flicker. The whole strip is the touch target. --- */
   :host .pf-az-index {
     display: flex;
     flex-direction: column;
@@ -1453,14 +1459,18 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 40;
-    padding: 6px 2px;
+    padding: 8px 4px;
     border-radius: 9999px;
     background: color-mix(in srgb, var(--bg-card-solid, #14142a) 70%, transparent);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   :host .pf-az-index__l {
-    width: 20px;
+    width: 22px;
     min-height: 18px;
     display: flex;
     align-items: center;
@@ -1474,8 +1484,41 @@
     line-height: 1;
     cursor: pointer;
     font-variant-numeric: tabular-nums;
+    /* The container owns the drag — letters shouldn't intercept pointer moves
+       (keeps ev.currentTarget on the strip and avoids per-glyph capture). */
+    pointer-events: none;
+    transition: transform 0.08s ease, color 0.08s ease;
   }
-  :host .pf-az-index__l:active { background: var(--glass-bg-hover); }
+  /* Re-enable hit-testing for keyboard/AT activation (Enter fires click). */
+  :host .pf-az-index__l:focus-visible { pointer-events: auto; }
+  /* Letter currently under the finger — subtly emphasised, iOS-like. */
+  :host .pf-az-index__l--on {
+    color: var(--text-primary, #fff);
+    transform: scale(1.35);
+  }
+
+  /* Magnified letter callout, centred over the list while scrubbing. */
+  :host .pf-az-callout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 56px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 41;
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 88%, #000 0%);
+    color: #fff;
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 12px 36px rgba(124, 58, 237, 0.55);
+    pointer-events: none;
+  }
 
   /* Anchor offset so a jumped-to section clears the top chrome / safe area. */
   :host [data-dept-letter] { scroll-margin-top: 12px; }

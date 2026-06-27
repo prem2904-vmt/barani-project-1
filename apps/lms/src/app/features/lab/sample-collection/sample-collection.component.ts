@@ -1180,36 +1180,51 @@ interface OrderGroup {
         gap: 10px;
       }
 
+      /* Full-width row tile: fixed-size vial illustration on the LEFT, a
+         flexible (min-width:0) LEFT-aligned text column on the right. The
+         tile fills the drawer width (see the width-enforcing block lower
+         down) — never a centred ~60% card. */
       .pf-tube {
         flex-direction: row;
         align-items: center;
-        gap: 12px;
-        padding: 12px 14px;
+        gap: 14px;
+        padding: 14px 16px;
         width: 100%;
+        text-align: left;
       }
       .pf-vial {
-        /* Compact glance icon — cap colour + fill stay readable, but the
-           row height stays thumb-friendly. */
-        width: 40px; height: 120px;
+        /* Compact glance icon at a FIXED size on the left — cap colour +
+           fill stay readable while the row height stays thumb-friendly. */
+        width: 44px; height: 132px;
         flex-shrink: 0;
+        align-self: center;
       }
-      .pf-vial--cup { width: 70px; height: 100px; }
+      .pf-vial--cup { width: 74px; height: 108px; }
 
       .pf-tube__body {
         flex: 1 1 auto;
         min-width: 0;          /* allow the body to shrink below its content */
         align-items: flex-start;
-        gap: 2px;
         text-align: left;
+        gap: 2px;
       }
-      .pf-tube__label  { font-size: 14px; text-align: left; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-      /* Dept label ("HAEMATOLOGY") gets bounded to the text column and
-         ellipsised so it can never overflow / get clipped by the tile's
-         overflow:hidden. */
-      .pf-tube__dept   { font-size: 9px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .pf-tube__label  { font-size: 15px; text-align: left; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* Dept label ("BIOCHEMISTRY") shown IN FULL — it's short, so let it
+         wrap rather than truncate. Trimmed letter-spacing so the common
+         names fit on a single line on the full-width tile. */
+      .pf-tube__dept   {
+        font-size: 9.5px;
+        text-align: left;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        letter-spacing: 0.14em;
+        line-height: 1.4;
+      }
+      /* Test name may ellipsis to a single line if long. */
       .pf-tube__tests  {
-        margin: 3px 0 0;
-        font-size: 11.5px;
+        margin: 4px 0 0;
+        font-size: 12px;
         text-align: left;
         max-width: 100%;
         overflow: hidden;
@@ -1227,19 +1242,21 @@ interface OrderGroup {
          overlapped the label/dept/tests text. Keeping it in normal flow
          (left-aligned, below the tests) is overlap-proof. The whole
          tile is still the click target — the pill just telegraphs it. */
-      /* The status pill ("Tap when drawn" / time) drops onto its own full-width
-         line beneath the text column so it always fits the tile and is never
-         clipped off the right edge. The whole tile remains the tap target. */
+      /* The status pill ("Tap when drawn" / collected time) sits on its OWN
+         line beneath the text column, LEFT-aligned and sized to its content
+         (not stretched across the tile, not clipped off the right edge). The
+         whole tile remains the tap target — the pill just telegraphs it. */
       .pf-tube__stamp {
         position: static;
-        align-self: stretch;
-        width: 100%;
+        align-self: flex-start;
+        width: auto;
+        max-width: 100%;
         box-sizing: border-box;
-        justify-content: center;
-        margin-top: 6px;
-        min-height: 32px;
-        padding: 8px 10px;
-        font-size: 10px;
+        justify-content: flex-start;
+        margin-top: 8px;
+        min-height: 30px;
+        padding: 7px 12px;
+        font-size: 10.5px;
         font-weight: 600;
         white-space: nowrap;
         letter-spacing: 0.04em;
@@ -1459,8 +1476,9 @@ interface OrderGroup {
     }
 
     /* ── Mobile vial-tile width — appended last so no earlier rule or
-       cascade quirk can suppress it. The tiles MUST fill the drawer
-       width, otherwise the body squeezes and the stamp pill clips. */
+       cascade quirk can suppress it. Each tile MUST span the full drawer
+       width (like the queue list cards), never a centred ~60% card —
+       otherwise the body squeezes and the stamp pill clips. */
     @media (max-width: 640px) {
       .pf-drawer__tubes {
         flex-direction: column !important;
@@ -1469,8 +1487,11 @@ interface OrderGroup {
         justify-content: flex-start !important;
       }
       .pf-drawer__tubes .pf-tube {
-        width: auto !important;
-        max-width: 100% !important;
+        width: 100% !important;       /* beats base width:min(320px,100%) */
+        max-width: 100% !important;   /* no narrow cap */
+        align-self: stretch !important;
+        margin-left: 0 !important;    /* no auto-centring */
+        margin-right: 0 !important;
         box-sizing: border-box !important;
       }
     }

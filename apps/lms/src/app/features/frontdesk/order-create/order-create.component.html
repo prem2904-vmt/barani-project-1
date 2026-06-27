@@ -384,15 +384,32 @@
                 </div>
 
                 <!-- iOS-Contacts-style A–Z index, phone only (≤640). Driven by
-                     deptLetters(); taps scroll the first matching dept into view. -->
+                     deptLetters(). It's a continuous scrubber: press and slide
+                     along the strip and the list tracks the finger live; a tap
+                     (or keyboard Enter on a letter) also jumps. The whole strip
+                     is one touch target — pointer capture keeps the drag alive
+                     even if the finger drifts off the narrow column. -->
                 @if (deptLetters().length > 1) {
-                  <nav class="pf-az-index" aria-label="Jump to department by letter">
+                  <nav class="pf-az-index" aria-label="Jump to department by letter"
+                       (pointerdown)="onScrubPointerDown($event)"
+                       (pointermove)="onScrubPointerMove($event)"
+                       (pointerup)="onScrubPointerUp($event)"
+                       (pointercancel)="onScrubPointerUp($event)"
+                       (touchstart)="onScrubTouchStart($event)"
+                       (touchmove)="onScrubTouchMove($event)"
+                       (touchend)="onScrubTouchEnd()"
+                       (touchcancel)="onScrubTouchEnd()">
                     @for (l of deptLetters(); track l) {
-                      <button type="button" class="pf-az-index__l press"
+                      <button type="button" class="pf-az-index__l"
+                              [class.pf-az-index__l--on]="scrubLetter() === l"
                               (click)="jumpToLetter(l)"
                               [attr.aria-label]="'Jump to departments starting with ' + l">{{ l }}</button>
                     }
                   </nav>
+                  <!-- Magnified letter callout shown only while scrubbing. -->
+                  @if (scrubLetter(); as sl) {
+                    <div class="pf-az-callout" aria-hidden="true">{{ sl }}</div>
+                  }
                 }
               }
             }

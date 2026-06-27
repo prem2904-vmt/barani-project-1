@@ -1852,12 +1852,21 @@
   // .pf-msgs--kbd below) so we drop back to a snug inset and the composer rides
   // just above the keyboard.
   .pf-msgs__composer    { padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 72px); gap: 8px;
-    // Slightly taller textarea — 44px min for thumb comfort.
-    textarea { min-height: 44px; }
+    // The textarea has no JS auto-grow, so its height is fixed at min-height
+    // until the user types enough to wrap. On a narrow phone the placeholder
+    // "Type a message (try @ to mention)" already wraps to TWO lines — at the
+    // old 44px min-height the second line ("(try @ to mention)") was clipped
+    // off the bottom edge. Size the resting box to fit two lines of the hint
+    // (2 × 1.4 × 13.5px + 20px vertical padding ≈ 58px) so the hint is never
+    // cut off; it still grows to max-height (140px) as the message gets longer.
+    textarea { min-height: 60px; }
   }
   // Typing: nav pill is hidden + the WebView is resized to sit above the
   // keyboard, so the composer rides flush on top of the keys — zero gap.
+  // overflow:visible is a backstop so the (now taller) composer's hint can
+  // never be clipped by the wrapper at the very bottom of the immersive view.
   .pf-msgs--kbd .pf-msgs__composer { padding-bottom: 0; }
+  .pf-msgs--kbd .pf-msgs__composer-wrap { overflow: visible; }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
   // Bubble actions on touch devices: visible row UNDER the bubble when

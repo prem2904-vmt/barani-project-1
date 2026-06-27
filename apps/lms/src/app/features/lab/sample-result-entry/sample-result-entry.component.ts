@@ -829,17 +829,32 @@ function defaultResultParam(): TestParameter {
          control is hidden, and only at <=640px. */
       .pf-sre__view { display: none; }
 
-      /* Sticky bottom action bar: pinned to the bottom of the scroll panel
-         and lifted clear of the floating bottom-nav pill via the shared
-         --tab-nav-total-height token (which already folds in the
-         home-indicator safe-area). It no longer floats over the grid rows. */
+      /* Bottom action bar — PINNED TO THE VIEWPORT on phone.
+         The prior sticky bottom:var(--tab-nav-total-height) floated mid-content:
+         the scroll panel (.pf-sre) lives INSIDE .shell-main, which already
+         reserves the floating bottom-nav as its own padding-bottom
+         (var(--tab-nav-total-height)). So .pf-sre's bottom edge already clears
+         the pill, and a sticky bottom of the SAME token lifted the bar a SECOND
+         time (~88px) onto the grid rows. position:fixed is viewport-relative and
+         ignores that padding, so the bar sits cleanly ONCE above the pill while
+         the grid scrolls independently above it. */
       .pf-sre__footer {
+        position: fixed;
+        left: 0; right: 0;
         bottom: var(--tab-nav-total-height);
-        padding: 12px 0;
+        margin-top: 0;
+        padding: 12px 16px;
+        z-index: 20;
+        background: var(--bg-primary, rgba(12, 14, 20, 0.92));
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-top: 1px solid var(--glass-border);
       }
-      /* Reserve room at the end of the scroll area so the last grid rows
-         aren't hidden behind the sticky bar that overlays them. */
-      .pf-sre { padding-bottom: var(--tab-nav-total-height); }
+      /* Reserve room at the end of the scroll area for BOTH the floating
+         bottom-nav and the now-fixed action bar, so the last grid rows
+         (Basophils, etc.) scroll fully clear and aren't hidden behind the
+         fixed bar. ~88px ≈ submit button (52px touch) + bar padding + border. */
+      .pf-sre { padding-bottom: calc(var(--tab-nav-total-height) + 88px); }
 
       /* Slim the per-test grid to TWO columns that fit a phone with no
          horizontal scroll: PARAMETER + RESULT only. The UNIT / REFERENCE

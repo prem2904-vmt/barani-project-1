@@ -313,8 +313,12 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       }
     }
     .pf-sc__manual-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px; }
+    /* Shared centering width so the segment row, numpad grid and Confirm
+       button form one balanced, centered column rather than stretching
+       edge-to-edge or hugging a side. */
     .pf-sc__seg {
-      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;
+      max-width: 340px; margin-inline: auto;
       padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
       border-radius: 14px; font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 17px; font-weight: 600; letter-spacing: 0.02em;
@@ -334,10 +338,14 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
     }
     .pf-sc__seg-input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
 
-    .pf-sc__numpad { margin-top: 14px; max-width: 320px; }
+    /* Center the 3-column numpad grid: cap its width and auto-margin it so
+       it sits centered in the modal. The inner pf-num-pad is forced to fill
+       this capped track so the keys stay edge-aligned and the gaps even. */
+    .pf-sc__numpad { margin-top: 14px; max-width: 340px; margin-inline: auto; }
+    .pf-sc__numpad pf-num-pad { display: block; width: 100%; }
 
     .pf-sc__manual-confirm {
-      margin-top: 14px; width: 100%;
+      margin-top: 14px; width: 100%; max-width: 340px; margin-inline: auto; display: block;
       padding: 12px 16px; border-radius: 14px; border: 0;
       background: var(--gradient-primary); color: #fff;
       font-size: 14px; font-weight: 600; cursor: pointer;
