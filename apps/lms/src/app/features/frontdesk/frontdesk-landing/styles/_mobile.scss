@@ -239,6 +239,30 @@
   .pf-q-drawer__body {
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* ── Cancel-order dialog → bottom sheet on phones. The centered modal
+        (top:50% + translate) gets covered by the on-screen keyboard the
+        moment the Reason field focuses; docking it to the bottom keeps
+        the field reachable above the IME and matches the iOS/Android
+        sheet pattern. Round the top, scroll inside dvh, pad the home
+        indicator. Additive (≤640px only) — desktop/iPad unchanged. */
+  .pf-cancel {
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-height: 90dvh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0 !important;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  /* iOS WKWebView auto-zooms any focused field < 16px — bump the Reason
+     input so focusing it doesn't jolt the layout. */
+  .pf-cancel__input {
+    font-size: 16px !important;
+  }
 }
 
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */

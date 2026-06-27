@@ -37,6 +37,12 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
        Desktop-web (>=1280px) and iPad are byte-for-byte unchanged. */
     @media (max-width: 640px) {
       :host input.pf-input { font-size: 16px; }
+      /* Same iOS auto-zoom guard for this page's numeric fields (lat/lng/radius/
+         weight). pf-number-input's inner .field is 14px; bump to 16px on phone.
+         Scoped under :host so only THIS page's number inputs are affected — the
+         shared pf-number-input primitive is unchanged everywhere else, and
+         iPad/desktop are byte-for-byte untouched. */
+      :host ::ng-deep pf-number-input .field { font-size: 16px; }
     }
   `],
   template: `

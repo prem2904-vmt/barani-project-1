@@ -208,6 +208,14 @@ interface PatientTemplate {
       :host textarea {
         font-size: 16px;
       }
+      /* The Escalations tab uses the shared pf-number-input, whose internal
+         <input> renders at 14px — below iOS's 16px no-zoom floor, so focusing
+         a stepper triggers a jarring auto-zoom. Bump just this page's nested
+         inputs to 16px (page-scoped via :host, so the shared primitive is
+         untouched elsewhere). Root-cause fix is reported as a shared rec. */
+      :host ::ng-deep pf-number-input input {
+        font-size: 16px;
+      }
       /* Channel toggle cells stack label over control: keeps "WhatsApp" from
          being squeezed in a 3-up grid and gives each toggle room to tap. */
       :host .pf-channel-cell {

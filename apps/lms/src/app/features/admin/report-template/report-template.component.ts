@@ -108,7 +108,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
 
                   @if (tpl().nablAccredited) {
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-2 gap-3 pf-nabl-grid">
                       <div><label class="pf-label">NABL number</label>
                         <input type="text" class="pf-input"
                                [ngModel]="tpl().nablNumber"
@@ -563,6 +563,18 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     @media (pointer: coarse) {
       .pf-color-picker { min-height: 44px; }
       .pf-link-btn { min-height: 44px; padding: 6px 4px; }
+      /* Inline-styled high/low colour swatches (Theme tab) sit at 30px;
+         lift them to a real tap target on touch. !important is needed
+         to win over the element's inline height. Scoped to this page's
+         toggle rows so no global swatch is affected. */
+      .pf-toggle-row input[type="color"] { min-height: 44px !important; }
+    }
+
+    /* Phone (<=640): the NABL number field + badge-image uploader are
+       too cramped side-by-side — stack them. Width-gated, so the
+       tablet/desktop 2-col layout is untouched. */
+    @media (max-width: 640px) {
+      .pf-nabl-grid { grid-template-columns: 1fr; }
     }
 
     /* Phone (<=640): the live-preview pane sits below the form as a tall

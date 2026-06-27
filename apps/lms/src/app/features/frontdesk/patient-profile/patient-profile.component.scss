@@ -273,3 +273,36 @@
   display: flex; justify-content: flex-end; gap: 10px;
   padding: 14px 18px; border-top: 1px solid var(--border-muted);
 }
+
+/* ── Edit-patient modal → bottom sheet on phones (<=640) ──────────────────
+   Desktop/tablet keep the centered dialog above (byte-for-byte untouched).
+   Below 640 it docks to the bottom as a sheet with a rounded top edge and a
+   home-indicator-clearing footer, matching the colleague-picker's behaviour. */
+@media (max-width: 640px) {
+  :host .pf-pp-edit-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  :host .pf-pp-edit {
+    width: 100%;
+    max-width: none;
+    max-height: 90dvh;
+    border-radius: 18px 18px 0 0;
+    animation: pf-pp-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Footer is the sticky action row — clear the home indicator / soft nav. */
+  :host .pf-pp-edit__foot {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  /* >=16px inputs stop iOS Safari from auto-zooming the viewport on focus
+     (the grid's default is 14px). */
+  :host .pf-pp-edit__grid input,
+  :host .pf-pp-edit__grid select {
+    font-size: 16px;
+  }
+}
+
+@keyframes pf-pp-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}

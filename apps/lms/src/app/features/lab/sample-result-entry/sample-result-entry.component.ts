@@ -909,6 +909,15 @@ function defaultResultParam(): TestParameter {
       .pf-sre__note-btn { min-height: 36px; padding: 8px 12px; }
       .pf-sre__submit { min-height: 52px; }
       .pf-sre__cb { width: 22px; height: 22px; }
+      /* The result-entry fields themselves are the densest, most-tapped
+         controls on this page yet were below the 44px touch floor (grid
+         inputs had no min-height; form inputs were 38px). Raise them on
+         coarse pointers only — desktop fine-pointer keeps its tighter
+         density. Also lifts grid row height since the input drives it. */
+      .pf-sre__input,
+      .pf-sre__ginput,
+      .pf-sre__ginput--num,
+      .pf-sre__select-wrap { min-height: 44px; }
     }
 
     /* Hover affordances only where a hover-capable pointer exists, so

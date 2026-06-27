@@ -1528,9 +1528,21 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
         max-width: none;
         border-radius: 20px 20px 0 0;
+        /* Room above the title for the bottom-sheet grabber handle. */
+        padding-top: 24px;
         /* --tab-nav-total-height already folds in env(safe-area-inset-bottom),
          * so do NOT add the inset again here. */
         padding-bottom: calc(22px + var(--tab-nav-total-height, 0px));
+      }
+      /* Bottom-sheet grabber (HIG): a small pill at the top edge so the
+       * sheet reads as swipe-dismissible. Cosmetic, additive, phone-only. */
+      .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell::before {
+        content: '';
+        position: absolute;
+        top: 9px; left: 50%; transform: translateX(-50%);
+        width: 40px; height: 4px;
+        border-radius: 9999px;
+        background: var(--glass-border);
       }
     }
 

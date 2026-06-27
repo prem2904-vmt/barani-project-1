@@ -1236,6 +1236,14 @@ interface ValueRow {
       /* Stop iOS auto-zoom on focus: form text >=16px on phones. */
       :host .pf-comment__input { font-size: 16px; }
 
+      /* The sticky validate bar wraps to multiple rows on phones (status
+         line on its own row + Reject/Reassign/Edit/Validate buttons), so
+         the base pb-32 (128px) on the scroll body isn't enough to clear
+         it — the trailing clinical-comment textarea hides behind the
+         floating bar. Reserve the bar's offset (~tab-nav) plus its wrapped
+         height so the last field is always reachable above it. */
+      :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height) + 150px); }
+
       /* Patient context strip lets the CRITICAL chip wrap under the
          identity block instead of squeezing the name. */
       :host .pf-ctx { flex-wrap: wrap; }

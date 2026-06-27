@@ -360,6 +360,30 @@
   .pf-auth__stack {
     max-width: 100%;
   }
+
+  /* Keyboard-overlap fix: when the on-screen keyboard (or an error
+     pill + env strip) makes the centred card taller than the shrunken
+     viewport, flex `align-items: center` clips the top with no way to
+     reach it. Allow the page to scroll vertically and switch centring
+     to auto margins, which keep the top edge reachable instead of
+     clipping it. Horizontal stays clipped so blobs never cause
+     side-scroll. */
+  .pf-auth {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    align-items: flex-start;
+  }
+  /* Clip the decorative blobs to the container so the now-scrollable
+     page can't scroll into their overflow. */
+  .pf-auth__mesh {
+    overflow: hidden;
+  }
+  /* Centre when there's room; collapse (no clip) when content is tall. */
+  .pf-auth__stack {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
 }
 
 /* ── Electron (desktop shell) ───────────────────────────────────────

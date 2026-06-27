@@ -99,7 +99,7 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
         <ul class="pf-list">
           @for (p of results(); track p.id) {
             <li>
-              <button type="button" class="pf-row" (click)="selectPatient(p)">
+              <button type="button" class="pf-row pf-row--inline" (click)="selectPatient(p)">
                 <pf-avatar [name]="display(p)" [size]="44"></pf-avatar>
                 <div class="min-w-0 flex-1">
                   <p class="pf-row__name">{{ display(p) }}</p>
@@ -196,6 +196,14 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
     }
     @media (min-width: 640px) {
       .pf-row { flex-direction: row; align-items: center; gap: 14px; }
+    }
+    /* Phone (<=639): a patient row (avatar · name · chevron) reads far better
+       horizontally than stacked, so keep it inline. Order rows still stack so
+       their "Process payment" button stays full-width + tappable. The order id
+       pill hugs its content instead of stretching the full width. */
+    @media (max-width: 639px) {
+      .pf-row--inline { flex-direction: row; align-items: center; gap: 12px; }
+      .pf-row__id { align-self: flex-start; }
     }
     /* Keep the row's leading avatar / trailing chevron + action from being
        squished by the flexible text column. */

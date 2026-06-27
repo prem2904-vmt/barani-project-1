@@ -193,11 +193,11 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
                   </div>
                   <div class="flex-shrink-0">
                     @if (a.status === 'booked') {
-                      <pf-touch-btn size="sm" variant="primary" class="sm:w-auto" (pressed)="checkInAndCollect(a)">
+                      <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" (pressed)="checkInAndCollect(a)">
                         Check in &amp; collect
                       </pf-touch-btn>
                     } @else {
-                      <pf-touch-btn size="sm" variant="secondary" class="sm:w-auto" (pressed)="goCollect()">
+                      <pf-touch-btn size="sm" variant="secondary" class="w-full sm:w-auto" (pressed)="goCollect()">
                         Collect samples
                       </pf-touch-btn>
                     }

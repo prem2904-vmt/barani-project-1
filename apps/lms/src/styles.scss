@@ -1320,6 +1320,13 @@ html[data-theme="light"] .pf-vial__outline {
     min-width: auto;
     min-height: auto;
   }
+  /* Text inputs/selects carrying .pf-input also need the 44px tap-target
+     floor on touch — the button/link rule above doesn't cover them. Height
+     only: width is governed by the field's own layout, and this is gated to
+     coarse pointers so the desktop-web (fine-pointer) baseline is untouched. */
+  .pf-input {
+    min-height: 44px;
+  }
 }
 
 /* Honour the user's prefers-reduced-motion. We have a lot of pulsing

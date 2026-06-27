@@ -146,6 +146,10 @@ interface InviteForm {
        the hit area is finger-friendly without affecting mouse/desktop. */
     @media (pointer: coarse) {
       :host .pf-radio input { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; }
+      /* Text inputs get the global 16px font bump but no min-height; give them a
+         comfortable >=44px touch target on this form (scoped to :host so the
+         shared .pf-input baseline and desktop are untouched). */
+      :host .pf-input { min-height: 44px; }
     }
   `]
 })

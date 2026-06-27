@@ -225,6 +225,14 @@ const TYPE_COLOR: Record<string, string> = {
         justify-content: flex-start;
         gap: 8px;
       }
+      /* On the dropped full-width action line the small buttons would
+         otherwise crowd into the left gutter. Let each grow to share the
+         width as a comfortable 2-up grid (a lone action goes full-width),
+         giving bigger, easier tap targets without changing button height. */
+      :host .pf-row-actions pf-touch-btn {
+        flex: 1 1 calc(50% - 4px);
+        min-width: calc(50% - 4px);
+      }
       /* The priority chip should never push the name block to nothing. */
       :host .pf-score { min-width: 48px; }
     }

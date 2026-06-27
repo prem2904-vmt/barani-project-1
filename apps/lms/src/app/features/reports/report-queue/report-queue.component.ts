@@ -718,6 +718,14 @@ interface PrelimOrder {
         width: 32px; height: 32px;
         font-size: 20px;
       }
+      /* iOS WKWebView auto-zooms any focused field whose font-size is
+         < 16px. Bump the search input to 16px on phones only (desktop
+         keeps its 13.5px density) and give it a comfortable >=44px
+         tap height. */
+      .pf-results-search__input {
+        font-size: 16px;
+        padding: 12px 0;
+      }
     }
 
     /* TOUCH SIZING (coarse pointer, any width): the dense desktop icon

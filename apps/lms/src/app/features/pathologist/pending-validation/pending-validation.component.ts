@@ -242,6 +242,14 @@ interface ResultSnapshot {
         flex: 1 1 100%;
         min-width: 0;
       }
+      /* the "entered …" timestamp gets its own full-width line so the row
+         reads cleanly as name / timestamp / actions instead of relying on
+         wrap order; left-aligned and tightened above the action row */
+      :host .pv-result-row > span:nth-child(2) {
+        flex: 1 1 100%;
+        min-width: 0;
+        margin-top: 0.125rem;
+      }
       /* action group drops to its own line and spreads the 3 buttons evenly */
       :host .pv-result-actions {
         display: flex;

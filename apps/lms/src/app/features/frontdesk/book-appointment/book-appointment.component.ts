@@ -748,6 +748,14 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
         :host .book-appt-grid .flex.gap-2\\.5 > button {
           min-height: 44px;
         }
+        /* The slot grid above caps its scroll area at 125px, which — once
+           each slot button becomes 44px tall (rule above) — only reveals
+           ~2 rows of times before scrolling. Raise the cap on touch so
+           several rows are visible at once. Desktop (fine pointer) keeps
+           the original 125px. Scoped to this page's unique slot container. */
+        :host .book-appt-grid .overflow-y-auto.max-h-\\[125px\\] {
+          max-height: 220px !important;
+        }
       }
     `
   ]

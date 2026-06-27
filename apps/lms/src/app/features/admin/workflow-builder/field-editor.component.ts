@@ -129,13 +129,13 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <label class="inline-flex items-center gap-2 text-sm">
+            <label class="inline-flex items-center gap-2 text-sm check-row">
               <input type="checkbox"
                      [ngModel]="!!draft().isRequired"
                      (ngModelChange)="patch({ isRequired: $event })" />
               <span>Required</span>
             </label>
-            <label class="inline-flex items-center gap-2 text-sm"
+            <label class="inline-flex items-center gap-2 text-sm check-row"
                    [class.opacity-50]="mode() === 'edit'">
               <input type="checkbox"
                      [ngModel]="isCustom()"
@@ -406,6 +406,20 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       .field-editor-page .range-row > .field-remove,
       .field-editor-page .option-row > .field-remove {
         margin-left: auto;
+      }
+    }
+
+    /* Touch: give the bare Required / Custom checkbox rows a real 44px
+       tap target and enlarge the native checkbox hit area. Desktop keeps
+       its compact rows (this only applies to coarse pointers). */
+    @media (pointer: coarse) {
+      .field-editor-page .check-row {
+        min-height: 44px;
+      }
+      .field-editor-page .check-row input[type='checkbox'] {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
       }
     }
   `]

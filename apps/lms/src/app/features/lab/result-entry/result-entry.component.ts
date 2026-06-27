@@ -2498,6 +2498,19 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-rg__textarea { padding-top: 10px; padding-bottom: 10px; }
       .pf-image-tile__frame { width: 80px; height: 80px; }
       .pf-param__image-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+
+      /* Card-view choice controls: the radio / checkbox / toggle rows,
+         button-select chips, file picker + canvas-clear all sit below the
+         44px touch floor (label text + a ~16-24px glyph). These are
+         inline-flex / button controls already centred on their cross axis,
+         so a min-height growth enlarges the tappable zone without shifting
+         the visual layout. Desktop (pointer:fine) and >=1280px untouched. */
+      .pf-radio-row,
+      .pf-checkbox-row,
+      .pf-toggle-row,
+      .pf-btnsel__opt,
+      .pf-param__filebtn { min-height: 44px; }
+      .pf-param__canvas-clear { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
     }
 
     /* Touch (no real hover): neutralise the :hover background swaps on the

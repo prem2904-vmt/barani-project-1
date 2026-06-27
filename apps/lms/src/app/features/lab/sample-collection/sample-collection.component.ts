@@ -1472,6 +1472,13 @@ interface OrderGroup {
       /* Loading stub: use dynamic viewport height so it doesn't jump when
          mobile browser chrome shows/hides. */
       .pf-sc__loading { min-height: 60dvh; }
+
+      /* The queue grid's minimum track is 400px (auto-fill minmax(400px,1fr)),
+         which is wider than most phones (iPhone SE 375px, iPhone 14 390px) and
+         forces horizontal page overflow. Collapse to a single shrinkable
+         column on phones so the cards fit with no sideways scroll. Tablet /
+         desktop (>=641px) keep the original multi-column auto-fill layout. */
+      .pf-sc__list { grid-template-columns: minmax(0, 1fr); }
     }
 
     /* Touch (coarse pointer): make the order-card tap target comfortable and

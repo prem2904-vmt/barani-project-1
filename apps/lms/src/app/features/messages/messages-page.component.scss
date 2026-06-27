@@ -1914,3 +1914,17 @@
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
   }
 }
+
+// ── Narrow-phone overflow guard (additive, phone-only) ──────────────
+// The in-bubble cards carry desktop fixed min-widths (rec-card 260px,
+// attach-card 240px) and the inline-image cap is 320px. On a phone the
+// bubble-wrap is only 84% of the scroller, so those fixed widths can
+// exceed the wrap and get clipped by `.pf-msgs { overflow:hidden }`
+// (content cut off at the right edge). Relax them to fill the available
+// bubble width instead. Desktop/tablet keep their comfortable widths
+// because this rule physically cannot apply at >=641px.
+@media (max-width: 640px) {
+  .pf-msgs__rec-card,
+  .pf-msgs__attach-card { min-width: 0; }
+  .pf-msgs__attach-image-link { max-width: 100%; }
+}

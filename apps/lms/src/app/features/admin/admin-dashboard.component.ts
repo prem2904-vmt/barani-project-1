@@ -546,7 +546,8 @@ interface Category {
        momentum scrolling without a scrollbar gutter. Cannot affect
        desktop. */
     @media (max-width: 640px) {
-      .pf-admin-search { max-width: 100%; }
+      /* >=16px so focusing the field never triggers iOS WKWebView auto-zoom. */
+      .pf-admin-search { max-width: 100%; font-size: 16px; }
       .pf-admin-rail {
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
@@ -554,6 +555,21 @@ interface Category {
       .pf-admin-rail::-webkit-scrollbar { display: none; }
       .pf-admin-rail__btn { min-width: 160px; }
       .pf-admin-tile { padding: 16px; gap: 12px; min-height: 96px; }
+
+      /* The 340px grid min overflows a ~360px phone (content area is
+         narrower than the track min once page + pane padding is removed),
+         producing horizontal scroll. Force a true single column. */
+      .pf-admin-pane__grid { grid-template-columns: 1fr; }
+
+      /* Kill the desktop nested-scroll model on phone: the rail + pane each
+         own an internal overflow region sized by the flex:1 layout, which
+         becomes a scroll trap and hides content behind the bottom-nav pill.
+         Let the page flow naturally so the shell-main scroll container (which
+         already reserves --tab-nav-total-height) handles scrolling + pill
+         clearance. */
+      .pf-admin-page { min-height: 0; }
+      .pf-admin-layout { flex: 0 1 auto; min-height: 0; }
+      .pf-admin-pane { overflow-y: visible; }
     }
 
     /* iPad / tablet band (641–1279): keep the two-pane layout — the

@@ -23,12 +23,12 @@ const DRAG_THRESHOLD_PX = 4;
     <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
          Scrolls horizontally on narrow viewports so all nav items stay
          reachable without overflowing off-screen.
-         The bottom inline style is a flat 8px — the pill hugs the
-         screen bottom edge with no floating gap (per the user's
-         "bring it to the bottom, no space" call). 8px keeps the icon
-         tap-targets — vertically centred in the ~56px pill — clear of
-         the iOS home-indicator gesture zone while the pill sits snug
-         at the edge. -->
+         The pill bottom-offset is calc(env(safe-area-inset-bottom) +
+         8px): 8px above the screen edge plus the device's bottom
+         safe-area inset so on notched iPhones it floats clear of the
+         home-indicator gesture zone (~34pt) rather than colliding with
+         it. The inset is 0 on desktop/non-notched, so it collapses to
+         8px there. See the .pf-bottom-nav rule in styles below. -->
     <nav class="pf-bottom-nav xl:hidden fixed z-30"
          [class.pf-bottom-nav--rail]="railMode()">
       <div #pill
@@ -300,10 +300,15 @@ const DRAG_THRESHOLD_PX = 4;
   `,
   styles: [`
     /* Default (phone) — floating bottom pill, horizontally centred,
-       8px above the screen edge. Positioning lives here in CSS now
-       (was Tailwind utility classes) so rail mode can fully override. */
+       8px above the screen edge PLUS the bottom safe-area inset so on
+       notched iPhones the pill floats clear of the home-indicator
+       gesture zone (~34pt) instead of colliding with it. On desktop /
+       non-notched devices env(safe-area-inset-bottom) resolves to 0px,
+       so calc() is a no-op (== 8px) and the layout is byte-identical.
+       Positioning lives here in CSS now (was Tailwind utility classes)
+       so rail mode can fully override. */
     .pf-bottom-nav {
-      bottom: 8px;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
       left: 50%;
       transform: translateX(-50%);
       max-width: calc(100vw - 16px);

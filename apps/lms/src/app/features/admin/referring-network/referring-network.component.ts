@@ -477,6 +477,11 @@ interface Doctor {
       .pf-rn-doc__btn { width: 44px; height: 44px; }
       .pf-rn-modal__close { width: 44px; height: 44px; }
       .pf-rn-row { padding-top: 12px; padding-bottom: 12px; }
+      /* Text fields meet the 44px tap floor (desktop keeps its 36px). */
+      .pf-rn-search,
+      .pf-rn-fld input { min-height: 44px; }
+      /* >=8px between adjacent edit/delete hit boxes on a card. */
+      .pf-rn-doc__actions { gap: 8px; }
     }
 
     /* iPad / mid-width (641–1279): two-column doctor cards use the width;

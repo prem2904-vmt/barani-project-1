@@ -713,6 +713,10 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       .pf-rs-row__chip { min-height: 32px; display: inline-flex; align-items: center; }
       .manual-link { min-height: 44px; display: inline-flex; align-items: center; }
       .pf-check-box { width: 24px; height: 24px; }
+      /* Grow the legacy in-transit checkbox hit area to the 44px touch
+       * floor (the visible box stays 24px; the invisible input fills the
+       * wrapper). Scoped to this page's .pf-check + coarse pointers only. */
+      .pf-check { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
       .seg--input { padding: 10px 10px; }
     }
 

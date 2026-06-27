@@ -404,6 +404,11 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
       /* Patient-ID grid: 2 cols can crowd narrow phones — go single column. */
       :host .grid.grid-cols-2 { grid-template-columns: 1fr; }
 
+      /* Auto-assign dept grid uses minmax(260px,…) which can exceed a narrow
+         phone's available width (section + tile padding) and force horizontal
+         overflow. Collapse to a single fluid column on phones. */
+      :host .pf-ls__dept-grid { grid-template-columns: 1fr; }
+
       /* Danger zone: stack the button full-width below the copy on phone. */
       :host .pf-ls__danger { align-items: stretch; }
       :host .pf-ls__danger > pf-touch-btn,

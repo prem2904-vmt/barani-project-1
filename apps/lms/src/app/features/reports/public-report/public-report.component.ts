@@ -81,10 +81,23 @@ interface PublicReportResult {
     @media (max-width:640px) {
       .inp { font-size:16px; }
       .btn { min-height:48px; }
+      /* PDF viewer goes full-bleed on phones so the report is readable */
+      .wrap:has(.viewer) { padding:0; gap:0; }
+      .viewer { max-width:none; }
+      .frame { border-radius:0; }
     }
     @media (pointer:coarse) {
       .btn { min-height:48px; }
       .inp { min-height:48px; font-size:16px; }
+      .viewer-open { min-height:44px; display:inline-flex; align-items:center; }
+    }
+    /* Native: keep the PDF viewer clear of the notch + home indicator */
+    :host-context(html.cap-native) .wrap:has(.viewer) { padding:0; gap:0; }
+    :host-context(html.cap-native) .viewer { box-sizing:border-box; padding-bottom:env(safe-area-inset-bottom); }
+    :host-context(html.cap-native) .viewer-bar {
+      padding-top:calc(12px + env(safe-area-inset-top));
+      padding-left:calc(14px + env(safe-area-inset-left));
+      padding-right:calc(14px + env(safe-area-inset-right));
     }
     .btn { -webkit-tap-highlight-color:transparent; }
   `]

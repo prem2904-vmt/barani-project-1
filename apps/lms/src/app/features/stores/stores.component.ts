@@ -443,6 +443,10 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
       .wrap .chip { min-height: 44px; }
       /* Save links inside count batches sit on their own touchable row. */
       .wrap .batch__act .link { min-width: 44px; justify-content: center; }
+      /* Action/overview tabs and item-picker rows are touch targets at every
+         touch width (the ≤640 rule only covers phones — tablets are coarse too). */
+      .wrap .tab { min-height: 44px; }
+      .wrap .pick { min-height: 44px; }
     }
   `]
 })

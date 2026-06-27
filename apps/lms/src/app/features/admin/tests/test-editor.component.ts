@@ -227,12 +227,14 @@ function newFieldId(): string {
            Layout content so admins don't have to scroll to find the layout
            editor, but General + Pricing stay always visible up top. -->
       <div class="mb-4">
-        <pf-segmented
-          [options]="tabOptions()"
-          [value]="tab()"
-          size="md"
-          (valueChange)="setTab($event)">
-        </pf-segmented>
+        <div class="tab-strip">
+          <pf-segmented
+            [options]="tabOptions()"
+            [value]="tab()"
+            size="md"
+            (valueChange)="setTab($event)">
+          </pf-segmented>
+        </div>
         @if (!d.id && tab() === 'layout') {
           <p class="mt-2 text-[12px]" style="color: var(--text-tertiary);">
             Save the test first — the report layout editor needs an id to attach to.
@@ -851,6 +853,22 @@ function newFieldId(): string {
          (lg:grid-cols-1 already covers desktop; this only touches <=640px,
          leaving iPad's 3-up untouched.) */
       .pf-pricing-grid { grid-template-columns: 1fr; }
+
+      /* The tab strip (pf-segmented) is display:inline-flex and never wraps,
+         so with 3 tabs (Parameters / Report layout / Consumables) it can be
+         wider than a small phone and force horizontal PAGE scroll. Let the
+         strip itself scroll horizontally instead, hiding the scrollbar. The
+         negative margin lets it bleed to the section's px-4 edges so the full
+         width is swipeable. Phone-only, so iPad/desktop stay byte-identical. */
+      .tab-strip {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        margin-inline: -16px;
+        padding-inline: 16px;
+        scrollbar-width: none;
+      }
+      .tab-strip::-webkit-scrollbar { display: none; }
     }
 
     /* (d) WEB-BELOW-DESKTOP band (641–1279px: iPad + any browser narrower

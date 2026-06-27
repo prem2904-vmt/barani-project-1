@@ -266,7 +266,9 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       .pb-toggle { min-width: 44px; min-height: 28px; width: 44px; height: 26px; border-radius: 13px; }
       .pb-toggle::after { width: 20px; height: 20px; top: 3px; left: 3px; }
       .pb-toggle.on::after { transform: translateX(18px); }
-      .pb-role, .pb-role-add, .pb-role-add--done { min-height: 32px; padding-top: 6px; padding-bottom: 6px; }
+      /* role pills become toggle buttons in edit mode — give them the full
+         44px touch floor (they sit in a wrap-flow so height grows gracefully). */
+      .pb-role, .pb-role-add, .pb-role-add--done { min-height: 44px; display: inline-flex; align-items: center; padding-top: 8px; padding-bottom: 8px; }
       /* grip is a drag affordance, not a tap target, but give it a real touch
          box so it's draggable on touch; flex-shrink so it never collapses. */
       .pb-grip { padding: 8px 4px; flex-shrink: 0; }

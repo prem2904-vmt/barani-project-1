@@ -175,6 +175,29 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
        --tab-nav-total-height + safe-area as its own padding-bottom), so
        this page fits exactly above the nav. The inner .pb-10 on .tat-scroll
        gives the last row breathing room without double-padding. */
+
+    /* ---- Phone (<=640px): full-page scroll, additive override ----
+       The desktop/iPad "fixed chrome + inner scroll" app layout above is
+       left untouched (no rule outside this block changes). On a phone the
+       pinned KPI strip + header would consume a large share of the small
+       viewport and trap the list in a cramped inner scroll window. Below
+       the breakpoint we let the whole page flow and scroll inside
+       .shell-main (which already reserves --tab-nav-total-height so the
+       last row clears the floating bottom pill), giving the list the full
+       height and a natural single-pane scroll. Scoped to this page's own
+       selectors so nothing global/shared is affected. */
+    @media (max-width: 640px) {
+      :host { height: auto; }
+      .tat-page {
+        height: auto;
+        overflow: visible;
+      }
+      .tat-scroll {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow-y: visible;
+      }
+    }
   `]
 })
 export class TatBoardComponent implements OnInit, OnDestroy {

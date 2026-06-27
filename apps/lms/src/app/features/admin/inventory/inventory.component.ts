@@ -106,7 +106,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                 @if (expandedId() === it.id) {
                   <tr style="background:var(--glass-bg)"><td colspan="5" class="p-3">
                     @if (receiveFor() === it.id) {
-                      <div class="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-lg" style="background:var(--bg-card-solid)">
+                      <div class="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-lg rcv-form" style="background:var(--bg-card-solid)">
                         <label class="block"><span class="lbl">Lot #</span><input class="inp" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
                         <label class="block"><span class="lbl">Expiry</span><input class="inp" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
                         <label class="block"><span class="lbl">Unit cost</span><input class="inp" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
@@ -225,6 +225,9 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       :host .bom-line { flex-wrap: wrap; }
       :host .bom-line__item { flex: 1 1 100%; min-width: 0; }
       :host .bom-line__qty { width: 120px !important; }
+      /* Goods-receipt inline form: stack Lot/Expiry/Cost/Qty single-column so the
+         content-sized inputs don't crowd; the "Add stock" button drops below. */
+      :host .rcv-form > label { flex: 1 1 100%; min-width: 0; }
     }
 
     /* The item select is a flex child whose option text can be long; allow it to

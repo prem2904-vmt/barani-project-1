@@ -820,6 +820,9 @@ const STATUS_CLASS: Record<string, string> = {
         margin-left: 0; width: 100%; order: 5;
         font-size: 13px; text-align: center;
       }
+      /* iOS: hidden jump-to-date input is focused on tap before its
+       * native picker opens — keep it >=16px so WKWebView doesn't zoom. */
+      .pf-cal-nav__jump-input { font-size: 16px; }
 
       /* Day / Week grid: narrower time rail + allow the 7-day week to
        * scroll horizontally instead of crushing columns to nothing.

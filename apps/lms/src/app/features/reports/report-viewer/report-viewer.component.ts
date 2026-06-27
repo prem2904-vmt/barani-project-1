@@ -1055,6 +1055,13 @@ function coerceCellText(raw: unknown): string {
 
     /* ── Phone (<=640): single-column, no horizontal overflow ── */
     @media (max-width: 640px) {
+      /* This page clamps itself (:host height:100%; section overflow:hidden)
+         so .pf-rv-scroll is the real scroll container, NOT shell-main. The
+         base 48px clearance under-clears the floating bottom-nav pill, so
+         re-apply the canonical pill footprint here (88px + bottom safe-area)
+         so the last report rows aren't hidden behind the pill. */
+      .pf-rv-scroll { padding-bottom: var(--tab-nav-total-height); }
+
       /* Status strip: chips + meta stack instead of cramping. */
       .pf-rv-status {
         flex-direction: column;

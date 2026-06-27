@@ -1321,6 +1321,38 @@ const COUNTERS: CounterSpec[] = [
     :host-context(html.cap-native) .pf-mw-pane:not(:first-of-type) .pf-mw-pane__body {
       padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
+
+    /* ── Phone (<=640px): the two work panes carry min-heights and
+       flex:1 inside a non-scrolling host (overflow:hidden). On a short
+       phone the chrome above the split (KPI strip, header, counter row,
+       scan row) leaves too little room, so the panes' combined
+       min-heights overflow the host and the lower Workbench pane gets
+       clipped — its last tube action becomes unreachable because nothing
+       scrolls at page level. On phones, release the host clamp and let
+       the whole page flow into the shell's scroll container (which
+       already reserves --tab-nav-total-height to clear the floating
+       bottom-nav pill): collapse to one natural column, size each pane to
+       its content, and drop the nested pane-body scroll so there's no
+       scroll trap. The 641-1023px iPad band keeps its stacked
+       internal-scroll layout, and >=1024px desktop stays byte-for-byte
+       unchanged. */
+    @media (max-width: 640px) {
+      :host { height: auto; min-height: 100%; overflow: visible; }
+      :host > section { flex: 0 0 auto; min-height: 0; }
+      .pf-mw-split { flex: 0 0 auto; min-height: 0; }
+      .pf-mw-pane,
+      .pf-mw-pane:first-of-type,
+      .pf-mw-pane:not(:first-of-type) {
+        flex: 0 0 auto !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+      }
+      .pf-mw-pane__body {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: visible;
+      }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {

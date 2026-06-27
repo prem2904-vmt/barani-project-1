@@ -51,7 +51,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                   <p class="text-[13px] mt-1" style="color: var(--text-secondary);">{{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}</p>
                   <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">{{ a.slotTime || '—' }} @if (a.patient; as patient) { @if (patient.phone) { · {{ patient.phone }} } }</p>
                 </div>
-                <div class="flex items-center gap-2 pt-2 border-t border-slate-700/30">
+                <div class="pf-assign-row flex items-center gap-2 pt-2 border-t border-slate-700/30">
                   <div class="flex-1 min-w-0">
                     <pf-select [options]="agentOptions()" [value]="pick()[a.id]"
                       placeholder="Choose agent" size="sm"
@@ -65,7 +65,24 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
         </div>
       }
     </section>
-  `
+  `,
+  styles: [`
+    /* Touch-only tap-target floor for the inline agent picker.
+       Gated behind (hover:none)+(pointer:coarse) so desktop-web/Electron
+       (mouse, fine pointer) stays byte-for-byte unchanged. Scoped to :host. */
+    @media (hover: none) and (pointer: coarse) {
+      :host ::ng-deep pf-select .pf-dd--sm .pf-dd__trigger {
+        min-height: 44px;
+      }
+      :host ::ng-deep pf-select .pf-dd__option {
+        min-height: 40px;
+      }
+    }
+    /* Phone: give the picker + Assign action a touch-comfortable gap. */
+    @media (max-width: 640px) {
+      :host .pf-assign-row { gap: 10px; }
+    }
+  `]
 })
 export class HomeCollectionAssignComponent implements OnInit {
   private readonly svc = inject(AppointmentQueueService);
