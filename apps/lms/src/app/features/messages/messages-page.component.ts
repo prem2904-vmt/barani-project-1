@@ -14,6 +14,7 @@ import { WebrtcService } from '../../core/services/webrtc.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ChatNotifyService } from '../../core/services/chat-notify.service';
 import { RingtoneService } from '../../core/services/ringtone.service';
+import { KeyboardService } from '../../core/services/keyboard.service';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
@@ -54,6 +55,9 @@ export class MessagesPageComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
   protected readonly ringtone = inject(RingtoneService);
+  /** Soft-keyboard visibility — drops the composer's nav-clearance padding so
+   *  it sits right above the keyboard while typing (phone). */
+  protected readonly kbd = inject(KeyboardService);
 
   @ViewChild('thread') private threadEl?: ElementRef<HTMLDivElement>;
   @ViewChild('composer') private composerEl?: ElementRef<HTMLTextAreaElement>;

@@ -75,10 +75,28 @@ const COUNTERS: CounterSpec[] = [
         </div>
       </pf-screen-header>
 
+      <!-- Phone-only (<=640px) toggle that collapses the KPI counter
+           chips below. Hidden above 640px, where the chips always show. -->
+      <button type="button" class="pf-kpi-toggle press"
+              [attr.aria-expanded]="kpiOpen()"
+              (click)="kpiOpen.set(!kpiOpen())">
+        <svg class="pf-kpi-toggle__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/>
+        </svg>
+        Stats
+        <svg class="pf-kpi-toggle__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+
       <!-- Counter filter pills — moved up here directly under the
            header so the counts read as page metadata, and the scan
-           bar sits below as the primary CTA. -->
-      <div class="pf-counter-row" role="tablist" aria-label="Filter queue">
+           bar sits below as the primary CTA. On phones these collapse
+           behind the Stats toggle above (pf-kpi-collapsed). -->
+      <div class="pf-counter-row" role="tablist" aria-label="Filter queue"
+           [class.pf-kpi-collapsed]="!kpiOpen()">
         @for (c of counters; track c.id) {
           <button type="button"
                   class="pf-counter"
@@ -207,6 +225,31 @@ const COUNTERS: CounterSpec[] = [
            the right. Same pattern as the Frontdesk landing splitter so
            the techs see the intake queue and their bench work side by
            side without tab-switching. Single drag handle in the middle. -->
+      <!-- Phone-only (<=640px) single-pane tab control: Intake / My Work /
+           Queue. Hidden above 640px, where all panes lay out together.
+           Selecting My Work / Queue drives the existing internal tab via
+           setMobileTab → setTab so the right pane loads the right data. -->
+      <div class="pf-mtabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'intake'"
+                [attr.aria-selected]="mobileTab() === 'intake'"
+                (click)="setMobileTab('intake')">Intake</button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'mywork'"
+                [attr.aria-selected]="mobileTab() === 'mywork'"
+                (click)="setMobileTab('mywork')">
+          My Work
+          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
+        </button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'queue'"
+                [attr.aria-selected]="mobileTab() === 'queue'"
+                (click)="setMobileTab('queue')">
+          Queue
+          <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
+        </button>
+      </div>
+
       <div class="pf-mw-split" #mwSplit
            [class.pf-mw-split--dragging]="mwDragging()">
 
@@ -214,8 +257,10 @@ const COUNTERS: CounterSpec[] = [
              scan bar: barcode icon, manual-typing input, camera shortcut,
              and a Receive button. Hits Enter or clicks Receive to intake.
              The camera button opens the same scanner the standalone
-             /lab/receive page uses; on match it auto-intakes. -->
-        <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()">
+             /lab/receive page uses; on match it auto-intakes.
+             On phones this pane only shows under the Intake tab. -->
+        <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
+                 [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
             <span class="pf-mw-pane__title">Lab Intake</span>
             <div class="pf-mw-scan">
@@ -264,8 +309,10 @@ const COUNTERS: CounterSpec[] = [
           <span class="pf-mw-handle__grip" aria-hidden="true"></span>
         </div>
 
-        <!-- RIGHT: tabbed My Work + Queue -->
-        <section class="pf-mw-pane">
+        <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
+             the My Work / Queue tabs (hidden under Intake). -->
+        <section class="pf-mw-pane"
+                 [class.pf-mobile-hide]="mobileTab() === 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
               <button type="button" role="tab" class="pf-mw-tab press"
@@ -1353,6 +1400,111 @@ const COUNTERS: CounterSpec[] = [
         overflow: visible;
       }
     }
+
+    /* ════════════════════════════════════════════════════════════
+       PHONE-ONLY SINGLE-PANE TABBED VIEW (<=640px) — additive.
+       New controls below default to display:none so they NEVER appear
+       above 640px; the visibility helpers (.pf-mobile-hide,
+       .pf-kpi-collapsed) only apply their display:none INSIDE the
+       max-width:640px block, so the >=641px layout is byte-for-byte
+       unchanged and keeps showing every section at once.
+       ════════════════════════════════════════════════════════════ */
+
+    /* Hidden everywhere by default; revealed only on phones. */
+    .pf-mtabs { display: none; }
+    .pf-kpi-toggle { display: none; }
+
+    @media (max-width: 640px) {
+      /* Phone visibility helpers — only take effect here so desktop
+         ignores them entirely. */
+      .pf-mobile-hide { display: none !important; }
+      .pf-counter-row.pf-kpi-collapsed { display: none !important; }
+
+      /* The split is just a stacked container on phones; show only the
+         selected pane (the other carries .pf-mobile-hide). */
+      .pf-mw-split { gap: 0; }
+
+      /* Redundant on phones — the top segmented control now drives the
+         My Work / Queue switch, so hide the in-pane pill cluster. */
+      .pf-mw-tabs { display: none; }
+
+      /* KPI counter collapse toggle. */
+      .pf-kpi-toggle {
+        display: inline-flex;
+        align-self: flex-start;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 8px 16px;
+        margin-bottom: 12px;
+        border-radius: 9999px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .pf-kpi-toggle__icon { color: #a78bfa; flex-shrink: 0; }
+      .pf-kpi-toggle__chev { transition: transform 0.15s ease; }
+      .pf-kpi-toggle[aria-expanded='true'] .pf-kpi-toggle__chev { transform: rotate(180deg); }
+
+      /* Top segmented control: Intake / My Work / Queue. Matches the
+         existing .pf-mw-tabs pill language (pill track + gradient on the
+         active cell). Full width, 3 equal cells, 44px tap targets. */
+      .pf-mtabs {
+        display: flex;
+        gap: 2px;
+        padding: 3px;
+        margin-bottom: 12px;
+        border-radius: 9999px;
+        background: rgba(0, 0, 0, 0.18);
+        border: 1px solid var(--glass-border);
+      }
+      .pf-mtab {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 6px;
+        border: 0;
+        background: transparent;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+      .pf-mtab--on {
+        background: linear-gradient(135deg, #8b5cf6, #ec4899);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
+      }
+      .pf-mtab__count {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 9999px;
+        background: rgba(168, 85, 247, 0.18);
+        border: 1px solid rgba(168, 85, 247, 0.32);
+        color: var(--text-primary);
+      }
+      .pf-mtab--on .pf-mtab__count {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: transparent;
+        color: #fff;
+      }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -1436,6 +1588,21 @@ export class MyWorkComponent implements OnInit {
   private readonly _tab = signal<Tab>('my_work');
   readonly tab = this._tab.asReadonly();
   setTab(t: Tab) { this._tab.set(t); this.refresh(); }
+
+  // ── Phone-only single-pane presentation state (<=640px) ──────────
+  // Purely presentational. `mobileTab` picks which section the phone
+  // tabbed view shows; `kpiOpen` toggles the collapsed KPI counter
+  // chips. Both are ignored above 640px (their visibility classes only
+  // apply inside @media (max-width:640px)), so desktop is untouched.
+  // Switching to My Work / Queue reuses the existing setTab() so the
+  // right pane loads the matching data — no new fetch logic.
+  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue'>('intake');
+  protected readonly kpiOpen = signal(false);
+  setMobileTab(t: 'intake' | 'mywork' | 'queue') {
+    this.mobileTab.set(t);
+    if (t === 'mywork') this.setTab('my_work');
+    else if (t === 'queue') this.setTab('service_queue');
+  }
 
   private readonly _counter = signal<CounterSpec['id']>('all');
   readonly counter = this._counter.asReadonly();

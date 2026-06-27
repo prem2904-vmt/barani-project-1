@@ -1808,10 +1808,18 @@
   .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
   .pf-msgs__scroller    { padding: 14px 12px 8px; }
-  .pf-msgs__composer    { padding: 8px 10px max(12px, env(safe-area-inset-bottom)); gap: 8px;
+  // The messages thread is an immersive full-height view, so its composer sits
+  // at the very bottom of the viewport — directly under the floating bottom-nav
+  // pill, which would crop it. Pad the bottom to clear the pill (pill height +
+  // its safe-area offset). When the keyboard is up the pill is hidden (see
+  // .pf-msgs--kbd below) so we drop back to a snug inset and the composer rides
+  // just above the keyboard.
+  .pf-msgs__composer    { padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 72px); gap: 8px;
     // Slightly taller textarea — 44px min for thumb comfort.
     textarea { min-height: 44px; }
   }
+  // Typing: nav pill is hidden, so the composer no longer needs to clear it.
+  .pf-msgs--kbd .pf-msgs__composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
   // Bubble actions on touch devices: visible row UNDER the bubble when

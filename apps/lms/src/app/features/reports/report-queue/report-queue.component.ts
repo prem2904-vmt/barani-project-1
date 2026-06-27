@@ -69,7 +69,7 @@ interface PrelimOrder {
               <path d="M3 21v-5h5"/>
             </svg>
           </span>
-          Refresh
+          <span class="pf-rq-btn-label">Refresh</span>
         </pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="promptGenerate()">
           <span icon-left aria-hidden="true">
@@ -110,6 +110,52 @@ interface PrelimOrder {
         </span>
       </div>
 
+      <!-- Phone-only (<=640px): the 5-chip stat block collapses into a
+           single expandable summary so it never eats two rows. Pure
+           presentation — values come from the same signals as above. -->
+      <div class="pf-rq-stats-m">
+        <button type="button" class="pf-rq-stats-m__summary"
+                [class.is-open]="statsOpen()"
+                [attr.aria-expanded]="statsOpen()"
+                aria-controls="pf-rq-stats-panel"
+                (click)="toggleStats()">
+          <span class="pf-rq-stats-m__lead">
+            <span class="pf-rq-stat__dot" data-color="violet" aria-hidden="true"></span>
+            <span class="pf-rq-stats-m__label">Total</span>
+            <span class="pf-rq-stats-m__value">{{ items().length }}</span>
+          </span>
+          <svg class="pf-rq-stats-m__chev" width="18" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+        @if (statsOpen()) {
+          <div class="pf-rq-stats-m__panel" id="pf-rq-stats-panel">
+            <span class="pf-rq-stat" data-color="amber">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Completed</span>
+              <span class="pf-rq-stat__value">{{ counts().pending }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="sky">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Partial</span>
+              <span class="pf-rq-stat__value">{{ partialOrders().length }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="emerald">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Delivered</span>
+              <span class="pf-rq-stat__value">{{ counts().delivered }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="rose">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Failed</span>
+              <span class="pf-rq-stat__value">{{ counts().failed }}</span>
+            </span>
+          </div>
+        }
+      </div>
+
       <div class="mb-4">
         <div class="pf-results-search">
           <svg class="pf-results-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -133,6 +179,17 @@ interface PrelimOrder {
           size="md"
           (valueChange)="setFilter($event)">
         </pf-segmented>
+
+        <!-- Phone-only (<=640px): the scrolling pill row becomes a native
+             select driving the SAME filter signal the pills drive. -->
+        <select class="pf-input pf-rq-filter-m"
+                aria-label="Filter reports"
+                [value]="filter()"
+                (change)="setFilter(asFilter($event))">
+          @for (opt of filterOptions; track opt.value) {
+            <option [value]="opt.value" [selected]="filter() === opt.value">{{ opt.label }}</option>
+          }
+        </select>
       </div>
      </div>
 
@@ -275,7 +332,9 @@ interface PrelimOrder {
                   <p class="font-semibold text-[15px]" style="color: var(--text-primary);">
                     {{ r.order?.patient?.displayName ?? ('Report #' + r.id.slice(0, 8)) }}
                   </p>
-                  <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
+                  <span class="pf-rq-row__badge">
+                    <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
+                  </span>
                 </div>
                 <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
                   Order #{{ r.orderId.slice(0, 8) }}
@@ -771,6 +830,80 @@ interface PrelimOrder {
        clears the 64px left rail via the shell. No overrides required;
        this comment documents the deliberate no-op so a future editor
        doesn't "fix" a band that isn't broken. */
+
+    /* ───────────────────────────────────────────────────────────────
+       PHONE-ONLY SLEEK PASS (<=640px). Every phone-only control is
+       display:none by default so tablet/desktop (>=641px) is byte-for-
+       byte unchanged. The phone variants only ever toggle on inside the
+       max-width:640 query. No business logic — the select & dropdown
+       drive the same filter / view-state signals as the desktop UI.
+       ─────────────────────────────────────────────────────────────── */
+    .pf-rq-stats-m { display: none; }
+    .pf-rq-filter-m { display: none; }
+
+    @media (max-width: 640px) {
+      /* Refresh → icon-only: hide the label visually but keep it in the
+         a11y tree (sr-only) so the button still has an accessible name. */
+      .pf-rq-btn-label {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0);
+        white-space: nowrap; border: 0;
+      }
+
+      /* Swap the multi-chip stat block for the collapsible summary. */
+      .pf-rq-stats { display: none; }
+      .pf-rq-stats-m { display: block; margin-bottom: 16px; }
+      .pf-rq-stats-m__summary {
+        width: 100%;
+        display: flex; align-items: center; gap: 10px;
+        min-height: 44px;
+        padding: 8px 14px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .pf-rq-stats-m__lead {
+        display: inline-flex; align-items: center; gap: 8px;
+        flex: 1 1 auto; min-width: 0;
+      }
+      .pf-rq-stats-m__lead .pf-rq-stat__dot {
+        background: #a78bfa;
+        box-shadow: 0 0 6px rgba(168, 85, 247, 0.45);
+      }
+      .pf-rq-stats-m__label {
+        font-size: 12px; font-weight: 500; color: var(--text-tertiary);
+      }
+      .pf-rq-stats-m__value {
+        font-size: 13px; font-weight: 600; color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+      }
+      .pf-rq-stats-m__chev {
+        flex: 0 0 auto; color: var(--text-muted);
+        transition: transform 0.18s;
+      }
+      .pf-rq-stats-m__summary.is-open .pf-rq-stats-m__chev { transform: rotate(180deg); }
+      .pf-rq-stats-m__panel {
+        display: flex; flex-wrap: wrap; gap: 6px 8px;
+        margin-top: 8px;
+      }
+
+      /* Swap the pill filter row for a native select (same filter signal). */
+      pf-segmented { display: none; }
+      .pf-rq-filter-m {
+        display: block;
+        min-height: 44px;
+        font-size: 16px; /* avoid iOS focus auto-zoom */
+      }
+
+      /* Sleeker card: the colored status badge is redundant on phone —
+         the left accent strip + icon already carry status. */
+      .pf-rq-row__badge { display: none; }
+    }
   `]
 })
 export class ReportQueueComponent implements OnInit {
@@ -799,6 +932,16 @@ export class ReportQueueComponent implements OnInit {
   private readonly _filter = signal<Filter>('pending');
   readonly filter = this._filter.asReadonly();
   setFilter(f: Filter) { this._filter.set(f); }
+
+  /** Phone-only presentational state: the compact stat summary's
+   *  expanded/collapsed flag. No business logic. */
+  private readonly _statsOpen = signal(false);
+  readonly statsOpen = this._statsOpen.asReadonly();
+  toggleStats() { this._statsOpen.update(v => !v); }
+
+  /** Read the value off the phone filter <select> (drives the same
+   *  filter signal the desktop pills drive). */
+  asFilter(ev: Event): Filter { return (ev.target as HTMLSelectElement).value as Filter; }
 
   /** Free-text search across patient name, phone, order id and report
    *  id — same vibe as the FD landing's search box. */

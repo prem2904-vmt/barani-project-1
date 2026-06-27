@@ -4,7 +4,8 @@
     Reconnecting…
   </div>
 }
-<div class="pf-msgs" [class.pf-msgs--thread-open]="!!chat.activeConversationId()">
+<div class="pf-msgs" [class.pf-msgs--thread-open]="!!chat.activeConversationId()"
+     [class.pf-msgs--kbd]="kbd.visible()">
   <!-- ── Left rail ────────────────────────────────────────────────── -->
   <aside class="pf-msgs__rail">
     <header class="pf-msgs__rail-head">

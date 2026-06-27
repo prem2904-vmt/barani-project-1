@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { KeyboardService } from '../../core/services/keyboard.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
@@ -30,7 +31,8 @@ const DRAG_THRESHOLD_PX = 4;
          it. The inset is 0 on desktop/non-notched, so it collapses to
          8px there. See the .pf-bottom-nav rule in styles below. -->
     <nav class="pf-bottom-nav xl:hidden fixed z-30"
-         [class.pf-bottom-nav--rail]="railMode()">
+         [class.pf-bottom-nav--rail]="railMode()"
+         [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()">
       <div #pill
            class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 shadow-2xl backdrop-blur-2xl"
            [class.pf-pill--rail]="railMode()"
@@ -313,6 +315,12 @@ const DRAG_THRESHOLD_PX = 4;
       transform: translateX(-50%);
       max-width: calc(100vw - 16px);
     }
+
+    /* While the soft keyboard is up (phone, typing) the floating pill is in
+       the way — hide it so the composer/input sits right above the keyboard.
+       Bound only when !railMode (phones), and KeyboardService.visible is only
+       ever true on native, so web/desktop are unaffected. */
+    .pf-bottom-nav--kbd { display: none !important; }
 
     /* Native (Capacitor) tablet keeps the rail visible even ≥1280px (a 12.9"
        iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows
@@ -799,6 +807,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  popover instead of the top chrome (which is hidden on mobile). */
   protected readonly theme = inject(ThemeService);
   protected readonly peopleDrawer = inject(PeopleDrawerService);
+  /** Hide the floating pill while the soft keyboard is up (phone typing). */
+  protected readonly kbd = inject(KeyboardService);
 
   private readonly btns = viewChildren<ElementRef<HTMLElement>>('navBtn');
   private readonly pillRef = viewChild<ElementRef<HTMLElement>>('pill');
