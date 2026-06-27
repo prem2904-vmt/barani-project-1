@@ -551,8 +551,12 @@ function defaultResultParam(): TestParameter {
       /* Compact header. The global html.cap-native already pads the safe-area
          top, so the sticky header must NOT add env() again (that double-counted
          into a big dead gap above the title). Tight padding; back arrow inline. */
-      .pf-sre { padding-top: 6px !important; }
-      .pf-sre__hdr--sticky { padding-top: 6px; }
+      .pf-sre { padding-top: 4px !important; }
+      /* !important: the base .pf-sre__hdr--sticky{padding-top:env(safe-area-inset-top)}
+         appears LATER in source and was overriding this, re-adding the notch
+         inset that html.cap-native already applies → a big double-inset gap
+         above the title. The global pad already clears the status bar. */
+      .pf-sre__hdr--sticky { padding-top: 4px !important; }
       .pf-sre__hdr {
         flex-direction: row;
         align-items: center;
@@ -903,9 +907,14 @@ function defaultResultParam(): TestParameter {
         gap: 12px;
         width: 100%;
         box-sizing: border-box;
-        padding: 9px 2px;
+        padding: 9px 6px;
         border-bottom: 1px solid var(--glass-border);
+        border-radius: 8px;
+        transition: background 0.12s ease;
       }
+      /* Focus: highlight the row whose input is being edited so the tech always
+         knows which parameter the keyboard is targeting. */
+      .pf-sre__grow:focus-within { background: rgba(168, 85, 247, 0.12); }
       /* Reset only the cells we still show (NO blanket td{display:block}, which
          previously out-specified the display:none above and brought the
          range/method columns back, overlapping everything). */
@@ -925,13 +934,13 @@ function defaultResultParam(): TestParameter {
       td.pf-sre__gc-result {
         display: flex; align-items: center; gap: 4px;
         flex: 0 0 auto; width: 132px;
-        min-height: 40px;
+        min-height: 42px;
         padding: 0 10px;
-        border: 1px solid var(--glass-border);
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--input-border, rgba(255,255,255,0.16));
+        border-radius: 10px;
+        background: var(--bg-input, rgba(255, 255, 255, 0.06));
       }
-      td.pf-sre__gc-result:focus-within { border-color: rgba(168, 85, 247, 0.6); background: rgba(168, 85, 247, 0.1); }
+      td.pf-sre__gc-result:focus-within { border-color: rgba(168, 85, 247, 0.75); background: rgba(168, 85, 247, 0.12); }
       td.pf-sre__gc-result .pf-sre__ginput {
         flex: 1 1 auto; min-width: 0; min-height: 0;
         border: 0 !important; background: transparent !important; padding: 8px 0 !important;
@@ -953,9 +962,9 @@ function defaultResultParam(): TestParameter {
          header pushes it up. Sits just below the sticky page header. */
       .pf-sre__test-hdr {
         position: sticky;
-        top: 46px;
+        top: 52px;            /* just below the compact sticky page header */
         z-index: 4;
-        background: var(--bg-primary, #0c0e14);
+        background: var(--bg-secondary, #0e1018);   /* opaque — hides rows scrolling under */
         margin: 0 -14px; padding: 12px 14px;
       }
     }
