@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy,
+  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
   computed, effect, inject, signal, viewChild, viewChildren
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -32,7 +32,8 @@ const DRAG_THRESHOLD_PX = 4;
          8px there. See the .pf-bottom-nav rule in styles below. -->
     <nav class="pf-bottom-nav xl:hidden fixed z-30"
          [class.pf-bottom-nav--rail]="railMode()"
-         [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()">
+         [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
+         [class.pf-bottom-nav--min]="minimized() && !railMode()">
       <div #pill
            class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 shadow-2xl backdrop-blur-2xl"
            [class.pf-pill--rail]="railMode()"
@@ -368,8 +369,31 @@ const DRAG_THRESHOLD_PX = 4;
       touch-action: pan-y;
       user-select: none;
       -webkit-user-select: none;
-      transition: box-shadow 200ms ease;
+      /* box-shadow on drag; transform/opacity drive the scroll-reactive
+         minimize (see .pf-bottom-nav--min below). */
+      transition:
+        box-shadow 200ms ease,
+        transform 220ms cubic-bezier(0.32, 0.72, 0, 1),
+        opacity   220ms cubic-bezier(0.32, 0.72, 0, 1);
     }
+
+    /* ─── Scroll-reactive minimize (iOS-26 / Instagram style) ──────────
+     * PHONE ONLY (bound on minimized() && !railMode()). On a downward
+     * scroll the floating pill condenses toward its bottom-centre +
+     * dims slightly, ceding space to the content; an upward scroll — or
+     * scrolling back near the top — restores it to full size. It scales
+     * rather than fully hiding (Apple's .onScrollDown hides; we shrink so
+     * the bar stays glanceable + tappable). The rail (iPad) and desktop
+     * never get this class, so they're untouched. */
+    .pf-bottom-nav--min .pf-pill {
+      transform: scale(0.82);
+      transform-origin: bottom center;
+      opacity: 0.9;
+    }
+    /* Drop the tab labels while minimized for a tighter, condensed pill —
+     * icons stay, so every tab is still reachable. (No-op in compact mode,
+     * where labels are already icon-only on phone.) */
+    .pf-bottom-nav--min .pf-nav-btn__lbl { display: none; }
     /* Rail pill — a full-height vertical column. The rail container
        already starts at the safe-area inset, so the pill's own
        padding-top is a plain 10px (no safe-area term — that would
@@ -695,6 +719,8 @@ const DRAG_THRESHOLD_PX = 4;
     @media (prefers-reduced-motion: reduce) {
       .pf-nav-indicator--ready { transition: none; }
       .pf-nav-btn--active svg { animation: none; }
+      /* No animated shrink/grow — snap between states instead. */
+      .pf-pill { transition: box-shadow 200ms ease; }
     }
 
     /* ── More button (PF glyph at end of pill) + popover ──────────── */
@@ -821,11 +847,21 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   /** Hide the floating pill while the soft keyboard is up (phone typing). */
   protected readonly kbd = inject(KeyboardService);
+  /** Scroll listener is registered runOutsideAngular (it fires very often),
+   *  so signal writes that must trigger OnPush re-render re-enter the zone. */
+  private readonly zone = inject(NgZone);
 
   private readonly btns = viewChildren<ElementRef<HTMLElement>>('navBtn');
   private readonly pillRef = viewChild<ElementRef<HTMLElement>>('pill');
 
   protected readonly moreOpen = signal(false);
+
+  /** Scroll-reactive minimize (phone only). True while the user is
+   *  scrolling DOWN (content rising) → the pill shrinks/condenses;
+   *  back to false on an upward scroll or near the top → pill restores.
+   *  The class binding gates this on !railMode() so the iPad rail and
+   *  desktop are never minimized. */
+  protected readonly minimized = signal(false);
 
   /** Rail mode — on the iPad band (641–1279px) the nav docks as a
    *  vertical rail on the left edge instead of a floating bottom pill.
@@ -994,6 +1030,24 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private routerSub?: Subscription;
   private resizeListener?: () => void;
 
+  // ─── Scroll-reactive minimize state ───────────────────────────────
+  /** Capture-phase scroll handler on document — catches nested scrollers
+   *  (most pages scroll inside .shell-main, some inner panes scroll) since
+   *  scroll events don't bubble but DO reach a capture listener. */
+  private scrollListener?: (ev: Event) => void;
+  /** The element that fired the most recent scroll (null = window/document
+   *  document-scrolling). Read inside the rAF tick so we always sample the
+   *  freshest scrollTop, not a stale value from the frame's first event. */
+  private lastScroller: HTMLElement | null = null;
+  /** Last committed scrollTop of the active scroller, for direction + delta. */
+  private lastScrollTop = 0;
+  /** rAF throttle latch — at most one direction eval per frame. */
+  private scrollRafPending = false;
+  /** Ignore sub-threshold scroll jitter (px) so the pill doesn't flicker. */
+  private static readonly SCROLL_DELTA = 6;
+  /** Always restore (grow) the pill when within this many px of the top. */
+  private static readonly NEAR_TOP = 24;
+
   constructor() {
     this.labCfg.ensureLoaded();
     this.process.loadActive();
@@ -1019,11 +1073,70 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       this.measureToActive();
     };
     window.addEventListener('resize', this.resizeListener);
+
+    // Scroll-reactive minimize. Registered runOutsideAngular (scroll fires
+    // very often) + passive (we never preventDefault) + capture (so nested
+    // scrollers, not just the document, are observed). setMinimized() re-
+    // enters the zone only on an actual state flip so OnPush updates.
+    if (typeof document !== 'undefined') {
+      this.scrollListener = (ev: Event) => this.onDocScroll(ev);
+      this.zone.runOutsideAngular(() => {
+        document.addEventListener('scroll', this.scrollListener!, { capture: true, passive: true });
+      });
+    }
   }
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
     if (this.resizeListener) window.removeEventListener('resize', this.resizeListener);
+    if (this.scrollListener) {
+      document.removeEventListener('scroll', this.scrollListener, { capture: true });
+    }
+  }
+
+  // ─── Scroll-reactive minimize logic ───────────────────────────────
+  /** Snapshot which element scrolled, then throttle the direction eval to
+   *  one run per animation frame (rAF). */
+  private onDocScroll(ev: Event): void {
+    const t = ev.target;
+    this.lastScroller =
+      t instanceof HTMLElement && t !== document.documentElement && t !== document.body
+        ? t
+        : null;
+    if (this.scrollRafPending) return;
+    this.scrollRafPending = true;
+    requestAnimationFrame(() => this.evalScroll());
+  }
+
+  /** Compare the active scroller's scrollTop with the last sample to derive
+   *  direction. Down → minimize; up or near-top → restore. A small delta
+   *  threshold (and NOT updating lastScrollTop until it's crossed) lets slow
+   *  scrolls accumulate instead of being eaten as jitter. */
+  private evalScroll(): void {
+    this.scrollRafPending = false;
+    const el = this.lastScroller;
+    const st = el
+      ? el.scrollTop
+      : (window.scrollY || document.documentElement.scrollTop || 0);
+
+    // Near the very top: always full-size, and re-baseline.
+    if (st < BottomNavComponent.NEAR_TOP) {
+      this.lastScrollTop = st < 0 ? 0 : st;
+      this.setMinimized(false);
+      return;
+    }
+
+    const delta = st - this.lastScrollTop;
+    if (Math.abs(delta) < BottomNavComponent.SCROLL_DELTA) return; // jitter — keep baseline so it accumulates
+    this.lastScrollTop = st;
+    this.setMinimized(delta > 0); // down → minimize, up → restore
+  }
+
+  /** Commit a minimize change, re-entering Angular's zone only on a real
+   *  flip (the listener runs outside the zone). */
+  private setMinimized(v: boolean): void {
+    if (v === this.minimized()) return;
+    this.zone.run(() => this.minimized.set(v));
   }
 
   // ─── Visible nav lists ───────────────────────────────────────────

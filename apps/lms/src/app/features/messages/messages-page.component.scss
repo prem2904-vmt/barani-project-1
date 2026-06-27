@@ -1893,6 +1893,14 @@
     // its max-height as the message wraps, WhatsApp-style.
     textarea { min-height: 40px; overflow-y: hidden; }
   }
+  // Blend the composer area into the keyboard: a SOLID opaque surface (no glass
+  // translucency) so the WebView's bottom edge — which shows through the iOS
+  // keyboard's rounded top corners — is one flat tone instead of a black seam.
+  .pf-msgs__composer-wrap {
+    background: var(--bg-secondary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
   // Phone composer: collapse the 3 inline icons into the single "+" so the
