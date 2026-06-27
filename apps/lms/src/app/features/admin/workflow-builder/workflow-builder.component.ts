@@ -70,7 +70,7 @@ interface HistoryRow {
           <div class="space-y-2.5">
             @for (r of screens(); track r.screenName) {
               <pf-tile [tone]="r.status === 'published' ? 'default' : 'amber'" padding="md">
-                <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
+                <div class="pf-wf-row flex items-center gap-3 flex-wrap md:flex-nowrap" (click)="openBuilder(r.screenName)">
                   <div class="pf-wf-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <rect width="7" height="7" x="3" y="3" rx="1"/>
@@ -92,7 +92,7 @@ interface HistoryRow {
                       v{{ r.version }} · {{ stepCount(r) }} steps · {{ fieldCount(r) }} fields
                     </p>
                   </div>
-                  <pf-touch-btn size="sm" variant="primary" (pressed)="openBuilder(r.screenName)">Edit</pf-touch-btn>
+                  <pf-touch-btn class="pf-wf-edit" size="sm" variant="primary" (pressed)="openBuilder(r.screenName)">Edit</pf-touch-btn>
                 </div>
               </pf-tile>
             }
@@ -104,10 +104,11 @@ interface HistoryRow {
     @if (screenName() && builder.workflow(); as wf) {
       <section class="px-4 md:px-6 pt-6 pb-10">
         <pf-screen-header
+          class="pf-builder-hdr"
           [eyebrow]="'Workflow · v' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '—')"
           [title]="wf.title"
           [subtitle]="builder.isDirty() ? 'Unsaved changes — save draft or publish to commit.' : 'Live configuration.'">
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="closeBuilder()">
+          <pf-touch-btn actions class="pf-tab-back" size="sm" variant="ghost" (pressed)="closeBuilder()">
             <span icon-left aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="m15 18-6-6 6-6"/>
@@ -743,12 +744,29 @@ interface HistoryRow {
     @media (max-width: 640px) {
       :host .pf-input { font-size: 16px; }
 
-      /* Compact header tabs: show the leading icon + the short horizontal
-         label, hide the long label. Keeps the actions row tidy so it wraps
-         cleanly under the title instead of clipping off the right edge. */
+      /* ICON-ONLY header actions on phone: hide BOTH labels and show just the
+         leading icon. Six text buttons were eating the whole header width and
+         squeezing the title down to a 1-char-per-line vertical column — compact
+         icons free the width so the title stays horizontal and nothing clips. */
       :host .pf-tab-icon { display: inline-flex; align-items: center; }
       :host .pf-tab-full { display: none; }
-      :host .pf-tab-short { display: inline; }
+      :host .pf-tab-short { display: none; }
+      /* Drop the in-page Back action on phone — the shared header's leading
+         chevron (added app-wide) already returns to the workflow list. */
+      :host .pf-tab-back { display: none; }
+
+      /* Editor title: with the icon-only actions cluster sharing the row, give
+         the title a slightly smaller size on phone so a long name ("Appointment
+         Booking") wraps at word boundaries to two clean lines rather than
+         breaking mid-word. Phone-only + scoped to this page's header. */
+      :host ::ng-deep .pf-builder-hdr h1 { font-size: 18px !important; }
+
+      /* Workflow list rows: the whole card is tappable to edit on phone, so
+         drop the decorative grid icon and the separate Edit button — just the
+         name + status remain. */
+      :host .pf-wf-icon { display: none; }
+      :host .pf-wf-edit { display: none; }
+      :host .pf-wf-row { cursor: pointer; }
 
       /* The actions cluster wraps under the title on phone; trim the section's
          top padding so the STEPS panel starts reasonably high (kills the big

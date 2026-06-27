@@ -1320,6 +1320,13 @@ html[data-theme="light"] .pf-vial__outline {
     min-width: auto;
     min-height: auto;
   }
+  /* Exempt the toggle switch: its button is a fixed-size pill (40×24 / 52×30).
+     Forcing a 44×44 floor turned it into an oversized circle on touch. The
+     pill is still an easy tap target at its natural width; no 44px floor. */
+  pf-toggle button, [role='switch'] {
+    min-width: auto;
+    min-height: auto;
+  }
   /* Text inputs/selects carrying .pf-input also need the 44px tap-target
      floor on touch — the button/link rule above doesn't cover them. Height
      only: width is governed by the field's own layout, and this is gated to

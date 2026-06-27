@@ -216,19 +216,26 @@ interface PatientTemplate {
       :host ::ng-deep pf-number-input input {
         font-size: 16px;
       }
-      /* Channel toggles: the 3-up grid squeezed each cell into a narrow third,
-         where the pill switches looked cramped/misaligned. On phone drop to a
-         single column so each channel becomes a full-width row, and keep the
-         cell's base row layout (label left, pf-toggle switch right) for clean,
-         consistent alignment. Presentation only — same pf-toggle + handlers. */
+      /* Channels (In-app / WhatsApp / Email): the 3-up grid squeezed each cell
+         into a narrow third where the switches looked cramped. On phone drop to
+         a single column, but keep it COMPACT — a tight divided list (label left,
+         switch right) instead of three chunky bordered cards. Presentation only;
+         same pf-toggle + handlers. */
       :host .pf-channel-grid {
         grid-template-columns: 1fr;
-        gap: 8px;
+        gap: 0;
       }
       :host .pf-channel-cell {
-        min-height: 44px;
+        min-height: 0;
         justify-content: space-between;
-        padding: 10px 14px;
+        padding: 7px 2px;
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid var(--glass-border);
+        border-radius: 0;
+      }
+      :host .pf-channel-cell:last-child {
+        border-bottom: 0;
       }
     }
 
