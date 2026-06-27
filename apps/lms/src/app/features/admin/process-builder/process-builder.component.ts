@@ -86,16 +86,21 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
         <!-- Lanes -->
         <div class="pb-lanes">
           @for (lane of lanes(); track lane.cat.id; let li = $index) {
-            <div class="pb-lane" [style.borderTopColor]="lane.cat.color" [style.--lane]="lane.cat.color">
+            <div class="pb-lane" [class.pb-lane--collapsed]="!isExpanded(lane.cat.id)" [style.borderTopColor]="lane.cat.color" [style.--lane]="lane.cat.color">
               <div class="pb-lane-hd">
                 <span class="pb-dot" [style.background]="lane.cat.color"></span>
                 <input class="pb-lane-name" [ngModel]="lane.cat.name" (ngModelChange)="renameCategory(li, $event)" />
+                <span class="pb-lane-count" [style.background]="lane.cat.color">{{ lane.items.length }}</span>
                 <div class="pb-lane-tools">
                   <input type="color" class="pb-color" [ngModel]="lane.cat.color" (ngModelChange)="recolor(li, $event)" title="Colour" />
                   <button type="button" class="pb-mini" [disabled]="li === 0" (click)="moveCategory(li, -1)" title="Move left">‹</button>
                   <button type="button" class="pb-mini" [disabled]="li === lanes().length - 1" (click)="moveCategory(li, 1)" title="Move right">›</button>
                   <button type="button" class="pb-mini pb-mini--del" (click)="deleteCategory(li)" title="Delete work-area">×</button>
                 </div>
+                <button type="button" class="pb-lane-expand" (click)="toggleLane(lane.cat.id)"
+                        [attr.aria-expanded]="isExpanded(lane.cat.id)" title="Expand / collapse">
+                  <svg class="pb-lane-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
               </div>
               <div class="pb-roles">
                 <span class="pb-roles-lbl">Who</span>
@@ -207,6 +212,11 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-mini:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text-primary); }
     .pb-mini:disabled { opacity: 0.3; cursor: not-allowed; }
     .pb-mini--del:hover:not(:disabled) { color: #fca5a5; background: rgba(239,68,68,0.12); }
+    /* Accordion controls — hidden on desktop (every lane is shown in full); the
+       <=640px block surfaces them and drives the collapse. */
+    .pb-lane-expand { display: none; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--text-secondary); border-radius: 9px; cursor: pointer; flex-shrink: 0; }
+    .pb-lane-chev { transition: transform .18s ease; }
+    .pb-lane-count { display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; color: #fff; font-size: 11px; font-weight: 800; align-items: center; justify-content: center; flex-shrink: 0; }
     .pb-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--glass-border); }
     .pb-roles-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-role { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid var(--glass-border); background: transparent; color: var(--text-tertiary); cursor: pointer; }
@@ -284,6 +294,40 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       .pb-btn, .pb-select, .pb-name { min-height: 44px; }
     }
 
+    /* Phone (<=640px): ACCORDION. Only one work-area is expanded at a time; the
+       rest collapse to just their header (name + count + chevron) so the long
+       config fits a phone. The lane LIST stays rendered as a slim strip even
+       when collapsed, so a dragged action can still be dropped straight onto a
+       collapsed area (cdkDropListGroup keeps it a live drop target). Tapping the
+       chevron expands a lane (and collapses whichever was open). Additive +
+       phone-only — desktop/iPad keep every lane fully shown. */
+    @media (max-width: 640px) {
+      .pb-lane-expand { display: inline-flex; }
+      .pb-lane-count { display: inline-flex; }
+      /* The header reads name on the left, count + chevron on the right; the
+         edit tools (colour/move/delete) only matter once expanded. */
+      .pb-lane--collapsed .pb-lane-tools { display: none; }
+      .pb-lane--collapsed .pb-roles { display: none; }
+      .pb-lane--collapsed .pb-lane-list { min-height: 0; padding: 6px 10px; }
+      .pb-lane--collapsed .pb-lane-list .pb-action { display: none; }
+      /* When expanded, the chevron flips to point up. */
+      .pb-lane:not(.pb-lane--collapsed) .pb-lane-chev { transform: rotate(180deg); }
+      /* Drop hint on a collapsed lane so it reads as a drag target. */
+      .pb-lane--collapsed .pb-lane-list::after {
+        content: 'Drop action here';
+        display: block;
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-align: center;
+        padding: 8px 4px;
+        border: 1px dashed var(--glass-border);
+        border-radius: 9px;
+      }
+      /* Collapsed lane with no items already shows its own .pb-empty — hide the
+         duplicate ::after hint there. */
+      .pb-lane--collapsed .pb-lane-list:has(.pb-empty)::after { display: none; }
+    }
+
     /* iPad / tablet (641–1279px): put the Available-actions palette on top as
        a horizontal strip (covers iPad portrait widths like 810–834 that the
        820px breakpoint missed), then tile the work-area lanes into a grid that
@@ -339,6 +383,14 @@ export class ProcessBuilderComponent implements OnInit {
 
   readonly roles = signal<string[]>(KNOWN_ROLES);
   readonly roleMenuLane = signal(-1);
+  /** Accordion state (phone): the id of the one expanded work-area, or null
+   *  (all collapsed). Only honoured by the <=640px CSS — desktop shows every
+   *  lane fully, so this is a no-op there. */
+  readonly expandedLane = signal<string | null>(null);
+  isExpanded(id: string): boolean { return this.expandedLane() === id; }
+  toggleLane(id: string): void {
+    this.expandedLane.update(cur => (cur === id ? null : id));
+  }
   readonly workflows = signal<ProcessWorkflowRecord[]>([]);
   readonly branches = signal<{ id: string; name: string }[]>([]);
   /** Branch scope being configured. null = the tenant-wide default that applies
