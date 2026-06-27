@@ -413,7 +413,7 @@ const COUNTERS: CounterSpec[] = [
                           <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
                           <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
                         </div>
-                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                        <p class="pf-grp-meta text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
                           #{{ g.orderId.slice(0,8) }}
                           @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                         </p>
@@ -1453,9 +1453,15 @@ const COUNTERS: CounterSpec[] = [
       /* Phone visibility helpers — only take effect here so desktop
          ignores them entirely. */
       .pf-mobile-hide { display: none !important; }
-      /* Stats live behind the header icon's popover on phone, so the inline
-         counter chips are always hidden here. */
+      /* Stats live behind the header icon's popover on phone, so both the
+         inline filter chips AND the KPI strip are hidden here (status is
+         already covered by the popover). */
       .pf-counter-row { display: none !important; }
+      pf-kpi-strip { display: none !important; }
+
+      /* Queue / My Work cards: just name + tests badge + time. Drop the
+         "#orderId · test names" meta line. */
+      .pf-grp-meta { display: none !important; }
 
       /* The split is just a stacked container on phones; show only the
          selected pane (the other carries .pf-mobile-hide). */
