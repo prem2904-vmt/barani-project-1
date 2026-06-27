@@ -261,6 +261,27 @@ html.cap-native.pf-chat-immersive {
   padding-top: 0 !important;
 }
 
+/* Back affordance label. The leading back chevron (.pf-hdr-back) renders on
+   every secondary screen at all widths. On phone it stays a bare chevron (space
+   is tight); on web + iPad it shows "‹ Back" with a label. One global rule
+   covers every .pf-hdr-back (the shared pf-screen-header + all custom headers);
+   !important overrides each component's scoped fixed-width chevron rule. */
+@media (min-width: 768px) {
+  .pf-hdr-back {
+    width: auto !important;
+    min-width: 38px;
+    padding: 0 12px 0 6px !important;
+    gap: 5px;
+  }
+  .pf-hdr-back::after {
+    content: 'Back';
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    color: inherit;
+  }
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;

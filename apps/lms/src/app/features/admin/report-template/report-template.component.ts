@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -28,6 +29,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
   standalone: true,
   imports: [
     FormsModule,
+    DragDropModule,
     ScreenHeaderComponent,
     SegmentedComponent,
     TileComponent,
@@ -175,6 +177,29 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (checkedChange)="patch({ topAccentBar: $event })">
                     </pf-toggle>
                   </div>
+
+                  <!-- ── Pre-printed letterpad mode ── -->
+                  <div class="pf-toggle-row">
+                    <div>
+                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
+                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
+                    </div>
+                    <pf-toggle [checked]="tpl().letterpadMode ?? false"
+                               (checkedChange)="patch({ letterpadMode: $event })">
+                    </pf-toggle>
+                  </div>
+                  @if (tpl().letterpadMode) {
+                    <div class="grid grid-cols-2 gap-3">
+                      <div><label class="pf-label">Header blank space (mm)</label>
+                        <input type="number" min="0" max="120" class="pf-input"
+                               [ngModel]="tpl().letterpadHeaderMm ?? 45"
+                               (ngModelChange)="patch({ letterpadHeaderMm: +$event })" /></div>
+                      <div><label class="pf-label">Footer blank space (mm)</label>
+                        <input type="number" min="0" max="120" class="pf-input"
+                               [ngModel]="tpl().letterpadFooterMm ?? 30"
+                               (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
+                    </div>
+                  }
                 </div>
               </pf-tile>
             }
@@ -304,83 +329,75 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       [options]="patientLayoutOptions"
                       [value]="tpl().patientLayout ?? 'three-col'"
                       size="md"
-                      (valueChange)="patch({ patientLayout: $event })">
+                      (valueChange)="setPatientLayout($event)">
                     </pf-segmented>
                   </div>
 
+                  <!-- Date & time format — moved here since the date fields print
+                       inside the patient block (arrange them below). -->
+                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-3"
+                     style="color: var(--text-muted);">Date &amp; time format</p>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label class="pf-label">Date format</label>
+                      <select class="pf-input" [ngModel]="dateFormatValue()"
+                              (ngModelChange)="patch({ dateFormat: $event })">
+                        @for (o of dateFormatOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
+                      </select>
+                    </div>
+                    <div>
+                      <label class="pf-label">Time format</label>
+                      <pf-segmented [options]="timeFormatOptions" [value]="tpl().timeFormat ?? '12h'" size="sm"
+                                    (valueChange)="patch({ timeFormat: $event })"></pf-segmented>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <label class="pf-label">Joiner between date and time</label>
+                    <select class="pf-input" [ngModel]="separatorValue()"
+                            (ngModelChange)="patch({ dateTimeSeparator: $event })">
+                      @for (o of separatorOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
+                    </select>
+                  </div>
+
+                  <!-- ── Unified drag-drop arranger (all layouts) ── -->
                   <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-4"
-                     style="color: var(--text-muted);">Show / hide patient fields</p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    @for (f of patientToggles; track f.key) {
-                      <div class="pf-toggle-row">
-                        <span class="text-[14px]" style="color: var(--text-primary);">{{ f.label }}</span>
-                        <pf-toggle
-                          [checked]="getBool(f.key, f.defaultVal)"
-                          size="sm"
-                          (checkedChange)="patchBool(f.key, $event)">
-                        </pf-toggle>
-                      </div>
-                    }
+                     style="color: var(--text-muted);">Patient block — drag to arrange</p>
+                  <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
+                    Drag a field <strong>into a column</strong> to print it (placement &amp; order = how it prints); drag it to <strong>Unused</strong> to hide it. The layout above sets the number of columns.</p>
+                  <div cdkDropListGroup>
+                    <div class="pf-pcols" [style.grid-template-columns]="'repeat(' + patientCols().length + ', minmax(0, 1fr))'">
+                      @for (col of patientCols(); track $index; let i = $index) {
+                        <div class="pf-pcol">
+                          <span class="pf-pcol-h">Column {{ i + 1 }}</span>
+                          <div class="pf-pcol-drop" cdkDropList [id]="'pcol-' + i"
+                               [cdkDropListData]="col"
+                               (cdkDropListDropped)="dropPatientItem($event)">
+                            @for (k of col; track k) {
+                              <div class="pf-pchip" cdkDrag>
+                                <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
+                              </div>
+                            }
+                            @if (col.length === 0) { <span class="pf-pcol-empty">Drop here</span> }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                    <p class="text-[11px] mt-3 mb-1" style="color: var(--text-muted);">Unused — not printed</p>
+                    <div class="pf-ppool" cdkDropList id="pcol-pool" [cdkDropListData]="patientPool()"
+                         (cdkDropListDropped)="dropPatientItem($event)">
+                      @for (k of patientPool(); track k) {
+                        <div class="pf-pchip pf-pchip--pool" cdkDrag>
+                          <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
+                        </div>
+                      }
+                      @if (patientPool().length === 0) { <span class="pf-pcol-empty">All fields are in columns — drag one here to hide it.</span> }
+                    </div>
                   </div>
                 </div>
               </pf-tile>
             }
 
             <!-- ────────── DATE & TIME ────────── -->
-            @case ('datetime') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-4">
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label class="pf-label">Date format</label>
-                      <select class="pf-input"
-                              [ngModel]="tpl().dateFormat ?? 'dd MMM yyyy'"
-                              (ngModelChange)="patch({ dateFormat: $event })">
-                        @for (o of dateFormatOptions; track o.value) {
-                          <option [value]="o.value">{{ o.label }}</option>
-                        }
-                      </select>
-                    </div>
-                    <div>
-                      <label class="pf-label">Time format</label>
-                      <pf-segmented
-                        [options]="timeFormatOptions"
-                        [value]="tpl().timeFormat ?? '12h'"
-                        size="sm"
-                        (valueChange)="patch({ timeFormat: $event })">
-                      </pf-segmented>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label class="pf-label">Joiner between date and time</label>
-                    <select class="pf-input"
-                            [ngModel]="tpl().dateTimeSeparator ?? ', '"
-                            (ngModelChange)="patch({ dateTimeSeparator: $event })">
-                      @for (o of separatorOptions; track o.value) {
-                        <option [value]="o.value">{{ o.label }}</option>
-                      }
-                    </select>
-                  </div>
-
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-4"
-                     style="color: var(--text-muted);">Which timestamps to show</p>
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    @for (f of timestampToggles; track f.key) {
-                      <div class="pf-toggle-row">
-                        <span class="text-[14px]" style="color: var(--text-primary);">{{ f.label }}</span>
-                        <pf-toggle
-                          [checked]="getBool(f.key, true)"
-                          size="sm"
-                          (checkedChange)="patchBool(f.key, $event)">
-                        </pf-toggle>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </pf-tile>
-            }
-
             <!-- ────────── COLUMNS (per-dept results table) ────────── -->
             @case ('columns') {
               <pf-report-columns-editor></pf-report-columns-editor>
@@ -531,6 +548,25 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }
+
+    /* ── Drag-arrange patient columns ── */
+    .pf-pcols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 640px) { .pf-pcols { grid-template-columns: 1fr; } }
+    .pf-pcol { display: flex; flex-direction: column; gap: 6px; }
+    .pf-pcol-h { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
+    .pf-pcol-drop { display: flex; flex-direction: column; gap: 6px; min-height: 64px; padding: 8px;
+      border-radius: 12px; border: 1px dashed var(--glass-border); background: rgba(255,255,255,0.02); }
+    .pf-pcol-empty { font-size: 11.5px; color: var(--text-tertiary); text-align: center; padding: 8px 0; }
+    .pf-ppool { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-radius: 12px;
+      border: 1px dashed var(--glass-border); background: rgba(255,255,255,0.02); min-height: 44px; }
+    .pf-pchip { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 9px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary);
+      font-size: 12.5px; font-weight: 600; cursor: grab; }
+    .pf-pchip--pool { background: rgba(124,58,237,0.10); border-color: rgba(168,85,247,0.30); }
+    .pf-pchip-grip { color: var(--text-muted); font-size: 12px; }
+    .pf-pchip.cdk-drag-preview { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .pf-pchip.cdk-drag-placeholder { opacity: 0.4; }
+    .cdk-drop-list-dragging .pf-pchip:not(.cdk-drag-placeholder) { transition: transform 180ms cubic-bezier(0.2,0.8,0.2,1); }
     .pf-toggle-row { display: flex; align-items: center;
       justify-content: space-between; padding: 8px 12px; border-radius: 10px;
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
@@ -598,17 +634,21 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'header',   label: 'Header & Logo' },
     { value: 'theme',    label: 'Theme' },
     { value: 'patient',  label: 'Patient' },
-    { value: 'datetime', label: 'Date & Time' },
     { value: 'columns',  label: 'Columns' },
     { value: 'testlayout', label: 'Per-test layout' },
     { value: 'signoff',  label: 'Sign-off & Footer' },
   ];
   private readonly _tab = signal<Tab>('identity');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); }
+  setTab(t: Tab) {
+    this._tab.set(t);
+    // Re-pull the form-flow fields when entering the Patient tab so the list
+    // reflects the latest saved Patient Registration flow (not a stale copy).
+    if (t === 'patient') this.loadCustomPatientFields();
+  }
 
   readonly headerPresetOptions: SegmentedOption<string>[] = [
-    { value: 'drlogy',   label: 'Drlogy'   },
+    { value: 'drlogy',   label: 'Classic'  },
     { value: 'centered', label: 'Centered' },
     { value: 'banner',   label: 'Banner'   },
     { value: 'minimal',  label: 'Minimal'  },
@@ -640,7 +680,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'bold_color', label: 'Bold + colour' },
   ];
   readonly patientLayoutOptions: SegmentedOption<string>[] = [
-    { value: 'three-col',     label: '3-column (Drlogy)' },
+    { value: 'three-col',     label: '3-column (Classic)' },
     { value: 'four-col-grid', label: '4-column grid'     },
     { value: 'stacked',       label: 'Stacked'           },
   ];
@@ -853,7 +893,196 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       this._tab.set(initial);
     }
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
-      next: t => { if (t) this._tpl.set({ ...this._tpl(), ...t }); }
+      next: t => { if (t) this._tpl.set({ ...this._tpl(), ...t }); this.initPatientCols(); }
+    });
+    this.loadCustomPatientFields();
+    this.initPatientCols();
+  }
+
+  // ── Custom patient fields (from the Patient Registration form flow) ──
+  readonly customPatientFields = signal<{ name: string; title: string }[]>([]);
+
+  /** Pull the non-standard fields defined in the patient_registration form flow
+   *  so the lab can choose which to print on the report. */
+  private loadCustomPatientFields() {
+    this.api.get<{ configJson?: string }>('/api/workflows/patient_registration').subscribe({
+      next: rec => {
+        try {
+          const cfg = rec?.configJson ? JSON.parse(rec.configJson) : null;
+          // Offer EVERY registration field that isn't already a built-in patient
+          // toggle (matched by name) — so "whatever is there" in the form flow
+          // becomes an option, regardless of the isStandard flag.
+          const builtIn = new Set([
+            'first_name', 'fathers_name', 'father_name', 'last_name', 'middle_name',
+            'displayname', 'display_name', 'name', 'full_name',
+            'sex', 'gender', 'age', 'date_of_birth', 'dob',
+            'phone', 'mobile', 'abha_id', 'mrn', 'patient_id', 'order_id',
+            'barcode', 'ref_doctor', 'referring_doctor', 'ref_doctor_name', 'refdoctor',
+          ]);
+          const fields: { name: string; title: string }[] = [];
+          const seen = new Set<string>();
+          for (const step of cfg?.steps ?? []) {
+            for (const f of step?.fields ?? []) {
+              if (f && f.name && !builtIn.has(String(f.name).toLowerCase()) && !seen.has(f.name)) {
+                seen.add(f.name);
+                fields.push({ name: f.name, title: f.title || f.name });
+              }
+            }
+          }
+          this.customPatientFields.set(fields);
+        } catch { this.customPatientFields.set([]); }
+      },
+      error: () => this.customPatientFields.set([]),
+    });
+  }
+
+  private enabledPatientFields(): { name: string; title: string }[] {
+    try {
+      const arr = JSON.parse(this._tpl().patientFieldsJson || '[]');
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  isPatientFieldOn(name: string): boolean {
+    return this.enabledPatientFields().some(f => f.name === name);
+  }
+  togglePatientField(field: { name: string; title: string }, on: boolean) {
+    const cur = this.enabledPatientFields().filter(f => f.name !== field.name);
+    if (on) cur.push({ name: field.name, title: field.title });
+    this.patch({ patientFieldsJson: JSON.stringify(cur) });
+  }
+
+  // ── Drag-arranged 3-column patient block ──
+  private readonly ALL_PATIENT_ITEMS = [
+    'name', 'age', 'sex', 'mrn', 'phone', 'orderid', 'refdoctor',
+    'specimen', 'barcode', 'registered', 'collected', 'reported',
+  ];
+  private readonly DEFAULT_PATIENT_COLS: string[][] = [
+    ['name', 'age', 'sex', 'mrn'],
+    ['specimen', 'refdoctor'],
+    ['barcode', 'registered', 'collected', 'reported'],
+  ];
+  private readonly PATIENT_ITEM_LABELS: Record<string, string> = {
+    name: 'Patient name', age: 'Age', sex: 'Sex', mrn: 'MRN', phone: 'Phone',
+    orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
+    barcode: 'Barcode', registered: 'Registered date', collected: 'Collected date',
+    reported: 'Reported date',
+  };
+
+  readonly patientCols = signal<string[][]>([[], [], []]);
+
+  /** Items not currently placed in any column (built-ins + ALL custom fields).
+   *  In a column = printed; here in Unused = hidden. */
+  readonly patientPool = computed<string[]>(() => {
+    const placed = new Set(this.patientCols().flat());
+    const custom = this.customPatientFields().map(f => f.name);
+    const all = [...this.ALL_PATIENT_ITEMS, ...custom];
+    return all.filter((k, i) => all.indexOf(k) === i && !placed.has(k));
+  });
+
+  patientItemLabel(k: string): string {
+    return this.PATIENT_ITEM_LABELS[k]
+      ?? this.customPatientFields().find(f => f.name === k)?.title
+      ?? this.enabledPatientFields().find(f => f.name === k)?.title
+      ?? k;
+  }
+
+  /** Number of patient-block columns for a layout. */
+  private colCountFor(layout: string | undefined): number {
+    return layout === 'four-col-grid' ? 4 : layout === 'stacked' ? 1 : 3;
+  }
+
+  private initPatientCols() {
+    const n = this.colCountFor(this._tpl().patientLayout);
+    let cols: string[][] | null = null;
+    const saved = this._tpl().patientColumnsJson;
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.every(Array.isArray)) cols = arr;
+      } catch { cols = null; }
+    }
+    cols = cols ?? this.DEFAULT_PATIENT_COLS.map(c => [...c]);
+    this.patientCols.set(this.fitColumns(cols, n));
+  }
+
+  /** Reshape a column set to exactly n columns, preserving item placement
+   *  (pad with empty columns, or merge overflow into the last kept column). */
+  private fitColumns(cols: string[][], n: number): string[][] {
+    const out = cols.map(c => [...c]);
+    if (out.length < n) while (out.length < n) out.push([]);
+    else if (out.length > n) {
+      const extra = out.slice(n).flat();
+      out.length = n;
+      out[n - 1] = [...out[n - 1], ...extra];
+    }
+    return out;
+  }
+
+  /** Always show a valid option in the date-format / separator selects, even if
+   *  the saved value is empty or no longer a known option. */
+  dateFormatValue(): string {
+    const v = this._tpl().dateFormat;
+    return this.dateFormatOptions.some(o => o.value === v) ? v! : 'dd MMM yyyy';
+  }
+  separatorValue(): string {
+    const v = this._tpl().dateTimeSeparator;
+    return this.separatorOptions.some(o => o.value === v) ? v! : ', ';
+  }
+
+  /** Per-column-count cache so switching layouts (e.g. 3 → stacked → 3) restores
+   *  the previous arrangement instead of dumping everything into column 1. */
+  private patientColsCache = new Map<number, string[][]>();
+
+  /** Switch layout → set the column count and reshape the arrangement, keeping
+   *  the previous arrangement for that count if we've seen it this session. */
+  setPatientLayout(layout: string) {
+    const curN = this.patientCols().length;
+    this.patientColsCache.set(curN, this.patientCols().map(c => [...c]));
+    const n = this.colCountFor(layout);
+    const cols = this.patientColsCache.has(n)
+      ? this.patientColsCache.get(n)!.map(c => [...c])
+      : this.redistribute(this.patientCols(), n);
+    this.patientCols.set(cols);
+    this.patientColsCache.set(n, cols.map(c => [...c]));
+    const placed = new Set(cols.flat());
+    const placedCustom = this.customPatientFields().filter(f => placed.has(f.name));
+    this.patch({
+      patientLayout: layout,
+      patientColumnsJson: JSON.stringify(cols),
+      patientFieldsJson: JSON.stringify(placedCustom),
+    });
+  }
+
+  /** Spread the currently-placed items into n columns as contiguous chunks
+   *  (preserves order; for n=1 everything stacks into one column). */
+  private redistribute(cols: string[][], n: number): string[][] {
+    const flat = cols.flat();
+    const out: string[][] = Array.from({ length: n }, () => []);
+    const per = Math.max(1, Math.ceil(flat.length / n));
+    flat.forEach((item, i) => out[Math.min(n - 1, Math.floor(i / per))].push(item));
+    return out;
+  }
+
+  dropPatientItem(ev: CdkDragDrop<string[]>) {
+    const cols = this.patientCols().map(c => [...c]);
+    const pool = [...this.patientPool()];
+    const arrOf = (id: string) => id === 'pcol-pool' ? pool : cols[Number(id.replace('pcol-', ''))];
+    const from = arrOf(ev.previousContainer.id);
+    const to = arrOf(ev.container.id);
+    if (ev.previousContainer === ev.container) {
+      moveItemInArray(to, ev.previousIndex, ev.currentIndex);
+    } else {
+      transferArrayItem(from, to, ev.previousIndex, ev.currentIndex);
+    }
+    this.patientCols.set(cols);                    // pool is derived → recomputes
+    // Persist the arrangement + the titles of any custom fields now placed in a
+    // column (so the PDF can label them; placement is the single shown/hidden
+    // control — no separate toggle).
+    const placed = new Set(cols.flat());
+    const placedCustom = this.customPatientFields().filter(f => placed.has(f.name));
+    this.patch({
+      patientColumnsJson: JSON.stringify(cols),
+      patientFieldsJson: JSON.stringify(placedCustom),
     });
   }
 

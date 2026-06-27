@@ -49,11 +49,11 @@ function defaultResultParam(): TestParameter {
          to 880px which left huge empty gutters on lab terminals. -->
     <section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
       <header class="pf-sre__hdr pf-sre__hdr--sticky">
-        <!-- App-wide standard mobile back chevron (phone-only). Sits BEFORE the
-             title; on phone it replaces the page's own .pf-sre__back pill (which
-             is suppressed below md via CSS). Desktop/iPad keep .pf-sre__back. -->
+        <!-- App-wide standard back chevron. Sits BEFORE the title and shows at
+             ALL widths; the legacy .pf-sre__back pill is suppressed everywhere
+             via CSS so there is exactly ONE back affordance per viewport. -->
         @if (navBack.showBack()) {
-          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+          <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
         }
@@ -642,16 +642,16 @@ function defaultResultParam(): TestParameter {
       cursor: pointer;
     }
     .pf-sre__back:hover { color: var(--text-primary); }
-    /* App-wide standard mobile back chevron. Phone-only via md:hidden in the
-       markup; placed BEFORE the title. Vertical centring with the title comes
-       from the header row, which already uses align-items:center on phone. */
-    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    /* App-wide standard back chevron, shown at ALL widths and placed BEFORE the
+       title. align-self:center keeps it vertically centred with the title block
+       regardless of the header row's align-items (flex-start on desktop, center
+       on phone). */
+    .pf-hdr-back { align-self:center; width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-    /* Single back affordance per viewport: below md the page's own pill back is
-       hidden so only the standard chevron shows. At >=768px (md) the chevron is
-       md:hidden and .pf-sre__back stays byte-for-byte unchanged. */
-    @media (max-width: 767.98px){ .pf-sre__back { display: none; } }
+    /* Single back affordance per viewport: the legacy pill back is hidden at ALL
+       widths so only the standard .pf-hdr-back chevron shows everywhere. */
+    .pf-sre__back { display: none; }
     .pf-sre__hdr-title { flex: 1; min-width: 0; }
     .pf-sre__eyebrow {
       margin: 0; font-size: 10.5px; font-weight: 700;

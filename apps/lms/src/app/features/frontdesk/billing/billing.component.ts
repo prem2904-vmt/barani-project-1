@@ -1488,12 +1488,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* ── Phone (<=640): stop iOS zoom-on-focus on the inputs the
      * user types into (font-size must be >=16px). Scoped to this
      * page's own inputs — never the shared primitives. */
-    /* The shared pf-screen-header now renders a leading back chevron on phone
-       (<768px). Hide this page's own header Back pill there so there's a single
-       back affordance per viewport; desktop/iPad (>=768px) keep the pill. */
-    @media (max-width: 767.98px) {
-      .pf-bill-back-desktop { display: none; }
-    }
+    /* The shared pf-screen-header now renders a leading back chevron at every
+       width, so this page's own header Back pill is redundant — hide it on all
+       widths (single back affordance: the chevron). */
+    .pf-bill-back-desktop { display: none; }
 
     @media (max-width: 640px) {
       .pf-discount__input { font-size: 16px; }

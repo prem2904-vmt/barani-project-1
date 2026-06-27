@@ -28,9 +28,9 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       <header class="pb-bar">
         <div class="min-w-0">
           <p class="pb-eyebrow">Admin · Process workflow</p>
-          <div class="flex items-center md:items-start gap-2">
+          <div class="flex items-center gap-2">
             @if (navBack.showBack()) {
-              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+              <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
               </button>
             }

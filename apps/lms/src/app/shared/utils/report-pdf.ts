@@ -122,6 +122,14 @@ interface ResolvedTheme {
   signatures: ReportSignature[];
   // Tagline string (raw — split on '|' at draw time so accent-coloured pipes render)
   tagline: string;
+  // NABL accreditation badge in the header
+  nablAccredited: boolean;
+  nablNumber: string;
+  nablLogoUrl: string;
+  // Custom patient-registration fields to print (label + the attribute key)
+  patientFields: { name: string; title: string }[];
+  // Drag-arranged 3-column patient block: item keys per column. Empty = default.
+  patientColumns: string[][];
   // Patient block layout preset
   patientLayout: 'three-col' | 'four-col-grid' | 'stacked';
   // Whether to show ABHA ID row in the patient block
@@ -141,6 +149,8 @@ interface ReportSnapshot {
     /** Lifetime MRN, e.g. `DEL-2605-004217-3`. Server-assigned;
      *  legacy patients may be null until backfilled. */
     mrn?: string;
+    /** JSON of the patient's saved registration custom fields ({name: value}). */
+    attributes?: string;
   };
   order?: {
     id?: string;
@@ -185,10 +195,18 @@ interface ReportSnapshot {
 }
 
 // ── Page geometry ─────────────────────────────────────────────────
+// MARGIN_TOP / MARGIN_BOTTOM are `let` because the pre-printed-letterpad mode
+// overrides them per render (the blank top/bottom space the lab's stationery
+// occupies). They reset to these defaults at the start of every non-letterpad
+// render. HEADER_RESERVE is the drawn-letterhead height the patient block sits
+// below — 0 in letterpad mode (no header is drawn).
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN_X = 30;
-const MARGIN_TOP = 28;
-const MARGIN_BOTTOM = 110; // reserves room for the 3-column sig block
+let MARGIN_TOP = 28;
+let MARGIN_BOTTOM = 110; // reserves room for the 3-column sig block
+let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
+let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
+const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
 
 // ── Drlogy palette ────────────────────────────────────────────────
 // Mutable module-level theme. `applyTheme()` (called at the start of
@@ -233,6 +251,9 @@ function defaultTheme(): ResolvedTheme {
     watermarkText: '', watermarkOpacity: 0.08, footerText: '',
     signatures: [],
     tagline: 'Accurate | Caring | Instant',
+    nablAccredited: false, nablNumber: '', nablLogoUrl: '',
+    patientFields: [],
+    patientColumns: [],
     patientLayout: 'three-col',
     showAbhaId: false,
     disclaimer: '',
@@ -296,6 +317,11 @@ function resolveTheme(
   t.footerText      = tpl.footerText ?? '';
   t.signatures      = parseSignatures(tpl.signaturesJson, tpl.signatureUrl);
   if (tpl.tagline && tpl.tagline.trim().length > 0) t.tagline = tpl.tagline;
+  t.nablAccredited  = !!tpl.nablAccredited;
+  t.nablNumber      = tpl.nablNumber ?? '';
+  t.nablLogoUrl     = tpl.nablLogoUrl ?? '';
+  t.patientFields   = parsePatientFields(tpl.patientFieldsJson);
+  t.patientColumns  = parsePatientColumns(tpl.patientColumnsJson);
   t.patientLayout   = (tpl.patientLayout as ResolvedTheme['patientLayout']) ?? 'three-col';
   t.showAbhaId      = tpl.showAbhaId ?? false;
   t.disclaimer      = tpl.disclaimer ?? '';
@@ -319,6 +345,80 @@ function parseSignatures(json: string | undefined, legacySigUrl?: string): Repor
   }
   if (legacySigUrl) return [{ signatureUrl: legacySigUrl }];
   return [];
+}
+
+/** Parse the template's chosen custom patient fields: a JSON array of
+ *  `{ name, title }`. Tolerates a plain string[] (treats name === title). */
+function parsePatientFields(json: string | undefined | null): { name: string; title: string }[] {
+  if (!json || !json.trim()) return [];
+  try {
+    const arr = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((f): { name: string; title: string } | null => {
+        if (typeof f === 'string') return { name: f, title: f };
+        if (f && typeof f.name === 'string') return { name: f.name, title: f.title || f.name };
+        return null;
+      })
+      .filter((f): f is { name: string; title: string } => !!f);
+  } catch { return []; }
+}
+
+/** Parse the saved 3-column patient-block arrangement: a JSON `string[][]` of
+ *  item keys. Returns [] (use the default layout) unless it's exactly 3 arrays. */
+function parsePatientColumns(json: string | undefined | null): string[][] {
+  if (!json || !json.trim()) return [];
+  try {
+    const arr = JSON.parse(json);
+    if (Array.isArray(arr) && arr.length === 3 && arr.every(c => Array.isArray(c))) {
+      return arr.map(c => c.filter((k: unknown): k is string => typeof k === 'string'));
+    }
+    return [];
+  } catch { return []; }
+}
+
+/** The patient's saved registration custom-field values ({name: value}). */
+function parsePatientAttributes(snap: ReportSnapshot): Record<string, unknown> {
+  const raw = snap.patient?.attributes;
+  if (!raw || !raw.trim()) return {};
+  try {
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch { return {}; }
+}
+
+/** Render the lab-chosen custom patient fields (title: value) in a compact
+ *  two-column row beneath the patient block. Values come from the patient's
+ *  saved registration attributes. No-op when none are chosen or have a value. */
+function drawCustomPatientFields(doc: jsPDF, snap: ReportSnapshot, startY: number): number {
+  // When a column arrangement is configured, every field is placed via the
+  // columns (placement = shown) — nothing renders below the block.
+  if (theme.patientColumns.length >= 1 && theme.patientColumns.some(c => c.length > 0)) return startY;
+  if (!theme.patientFields.length) return startY;
+  const attrs = parsePatientAttributes(snap);
+  // Fields already placed inside a drag-arranged column are drawn there, not here.
+  const placed = new Set(theme.patientColumns.flat());
+  const rows = theme.patientFields
+    .filter(f => !placed.has(f.name))
+    .map(f => ({ title: f.title, value: attrs[f.name] }))
+    .filter(r => r.value != null && String(r.value).trim() !== '');
+  if (!rows.length) return startY;
+
+  let y = startY + 12;
+  const colW = (A4.w - 2 * MARGIN_X) / 2;
+  doc.setFontSize(8.5 * theme.fontScale);
+  rows.forEach((r, i) => {
+    if (i % 2 === 0 && i > 0) y += 13;
+    const x = MARGIN_X + (i % 2) * colW;
+    const label = `${r.title}: `;
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setTextColor(BLACK);
+    doc.text(label, x, y);
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setTextColor(TEXT_DIM);
+    doc.text(String(r.value), x + doc.getTextWidth(label), y);
+  });
+  return y + 4;
 }
 
 function applyTheme(t: ResolvedTheme) {
@@ -355,8 +455,23 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
 
   applyTheme(resolveTheme(template, practice));
 
+  // Pre-printed letterpad mode: skip the rendered header + footer and reserve
+  // blank top/bottom space on every page (the lab's stationery occupies it),
+  // printing only the results body. Reset to the normal defaults otherwise
+  // (module-level margins persist across renders).
+  LETTERPAD = !!template?.letterpadMode;
+  if (LETTERPAD) {
+    MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
+    MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
+    HEADER_RESERVE = 0;
+  } else {
+    MARGIN_TOP = 28;
+    MARGIN_BOTTOM = 110;
+    HEADER_RESERVE = 70;
+  }
+
   drawLetterhead(doc, practice, template?.logoUrl ?? null);
-  const patientBottom = drawPatientBlock(doc, snap, report);
+  const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
   // ── Amended-report banner ──────────────────────────────────────
   // A corrected re-issue carries snap.amendment; flag it prominently so the
@@ -460,7 +575,9 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   drawEndOfReport(doc, snap, cursorY);
 
   // ── Signature footer + page numbers (every page, drawn last) ───
-  drawSignatureFooter(doc, practice, snap);
+  // Skipped in letterpad mode — the blank MARGIN_BOTTOM reserve is where the
+  // lab's own pre-printed footer/signatures sit.
+  if (!LETTERPAD) drawSignatureFooter(doc, practice, snap);
   return doc;
 }
 
@@ -608,6 +725,9 @@ function drawLogoPlaceholder(doc: jsPDF, sizePx: number) {
 }
 
 function drawLetterhead(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  // Pre-printed letterpad: draw nothing — the blank MARGIN_TOP reserve is the
+  // space the lab's own printed letterhead occupies.
+  if (LETTERPAD) return;
   switch (theme.headerPreset) {
     case 'centered':  drawLetterheadCentered(doc, practice, logoUrl); break;
     case 'banner':    drawLetterheadBanner  (doc, practice, logoUrl); break;
@@ -642,11 +762,13 @@ function drawLetterheadDrlogy(doc: jsPDF, practice: NonNullable<ReportPdfInput['
   drawTagline(doc, theme.tagline, wordmarkX, wordmarkY + 14);
 
   const rightX = A4.w - MARGIN_X;
+  // NABL badge at the top-right corner; contact info right-aligns to its left.
+  const contactX = rightX - drawNablBadge(doc, rightX, MARGIN_TOP - 2);
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9 * theme.fontScale);
   doc.setTextColor(BLACK);
-  if (practice.phone) doc.text(practice.phone, rightX, MARGIN_TOP + 14, { align: 'right' });
-  if (practice.email) doc.text(practice.email, rightX, MARGIN_TOP + 28, { align: 'right' });
+  if (practice.phone) doc.text(practice.phone, contactX, MARGIN_TOP + 14, { align: 'right' });
+  if (practice.email) doc.text(practice.email, contactX, MARGIN_TOP + 28, { align: 'right' });
 
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8 * theme.fontScale);
@@ -659,6 +781,7 @@ function drawLetterheadDrlogy(doc: jsPDF, practice: NonNullable<ReportPdfInput['
 /** Centered preset — logo, wordmark, tagline, address all stacked
  *  and centered. Phone + email on a single centered line below. */
 function drawLetterheadCentered(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
   const sizePx = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
   drawLogo(doc, logoUrl, (A4.w - sizePx) / 2, MARGIN_TOP, sizePx);
 
@@ -688,6 +811,7 @@ function drawLetterheadCentered(doc: jsPDF, practice: NonNullable<ReportPdfInput
 /** Banner preset — solid coloured band across the top with white text
  *  inside. Eye-catching, less "lab-formal". */
 function drawLetterheadBanner(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
+  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
   const bannerH = 54;
   doc.setFillColor(BLUE);
   doc.rect(0, 0, A4.w, bannerH, 'F');
@@ -721,6 +845,7 @@ function drawLetterheadBanner(doc: jsPDF, practice: NonNullable<ReportPdfInput['
 
 /** Minimal preset — text-only. No logo, no accent bar. */
 function drawLetterheadMinimal(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
+  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
   doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(16 * theme.fontScale);
   doc.setTextColor(BLACK);
@@ -761,6 +886,37 @@ function drawLogo(doc: jsPDF, logoUrl: string | null, x: number, y: number, size
     } catch { /* fall through to placeholder */ }
   }
   drawLogoPlaceholderAt(doc, x, y, sizePx);
+}
+
+/** Draw the NABL accreditation badge (the uploaded badge image, else a green
+ *  "NABL" text chip) at the top-right corner, with the accreditation number
+ *  beneath it. Returns the horizontal space it consumed so the caller can shift
+ *  adjacent content (phone/email) left of it. No-op unless the lab is
+ *  NABL-accredited (theme.nablAccredited). */
+function drawNablBadge(doc: jsPDF, rightX: number, topY: number): number {
+  if (!theme.nablAccredited) return 0;
+  const size = 30;
+  const x = rightX - size;
+  const cached = theme.nablLogoUrl && IMG_CACHE[theme.nablLogoUrl];
+  if (cached) {
+    try { doc.addImage(cached, 'PNG', x, topY, size, size, undefined, 'FAST'); }
+    catch { /* fall through to the text chip */ }
+  } else {
+    doc.setDrawColor('#10b981');
+    doc.setFillColor('#ecfdf5');
+    doc.roundedRect(x, topY + 5, size, 15, 3, 3, 'FD');
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor('#059669');
+    doc.text('NABL', x + size / 2, topY + 15.5, { align: 'center' });
+  }
+  if (theme.nablNumber) {
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(theme.nablNumber, x + size / 2, topY + size + 6, { align: 'center' });
+  }
+  return size + 8; // badge width + gap
 }
 
 /** Same as drawLogoPlaceholder but at an explicit (x, y) — needed for
@@ -809,6 +965,11 @@ function drawPatientBlock(
   // Dispatch to the chosen patient-block layout. All three renderers
   // share the same external contract: take snapshot + report, return
   // the cursor Y after the block.
+  // Any layout: when the lab has saved a drag-arranged column set, render from
+  // it (N columns = the layout's column count) so placement + order are honoured.
+  if (theme.patientColumns.length >= 1 && theme.patientColumns.some(c => c.length > 0)) {
+    return drawPatientBlockColumns(doc, snap, report);
+  }
   switch (theme.patientLayout) {
     case 'four-col-grid': return drawPatientBlockFourCol(doc, snap, report);
     case 'stacked':       return drawPatientBlockStacked(doc, snap, report);
@@ -817,13 +978,15 @@ function drawPatientBlock(
   }
 }
 
-/** Patient-block: three-column Drlogy layout (default). */
+/** Patient-block: three-column Classic layout (default). When the lab has saved
+ *  a drag-arranged column layout (theme.patientColumns), render from that
+ *  instead so the PDF reflects their chosen placement + order. */
 function drawPatientBlockThreeCol(
   doc: jsPDF,
   snap: ReportSnapshot,
   report: ReportPdfInput['report']
 ): number {
-  const top = MARGIN_TOP + 70;
+  const top = MARGIN_TOP + HEADER_RESERVE;
   const blockH = 80;
   const w = A4.w - 2 * MARGIN_X;
   const col1W = w * 0.36;
@@ -940,6 +1103,129 @@ function drawPatientBlockThreeCol(
   return top + blockH;
 }
 
+/** Config-driven N-column patient block. Renders each column from the lab's
+ *  drag-arranged item-key order (theme.patientColumns); the column count = the
+ *  saved array length (3-col → 3, 4-col → 4, stacked → 1). Equal widths; the
+ *  bottom border tracks the tallest column. Each item draws via drawPatientItem. */
+function drawPatientBlockColumns(
+  doc: jsPDF,
+  snap: ReportSnapshot,
+  report: ReportPdfInput['report']
+): number {
+  const top = MARGIN_TOP + HEADER_RESERVE;
+  const w = A4.w - 2 * MARGIN_X;
+  const cols = theme.patientColumns;
+  const n = Math.max(1, cols.length);
+  const colW = w / n;
+
+  doc.setDrawColor(HAIR);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+
+  let maxBottom = top + 22;
+  cols.forEach((keys, ci) => {
+    const x = MARGIN_X + ci * colW + 10;
+    let y = top + 16;
+    for (const key of keys) y = drawPatientItem(doc, key, x, colW - 16, y, snap, report);
+    if (y > maxBottom) maxBottom = y;
+  });
+  const blockBottom = maxBottom + 4;
+
+  // Vertical separators between columns.
+  for (let i = 1; i < n; i++) {
+    doc.line(MARGIN_X + i * colW, top + 6, MARGIN_X + i * colW, blockBottom - 6);
+  }
+  doc.line(MARGIN_X, blockBottom, A4.w - MARGIN_X, blockBottom);
+  return blockBottom;
+}
+
+/** Draw one patient-block item at (x, y) within a column of width colW; returns
+ *  the new y. Unknown keys are treated as custom registration fields (label from
+ *  theme.patientFields, value from the patient's saved attributes). */
+function drawPatientItem(
+  doc: jsPDF, key: string, x: number, colW: number, y: number,
+  snap: ReportSnapshot, report: ReportPdfInput['report']
+): number {
+  switch (key) {
+    case 'name':
+      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(12); doc.setTextColor(BLACK);
+      doc.text(snap.patient?.displayName ?? '—', x, y);
+      return y + 16;
+    case 'age':
+      if (snap.patient?.age == null) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(`Age : ${snap.patient.age} Years`, x, y); return y + 12;
+    case 'sex':
+      if (!snap.patient?.sex) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(`Sex : ${snap.patient.sex}`, x, y); return y + 12;
+    case 'mrn': {
+      const mrn = (snap.patient?.mrn ?? '').trim(); if (!mrn) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(`MRN : ${mrn}`, x, y); return y + 12;
+    }
+    case 'phone':
+      if (!snap.patient?.phone) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(`Phone : ${snap.patient.phone}`, x, y); return y + 12;
+    case 'orderid': {
+      const oid = (snap.order?.id ?? '').slice(0, 8); if (!oid) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(`Order : ${oid}`, x, y); return y + 12;
+    }
+    case 'refdoctor': {
+      if (!snap.order?.refDoctorName) return y;
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text('Ref. By: ', x, y);
+      const rw = doc.getTextWidth('Ref. By: ');
+      doc.setFont(PDF_FONT, 'bold'); doc.text(snap.order.refDoctorName, x + rw, y);
+      return y + 12;
+    }
+    case 'specimen': {
+      const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s)));
+      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLUE);
+      doc.text('Specimen(s) :', x, y); y += 12;
+      if (specimens.length) {
+        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        const lines = doc.splitTextToSize(specimens.join(', '), colW);
+        doc.text(lines, x, y); y += lines.length * 11 + 2;
+      }
+      return y;
+    }
+    case 'barcode': {
+      // Placement in a column is the show control here — always draw it.
+      drawBarcodePlaceholder(doc, x, y - 4, Math.min(colW, 130), 18);
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(BLACK);
+      const txt = (snap.order?.id ?? report.id).replace(/-/g, '').slice(-12).toUpperCase();
+      doc.text(txt, x, y + 22);
+      return y + 30;
+    }
+    case 'registered': return drawPatientTimeItem(doc, 'Registered on: ', formatShort(snap.order?.createdAt), x, y);
+    case 'collected':  return drawPatientTimeItem(doc, 'Collected on: ',  formatShort(snap.order?.createdAt), x, y);
+    case 'reported':   return drawPatientTimeItem(doc, 'Reported on: ',   formatShort(report.createdAt), x, y);
+    default: {
+      const fld = theme.patientFields.find(f => f.name === key);
+      const val = parsePatientAttributes(snap)[key];
+      if (val == null || String(val).trim() === '') return y;
+      const label = `${fld?.title ?? key}: `;
+      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      doc.text(label, x, y);
+      doc.setFont(PDF_FONT, 'normal'); doc.setTextColor(TEXT_DIM);
+      doc.text(String(val), x + doc.getTextWidth(label), y);
+      return y + 12;
+    }
+  }
+}
+
+function drawPatientTimeItem(doc: jsPDF, label: string, value: string, x: number, y: number): number {
+  if (!value) return y;
+  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+  doc.text(label, x, y);
+  const lw = doc.getTextWidth(label);
+  doc.setFont(PDF_FONT, 'bold'); doc.text(value, x + lw, y);
+  return y + 11;
+}
+
 /** Patient-block: 4-column labelled grid (compact, label-above-value).
  *  Two rows of four cells each. No vertical separators — the labels
  *  themselves act as visual anchors. Best when the lab wants a more
@@ -949,7 +1235,7 @@ function drawPatientBlockFourCol(
   snap: ReportSnapshot,
   report: ReportPdfInput['report']
 ): number {
-  const top = MARGIN_TOP + 70;
+  const top = MARGIN_TOP + HEADER_RESERVE;
   const blockH = 76;
   const w = A4.w - 2 * MARGIN_X;
   const colW = w / 4;
@@ -1014,7 +1300,7 @@ function drawPatientBlockStacked(
   snap: ReportSnapshot,
   report: ReportPdfInput['report']
 ): number {
-  const top = MARGIN_TOP + 70;
+  const top = MARGIN_TOP + HEADER_RESERVE;
   const mrn = (snap.patient?.mrn ?? '').trim();
   const orderShort = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
   const ageSex = [

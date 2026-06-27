@@ -1480,7 +1480,10 @@ const COUNTERS: CounterSpec[] = [
 
       /* Stats icon + popover — same size/shape as the Refresh button beside it
          and the same pattern as the Report queue stats button. */
-      .pf-kpi-statbtn-m { display: inline-flex; position: relative; }
+      /* z-index lifts the Stats button's popover subtree above the queue list
+         below (which has its own glass stacking contexts), so the popover comes
+         to the front instead of being painted under the cards. */
+      .pf-kpi-statbtn-m { display: inline-flex; position: relative; z-index: 30; }
       .pf-kpi-statbtn {
         display: inline-flex; align-items: center; justify-content: center;
         width: 40px; height: 40px;
@@ -1495,10 +1498,10 @@ const COUNTERS: CounterSpec[] = [
         color: #c4b5fd;
         background: rgba(124, 58, 247, 0.16);
       }
-      .pf-kpi-pop__backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; }
+      .pf-kpi-pop__backdrop { position: fixed; inset: 0; z-index: 70; background: transparent; }
       .pf-kpi-pop {
         position: absolute; top: calc(100% + 8px); right: 0;
-        z-index: 41;
+        z-index: 80;
         display: flex; flex-direction: column; gap: 2px;
         min-width: 180px;
         padding: 8px;

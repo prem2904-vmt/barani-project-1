@@ -61,7 +61,7 @@ interface ValueRow {
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
           @if (navBack.showBack()) {
-            <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+            <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           }
@@ -535,13 +535,15 @@ interface ValueRow {
     /* ── Compact page header (same shape as other screens) ─── */
     .pf-head {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 10px;
       flex-wrap: wrap;
       padding: 6px 0 10px;
     }
+    /* Legacy desktop text pill — retired at ALL widths. The single back
+       affordance is now the .pf-hdr-back chevron, rendered on every breakpoint. */
     .pf-head__back {
-      display: inline-flex;
+      display: none;
       align-items: center;
       gap: 4px;
       height: 32px;
@@ -1251,21 +1253,13 @@ interface ValueRow {
     /* Action-bar icons are phone-only — desktop keeps text labels (no icon). */
     .pf-btn--icony .pf-btn__ic { display: none; }
 
-    /* ── Standard app-wide phone back chevron (before the title) ──
-       Phone-only via md:hidden in markup. On phone the old text pill is
-       hidden (below) so this is the single back affordance. Desktop/iPad
-       >=768px never render this button — the pill stays unchanged. */
+    /* ── Standard app-wide back chevron (before the title) ──
+       The single back affordance at ALL widths (web, iPad, phone). The legacy
+       text pill is retired everywhere, and .pf-head centers the row so this
+       38px chevron lines up vertically with the title on every breakpoint. */
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-
-    /* Phone (<768px): show the standard chevron, retire the old text pill,
-       and center the row so the 38px chevron lines up with the title.
-       Desktop/iPad (>=768px) untouched — pill + baseline alignment stay. */
-    @media (max-width: 767px) {
-      :host .pf-head { align-items: center; }
-      :host .pf-head__back { display: none; }
-    }
 
     /* ── Phone (<=640px) ─────────────────────────────────────── */
     @media (max-width: 640px) {

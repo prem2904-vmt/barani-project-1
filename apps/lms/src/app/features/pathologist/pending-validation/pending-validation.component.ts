@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -31,7 +30,6 @@ interface ResultSnapshot {
   standalone: true,
   imports: [
     FormsModule,
-    DatePipe,
     TatIndicatorComponent,
     AvatarComponent,
     ChipComponent,
@@ -111,7 +109,8 @@ interface ResultSnapshot {
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block">
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
-                          (click)="toggleExpand(g.orderId)">
+                          (click)="openOrder(g)"
+                          [attr.aria-label]="'Validate ' + g.patientName">
                     <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
@@ -127,31 +126,10 @@ interface ResultSnapshot {
                     <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-                         [style.transform]="expanded(g.orderId) ? 'rotate(90deg)' : 'none'"
-                         style="transition: transform 0.15s ease; color: var(--text-muted);">
+                         style="color: var(--text-muted);">
                       <path d="m9 18 6-6-6-6"/>
                     </svg>
                   </button>
-                  @if (expanded(g.orderId)) {
-                    <ul class="pv-result-list mt-3 space-y-2 pl-12">
-                      @for (t of g.items; track t.id) {
-                        <li class="pv-result-row flex items-center gap-2 py-2 px-3 rounded-lg" style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
-                          <span class="text-[13.5px] font-medium flex-1 truncate" style="color: var(--text-primary);">
-                            {{ t.test?.name }}
-                            @if (isCritical(t)) { <span class="text-[10px] ml-1" style="color:#fb7185;">CRITICAL</span> }
-                          </span>
-                          <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">
-                            entered {{ t.resultedAt ? (t.resultedAt | date:'shortTime') : '—' }}
-                          </span>
-                          <span class="pv-result-actions inline-flex items-center gap-2">
-                            <pf-touch-btn size="sm" variant="ghost" (pressed)="openReject(t)">Reject</pf-touch-btn>
-                            <pf-touch-btn size="sm" variant="secondary" (pressed)="reassign(t)">Reassign</pf-touch-btn>
-                            <pf-touch-btn size="sm" variant="primary" (pressed)="openValidate(t)">Validate</pf-touch-btn>
-                          </span>
-                        </li>
-                      }
-                    </ul>
-                  }
                 </pf-tile>
               }
             </div>
@@ -420,6 +398,15 @@ export class PendingValidationComponent implements OnInit {
 
   openValidate(t: OrderTest) {
     this.router.navigate(['/pathologist/validate', t.id]);
+  }
+
+  /** One-click: tapping a pending order goes straight to the validation screen
+   *  for its first pending test (no expand-then-Validate step). Reject /
+   *  reassign live on that screen. For a multi-test order the validator returns
+   *  here after each, and the next test is one tap away. */
+  openOrder(g: { items: OrderTest[] }) {
+    const first = g.items[0];
+    if (first) this.router.navigate(['/pathologist/validate', first.id]);
   }
 
   async openReject(t: OrderTest) {

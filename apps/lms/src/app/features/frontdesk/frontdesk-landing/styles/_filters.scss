@@ -447,10 +447,20 @@
   // margin-left: auto;
   position: relative;
   display: inline-flex;
+  /* Lift the filter's own subtree above sibling content inside the pane. */
+  z-index: 5;
 
   @media (min-width: 1024px) {
     display: none;
   }
+}
+
+/* The two appointment/work panes are each a stacking context (container-type),
+   so a date-filter popover in one pane was painted UNDER the other pane. While a
+   pane's filter is open, lift that pane above its sibling so the popover comes to
+   the front. Scoped to the open state — no effect otherwise. */
+.pf-appt-split__pane--filtering {
+  z-index: 60;
 }
 .pf-hdr-filter__btn {
   display: inline-flex;

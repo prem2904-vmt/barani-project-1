@@ -37,11 +37,11 @@ import { NavBackService } from "../../core/services/nav-back.service";
          actions stay pinned right and shrink-0 (wrapping within their own
          column if there are many). This restores the inline layout on phone —
          the icons sit beside the title, not on a new line below it. -->
-    <header class="flex flex-row items-center md:items-start justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+    <header class="flex flex-row items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
       @if (navBack.showBack() && !noBack) {
         <button
           type="button"
-          class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center"
+          class="pf-hdr-back shrink-0 inline-flex items-center justify-center"
           (click)="navBack.back()"
           aria-label="Go back"
         >

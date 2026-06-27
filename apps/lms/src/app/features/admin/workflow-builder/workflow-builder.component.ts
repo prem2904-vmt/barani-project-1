@@ -519,6 +519,9 @@ interface HistoryRow {
        phone via the <=640 override below. */
     .pf-tab-icon { display: none; }
     .pf-tab-short { display: none; }
+    /* The shared header now renders a leading back chevron at every width, so the
+       in-page "All workflows" back action is redundant — hide it on all widths. */
+    .pf-tab-back { display: none !important; }
 
     .pf-step-item {
       display: flex;

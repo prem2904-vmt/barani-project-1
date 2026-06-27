@@ -67,9 +67,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page">
-      <header class="pf-kpi-hdr items-center md:items-start">
+      <header class="pf-kpi-hdr items-center">
         @if (navBack.showBack()) {
-          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+          <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
         }
@@ -591,8 +591,8 @@ const CATEGORY_LABELS: Record<string, string> = {
       font-size: 13px;
     }
 
-    /* Mobile back chevron — phone-only, additive. Desktop/iPad (>=768px)
-       never render the button (md:hidden) and the header layout is unchanged. */
+    /* Back chevron — shown at all widths when navBack.showBack() is true.
+       Single consistent back affordance across phone, tablet and desktop. */
     .pf-hdr-back {
       width: 38px;
       height: 38px;
@@ -609,11 +609,9 @@ const CATEGORY_LABELS: Record<string, string> = {
     @media (hover: hover) {
       .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); }
     }
-    /* Make the header a row so the chevron sits beside the title, phone-only.
-       Above md the chevron is hidden, so this never affects desktop/iPad. */
-    @media (max-width: 767.98px) {
-      .pf-kpi-hdr { display: flex; gap: 8px; }
-    }
+    /* Lay the header out as a row at all widths so the chevron sits beside
+       and vertically centered with the title on phone, tablet and desktop. */
+    .pf-kpi-hdr { display: flex; align-items: center; gap: 8px; }
 
     /* ═══════════════════════════════════════════════════════════
        CROSS-PLATFORM OVERRIDES — additive only.

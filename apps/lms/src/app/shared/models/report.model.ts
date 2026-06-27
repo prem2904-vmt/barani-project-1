@@ -58,6 +58,15 @@ export interface ReportTemplate {
   logoSize?: string;
   topAccentBar?: boolean;
 
+  // ── Pre-printed letterpad mode ───────────────────────────
+  /** When true, the PDF draws NO header/footer/logo and instead leaves blank
+   *  space at the top (letterpadHeaderMm) and bottom (letterpadFooterMm) of
+   *  every page, printing only the results body — for labs that print onto
+   *  their own pre-printed letterhead stationery. */
+  letterpadMode?: boolean;
+  letterpadHeaderMm?: number;
+  letterpadFooterMm?: number;
+
   // ── Theme — colors + typography ──────────────────────────
   primaryColor: string;
   accentColor?: string;
@@ -83,6 +92,13 @@ export interface ReportTemplate {
   showAbhaId: boolean;
   showBarcode?: boolean;
   showQrCode: boolean;
+  /** JSON array of custom patient-registration fields the lab chose to print on
+   *  the report: `[{ name, title }]`. The values come from the patient's saved
+   *  registration attributes (snapshot.patient.attributes). */
+  patientFieldsJson?: string;
+  /** JSON `string[][]` — drag-arranged item keys per column for the 3-column
+   *  patient block (which items go in each column, in what order). */
+  patientColumnsJson?: string;
 
   // ── Date & time ──────────────────────────────────────────
   /** Token: 'dd MMM yyyy' | 'dd/MM/yyyy' | 'MMM dd, yyyy' | 'yyyy-MM-dd' */

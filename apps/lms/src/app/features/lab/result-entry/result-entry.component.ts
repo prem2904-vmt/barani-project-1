@@ -91,7 +91,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           </button>
 
           @if (navBack.showBack()) {
-            <button type="button" class="pf-hdr-back md:hidden shrink-0 self-center inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+            <button type="button" class="pf-hdr-back shrink-0 self-center inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           }
@@ -2473,13 +2473,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
        rule (a literal vh->dvh swap), so no duplicate override is needed here.
        ════════════════════════════════════════════════════════════════ */
 
-    /* App-wide phone back chevron (sits before the title). Renders only on
-       phone via md:hidden; desktop/iPad keep the existing pf-head__back pill,
-       which we hide below the md breakpoint so a single back affordance shows. */
+    /* App-wide back chevron (sits before the title). Renders at all widths so
+       a single, consistent back affordance shows everywhere. The legacy
+       pf-head__back pill is fully hidden (see rule below) to avoid duplicates. */
     .pf-hdr-back { width: 38px; height: 38px; margin-left: -8px; border-radius: 11px; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform: scale(0.9); background: var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
-    @media (max-width: 767.98px) { .pf-head__back { display: none; } }
+    /* Legacy desktop Back pill retired in favor of the chevron at every width. */
+    .pf-head__back { display: none; }
 
     /* iOS zoom-guard: any focusable input below 16px triggers an
        auto-zoom on focus in mobile Safari/WKWebView. Bump to 16px on

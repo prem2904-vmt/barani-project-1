@@ -35,7 +35,10 @@
   // grid there anyway).
   overflow: hidden;
   gap: 0;
-  background: var(--bg-secondary);
+  // Transparent so the shell's ambient flow + glow shows through at every width
+  // (web / iPad / phone) — same as the rest of the app. The rail, header,
+  // conversation rows and bubbles keep their own glass; the composer stays solid.
+  background: transparent;
 
   // Tablet & phone: only one pane at a time (list ↔ thread).
   @media (max-width: 1024px) {
@@ -51,10 +54,9 @@
   flex-direction: column;
   min-width: 0; // allow the rail to shrink + its rows to ellipsis
   min-height: 0;
-  // Frosted glass rail — consistent with the app's glass surfaces.
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  // Transparent so the ambient flows behind the conversation list (the rows are
+  // their own glass tiles). The hairline keeps it visually separate from thread.
+  background: transparent;
   border-right: 1px solid var(--glass-border);
 }
 
@@ -158,7 +160,14 @@
 .pf-msgs__conv-list {
   list-style: none;
   margin: 0;
-  padding: 4px 0 12px;
+  // 12px horizontal inset so the conversation rows line up with the search box,
+  // Notes-to-self card and tabs (all inset 12px) instead of bleeding to the edge.
+  // Flex column with a tight, explicit gap so row spacing is consistent (not
+  // left to shadows/rounding) and the list reads compact.
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 12px 12px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -310,7 +319,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-secondary);
+  background: transparent;
 }
 .pf-msgs__thread-head {
   display: flex;
@@ -509,10 +518,11 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  // Transparent base (ambient shows through) + the chat's own subtle tint glow.
   background:
     radial-gradient(circle at 80% -10%, rgba(139, 92, 246, 0.08), transparent 50%),
     radial-gradient(circle at -10% 110%, rgba(236, 72, 153, 0.06), transparent 50%),
-    var(--bg-secondary);
+    transparent;
   &::-webkit-scrollbar { width: 8px; }
   &::-webkit-scrollbar-track { background: var(--scrollbar-track); }
   &::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
@@ -1471,9 +1481,11 @@
   padding: 32px;
   text-align: center;
   color: var(--text-tertiary);
+  // Transparent base so the shell ambient flows behind the empty state too
+  // (keeps a faint tint glow over it).
   background:
     radial-gradient(circle at 50% 30%, rgba(139, 92, 246, 0.08), transparent 60%),
-    var(--bg-secondary);
+    transparent;
   h3 { font-size: 16px; font-weight: 600; margin: 14px 0 4px; color: var(--text-primary); }
   p { font-size: 13px; margin: 0; }
 }
@@ -1865,9 +1877,8 @@
     flex-shrink: 0;
   }
   .pf-msgs__search    { margin: 0 10px 8px; padding: 10px 12px; }
-  // Generous touch zone on conversation rows — 60px min so they're a
-  // proper thumb-target. Avatar bumps to 44px.
-  .pf-msgs__conv-row  { padding: 12px 14px; min-height: 60px; }
+  // Comfortable thumb-target (>=52px) but tighter top/bottom than before.
+  .pf-msgs__conv-row  { padding: 9px 14px; min-height: 52px; }
   .pf-msgs__avatar    { width: 44px; height: 44px; font-size: 13.5px; }
   .pf-msgs__avatar-dot { width: 13px; height: 13px; border-width: 2.5px; }
   /* Add safe-area-inset-top so the avatar + name don't slide UNDER the

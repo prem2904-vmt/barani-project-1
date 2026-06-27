@@ -245,6 +245,7 @@
             
             <!-- Left Pane -->
             <section class="pf-appt-split__pane" [style.flex-basis.%]="twoPaneSplit()"
+              [class.pf-appt-split__pane--filtering]="apptFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'appt'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'appt' && expandedPane() !== 'none'">
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('appt')" role="button"
@@ -529,6 +530,7 @@
 
             <!-- Right Pane -->
             <section class="pf-appt-split__pane pf-appt-split__pane--work"
+              [class.pf-appt-split__pane--filtering]="workFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'work'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'work' && expandedPane() !== 'none'">
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('work')" role="button"

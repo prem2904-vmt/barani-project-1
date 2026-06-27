@@ -31,9 +31,9 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       <div class="flex items-center justify-between gap-3 mb-5">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--violet-400)">Admin · Lab</div>
-          <div class="flex items-center md:items-start gap-2">
+          <div class="flex items-center gap-2">
             @if (navBack.showBack()) {
-              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+              <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
               </button>
             }

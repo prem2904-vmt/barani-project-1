@@ -66,12 +66,10 @@ interface Category {
       <header class="pf-admin-hdr">
         <div>
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
-          <div class="flex items-center md:items-start gap-1.5">
-            @if (navBack.showBack()) {
-              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-              </button>
-            }
+          <div class="flex items-center gap-1.5">
+            <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Back to overview">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
             <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
           </div>
         </div>
@@ -83,37 +81,9 @@ interface Category {
       </header>
 
       <div class="pf-admin-layout">
-        <!-- ── Left rail: categories ───────────────────────── -->
-        <aside class="pf-admin-rail" role="tablist" aria-label="Admin categories">
-          @for (cat of categories; track cat.id) {
-            <button type="button" role="tab"
-                    class="pf-admin-rail__btn"
-                    [class.pf-admin-rail__btn--on]="active() === cat.id"
-                    [attr.aria-selected]="active() === cat.id"
-                    (click)="select(cat.id)">
-              <span class="pf-admin-rail__icon"
-                    [attr.data-on]="active() === cat.id"
-                    [attr.data-g]="cat.gradient">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-                     stroke="currentColor" stroke-width="1.8"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path [attr.d]="cat.iconPath"/>
-                  @if (cat.iconExtra) { <path [attr.d]="cat.iconExtra"/> }
-                </svg>
-              </span>
-              <div class="pf-admin-rail__text">
-                <span class="pf-admin-rail__label">{{ cat.label }}</span>
-                <span class="pf-admin-rail__count">{{ cat.tiles.length }} item{{ cat.tiles.length === 1 ? '' : 's' }}</span>
-              </div>
-              <svg class="pf-admin-rail__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m9 6 6 6-6 6"/>
-              </svg>
-            </button>
-          }
-        </aside>
-
-        <!-- ── Right pane: tiles for the selected category ─── -->
+        <!-- Category is chosen on the Overview screen and deep-linked via ?cat=;
+             the left category rail was redundant with those cards, so this hub
+             shows just the selected category full-width. Back returns to it. -->
         <div class="pf-admin-pane">
           @if (q().trim()) {
             <header class="pf-admin-pane__hdr">
@@ -281,14 +251,14 @@ interface Category {
 
     .pf-admin-layout {
       display: grid;
-      grid-template-columns: 240px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 18px;
       align-items: stretch;
       flex: 1;
       min-height: 0; /* allow children to shrink for overflow-y */
     }
     @media (max-width: 768px) {
-      .pf-admin-layout { grid-template-columns: 1fr; gap: 14px; }
+      .pf-admin-layout { gap: 14px; }
     }
 
     /* ── Left rail ───────────────────────────────────────── */

@@ -58,7 +58,7 @@ const STATUS_CLASS: Record<string, string> = {
           <span>Back</span>
         </button>
         @if (navBack.showBack()) {
-          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+          <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
         }
@@ -366,14 +366,13 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-cal-back svg { color: var(--text-muted); }
     .pf-cal-back:hover svg { color: #c4b5fd; }
 
-    /* Phone-only standard back chevron (sits before the title). Hidden at
-     * md+ via the md:hidden utility; desktop keeps the .pf-cal-back pill. */
+    /* Standard back chevron (sits before the title). Shown at ALL widths as
+     * the single, consistent back affordance. */
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-    /* Phone: drop the legacy back pill so only the new chevron shows.
-     * Breakpoint matches the md:hidden utility (768px) on the chevron. */
-    @media (max-width: 767.98px) { .pf-cal-back { display: none; } }
+    /* Legacy back pill fully retired at every width so only the chevron shows. */
+    .pf-cal-back { display: none; }
 
     .pf-cal-book {
       display: inline-flex; align-items: center; gap: 6px;

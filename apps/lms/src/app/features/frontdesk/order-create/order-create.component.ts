@@ -15,7 +15,6 @@ import { Test } from '../../../shared/models/test.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
@@ -35,7 +34,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, PatientSearchComponent, InlinePaymentPanelComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
