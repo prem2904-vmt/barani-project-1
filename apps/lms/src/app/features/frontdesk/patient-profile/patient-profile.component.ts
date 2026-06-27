@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -149,6 +150,7 @@ export class PatientProfileComponent implements OnInit {
   private readonly chat = inject(ChatService);
   protected readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
+  protected readonly navBack = inject(NavBackService);
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _history = signal<Order[]>([]);

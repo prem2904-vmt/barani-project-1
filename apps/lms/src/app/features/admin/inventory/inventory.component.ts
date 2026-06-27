@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 
@@ -30,7 +31,14 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       <div class="flex items-center justify-between gap-3 mb-5">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--violet-400)">Admin · Lab</div>
-          <h1 class="text-2xl font-extrabold" style="color:var(--text-primary)">Inventory</h1>
+          <div class="flex items-center md:items-start gap-2">
+            @if (navBack.showBack()) {
+              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+            }
+            <h1 class="text-2xl font-extrabold" style="color:var(--text-primary)">Inventory</h1>
+          </div>
           <p class="text-sm" style="color:var(--text-tertiary)">Stock for the active branch. Usage is auto-deducted per test at sample collection.</p>
         </div>
         <button class="px-4 py-2 rounded-xl text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" (click)="startNew()">New item</button>
@@ -204,6 +212,10 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
 
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
+
     /* ---------- Cross-platform additive overrides (do not touch desktop >=1280) ---------- */
 
     /* The items table is dense (4 row actions + numeric columns). Below desktop, let it
@@ -266,6 +278,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 export class InventoryComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly navBack = inject(NavBackService);
   readonly categories = CATEGORIES;
 
   readonly items = signal<InvItem[]>([]);

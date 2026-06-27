@@ -31,6 +31,7 @@ import { ScanService } from "../../core/services/scan.service";
 import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
+import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
 @Component({
   selector: "pf-shell",
@@ -45,6 +46,7 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
     CallOverlayComponent,
     PeopleDrawerComponent,
     BarcodeScannerModalComponent,
+    SwipeBackDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -59,7 +61,7 @@ import { BarcodeScannerModalComponent } from "../../shared/components/barcode-sc
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" [class.shell-main--kbd]="kbd.visible()">
+      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages

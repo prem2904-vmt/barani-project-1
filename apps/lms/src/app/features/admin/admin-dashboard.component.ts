@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { NavBackService } from '../../core/services/nav-back.service';
 
 interface SeedSummary {
   tenants: number;
@@ -65,7 +66,14 @@ interface Category {
       <header class="pf-admin-hdr">
         <div>
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
-          <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
+          <div class="flex items-center md:items-start gap-1.5">
+            @if (navBack.showBack()) {
+              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+            }
+            <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
+          </div>
         </div>
         <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
         <input class="pf-admin-search" type="search" [value]="q()"
@@ -251,6 +259,12 @@ interface Category {
       color: var(--text-tertiary);
       margin: 0;
     }
+
+    /* Mobile-only back chevron before the title (phone-only via md:hidden in
+       markup; hidden on /admin root by NavBackService.showBack()). */
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
     .pf-admin-search {
       margin-top: 12px;
       width: 100%;
@@ -595,6 +609,7 @@ interface Category {
 export class AdminDashboardComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
+  protected readonly navBack = inject(NavBackService);
 
   private readonly _summary = signal<SeedSummary | null>(null);
   readonly summary = this._summary.asReadonly();

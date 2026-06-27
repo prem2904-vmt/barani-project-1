@@ -119,14 +119,6 @@ function coerceCellText(raw: unknown): string {
         eyebrow="Reports"
         title="Report viewer"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions class="pf-rv-action" size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          <span class="pf-rv-action-label">Back</span>
-        </pf-touch-btn>
         @if (report()) {
           <ng-container actions>
             <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="print()">

@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
@@ -48,6 +49,14 @@ function defaultResultParam(): TestParameter {
          to 880px which left huge empty gutters on lab terminals. -->
     <section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
       <header class="pf-sre__hdr pf-sre__hdr--sticky">
+        <!-- App-wide standard mobile back chevron (phone-only). Sits BEFORE the
+             title; on phone it replaces the page's own .pf-sre__back pill (which
+             is suppressed below md via CSS). Desktop/iPad keep .pf-sre__back. -->
+        @if (navBack.showBack()) {
+          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+        }
         <button type="button" class="pf-sre__back" (click)="back()" aria-label="Back">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -633,6 +642,16 @@ function defaultResultParam(): TestParameter {
       cursor: pointer;
     }
     .pf-sre__back:hover { color: var(--text-primary); }
+    /* App-wide standard mobile back chevron. Phone-only via md:hidden in the
+       markup; placed BEFORE the title. Vertical centring with the title comes
+       from the header row, which already uses align-items:center on phone. */
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
+    /* Single back affordance per viewport: below md the page's own pill back is
+       hidden so only the standard chevron shows. At >=768px (md) the chevron is
+       md:hidden and .pf-sre__back stays byte-for-byte unchanged. */
+    @media (max-width: 767.98px){ .pf-sre__back { display: none; } }
     .pf-sre__hdr-title { flex: 1; min-width: 0; }
     .pf-sre__eyebrow {
       margin: 0; font-size: 10.5px; font-weight: 700;
@@ -1100,6 +1119,7 @@ export class SampleResultEntryComponent {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  protected readonly navBack = inject(NavBackService);
 
   private readonly _sample = signal<OrderSample | null>(null);
   private readonly _loading = signal<boolean>(true);

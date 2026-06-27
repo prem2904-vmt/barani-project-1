@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -66,7 +67,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page">
-      <header class="pf-kpi-hdr">
+      <header class="pf-kpi-hdr items-center md:items-start">
+        @if (navBack.showBack()) {
+          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+        }
         <div>
           <h1>KPI configuration</h1>
           <p>Pick which KPI cards appear on each screen. Configure tenant-wide for everyone, or per-branch for that branch only — both layers stack.</p>
@@ -585,6 +591,30 @@ const CATEGORY_LABELS: Record<string, string> = {
       font-size: 13px;
     }
 
+    /* Mobile back chevron — phone-only, additive. Desktop/iPad (>=768px)
+       never render the button (md:hidden) and the header layout is unchanged. */
+    .pf-hdr-back {
+      width: 38px;
+      height: 38px;
+      margin-left: -8px;
+      border-radius: 11px;
+      color: var(--text-primary);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s ease, transform .08s ease;
+    }
+    .pf-hdr-back:active { transform: scale(0.9); background: var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover: hover) {
+      .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); }
+    }
+    /* Make the header a row so the chevron sits beside the title, phone-only.
+       Above md the chevron is hidden, so this never affects desktop/iPad. */
+    @media (max-width: 767.98px) {
+      .pf-kpi-hdr { display: flex; gap: 8px; }
+    }
+
     /* ═══════════════════════════════════════════════════════════
        CROSS-PLATFORM OVERRIDES — additive only.
        Desktop-web (>=1280px) is untouched by everything below.
@@ -677,6 +707,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export class KpiConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly navBack = inject(NavBackService);
 
   protected readonly screens = SCREENS;
 

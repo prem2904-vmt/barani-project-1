@@ -10,6 +10,7 @@ import { Observable } from 'rxjs';
 import { skip } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -56,6 +57,11 @@ const STATUS_CLASS: Record<string, string> = {
           </svg>
           <span>Back</span>
         </button>
+        @if (navBack.showBack()) {
+          <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+        }
         <div class="pf-cal-hdr__l">
           <h1>Appointments</h1>
           <p>Tap an empty slot to book · click an event to open the patient profile</p>
@@ -359,6 +365,15 @@ const STATUS_CLASS: Record<string, string> = {
     .pf-cal-back:active { transform: translateY(1px); }
     .pf-cal-back svg { color: var(--text-muted); }
     .pf-cal-back:hover svg { color: #c4b5fd; }
+
+    /* Phone-only standard back chevron (sits before the title). Hidden at
+     * md+ via the md:hidden utility; desktop keeps the .pf-cal-back pill. */
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
+    /* Phone: drop the legacy back pill so only the new chevron shows.
+     * Breakpoint matches the md:hidden utility (768px) on the chevron. */
+    @media (max-width: 767.98px) { .pf-cal-back { display: none; } }
 
     .pf-cal-book {
       display: inline-flex; align-items: center; gap: 6px;
@@ -867,6 +882,7 @@ export class AppointmentsCalendarComponent {
   private readonly booking = inject(AppointmentBookingService);
   protected readonly queue = inject(AppointmentQueueService);
   private readonly toasts = inject(ToastService);
+  protected readonly navBack = inject(NavBackService);
 
   // Action sheet for a clicked appointment.
   protected readonly selectedAppt = signal<Appointment | null>(null);

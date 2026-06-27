@@ -1,9 +1,35 @@
-import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
+import { ChangeDetectionStrategy, Component, Input, inject } from "@angular/core";
+import { NavBackService } from "../../core/services/nav-back.service";
 
 @Component({
   selector: "pf-screen-header",
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    /* Phone-only leading back chevron. Hidden at md+ (md:hidden in the
+       template) so the desktop/iPad header is byte-for-byte unchanged. A bare
+       chevron with a generous tap target, pulled toward the screen edge like
+       the native iOS back affordance. */
+    .pf-hdr-back {
+      width: 38px;
+      height: 38px;
+      margin-left: -8px;
+      border-radius: 11px;
+      color: var(--text-primary);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s ease, transform .08s ease;
+    }
+    .pf-hdr-back:active {
+      transform: scale(0.9);
+      background: var(--glass-bg, rgba(255, 255, 255, 0.06));
+    }
+    @media (hover: hover) {
+      .pf-hdr-back:hover { background: var(--glass-bg, rgba(255, 255, 255, 0.06)); }
+    }
+  `],
   template: `
     <!-- Title and actions share one row on every width. The title sits in its
          own flex-1/min-w-0 track so a compact (icon-only) actions cluster can
@@ -11,7 +37,20 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
          actions stay pinned right and shrink-0 (wrapping within their own
          column if there are many). This restores the inline layout on phone —
          the icons sit beside the title, not on a new line below it. -->
-    <header class="flex flex-row items-start justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+    <header class="flex flex-row items-center md:items-start justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+      @if (navBack.showBack() && !noBack) {
+        <button
+          type="button"
+          class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center"
+          (click)="navBack.back()"
+          aria-label="Go back"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+      }
       <div class="min-w-0 flex-1">
         <!--
         @if (eyebrow) {
@@ -50,9 +89,15 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
   `,
 })
 export class ScreenHeaderComponent {
+  protected readonly navBack = inject(NavBackService);
+
   @Input() eyebrow: string | null = null;
   @Input() title: string | null = null;
   @Input() subtitle: string | null = null;
+
+  /** Force-hide the back chevron even on a secondary route (rare — for a
+   *  screen that is logically a root but doesn't sit on the primary nav). */
+  @Input() noBack = false;
 
   /**
    * The default slot takes priority — consumers can project rich HTML for the title

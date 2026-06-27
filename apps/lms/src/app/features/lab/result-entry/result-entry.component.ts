@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
@@ -88,6 +89,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
             </svg>
             <span class="hidden sm:inline">Back</span>
           </button>
+
+          @if (navBack.showBack()) {
+            <button type="button" class="pf-hdr-back md:hidden shrink-0 self-center inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+          }
 
           <h1 class="pf-head__title">{{ orderTest()?.test?.name ?? 'Result entry' }}</h1>
 
@@ -2466,6 +2473,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
        rule (a literal vh->dvh swap), so no duplicate override is needed here.
        ════════════════════════════════════════════════════════════════ */
 
+    /* App-wide phone back chevron (sits before the title). Renders only on
+       phone via md:hidden; desktop/iPad keep the existing pf-head__back pill,
+       which we hide below the md breakpoint so a single back affordance shows. */
+    .pf-hdr-back { width: 38px; height: 38px; margin-left: -8px; border-radius: 11px; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform: scale(0.9); background: var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
+    @media (max-width: 767.98px) { .pf-head__back { display: none; } }
+
     /* iOS zoom-guard: any focusable input below 16px triggers an
        auto-zoom on focus in mobile Safari/WKWebView. Bump to 16px on
        phone widths only — desktop keeps its tighter typography. */
@@ -2557,6 +2572,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
+  protected readonly navBack = inject(NavBackService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;

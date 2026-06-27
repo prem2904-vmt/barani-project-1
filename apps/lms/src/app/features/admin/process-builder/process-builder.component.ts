@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiService } from '../../../core/services/api.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf } from '../../../shared/models/process-workflow.model';
 
@@ -27,7 +28,14 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       <header class="pb-bar">
         <div class="min-w-0">
           <p class="pb-eyebrow">Admin · Process workflow</p>
-          <h1 class="pb-title">Workflow <span class="pb-title-accent">builder</span></h1>
+          <div class="flex items-center md:items-start gap-2">
+            @if (navBack.showBack()) {
+              <button type="button" class="pf-hdr-back md:hidden shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+            }
+            <h1 class="pb-title">Workflow <span class="pb-title-accent">builder</span></h1>
+          </div>
           <p class="pb-sub">Arrange actions into work-areas — the name becomes the nav, roles set who gets in.</p>
         </div>
         <div class="pb-bar-actions">
@@ -316,12 +324,18 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
        that can ride under the device top inset; nudge it clear of the
        status bar / notch (global body inset covers the page body). */
     :host-context(html.cap-native) .pb-palette { top: calc(8px + env(safe-area-inset-top)); }
+
+    /* Phone-only back chevron (sits before the page title; hidden at md+). */
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
   `]
 })
 export class ProcessBuilderComponent implements OnInit {
   private readonly svc = inject(ProcessWorkflowService);
   private readonly toasts = inject(ToastService);
   private readonly api = inject(ApiService);
+  protected readonly navBack = inject(NavBackService);
 
   readonly roles = signal<string[]>(KNOWN_ROLES);
   readonly roleMenuLane = signal(-1);
