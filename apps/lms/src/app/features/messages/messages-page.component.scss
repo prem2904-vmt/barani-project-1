@@ -1802,7 +1802,11 @@
      iPhone notch / Dynamic Island. The chrome above usually owns this
      inset, but when the messages route uses an immersive layout (no
      chrome on top), the thread head must take it. */
-  .pf-msgs__thread-head { padding: max(10px, env(safe-area-inset-top, 10px)) 12px 10px; }
+  // The global html.cap-native already pads the top by the safe-area inset, so
+  // the thread head must NOT re-add it (that double-counted and left a big dead
+  // gap above "Priya Sharma"). A plain 12px is enough; the global inset keeps
+  // the head clear of the status bar.
+  .pf-msgs__thread-head { padding: 12px 12px 10px; }
   // Sticky pinned strip + reconnect — so they don't scroll away as the
   // thread grows. Glass effect for legibility against bubbles below.
   .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;
@@ -1818,8 +1822,9 @@
     // Slightly taller textarea — 44px min for thumb comfort.
     textarea { min-height: 44px; }
   }
-  // Typing: nav pill is hidden, so the composer no longer needs to clear it.
-  .pf-msgs--kbd .pf-msgs__composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  // Typing: nav pill is hidden + the WebView is resized to sit above the
+  // keyboard, so the composer rides flush on top of the keys — zero gap.
+  .pf-msgs--kbd .pf-msgs__composer { padding-bottom: 0; }
   .pf-msgs__icon-btn--composer { width: 40px; height: 40px; }
   .pf-msgs__send { width: 44px; height: 44px; }
   // Bubble actions on touch devices: visible row UNDER the bubble when

@@ -67,10 +67,16 @@ const config: CapacitorConfig = {
     // background defaults to white, which was what showed as the white strip
     // once the keyboard used native resize.
     backgroundColor: '#0a0a15',
-    // KEEP 'always': WKWebView insets content below the notch / Dynamic Island
-    // (the app is laid out for this). 'never' pushed content up under the
-    // status bar. With backgroundColor set, the inset region is dark, not white.
-    contentInset: 'always',
+    // 'never': WKWebView must NOT add its own safe-area content inset, because
+    // our CSS already owns the inset (html.cap-native padding-top:
+    // max(env(safe-area-inset-top), 50px)). With BOTH on ('always' + the CSS
+    // pad) the top inset was double-counted intermittently — env() reports 0 on
+    // the first paint then flips to the real value, so the gap would sometimes
+    // come out ~2x and only correct itself on an app relaunch. The 50px CSS
+    // floor (which didn't exist when 'never' was first tried) now prevents the
+    // header from sliding under the status bar before env() reports, so 'never'
+    // is safe and makes the inset deterministic — one source of truth.
+    contentInset: 'never',
     limitsNavigationsToAppBoundDomains: true
   },
   android: {

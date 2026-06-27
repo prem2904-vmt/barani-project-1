@@ -91,6 +91,11 @@
   .pf-head__alerts::-webkit-scrollbar { display: none; }
   .pf-head__alert { flex-shrink: 0; }
 
+  /* ── Hide the "NN ready" status chip on phones only. The ready count is
+        still surfaced elsewhere on small screens; iPad/desktop (≥641px)
+        keep the chip. Phone-only, additive. */
+  .pf-head__alert--ready { display: none !important; }
+
   /* ── Cash-flow + top-test pills sit in alerts row but might also
         wrap as their own cluster — keep them in line. */
   .pf-collection, .pf-toptest-pill { flex-shrink: 0; }

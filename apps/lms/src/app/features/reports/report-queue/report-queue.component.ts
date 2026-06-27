@@ -71,6 +71,56 @@ interface PrelimOrder {
           </span>
           <span class="pf-rq-btn-label">Refresh</span>
         </pf-touch-btn>
+
+        <!-- Phone-only (<=640px): a compact status icon between Refresh and
+             Generate. Tapping opens a small popover with the same count
+             breakdown the old .pf-rq-stats-m summary showed. Same signals,
+             no business logic. -->
+        <div actions class="pf-rq-statbtn-m">
+          <button type="button" class="pf-rq-statbtn"
+                  [class.is-open]="statsOpen()"
+                  [attr.aria-expanded]="statsOpen()"
+                  aria-label="Queue stats"
+                  aria-controls="pf-rq-statpop"
+                  (click)="toggleStats()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </button>
+          @if (statsOpen()) {
+            <div class="pf-rq-statpop__backdrop" aria-hidden="true" (click)="toggleStats()"></div>
+            <div class="pf-rq-statpop" id="pf-rq-statpop" role="dialog" aria-label="Queue stats">
+              <span class="pf-rq-stat" data-color="violet">
+                <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+                <span class="pf-rq-stat__label">Total</span>
+                <span class="pf-rq-stat__value">{{ items().length }}</span>
+              </span>
+              <span class="pf-rq-stat" data-color="amber">
+                <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+                <span class="pf-rq-stat__label">Completed</span>
+                <span class="pf-rq-stat__value">{{ counts().pending }}</span>
+              </span>
+              <span class="pf-rq-stat" data-color="sky">
+                <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+                <span class="pf-rq-stat__label">Partial</span>
+                <span class="pf-rq-stat__value">{{ partialOrders().length }}</span>
+              </span>
+              <span class="pf-rq-stat" data-color="emerald">
+                <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+                <span class="pf-rq-stat__label">Delivered</span>
+                <span class="pf-rq-stat__value">{{ counts().delivered }}</span>
+              </span>
+              <span class="pf-rq-stat" data-color="rose">
+                <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+                <span class="pf-rq-stat__label">Failed</span>
+                <span class="pf-rq-stat__value">{{ counts().failed }}</span>
+              </span>
+            </div>
+          }
+        </div>
+
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="promptGenerate()">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -110,52 +160,6 @@ interface PrelimOrder {
         </span>
       </div>
 
-      <!-- Phone-only (<=640px): the 5-chip stat block collapses into a
-           single expandable summary so it never eats two rows. Pure
-           presentation — values come from the same signals as above. -->
-      <div class="pf-rq-stats-m">
-        <button type="button" class="pf-rq-stats-m__summary"
-                [class.is-open]="statsOpen()"
-                [attr.aria-expanded]="statsOpen()"
-                aria-controls="pf-rq-stats-panel"
-                (click)="toggleStats()">
-          <span class="pf-rq-stats-m__lead">
-            <span class="pf-rq-stat__dot" data-color="violet" aria-hidden="true"></span>
-            <span class="pf-rq-stats-m__label">Total</span>
-            <span class="pf-rq-stats-m__value">{{ items().length }}</span>
-          </span>
-          <svg class="pf-rq-stats-m__chev" width="18" height="18" viewBox="0 0 24 24"
-               fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="m6 9 6 6 6-6"/>
-          </svg>
-        </button>
-        @if (statsOpen()) {
-          <div class="pf-rq-stats-m__panel" id="pf-rq-stats-panel">
-            <span class="pf-rq-stat" data-color="amber">
-              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Completed</span>
-              <span class="pf-rq-stat__value">{{ counts().pending }}</span>
-            </span>
-            <span class="pf-rq-stat" data-color="sky">
-              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Partial</span>
-              <span class="pf-rq-stat__value">{{ partialOrders().length }}</span>
-            </span>
-            <span class="pf-rq-stat" data-color="emerald">
-              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Delivered</span>
-              <span class="pf-rq-stat__value">{{ counts().delivered }}</span>
-            </span>
-            <span class="pf-rq-stat" data-color="rose">
-              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Failed</span>
-              <span class="pf-rq-stat__value">{{ counts().failed }}</span>
-            </span>
-          </div>
-        }
-      </div>
-
       <div class="mb-4">
         <div class="pf-results-search">
           <svg class="pf-results-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -180,16 +184,59 @@ interface PrelimOrder {
           (valueChange)="setFilter($event)">
         </pf-segmented>
 
-        <!-- Phone-only (<=640px): the scrolling pill row becomes a native
-             select driving the SAME filter signal the pills drive. -->
-        <select class="pf-input pf-rq-filter-m"
-                aria-label="Filter reports"
-                [value]="filter()"
-                (change)="setFilter(asFilter($event))">
-          @for (opt of filterOptions; track opt.value) {
-            <option [value]="opt.value" [selected]="filter() === opt.value">{{ opt.label }}</option>
-          }
-        </select>
+        <!-- Phone-only (<=640px): the scrolling pill row becomes an
+             icon-only filter row driving the SAME filter signal the pills
+             drive (setFilter). Active status is highlighted in violet. -->
+        <div class="pf-rq-filter-m" role="group" aria-label="Filter reports">
+          <button type="button" class="pf-rq-filticon"
+                  [class.is-active]="filter() === 'all'"
+                  aria-label="All" title="All"
+                  (click)="setFilter('all')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button type="button" class="pf-rq-filticon"
+                  [class.is-active]="filter() === 'pending'"
+                  aria-label="Completed" title="Completed"
+                  (click)="setFilter('pending')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </button>
+          <button type="button" class="pf-rq-filticon"
+                  [class.is-active]="filter() === 'partial'"
+                  aria-label="Partial" title="Partial"
+                  (click)="setFilter('partial')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+            </svg>
+          </button>
+          <button type="button" class="pf-rq-filticon"
+                  [class.is-active]="filter() === 'delivered'"
+                  aria-label="Delivered" title="Delivered"
+                  (click)="setFilter('delivered')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+          <button type="button" class="pf-rq-filticon"
+                  [class.is-active]="filter() === 'failed'"
+                  aria-label="Failed" title="Failed"
+                  (click)="setFilter('failed')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+          </button>
+        </div>
       </div>
      </div>
 
@@ -336,7 +383,7 @@ interface PrelimOrder {
                     <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
                   </span>
                 </div>
-                <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
+                <p class="pf-rq-row__meta text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
                   Order #{{ r.orderId.slice(0, 8) }}
                   · {{ r.type }}
                   · generated {{ r.createdAt | date:'short' }}
@@ -838,7 +885,7 @@ interface PrelimOrder {
        max-width:640 query. No business logic — the select & dropdown
        drive the same filter / view-state signals as the desktop UI.
        ─────────────────────────────────────────────────────────────── */
-    .pf-rq-stats-m { display: none; }
+    .pf-rq-statbtn-m { display: none; }
     .pf-rq-filter-m { display: none; }
 
     @media (max-width: 640px) {
@@ -852,57 +899,85 @@ interface PrelimOrder {
         white-space: nowrap; border: 0;
       }
 
-      /* Swap the multi-chip stat block for the collapsible summary. */
+      /* Drop the full stat bar — its data now lives behind the header
+         status icon's popover. */
       .pf-rq-stats { display: none; }
-      .pf-rq-stats-m { display: block; margin-bottom: 16px; }
-      .pf-rq-stats-m__summary {
-        width: 100%;
-        display: flex; align-items: center; gap: 10px;
-        min-height: 44px;
-        padding: 8px 14px;
+
+      /* Header status icon + popover. The button sits in the action row
+         between Refresh and Generate; the popover floats below it. */
+      .pf-rq-statbtn-m { display: inline-flex; position: relative; }
+      .pf-rq-statbtn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 40px; height: 40px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 10px;
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .pf-rq-statbtn.is-open {
+        border-color: rgba(168, 85, 247, 0.55);
+        color: #c4b5fd;
+        background: rgba(124, 58, 247, 0.16);
+      }
+      .pf-rq-statpop__backdrop {
+        position: fixed; inset: 0;
+        z-index: 40;
+        background: transparent;
+      }
+      .pf-rq-statpop {
+        position: absolute; top: calc(100% + 8px); right: 0;
+        z-index: 41;
+        display: flex; flex-direction: column; gap: 4px;
+        min-width: 168px;
+        padding: 8px;
+        background: var(--bg-card-solid, rgba(20, 22, 30, 0.96));
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      }
+      .pf-rq-statpop .pf-rq-stat {
+        justify-content: flex-start;
+        gap: 8px; padding: 6px 8px;
+        border-right: none; flex: 0 0 auto;
+        border-radius: 8px;
+      }
+      .pf-rq-statpop .pf-rq-stat__label {
+        flex: 1 1 auto; font-size: 12px;
+      }
+      .pf-rq-statpop .pf-rq-stat__value { font-size: 13px; }
+
+      /* Swap the pill filter row for an icon-only filter row (same
+         filter signal — setFilter). */
+      pf-segmented { display: none; }
+      .pf-rq-filter-m {
+        display: flex; align-items: center; gap: 8px;
+      }
+      .pf-rq-filticon {
+        flex: 1 1 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 40px; min-height: 44px;
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
         border-radius: 12px;
-        color: var(--text-primary);
+        color: var(--text-tertiary);
         cursor: pointer;
+        transition: color 0.12s, border-color 0.12s, background 0.12s;
       }
-      .pf-rq-stats-m__lead {
-        display: inline-flex; align-items: center; gap: 8px;
-        flex: 1 1 auto; min-width: 0;
-      }
-      .pf-rq-stats-m__lead .pf-rq-stat__dot {
-        background: #a78bfa;
-        box-shadow: 0 0 6px rgba(168, 85, 247, 0.45);
-      }
-      .pf-rq-stats-m__label {
-        font-size: 12px; font-weight: 500; color: var(--text-tertiary);
-      }
-      .pf-rq-stats-m__value {
-        font-size: 13px; font-weight: 600; color: var(--text-primary);
-        font-variant-numeric: tabular-nums;
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-      }
-      .pf-rq-stats-m__chev {
-        flex: 0 0 auto; color: var(--text-muted);
-        transition: transform 0.18s;
-      }
-      .pf-rq-stats-m__summary.is-open .pf-rq-stats-m__chev { transform: rotate(180deg); }
-      .pf-rq-stats-m__panel {
-        display: flex; flex-wrap: wrap; gap: 6px 8px;
-        margin-top: 8px;
-      }
-
-      /* Swap the pill filter row for a native select (same filter signal). */
-      pf-segmented { display: none; }
-      .pf-rq-filter-m {
-        display: block;
-        min-height: 44px;
-        font-size: 16px; /* avoid iOS focus auto-zoom */
+      .pf-rq-filticon.is-active {
+        color: #fff;
+        border-color: rgba(168, 85, 247, 0.55);
+        background: linear-gradient(135deg, rgba(124, 58, 247, 0.85), rgba(168, 85, 247, 0.7));
+        box-shadow: 0 4px 14px rgba(124, 58, 247, 0.35);
       }
 
       /* Sleeker card: the colored status badge is redundant on phone —
          the left accent strip + icon already carry status. */
       .pf-rq-row__badge { display: none; }
+
+      /* Phone card shows only patient name + the 4 action icons — drop
+         the order/type/generated meta line entirely. */
+      .pf-rq-row__meta { display: none; }
     }
   `]
 })

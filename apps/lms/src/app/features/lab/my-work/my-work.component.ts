@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -63,14 +63,14 @@ const COUNTERS: CounterSpec[] = [
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
         <div actions>
-          <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()">
+          <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()" aria-label="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
               <path d="M21 3v5h-5"/>
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
               <path d="M3 21v-5h5"/>
             </svg>
-            Refresh
+            <span class="pf-refresh-label">Refresh</span>
           </pf-touch-btn>
         </div>
       </pf-screen-header>
@@ -78,13 +78,14 @@ const COUNTERS: CounterSpec[] = [
       <!-- Phone-only (<=640px) toggle that collapses the KPI counter
            chips below. Hidden above 640px, where the chips always show. -->
       <button type="button" class="pf-kpi-toggle press"
+              aria-label="Stats"
               [attr.aria-expanded]="kpiOpen()"
               (click)="kpiOpen.set(!kpiOpen())">
         <svg class="pf-kpi-toggle__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/>
         </svg>
-        Stats
+        <span class="pf-kpi-toggle__text">Stats</span>
         <svg class="pf-kpi-toggle__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6"/>
@@ -142,7 +143,7 @@ const COUNTERS: CounterSpec[] = [
             </svg>
           </button>
         </div>
-        <pf-touch-btn variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
           Open
           <span icon-right>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -263,7 +264,19 @@ const COUNTERS: CounterSpec[] = [
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
             <span class="pf-mw-pane__title">Lab Intake</span>
-            <div class="pf-mw-scan">
+            <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
+              <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
+                   search to an icon by default; tapping expands the full-width
+                   input across the intake header row. Hidden >=641px. -->
+              <button type="button" class="pf-intake-search-toggle press"
+                      aria-label="Search intake"
+                      [attr.aria-expanded]="intakeSearchOpen()"
+                      (click)="openIntakeSearch()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+                </svg>
+              </button>
               <svg class="pf-mw-scan__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
                    aria-hidden="true">
@@ -273,7 +286,7 @@ const COUNTERS: CounterSpec[] = [
                 <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
                 <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
               </svg>
-              <input type="text" class="pf-mw-scan__input"
+              <input #intakeSearchField type="text" class="pf-mw-scan__input"
                      placeholder="Scan or type PF-XXXX-XXXXX"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
@@ -1413,6 +1426,9 @@ const COUNTERS: CounterSpec[] = [
     /* Hidden everywhere by default; revealed only on phones. */
     .pf-mtabs { display: none; }
     .pf-kpi-toggle { display: none; }
+    /* Phone-only intake search magnifier — never shown >=641px, where the
+       Lab Intake inline search stays inline and unchanged. */
+    .pf-intake-search-toggle { display: none; }
 
     @media (max-width: 640px) {
       /* Phone visibility helpers — only take effect here so desktop
@@ -1428,28 +1444,28 @@ const COUNTERS: CounterSpec[] = [
          My Work / Queue switch, so hide the in-pane pill cluster. */
       .pf-mw-tabs { display: none; }
 
-      /* KPI counter collapse toggle. */
+      /* KPI counter collapse toggle — icon-only on phone (a small bar-chart
+         glyph). Text label + chevron dropped; aria-label carries the name.
+         Square 44px tap target. */
       .pf-kpi-toggle {
         display: inline-flex;
         align-self: flex-start;
         align-items: center;
-        gap: 8px;
+        justify-content: center;
+        gap: 0;
+        min-width: 44px;
         min-height: 44px;
-        padding: 8px 16px;
+        padding: 8px;
         margin-bottom: 12px;
         border-radius: 9999px;
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
         color: var(--text-secondary);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
         cursor: pointer;
       }
       .pf-kpi-toggle__icon { color: #a78bfa; flex-shrink: 0; }
-      .pf-kpi-toggle__chev { transition: transform 0.15s ease; }
-      .pf-kpi-toggle[aria-expanded='true'] .pf-kpi-toggle__chev { transform: rotate(180deg); }
+      .pf-kpi-toggle__text { display: none; }
+      .pf-kpi-toggle__chev { display: none; }
 
       /* Top segmented control: Intake / My Work / Queue. Matches the
          existing .pf-mw-tabs pill language (pill track + gradient on the
@@ -1504,6 +1520,63 @@ const COUNTERS: CounterSpec[] = [
         border-color: transparent;
         color: #fff;
       }
+
+      /* (1) Header Refresh → icon-only on phone. Visually hide the text
+         label (kept in the a11y tree so the button still has an accessible
+         name; aria-label="Refresh" also set on the host). */
+      .pf-refresh-label {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* (3) Drop the big Open button on phone — Enter in the scan input
+         already triggers scanSubmit(), the same action Open fired. */
+      .pf-open-btn { display: none !important; }
+
+      /* (4) Lab Intake inline search → collapses to a magnifier icon by
+         default; expands to a full-width input on demand (intakeSearchOpen).
+         The RECEIVE button (.pf-mw-scan__btn) stays visible in both states. */
+      .pf-intake-search-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 44px; height: 44px;
+        border-radius: 9999px;
+        background: transparent;
+        border: 1px solid var(--glass-border);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      /* Collapsed: strip the pill chrome down to just magnifier + Receive. */
+      .pf-mw-pane__hdr--intake .pf-mw-scan:not(.pf-intake-open) {
+        flex: 0 0 auto;
+        width: auto;
+        max-width: none;
+        height: auto;
+        padding: 0;
+        gap: 8px;
+        background: transparent;
+        border: none;
+      }
+      .pf-mw-scan:not(.pf-intake-open) .pf-mw-scan__icon,
+      .pf-mw-scan:not(.pf-intake-open) .pf-mw-scan__input,
+      .pf-mw-scan:not(.pf-intake-open) .pf-mw-scan__cam {
+        display: none;
+      }
+      /* Expanded: full-width search occupying the intake header row; the
+         magnifier toggle hides while the input is open. */
+      .pf-mw-pane__hdr--intake .pf-mw-scan.pf-intake-open {
+        flex: 1 1 100%;
+        width: 100%;
+        max-width: none;
+      }
+      .pf-mw-scan.pf-intake-open .pf-intake-search-toggle { display: none; }
     }
   `]
 })
@@ -1527,6 +1600,18 @@ export class MyWorkComponent implements OnInit {
   private readonly intakeRef = viewChild<ReceiveSamplesComponent>('intakeRef');
   /** Buffer for the header's manual-typing input. Cleared after submit. */
   protected readonly intakeScanInput = signal('');
+
+  /** Phone-only (<=640px) presentational toggle: collapses the cramped
+   *  Lab Intake inline search to a magnifier icon by default and expands
+   *  it to a full-width input on demand. Ignored >=641px (the inline
+   *  search there is always shown, byte-for-byte unchanged). */
+  protected readonly intakeSearchOpen = signal(false);
+  private readonly intakeSearchField = viewChild<ElementRef<HTMLInputElement>>('intakeSearchField');
+  openIntakeSearch() {
+    this.intakeSearchOpen.set(true);
+    setTimeout(() => this.intakeSearchField()?.nativeElement.focus(), 0);
+  }
+
   openIntakeScanner() { this.intakeRef()?.openBarcodeScanner(); }
   intakeReceive() {
     const code = this.intakeScanInput().trim();
