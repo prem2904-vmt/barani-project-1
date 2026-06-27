@@ -367,7 +367,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
-  readonly homeCollections = this._homeCollections.asReadonly();
+  
+  readonly homeCollections = computed(() => {
+    return this._homeCollections().filter(a => this.inApptRange(a.appointmentDate));
+  });
+
   private readonly _tests = signal<Test[]>([]);
   readonly testsById = computed(() => {
     const m = new Map<string, string>();
