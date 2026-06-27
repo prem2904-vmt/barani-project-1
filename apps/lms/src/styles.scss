@@ -248,6 +248,19 @@ html.cap-native {
   }
 }
 
+/* Immersive chat thread (phone, WhatsApp model): the thread header owns the
+   status-bar inset itself (it sits flush at the top of the WebView). Keeping
+   the global top pad here double-counts it — a dead gap above the header AND,
+   because <body> is a full 100dvh tall, it gets pushed down so its bottom (the
+   message COMPOSER) lands below the viewport, off-screen. Drop the top pad in
+   immersive mode so the body fills the visible viewport and the composer sits
+   at the true bottom. Scoped to .pf-chat-immersive (only set on phone in an
+   open thread), so every other screen keeps its notch clearance. */
+html.pf-chat-immersive,
+html.cap-native.pf-chat-immersive {
+  padding-top: 0 !important;
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;
