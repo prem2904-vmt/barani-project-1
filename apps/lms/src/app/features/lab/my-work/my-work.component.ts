@@ -62,47 +62,45 @@ const COUNTERS: CounterSpec[] = [
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
-        <div actions class="pf-mw-actions">
-          <!-- Phone-only (<=640px) Stats icon — sits next to Refresh, matched
-               in size/shape. Tapping opens a popover with the counters (same
-               style + behaviour as the Report queue stats button). Hidden
-               above 640px, where the inline counter chips show instead. -->
-          <div class="pf-kpi-statbtn-m">
-            <button type="button" class="pf-kpi-statbtn"
-                    [class.is-open]="kpiOpen()"
-                    aria-label="Stats"
-                    [attr.aria-expanded]="kpiOpen()"
-                    (click)="kpiOpen.set(!kpiOpen())">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-              </svg>
-            </button>
-            @if (kpiOpen()) {
-              <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
-              <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats">
-                @for (c of counters; track c.id) {
-                  <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
-                          [attr.data-tone]="c.tone"
-                          (click)="setCounter(c.id); kpiOpen.set(false)">
-                    <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
-                    <span class="pf-kpi-stat__label">{{ c.label }}</span>
-                    <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
-                  </button>
-                }
-              </div>
-            }
-          </div>
-          <pf-touch-btn variant="secondary" size="sm" (pressed)="refresh()" aria-label="Refresh">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-              <path d="M3 21v-5h5"/>
+        <!-- Phone-only (<=640px) Stats icon — sits next to Refresh, matched in
+             size/shape (same pattern as the Report queue stats button). Each is
+             a direct [actions] element so the header lays them out with the
+             standard gap. Hidden above 640px, where the inline chips show. -->
+        <div actions class="pf-kpi-statbtn-m">
+          <button type="button" class="pf-kpi-statbtn"
+                  [class.is-open]="kpiOpen()"
+                  aria-label="Stats"
+                  [attr.aria-expanded]="kpiOpen()"
+                  (click)="kpiOpen.set(!kpiOpen())">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
             </svg>
-            <span class="pf-refresh-label">Refresh</span>
-          </pf-touch-btn>
+          </button>
+          @if (kpiOpen()) {
+            <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
+            <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats">
+              @for (c of counters; track c.id) {
+                <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
+                        [attr.data-tone]="c.tone"
+                        (click)="setCounter(c.id); kpiOpen.set(false)">
+                  <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
+                  <span class="pf-kpi-stat__label">{{ c.label }}</span>
+                  <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
+                </button>
+              }
+            </div>
+          }
         </div>
+        <pf-touch-btn actions variant="secondary" size="sm" (pressed)="refresh()" aria-label="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            <path d="M3 21v-5h5"/>
+          </svg>
+          <span class="pf-refresh-label">Refresh</span>
+        </pf-touch-btn>
       </pf-screen-header>
 
       <!-- Counter filter pills — moved up here directly under the

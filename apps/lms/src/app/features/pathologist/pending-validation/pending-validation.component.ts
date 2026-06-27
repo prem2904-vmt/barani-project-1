@@ -51,7 +51,7 @@ interface ResultSnapshot {
           eyebrow="Validation queue"
           title="Pending validation"
           subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()" aria-label="Refresh">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
@@ -60,7 +60,7 @@ interface ResultSnapshot {
                 <path d="M3 21v-5h5"/>
               </svg>
             </span>
-            Refresh
+            <span class="pv-refresh-label">Refresh</span>
           </pf-touch-btn>
         </pf-screen-header>
 
@@ -119,7 +119,7 @@ interface ResultSnapshot {
                         <span class="pv-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
                         @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                       </div>
-                      <p class="text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
+                      <p class="pv-grp-meta text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
                         #{{ g.orderId.slice(0,8) }}
                         @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                       </p>
@@ -229,6 +229,17 @@ interface ResultSnapshot {
 
     /* ===== Phone (<=640): stack expanded result rows so 3 actions don't overflow ===== */
     @media (max-width: 640px) {
+      /* Phone: Refresh is icon-only (label kept in the a11y tree). */
+      :host .pv-refresh-label {
+        position: absolute; width: 1px; height: 1px;
+        padding: 0; margin: -1px; overflow: hidden;
+        clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+      /* Phone cards: just name + time — drop the test-count badge and the
+         "#orderId · tests" meta line. */
+      :host .pv-grp-count { display: none !important; }
+      :host .pv-grp-meta { display: none !important; }
+
       :host .pv-result-list {
         /* tighten the avatar-aligned indent so result rows aren't squeezed */
         padding-left: 0.5rem;

@@ -240,6 +240,10 @@ interface PrelimOrder {
       </div>
      </div>
 
+     <!-- Phone-only: name the active category so the icon-only filter row is
+          unambiguous. Hidden >=641px (the pills are self-labelling there). -->
+     <div class="pf-rq-filter-active" aria-live="polite">{{ activeFilterLabel() }}</div>
+
      <div class="pf-rq-body">
       @if (loading() && items().length === 0) {
         <div class="space-y-2.5">
@@ -887,6 +891,9 @@ interface PrelimOrder {
        ─────────────────────────────────────────────────────────────── */
     .pf-rq-statbtn-m { display: none; }
     .pf-rq-filter-m { display: none; }
+    /* Active-category label is phone-only — the desktop pills already label
+       themselves. */
+    .pf-rq-filter-active { display: none; }
 
     @media (max-width: 640px) {
       /* Refresh → icon-only: hide the label visually but keep it in the
@@ -950,6 +957,15 @@ interface PrelimOrder {
       /* Swap the pill filter row for an icon-only filter row (same
          filter signal — setFilter). */
       pf-segmented { display: none; }
+      /* The active category name, so icon-only filters read clearly. */
+      .pf-rq-filter-active {
+        display: block;
+        margin: 10px 2px 2px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: var(--text-primary);
+      }
       .pf-rq-filter-m {
         display: flex; align-items: center; gap: 8px;
       }
@@ -1006,6 +1022,10 @@ export class ReportQueueComponent implements OnInit {
   // showing what's done and waiting for handover.
   private readonly _filter = signal<Filter>('pending');
   readonly filter = this._filter.asReadonly();
+  /** Human label for the active filter — shown on phone above the list so the
+   *  icon-only filter row reads clearly ("which category am I looking at?"). */
+  readonly activeFilterLabel = computed(() =>
+    this.filterOptions.find(o => o.value === this._filter())?.label ?? 'All');
   setFilter(f: Filter) { this._filter.set(f); }
 
   /** Phone-only presentational state: the compact stat summary's
