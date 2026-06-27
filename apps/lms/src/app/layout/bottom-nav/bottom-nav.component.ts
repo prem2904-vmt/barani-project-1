@@ -319,8 +319,14 @@ const DRAG_THRESHOLD_PX = 4;
     /* While the soft keyboard is up (phone, typing) the floating pill is in
        the way — hide it so the composer/input sits right above the keyboard.
        Bound only when !railMode (phones), and KeyboardService.visible is only
-       ever true on native, so web/desktop are unaffected. */
-    .pf-bottom-nav--kbd { display: none !important; }
+       ever true on native/touch, so web/desktop are unaffected.
+       NOTE: the native rule below (:host-context(html.cap-native) .pf-bottom-nav
+       { display:block !important }) is MORE specific than a bare
+       .pf-bottom-nav--kbd, so on a real device it was overriding the hide and
+       the nav stayed up while typing. The native-scoped, higher-specificity
+       selector here (0,3,0 > the native 0,2,0) reclaims the override. */
+    .pf-bottom-nav--kbd,
+    :host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--kbd { display: none !important; }
 
     /* Native (Capacitor) tablet keeps the rail visible even ≥1280px (a 12.9"
        iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows

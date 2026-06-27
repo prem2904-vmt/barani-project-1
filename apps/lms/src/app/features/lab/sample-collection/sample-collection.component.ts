@@ -1632,6 +1632,66 @@ interface OrderGroup {
       }
     }
 
+    /* ─────────────────────────────────────────────────────────────────
+       AUTHORITATIVE phone vial-card layout (LAST = wins). Successive passes
+       layered several @media(max-width:640px) blocks; this single block,
+       placed last and scoped under .pf-drawer__tubes (so it out-specifies the
+       base .pf-tube/.pf-vial rules), is the source of truth for the phone tile:
+       a FULL-WIDTH row — fixed vial on the left, left-aligned text column,
+       dept shown in full, status pill on its own line, nothing clipped.
+       >=641px is untouched (gated to <=640). ───────────────────────────── */
+    @media (max-width: 640px) {
+      .pf-drawer__tubes {
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        max-width: 100% !important;
+        gap: 10px !important;
+      }
+      .pf-drawer__tubes .pf-tube {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 14px !important;
+        padding: 14px 16px !important;
+        text-align: left !important;
+      }
+      .pf-drawer__tubes .pf-vial {
+        width: 40px !important;
+        height: 120px !important;
+        flex: 0 0 auto !important;
+      }
+      .pf-drawer__tubes .pf-vial--cup {
+        width: 64px !important;
+        height: 100px !important;
+      }
+      .pf-drawer__tubes .pf-tube__body {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        gap: 2px !important;
+      }
+      .pf-drawer__tubes .pf-tube__dept {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        max-width: 100% !important;
+        letter-spacing: 0.12em !important;
+      }
+      .pf-drawer__tubes .pf-tube__stamp {
+        position: static !important;
+        align-self: flex-start !important;
+        width: auto !important;
+        max-width: 100% !important;
+        justify-content: flex-start !important;
+        margin-top: 8px !important;
+      }
+    }
+
   `]
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
