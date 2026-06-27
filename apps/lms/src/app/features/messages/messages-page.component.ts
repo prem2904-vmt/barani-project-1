@@ -15,6 +15,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ChatNotifyService } from '../../core/services/chat-notify.service';
 import { RingtoneService } from '../../core/services/ringtone.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
+import { NavBackService } from '../../core/services/nav-back.service';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
@@ -58,6 +59,13 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   /** Soft-keyboard visibility — drops the composer's nav-clearance padding so
    *  it sits right above the keyboard while typing (phone). */
   protected readonly kbd = inject(KeyboardService);
+  /** Lets the edge-swipe / hardware back close the open thread instead of
+   *  leaving /messages (the thread is signal-driven, not a route). */
+  private readonly navBack = inject(NavBackService);
+  private readonly closeThreadBack = (): boolean => {
+    if (this.chat.activeConversationId()) { this.chat.closeConversation(); return true; }
+    return false;
+  };
 
   @ViewChild('thread') private threadEl?: ElementRef<HTMLDivElement>;
   @ViewChild('composer') private composerEl?: ElementRef<HTMLTextAreaElement>;
@@ -437,6 +445,14 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       if (typeof document !== 'undefined') {
         document.documentElement.classList.toggle('pf-chat-immersive', open && phone);
       }
+      // While a thread is open on phone, route edge-swipe / hardware back through
+      // closeConversation() (the thread is a signal, not a route) so swiping back
+      // returns to the conversation list instead of leaving /messages.
+      if (open && phone) {
+        this.navBack.registerBackInterceptor(this.closeThreadBack);
+      } else {
+        this.navBack.clearBackInterceptor(this.closeThreadBack);
+      }
     });
 
     // Auto-grow the composer (single line → grows → caps → scrolls) whenever the
@@ -463,6 +479,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.remove('pf-chat-immersive');
     }
+    this.navBack.clearBackInterceptor(this.closeThreadBack);
   }
 
   private async refreshPinned(conversationId: string): Promise<void> {

@@ -35,8 +35,31 @@ export class NavBackService {
 
   private readonly url = signal(this.norm(this.router.url));
 
-  /** True when the current route is a secondary (drill-down) page. */
-  readonly showBack = computed(() => !this.roots.has(this.url()));
+  /** An optional in-page back handler. A screen whose "back" is NOT a route
+   *  change (e.g. the chat thread, which closes a conversation via a signal on
+   *  the /messages root) registers one so the shared chevron, the edge-swipe
+   *  gesture, and Android hardware-back all route through it instead of popping
+   *  history. Returns true if it handled the back. */
+  private interceptor: (() => boolean) | null = null;
+  private readonly hasInterceptor = signal(false);
+
+  /** True when a back affordance should be shown: an in-page handler is active,
+   *  OR the current route is a secondary (drill-down) page. */
+  readonly showBack = computed(() => this.hasInterceptor() || !this.roots.has(this.url()));
+
+  /** Register an in-page back handler (call from a screen's effect/ngOnInit). */
+  registerBackInterceptor(fn: () => boolean): void {
+    this.interceptor = fn;
+    this.hasInterceptor.set(true);
+  }
+
+  /** Clear the handler (pass the same fn to avoid clobbering a newer one). */
+  clearBackInterceptor(fn?: () => boolean): void {
+    if (!fn || this.interceptor === fn) {
+      this.interceptor = null;
+      this.hasInterceptor.set(false);
+    }
+  }
 
   constructor() {
     this.router.events.subscribe((e) => {
@@ -55,6 +78,8 @@ export class NavBackService {
    * so the user is never stranded on a page they can't leave.
    */
   back(): void {
+    // An in-page handler (e.g. close the open chat thread) takes precedence.
+    if (this.interceptor && this.interceptor()) return;
     if (typeof window !== 'undefined' && window.history.length > 1) {
       this.location.back();
     } else {
