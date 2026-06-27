@@ -856,34 +856,74 @@ function defaultResultParam(): TestParameter {
          fixed bar. ~88px ≈ submit button (52px touch) + bar padding + border. */
       .pf-sre { padding-bottom: calc(var(--tab-nav-total-height) + 88px); }
 
-      /* Slim the per-test grid to TWO columns that fit a phone with no
-         horizontal scroll: PARAMETER + RESULT only. The UNIT / REFERENCE
-         RANGE / METHOD columns are dropped (their <th>+<td> share these
-         classes), and the unit is re-shown as an inline suffix inside the
-         result field via .pf-sre__gunit-inline. Replaces the old
-         horizontal-scroll workaround. */
+      /* Phone: a <table> can't be made to look professional at 390px (it was
+         rendering ~70% wide with tiny sliver inputs). Convert it to a clean
+         full-width block list — each parameter is one row: the name on the
+         left (flex, wraps), a proper result input + unit suffix on the right.
+         UNIT / REFERENCE RANGE / METHOD columns are dropped (unit re-shown
+         inline). >=641px keeps the real 5-column table. */
       .pf-sre__gc-unit,
       .pf-sre__gc-range,
       .pf-sre__gc-method { display: none; }
-      .pf-sre__grid { table-layout: fixed; }
-      .pf-sre__grid th, .pf-sre__grid td { padding-inline: 8px; }
-      .pf-sre__gc-param  { width: 56%; white-space: normal; }
-      .pf-sre__gc-result { width: 44%; }
-      /* RESULT cell → flex row so the input grows and the unit suffix sits
-         immediately to its right inside the same field container. */
-      td.pf-sre__gc-result {
-        display: flex; align-items: center; gap: 6px;
+      .pf-sre__grid-wrap { width: 100%; }
+      .pf-sre__grid,
+      .pf-sre__grid tbody { display: block; width: 100%; }
+      .pf-sre__grid thead { display: none; }     /* column headers make no sense once stacked */
+
+      .pf-sre__grow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--glass-border);
       }
-      td.pf-sre__gc-result .pf-sre__ginput { flex: 1 1 auto; min-width: 0; }
-      td.pf-sre__gc-result .pf-sre__cb { flex: 0 0 auto; }
+      .pf-sre__grow td {
+        display: block;
+        padding: 0;
+        border: 0;
+        background: none !important;   /* row owns the background now */
+      }
+      /* Parameter name takes the remaining width and wraps cleanly. */
+      .pf-sre__gc-param {
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: normal;
+        line-height: 1.3;
+      }
+      /* Result group: a fixed, comfortable field on the right with the unit
+         as a suffix. The input is a real 40px field — not a sliver. */
+      td.pf-sre__gc-result {
+        flex: 0 0 auto;
+        width: 148px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      td.pf-sre__gc-result .pf-sre__ginput {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 40px;
+        text-align: left;
+      }
+      td.pf-sre__gc-result .pf-sre__ginput--num { text-align: right; }
+      td.pf-sre__gc-result .pf-sre__cb {
+        flex: 0 0 auto;
+        width: 24px; height: 24px;
+      }
       .pf-sre__gunit-inline {
         display: inline-flex; align-items: center;
         flex: 0 0 auto;
+        min-width: 30px;
         font-size: 12px; font-weight: 600;
         color: var(--text-tertiary);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
       }
+      /* Pathologist-comment thread row: full-width block under its parameter. */
+      .pf-sre__grow-comments { display: block; width: 100%; }
+      .pf-sre__grow-comments td { display: block; width: 100%; padding: 8px 14px; }
     }
     .pf-sre__submit {
       flex: 1 1 auto;
