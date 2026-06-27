@@ -77,7 +77,8 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 <span class="pf-sc__seg-sep">·</span>
                 <input #manualInput
                        class="pf-sc__seg-part pf-sc__seg-input"
-                       inputmode="numeric"
+                       [attr.inputmode]="isTouch() ? 'none' : 'numeric'"
+                       [readonly]="isTouch()"
                        pattern="[0-9]*"
                        maxlength="5"
                        placeholder="00000"
@@ -299,6 +300,18 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
 
     /* Manual entry — replaces the camera viewport when active */
     .pf-sc__manual { padding: 16px; }
+    /* Mobile: the native soft keyboard is suppressed (input is inputmode=none
+       + readonly on touch), so the custom numpad is the sole input. Let the
+       panel scroll within the sheet and reserve the home-bar safe area so the
+       C / 0 / backspace row and the Confirm button are never clipped. */
+    @media (max-width: 640px) {
+      .pf-sc__manual {
+        max-height: 78dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+      }
+    }
     .pf-sc__manual-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px; }
     .pf-sc__seg {
       display: flex; align-items: center; gap: 6px; flex-wrap: wrap;

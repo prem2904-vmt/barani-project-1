@@ -246,6 +246,12 @@ function defaultResultParam(): TestParameter {
                                      (ngModelChange)="setValue(t.id, p.name, $event)" />
                             }
                           }
+                          <!-- Phone only (CSS-gated): the dropped UNIT column re-shown
+                               as a small inline suffix beside the result input. Reuses
+                               the same p.unit value rendered in the UNIT column above. -->
+                          @if (p.unit) {
+                            <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span>
+                          }
                         </td>
                         <td class="pf-sre__gc-unit">{{ p.unit || '—' }}</td>
                         <td class="pf-sre__gc-range">{{ refLabelFor(p) || '—' }}</td>
@@ -493,6 +499,10 @@ function defaultResultParam(): TestParameter {
       color: var(--text-tertiary);
       font-size: 12px;
     }
+    /* Inline unit suffix beside the result input — phone only. Hidden by
+       default so desktop/iPad keep their dedicated UNIT column unchanged;
+       the phone breakpoint switches it on. */
+    .pf-sre__gunit-inline { display: none; }
     .pf-sre__grow-comments td {
       padding: 8px 10px;
       background: rgba(168, 85, 247, 0.04);
@@ -814,18 +824,51 @@ function defaultResultParam(): TestParameter {
        The pill body sits ~72px tall + safe-area; we add 16px breathing
        on top of that. iPad/desktop fall through unchanged. */
     @media (max-width: 640px) {
+      /* Single mode on phone: hide the Grid/Form toggle entirely — grid is
+         the one view here. Form logic + DOM are left intact; only this
+         control is hidden, and only at <=640px. */
+      .pf-sre__view { display: none; }
+
+      /* Sticky bottom action bar: pinned to the bottom of the scroll panel
+         and lifted clear of the floating bottom-nav pill via the shared
+         --tab-nav-total-height token (which already folds in the
+         home-indicator safe-area). It no longer floats over the grid rows. */
       .pf-sre__footer {
-        bottom: calc(72px + 12px + env(safe-area-inset-bottom, 0px));
+        bottom: var(--tab-nav-total-height);
         padding: 12px 0;
-       
       }
-      /* Each test card has its own table that overflows on a 375px
-         viewport (PARAMETER | RESULT | UNIT | REF RANGE | METHOD = 5
-         cols at ~80px each = 400px+). Wrap the table in a horizontal
-         scroller so METHOD isn't clipped off the right edge. */
-      .pf-sre__test table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
-      .pf-sre__test table thead, .pf-sre__test table tbody { display: table; width: max-content; min-width: 100%; }
-      .pf-sre__test table th, .pf-sre__test table td { white-space: nowrap; padding-inline: 8px; }
+      /* Reserve room at the end of the scroll area so the last grid rows
+         aren't hidden behind the sticky bar that overlays them. */
+      .pf-sre { padding-bottom: var(--tab-nav-total-height); }
+
+      /* Slim the per-test grid to TWO columns that fit a phone with no
+         horizontal scroll: PARAMETER + RESULT only. The UNIT / REFERENCE
+         RANGE / METHOD columns are dropped (their <th>+<td> share these
+         classes), and the unit is re-shown as an inline suffix inside the
+         result field via .pf-sre__gunit-inline. Replaces the old
+         horizontal-scroll workaround. */
+      .pf-sre__gc-unit,
+      .pf-sre__gc-range,
+      .pf-sre__gc-method { display: none; }
+      .pf-sre__grid { table-layout: fixed; }
+      .pf-sre__grid th, .pf-sre__grid td { padding-inline: 8px; }
+      .pf-sre__gc-param  { width: 56%; white-space: normal; }
+      .pf-sre__gc-result { width: 44%; }
+      /* RESULT cell → flex row so the input grows and the unit suffix sits
+         immediately to its right inside the same field container. */
+      td.pf-sre__gc-result {
+        display: flex; align-items: center; gap: 6px;
+      }
+      td.pf-sre__gc-result .pf-sre__ginput { flex: 1 1 auto; min-width: 0; }
+      td.pf-sre__gc-result .pf-sre__cb { flex: 0 0 auto; }
+      .pf-sre__gunit-inline {
+        display: inline-flex; align-items: center;
+        flex: 0 0 auto;
+        font-size: 12px; font-weight: 600;
+        color: var(--text-tertiary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
     }
     .pf-sre__submit {
       flex: 1 1 auto;
@@ -942,7 +985,7 @@ function defaultResultParam(): TestParameter {
     }
     @media (max-width: 640px) {
       :host-context(html.cap-native) .pf-sre__footer {
-        bottom: calc(72px + 12px + env(safe-area-inset-bottom, 0px));
+        bottom: var(--tab-nav-total-height);
         padding-bottom: 12px;
       }
     }

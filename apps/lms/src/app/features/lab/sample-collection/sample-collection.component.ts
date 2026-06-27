@@ -476,7 +476,13 @@ interface OrderGroup {
                 {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
               </button>
             } @else {
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)">Can't collect</button>
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)"
+                      aria-label="Can't collect" data-label="Can't collect">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/>
+                </svg>
+                <span class="pf-btn__text">Can't collect</span>
+              </button>
             }
             @if (isDispatched(g)) {
               <span class="pf-drawer__done-stamp">
@@ -498,13 +504,28 @@ interface OrderGroup {
             <!-- Dispatch right here once everything's drawn (FD/collector handoff
                  to the lab) — only if the user can dispatch and it's not already. -->
             @if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()">
-                {{ dispatching() ? 'Dispatching…' : 'Dispatch' }}
+              <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()"
+                      aria-label="Dispatch" data-label="Dispatch">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch' }}</span>
               </button>
             }
             <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
-                    (click)="close()" [disabled]="g.collected < g.totalVials">
-              {{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}
+                    (click)="close()" [disabled]="g.collected < g.totalVials"
+                    [attr.aria-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'"
+                    [attr.data-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'">
+              @if (g.collected < g.totalVials) {
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m17 13 2 2 4-4"/>
+                </svg>
+              } @else {
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 4 4L19 6"/>
+                </svg>
+              }
+              <span class="pf-btn__text">{{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}</span>
             </button>
           </footer>
         </div>
@@ -1069,6 +1090,11 @@ interface OrderGroup {
 
     .hidden { display: none; }
 
+    /* Footer action buttons: the inline-SVG icon is hidden everywhere by
+       default so desktop (>=641px) keeps the existing TEXT buttons exactly as
+       before. The phone media query below flips this — text out, icon in. */
+    .pf-drawer__foot .pf-btn__icon { display: none; }
+
     /* ─── Reject-with-reason modal ─────────────────────────── */
     .pf-rej {
       position: fixed; inset: 0; z-index: 1100;
@@ -1176,8 +1202,11 @@ interface OrderGroup {
         gap: 2px;
         text-align: left;
       }
-      .pf-tube__label  { font-size: 14px; text-align: left; line-height: 1.2; }
-      .pf-tube__dept   { font-size: 9px; }
+      .pf-tube__label  { font-size: 14px; text-align: left; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+      /* Dept label ("HAEMATOLOGY") gets bounded to the text column and
+         ellipsised so it can never overflow / get clipped by the tile's
+         overflow:hidden. */
+      .pf-tube__dept   { font-size: 9px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .pf-tube__tests  {
         margin: 3px 0 0;
         font-size: 11.5px;
@@ -1198,11 +1227,18 @@ interface OrderGroup {
          overlapped the label/dept/tests text. Keeping it in normal flow
          (left-aligned, below the tests) is overlap-proof. The whole
          tile is still the click target — the pill just telegraphs it. */
+      /* The status pill ("Tap when drawn" / time) drops onto its own full-width
+         line beneath the text column so it always fits the tile and is never
+         clipped off the right edge. The whole tile remains the tap target. */
       .pf-tube__stamp {
         position: static;
-        align-self: flex-start;
-        margin-top: 4px;
-        padding: 6px 10px;
+        align-self: stretch;
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: center;
+        margin-top: 6px;
+        min-height: 32px;
+        padding: 8px 10px;
         font-size: 10px;
         font-weight: 600;
         white-space: nowrap;
@@ -1528,6 +1564,50 @@ interface OrderGroup {
       :host-context(html.cap-native) .pf-drawer__head {
         padding-left: calc(20px + env(safe-area-inset-left));
         padding-right: calc(20px + env(safe-area-inset-right));
+      }
+    }
+
+    /* Phone (<=640px): collapse the footer action buttons to ICON-ONLY squares
+       to save space. Each keeps its full text in aria-label (a11y) and shows a
+       press-and-hold tooltip via data-label + :active::after — no JS/state.
+       The "Undo dispatch" button + status stamps are intentionally left as-is.
+       Desktop (>=641px) is untouched: text buttons, icons display:none. */
+    @media (max-width: 640px) {
+      .pf-drawer__foot .pf-btn {
+        position: relative;          /* anchor for the press tooltip */
+        width: 46px;                 /* >=44px tap target */
+        min-width: 46px;             /* beats .pf-btn-primary's min-width:140px */
+        height: 46px;
+        padding: 0;
+        flex: 0 0 auto;
+        gap: 0;
+      }
+      .pf-drawer__foot .pf-btn__text { display: none; }
+      .pf-drawer__foot .pf-btn__icon { display: inline-flex; }
+
+      /* Press-and-hold tooltip: a small dark pill above the held button. */
+      .pf-drawer__foot .pf-btn[data-label]:active::after {
+        content: attr(data-label);
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        padding: 5px 9px;
+        border-radius: 8px;
+        background: rgba(4, 6, 18, 0.95);
+        border: 1px solid var(--glass-border);
+        color: var(--text-primary);
+        font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      :host-context([data-theme="light"]) .pf-drawer__foot .pf-btn[data-label]:active::after {
+        background: rgba(255, 255, 255, 0.98);
+        color: #0f172a;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
       }
     }
 
