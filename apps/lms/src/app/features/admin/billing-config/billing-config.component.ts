@@ -304,7 +304,11 @@ interface GstRow {
             </div>
           </div>
           @if (invoicePreviewUrl(); as src) {
-            <iframe [src]="src" title="Invoice preview" class="pf-invoice-iframe" style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
+            <div class="pf-invoice-viewport" [style.--pf-inv-scale]="invoicePreviewScale()">
+              <div class="pf-invoice-stage">
+                <iframe [src]="src" title="Invoice preview" class="pf-invoice-iframe" style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
+              </div>
+            </div>
           } @else {
             <div class="text-[13px] py-10 text-center" style="color: var(--text-tertiary);">Rendering preview…</div>
           }
@@ -355,6 +359,12 @@ interface GstRow {
     }
     .pf-tpl-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
 
+    /* Desktop/iPad: the scale wrappers are transparent — the iframe keeps its
+       original width:100% / height:62dvh behaviour. They only become real
+       (scaling) boxes at ≤640px below, so the desktop preview is unchanged. */
+    .pf-invoice-viewport,
+    .pf-invoice-stage { display: contents; }
+
     /* ── Cross-platform additive overrides (scoped to this page only) ── */
 
     /* Phone: stop iOS auto-zoom on focus by keeping form text >= 16px.
@@ -366,9 +376,38 @@ interface GstRow {
       :host select {
         font-size: 16px;
       }
-      /* Cap the live-preview iframe so it never dominates the small viewport. */
+      /* ── Invoice preview: CONTAIN the A4 page inside the phone. The PDF
+            iframe renders the page at its intrinsic 794px CSS width, which
+            otherwise spills past the tile and clips the right edge ("MicroLab",
+            "CASH B…", the phone number). We scale it down to the tile width via
+            --pf-inv-scale (set in TS), then let the viewport scroll + pinch-zoom
+            so the whole bill is visible and zoomable. The wrappers (which are
+            display:contents at ≥641px) become real boxes here. */
+      :host .pf-invoice-viewport {
+        display: block;
+        width: 100%;
+        height: 56dvh;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y pinch-zoom;
+        border-radius: 12px;
+        background: #525659; /* letterbox around the scaled page */
+      }
+      :host .pf-invoice-stage {
+        display: block;
+        /* Scaled footprint so the scroller sizes correctly and nothing
+           overflows horizontally at the default fit. 794×1123 = A4 @ ~96dpi. */
+        width: calc(794px * var(--pf-inv-scale, 1));
+        height: calc(1123px * var(--pf-inv-scale, 1));
+        margin: 0 auto;
+      }
       :host .pf-invoice-iframe {
-        height: 48dvh;
+        width: 794px !important;
+        height: 1123px !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        transform-origin: top left;
+        transform: scale(var(--pf-inv-scale, 1));
       }
     }
 
@@ -504,6 +543,16 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   setPreviewMode(m: 'tax_invoice' | 'bill_of_supply') { this.previewMode.set(m); }
+
+  /** Fit-to-width scale for the phone invoice preview. The PDF iframe renders
+   *  the A4 page at its intrinsic ~794px CSS width (595.28pt × 96/72); on a
+   *  narrow screen we scale it down to the tile's content width so the whole
+   *  bill is visible with nothing clipped on the right ("MicroLab", "CASH B").
+   *  Capped at 1 so it never upscales. Only consumed by the ≤640px CSS. */
+  invoicePreviewScale(): number {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 794;
+    return Math.min(1, Math.max(0.1, (w - 64) / 794));
+  }
 
   // Sample QR data URLs so the preview shows the tracking + order QRs the
   // real invoice carries. Generated once, lazily.

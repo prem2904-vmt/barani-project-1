@@ -5,10 +5,13 @@ import { ChangeDetectionStrategy, Component, Input } from "@angular/core";
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Phone: stack the title above the actions (flex-col) so a wide actions
-         cluster can't squeeze the title down to a 1-char-per-line vertical
-         column. md:+ keeps the original side-by-side row. -->
-    <header class="flex flex-col md:flex-row md:items-start md:justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+    <!-- Title and actions share one row on every width. The title sits in its
+         own flex-1/min-w-0 track so a compact (icon-only) actions cluster can
+         never squeeze it down to a 1-char-per-line vertical column, while the
+         actions stay pinned right and shrink-0 (wrapping within their own
+         column if there are many). This restores the inline layout on phone —
+         the icons sit beside the title, not on a new line below it. -->
+    <header class="flex flex-row items-start justify-between gap-2 md:gap-4 mb-2 md:mb-3">
       <div class="min-w-0 flex-1">
         <!--
         @if (eyebrow) {
