@@ -53,7 +53,7 @@ function defaultResultParam(): TestParameter {
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m15 18-6-6 6-6"/>
           </svg>
-          Back
+          <span class="pf-sre__back-txt">Back</span>
         </button>
         @if (sample(); as s) {
           <div class="pf-sre__hdr-title">
@@ -532,15 +532,24 @@ function defaultResultParam(): TestParameter {
        submit button stays on screen so the tech doesn't lose it
        below the fold. */
     @media (max-width: 639px) {
+      /* Compact header: trim the big top gap and put the back arrow INLINE with
+         the title row (it used to stack on its own line, wasting a slot). */
+      .pf-sre { padding-top: 8px !important; }
       .pf-sre__hdr {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-        padding-bottom: 12px;
-        margin-bottom: 12px;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
       }
-      .pf-sre__title { font-size: 18px; }
-      .pf-sre__sub { font-size: 11.5px; }
+      /* Back → compact icon-only square on phone. */
+      .pf-sre__back { width: 34px; height: 34px; padding: 0; justify-content: center; flex: 0 0 auto; }
+      .pf-sre__back-txt { display: none; }
+      .pf-sre__hdr-title { display: flex; flex-direction: column; gap: 1px; }
+      .pf-sre__eyebrow { font-size: 9.5px; letter-spacing: 0.1em; }
+      .pf-sre__title { font-size: 16px; margin: 0; line-height: 1.2;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .pf-sre__sub { font-size: 11px; }
       .pf-sre__test {
         padding: 12px 14px;
         margin-bottom: 10px;
@@ -856,19 +865,19 @@ function defaultResultParam(): TestParameter {
          fixed bar. ~88px ≈ submit button (52px touch) + bar padding + border. */
       .pf-sre { padding-bottom: calc(var(--tab-nav-total-height) + 88px); }
 
-      /* Phone: a <table> can't be made to look professional at 390px (it was
-         rendering ~70% wide with tiny sliver inputs). Convert it to a clean
-         full-width block list — each parameter is one row: the name on the
-         left (flex, wraps), a proper result input + unit suffix on the right.
-         UNIT / REFERENCE RANGE / METHOD columns are dropped (unit re-shown
-         inline). >=641px keeps the real 5-column table. */
+      /* Phone: a <table> can't look right at 390px. Convert it to a clean
+         full-width row list — each parameter is ONE row: name (left, wraps) +
+         result input + unit (right). That's all the tech needs on a phone.
+         The dedicated UNIT / REFERENCE-RANGE / METHOD columns are dropped
+         (!important so the block-display below can't resurrect them); the unit
+         is re-shown inline next to the input. >=641px keeps the 5-col table. */
       .pf-sre__gc-unit,
       .pf-sre__gc-range,
-      .pf-sre__gc-method { display: none; }
-      .pf-sre__grid-wrap { width: 100%; }
+      .pf-sre__gc-method,
+      .pf-sre__grid thead { display: none !important; }
+      .pf-sre__grid-wrap { width: 100%; border: 0; border-radius: 0; background: none; }
       .pf-sre__grid,
       .pf-sre__grid tbody { display: block; width: 100%; }
-      .pf-sre__grid thead { display: none; }     /* column headers make no sense once stacked */
 
       .pf-sre__grow {
         display: flex;
@@ -876,54 +885,35 @@ function defaultResultParam(): TestParameter {
         gap: 12px;
         width: 100%;
         box-sizing: border-box;
-        padding: 10px 14px;
+        padding: 9px 2px;
         border-bottom: 1px solid var(--glass-border);
       }
-      .pf-sre__grow td {
+      /* Reset only the cells we still show (NO blanket td{display:block}, which
+         previously out-specified the display:none above and brought the
+         range/method columns back, overlapping everything). */
+      .pf-sre__grow td { padding: 0; border: 0; background: none !important; }
+      td.pf-sre__gc-param {
         display: block;
-        padding: 0;
-        border: 0;
-        background: none !important;   /* row owns the background now */
+        flex: 1 1 auto; min-width: 0;
+        white-space: normal; line-height: 1.3;
       }
-      /* Parameter name takes the remaining width and wraps cleanly. */
-      .pf-sre__gc-param {
-        flex: 1 1 auto;
-        min-width: 0;
-        white-space: normal;
-        line-height: 1.3;
-      }
-      /* Result group: a fixed, comfortable field on the right with the unit
-         as a suffix. The input is a real 40px field — not a sliver. */
       td.pf-sre__gc-result {
-        flex: 0 0 auto;
-        width: 148px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        display: flex; align-items: center; gap: 6px;
+        flex: 0 0 auto; width: 150px;
       }
       td.pf-sre__gc-result .pf-sre__ginput {
-        flex: 1 1 auto;
-        min-width: 0;
-        min-height: 40px;
-        text-align: left;
+        flex: 1 1 auto; min-width: 0; min-height: 40px; text-align: left;
       }
       td.pf-sre__gc-result .pf-sre__ginput--num { text-align: right; }
-      td.pf-sre__gc-result .pf-sre__cb {
-        flex: 0 0 auto;
-        width: 24px; height: 24px;
-      }
+      td.pf-sre__gc-result .pf-sre__cb { flex: 0 0 auto; width: 24px; height: 24px; }
       .pf-sre__gunit-inline {
-        display: inline-flex; align-items: center;
-        flex: 0 0 auto;
-        min-width: 30px;
-        font-size: 12px; font-weight: 600;
+        display: inline-flex; align-items: center; flex: 0 0 auto;
+        min-width: 26px; font-size: 12px; font-weight: 600;
         color: var(--text-tertiary);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
+        font-variant-numeric: tabular-nums; white-space: nowrap;
       }
-      /* Pathologist-comment thread row: full-width block under its parameter. */
       .pf-sre__grow-comments { display: block; width: 100%; }
-      .pf-sre__grow-comments td { display: block; width: 100%; padding: 8px 14px; }
+      .pf-sre__grow-comments td { display: block; width: 100%; padding: 8px 2px; }
     }
     .pf-sre__submit {
       flex: 1 1 auto;
