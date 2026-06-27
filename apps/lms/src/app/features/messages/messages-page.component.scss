@@ -51,8 +51,11 @@
   flex-direction: column;
   min-width: 0; // allow the rail to shrink + its rows to ellipsis
   min-height: 0;
-  background: var(--bg-card-solid);
-  border-right: 1px solid var(--border-secondary);
+  // Frosted glass rail — consistent with the app's glass surfaces.
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-right: 1px solid var(--glass-border);
 }
 
 .pf-msgs__rail-head {
@@ -128,12 +131,15 @@
   margin: 0 12px 10px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: var(--bg-input);
-  border: 1px solid var(--input-border);
+  // Subtle glass search field — frosted to match the rest of the app.
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
   transition: border-color 0.15s, background 0.15s;
   &:focus-within {
     border-color: var(--input-border-focus);
-    background: var(--bg-hover);
+    background: var(--glass-bg-hover);
   }
   svg { color: var(--text-muted); flex-shrink: 0; }
   input {
@@ -303,8 +309,11 @@
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  border-bottom: 1px solid var(--border-secondary);
-  background: var(--bg-card-solid);
+  // Floating frosted-glass header bar with a hairline bottom border.
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 .pf-msgs__back-btn {
   display: none;
@@ -602,12 +611,15 @@
   max-width: 100%;
   padding: 9px 13px;
   border-radius: 14px 14px 14px 4px;          // tail on bottom-left (other)
-  background: var(--bg-card);
+  // Received bubbles read as frosted glass — translucent surface, hairline
+  // glass border, blur+saturate. (Sent bubbles keep the violet→pink
+  // gradient below.)
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   &.pf-msgs__bubble--mine {
     background: var(--gradient-primary);
     color: #fff;
@@ -798,8 +810,12 @@
 .pf-msgs__composer-wrap {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border-secondary);
-  background: var(--bg-card-solid);
+  // Floating frosted glass over the thread — top hairline border + blur so
+  // the composer reads as a glass surface resting above the messages.
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 .pf-msgs__compose-banner {
   display: flex;
@@ -1806,7 +1822,10 @@
   // the thread head must NOT re-add it (that double-counted and left a big dead
   // gap above "Priya Sharma"). A plain 12px is enough; the global inset keeps
   // the head clear of the status bar.
-  .pf-msgs__thread-head { padding: 12px 12px 10px; }
+  // The immersive thread view sits at the very top of the WebView (it doesn't
+  // get the global html safe-area pad), so the head owns the status-bar inset
+  // itself — otherwise the avatar/name slide under the notch / Dynamic Island.
+  .pf-msgs__thread-head { padding: max(12px, env(safe-area-inset-top, 12px)) 12px 10px; }
   // Sticky pinned strip + reconnect — so they don't scroll away as the
   // thread grows. Glass effect for legibility against bubbles below.
   .pf-msgs__pinned-strip { position: sticky; top: 0; z-index: 2;
