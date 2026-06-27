@@ -63,6 +63,23 @@ const COUNTERS: CounterSpec[] = [
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
         <div actions>
+          <!-- Phone-only (<=640px) Stats toggle — sits next to Refresh in the
+               header actions; collapses the KPI counter chips below. Hidden
+               above 640px (the chips always show there). -->
+          <button type="button" class="pf-kpi-toggle press"
+                  aria-label="Stats"
+                  [attr.aria-expanded]="kpiOpen()"
+                  (click)="kpiOpen.set(!kpiOpen())">
+            <svg class="pf-kpi-toggle__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/>
+            </svg>
+            <span class="pf-kpi-toggle__text">Stats</span>
+            <svg class="pf-kpi-toggle__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
           <pf-touch-btn variant="secondary" size="md" (pressed)="refresh()" aria-label="Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
@@ -74,23 +91,6 @@ const COUNTERS: CounterSpec[] = [
           </pf-touch-btn>
         </div>
       </pf-screen-header>
-
-      <!-- Phone-only (<=640px) toggle that collapses the KPI counter
-           chips below. Hidden above 640px, where the chips always show. -->
-      <button type="button" class="pf-kpi-toggle press"
-              aria-label="Stats"
-              [attr.aria-expanded]="kpiOpen()"
-              (click)="kpiOpen.set(!kpiOpen())">
-        <svg class="pf-kpi-toggle__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/>
-        </svg>
-        <span class="pf-kpi-toggle__text">Stats</span>
-        <svg class="pf-kpi-toggle__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m6 9 6 6 6-6"/>
-        </svg>
-      </button>
 
       <!-- Counter filter pills — moved up here directly under the
            header so the counts read as page metadata, and the scan
@@ -269,13 +269,21 @@ const COUNTERS: CounterSpec[] = [
                    search to an icon by default; tapping expands the full-width
                    input across the intake header row. Hidden >=641px. -->
               <button type="button" class="pf-intake-search-toggle press"
-                      aria-label="Search intake"
+                      [attr.aria-label]="intakeSearchOpen() ? 'Close search' : 'Search intake'"
                       [attr.aria-expanded]="intakeSearchOpen()"
-                      (click)="openIntakeSearch()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-                </svg>
+                      (click)="toggleIntakeSearch()">
+                @if (intakeSearchOpen()) {
+                  <!-- Expanded → tap again to collapse. -->
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 6 6 18M6 6l12 12"/>
+                  </svg>
+                } @else {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+                  </svg>
+                }
               </button>
               <svg class="pf-mw-scan__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
@@ -1449,14 +1457,12 @@ const COUNTERS: CounterSpec[] = [
          Square 44px tap target. */
       .pf-kpi-toggle {
         display: inline-flex;
-        align-self: flex-start;
         align-items: center;
         justify-content: center;
         gap: 0;
         min-width: 44px;
         min-height: 44px;
         padding: 8px;
-        margin-bottom: 12px;
         border-radius: 9999px;
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
@@ -1569,14 +1575,15 @@ const COUNTERS: CounterSpec[] = [
       .pf-mw-scan:not(.pf-intake-open) .pf-mw-scan__cam {
         display: none;
       }
-      /* Expanded: full-width search occupying the intake header row; the
-         magnifier toggle hides while the input is open. */
+      /* Expanded: full-width search occupying the intake header row. The
+         toggle stays visible (now an ✕) so a second tap collapses it; the
+         barcode glyph is dropped to keep the row clean. */
       .pf-mw-pane__hdr--intake .pf-mw-scan.pf-intake-open {
         flex: 1 1 100%;
         width: 100%;
         max-width: none;
       }
-      .pf-mw-scan.pf-intake-open .pf-intake-search-toggle { display: none; }
+      .pf-mw-scan.pf-intake-open .pf-mw-scan__icon { display: none; }
     }
   `]
 })
@@ -1607,9 +1614,12 @@ export class MyWorkComponent implements OnInit {
    *  search there is always shown, byte-for-byte unchanged). */
   protected readonly intakeSearchOpen = signal(false);
   private readonly intakeSearchField = viewChild<ElementRef<HTMLInputElement>>('intakeSearchField');
-  openIntakeSearch() {
-    this.intakeSearchOpen.set(true);
-    setTimeout(() => this.intakeSearchField()?.nativeElement.focus(), 0);
+  /** Toggle the Lab Intake search: tap the magnifier to expand, tap again to
+   *  collapse. Focuses the field when expanding. */
+  toggleIntakeSearch() {
+    const next = !this.intakeSearchOpen();
+    this.intakeSearchOpen.set(next);
+    if (next) setTimeout(() => this.intakeSearchField()?.nativeElement.focus(), 0);
   }
 
   openIntakeScanner() { this.intakeRef()?.openBarcodeScanner(); }
