@@ -83,6 +83,25 @@ function defaultResultParam(): TestParameter {
             Form
           </button>
         </span>
+        <!-- Phone: the primary action moves into the header as an icon (top-
+             right) so the bottom is free. Submitted-and-awaiting state flips it
+             to an undo. Hidden >=641px (which uses the bottom action bar). -->
+        @if (hasReopenable() && !hasWritable()) {
+          <button type="button" class="pf-sre__hdr-action" [disabled]="submitting()"
+                  (click)="reopenSample()" aria-label="Undo submit & edit" title="Undo submit & edit">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+            </svg>
+          </button>
+        } @else {
+          <button type="button" class="pf-sre__hdr-action pf-sre__hdr-action--go"
+                  [disabled]="submitting() || !hasWritable()"
+                  (click)="submitAll()" aria-label="Submit all results" title="Submit all results">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5"/>
+            </svg>
+          </button>
+        }
       </header>
 
       @if (loading()) {
@@ -198,10 +217,7 @@ function defaultResultParam(): TestParameter {
                           [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
                         <td class="pf-sre__gc-param">
                           <span class="pf-sre__gidx">{{ idx + 1 }}</span>
-                          {{ p.title || p.name }}
-                          @if (hasOpenComment(t.id, p.name)) {
-                            <span class="pf-sre__param-flag" title="Pathologist commented">↻</span>
-                          }
+                          <span class="pf-sre__gname">{{ p.title || p.name }}@if (hasOpenComment(t.id, p.name)) {<span class="pf-sre__param-flag" title="Pathologist commented"> ↻</span>}</span>
                         </td>
                         <td class="pf-sre__gc-result">
                           @switch (inputKindFor(p)) {
@@ -532,9 +548,11 @@ function defaultResultParam(): TestParameter {
        submit button stays on screen so the tech doesn't lose it
        below the fold. */
     @media (max-width: 639px) {
-      /* Compact header: trim the big top gap and put the back arrow INLINE with
-         the title row (it used to stack on its own line, wasting a slot). */
-      .pf-sre { padding-top: 8px !important; }
+      /* Compact header. The global html.cap-native already pads the safe-area
+         top, so the sticky header must NOT add env() again (that double-counted
+         into a big dead gap above the title). Tight padding; back arrow inline. */
+      .pf-sre { padding-top: 6px !important; }
+      .pf-sre__hdr--sticky { padding-top: 6px; }
       .pf-sre__hdr {
         flex-direction: row;
         align-items: center;
@@ -542,19 +560,41 @@ function defaultResultParam(): TestParameter {
         padding-bottom: 8px;
         margin-bottom: 8px;
       }
-      /* Back → compact icon-only square on phone. */
       .pf-sre__back { width: 34px; height: 34px; padding: 0; justify-content: center; flex: 0 0 auto; }
       .pf-sre__back-txt { display: none; }
-      .pf-sre__hdr-title { display: flex; flex-direction: column; gap: 1px; }
-      .pf-sre__eyebrow { font-size: 9.5px; letter-spacing: 0.1em; }
-      .pf-sre__title { font-size: 16px; margin: 0; line-height: 1.2;
+      /* Title row: name FIRST (order 1), code under it (order 2); drop the
+         "N tests on this tube" line — name + code is enough on a phone. */
+      .pf-sre__hdr-title { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+      .pf-sre__title  { order: 1; font-size: 16px; margin: 0; line-height: 1.2;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-      .pf-sre__sub { font-size: 11px; }
+      .pf-sre__eyebrow { order: 2; font-size: 9.5px; letter-spacing: 0.1em; }
+      .pf-sre__sub { display: none; }
+      /* Submit (or undo) lives top-right as an icon; the bottom bar is gone. */
+      .pf-sre__hdr-action { display: inline-flex; }
+      .pf-sre__footer { display: none !important; }
       .pf-sre__test {
         padding: 12px 14px;
         margin-bottom: 10px;
       }
       .pf-sre__test-name { font-size: 14px; }
+    }
+    /* Header action icon — phone only (default-hidden so desktop keeps its
+       Grid/Form toggle + bottom submit bar). */
+    .pf-sre__hdr-action {
+      display: none;
+      flex: 0 0 auto;
+      width: 40px; height: 40px;
+      align-items: center; justify-content: center;
+      border-radius: 11px;
+      border: 1px solid transparent;
+      background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
+      cursor: pointer;
+    }
+    .pf-sre__hdr-action:disabled { opacity: 0.4; box-shadow: none; cursor: not-allowed; }
+    .pf-sre__hdr-action:not(.pf-sre__hdr-action--go) {
+      background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-secondary); box-shadow: none;
     }
     .pf-sre__hdr {
       display: flex; align-items: flex-start; gap: 14px;
@@ -838,32 +878,10 @@ function defaultResultParam(): TestParameter {
          control is hidden, and only at <=640px. */
       .pf-sre__view { display: none; }
 
-      /* Bottom action bar — PINNED TO THE VIEWPORT on phone.
-         The prior sticky bottom:var(--tab-nav-total-height) floated mid-content:
-         the scroll panel (.pf-sre) lives INSIDE .shell-main, which already
-         reserves the floating bottom-nav as its own padding-bottom
-         (var(--tab-nav-total-height)). So .pf-sre's bottom edge already clears
-         the pill, and a sticky bottom of the SAME token lifted the bar a SECOND
-         time (~88px) onto the grid rows. position:fixed is viewport-relative and
-         ignores that padding, so the bar sits cleanly ONCE above the pill while
-         the grid scrolls independently above it. */
-      .pf-sre__footer {
-        position: fixed;
-        left: 0; right: 0;
-        bottom: var(--tab-nav-total-height);
-        margin-top: 0;
-        padding: 12px 16px;
-        z-index: 20;
-        background: var(--bg-primary, rgba(12, 14, 20, 0.92));
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-top: 1px solid var(--glass-border);
-      }
-      /* Reserve room at the end of the scroll area for BOTH the floating
-         bottom-nav and the now-fixed action bar, so the last grid rows
-         (Basophils, etc.) scroll fully clear and aren't hidden behind the
-         fixed bar. ~88px ≈ submit button (52px touch) + bar padding + border. */
-      .pf-sre { padding-bottom: calc(var(--tab-nav-total-height) + 88px); }
+      /* The bottom action bar is gone on phone (submit moved to the header
+         icon — see .pf-sre__footer{display:none} above). The scroll area only
+         needs to clear the floating bottom-nav now. */
+      .pf-sre { padding-bottom: calc(var(--tab-nav-total-height) + 8px); }
 
       /* Phone: a <table> can't look right at 390px. Convert it to a clean
          full-width row list — each parameter is ONE row: name (left, wraps) +
@@ -892,28 +910,54 @@ function defaultResultParam(): TestParameter {
          previously out-specified the display:none above and brought the
          range/method columns back, overlapping everything). */
       .pf-sre__grow td { padding: 0; border: 0; background: none !important; }
+      /* Param cell: number is a fixed-width prefix; the name wraps in its OWN
+         column so a 2nd line ("(PCV)") aligns under the name's first letter,
+         NOT under the number — a clean hanging indent. */
       td.pf-sre__gc-param {
-        display: block;
+        display: flex; align-items: baseline; gap: 8px;
         flex: 1 1 auto; min-width: 0;
-        white-space: normal; line-height: 1.3;
       }
+      .pf-sre__gc-param .pf-sre__gidx { flex: 0 0 auto; margin: 0; }
+      .pf-sre__gc-param .pf-sre__gname { flex: 1 1 auto; min-width: 0; white-space: normal; line-height: 1.3; }
+
+      /* Result cell IS the field box (fixed width → every row symmetric). The
+         input is borderless and fills it; the unit sits INSIDE on the right. */
       td.pf-sre__gc-result {
-        display: flex; align-items: center; gap: 6px;
-        flex: 0 0 auto; width: 150px;
+        display: flex; align-items: center; gap: 4px;
+        flex: 0 0 auto; width: 132px;
+        min-height: 40px;
+        padding: 0 10px;
+        border: 1px solid var(--glass-border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
       }
+      td.pf-sre__gc-result:focus-within { border-color: rgba(168, 85, 247, 0.6); background: rgba(168, 85, 247, 0.1); }
       td.pf-sre__gc-result .pf-sre__ginput {
-        flex: 1 1 auto; min-width: 0; min-height: 40px; text-align: left;
+        flex: 1 1 auto; min-width: 0; min-height: 0;
+        border: 0 !important; background: transparent !important; padding: 8px 0 !important;
+        text-align: left;
       }
       td.pf-sre__gc-result .pf-sre__ginput--num { text-align: right; }
       td.pf-sre__gc-result .pf-sre__cb { flex: 0 0 auto; width: 24px; height: 24px; }
       .pf-sre__gunit-inline {
         display: inline-flex; align-items: center; flex: 0 0 auto;
-        min-width: 26px; font-size: 12px; font-weight: 600;
+        font-size: 11.5px; font-weight: 600;
         color: var(--text-tertiary);
         font-variant-numeric: tabular-nums; white-space: nowrap;
       }
       .pf-sre__grow-comments { display: block; width: 100%; }
       .pf-sre__grow-comments td { display: block; width: 100%; padding: 8px 2px; }
+
+      /* Lock the test name (e.g. "Complete Blood Count (CBC)") as a sticky
+         section header while its parameters scroll, until the next test's
+         header pushes it up. Sits just below the sticky page header. */
+      .pf-sre__test-hdr {
+        position: sticky;
+        top: 46px;
+        z-index: 4;
+        background: var(--bg-primary, #0c0e14);
+        margin: 0 -14px; padding: 12px 14px;
+      }
     }
     .pf-sre__submit {
       flex: 1 1 auto;
