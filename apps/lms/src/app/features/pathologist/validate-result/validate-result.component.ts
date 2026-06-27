@@ -377,21 +377,32 @@ interface ValueRow {
                 }
               </span>
               <div class="flex-1"></div>
-              <button type="button" class="pf-btn pf-btn--ghost press" (click)="reject()">Reject</button>
-              <button type="button" class="pf-btn pf-btn--ghost press" (click)="reassign()">Reassign</button>
+              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
+                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+                <span class="pf-btn-label">Reject</span>
+              </button>
+              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reassign()" aria-label="Reassign">
+                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
+                <span class="pf-btn-label">Reassign</span>
+              </button>
               @if (!isCulture()) {
                 <!-- Culture values are a structured object; editing them as flat
                      fields would corrupt the shape. The validator rejects for
                      re-entry instead, which reopens the structured tech screen. -->
-                <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit()">Edit values</button>
+                <button type="button" class="pf-btn pf-btn--secondary pf-btn--icony press" (click)="startEdit()" aria-label="Edit values">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  <span class="pf-btn-label">Edit values</span>
+                </button>
               }
               <button type="button"
-                      class="pf-btn"
+                      class="pf-btn pf-btn--icony"
                       [class.pf-btn--primary]="!hasCritical()"
                       [class.pf-btn--danger]="hasCritical()"
                       [disabled]="saving() || (!isCulture() && valueRows().length === 0)"
-                      (click)="validate()">
-                {{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}
+                      (click)="validate()"
+                      [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
+                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
               </button>
             }
           </div>
@@ -1231,10 +1242,28 @@ interface ValueRow {
        viewports. (Prior sweep set 100dvh here — that fights the
        non-scroll model and is intentionally removed.) */
 
+    /* Action-bar icons are phone-only — desktop keeps text labels (no icon). */
+    .pf-btn--icony .pf-btn__ic { display: none; }
+
     /* ── Phone (<=640px) ─────────────────────────────────────── */
     @media (max-width: 640px) {
       /* Stop iOS auto-zoom on focus: form text >=16px on phones. */
       :host .pf-comment__input { font-size: 16px; }
+
+      /* Drop the header description on phone — it squeezes into a thin column
+         next to the long title and reads as broken. Title is enough. */
+      :host .pf-head__sub { display: none; }
+
+      /* Validate-bar actions → icon-only on phone. Show the glyph, hide the
+         text label, make each a square 44px tap target. Cancel/Save (edit
+         mode) keep their text — they aren't .pf-btn--icony. */
+      :host .pf-btn--icony .pf-btn-label { display: none; }
+      :host .pf-btn--icony .pf-btn__ic { display: inline-block; }
+      :host .pf-btn--icony {
+        width: 44px; min-width: 44px; height: 44px;
+        padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
 
       /* The sticky validate bar wraps to multiple rows on phones (status
          line on its own row + Reject/Reassign/Edit/Validate buttons), so
