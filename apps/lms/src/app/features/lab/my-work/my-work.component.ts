@@ -54,7 +54,10 @@ const COUNTERS: CounterSpec[] = [
   template: `
     <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
-      <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
+      <!-- KPI strip: not on phone (status lives in the header Stats popover). -->
+      @if (!isPhone()) {
+        <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
+      }
 
       <!-- Actions dragged into the Lab work-area in /admin/process render here. -->
       <pf-work-area-panels menu="lab" />
@@ -107,21 +110,24 @@ const COUNTERS: CounterSpec[] = [
            header so the counts read as page metadata, and the scan
            bar sits below as the primary CTA. On phones these collapse
            behind the Stats toggle above (pf-kpi-collapsed). -->
-      <div class="pf-counter-row" role="tablist" aria-label="Filter queue"
-           [class.pf-kpi-collapsed]="!kpiOpen()">
-        @for (c of counters; track c.id) {
-          <button type="button"
-                  class="pf-counter"
-                  [class.pf-counter--on]="counter() === c.id"
-                  [attr.data-tone]="c.tone"
-                  [attr.aria-pressed]="counter() === c.id"
-                  (click)="setCounter(c.id)">
-            <span class="pf-counter__dot" aria-hidden="true"></span>
-            <span class="pf-counter__label">{{ c.label }}</span>
-            <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
-          </button>
-        }
-      </div>
+      <!-- Inline counter filter row: not on phone (status + filtering live in
+           the header Stats popover there). -->
+      @if (!isPhone()) {
+        <div class="pf-counter-row" role="tablist" aria-label="Filter queue">
+          @for (c of counters; track c.id) {
+            <button type="button"
+                    class="pf-counter"
+                    [class.pf-counter--on]="counter() === c.id"
+                    [attr.data-tone]="c.tone"
+                    [attr.aria-pressed]="counter() === c.id"
+                    (click)="setCounter(c.id)">
+              <span class="pf-counter__dot" aria-hidden="true"></span>
+              <span class="pf-counter__label">{{ c.label }}</span>
+              <span class="pf-counter__value">{{ counterValue(c.id) }}</span>
+            </button>
+          }
+        </div>
+      }
 
       <!-- Scan bar — primary entry point. Clean compact pill, camera
            shortcut on the right, manual-entry inline link below. -->
@@ -1765,6 +1771,11 @@ export class MyWorkComponent implements OnInit {
   protected readonly isTouch = signal<boolean>(
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
   );
+  /** Phone viewport — drives DOM-level removal of chrome that belongs only on
+   *  larger screens (the KPI strip + inline counter filter row, both replaced
+   *  by the header Stats popover on phone). Kept in sync via matchMedia. */
+  private readonly _phoneMq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 640px)') : null;
+  protected readonly isPhone = signal<boolean>(this._phoneMq?.matches ?? false);
   readonly currentYear = new Date().getFullYear();
 
   readonly vendorCode = computed(() => this.tenantState.tenant()?.vendorCode ?? '');
@@ -1935,7 +1946,11 @@ export class MyWorkComponent implements OnInit {
     return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
   }
 
-  ngOnInit() { this.refresh(); this.refreshAllCounts(); }
+  ngOnInit() {
+    this.refresh();
+    this.refreshAllCounts();
+    this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
+  }
 
   refresh() {
     // Intake tab embeds the ReceiveSamplesComponent which manages its own
