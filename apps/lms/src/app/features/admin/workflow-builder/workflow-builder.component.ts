@@ -113,17 +113,58 @@ interface HistoryRow {
                 <path d="m15 18-6-6 6-6"/>
               </svg>
             </span>
-            All workflows
+            <span class="pf-tab-full">All workflows</span>
+            <span class="pf-tab-short">Back</span>
           </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openPreview()">Preview</pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openHistory()">History</pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="resetWorkflow()">Reset</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openPreview()">
+            <span icon-left class="pf-tab-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </span>
+            <span class="pf-tab-full">Preview</span>
+            <span class="pf-tab-short">Preview</span>
+          </pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openHistory()">
+            <span icon-left class="pf-tab-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
+              </svg>
+            </span>
+            <span class="pf-tab-full">History</span>
+            <span class="pf-tab-short">History</span>
+          </pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="resetWorkflow()">
+            <span icon-left class="pf-tab-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+            </span>
+            <span class="pf-tab-full">Reset</span>
+            <span class="pf-tab-short">Reset</span>
+          </pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="secondary"
                         [disabled]="!builder.isDirty() || saving()"
-                        (pressed)="saveDraft()">Save draft</pf-touch-btn>
+                        (pressed)="saveDraft()">
+            <span icon-left class="pf-tab-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+            </span>
+            <span class="pf-tab-full">Save draft</span>
+            <span class="pf-tab-short">Save</span>
+          </pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="primary"
                         [disabled]="saving()"
-                        (pressed)="publish()">{{ saving() ? 'Publishing…' : 'Publish' }}</pf-touch-btn>
+                        (pressed)="publish()">
+            <span icon-left class="pf-tab-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
+              </svg>
+            </span>
+            <span class="pf-tab-full">{{ saving() ? 'Publishing…' : 'Publish' }}</span>
+            <span class="pf-tab-short">{{ saving() ? 'Publishing…' : 'Publish' }}</span>
+          </pf-touch-btn>
         </pf-screen-header>
 
         <!-- md (iPad Mini, 768px): introduce a narrower 200px steps rail so
@@ -472,6 +513,12 @@ interface HistoryRow {
     }
     .pf-inline-link:hover { text-decoration: underline; }
 
+    /* Header action tabs: by default only the full label shows (desktop is
+       byte-identical). The leading icon + short label are surfaced only on
+       phone via the <=640 override below. */
+    .pf-tab-icon { display: none; }
+    .pf-tab-short { display: none; }
+
     .pf-step-item {
       display: flex;
       align-items: center;
@@ -695,6 +742,18 @@ interface HistoryRow {
        primitive is unchanged elsewhere. --- */
     @media (max-width: 640px) {
       :host .pf-input { font-size: 16px; }
+
+      /* Compact header tabs: show the leading icon + the short horizontal
+         label, hide the long label. Keeps the actions row tidy so it wraps
+         cleanly under the title instead of clipping off the right edge. */
+      :host .pf-tab-icon { display: inline-flex; align-items: center; }
+      :host .pf-tab-full { display: none; }
+      :host .pf-tab-short { display: inline; }
+
+      /* The actions cluster wraps under the title on phone; trim the section's
+         top padding so the STEPS panel starts reasonably high (kills the big
+         empty gap above the content). */
+      :host section { padding-top: 14px; }
 
       /* Collapse the fixed-width inner grids (step title pair + routing
          rows) to a single column so they don't overflow the narrow

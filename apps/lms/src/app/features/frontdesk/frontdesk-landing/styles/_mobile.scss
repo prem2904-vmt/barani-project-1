@@ -235,6 +235,37 @@
   .pf-inv-preview {
     height: min(92dvh, 1040px);
   }
+  /* ── Invoice (Cash Bill) preview: CONTAIN the A4 page inside the phone.
+        The PDF iframe renders the page at its intrinsic 794×1123 CSS px, which
+        otherwise spills past the modal and clips the left/right edges
+        ("C Colony Rd", "Male)", "Only)"). We scale it down to the modal width
+        via --pf-inv-scale (set in TS) so the whole bill width is visible, then
+        let the viewport scroll + pinch-zoom so the user can zoom in to read.
+        Wrappers become real boxes here (they are display:contents at ≥641px). */
+  .pf-inv-preview__viewport {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y pinch-zoom; /* pinch to zoom, drag to pan */
+    background: #525659; /* letterbox around the scaled page */
+  }
+  .pf-inv-preview__stage {
+    display: block;
+    /* Scaled footprint so the scroller sizes correctly and nothing overflows
+       horizontally at the default fit. 794×1123 = A4 @ ~96dpi. */
+    width: calc(794px * var(--pf-inv-scale, 1));
+    height: calc(1123px * var(--pf-inv-scale, 1));
+    margin: 0 auto;
+  }
+  .pf-inv-preview__frame {
+    flex: none;
+    width: 794px;
+    height: 1123px;
+    transform-origin: top left;
+    transform: scale(var(--pf-inv-scale, 1));
+  }
 
   /* ── Bottom-sheet drawer pins to bottom:0 on phones, so its scroll body
         ends right at the home indicator / browser toolbar. Pad it by the

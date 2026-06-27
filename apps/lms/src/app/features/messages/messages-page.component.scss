@@ -1171,6 +1171,12 @@
   color: var(--text-tertiary);
 }
 
+// Picker backdrop — only materialises on phone (<=640px), where the
+// share / emoji popovers become bottom sheets. On desktop they stay inline
+// popovers, so the backdrop stays hidden. See the phone block below.
+.pf-msgs__picker-bd { display: none; }
+@keyframes pf-msgs-picker-fade { from { opacity: 0; } to { opacity: 1; } }
+
 // ── Emoji popover ────────────────────────────────────────────────────
 .pf-msgs__emoji-popover {
   display: grid;
@@ -1935,6 +1941,63 @@
   .pf-msgs__picker-list,
   .pf-msgs__call-list,
   .pf-msgs__share-popover-list { padding-top: 8px; }
+
+  // ── Patient-share + emoji pickers as bottom sheets ────────────────
+  // On phone the inline popovers (which lived inside the composer footer)
+  // were jammed against / overlapping the composer. Lift them out of flow
+  // into proper bottom sheets: full-width, anchored to the bottom edge,
+  // rounded top, drag handle, their own dimmed backdrop, and sitting above
+  // the composer (z-index) instead of colliding with it. Mirrors the
+  // shared .pf-sheet modal pattern + respects safe-area-inset-bottom.
+  .pf-msgs__picker-bd {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: pf-msgs-picker-fade 0.2s ease;
+  }
+  .pf-msgs__share-popover,
+  .pf-msgs__emoji-popover {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 61;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    border-top: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  // Drag-handle affordance (matches .pf-sheet__panel::before).
+  .pf-msgs__share-popover::before,
+  .pf-msgs__emoji-popover::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+    pointer-events: none;
+    z-index: 1;
+  }
+  // Share sheet: roomier on phone, header clears the drag handle.
+  .pf-msgs__share-popover { max-height: 72dvh; }
+  .pf-msgs__share-popover-hdr { padding-top: 20px; }
+  // Emoji sheet: top padding clears the drag handle (no header), more rows.
+  .pf-msgs__emoji-popover {
+    max-height: 52dvh;
+    padding-top: 22px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
   // The new-chat / members / forward / share / add-member sheets get
   // a top breathing room for the drag handle that .pf-sheet adds.
   .pf-msgs__modal-head { padding-top: 24px; }

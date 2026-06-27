@@ -1306,6 +1306,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly invoicePreviewNumber = signal('');
   protected readonly invoiceLoading = signal(false);
 
+  /** Fit-to-width scale for the phone invoice preview. The PDF iframe renders
+   *  the A4 page at its intrinsic ~794px CSS width (595.28pt × 96/72), so on a
+   *  narrow screen we scale it down to the modal's content width (= 100vw − 32px
+   *  gutters) — keeping the whole bill width visible with nothing clipped. Capped
+   *  at 1 so it never upscales. Only consumed by the ≤640px CSS; ignored above. */
+  protected invoicePreviewScale(): number {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 794;
+    return Math.min(1, Math.max(0.1, (w - 32) / 794));
+  }
+
   /** Open the invoice in an in-app preview (fetches the bill + letterhead +
    *  tracking QR and renders the A4 invoice) — distinct from collect-payment. */
   async viewInvoice(o: Order) {

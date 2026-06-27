@@ -119,17 +119,17 @@ function coerceCellText(raw: unknown): string {
         eyebrow="Reports"
         title="Report viewer"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
+        <pf-touch-btn actions class="pf-rv-action" size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m15 18-6-6 6-6"/>
             </svg>
           </span>
-          Back
+          <span class="pf-rv-action-label">Back</span>
         </pf-touch-btn>
         @if (report()) {
           <ng-container actions>
-            <pf-touch-btn size="sm" variant="secondary" (pressed)="print()">
+            <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="print()">
               <span icon-left aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="6 9 6 2 18 2 18 9"/>
@@ -137,24 +137,24 @@ function coerceCellText(raw: unknown): string {
                   <rect x="6" y="14" width="12" height="8"/>
                 </svg>
               </span>
-              Print
+              <span class="pf-rv-action-label">Print</span>
             </pf-touch-btn>
-            <pf-touch-btn size="sm" variant="secondary" (pressed)="openSharePicker()">
+            <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openSharePicker()">
               <span icon-left aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </span>
-              Share with…
+              <span class="pf-rv-action-label">Share with…</span>
             </pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" (pressed)="deliverWhatsApp()">
+            <pf-touch-btn class="pf-rv-action" size="sm" variant="primary" (pressed)="deliverWhatsApp()">
               <span icon-left aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="m22 2-7 20-4-9-9-4Z"/>
                   <path d="M22 2 11 13"/>
                 </svg>
               </span>
-              Send WhatsApp
+              <span class="pf-rv-action-label">Send WhatsApp</span>
             </pf-touch-btn>
           </ng-container>
         }
@@ -1056,6 +1056,47 @@ function coerceCellText(raw: unknown): string {
 
     /* ── Phone (<=640): single-column, no horizontal overflow ── */
     @media (max-width: 640px) {
+      /* Header actions → compact icon-only squares so Print / Share / Send /
+         Back all fit on one row under the title and nothing overflows the
+         right edge. The text label stays in the DOM but visually-hidden, so
+         each button keeps its accessible name (svg is aria-hidden). Desktop
+         (>=641) keeps the full text buttons untouched. */
+      .pf-rv-action-label {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .pf-rv-action ::ng-deep button {
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        padding: 0;
+        gap: 0;
+        border-radius: 12px;
+      }
+
+      /* Report preview must be contained within the viewport — never push the
+         page sideways. The paper is fluid; pin it to the available width and
+         let fixed-width children (barcode/QR card, images) scale down. Touch
+         users can pinch-zoom the report for detail. */
+      .pf-rv-scroll { touch-action: pan-x pan-y pinch-zoom; }
+      .pf-paper { max-width: 100%; box-sizing: border-box; }
+      .pf-paper img { max-width: 100%; height: auto; }
+      .pf-paper__qr ::ng-deep .pf-code-card {
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      .pf-paper__qr ::ng-deep .pf-code-card__row {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+      }
+      .pf-paper__qr ::ng-deep .pf-code-card__bar { max-width: 100%; }
+
       /* This page clamps itself (:host height:100%; section overflow:hidden)
          so .pf-rv-scroll is the real scroll container, NOT shell-main. The
          base 48px clearance under-clears the floating bottom-nav pill, so

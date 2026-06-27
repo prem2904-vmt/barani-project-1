@@ -617,6 +617,9 @@
           </div>
         }
         @if (emojiOpen()) {
+          <!-- Phone-only backdrop: turns the inline popover into a dismissible
+               bottom sheet. Hidden >640px (see .pf-msgs__picker-bd). -->
+          <div class="pf-msgs__picker-bd" (click)="toggleEmoji()"></div>
           <div class="pf-msgs__emoji-popover">
             @for (e of emojiBank; track e) {
               <button type="button" class="pf-msgs__emoji-btn" (click)="insertEmoji(e)">{{ e }}</button>
@@ -624,6 +627,9 @@
           </div>
         }
         @if (sharePickerOpen()) {
+          <!-- Phone-only backdrop: turns the inline popover into a dismissible
+               bottom sheet. Hidden >640px (see .pf-msgs__picker-bd). -->
+          <div class="pf-msgs__picker-bd" (click)="closeSharePicker()"></div>
           <div class="pf-msgs__share-popover">
             <header class="pf-msgs__share-popover-hdr">
               <span class="pf-msgs__share-popover-title">Share a patient</span>

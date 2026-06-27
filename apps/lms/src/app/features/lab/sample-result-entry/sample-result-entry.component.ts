@@ -543,11 +543,33 @@ function defaultResultParam(): TestParameter {
       -webkit-overflow-scrolling: touch;
     }
 
+    /* Header action icon styling — declared BEFORE the phone media query
+       below so the media query's display:inline-flex wins on source order
+       (media queries add no specificity; equal-specificity rules resolve by
+       source order). Default = hidden so desktop keeps its Grid/Form toggle
+       + bottom submit bar; the phone block re-shows it. */
+    .pf-sre__hdr-action {
+      display: none;
+      flex: 0 0 auto;
+      width: 40px; height: 40px;
+      align-items: center; justify-content: center;
+      border-radius: 11px;
+      border: 1px solid transparent;
+      background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
+      cursor: pointer;
+    }
+    .pf-sre__hdr-action:disabled { opacity: 0.4; box-shadow: none; cursor: not-allowed; }
+    .pf-sre__hdr-action:not(.pf-sre__hdr-action--go) {
+      background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-secondary); box-shadow: none;
+    }
+
     /* Mobile breakpoint — phones (<640px). Tighter every-thing so
        the form fits a 5" screen without horizontal scroll, and the
        submit button stays on screen so the tech doesn't lose it
        below the fold. */
-    @media (max-width: 639px) {
+    @media (max-width: 640px) {
       /* Compact header. The global html.cap-native already pads the safe-area
          top, so the sticky header must NOT add env() again (that double-counted
          into a big dead gap above the title). Tight padding; back arrow inline. */
@@ -573,32 +595,16 @@ function defaultResultParam(): TestParameter {
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
       .pf-sre__eyebrow { order: 2; font-size: 9.5px; letter-spacing: 0.1em; }
       .pf-sre__sub { display: none; }
-      /* Submit (or undo) lives top-right as an icon; the bottom bar is gone. */
-      .pf-sre__hdr-action { display: inline-flex; }
+      /* Submit (or undo) lives top-right as an icon; the bottom bar is gone.
+         margin-left:auto pins it to the far right even if the title is short,
+         and flex:0 0 auto (from base) stops it being squeezed off-screen. */
+      .pf-sre__hdr-action { display: inline-flex; margin-left: auto; }
       .pf-sre__footer { display: none !important; }
       .pf-sre__test {
         padding: 12px 14px;
         margin-bottom: 10px;
       }
       .pf-sre__test-name { font-size: 14px; }
-    }
-    /* Header action icon — phone only (default-hidden so desktop keeps its
-       Grid/Form toggle + bottom submit bar). */
-    .pf-sre__hdr-action {
-      display: none;
-      flex: 0 0 auto;
-      width: 40px; height: 40px;
-      align-items: center; justify-content: center;
-      border-radius: 11px;
-      border: 1px solid transparent;
-      background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
-      color: #fff;
-      box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
-      cursor: pointer;
-    }
-    .pf-sre__hdr-action:disabled { opacity: 0.4; box-shadow: none; cursor: not-allowed; }
-    .pf-sre__hdr-action:not(.pf-sre__hdr-action--go) {
-      background: var(--glass-bg); border-color: var(--glass-border); color: var(--text-secondary); box-shadow: none;
     }
     .pf-sre__hdr {
       display: flex; align-items: flex-start; gap: 14px;

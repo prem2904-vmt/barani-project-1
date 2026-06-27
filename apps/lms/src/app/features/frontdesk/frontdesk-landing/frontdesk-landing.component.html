@@ -1036,7 +1036,8 @@
   <!-- Invoice preview (in-app PDF, no browser popup) -->
   @if (invoicePreviewUrl(); as src) {
   <div class="pf-drawer-bd" (click)="closeInvoicePreview()"></div>
-  <div class="pf-inv-preview" role="dialog" aria-modal="true" aria-label="Invoice preview">
+  <div class="pf-inv-preview" role="dialog" aria-modal="true" aria-label="Invoice preview"
+       [style.--pf-inv-scale]="invoicePreviewScale()">
     <header class="pf-inv-preview__hdr">
       <div class="pf-inv-preview__title">
         <span class="pf-inv-preview__eyebrow">Invoice</span>
@@ -1056,7 +1057,14 @@
         </button>
       </div>
     </header>
-    <iframe class="pf-inv-preview__frame" [src]="src" title="Invoice PDF"></iframe>
+    <!-- Scroll/zoom viewport: on phones the A4 page is rendered at its intrinsic
+         width and scaled to fit (no left/right clipping); pinch-zoom + pan are
+         handled by this scroller. ≥641px is unchanged (wrappers are display:contents). -->
+    <div class="pf-inv-preview__viewport">
+      <div class="pf-inv-preview__stage">
+        <iframe class="pf-inv-preview__frame" [src]="src" title="Invoice PDF"></iframe>
+      </div>
+    </div>
   </div>
   }
 

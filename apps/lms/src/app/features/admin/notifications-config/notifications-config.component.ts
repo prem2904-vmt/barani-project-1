@@ -76,7 +76,7 @@ interface PatientTemplate {
                   <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ alertLabel(a.eventType) }}</p>
                   <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">{{ a.eventType }}</p>
 
-                  <div class="mt-3 grid grid-cols-3 gap-2">
+                  <div class="pf-channel-grid mt-3 grid grid-cols-3 gap-2">
                     <div class="pf-channel-cell">
                       <span class="text-[12px]" style="color: var(--text-secondary);">In-app</span>
                       <pf-toggle size="sm"
@@ -216,14 +216,19 @@ interface PatientTemplate {
       :host ::ng-deep pf-number-input input {
         font-size: 16px;
       }
-      /* Channel toggle cells stack label over control: keeps "WhatsApp" from
-         being squeezed in a 3-up grid and gives each toggle room to tap. */
+      /* Channel toggles: the 3-up grid squeezed each cell into a narrow third,
+         where the pill switches looked cramped/misaligned. On phone drop to a
+         single column so each channel becomes a full-width row, and keep the
+         cell's base row layout (label left, pf-toggle switch right) for clean,
+         consistent alignment. Presentation only — same pf-toggle + handlers. */
+      :host .pf-channel-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
       :host .pf-channel-cell {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
         min-height: 44px;
-        justify-content: center;
+        justify-content: space-between;
+        padding: 10px 14px;
       }
     }
 

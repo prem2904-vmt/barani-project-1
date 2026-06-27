@@ -1308,14 +1308,55 @@ export class ReportQueueComponent implements OnInit {
     try {
       const { generateReportPdf, buildReportPdf } = await import('../../../shared/utils/report-pdf');
       const { baseInput, imageCache } = await this.buildReportRender(r);
-      generateReportPdf({ ...baseInput, imageCache });
+      const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: web blob downloads are no-ops. Hand the PDF to
+        // the native iOS share sheet (Save to Files, AirDrop, etc.) via the
+        // Web Share API — no Capacitor plugin needed.
+        await this.sharePdfNative(r, blob, 'Download report');
+      } else {
+        // Web/desktop: jsPDF's own download path still works.
+        generateReportPdf({ ...baseInput, imageCache });
+      }
       // Archive the rendered PDF to object storage (Spaces) so finished results
       // are stored and the patient's public report / QR-tracking page can serve
       // the exact file. Best-effort — never affects the download.
-      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache }).output('blob'));
+      this.uploadReportPdf(r, blob);
     } catch (err) {
       console.error('[reports] download failed', err);
       this.toasts.error('Could not download report');
+    }
+  }
+
+  /** True when running inside the Capacitor native shell (iOS/Android),
+   *  where web blob downloads and window.print are no-ops. */
+  private isNativePlatform(): boolean {
+    return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+      .Capacitor?.isNativePlatform?.();
+  }
+
+  /** Present a rendered report PDF through the native iOS/Android share sheet
+   *  using the Web Share API (level 2 — file sharing). From the sheet the user
+   *  can Save to Files, Print, AirDrop, etc. AbortError (user dismisses the
+   *  sheet) is swallowed; anything else surfaces a toast. */
+  private async sharePdfNative(r: Report, blob: Blob, title: string) {
+    const shortId = r.id.replace(/-/g, '').slice(-8).toUpperCase();
+    const name = r.order?.patient?.displayName ?? '';
+    const file = new File([blob], `report-${shortId}.pdf`, { type: 'application/pdf' });
+    const text = name ? `Lab report for ${name}` : 'Lab report';
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title, text });
+      } else {
+        // No file-share support — fall back to the web download path.
+        const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+        const { baseInput, imageCache } = await this.buildReportRender(r);
+        generateReportPdf({ ...baseInput, imageCache });
+      }
+    } catch (err) {
+      // User cancelled the share sheet — not an error.
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      throw err;
     }
   }
 
@@ -1401,6 +1442,22 @@ export class ReportQueueComponent implements OnInit {
       if (link) lines.push(`View & download your report:\n${link}`);
       lines.push('Please contact us if you have any questions.');
       window.open(waLink(r.order?.patient?.phone, lines.join('\n\n')), '_blank', 'noopener');
+    }
+    if (via === 'print' && this.isNativePlatform()) {
+      // There's no reliable print() inside the Capacitor WKWebView, so render
+      // the PDF and hand it to the native share sheet — the user can pick Print
+      // (or Save to Files) from there. Best-effort; the deliver record below
+      // still fires regardless.
+      (async () => {
+        try {
+          const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+          const { baseInput, imageCache } = await this.buildReportRender(r);
+          await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache }).output('blob'), 'Print report');
+        } catch (err) {
+          console.error('[reports] native print share failed', err);
+          this.toasts.error('Could not open report');
+        }
+      })();
     }
     this.api.post(`/api/reports/${r.id}/deliver`, { via, note: via === 'whatsapp' ? 'wa.me link' : null }).subscribe({
       next: () => { if (via !== 'whatsapp') this.toasts.success(`Delivered via ${via}`); this.refresh(); },

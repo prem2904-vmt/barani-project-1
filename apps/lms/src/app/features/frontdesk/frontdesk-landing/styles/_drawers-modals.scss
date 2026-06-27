@@ -1516,6 +1516,11 @@
   cursor: pointer;
 }
 .pf-inv-preview__close:hover { background: rgba(239, 68, 68, 0.14); color: #f87171; }
+/* Scroll/scale wrappers around the iframe. At ≥641px they collapse out of the
+   layout (display:contents) so the iframe behaves exactly as before; the phone
+   pass (_mobile.scss) turns them into a scaled, pinch-zoomable scroller. */
+.pf-inv-preview__viewport,
+.pf-inv-preview__stage { display: contents; }
 .pf-inv-preview__frame {
   flex: 1;
   width: 100%;
