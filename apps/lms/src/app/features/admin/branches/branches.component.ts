@@ -249,10 +249,10 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                   }
 
                   @if (addingDeptFor() === b.id) {
-                    <div class="mt-4 flex gap-2 flex-wrap">
-                      <input type="text" class="pf-input flex-1 min-w-0" placeholder="Department name"
+                    <div class="pf-dept-add mt-4 flex gap-2 flex-wrap">
+                      <input type="text" class="pf-input pf-dept-add__name flex-1 min-w-0" placeholder="Department name"
                              [ngModel]="deptDraft().name" (ngModelChange)="patchDeptDraft({ name: $event })" />
-                      <input type="text" class="pf-input w-32 uppercase" placeholder="CODE"
+                      <input type="text" class="pf-input pf-dept-add__code w-32 uppercase" placeholder="CODE"
                              [ngModel]="deptDraft().code" (ngModelChange)="patchDeptDraft({ code: $event.toUpperCase() })" />
                       <pf-touch-btn size="sm" variant="primary" (pressed)="createDepartment(b.id)">Save</pf-touch-btn>
                       <pf-touch-btn size="sm" variant="ghost" (pressed)="cancelAddDept()">Cancel</pf-touch-btn>
@@ -461,6 +461,24 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     @media (max-width: 640px) {
       /* New-branch + sub-branch forms: stack fields */
       .pf-branch-grid { grid-template-columns: 1fr !important; }
+
+      /* Lift every text box on this page to >=16px so iOS doesn't auto-zoom the
+         page when a field is focused (the main "not optimised for mobile" issue).
+         Scoped to :host so the shared .pf-input primitive is untouched globally. */
+      :host .pf-input,
+      :host input[type="text"] {
+        font-size: 16px;
+      }
+
+      /* Department add-row: give each field its own full-width line (the fixed
+         w-32 CODE box crammed beside the name was the cramped bit), then the
+         Save / Cancel buttons sit on the row below. */
+      .pf-dept-add { gap: 8px; }
+      .pf-dept-add__name,
+      .pf-dept-add__code {
+        flex: 1 1 100%;
+        width: 100% !important;
+      }
 
       /* Branch header row: let the right cluster wrap instead of overflowing */
       .pf-branch-toggle {
