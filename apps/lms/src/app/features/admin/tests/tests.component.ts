@@ -266,6 +266,23 @@ const UNASSIGNED = 'Unassigned';
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
+
+    /* Phone (<=640px): the 2-up grid squashes department names into ellipses
+       ("Bi…", "C…"). Drop to a single column so each card spans the full row
+       and the name can render in full. Phone-scoped + additive; >=641px keeps
+       the Tailwind grid-cols-2 / md / lg layout untouched. */
+    @media (max-width: 640px) {
+      :host .pf-dept-grid {
+        grid-template-columns: 1fr;
+      }
+      /* With the full row width there is room for the whole name — relax the
+         Tailwind .truncate on the department name so it no longer clips. */
+      :host .pf-dept-grid .pf-dept-card .truncate {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+      }
+    }
   `]
 })
 export class TestsComponent implements OnInit {

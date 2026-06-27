@@ -727,6 +727,15 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
         :host .book-appt-grid .flex.p-1.gap-1 > button {
           flex: 1 1 calc(50% - 0.25rem) !important;
         }
+        /* PHONE: the floating bottom-nav pill overlaps the in-flow
+           Cancel/Book action row at the foot of the summary card, so the
+           primary "Book" button can't be reached/tapped. Pad the page
+           foot by (action-row height + the pill's reserved height,
+           --tab-nav-total-height) so the content scrolls fully clear and
+           the button sits above the pill. Phone-only; ≥641px untouched. */
+        :host .book-appt-page {
+          padding-bottom: calc(64px + var(--tab-nav-total-height)) !important;
+        }
       }
 
       /* Touch devices (coarse pointer, any size): give the primary,

@@ -1107,6 +1107,31 @@ const PAGE_SIZE = 20;
       .pf-aps-table thead th { font-size: 10.5px; padding: 8px 10px; }
       .pf-aps-table tbody td { padding: 8px 10px; }
       .pf-aps-actions-cell .pf-aps-row-btn:not(:first-child) { display: none; }
+
+      /* Phone: the single-column field stack can run taller than the screen,
+         which previously pushed the Clear/Search row off the bottom with no
+         way to scroll to it. Give the filter body its own constrained scroll
+         region (min-height:0 so the flex child may shrink) and pin the action
+         row as a sticky footer that always stays on screen — clearing the
+         home indicator via the safe-area inset. */
+      .pf-aps-filters {
+        flex: 0 0 auto;
+        min-height: 0;
+        max-height: 60dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0;
+      }
+      .pf-aps-actions {
+        position: sticky;
+        bottom: 0;
+        margin: 14px -22px 0;
+        padding: 12px 22px max(12px, env(safe-area-inset-bottom));
+        background: var(--bg-card-solid);
+        border-top: 1px solid var(--glass-border);
+      }
+      /* Keep an open Tests dropdown stacked above the sticky action footer. */
+      .pf-aps-multi--open { z-index: 3; }
     }
   `]
 })

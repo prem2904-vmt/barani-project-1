@@ -387,6 +387,12 @@ interface PrelimOrder {
                     <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
                   </span>
                 </div>
+                <!-- Phone-only (<=640px) subline: sex · age, shown under the
+                     name since the full meta line is hidden on phone. Same
+                     already-loaded order.patient data — no fetch. -->
+                @if (patientSexAge(r.order?.patient); as sa) {
+                  <p class="pf-rq-row__sexage">{{ sa }}</p>
+                }
                 <p class="pf-rq-row__meta text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
                   Order #{{ r.orderId.slice(0, 8) }}
                   · {{ r.type }}
@@ -891,6 +897,8 @@ interface PrelimOrder {
        ─────────────────────────────────────────────────────────────── */
     .pf-rq-statbtn-m { display: none; }
     .pf-rq-filter-m { display: none; }
+    /* Sex · age subline is phone-only — desktop shows the full meta line. */
+    .pf-rq-row__sexage { display: none; }
     /* Active-category label is phone-only — the desktop pills already label
        themselves. */
     .pf-rq-filter-active { display: none; }
@@ -994,6 +1002,15 @@ interface PrelimOrder {
       /* Phone card shows only patient name + the 4 action icons — drop
          the order/type/generated meta line entirely. */
       .pf-rq-row__meta { display: none; }
+
+      /* …but show a compact sex · age line directly under the name. */
+      .pf-rq-row__sexage {
+        display: block;
+        margin-top: 2px;
+        font-size: 11.5px;
+        line-height: 1.2;
+        color: var(--text-tertiary);
+      }
     }
   `]
 })
@@ -1089,6 +1106,30 @@ export class ReportQueueComponent implements OnInit {
    *  + chip + the left-edge accent strip instead. */
   rowTone(_status: string): TileTone {
     return 'default';
+  }
+
+  /** Phone-only subline text: "Male · 32y" built from the patient's sex and
+   *  age. Reuses the already-loaded order.patient fields (no data fetch).
+   *  Renders only what's available; returns '' if both are missing so the
+   *  template's `@if … as` skips the element entirely. */
+  patientSexAge(p: { sex?: string | null; age?: number | null } | null | undefined): string {
+    if (!p) return '';
+    const parts: string[] = [];
+    const sex = this.formatSex(p.sex);
+    if (sex) parts.push(sex);
+    if (p.age != null && Number.isFinite(p.age) && p.age >= 0) parts.push(`${p.age}y`);
+    return parts.join(' · ');
+  }
+
+  /** Normalise a raw sex value (e.g. 'm', 'FEMALE') to a short label. */
+  private formatSex(sex?: string | null): string {
+    const v = (sex ?? '').trim();
+    if (!v) return '';
+    const lc = v.toLowerCase();
+    if (lc === 'm' || lc === 'male') return 'Male';
+    if (lc === 'f' || lc === 'female') return 'Female';
+    if (lc === 'o' || lc === 'other') return 'Other';
+    return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
   }
 
   chipTone(status: string): ChipTone {

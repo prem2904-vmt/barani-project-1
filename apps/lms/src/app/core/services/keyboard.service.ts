@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, NgZone, inject, signal } from '@angular/core';
 import { PlatformService } from './platform.service';
 
 /**
@@ -13,6 +13,7 @@ import { PlatformService } from './platform.service';
 @Injectable({ providedIn: 'root' })
 export class KeyboardService {
   private readonly platform = inject(PlatformService);
+  private readonly zone = inject(NgZone);
 
   /** True while the soft keyboard is on screen (native only). */
   readonly visible = signal(false);
@@ -28,10 +29,12 @@ export class KeyboardService {
     this._wired = true;
     try {
       const { Keyboard } = await import('@capacitor/keyboard');
-      // willShow/willHide fire a touch earlier than didShow/didHide, so the
-      // nav animates out as the keyboard slides up rather than after.
-      await Keyboard.addListener('keyboardWillShow', () => this.visible.set(true));
-      await Keyboard.addListener('keyboardWillHide', () => this.visible.set(false));
+      // The plugin's callbacks fire OUTSIDE Angular's zone, so we must set the
+      // signal inside zone.run — otherwise OnPush views (the bottom-nav) never
+      // re-check and the nav fails to hide. willShow/willHide fire a touch
+      // earlier than didShow/didHide so the nav animates out with the keyboard.
+      await Keyboard.addListener('keyboardWillShow', () => this.zone.run(() => this.visible.set(true)));
+      await Keyboard.addListener('keyboardWillHide', () => this.zone.run(() => this.visible.set(false)));
     } catch {
       // Plugin missing (web/electron) — leave `visible` false.
     }

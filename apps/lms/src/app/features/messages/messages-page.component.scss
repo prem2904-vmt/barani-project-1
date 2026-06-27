@@ -175,16 +175,24 @@
   gap: 12px;
   width: 100%;
   padding: 10px 14px;
-  background: transparent;
-  border: none;
+  // Frosted-glass tile — translucent surface, hairline glass border,
+  // rounded corners + blur/saturate so each row reads as a glass card,
+  // consistent with the thread bubbles and the rest of the app.
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  // Keep the violet active-accent rail on the left edge.
   border-left: 2px solid transparent;
+  border-radius: 12px;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
   transition: background 0.12s, border-color 0.12s;
-  &:hover { background: var(--bg-hover); }
+  &:hover { background: var(--glass-bg-hover); }
   &.pf-msgs__conv-row--active {
-    background: var(--bg-active);
+    background: var(--glass-bg-hover);
     border-left-color: var(--color-violet-500);
   }
 }
@@ -1018,14 +1026,20 @@
   margin: 0 12px 8px;
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(245, 158, 11, 0.08);
+  // Frosted-glass surface — same treatment as the conversation rows — while
+  // keeping the amber accent on the hairline border so it still reads as the
+  // distinct "Notes to self" shortcut.
+  background: var(--glass-bg);
   border: 1px solid rgba(245, 158, 11, 0.18);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
   transition: background 0.12s, border-color 0.12s;
   &:hover {
-    background: rgba(245, 158, 11, 0.14);
+    background: var(--glass-bg-hover);
     border-color: rgba(245, 158, 11, 0.3);
   }
 }

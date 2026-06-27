@@ -682,21 +682,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
 
-    // One-shot toast + tab-title pulse when new orders flip to
-    // "Ready for delivery" (status 'validated' / 'partially_validated').
-    // Drives the "completed → notify FD" hand-off — every time the
-    // count rises during this session, reception gets a visible cue
-    // that there's something new to hand over.
-    let prevReady = -1; // -1 = first run, suppress initial toast
-    effect(() => {
-      const list = this.readyForPickup();
-      const next = list.length;
-      if (prevReady >= 0 && next > prevReady) {
-        const delta = next - prevReady;
-        this.toasts.success(`${delta} report${delta === 1 ? '' : 's'} ready for delivery`);
-      }
-      prevReady = next;
-    });
+    // (Removed the "N reports ready for delivery" toast — it fired on the
+    // initial data load every time the user navigated to the front desk, which
+    // read as noise rather than a useful new-arrival cue.)
 
     // Mirror the Appt|Work split into the first pane's `flex-basis`
     // whenever the value changes (or the viewChild ref becomes

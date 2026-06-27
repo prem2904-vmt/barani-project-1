@@ -1383,3 +1383,100 @@
   :host .pf-cart-draft { min-height: 44px; }
   :host .pf-paid__btn { min-height: 44px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   PHONE (≤640) ONLY — three additive presentational fixes. Every rule is
+   gated to ≤640 (or a hide-on-phone element that is display:none above 640),
+   so tablet/desktop (≥641) stay byte-for-byte identical.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* These two helpers are hidden everywhere by default → only the ≤640 block
+   below turns them on, so ≥641 never sees them. */
+.pf-tabs__icon { display: none; }
+.pf-az-index { display: none; }
+
+@media (max-width: 640px) {
+  /* --- FIX 1: test cards → single-column full-width vertical list (no
+         horizontal scroll, no 2-up grid). --- */
+  :host .pf-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-x: hidden;
+    overflow-y: visible;
+    padding: 6px 0 12px;
+    scroll-snap-type: none;
+  }
+  :host .pf-rail-card {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-height: 56px;          /* ≥44px tap target */
+    padding: 10px 12px;
+    scroll-snap-align: none;
+  }
+  /* Let the name size to its content in list rows instead of a fixed 3em box. */
+  :host .pf-rail-card__name {
+    min-height: 0;
+    max-height: none;
+  }
+
+  /* --- FIX 2: chip row → icon-only, 4 across, no horizontal overflow. --- */
+  :host .pf-tabs { overflow-x: hidden; }
+  :host .pf-tabs__btn {
+    flex: 1 1 0;
+    min-width: 0;              /* override the 96px min set elsewhere ≤640 */
+    gap: 4px;
+    padding: 8px 4px;
+  }
+  :host .pf-tabs__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  :host .pf-tabs__label { display: none; }   /* text replaced by the icon */
+  :host .pf-tabs__count {
+    min-width: 0;
+    padding: 0 5px;
+    font-size: 9.5px;
+  }
+
+  /* --- FIX 3: iOS-Contacts-style A–Z index pinned to the right edge. --- */
+  :host .pf-az-index {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    position: fixed;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 40;
+    padding: 6px 2px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--bg-card-solid, #14142a) 70%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  :host .pf-az-index__l {
+    width: 20px;
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--color-primary, #7c3aed);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  :host .pf-az-index__l:active { background: var(--glass-bg-hover); }
+
+  /* Anchor offset so a jumped-to section clears the top chrome / safe area. */
+  :host [data-dept-letter] { scroll-margin-top: 12px; }
+}

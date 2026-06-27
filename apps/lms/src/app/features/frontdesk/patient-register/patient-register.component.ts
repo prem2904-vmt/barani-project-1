@@ -26,7 +26,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-3 sm:px-4 md:px-8 pt-5 sm:pt-6 pb-10">
+    <section class="pf-register-page px-3 sm:px-4 md:px-8 pt-5 sm:pt-6 pb-10">
 
       <pf-screen-header
         eyebrow="Frontdesk · Registration"
@@ -65,7 +65,24 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
         Config: patient_registration v{{ record()?.version ?? '—' }}
       </p> -->
     </section>
-  `
+  `,
+  styles: [
+    `
+      /* PHONE (≤640px): the floating bottom-nav pill overlaps the
+         in-flow workflow footer (the "← Back / Next →" / "Register
+         patient" action row rendered by pf-workflow-renderer), so the
+         primary button can't be reached/tapped. Pad the page foot by
+         (action-row height + the pill's reserved height,
+         --tab-nav-total-height) so the form scrolls fully clear and the
+         button sits above the pill. Additive + phone-only: ≥641px is
+         byte-for-byte unchanged. */
+      @media (max-width: 640px) {
+        :host .pf-register-page {
+          padding-bottom: calc(56px + var(--tab-nav-total-height)) !important;
+        }
+      }
+    `
+  ]
 })
 export class PatientRegisterComponent implements OnInit {
   private readonly api = inject(ApiService);

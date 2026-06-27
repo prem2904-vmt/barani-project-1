@@ -190,6 +190,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       .sort((a, b) => a.department.localeCompare(b.department));
   });
 
+  /** First A–Z letter of a department name (non-alpha → '#'). Used to build
+   *  the phone A–Z index and to anchor each dept group (presentational). */
+  deptFirstLetter(name: string): string {
+    const c = (name || '').trim().charAt(0).toUpperCase();
+    return /[A-Z]/.test(c) ? c : '#';
+  }
+
+  /** Sorted unique first-letters of the visible departments — drives the
+   *  phone-only iOS-Contacts-style A–Z index strip. */
+  readonly deptLetters = computed<string[]>(() => {
+    const set = new Set<string>();
+    for (const g of this.filteredTestsByDept()) set.add(this.deptFirstLetter(g.department));
+    return Array.from(set).sort();
+  });
+
+  /** Scroll the first department whose name starts with `letter` to the top of
+   *  the scrolling left column. Presentational only — no data changes. The
+   *  groups render in alpha order, so the first match is the right anchor. */
+  jumpToLetter(letter: string): void {
+    const root: ParentNode = this.searchInput()?.nativeElement?.ownerDocument ?? document;
+    const el = root.querySelector(`[data-dept-letter="${letter}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
   readonly subtotal = computed(() =>
     this._selected()
       .map(id => this._tests().find(t => t.id === id)?.price ?? 0)
