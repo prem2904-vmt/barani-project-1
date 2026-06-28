@@ -20,8 +20,21 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>remote-notification</string>
+		<string>voip</string>
+		<string>fetch</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -30,46 +43,18 @@
 	<array>
 		<string>armv7</string>
 	</array>
-	<!-- iPhone: portrait only. The mobile layout assumes a tall, thumb-
-	     reachable phone-shaped viewport. Landscape on a phone leaves
-	     ~375px of height which crushes the chat thread, login form,
-	     and result-entry pages — not worth supporting. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<!-- iPad: landscape only. Tablet layouts use wide 2-pane split
-	     views (Messages list + thread, frontdesk appt + work, admin
-	     browse + detail) that read well at ≥1024px width. Portrait
-	     iPad would collapse them to single-column — duplicating the
-	     phone variant — so we lock to landscape for clarity. -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- Media permission strings. iOS WKWebView DISABLES
-	     navigator.mediaDevices entirely (makes it `undefined`) unless
-	     the matching usage-description key is present — that's why
-	     navigator.mediaDevices.getUserMedia threw "undefined is not an
-	     object" when starting a call.
-	     • Microphone — required for WebRTC voice calls / consults.
-	     • Camera — required for the in-app QR / barcode scanner.
-	     iOS shows these strings in the system permission prompt. -->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-		<string>remote-notification</string>
-		<string>voip</string>
-		<string>fetch</string>
-	</array>
 </dict>
 </plist>

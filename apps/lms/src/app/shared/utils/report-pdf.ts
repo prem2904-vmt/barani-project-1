@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
+  DEFAULT_RESULT_COLUMNS,
   ReportColumn,
   ResolvedReportLayout,
   ResolvedRow,
@@ -103,14 +104,16 @@ interface ResolvedTheme {
   // Results — abnormal-flag styling. 'bold' = bold black value + indicator;
   // 'bold_color' = additionally tint high/low. Admin-configurable.
   flagStyle: 'bold' | 'bold_color';
-  // Abnormal indicator glyph: 'letter' = H/L, 'arrow' = ↑/↓.
-  flagIndicator: 'letter' | 'arrow';
+  // Abnormal indicator glyph: 'letter' = H/L, 'arrow' = ↑/↓, 'none' = no marker.
+  flagIndicator: 'letter' | 'arrow' | 'none';
   // Colours used when flagStyle === 'bold_color' (admin picks). High + low.
   abnormalColor: string;
   abnormalLowColor: string;
   // Group the continuous results table by department band as well as
   // panel. Off by default → panel/profile headers only (no department).
   groupByDepartment: boolean;
+  // When true, each department's section starts on a fresh page.
+  departmentPageBreak: boolean;
   // Chrome
   endOfReportText: string;
   showSampleBand: boolean;
@@ -242,7 +245,7 @@ function defaultTheme(): ResolvedTheme {
     font: PDF_FONT, fontScale: 1,
     headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     tableStyle: 'plain', zebraRows: false,
-    flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb', groupByDepartment: false,
+    flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb', groupByDepartment: false, departmentPageBreak: false,
     dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
     showRegistered: true, showCollected: true, showReported: true,
     showBarcode: true,
@@ -297,10 +300,11 @@ function resolveTheme(
   t.tableStyle      = (tpl.tableStyle as 'plain'|'bordered'|'striped') ?? 'plain';
   t.zebraRows       = tpl.zebraRows ?? (tpl.tableStyle === 'striped');
   t.flagStyle       = tpl.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
-  t.flagIndicator   = tpl.flagIndicator === 'arrow' ? 'arrow' : 'letter';
+  t.flagIndicator   = tpl.flagIndicator === 'arrow' ? 'arrow' : tpl.flagIndicator === 'none' ? 'none' : 'letter';
   t.abnormalColor   = pickColor(tpl.abnormalColor, '#dc2626');
   t.abnormalLowColor = pickColor(tpl.abnormalLowColor, '#2563eb');
   t.groupByDepartment = tpl.groupByDepartment ?? false;
+  t.departmentPageBreak = tpl.departmentPageBreak ?? false;
   t.dateFormat      = tpl.dateFormat ?? t.dateFormat;
   t.timeFormat      = (tpl.timeFormat as 'none'|'12h'|'24h') ?? '12h';
   t.dateTimeSeparator = tpl.dateTimeSeparator ?? t.dateTimeSeparator;
@@ -527,6 +531,12 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     .map(t => buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined))
     .filter(g => g.rows.length > 0);
 
+  // Canonical typed columns (result/range/unit) across every resolved layout.
+  // Computed up-front so BOTH the continuous table and the grid sections lay
+  // out against the same column template — units are shown (or merged) the same
+  // way for every test.
+  CANON_COLS = buildCanonicalColumns(resolvedLayouts);
+
   // NABL 133 — segregate non-accredited tests into their own section
   // (separated, never asterisked). Only when the lab is NABL-accredited
   // AND at least one test is explicitly marked out-of-scope; otherwise we
@@ -544,8 +554,8 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   }
 
   // Narrative + microbiology blocks after the columnar results.
-  // Canonical columns feed any grid section embedded in a narrative test.
-  CANON_COLS = buildCanonicalColumns(resolvedLayouts);
+  // Canonical columns (already computed above) feed any grid section embedded
+  // in a narrative test.
   for (const t of special) {
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
@@ -1385,6 +1395,11 @@ interface PanelRowData {
 
 interface PanelGroup {
   testName: string;
+  /** Department name — drives per-department section grouping + its columns. */
+  department?: string;
+  /** The resolved per-department column layout for this test (incl. linkedNext
+   *  merges). Empty ⇒ the renderer falls back to the default layout. */
+  columns?: ReportColumn[];
   specimen?: string;
   method?: string;
   referralLab?: string | null;
@@ -1402,6 +1417,8 @@ function buildPanelGroup(
 ): PanelGroup {
   const group: PanelGroup = {
     testName: t.name ?? layout?.testName ?? 'Test',
+    department: (t.department ?? '').trim() || undefined,
+    columns: layout?.columns ?? [],
     specimen: ((t.sampleType ?? layout?.sampleType) ?? '').trim() || undefined,
     method: (t.method ?? '').trim() || undefined,
     referralLab: (t.referralLab ?? '').trim() || undefined,
@@ -1480,7 +1497,9 @@ function renderScopeHeading(
   return y + 18;
 }
 
-/** Render all panel groups as ONE continuous autoTable. */
+/** Render panel groups grouped into per-DEPARTMENT sections — each department's
+ *  tests render in their own block under THAT department's column layout (with
+ *  its merges), so one report can show different columns per department. */
 function renderContinuousTable(
   doc: jsPDF,
   groups: PanelGroup[],
@@ -1489,26 +1508,95 @@ function renderContinuousTable(
   _title: string | null
 ): number {
   if (groups.length === 0) return startY;
+  // Partition into departments, preserving first-seen order.
+  const order: string[] = [];
+  const byDept = new Map<string, PanelGroup[]>();
+  for (const g of groups) {
+    const d = (g.department ?? '').trim();
+    if (!byDept.has(d)) { byDept.set(d, []); order.push(d); }
+    byDept.get(d)!.push(g);
+  }
+  const multiDept = order.filter(Boolean).length > 1;
+  let y = startY;
+  let rendered = 0;
+  for (const dept of order) {
+    const dg = byDept.get(dept)!;
+    // Optionally start each department (after the first) on a fresh page.
+    if (rendered > 0 && theme.departmentPageBreak) {
+      y = newPage(doc, practice);
+    }
+    // Show a department heading when the report spans departments (or when the
+    // admin opted into department banding or page breaks).
+    if (dept && (multiDept || theme.groupByDepartment || theme.departmentPageBreak)) {
+      y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice);
+    }
+    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice);
+    rendered++;
+  }
+  return y;
+}
+
+/** Resolve the column layout for one department's groups: the first group's
+ *  resolved columns (else the default), guaranteeing an Investigation (name)
+ *  lead column so the parameter name always shows. Sorted by order. */
+function deptColumns(groups: PanelGroup[]): ReportColumn[] {
+  const src = groups.find(g => g.columns && g.columns.length)?.columns ?? DEFAULT_RESULT_COLUMNS;
+  let cfg = src.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (!cfg.some(c => c.type === 'name')) {
+    cfg = [{ id: 'rc-name', name: 'name', label: 'Investigation', order: 0, width: 30, type: 'name', locked: false }, ...cfg];
+  }
+  return applyDefaultResultUnitLink(cfg);
+}
+
+/** When a column config has NO merges set yet, merge an adjacent Result→Unit by
+ *  default ("11.4 g/dL") — so EVERY department shows the unit beside the value
+ *  even if its saved layout predates the link feature. Once any link exists, the
+ *  admin's choices are respected exactly. */
+function applyDefaultResultUnitLink(cfg: ReportColumn[]): ReportColumn[] {
+  if (cfg.some(c => c.linkedNext)) return cfg;
+  const ri = cfg.findIndex(c => c.type === 'result');
+  if (ri >= 0 && cfg[ri + 1]?.type === 'unit') {
+    return cfg.map((c, i) => (i === ri ? { ...c, linkedNext: true } : c));
+  }
+  return cfg;
+}
+
+/** Render panel groups as ONE columnar autoTable against the column config
+ *  `cfg`. Consecutive LINKED columns merge into a single cell ("11.4 g/dL")
+ *  and keep the first column's header label. */
+function renderColumnarTable(
+  doc: jsPDF,
+  groups: PanelGroup[],
+  cfg: ReportColumn[],
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>
+): number {
+  if (groups.length === 0) return startY;
   if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
   const usable = A4.w - 2 * MARGIN_X;
-  // No dedicated Unit column — the unit is appended to the Result value
-  // ("11.4 g/dL") so the freed width goes to the other columns.
-  const W = {
-    invest: 0.34 * usable,
-    result: 0.22 * usable,
-    range: 0.26 * usable,
-    specimen: 0.18 * usable,
-  };
-  const COLSPAN = 4;
+  type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
+  const vcols: VCol[] = [];
+  for (let i = 0; i < cfg.length; i++) {
+    const members: ReportColumn[] = [cfg[i]];
+    while (cfg[i]?.linkedNext && i + 1 < cfg.length) { members.push(cfg[++i]); }
+    vcols.push({
+      members,
+      label: members[0].label || '',
+      weight: members.reduce((s, m) => s + (m.width || 0), 0) || 1,
+      hasResult: members.some(m => m.type === 'result'),
+      textOnly: members.every(m => m.type === 'text'),
+      nameOnly: members.every(m => m.type === 'name'),
+    });
+  }
+  const hasResultCol = vcols.some(c => c.hasResult);
+  const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
+  const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
+  const COLSPAN = vcols.length;
+  const resultColIdx = Math.max(0, vcols.findIndex(c => c.hasResult));
 
   type Cell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
-  const head: Cell[][] = [[
-    { content: 'Investigation', styles: { halign: 'left' } },
-    { content: 'Result', styles: { halign: 'left' } },
-    { content: 'Reference Range', styles: { halign: 'left' } },
-    { content: 'Specimen', styles: { halign: 'left' } },
-  ]];
+  const head: Cell[][] = [vcols.map(c => ({ content: c.label, styles: { halign: 'left' } }))];
 
   const body: Cell[][] = [];
   // Parallel to `body` — carries the arrow indicator to draw in the result
@@ -1551,32 +1639,48 @@ function renderContinuousTable(
       // A 'N' (normal) flag is never abnormal — keep it plain black, never
       // bold/coloured, even if the row carried a stray colour.
       const isNormal = !r.abnormal || r.flag === 'N';
-      // Colour for an abnormal value when colour mode is on: high → admin
-      // colour, low → blue.
       const abnColor = r.isLow ? theme.abnormalLowColor : theme.abnormalColor;
-      const resultStyles: Record<string, unknown> = { halign: 'left', textColor: BLACK };
-      if (!isNormal) {
-        resultStyles['fontStyle'] = 'bold';
-        if (theme.flagStyle === 'bold_color') resultStyles['textColor'] = abnColor;
-      }
-      // Unit now lives next to the value ("11.4 g/dL") — the Unit column was
-      // removed to save width.
-      const valueWithUnit = [r.result ?? '', r.unit ?? ''].map(s => s.trim()).filter(Boolean).join(' ');
-      // Letter mode appends the flag letter; arrow mode draws a triangle (see
-      // didDrawCell) so no text glyph is appended here. A normal 'N' is shown
-      // only as plain black text.
+      // Letter mode appends the flag letter to the result; arrow mode draws a
+      // triangle (didDrawCell). 'none' → no glyph/arrow.
       const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L');
-      const glyph = (r.flag && !useArrow) ? r.flag : '';
-      const resultContent = glyph ? `${valueWithUnit}  ${glyph}` : valueWithUnit;
-      const specimenCell = firstParam ? (g.specimen ?? '') : '';
+      const glyph = (r.flag && !useArrow && theme.flagIndicator !== 'none') ? r.flag : '';
+      const isFirst = firstParam;
       firstParam = false;
-      body.push([
-        { content: r.name ?? '', styles: { fontStyle: 'bold', textColor: BLACK } },
-        { content: resultContent, styles: resultStyles },
-        { content: r.range ?? '', styles: { textColor: TEXT_DIM } },
-        { content: specimenCell, styles: { textColor: TEXT_DIM, fontSize: 8 } },
-      ]);
-      bodyMeta.push(useArrow ? { arrow: r.isLow ? 'down' : 'up', color: theme.flagStyle === 'bold_color' ? abnColor : BLACK } : null);
+
+      // Value for a single configured column member, by type.
+      const valueOf = (m: ReportColumn): string => {
+        switch (m.type) {
+          case 'name':   return (r.name ?? '').trim();
+          case 'result': return (r.result ?? '').trim();
+          case 'unit':   return (r.unit ?? '').trim();
+          case 'range':  return (r.range ?? '').trim();
+          case 'flag':   return (r.flag ?? '').trim();
+          case 'text':
+          default:
+            if (m.locked) return (m.lockedValue ?? '').trim();
+            // A 'specimen' text column shows the group's specimen once.
+            if (m.name === 'specimen') return isFirst ? (g.specimen ?? '').trim() : '';
+            return '';
+        }
+      };
+
+      const cells: Cell[] = vcols.map(vc => {
+        let txt = vc.members.map(valueOf).filter(Boolean).join(' ');
+        const styles: Record<string, unknown> = { halign: 'left', textColor: TEXT_DIM };
+        if (vc.nameOnly) { styles['fontStyle'] = 'bold'; styles['textColor'] = BLACK; }
+        else if (vc.textOnly) { styles['fontSize'] = 8; }
+        if (vc.hasResult) {
+          if (glyph) txt = txt ? `${txt}  ${glyph}` : glyph;
+          styles['textColor'] = BLACK;
+          if (!isNormal && theme.flagIndicator !== 'none') {
+            styles['fontStyle'] = 'bold';
+            if (theme.flagStyle === 'bold_color') styles['textColor'] = abnColor;
+          }
+        }
+        return { content: txt, styles };
+      });
+      body.push(cells);
+      bodyMeta.push((useArrow && hasResultCol) ? { arrow: r.isLow ? 'down' : 'up', color: theme.flagStyle === 'bold_color' ? abnColor : BLACK } : null);
     }
   }
 
@@ -1590,16 +1694,13 @@ function renderContinuousTable(
     headStyles: tableHeadStyles(),
     bodyStyles: { fillColor: '#ffffff' },
     alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
-    columnStyles: {
-      0: { cellWidth: W.invest, halign: 'left' },
-      1: { cellWidth: W.result, halign: 'left' },
-      2: { cellWidth: W.range, halign: 'left' },
-      3: { cellWidth: W.specimen, halign: 'left' },
-    } as unknown as Record<number, { cellWidth: number }>,
+    columnStyles: Object.fromEntries(
+      colWidths.map((w, i) => [i, { cellWidth: w, halign: 'left' }])
+    ) as unknown as Record<number, { cellWidth: number }>,
     // Arrow indicator: draw a small ▲/▼ triangle at the right of the result
     // cell for abnormal rows (standard PDF fonts can't render ↑/↓ glyphs).
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number } }) => {
-      if (d.section !== 'body' || d.column.index !== 1) return;
+      if (d.section !== 'body' || d.column.index !== resultColIdx) return;
       const m = bodyMeta[d.row.index];
       if (!m) return;
       const s = 3.2;

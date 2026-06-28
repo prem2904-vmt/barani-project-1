@@ -556,20 +556,17 @@ interface Category {
       .pf-admin-pane { overflow-y: visible; }
     }
 
-    /* iPad / tablet band (641–1279): keep the two-pane layout — the
-       768px collapse to a single column wastes the width on portrait
-       iPad. Restore the rail + pane split and let tiles go 2-up.
-       Bounded so it can never touch desktop (>=1280) or phone (<=640). */
+    /* iPad / tablet band (641–1279): the category rail was removed, so the
+       layout is a single full-width pane (same as desktop/phone). Earlier this
+       band forced a 200px + pane two-column grid for the old rail, which now
+       crams the lone pane into the 200px track and wastes the rest of the width.
+       Use one full-width column and let the tiles go 2-up. Bounded so it can
+       never touch desktop (>=1280) or phone (<=640). */
     @media (min-width: 641px) and (max-width: 1279px) {
       .pf-admin-layout {
-        grid-template-columns: 200px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 14px;
       }
-      .pf-admin-rail { flex-direction: column; overflow-x: visible; padding: 10px; }
-      /* Undo the <=768 horizontal-row sizing leaking into 641–768 so
-         buttons go back to full-width column items. */
-      .pf-admin-rail__btn { flex: 0 0 auto; width: 100%; min-width: 0; }
-      .pf-admin-rail__chev { display: block; }
       .pf-admin-pane__grid {
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       }
@@ -617,10 +614,7 @@ export class AdminDashboardComponent implements OnInit {
           subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
         { title: 'Report Template',  href: '/admin/reports', gradient: 'fuchsia',
           iconPath: 'M4 4h11l5 5v11H4z', iconExtra: 'M15 4v5h5M8 14h8M8 18h6',
-          subtitle: () => 'Branding, header, signatures, colours' },
-        { title: 'Report Columns',   href: '/admin/reports', queryParams: { tab: 'columns' }, gradient: 'emerald',
-          iconPath: 'M4 5v14M10 5v14M16 5v14M22 5v14', iconExtra: 'M2 5h22M2 19h22',
-          subtitle: () => 'Per-department result table structure' },
+          subtitle: () => 'Branding, header, columns, signatures, colours' },
       ]
     },
     {

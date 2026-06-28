@@ -18,7 +18,7 @@
 // Department-level columns
 // ═══════════════════════════════════════════════════════════════
 
-export type ReportColumnType = 'text' | 'result' | 'unit' | 'range' | 'flag';
+export type ReportColumnType = 'name' | 'text' | 'result' | 'unit' | 'range' | 'flag';
 
 export interface ReportColumn {
   id: string;
@@ -33,7 +33,24 @@ export interface ReportColumn {
   /** When `locked: true`, all rows show `lockedValue` for this column. */
   locked: boolean;
   lockedValue?: string | null;
+  /** When true, this column is MERGED with the column immediately after it in
+   *  the rendered report — both values render in a single cell (e.g. Result +
+   *  Unit → "11.4 g/dL"). Consecutive linked columns form one merge group; the
+   *  group keeps the first (primary) column's header label. */
+  linkedNext?: boolean;
 }
+
+/** Default results-table columns for the template-level (singular, common to
+ *  every test) results-columns config. Investigation (the parameter name) leads;
+ *  Result is linked to Unit so they merge into one cell by default — matching the
+ *  conventional "11.4 g/dL" presentation. Widths sum to 100. */
+export const DEFAULT_RESULT_COLUMNS: ReportColumn[] = [
+  { id: 'rc-name',     name: 'name',     label: 'Investigation',   order: 1, width: 34, type: 'name',   locked: false },
+  { id: 'rc-result',   name: 'result',   label: 'Result',          order: 2, width: 16, type: 'result', locked: false, linkedNext: true },
+  { id: 'rc-unit',     name: 'unit',     label: 'Unit',            order: 3, width: 10, type: 'unit',   locked: false },
+  { id: 'rc-range',    name: 'range',    label: 'Reference Range',  order: 4, width: 24, type: 'range',  locked: false },
+  { id: 'rc-specimen', name: 'specimen', label: 'Specimen',         order: 5, width: 16, type: 'text',   locked: false },
+];
 
 export interface DepartmentReportColumnsResponse {
   departmentId: string;
@@ -273,6 +290,7 @@ export const DEFAULT_REPORT_COLUMNS: ReportColumn[] = [
 
 /** Available column types for the admin picker. */
 export const COLUMN_TYPE_OPTIONS: { value: ReportColumnType; label: string; description: string }[] = [
+  { value: 'name',   label: 'Parameter name', description: 'The investigation / parameter name (e.g. Hemoglobin)' },
   { value: 'text',   label: 'Text',           description: 'Free text — admin or condition fills it' },
   { value: 'result', label: 'Result value',   description: 'Pulls from the entered result for the row\'s parameter' },
   { value: 'unit',   label: 'Unit',           description: 'Pulls from the test parameter\'s unit (e.g. g/dL)' },

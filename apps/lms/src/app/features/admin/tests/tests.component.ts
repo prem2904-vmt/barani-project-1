@@ -9,8 +9,9 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { PricingComponent } from '../pricing/pricing.component';
 
-type Tab = 'individual' | 'package';
+type Tab = 'individual' | 'package' | 'pricing';
 
 /** A department derived from the test catalogue (deduped by name). */
 interface DeptGroup {
@@ -27,6 +28,7 @@ const UNASSIGNED = 'Unassigned';
   imports: [
     FormsModule,
     CurrencyInrPipe,
+    PricingComponent,
     ChipComponent,
     ScreenHeaderComponent,
     SegmentedComponent,
@@ -40,15 +42,17 @@ const UNASSIGNED = 'Unassigned';
         eyebrow="Admin"
         title="Tests"
         subtitle="Master test catalog and packages, grouped by department.">
-        <pf-touch-btn actions size="sm" variant="primary" (pressed)="openCreate()">
-          <span icon-left aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 5v14"/>
-              <path d="M5 12h14"/>
-            </svg>
-          </span>
-          {{ tab() === 'package' ? 'Create package' : 'Create test' }}
-        </pf-touch-btn>
+        @if (tab() !== 'pricing') {
+          <pf-touch-btn actions size="sm" variant="primary" (pressed)="openCreate()">
+            <span icon-left aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14"/>
+                <path d="M5 12h14"/>
+              </svg>
+            </span>
+            {{ tab() === 'package' ? 'Create package' : 'Create test' }}
+          </pf-touch-btn>
+        }
       </pf-screen-header>
 
       <div class="mb-4">
@@ -60,6 +64,9 @@ const UNASSIGNED = 'Unassigned';
         </pf-segmented>
       </div>
 
+      @if (tab() === 'pricing') {
+        <pf-pricing [embedded]="true"></pf-pricing>
+      } @else {
       <div class="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center mb-4">
         <input type="text" class="pf-input w-full sm:max-w-xs"
                [placeholder]="tab() === 'package' ? 'Search packages…' : 'Search all tests…'"
@@ -207,6 +214,7 @@ const UNASSIGNED = 'Unassigned';
           }
         </div>
       }
+      }
     </section>
   `,
   styles: [`
@@ -291,7 +299,8 @@ export class TestsComponent implements OnInit {
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'individual', label: 'Individual tests' },
-    { value: 'package',    label: 'Packages' }
+    { value: 'package',    label: 'Packages' },
+    { value: 'pricing',    label: 'Pricing' }
   ];
 
   private readonly _tab = signal<Tab>('individual');

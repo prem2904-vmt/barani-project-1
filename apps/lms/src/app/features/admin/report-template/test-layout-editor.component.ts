@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -7,8 +7,10 @@ import {
   GridRowParameter,
   GridSection,
   ParagraphSection,
+  ReportColumn,
   ReportSection,
   ResolvedReportLayout,
+  ResolvedRow,
 } from '../../../shared/models/report-layout.model';
 import { Test } from '../../../shared/models/test.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -36,7 +38,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
   imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="grid grid-cols-1 xl:grid-cols-[1.3fr_1fr] gap-5">
+    <div class="grid gap-5 {{ hidePreview() ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.3fr_1fr]' }}">
 
       <!-- ─────────────── LEFT: section editor ─────────────── -->
       <pf-tile tone="default" padding="lg" class="block">
@@ -206,6 +208,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
       </pf-tile>
 
       <!-- ─────────────── RIGHT: live preview ─────────────── -->
+      @if (!hidePreview()) {
       <aside class="xl:sticky xl:top-4 h-fit">
         <div class="flex items-center justify-between mb-2">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
@@ -252,18 +255,18 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                       <table class="pf-prev-table">
                         <thead>
                           <tr>
-                            @for (col of preview()!.columns; track col.id) {
-                              <th [style.width.%]="col.width">{{ col.label }}</th>
+                            @for (vc of previewVCols(); track vc.id) {
+                              <th [style.width.%]="vc.width">{{ vc.label }}</th>
                             }
                           </tr>
                         </thead>
                         <tbody>
                           @for (row of sec.rows; track row.id) {
                             <tr>
-                              @for (col of preview()!.columns; track col.id) {
+                              @for (vc of previewVCols(); track vc.id) {
                                 <td [style.color]="row.color || null"
                                     [style.font-weight]="row.isBold ? '700' : null">
-                                  {{ row.cells[col.name] || '' }}
+                                  {{ cellText(row, vc) }}
                                 </td>
                               }
                             </tr>
@@ -286,6 +289,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
           Preview runs the layout engine with sample result values for this test's parameters.
         </p>
       </aside>
+      }
     </div>
   `,
   styles: [`
@@ -373,6 +377,11 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
   `]
 })
 export class TestLayoutEditorComponent implements OnInit {
+  /** When embedded in the Report Template shell (which has its own shared PDF
+   *  preview on the right), hide this editor's own preview pane and render the
+   *  section editor full-width. */
+  readonly hidePreview = input(false);
+
   private readonly api = inject(ApiService);
   private readonly layout = inject(ReportLayoutService);
   private readonly toasts = inject(ToastService);
@@ -387,6 +396,36 @@ export class TestLayoutEditorComponent implements OnInit {
   protected readonly preview = signal<ResolvedReportLayout | null>(null);
   protected readonly previewing = signal(false);
   protected readonly previewError = signal<string>('');
+
+  /** Visual columns for the preview table — consecutive LINKED columns merged
+   *  into one (Result + Unit → "11.4 g/dL"), keeping the first column's header.
+   *  Mirrors the PDF renderer so the preview matches the printed report. */
+  protected readonly previewVCols = computed<{ id: string; label: string; width: number; members: ReportColumn[] }[]>(() => {
+    let cols = (this.preview()?.columns ?? []).slice();
+    // Default-merge an adjacent Result→Unit when no link is configured yet.
+    if (!cols.some(c => c.linkedNext)) {
+      const ri = cols.findIndex(c => c.type === 'result');
+      if (ri >= 0 && cols[ri + 1]?.type === 'unit') {
+        cols = cols.map((c, i) => (i === ri ? { ...c, linkedNext: true } : c));
+      }
+    }
+    const out: { id: string; label: string; width: number; members: ReportColumn[] }[] = [];
+    for (let i = 0; i < cols.length; i++) {
+      const members: ReportColumn[] = [cols[i]];
+      while (cols[i]?.linkedNext && i + 1 < cols.length) { members.push(cols[++i]); }
+      out.push({ id: members[0].id, label: members[0].label, width: members.reduce((s, m) => s + (m.width || 0), 0), members });
+    }
+    return out;
+  });
+
+  /** Merged cell text for a row across a visual column's members. */
+  protected cellText(row: ResolvedRow, vc: { members: ReportColumn[] }): string {
+    return vc.members
+      .map(m => row.cells[m.name])
+      .filter(v => v != null && String(v).trim() !== '')
+      .map(v => String(v).trim())
+      .join(' ');
+  }
 
   /** Default column names a grid row exposes cell templates for. Matches the
    *  default department column set; admins can leave cells blank to fall back

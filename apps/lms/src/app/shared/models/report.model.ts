@@ -114,7 +114,16 @@ export interface ReportTemplate {
   showMethod: boolean;
   showInstrument: boolean;
   groupByDepartment: boolean;
+  /** When true, each department's tests start on a NEW PAGE in the report. */
+  departmentPageBreak?: boolean;
   showCriticalFlag: boolean;
+  /** Template-level (singular, common to every test) results-table columns.
+   *  JSON-serialised ReportColumn[] — order, type, width, lock, and linkedNext
+   *  (merge-with-next) per column. Drives the main results table directly in
+   *  both the live preview and generated reports. When absent, the renderer
+   *  falls back to its built-in column layout. Supersedes the per-department
+   *  columns for the continuous results table. */
+  resultColumnsJson?: string;
   /** Abnormal-flag styling in the results table:
    *  'bold' (bold value + indicator) | 'bold_color' (also tints high/low). */
   flagStyle?: string;

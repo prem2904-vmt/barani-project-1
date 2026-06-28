@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { ReportColumn } from '../../../shared/models/report-layout.model';
+import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -52,8 +54,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
       </pf-screen-header>
 
       <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-        <!-- ── Left: tabbed form ────────────────────────────── -->
-        <div>
+        <!-- ── Left: tabbed form. On Per-test layout it spans the full width so
+                the per-test editor + its own resolved preview fill the row. ── -->
+        <div class="{{ tab() === 'testlayout' ? 'lg:col-span-2' : '' }}">
           <div class="mb-5 overflow-x-auto pb-1">
             <pf-segmented
               [options]="tabOptions"
@@ -263,7 +266,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (checkedChange)="patch({ zebraRows: $event })">
                     </pf-toggle>
                   </div>
-                  <div>
+                  <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
+                       [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                     <label class="pf-label">Abnormal value style</label>
                     <pf-segmented
                       [options]="flagStyleOptions"
@@ -284,18 +288,22 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       (valueChange)="patch({ flagIndicator: $event })">
                     </pf-segmented>
                     <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                      Mark high/low with H&nbsp;/&nbsp;L letters or ↑&nbsp;/&nbsp;↓ arrows.
+                      Mark high/low with H&nbsp;/&nbsp;L letters or ↑&nbsp;/&nbsp;↓ arrows. Choose <b>None</b> for a plain report — no letters, arrows, bold or colour.
                     </p>
                   </div>
                   @if ((tpl().flagStyle ?? 'bold') === 'bold_color') {
-                    <div class="pf-toggle-row">
+                    <div class="pf-toggle-row"
+                         [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
+                         [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                       <span class="text-[14px]" style="color: var(--text-primary);">High value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
                              [ngModel]="tpl().abnormalColor || '#dc2626'"
                              (ngModelChange)="patch({ abnormalColor: $event })" />
                     </div>
-                    <div class="pf-toggle-row">
+                    <div class="pf-toggle-row"
+                         [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
+                         [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                       <span class="text-[14px]" style="color: var(--text-primary);">Low value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
@@ -307,6 +315,15 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
                     <pf-toggle [checked]="tpl().groupByDepartment ?? false"
                                (checkedChange)="patch({ groupByDepartment: $event })">
+                    </pf-toggle>
+                  </div>
+                  <div class="pf-toggle-row">
+                    <div class="flex flex-col pr-3">
+                      <span class="text-[14px]" style="color: var(--text-primary);">Each department on a new page</span>
+                      <span class="text-[12px]" style="color: var(--text-tertiary);">Start every department's tests on a fresh page.</span>
+                    </div>
+                    <pf-toggle [checked]="tpl().departmentPageBreak ?? false"
+                               (checkedChange)="patch({ departmentPageBreak: $event })">
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
@@ -400,7 +417,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── DATE & TIME ────────── -->
             <!-- ────────── COLUMNS (per-dept results table) ────────── -->
             @case ('columns') {
-              <pf-report-columns-editor></pf-report-columns-editor>
+              <pf-report-columns-editor (stateChange)="onColumnsState($event)">
+              </pf-report-columns-editor>
             }
 
             <!-- ────────── PER-TEST LAYOUT (sections engine) ────────── -->
@@ -520,8 +538,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
           }
         </div>
 
-        <!-- ── Right: live PDF preview (hidden on the per-test layout tab,
-                which has its own engine-resolved preview pane) ─────── -->
+        <!-- ── Right: live PDF preview. Shared by all tabs EXCEPT Per-test
+                layout, which renders its own engine-resolved preview for the
+                selected test (full-width). ─────── -->
         @if (tab() !== 'testlayout') {
         <aside class="lg:sticky lg:top-4 h-fit">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
@@ -674,6 +693,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly flagIndicatorOptions: SegmentedOption<string>[] = [
     { value: 'letter', label: 'H / L' },
     { value: 'arrow',  label: '↑ / ↓' },
+    { value: 'none',   label: 'None' },
   ];
   readonly flagStyleOptions: SegmentedOption<string>[] = [
     { value: 'bold',       label: 'Bold (H/L)'   },
@@ -725,13 +745,21 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { key: 'showReportDate',     label: 'Reported on' },
   ];
 
-  // The columns-tab editor; captured for future cross-pane wiring.
-  readonly columnsEditor = viewChild(ReportColumnsEditorComponent);
-
   // ── Template state ──────────────────────────────────────────
   private readonly _tpl = signal<ReportTemplate>(this.defaultTemplate());
   readonly tpl = this._tpl.asReadonly();
   patch(p: Partial<ReportTemplate>) { this._tpl.update(v => ({ ...v, ...p })); }
+
+  // Live columns being edited in the Columns tab + their department, so the
+  // preview can apply them to that department's sample tests before save.
+  private readonly editedCols = signal<ReportColumn[]>([]);
+  private readonly editedDeptName = signal<string>('');
+  private readonly editedDeptCode = signal<string>('');
+  onColumnsState(s: { departmentName: string; departmentCode: string; columns: ReportColumn[] }) {
+    this.editedDeptName.set(s.departmentName);
+    this.editedDeptCode.set(s.departmentCode);
+    this.editedCols.set(s.columns);
+  }
   patchKey(key: keyof ReportTemplate, val: unknown) {
     this.patch({ [key]: val } as Partial<ReportTemplate>);
   }
@@ -823,10 +851,39 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     // on every keystroke).
     effect(() => {
       const tpl = this._tpl();
+      // Also depend on the columns being edited so the preview reflects the
+      // Columns tab live (per-department).
+      this.editedCols(); this.editedDeptName(); this.editedDeptCode();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
     });
+  }
+
+  /** Build resolved layouts for the sample tests so the preview applies the
+   *  columns being edited to that department's tests (other departments fall
+   *  back to the default layout — demonstrating per-department sections). */
+  private buildPreviewLayouts(): Record<string, ResolvedReportLayout> {
+    const cols = this.editedCols();
+    if (!cols.length) return {};
+    const dn = this.editedDeptName().trim().toLowerCase();
+    const dc = this.editedDeptCode().trim().toLowerCase();
+    if (!dn && !dc) return {};
+    let snap: { tests?: { testId: string; name?: string; department?: string; departmentCode?: string; sampleType?: string }[] };
+    try { snap = JSON.parse(this.sampleSnapshot()); } catch { return {}; }
+    const out: Record<string, ResolvedReportLayout> = {};
+    for (const t of snap.tests ?? []) {
+      const td = (t.department ?? '').trim().toLowerCase();
+      const tc = (t.departmentCode ?? '').trim().toLowerCase();
+      const match = (!!td && (td === dn || td === dc)) || (!!tc && (tc === dn || tc === dc));
+      if (match) {
+        out[t.testId] = {
+          testId: t.testId, testName: t.name ?? '', sampleType: t.sampleType ?? '',
+          columns: cols, sections: [], configured: true, version: 1,
+        } as unknown as ResolvedReportLayout;
+      }
+    }
+    return out;
   }
 
   private async renderPreview(tpl: ReportTemplate) {
@@ -835,6 +892,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         report: { id: 'preview-' + Date.now(), type: 'final',
                   createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
         template: tpl,
+        resolvedLayouts: this.buildPreviewLayouts(),
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step
@@ -862,7 +920,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
                  refDoctorName: 'Dr. A. Sharma' },
       type: 'final',
       tests: [
-        { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Hematology',
+        { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
           sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
           result: { values: {
             'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L' },
@@ -870,7 +928,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
             'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H' },
             'Platelets':    { value: '240000', unit: '/cmm',    range: '150000 – 410000' },
           } } },
-        { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry',
+        { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry', departmentCode: 'BIO',
           sampleType: 'Serum', method: 'Photometry',
           result: { values: {
             'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H' },
@@ -878,7 +936,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
             'LDL Cholesterol':   { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
             'Triglycerides':     { value: '120', unit: 'mg/dL', range: '< 150' },
           } } },
-        { testId: 'd3', name: 'Vitamin D (25-OH)', department: 'Biochemistry',
+        { testId: 'd3', name: 'Vitamin D (25-OH)', department: 'Biochemistry', departmentCode: 'BIO',
           sampleType: 'Serum', nablScope: false, referralLab: 'Reference Labs Pvt. Ltd., Mumbai',
           result: { values: {
             '25-Hydroxy Vitamin D': { value: '18', unit: 'ng/mL', range: '30 – 100', flag: 'L' },
