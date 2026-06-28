@@ -7,6 +7,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { TenantStateService } from '../../core/services/tenant-state.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
@@ -68,24 +69,18 @@ const DRAG_THRESHOLD_PX = 4;
                 aria-hidden="true"></span>
         }
 
-        <!-- Rail brand mark — the PF glyph at the top of the rail.
-             On iPad there's no top chrome, so the rail carries the
-             brand. Icon-only (no "PREFRONTAL" wordmark). -->
+        <!-- Rail brand mark — the CLIENT logo at the top of the rail. On iPad
+             there's no top chrome, so the rail carries the client's branding
+             (their software). The PF platform mark folds down to the account
+             button at the bottom. -->
         @if (railMode()) {
-          <span class="pf-rail-brand" aria-label="Prefrontal">
-            <svg viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <defs>
-                <linearGradient id="pfRailBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%"   stop-color="#7c3aed" />
-                  <stop offset="25%"  stop-color="#8b5cf6" />
-                  <stop offset="50%"  stop-color="#a855f7" />
-                  <stop offset="75%"  stop-color="#d946ef" />
-                  <stop offset="100%" stop-color="#ec4899" />
-                </linearGradient>
-              </defs>
-              <path d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z" fill="url(#pfRailBrandGradient)" />
-              <path d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z" fill="url(#pfRailBrandGradient)" />
-            </svg>
+          <span class="pf-rail-brand" [title]="tenantName()"
+                [attr.aria-label]="tenantName() || 'Client'">
+            @if (tenantLogo()) {
+              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-rail-brand__logo" />
+            } @else {
+              <span class="pf-rail-brand__init">{{ tenantInitial() }}</span>
+            }
           </span>
           <div class="pf-rail-sep" aria-hidden="true"></div>
         }
@@ -140,7 +135,6 @@ const DRAG_THRESHOLD_PX = 4;
              to the bottom of the rail. -->
         @if (railMode()) {
           <div class="pf-rail-sep pf-rail-sep--foot" aria-hidden="true"></div>
-          <span class="pf-rail-vendor" [title]="tenantName()">{{ tenantInitial() }}</span>
           <button type="button" class="pf-rail-action press"
                   (click)="onMoreNotifications()" aria-label="Notifications">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -174,33 +168,28 @@ const DRAG_THRESHOLD_PX = 4;
                 (click)="toggleMore($event)"
                 [attr.aria-label]="railMode() ? 'Account & more' : 'More'"
                 [attr.aria-expanded]="moreOpen()">
-          @if (railMode()) {
-            <!-- iPad rail: the More button IS the user badge — the
-                 chrome's profile avatar folds in here. Tapping opens
-                 the account popover (notifications / people / theme /
-                 sign-out). -->
-            <span class="pf-rail-avatar">{{ userInitials() }}</span>
-          } @else {
-            <!-- Phone: PF brand glyph (the only branding on a phone). -->
-            <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
-                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <defs>
-                <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%"   stop-color="#7c3aed" />
-                  <stop offset="25%"  stop-color="#8b5cf6" />
-                  <stop offset="50%"  stop-color="#a855f7" />
-                  <stop offset="75%"  stop-color="#d946ef" />
-                  <stop offset="100%" stop-color="#ec4899" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-                fill="url(#pfMoreBrandGradient)" />
-              <path
-                d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-                fill="url(#pfMoreBrandGradient)" />
-            </svg>
-          }
+          <!-- The account button shows the PF brand glyph on BOTH the phone
+               bottom pill and the iPad rail's bottom account button. Tapping
+               opens the account popover (notifications / people / theme /
+               sign-out). -->
+          <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="#7c3aed" />
+                <stop offset="25%"  stop-color="#8b5cf6" />
+                <stop offset="50%"  stop-color="#a855f7" />
+                <stop offset="75%"  stop-color="#d946ef" />
+                <stop offset="100%" stop-color="#ec4899" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+              fill="url(#pfMoreBrandGradient)" />
+            <path
+              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+              fill="url(#pfMoreBrandGradient)" />
+          </svg>
         </button>
       </div>
 
@@ -423,11 +412,24 @@ const DRAG_THRESHOLD_PX = 4;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       flex-shrink: 0;
     }
-    .pf-rail-brand svg { width: 24px; height: 30px; }
+    /* Client logo (image) or its initial badge — the prominent top brand. */
+    .pf-rail-brand__logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    .pf-rail-brand__init {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: var(--gradient-primary);
+      color: #fff; font-weight: 700; font-size: 15px;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.36);
+    }
 
     /* Hairline separators between the rail's three zones. */
     .pf-rail-sep {
@@ -880,9 +882,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     return w >= 641 && w < 1280;
   }
 
-  /** Tenant (vendor) name + a 1-letter badge for the rail bottom. The
-   *  chrome's vendor pill folds into the rail as just this badge. */
-  protected readonly tenantName = computed(() => this.auth.user()?.tenantName ?? '');
+  /** Tenant (client) identity for the rail TOP brand. Prefer the live tenant
+   *  state (carries the uploaded logo) and fall back to the auth user's tenant
+   *  name. */
+  private readonly tenantState = inject(TenantStateService);
+  protected readonly tenantName = computed(() =>
+    this.tenantState.tenant()?.name || this.auth.user()?.tenantName || '');
+  protected readonly tenantLogo = computed(() => this.tenantState.tenant()?.logoUrl || null);
   protected readonly tenantInitial = computed(() => {
     const n = this.tenantName().trim();
     return n ? n[0].toUpperCase() : 'P';
@@ -1050,6 +1056,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.labCfg.ensureLoaded();
+    this.tenantState.ensureLoaded();
     this.process.loadActive();
 
     // Re-measure whenever the visible nav set changes (perm reload, mode

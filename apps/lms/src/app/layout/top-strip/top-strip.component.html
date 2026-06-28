@@ -44,71 +44,67 @@
       </span>
     </a>
 
-    <div class="pf-ts-spacer flex-1 min-w-0"></div>
-
-    <!-- Desktop nav (hidden < md so bottom-nav is the only nav on mobile).
-         Left-aligned, flows inline after the brand lockup. -->
-    <nav class="pf-topnav-center hidden xl:flex">
-      @for (n of primary(); track n.id) {
-      <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
-        class="pf-topnav-btn press">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          @for (p of n.iconPath; track p) {
-          <path [attr.d]="p" />
+    <!-- Pipe separator + client/tenant logo — clean branding immediately after
+         the PF brand on the LEFT (logo + name always shown). -->
+    @if (tenantLoaded()) {
+      <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
+      @if (showAdmin()) {
+        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
+           [class.pf-ts-tenant--empty]="!hasBrand()"
+           [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+          @if (showLogo() && tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+          } @else {
+            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
           }
-        </svg>
-        <span>{{ n.label }}</span>
-      </a>
+          @if (showName()) {
+            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+          }
+        </a>
+      } @else {
+        <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
+             [class.pf-ts-tenant--empty]="!hasBrand()"
+             [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+          @if (showLogo() && tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+          } @else {
+            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+          }
+          @if (showName()) {
+            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+          }
+        </div>
       }
+    }
 
-      <!-- The "More" popover used to live here with every admin config
-           link crammed into a 12-tile grid. That competed with the
-           primary modules and made the nav noisy. Removed entirely —
-           those items now live inside the Admin panel itself, organised
-           into categories. The routes are unchanged, only the entry
-           point moved. -->
-    </nav>
-
-    <!-- Spacer pushes right cluster to the far edge -->
+    <!-- Spacer pushes the nav + right cluster to the far edge -->
     <div class="pf-ts-spacer flex-1 min-w-0"></div>
 
     <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
     <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
 
-      <!-- Tenant identity pill — logo + name. Click goes to /setup
-           branding. Hidden under sm so the right cluster stays compact
-           on mobile (the bottom-nav already covers identity there). -->
-      @if (tenantLoaded()) {
-        @if (showAdmin()) {
-          <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
-             [class.pf-ts-tenant--empty]="!hasBrand()"
-             [attr.aria-label]="brandAriaLabel()">
-            @if (showLogo() && tenantLogo()) {
-              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-            } @else {
-              <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+      <!-- Primary nav — Frontdesk … Messages. Moved to the RIGHT (icon-first:
+           active item shows its label, others expand on hover). Hidden below xl
+           so the bottom-nav is the only nav on mobile/iPad. -->
+      <nav class="pf-topnav-center hidden xl:flex">
+        @for (n of primary(); track n.id) {
+        <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+          class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            @for (p of n.iconPath; track p) {
+            <path [attr.d]="p" />
             }
-            @if (showName()) {
-              <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
-            }
-          </a>
-        } @else {
-          <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
-               [class.pf-ts-tenant--empty]="!hasBrand()"
-               [attr.aria-label]="brandAriaLabel()">
-            @if (showLogo() && tenantLogo()) {
-              <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-            } @else {
-              <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-            }
-            @if (showName()) {
-              <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
-            }
-          </div>
+          </svg>
+          <span>{{ n.label }}</span>
+        </a>
         }
+      </nav>
 
+      @if (tenantLoaded()) {
+        <!-- Pipe separator before the branch picker. -->
+        <span class="pf-ts-sep hidden md:inline-block" aria-hidden="true"></span>
         <!-- Branch selector — kept on the top strip so route context stays
              visible without a second navbar. md+ only; mobile users use the
              dedicated branch settings screen. -->
