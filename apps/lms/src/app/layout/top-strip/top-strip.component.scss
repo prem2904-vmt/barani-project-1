@@ -257,10 +257,6 @@
  * flanking it. The flex-1 spacers in the markup keep the inline layout
  * tight on narrower viewports where this nav is hidden. */
 .pf-topnav-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   align-items: center;
   gap: 4px;
   flex-shrink: 0;

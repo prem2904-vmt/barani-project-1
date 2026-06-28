@@ -682,7 +682,7 @@
 
 <!-- ── New chat modal ───────────────────────────────────────────────── -->
 @if (newChatOpen()) {
-  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeNewChatModal()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" pfModalPortal (click)="closeNewChatModal()">
     <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>{{ pickerSelection().size <= 1 ? 'New chat' : 'New group' }}</h3>
@@ -750,7 +750,7 @@
 
 <!-- ── Group members modal ─────────────────────────────────────────── -->
 @if (membersOpen() && chat.activeConversation(); as conv) {
-  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeMembers()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" pfModalPortal (click)="closeMembers()">
     <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>{{ conv.name ?? 'Group' }} · {{ conv.participants.length }} members</h3>
@@ -801,7 +801,7 @@
 
 <!-- ── Add member sub-modal ────────────────────────────────────────── -->
 @if (addMemberOpen()) {
-  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="closeAddMember()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" pfModalPortal (click)="closeAddMember()">
     <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>Add member</h3>
@@ -835,7 +835,7 @@
 
 <!-- ── Forward-message modal ────────────────────────────────────────── -->
 @if (forwardingMessage(); as fwd) {
-  <div class="pf-msgs__modal-backdrop pf-sheet" (click)="cancelForward()">
+  <div class="pf-msgs__modal-backdrop pf-sheet" pfModalPortal (click)="cancelForward()">
     <div class="pf-msgs__modal pf-sheet__panel" (click)="$event.stopPropagation()">
       <header class="pf-msgs__modal-head">
         <h3>Forward to…</h3>

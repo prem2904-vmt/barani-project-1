@@ -194,7 +194,6 @@
   border-radius: 12px;
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
@@ -1043,7 +1042,6 @@
   border: 1px solid rgba(245, 158, 11, 0.18);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
@@ -2131,3 +2129,72 @@
   .pf-msgs__attach-card { min-width: 0; }
   .pf-msgs__attach-image-link { max-width: 100%; }
 }
+
+// ── Light mode compatibility overrides for modals and components ──
+::ng-deep .light {
+  .pf-msgs__modal {
+    background: #ffffff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+  }
+  .pf-msgs__modal-foot {
+    background: rgba(139, 92, 246, 0.03);
+    border-top-color: rgba(139, 92, 246, 0.1);
+  }
+  .pf-msgs__modal-head,
+  .pf-msgs__modal-group-name,
+  .pf-msgs__modal-search {
+    border-bottom-color: rgba(139, 92, 246, 0.1);
+  }
+  .pf-msgs__modal-group-name input,
+  .pf-msgs__modal-search input {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    &::placeholder {
+      color: #94a3b8;
+    }
+    &:focus {
+      border-color: var(--input-border-focus);
+      background: #ffffff;
+    }
+  }
+  .pf-msgs__picker-row {
+    &:hover:not(:disabled) {
+      background: #f1f5f9;
+    }
+  }
+  .pf-msgs__icon-btn {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+    &:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+  }
+  .pf-msgs__forward-preview {
+    background: rgba(139, 92, 246, 0.04);
+    border-bottom-color: rgba(139, 92, 246, 0.1);
+  }
+  .pf-msgs__forward-label {
+    color: var(--color-violet-600);
+  }
+  .pf-msgs__share-popover {
+    background: #ffffff;
+  }
+  .pf-msgs__share-popover-item {
+    &:hover {
+      background: #f1f5f9;
+    }
+  }
+  .pf-msgs__share-popover-avatar {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+  }
+  .pf-msgs__share-popover-item:hover .pf-msgs__share-popover-go {
+    color: var(--color-violet-600);
+  }
+}
+
