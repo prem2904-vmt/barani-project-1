@@ -17,6 +17,7 @@ import { RingtoneService } from '../../core/services/ringtone.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
+import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
@@ -42,7 +43,7 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink],
+  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
