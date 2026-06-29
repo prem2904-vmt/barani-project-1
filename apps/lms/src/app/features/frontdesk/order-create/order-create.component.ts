@@ -782,12 +782,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
           }));
         }
+      } else if (d.advanceAmount && d.advanceAmount > 0) {
+        // Pay-later with an advance: record the partial payment now; the rest
+        // of the bill stays outstanding (due on report).
+        await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+        }));
       }
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
       this.paidBill = bill;
       this.paidOrderId.set(order.id);
-      this.toasts.success(d.mode === 'later' ? 'Order placed — payment pending' : 'Payment collected');
+      this.toasts.success(
+        d.mode !== 'later' ? 'Payment collected'
+          : (d.advanceAmount && d.advanceAmount > 0) ? 'Advance collected — balance pending'
+          : 'Order placed — payment pending');
       // Auto-open the invoice print dialog (best-effort).
       //this.printPaidInvoice();
     } catch (e: any) {

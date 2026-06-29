@@ -11,6 +11,10 @@ export interface InlinePaymentResult {
   cashTendered?: number;
   vendorId?: string;
   splitParts?: Array<{ mode: PayMode; amount: number }>;
+  /** Pay-later mode only: an optional advance collected now (rest stays
+   *  outstanding) and how it was tendered. */
+  advanceAmount?: number;
+  advanceMode?: PayMode;
 }
 
 interface VendorWallet { id: string; name: string; code?: string; balance: number; isActive: boolean; }
@@ -126,6 +130,32 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
               </p>
             </div>
           }
+          @case ('later') {
+            <!-- Advance payment (optional): collect a partial amount now; the
+                 rest stays outstanding and is due on the report. -->
+            <div class="pf-adv">
+              <div class="pf-adv__row">
+                <span class="pf-adv__title">Advance now</span>
+                <input type="number" inputmode="numeric" min="0" [attr.max]="amount()"
+                       class="pf-ipp__input pf-adv__input" [value]="advance()"
+                       (input)="setAdvance(asVal($event))" placeholder="0"/>
+                <button type="button" class="pf-adv__max" (click)="setAdvanceFull()">Full</button>
+              </div>
+              @if (advanceNum() > 0) {
+                <div class="pf-adv__tenders">
+                  @for (t of advanceModes; track t.id) {
+                    <button type="button" class="pf-adv__tender"
+                            [class.pf-adv__tender--on]="advanceMode() === t.id"
+                            (click)="setAdvanceMode(t.id)">{{ t.label }}</button>
+                  }
+                </div>
+                <p class="pf-adv__hint">Collect <strong>{{ advanceNum() | inr }}</strong> now ·
+                  <strong>{{ (amount() - advanceNum()) | inr }}</strong> stays outstanding</p>
+              } @else {
+                <p class="pf-adv__hint pf-adv__hint--muted">No advance — the full {{ amount() | inr }} is due on the report.</p>
+              }
+            </div>
+          }
           @default {
             <p class="pf-ipp__muted">Payment will be collected later (on report).</p>
           }
@@ -133,7 +163,10 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
       </div>
 
       <button type="button" class="pf-ipp__confirm" [disabled]="busy() || blocked() || !canConfirm()" (click)="emit()">
-        @if (mode() === 'later') { Place order (pay later) }
+        @if (mode() === 'later') {
+          @if (advanceNum() > 0) { Collect advance · {{ advanceNum() | inr }} }
+          @else { Place order (pay later) }
+        }
         @else { {{ busy() ? 'Processing…' : ('Confirm payment · ' + (amount() | inr)) }} }
       </button>
     </div>
@@ -191,6 +224,23 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
     .pf-ipp__muted { font-size: 12px; color: var(--text-tertiary); }
     .pf-ipp__muted[data-kind="ok"] { color: #34d399; }
     .pf-ipp__muted[data-kind="short"] { color: #f87171; }
+    /* ── Advance (pay-later) block ── */
+    .pf-adv { display: flex; flex-direction: column; gap: 10px; }
+    .pf-adv__row { display: flex; align-items: center; gap: 10px; }
+    .pf-adv__title { font-size: 13px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+    .pf-adv__input { flex: 1 1 auto; }
+    .pf-adv__max { flex: 0 0 auto; padding: 9px 14px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); background: transparent;
+      color: var(--text-secondary); font-weight: 600; font-size: 13px; }
+    .pf-adv__tenders { display: flex; gap: 8px; }
+    .pf-adv__tender { flex: 1 1 0; padding: 9px 0; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); background: transparent;
+      color: var(--text-secondary); font-weight: 600; font-size: 13px; }
+    .pf-adv__tender--on { border-color: var(--accent, #7c3aed); color: var(--text-primary);
+      background: color-mix(in srgb, var(--accent, #7c3aed) 16%, transparent); }
+    .pf-adv__hint { font-size: 12px; color: var(--text-secondary); margin: 0; }
+    .pf-adv__hint strong { color: var(--text-primary); }
+    .pf-adv__hint--muted { color: var(--text-tertiary); }
     .pf-ipp__confirm { width: 100%; padding: 13px; border-radius: 14px; border: 0; cursor: pointer;
       background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); color: #fff; font-weight: 700; font-size: 15px; }
     .pf-ipp__confirm:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -241,6 +291,17 @@ export class InlinePaymentPanelComponent implements OnInit {
 
   // Card ref
   readonly refNo = signal('');
+
+  // Advance (pay-later mode): collect part now, leave the rest outstanding.
+  readonly advance = signal('');
+  readonly advanceNum = computed(() => Math.min(this.amount(), parseInt(this.advance() || '0', 10) || 0));
+  readonly advanceMode = signal<PayMode>('cash');
+  readonly advanceModes: Array<{ id: PayMode; label: string }> = [
+    { id: 'cash', label: 'Cash' }, { id: 'upi', label: 'UPI' }, { id: 'card', label: 'Card' },
+  ];
+  setAdvance(v: string) { this.advance.set((v || '').replace(/\D/g, '')); }
+  setAdvanceFull() { this.advance.set(String(this.amount())); }
+  setAdvanceMode(m: PayMode) { this.advanceMode.set(m); }
 
   // Wallet
   readonly vendors = signal<VendorWallet[] | null>(null);
@@ -295,6 +356,10 @@ export class InlinePaymentPanelComponent implements OnInit {
     if (m === 'card') r.referenceNo = this.refNo().trim() || undefined;
     if (m === 'wallet') r.vendorId = this.vendorId() ?? undefined;
     if (m === 'split') r.splitParts = this.splitParts().filter(p => p.amount > 0);
+    if (m === 'later' && this.advanceNum() > 0) {
+      r.advanceAmount = this.advanceNum();
+      r.advanceMode = this.advanceMode();
+    }
     this.confirm.emit(r);
   }
 }

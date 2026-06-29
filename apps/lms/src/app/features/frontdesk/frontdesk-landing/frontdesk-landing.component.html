@@ -243,7 +243,9 @@
                is saved to localStorage so the chosen ratio sticks across sessions. -->
           <div class="pf-appt-split" #apptSplit [class.pf-appt-split--dragging]="apptSplitDragging()">
             
-            <!-- Left Pane -->
+            <!-- Left Pane — hidden entirely when BOTH Appointments and Home
+                 collection are disabled in /admin/process. -->
+            @if (showLeftPane()) {
             <section class="pf-appt-split__pane" [style.flex-basis.%]="twoPaneSplit()"
               [class.pf-appt-split__pane--filtering]="apptFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'appt'"
@@ -527,9 +529,11 @@
               (keydown)="onApptSplitKey($event, 'two')">
               <span class="pf-appt-split__grip" aria-hidden="true"></span>
             </div>
+            }
 
             <!-- Right Pane -->
             <section class="pf-appt-split__pane pf-appt-split__pane--work"
+              [class.pf-appt-split__pane--solo]="!showLeftPane()"
               [class.pf-appt-split__pane--filtering]="workFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'work'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'work' && expandedPane() !== 'none'">

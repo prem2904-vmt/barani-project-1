@@ -18,6 +18,9 @@ export interface Tenant {
   /** Admin-toggled: if true, supervisors can claim a sample without a
    * physical scan (broken barcode workaround, audit-logged). Default false. */
   allowNoScanClaim?: boolean;
+  /** Tenant-wide: number of digits in the running part of the short sample
+   * barcode (DD + YY + this many digits). Valid 1–9. Default 5 → 00001. */
+  sampleNumberWidth?: number;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;
@@ -83,6 +86,9 @@ export interface Department {
   subBranchId?: string;
   name: string;
   code: string;
+  /** 2-digit department code (01–99) that prefixes the short sample barcode
+   * (DD + YY + running number). Optional; null/undefined when unset. */
+  sampleCode?: number;
   isActive: boolean;
   createdAt: string;
 }

@@ -273,6 +273,13 @@
     min-height: 0;
     transition: flex 0.2s ease;
   }
+  /* Left pane (Appointments / Home) disabled → the work pane is the only pane;
+     fill the whole row. */
+  .pf-appt-split__pane--solo {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    flex-basis: 100% !important;
+  }
   .pf-appt-split__pane > .pf-appt-split__hdr {
     cursor: pointer;
     border-bottom-color: transparent;
@@ -348,6 +355,13 @@
   .pf-appt-split > .pf-appt-split__pane:not(:first-of-type) {
     flex: 1 1 0;
     min-width: 260px;
+  }
+  /* Left pane (Appointments / Home) disabled → the work pane is the only pane.
+     Without the left pane it becomes :first-of-type (33% above) — force it to
+     span the full row instead. */
+  .pf-appt-split > .pf-appt-split__pane--solo {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
   }
   /* Handle is a fixed-width flex item between the two panes. */
   .pf-appt-split > .pf-appt-split__handle {

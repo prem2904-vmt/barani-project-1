@@ -1,10 +1,11 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
@@ -140,7 +141,7 @@ const COUNTERS: CounterSpec[] = [
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
-                 placeholder="Scan a barcode or type PF-XXXX-XXXXX…"
+                 [placeholder]="'Scan a barcode or type a sample ID (e.g. ' + sampleIdExample() + ')…'"
                  class="pf-scan__input"/>
           <button type="button"
                   class="pf-scan__manual press"
@@ -176,21 +177,17 @@ const COUNTERS: CounterSpec[] = [
                  style="color: var(--text-muted);">Manual barcode entry</label>
 
           <div class="seg-row">
-            <span class="seg seg--locked">PF</span>
+            <span class="seg seg--locked seg--dept">{{ selectedDeptSampleCode() || '01' }}</span>
             <span class="seg-sep">·</span>
-            <span class="seg seg--locked">{{ vendorCode() || '??' }}</span>
-            <span class="seg-sep">·</span>
-            <span class="seg seg--locked">{{ currentYear }}</span>
+            <span class="seg seg--locked">{{ yy() }}</span>
             <span class="seg-sep">·</span>
             <input class="seg seg--input"
                    inputmode="numeric"
                    pattern="[0-9]*"
-                   maxlength="5"
-                   placeholder="00000"
+                   [attr.maxlength]="numberWidth()"
+                   [placeholder]="'0'.repeat(numberWidth())"
                    [ngModel]="seqValue()"
                    (ngModelChange)="onSeqChange($event)" />
-            <span class="seg-sep">·</span>
-            <span class="seg seg--locked seg--dept">{{ selectedDeptCode() || '—' }}</span>
           </div>
 
           <div class="manual-meta">
@@ -216,14 +213,14 @@ const COUNTERS: CounterSpec[] = [
                 [value]="seqValue()"
                 [allowDecimal]="false"
                 [allowNegative]="false"
-                [maxLength]="5"
+                [maxLength]="numberWidth()"
                 (valueChange)="onSeqChange($event)"></pf-num-pad>
             </div>
           }
 
           <div class="manual-actions">
-            @if (seqValue().length > 0 && seqValue().length < 5) {
-              <span class="seq-hint">{{ 5 - seqValue().length }} more digit{{ seqValue().length === 4 ? '' : 's' }}</span>
+            @if (seqValue().length > 0 && seqValue().length < numberWidth()) {
+              <span class="seq-hint">{{ numberWidth() - seqValue().length }} more digit{{ numberWidth() - seqValue().length === 1 ? '' : 's' }}</span>
             }
             <pf-touch-btn size="md" variant="primary"
                           [disabled]="!canManualConfirm()"
@@ -248,10 +245,12 @@ const COUNTERS: CounterSpec[] = [
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
+        @if (showIntake()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
                 (click)="setMobileTab('intake')">Intake</button>
+        }
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'mywork'"
                 [attr.aria-selected]="mobileTab() === 'mywork'"
@@ -276,7 +275,9 @@ const COUNTERS: CounterSpec[] = [
              and a Receive button. Hits Enter or clicks Receive to intake.
              The camera button opens the same scanner the standalone
              /lab/receive page uses; on match it auto-intakes.
-             On phones this pane only shows under the Intake tab. -->
+             On phones this pane only shows under the Intake tab.
+             Hidden entirely when lab_intake is switched off in /admin/process. -->
+        @if (showIntake()) {
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
@@ -312,7 +313,7 @@ const COUNTERS: CounterSpec[] = [
                 <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
               </svg>
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
-                     placeholder="Scan or type PF-XXXX-XXXXX"
+                     [placeholder]="'Scan or type ' + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
                      (keydown.enter)="intakeReceive()" />
@@ -346,10 +347,12 @@ const COUNTERS: CounterSpec[] = [
              (lostpointercapture)="onMwSplitPointerUp($event)">
           <span class="pf-mw-handle__grip" aria-hidden="true"></span>
         </div>
+        }
 
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
+                 [class.pf-mw-pane--solo]="!showIntake()"
                  [class.pf-mobile-hide]="mobileTab() === 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
@@ -662,6 +665,9 @@ const COUNTERS: CounterSpec[] = [
       background: var(--glass-bg);
       overflow: hidden;
     }
+    /* Lab Intake disabled → the work pane is the only pane; fill the whole row
+       (overrides the desktop :first-of-type 33% width). */
+    .pf-mw-pane--solo { flex: 1 1 100% !important; max-width: 100% !important; }
     .pf-mw-pane__hdr {
       display: flex;
       align-items: center;
@@ -1646,6 +1652,11 @@ export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly process = inject(ProcessWorkflowService);
+
+  /** Lab Intake is a placeable workflow action — hide the intake pane/tab when
+   *  an admin switches `lab_intake` OFF in /admin/process. */
+  readonly showIntake = computed(() => this.process.isEnabled('lab_intake'));
 
   // Rejected tab dropped — re-entry rows now show inline in My Work
   // with their rejection reason in the tube tile, so the tech sees WHY
@@ -1748,6 +1759,11 @@ export class MyWorkComponent implements OnInit {
   // right pane loads the matching data — no new fetch logic.
   protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue'>('intake');
   protected readonly kpiOpen = signal(false);
+  /** When Lab Intake is switched off, don't strand the phone view on the
+   *  now-hidden Intake tab. */
+  private readonly _intakeTabGuard = effect(() => {
+    if (!this.showIntake() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
+  });
   setMobileTab(t: 'intake' | 'mywork' | 'queue') {
     this.mobileTab.set(t);
     if (t === 'mywork') this.setTab('my_work');
@@ -1783,21 +1799,47 @@ export class MyWorkComponent implements OnInit {
 
   readonly vendorCode = computed(() => this.tenantState.tenant()?.vendorCode ?? '');
 
+  /** Tenant-wide running-number width for the short sample barcode (1–9). */
+  readonly numberWidth = computed(() => {
+    const w = this.tenantState.tenant()?.sampleNumberWidth ?? 5;
+    return w >= 1 && w <= 9 ? w : 5;
+  });
+  /** 2-digit year suffix (YY). */
+  readonly yy = computed(() => (this.currentYear % 100).toString().padStart(2, '0'));
+
   readonly deptOptions = computed<PfSelectOption<string>[]>(() =>
-    this.departments().map(d => ({ value: d.code, label: `${d.code} · ${d.name}` }))
+    this.departments().map(d => ({
+      value: d.code,
+      label: `${d.sampleCode != null ? d.sampleCode.toString().padStart(2, '0') : '··'} · ${d.name}`,
+    }))
   );
 
+  /** The selected department's 2-digit sample code — the prefix of the new
+   *  short barcode. Null when the admin hasn't assigned one yet. */
+  readonly selectedDeptSampleCode = computed(() => {
+    const d = this.departments().find(x => x.code === this.selectedDeptCode());
+    return (d?.sampleCode != null && d.sampleCode >= 1 && d.sampleCode <= 99)
+      ? d.sampleCode.toString().padStart(2, '0')
+      : null;
+  });
+
+  /** New short sample barcode: DD(dept) + YY(year) + running number. */
   readonly fullManualBarcode = computed(() => {
-    const v = this.vendorCode() || '??';
-    const seq = (this.seqValue() || '').padStart(5, '0');
-    const d = this.selectedDeptCode() || '——';
-    return `PF-${v}-${this.currentYear}-${seq}-${d}`;
+    const dd = this.selectedDeptSampleCode() ?? '——';
+    const seq = (this.seqValue() || '').padStart(this.numberWidth(), '0');
+    return `${dd}${this.yy()}${seq}`;
+  });
+
+  /** Example sample id for the scan/search placeholders, e.g. 012600001. */
+  readonly sampleIdExample = computed(() => {
+    const dd = this.selectedDeptSampleCode() ?? '01';
+    const seq = ''.padStart(this.numberWidth(), '0').replace(/0$/, '1');
+    return `${dd}${this.yy()}${seq}`;
   });
 
   readonly canManualConfirm = computed(() =>
-    this.seqValue().length === 5 &&
-    !!this.selectedDeptCode() &&
-    !!this.vendorCode()
+    this.seqValue().length === this.numberWidth() &&
+    !!this.selectedDeptSampleCode()
   );
 
   toggleManual() {
@@ -1810,7 +1852,7 @@ export class MyWorkComponent implements OnInit {
   }
 
   onSeqChange(v: string) {
-    this.seqValue.set((v ?? '').replace(/\D/g, '').slice(0, 5));
+    this.seqValue.set((v ?? '').replace(/\D/g, '').slice(0, this.numberWidth()));
   }
 
   onDeptChange(code: string) {
@@ -1950,6 +1992,9 @@ export class MyWorkComponent implements OnInit {
   }
 
   ngOnInit() {
+    // Re-fetch the active workflow so a `lab_intake` toggle in /admin/process
+    // reflects here (hides/shows the Lab Intake pane) on each visit.
+    this.process.refreshActive();
     this.refresh();
     this.refreshAllCounts();
     this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
@@ -2022,7 +2067,17 @@ export class MyWorkComponent implements OnInit {
       r.subOrder?.id === q
     );
     if (!hit) {
-      this.toasts.warning('No match for scan');
+      // Not in this tech's queue — resolve the typed/scanned barcode to its
+      // sample and open result entry directly (so any valid code opens the
+      // tests, not only rows already assigned here).
+      this.api.get<{ sampleId: string; orderId: string }>(
+        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).subscribe({
+        next: r => {
+          if (r?.sampleId) { this._scan.set(''); this.router.navigate(['/lab/sample', r.sampleId]); }
+          else this.toasts.warning('No match for that code');
+        },
+        error: () => this.toasts.warning('No match for that code'),
+      });
       return;
     }
     const scannedBarcode = hit.subOrder?.barcode ?? q;

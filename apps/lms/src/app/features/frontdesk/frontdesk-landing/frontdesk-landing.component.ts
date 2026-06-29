@@ -218,6 +218,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return !cfg ? true : this.process.placedIn('appointment') === 'frontdesk';
   });
   readonly showHome = computed(() => this.process.isEnabled('home_visits'));
+  /** The left pane only exists if at least one of its tabs (Appointments /
+   *  Home collection) is enabled — otherwise it's hidden and the work pane
+   *  fills the row. */
+  readonly showLeftPane = computed(() => this.showAppt() || this.showHome());
   readonly showOrder = computed(() => this.process.isEnabled('walk_in_order'));
   readonly showRegister = computed(() => this.process.isEnabled('patient_registration'));
   // If the currently-selected left tab gets disabled, fall back to the other one.
@@ -737,7 +741,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
     ngOnInit() {
     this.labCfg.ensureLoaded();
-    this.process.loadActive();
+    // Re-fetch the active workflow each visit so toggles made in /admin/process
+    // (e.g. disabling Appointments / Home visits) reflect here immediately.
+    this.process.refreshActive();
     this.refresh();
     this.pollHandle = setInterval(() => {
       // Skip polls while the tab is hidden — saves bandwidth on inactive

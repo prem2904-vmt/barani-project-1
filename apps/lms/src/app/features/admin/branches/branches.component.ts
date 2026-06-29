@@ -153,6 +153,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                               @for (d of deptsForSubBranch(sb.id); track d.id) {
                                 <div class="pf-dept-pill">
                                   <span>{{ d.name }}</span>
+                                  <input type="number" inputmode="numeric" min="1" max="99"
+                                         class="pf-input pf-sample-input pf-sample-input--pill" placeholder="01"
+                                         title="Sample # — 2-digit code (01–99) prefixing the short sample barcode"
+                                         [value]="d.sampleCode ?? ''"
+                                         (change)="saveSampleCode(d, $any($event.target).value)" />
                                   <button type="button" class="pf-unassign"
                                           (click)="unassignDepartment(sb.id, d.id)"
                                           title="Unassign from sub-branch">
@@ -214,6 +219,10 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                     </pf-touch-btn>
                   </div>
 
+                  <p class="text-[11px] mb-2" style="color: var(--text-tertiary);">
+                    Sample # is a 2-digit code (01–99) that prefixes the short sample barcode (DD + YY + running number).
+                  </p>
+
                   @if (unassignedDeptsFor(b.id).length === 0) {
                     <p class="text-[13px]" style="color: var(--text-tertiary);">
                       All departments are assigned to sub-branches.
@@ -227,6 +236,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                             <span class="text-[11px] font-mono ml-2" style="color: var(--text-muted);">{{ d.code }}</span>
                           </div>
                           <div class="flex items-center gap-2">
+                            <label class="pf-sample-field">
+                              <span class="pf-sample-label">Sample #</span>
+                              <input type="number" inputmode="numeric" min="1" max="99"
+                                     class="pf-input pf-sample-input" placeholder="01"
+                                     [value]="d.sampleCode ?? ''"
+                                     (change)="saveSampleCode(d, $any($event.target).value)" />
+                            </label>
                             @if (subBranchesFor(b.id).length > 0) {
                               <pf-select
                                 style="width: 150px"
@@ -362,6 +378,36 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     }
     @media (hover: hover) {
       .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
+    }
+
+    /* ── Per-department sample code (2-digit prefix) ── */
+    .pf-sample-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pf-sample-label {
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .pf-sample-input {
+      width: 64px;
+      text-align: center;
+      padding: 6px 8px;
+      -moz-appearance: textfield;
+    }
+    .pf-sample-input::-webkit-outer-spin-button,
+    .pf-sample-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    /* Compact variant inside the assigned-department pill */
+    .pf-sample-input--pill {
+      width: 52px;
+      padding: 2px 6px;
+      font-size: 12px;
     }
 
     .pf-mini-select {
@@ -650,6 +696,38 @@ export class BranchesComponent implements OnInit {
     if (!d.name.trim() || !d.code.trim()) { this.toasts.warning('Name and code required'); return; }
     this.api.post<Department>('/api/tenants/departments', { name: d.name, code: d.code, branchId }).subscribe({
       next: saved => { this._departments.update(list => [...list, saved]); this.toasts.success('Department added'); this.cancelAddDept(); }
+    });
+  }
+
+  /**
+   * Persist a department's 2-digit sample code. Empty input clears it (null);
+   * otherwise the value is clamped to 1–99 before PATCHing. No-ops when the
+   * value is unchanged or invalid (e.g. non-numeric).
+   */
+  saveSampleCode(dept: Department, raw: string) {
+    const trimmed = (raw ?? '').trim();
+    let sampleCode: number | null;
+    if (trimmed === '') {
+      sampleCode = null;
+    } else {
+      const n = Math.floor(Number(trimmed));
+      if (!Number.isFinite(n)) { return; }
+      sampleCode = Math.min(99, Math.max(1, n));
+    }
+
+    const current = dept.sampleCode ?? null;
+    if (current === sampleCode) { return; }
+
+    this.api.patch<Department>('/api/tenants/departments/' + dept.id, { sampleCode }).subscribe({
+      next: () => {
+        this._departments.update(list =>
+          list.map(d => d.id === dept.id ? { ...d, sampleCode: sampleCode ?? undefined } : d));
+        this.toasts.success(
+          sampleCode === null
+            ? 'Sample code cleared'
+            : `Sample code set to ${String(sampleCode).padStart(2, '0')}`);
+      },
+      error: () => this.toasts.error('Could not save sample code')
     });
   }
 

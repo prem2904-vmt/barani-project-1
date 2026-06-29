@@ -91,26 +91,12 @@ export class PushService {
 
     this._initialised = true;
 
-    // ── (1) Permissions ─────────────────────────────────────────────
-    try {
-      const status = await PushNotifications.checkPermissions();
-      if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
-        const req = await PushNotifications.requestPermissions();
-        this.permission.set(req.receive);
-        if (req.receive !== 'granted') {
-          // Permission denied — bail cleanly. We don't register tokens.
-          return;
-        }
-      } else {
-        this.permission.set(status.receive);
-        if (status.receive !== 'granted') return;
-      }
-    } catch {
-      // Plugin not present (web/electron) — nothing to do.
-      return;
-    }
-
-    // ── (2) APNs / FCM token registration ───────────────────────────
+    // ── (1) Listeners + category FIRST ──────────────────────────────
+    // CRITICAL for the lock-screen Reply: when the phone is locked and the app
+    // is KILLED, iOS relaunches it in the background purely to deliver the
+    // notification action. Capacitor fires `pushNotificationActionPerformed`
+    // ONCE and does not buffer it — so the listener must be attached before any
+    // `await` (the permission round-trip below) or the reply is silently lost.
     PushNotifications.addListener('registration', (t: Token) => {
       this.appToken.set(t.value);
       void this.postTokensToBackend();
@@ -121,25 +107,19 @@ export class PushService {
       console.warn('[push] registrationError', err);
     });
 
-    // ── (3) Foreground delivery — show in-app toast and route ──────
+    // Foreground delivery — show in-app toast and route.
     PushNotifications.addListener('pushNotificationReceived', (n: PushNotificationSchema) => {
       this.handleIncomingPayload(n.data ?? {}, /*opened=*/ false, n.title, n.body);
     });
 
-    // ── (4) Cold-start / background tap OR inline reply ────────────────
+    // Cold-start / background tap OR inline lock-screen reply.
     PushNotifications.addListener('pushNotificationActionPerformed', (a: ActionPerformed) => {
       const data = a.notification?.data ?? {};
       const reply = (a as ActionPerformed & { inputValue?: string }).inputValue;
       // WhatsApp-style inline reply: the user typed into the notification's
       // Reply action and hit send — deliver it WITHOUT opening the app.
       if (a.actionId === 'REPLY' && reply && data['kind'] === 'chat-message' && data['conversationId']) {
-        void (async () => {
-          await this.auth.waitForAuth();
-          // HTTP send (not SignalR) — reliable from a backgrounded app where the
-          // hub can't be trusted to connect for a one-shot reply.
-          await firstValueFrom(this.api.post(
-            `/api/chat/conversations/${data['conversationId']}/messages`, { body: reply }));
-        })().catch(err => console.warn('[push] inline reply failed', err));
+        void this.sendInlineReply(String(data['conversationId']), reply);
         return;
       }
       // Otherwise it's a tap on the notification body — route into the app.
@@ -158,6 +138,26 @@ export class PushService {
       });
     } catch (err) { console.warn('[push] registerActionTypes failed', err); }
 
+    // ── (2) Permissions ─────────────────────────────────────────────
+    try {
+      const status = await PushNotifications.checkPermissions();
+      if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+        const req = await PushNotifications.requestPermissions();
+        this.permission.set(req.receive);
+        if (req.receive !== 'granted') {
+          // Permission denied — bail cleanly. We don't register tokens.
+          return;
+        }
+      } else {
+        this.permission.set(status.receive);
+        if (status.receive !== 'granted') return;
+      }
+    } catch {
+      // Plugin not present (web/electron) — nothing to do.
+      return;
+    }
+
+    // ── (3) APNs / FCM token registration ───────────────────────────
     try {
       await PushNotifications.register();
     } catch (err) {
@@ -203,6 +203,36 @@ export class PushService {
       // Plugin only ships an iOS implementation; Android is a no-op stub.
       // eslint-disable-next-line no-console
       console.warn('[callkit] register skipped or failed', err);
+    }
+  }
+
+  /** Send a lock-screen inline reply. Runs in a tightly time-boxed background
+   *  window when the app was woken just to handle the action, so it must not
+   *  hang: we race session-restore against a short timeout, then POST. If the
+   *  send fails (offline / session gone) we surface a local notification so the
+   *  reply is never SILENTLY dropped — the user can reopen and resend. */
+  private async sendInlineReply(conversationId: string, body: string): Promise<void> {
+    try {
+      // HTTP send (not SignalR) — reliable from a backgrounded/killed app where
+      // the hub can't be trusted to connect for a one-shot reply.
+      await Promise.race([
+        this.auth.waitForAuth(),
+        new Promise<void>(resolve => setTimeout(resolve, 4000)),
+      ]);
+      await firstValueFrom(this.api.post(
+        `/api/chat/conversations/${conversationId}/messages`, { body }));
+    } catch (err) {
+      console.warn('[push] inline reply failed', err);
+      try {
+        await LocalNotifications.schedule({
+          notifications: [{
+            id: Math.floor(Date.now() % 100000),
+            title: 'Message not sent',
+            body: 'Tap to open the conversation and resend.',
+            extra: { kind: 'chat-message', conversationId },
+          }],
+        });
+      } catch { /* best-effort */ }
     }
   }
 

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -139,6 +139,28 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
                 style="background: var(--violet-600, #7c3aed);" [disabled]="pidSaving()" (click)="savePatientId()">
           {{ pidSaving() ? 'Saving…' : 'Save format' }}
         </button>
+      </pf-tile>
+
+      <!-- Sample ID — short sample barcode number width (tenant-wide) -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Sample ID</h3>
+        <p class="pf-ls__hint">
+          The short sample barcode is <strong>DD</strong>(dept) + <strong>YY</strong>(year) +
+          this many digits, e.g. <span class="font-mono">012600001</span>. Set each department's
+          2-digit code in <strong>Departments</strong>.
+        </p>
+        <div class="mt-4 flex flex-wrap items-end gap-4">
+          <label class="block max-w-[160px]">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Number width</span>
+            <input class="pf-input mt-1" type="number" min="1" max="9"
+                   [ngModel]="sampleNumberWidth()"
+                   (ngModelChange)="sampleNumberWidth.set(+$event)"
+                   (blur)="saveSampleNumberWidth()" />
+          </label>
+          <p class="text-[13px] pb-2" style="color: var(--text-secondary);">
+            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
+          </p>
+        </div>
       </pf-tile>
 
       <!-- No-scan override (tenant-wide) -->
@@ -448,6 +470,21 @@ export class LabSettingsComponent implements OnInit {
   readonly canWipe = computed(() => this.auth.hasPermission('manage_tenant'));
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
+
+  // ── Sample ID — running-number width of the short sample barcode ──
+  /** Editable number width (1–9). Seeded from the tenant once it loads. */
+  protected readonly sampleNumberWidth = signal(5);
+  /** Keep the editable signal in sync with the loaded/saved tenant. */
+  private readonly _swSync = effect(() => {
+    const w = this.tenantState.tenant()?.sampleNumberWidth;
+    if (typeof w === 'number') this.sampleNumberWidth.set(Math.min(Math.max(w, 1), 9));
+  });
+  /** Live example barcode: dept 01 + last-2-digit year + zero-padded number. */
+  protected readonly sampleBarcodePreview = computed(() => {
+    const yy = String(new Date().getFullYear() % 100).padStart(2, '0');
+    const width = Math.min(Math.max(this.sampleNumberWidth() || 1, 1), 9);
+    return '01' + yy + '1'.padStart(width, '0');
+  });
   readonly collectionMode = this.labCfg.collectionMode;
   readonly billingMode = this.labCfg.billingMode;
 
@@ -611,6 +648,16 @@ export class LabSettingsComponent implements OnInit {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
       next: t => this.tenantState.update(t),
       error: e => this.toasts.error(e?.message ?? 'Could not save')
+    });
+  }
+
+  /** Clamp to 1–9, then PATCH the tenant-wide sample number width. */
+  saveSampleNumberWidth() {
+    const width = Math.min(Math.max(Math.trunc(this.sampleNumberWidth() || 1), 1), 9);
+    this.sampleNumberWidth.set(width);
+    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
+      error: e => this.toasts.error(e?.message ?? 'Could not save sample number width')
     });
   }
 
