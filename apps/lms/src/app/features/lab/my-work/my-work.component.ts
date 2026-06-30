@@ -501,7 +501,7 @@ const COUNTERS: CounterSpec[] = [
                             <div class="flex justify-end gap-2">
                               @switch (tab()) {
                                 @case ('service_queue') {
-                                  <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="pickTube(tube)">Pick · scan tube</button>
+                                  <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, g.patientName)">Pick · view tests</button>
                                   <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests[0])">Delegate</button>
                                 }
                                 @default {
@@ -620,6 +620,51 @@ const COUNTERS: CounterSpec[] = [
         (chose)="onDelegate($event)"
         (cancelled)="cancelDelegate()">
       </pf-delegate-modal>
+    }
+
+    <!-- Pick → see the tube's tests → claim it into My Work. Centered modal on
+         web/iPad; full-width bottom-sheet on phones. -->
+    @if (claimTarget(); as c) {
+      <div class="pf-claim" role="dialog" aria-modal="true" aria-labelledby="pf-claim-title">
+        <div class="pf-claim__backdrop" (click)="cancelClaim()"></div>
+        <div class="pf-claim__sheet">
+          <header class="pf-claim__hdr">
+            <div class="pf-claim__hdr-main">
+              <p class="pf-claim__eyebrow">{{ c.deptName || 'Tube' }}{{ c.barcode ? ' · ' + c.barcode : '' }}</p>
+              <h2 id="pf-claim-title" class="pf-claim__title">{{ c.patientName }}</h2>
+            </div>
+            <button type="button" class="pf-claim__close press" (click)="cancelClaim()" aria-label="Close">✕</button>
+          </header>
+          <p class="pf-claim__lead">{{ c.tests.length }} test{{ c.tests.length === 1 ? '' : 's' }} to be taken on this tube:</p>
+          <ul class="pf-claim__tests">
+            @for (t of c.tests; track t.id) {
+              <li class="pf-claim__test">
+                <span class="pf-claim__test-name">{{ t.test?.name ?? 'Test' }}</span>
+                @if (t.test?.department?.name || t.subOrder?.department?.name; as d) {
+                  <span class="pf-claim__test-dept">{{ d }}</span>
+                }
+              </li>
+            }
+          </ul>
+          <div class="pf-claim__actions">
+            <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
+              {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
+            </button>
+          </div>
+          <p class="pf-claim__foot">Scan this tube's barcode to confirm you have the right sample — it then moves into My Work.</p>
+        </div>
+      </div>
+    }
+
+    <!-- Scan gate for claiming: the modal only emits matched when the scanned
+         code equals THIS tube's barcode, so a tech can't claim the wrong tube. -->
+    @if (claimScanning() && claimTarget(); as c) {
+      <pf-barcode-scanner-modal
+        title="Scan vial to claim"
+        [expectedBarcode]="c.barcode"
+        (matched)="onClaimScanned()"
+        (cancelled)="cancelClaimScan()">
+      </pf-barcode-scanner-modal>
     }
   `,
   styles: [`
@@ -1646,6 +1691,42 @@ const COUNTERS: CounterSpec[] = [
       }
       .pf-mw-scan.pf-intake-open .pf-mw-scan__icon { display: none; }
     }
+
+    /* ── Claim popup: pick a tube → see its tests → claim into My Work ── */
+    .pf-claim { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .pf-claim__backdrop { position: absolute; inset: 0; background: rgba(8, 10, 16, 0.62); backdrop-filter: blur(4px); }
+    .pf-claim__sheet {
+      position: relative; z-index: 1; width: 100%; max-width: 440px;
+      max-height: min(80vh, 640px); display: flex; flex-direction: column;
+      background: var(--card-bg, rgba(22, 24, 32, 0.96)); border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
+      border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,0.5); padding: 18px 18px 16px;
+    }
+    .pf-claim__hdr { display: flex; align-items: flex-start; gap: 12px; }
+    .pf-claim__hdr-main { min-width: 0; flex: 1; }
+    .pf-claim__eyebrow { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 2px; }
+    .pf-claim__title { font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-claim__close { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; }
+    .pf-claim__lead { font-size: 12.5px; color: var(--text-secondary); margin: 14px 0 8px; }
+    .pf-claim__tests { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; }
+    .pf-claim__test { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(255,255,255,0.08)); }
+    .pf-claim__test-name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-claim__test-dept { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-claim__actions { display: flex; gap: 10px; margin-top: 16px; }
+    .pf-claim__scan { flex: 0 0 auto; padding: 0 16px; min-height: 46px; border-radius: 13px; cursor: pointer; font-size: 13.5px; font-weight: 600; background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+    .pf-claim__scan:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
+    .pf-claim__go { flex: 1 1 auto; min-height: 46px; border-radius: 13px; border: 0; cursor: pointer; font-size: 14.5px; font-weight: 700; color: #fff; background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef)); box-shadow: 0 8px 22px rgba(168,85,247,0.4); }
+    .pf-claim__go:disabled, .pf-claim__scan:disabled { opacity: 0.55; cursor: not-allowed; }
+    .pf-claim__foot { font-size: 11px; color: var(--text-tertiary); margin: 10px 0 0; text-align: center; }
+
+    /* Phone: keep the dialog centered (a bottom-anchored sheet gets trapped by
+       the shell's backdrop-filter ancestor, so its "bottom" isn't the viewport
+       and the action row slid under the floating nav). The container reserves
+       the nav zone as bottom padding, so the centered card can never overlap
+       the pill regardless of how the fixed element's containing block resolves. */
+    @media (max-width: 640px) {
+      .pf-claim { padding: 14px 12px calc(var(--tab-nav-total-height) + 12px); }
+      .pf-claim__sheet { max-width: none; max-height: 80dvh; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -2204,6 +2285,62 @@ export class MyWorkComponent implements OnInit {
   }
   private readonly _pickingTubeId = signal<string | null>(null);
   readonly pickingTubeId = this._pickingTubeId.asReadonly();
+
+  // ── Claim-into-my-queue popup ─────────────────────────────
+  // Picking a tube from the service queue first shows the tech WHAT tests
+  // are on the tube, then claims the whole tube into "My Work" (the tech can
+  // then open it any time — via the list, a typed id, or a scan — to fill,
+  // save a draft, and come back). Scanning the tube stays available as the
+  // verified-claim alternative.
+  private readonly _claimTarget = signal<{
+    sampleId: string; deptName: string; barcode: string; patientName: string; tests: Enriched[];
+  } | null>(null);
+  readonly claimTarget = this._claimTarget.asReadonly();
+  private readonly _claiming = signal(false);
+  readonly claiming = this._claiming.asReadonly();
+
+  // Scanning the physical tube is required before a claim commits, so a tech
+  // can't pick up the wrong sample. The scanner modal gates on the tube's
+  // barcode and only fires onClaimScanned() on an exact match.
+  private readonly _claimScanning = signal(false);
+  readonly claimScanning = this._claimScanning.asReadonly();
+
+  openClaim(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[] }, patientName: string) {
+    this._claimTarget.set({ ...tube, patientName });
+  }
+  cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
+
+  /** Open the scan gate for the pending claim. Tubes with no printed barcode
+   *  (legacy/seeder samples) can't be scan-verified, so they fall back to a
+   *  direct claim. */
+  startClaimScan() {
+    const c = this._claimTarget();
+    if (!c || this._claiming()) return;
+    if (!c.barcode) { this.confirmClaim(); return; }
+    this._claimScanning.set(true);
+  }
+  cancelClaimScan() { this._claimScanning.set(false); }
+  /** Correct tube scanned — commit the claim. */
+  onClaimScanned() { this._claimScanning.set(false); this.confirmClaim(); }
+
+  /** Commit the claim — assigns every writable test on the tube to this tech
+   *  and moves it into My Work. Reached only after a matching scan (or the
+   *  barcode-less fallback above). */
+  confirmClaim() {
+    const c = this._claimTarget();
+    if (!c || this._claiming()) return;
+    this._claiming.set(true);
+    this.api.post(`/api/samples/${c.sampleId}/claim`, {}).subscribe({
+      next: () => {
+        this._claiming.set(false);
+        this._claimTarget.set(null);
+        this.toasts.success('Claimed into My Work — open it when you’re ready to enter results.');
+        this.setMobileTab('mywork');
+        this.refreshAllCounts();
+      },
+      error: e => { this._claiming.set(false); this.toasts.error(e?.message ?? 'Could not claim — try again'); }
+    });
+  }
 
   private enterJustScanned(t: OrderTest) {
     const sid = t.subOrder?.id;

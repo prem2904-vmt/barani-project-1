@@ -43,19 +43,51 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
          [class.pf-dd--open]="isOpen()"
          [class.pf-dd--disabled]="disabled">
 
-      <button type="button"
-              class="pf-dd__trigger"
-              [disabled]="disabled"
-              [attr.aria-expanded]="isOpen()"
-              aria-haspopup="listbox"
-              (click)="toggle($event)">
-        <span class="pf-dd__value" [class.pf-dd__value--ph]="!matched">{{ displayLabel }}</span>
-        <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
-          <path d="m6 9 6 6 6-6"/>
-        </svg>
-      </button>
+      @if (multiple) {
+        <!-- A <button> does NOT grow to contain wrapped flex/block children
+             (they overflow its border-box), so the multi trigger is a div with
+             combobox semantics — it expands normally as chips wrap. -->
+        <div class="pf-dd__trigger pf-dd__trigger--multi"
+             role="combobox"
+             [attr.tabindex]="disabled ? -1 : 0"
+             [attr.aria-expanded]="isOpen()"
+             [attr.aria-disabled]="disabled"
+             aria-haspopup="listbox"
+             (click)="toggle($event)">
+          @if (selectedOptions.length) {
+            <span class="pf-dd__chips">
+              @for (o of selectedOptions; track o.value) {
+                <span class="pf-dd__chip">
+                  <span class="pf-dd__chip-lbl">{{ o.label }}</span>
+                  <span class="pf-dd__chip-x" role="button" tabindex="0" aria-label="Remove"
+                        (click)="removeChip(o, $event)">✕</span>
+                </span>
+              }
+            </span>
+          } @else {
+            <span class="pf-dd__value pf-dd__value--ph">{{ placeholder }}</span>
+          }
+          <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </div>
+      } @else {
+        <button type="button"
+                class="pf-dd__trigger"
+                [disabled]="disabled"
+                [attr.aria-expanded]="isOpen()"
+                aria-haspopup="listbox"
+                (click)="toggle($event)">
+          <span class="pf-dd__value" [class.pf-dd__value--ph]="!matched">{{ displayLabel }}</span>
+          <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+      }
     </div>
 
     <ng-template #panelTpl>
@@ -74,6 +106,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                     [attr.aria-selected]="isSelected(opt.value)"
                     [disabled]="opt.disabled ?? false"
                     (click)="pick(opt, $event)">
+              @if (multiple) {
+                <span class="pf-dd__box" [class.pf-dd__box--on]="isSelected(opt.value)" aria-hidden="true">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </span>
+              }
               <span class="pf-dd__opt-label">{{ opt.label }}</span>
               @if (opt.hint) { <span class="pf-dd__hint">{{ opt.hint }}</span> }
             </button>
@@ -88,6 +125,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                         [attr.aria-selected]="isSelected(opt.value)"
                         [disabled]="opt.disabled ?? false"
                         (click)="pick(opt, $event)">
+                  @if (multiple) {
+                    <span class="pf-dd__box" [class.pf-dd__box--on]="isSelected(opt.value)" aria-hidden="true">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    </span>
+                  }
                   <span class="pf-dd__opt-label">{{ opt.label }}</span>
                 </button>
               }
@@ -126,6 +168,32 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     pf-select .pf-dd__value {
       flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+
+    /* Multi-select: chips live INSIDE the trigger so they fill the control.
+       Block layout (not flex) so the trigger height always follows the wrapped
+       chips; the chevron is absolutely pinned top-right and the right padding
+       reserves room for it. */
+    pf-select .pf-dd__trigger--multi {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      height: auto; min-height: 44px;
+      padding: 6px 34px 6px 10px; position: relative;
+    }
+    pf-select .pf-dd__trigger--multi .pf-dd__chevron { position: absolute; right: 12px; top: 50%; margin-top: -7px; }
+    pf-select .pf-dd--open .pf-dd__trigger--multi .pf-dd__chevron { transform: rotate(180deg); }
+    pf-select .pf-dd__chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+    pf-select .pf-dd__chip {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+      padding: 3px 4px 3px 10px; border-radius: 999px; font-size: 13px; line-height: 1.3;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+      color: var(--text-primary, #0f172a); border: 1px solid var(--input-border, rgba(148,163,184,0.4));
+    }
+    pf-select .pf-dd__chip-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    pf-select .pf-dd__chip-x {
+      flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 999px; cursor: pointer; font-size: 10px; line-height: 1;
+      background: rgba(255,255,255,0.14); color: var(--text-secondary, #cbd5e1);
+    }
+    pf-select .pf-dd__chip-x:hover { background: rgba(255,255,255,0.26); color: var(--text-primary, #0f172a); }
     pf-select .pf-dd__value--ph { color: var(--text-tertiary, #94a3b8); }
 
     pf-select .pf-dd__chevron {
@@ -179,7 +247,15 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
     .pf-dd__option--active:hover:not(:disabled) { background: rgba(139, 92, 246, 0.14); }
     .pf-dd__option:disabled { opacity: 0.38; cursor: not-allowed; }
-    .pf-dd__opt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-dd__box {
+      flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 5px;
+      border: 1.5px solid var(--input-border, rgba(148,163,184,0.5)); color: transparent;
+    }
+    .pf-dd__box--on {
+      background: var(--color-primary, #7c3aed); border-color: var(--color-primary, #7c3aed); color: #fff;
+    }
+    .pf-dd__opt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
     .pf-dd__hint { flex-shrink: 0; font-size: 11px; color: var(--text-tertiary, #94a3b8); font-weight: 400; }
 
     .pf-dd__group { border-top: 1px solid var(--border-muted, #e2e8f0); margin-top: 2px; padding-top: 2px; }
@@ -205,7 +281,14 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   @Input() size: PfSelectSize = 'md';
   @Input() disabled = false;
 
+  /** Multi-select mode: bind `values`/`valuesChange` instead of `value`/
+   *  `valueChange`. Options show a checkbox and the panel stays open across
+   *  picks. Single-select (default) behaviour is unchanged. */
+  @Input() multiple = false;
+  @Input() values: T[] = [];
+
   @Output() valueChange = new EventEmitter<T>();
+  @Output() valuesChange = new EventEmitter<T[]>();
 
   readonly isOpen = signal(false);
   readonly panelPos = signal<PanelPos>({ top: 0, left: 0, width: 0, above: false });
@@ -230,19 +313,42 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   }
 
   get matched(): boolean {
+    if (this.multiple) return (this.values?.length ?? 0) > 0;
     if (this.value === null || this.value === undefined) return false;
     return this.allOptions.some(o => String(o.value) === String(this.value));
   }
 
   get displayLabel(): string {
+    if (this.multiple) {
+      const sel = this.values ?? [];
+      if (!sel.length) return this.placeholder;
+      const labels = sel.map(v => this.allOptions.find(o => String(o.value) === String(v))?.label ?? String(v));
+      return labels.length <= 2 ? labels.join(', ') : `${labels.length} selected`;
+    }
     if (this.value === null || this.value === undefined) return this.placeholder;
     const opt = this.allOptions.find(o => String(o.value) === String(this.value));
     return opt?.label ?? this.placeholder;
   }
 
   isSelected(v: T): boolean {
+    if (this.multiple) return (this.values ?? []).some(x => String(x) === String(v));
     if (this.value === null || this.value === undefined) return false;
     return String(v) === String(this.value);
+  }
+
+  /** Selected options as chips inside the trigger (multi mode), in option order. */
+  get selectedOptions(): PfSelectOption<T>[] {
+    if (!this.multiple) return [];
+    const vals = (this.values ?? []).map(String);
+    return this.allOptions.filter(o => vals.includes(String(o.value)));
+  }
+
+  /** Remove one chip without opening/closing the panel. */
+  removeChip(opt: PfSelectOption<T>, ev: Event): void {
+    ev.stopPropagation();
+    const next = (this.values ?? []).filter(x => String(x) !== String(opt.value));
+    this.values = next;
+    this.valuesChange.emit(next);
   }
 
   toggle(ev: MouseEvent): void {
@@ -254,6 +360,16 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   pick(opt: PfSelectOption<T>, ev: MouseEvent): void {
     ev.stopPropagation();
     if (opt.disabled) return;
+    if (this.multiple) {
+      // Toggle membership; keep the panel open so several can be picked at once.
+      const cur = this.values ?? [];
+      const has = cur.some(x => String(x) === String(opt.value));
+      const next = has ? cur.filter(x => String(x) !== String(opt.value)) : [...cur, opt.value];
+      this.values = next;
+      this.valuesChange.emit(next);
+      this.panelRef?.detectChanges();
+      return;
+    }
     this.valueChange.emit(opt.value);
     this.closePanel();
   }

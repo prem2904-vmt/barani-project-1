@@ -9,7 +9,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ToastService } from '../../../core/services/toast.service';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
 import { Department, Tenant } from '../../../shared/models/tenant.model';
-import { Role } from '../../../shared/models/user.model';
+import { Role, User } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -19,8 +19,10 @@ interface AutoAssignConfig {
   id?: string;
   tenantId?: string;
   departmentId: string;
-  isEnabled: boolean;
-  autoAssignRoleId?: string | null;
+  isEnabled?: boolean;
+  // The API stores the eligible pool as JSON arrays of GUIDs.
+  assigneeUserIdsJson?: string | null;
+  autoAssignRoleIdsJson?: string | null;
 }
 
 interface WipeResult { patients: number; orders: number; bills: number; reports: number; appointments: number; }
@@ -239,15 +241,28 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
         <p class="pf-ls__hint">
-          When a sample is received, tests are auto-assigned to the least-loaded tech holding the
-          configured role within the sample's branch / sub-branch. Picking a role without enabling
-          the toggle does nothing.
+          When a sample is received, each test is routed to the person — or the least-loaded member
+          of a role — you set for its department. Departments with nothing set fall into the shared
+          queue for anyone to pick up.
         </p>
+
+        <!-- Master toggle for this branch -->
+        <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
+          <div class="min-w-0">
+            <p class="pf-ls__dept-name">Enable auto-assign for this branch</p>
+            <p class="pf-ls__hint">Off → every received test goes to the shared queue.</p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="autoAssignEnabled()">
+            <input type="checkbox" [checked]="autoAssignEnabled()"
+                   (change)="setAutoAssignEnabled($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
 
         @if (departments().length === 0) {
           <p class="pf-ls__empty">No departments yet — add them from Branches first.</p>
         } @else {
-          <div class="pf-ls__dept-grid">
+          <div class="pf-ls__dept-grid" [class.pf-ls__dept-grid--off]="!autoAssignEnabled()">
             @for (d of departments(); track d.id) {
               <div class="pf-ls__dept">
                 <div class="pf-ls__dept-head">
@@ -255,24 +270,30 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
                     <p class="pf-ls__dept-name">{{ d.name }}</p>
                     <p class="pf-ls__dept-code">{{ d.code }}</p>
                   </div>
-                  <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="isEnabledFor(d.id)">
-                    <input type="checkbox"
-                           [checked]="isEnabledFor(d.id)"
-                           (change)="toggleDept(d.id, $any($event.target).checked)" />
-                    <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-                  </label>
                 </div>
 
-                <label class="pf-ls__label">Auto-assign role</label>
+                <label class="pf-ls__label">People</label>
                 <pf-select
-                  [options]="roleOptions()"
-                  [value]="roleFor(d.id)"
-                  placeholder="— pick a role —"
-                  [disabled]="!isEnabledFor(d.id)"
-                  (valueChange)="setRole(d.id, $any($event))">
+                  [multiple]="true"
+                  [options]="allUserOptions()"
+                  [values]="assigneesFor(d.id)"
+                  placeholder="Select people…"
+                  [disabled]="!autoAssignEnabled()"
+                  (valuesChange)="setAssignees(d.id, $any($event))">
                 </pf-select>
-                @if (isEnabledFor(d.id) && !roleFor(d.id)) {
-                  <p class="pf-ls__warn">Enabled without a role — no one will get assigned until a role is picked.</p>
+
+                <label class="pf-ls__label">Roles (least-loaded member gets it)</label>
+                <pf-select
+                  [multiple]="true"
+                  [options]="allRoleOptions()"
+                  [values]="rolesFor(d.id)"
+                  placeholder="Select roles…"
+                  [disabled]="!autoAssignEnabled()"
+                  (valuesChange)="setRoles(d.id, $any($event))">
+                </pf-select>
+
+                @if (autoAssignEnabled() && !assigneesFor(d.id).length && !rolesFor(d.id).length) {
+                  <p class="pf-ls__warn">No one set — this department's tests go to the shared queue.</p>
                 }
               </div>
             }
@@ -344,12 +365,34 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
     }
     .pf-ls__inline-toggle-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 
+    .pf-ls__autoassign-master {
+      margin-top: 12px; padding: 12px 14px;
+      border: 1px solid var(--glass-border); border-radius: 12px;
+      background: var(--glass-bg, rgba(255,255,255,0.03));
+    }
     .pf-ls__dept-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 12px;
       margin-top: 16px;
     }
+    /* When the master toggle is off, dim the per-department editors — their
+       selects are disabled and have no effect until auto-assign is on. */
+    .pf-ls__dept-grid--off { opacity: 0.5; }
+    .pf-ls__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+    .pf-ls__chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 12.5px;
+      background: color-mix(in srgb, var(--accent, #a855f7) 16%, transparent);
+      color: var(--text-primary); border: 1px solid var(--glass-border);
+    }
+    .pf-ls__chip-x {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 999px; border: 0; cursor: pointer;
+      background: rgba(255,255,255,0.12); color: var(--text-secondary); font-size: 10px; line-height: 1;
+    }
+    .pf-ls__chip-x:hover:not(:disabled) { background: rgba(255,255,255,0.22); color: var(--text-primary); }
+    .pf-ls__chip-x:disabled { opacity: 0.4; cursor: not-allowed; }
     .pf-ls__dept {
       padding: 14px;
       border-radius: 14px;
@@ -459,8 +502,12 @@ export class LabSettingsComponent implements OnInit {
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
+  private readonly _users = signal<User[]>([]);
   private readonly _configs = signal<AutoAssignConfig[]>([]);
   readonly departments = this._departments.asReadonly();
+
+  // Per-branch master toggle for auto-assign.
+  protected readonly autoAssignEnabled = signal(false);
 
   // ── Danger-zone state ──
   protected readonly wiping = signal(false);
@@ -488,10 +535,6 @@ export class LabSettingsComponent implements OnInit {
   readonly collectionMode = this.labCfg.collectionMode;
   readonly billingMode = this.labCfg.billingMode;
 
-  readonly roleOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: '— none —' },
-    ...this._roles().map(r => ({ value: r.id, label: r.name }))
-  ]);
 
   // ── Patient-ID format ──
   protected readonly pidEnabled = signal(false);
@@ -569,6 +612,7 @@ export class LabSettingsComponent implements OnInit {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);
         this.requireBill.set(c?.requireBillBeforeCollection === true);
         this.requireValidation.set(c?.requireValidationForAllResults === true);
+        this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
       }
     });
     this.api.get<any>('/api/config/patient-id').subscribe({
@@ -583,11 +627,20 @@ export class LabSettingsComponent implements OnInit {
         this.pidLetters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
       }
     });
-    this.api.get<Department[]>('/api/tenants/departments').subscribe({
+    // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
+    // backend keys branch-lab-config / auto-assign on the X-Active-Branch
+    // header). Departments are per-branch, so list ONLY this branch's — without
+    // this filter the page showed every branch's departments, which looked like
+    // duplicate "Biochemistry" rows (one per branch).
+    const bid = this.auth.activeBranchId() ?? this.auth.user()?.branchId ?? null;
+    this.api.get<Department[]>(bid ? `/api/tenants/departments?branchId=${bid}` : '/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
     this.api.get<Role[]>('/api/roles/').subscribe({
       next: l => this._roles.set(l ?? [])
+    });
+    this.api.get<User[]>('/api/users/').subscribe({
+      next: l => this._users.set((l ?? []).filter(u => u.isActive !== false))
     });
     this.api.get<AutoAssignConfig[]>('/api/tenants/auto-assign-configs').subscribe({
       next: l => this._configs.set(l ?? [])
@@ -610,34 +663,67 @@ export class LabSettingsComponent implements OnInit {
     });
   }
 
-  isEnabledFor(departmentId: string): boolean {
-    return this._configs().find(c => c.departmentId === departmentId)?.isEnabled ?? false;
-  }
-  roleFor(departmentId: string): string {
-    return this._configs().find(c => c.departmentId === departmentId)?.autoAssignRoleId ?? '';
-  }
-
-  toggleDept(departmentId: string, isEnabled: boolean) {
-    const current = this._configs().find(c => c.departmentId === departmentId);
-    this.upsert({ ...(current ?? { departmentId }), isEnabled });
-  }
-  setRole(departmentId: string, roleId: string) {
-    const current = this._configs().find(c => c.departmentId === departmentId);
-    this.upsert({ ...(current ?? { departmentId, isEnabled: false }), autoAssignRoleId: roleId || null });
+  /** Per-branch master toggle. Off → all received tests go to the queue. */
+  setAutoAssignEnabled(v: boolean) {
+    this.autoAssignEnabled.set(v);
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).subscribe({
+      next: () => this.toasts.success(v ? 'Auto-assign on for this branch' : 'Auto-assign off — tests go to the queue'),
+      error: () => { this.autoAssignEnabled.set(!v); this.toasts.error('Could not update setting'); }
+    });
   }
 
-  private upsert(patch: AutoAssignConfig) {
-    this.api.put<unknown>('/api/tenants/auto-assign-configs', {
-      departmentId: patch.departmentId,
-      isEnabled: !!patch.isEnabled,
-      autoAssignRoleId: patch.autoAssignRoleId ?? null
-    }).subscribe({
+  private parseIds(json?: string | null): string[] {
+    if (!json) return [];
+    try { const v = JSON.parse(json); return Array.isArray(v) ? v.map(String) : []; }
+    catch { return []; }
+  }
+  assigneesFor(departmentId: string): string[] {
+    return this.parseIds(this._configs().find(c => c.departmentId === departmentId)?.assigneeUserIdsJson);
+  }
+  rolesFor(departmentId: string): string[] {
+    return this.parseIds(this._configs().find(c => c.departmentId === departmentId)?.autoAssignRoleIdsJson);
+  }
+  userName(id: string): string {
+    const u = this._users().find(x => x.id === id);
+    return u ? (u.displayName || u.firstName || u.email) : 'User';
+  }
+  roleName(id: string): string {
+    return this._roles().find(r => r.id === id)?.name ?? 'Role';
+  }
+  /** Full option lists for the multi-select dropdowns. */
+  readonly allUserOptions = computed<PfSelectOption<string>[]>(() =>
+    this._users().map(u => ({ value: u.id, label: u.displayName || u.firstName || u.email })));
+  readonly allRoleOptions = computed<PfSelectOption<string>[]>(() =>
+    this._roles().map(r => ({ value: r.id, label: r.name })));
+
+  /** Replace the whole selection for a department (from the multi-select). */
+  setAssignees(departmentId: string, userIds: string[]) {
+    this.upsert(departmentId, userIds ?? [], this.rolesFor(departmentId));
+  }
+  setRoles(departmentId: string, roleIds: string[]) {
+    this.upsert(departmentId, this.assigneesFor(departmentId), roleIds ?? []);
+  }
+  removeAssignee(departmentId: string, userId: string) {
+    this.setAssignees(departmentId, this.assigneesFor(departmentId).filter(id => id !== userId));
+  }
+  removeRole(departmentId: string, roleId: string) {
+    this.setRoles(departmentId, this.rolesFor(departmentId).filter(id => id !== roleId));
+  }
+
+  private upsert(departmentId: string, assigneeUserIds: string[], roleIds: string[]) {
+    this.api.put<unknown>('/api/tenants/auto-assign-configs', { departmentId, assigneeUserIds, roleIds }).subscribe({
       next: () => {
+        const patch: AutoAssignConfig = {
+          departmentId,
+          isEnabled: assigneeUserIds.length > 0 || roleIds.length > 0,
+          assigneeUserIdsJson: JSON.stringify(assigneeUserIds),
+          autoAssignRoleIdsJson: JSON.stringify(roleIds),
+        };
         this._configs.update(list => {
-          const exists = list.some(c => c.departmentId === patch.departmentId);
+          const exists = list.some(c => c.departmentId === departmentId);
           return exists
-            ? list.map(c => c.departmentId === patch.departmentId ? { ...c, ...patch } : c)
-            : [...list, { ...patch, isEnabled: !!patch.isEnabled }];
+            ? list.map(c => c.departmentId === departmentId ? { ...c, ...patch } : c)
+            : [...list, patch];
         });
       },
       error: e => this.toasts.error(e?.message ?? 'Could not save')

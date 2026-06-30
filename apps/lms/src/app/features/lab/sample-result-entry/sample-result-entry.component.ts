@@ -103,8 +103,18 @@ function defaultResultParam(): TestParameter {
             </svg>
           </button>
         } @else {
+          @if (hasWritable()) {
+            <button type="button" class="pf-sre__hdr-action pf-sre__hdr-action--draft"
+                    [disabled]="submitting() || savingDraft()"
+                    (click)="saveDraft()" aria-label="Save draft" title="Save draft">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+            </button>
+          }
           <button type="button" class="pf-sre__hdr-action pf-sre__hdr-action--go"
-                  [disabled]="submitting() || !hasWritable()"
+                  [disabled]="submitting() || savingDraft() || !hasWritable()"
                   (click)="submitAll()" aria-label="Submit all results" title="Submit all results">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 6 9 17l-5-5"/>
@@ -398,8 +408,16 @@ function defaultResultParam(): TestParameter {
               {{ submitting() ? 'Reopening…' : '↺ Undo submit & edit' }}
             </button>
           }
+          <!-- Save partial work and come back later (tube stays in_progress). -->
+          @if (hasWritable()) {
+            <button type="button" class="pf-sre__draft"
+                    [disabled]="submitting() || savingDraft()"
+                    (click)="saveDraft()">
+              {{ savingDraft() ? 'Saving…' : 'Save draft' }}
+            </button>
+          }
           <button type="button" class="pf-sre__submit"
-                  [disabled]="submitting() || !hasWritable()"
+                  [disabled]="submitting() || savingDraft() || !hasWritable()"
                   (click)="submitAll()">
             {{ submitting() ? 'Submitting…' : (hasReopenable() && !hasWritable() ? 'Submitted — awaiting validation' : 'Submit All Results') }}
           </button>
@@ -897,6 +915,15 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__reopen:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
     .pf-sre__reopen:disabled { opacity: 0.55; cursor: not-allowed; }
+    .pf-sre__draft {
+      flex: 0 0 auto;
+      padding: 0 18px; border-radius: 14px; cursor: pointer;
+      font-size: 14px; font-weight: 600;
+      background: var(--glass-bg); color: var(--text-secondary);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-sre__draft:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
+    .pf-sre__draft:disabled { opacity: 0.55; cursor: not-allowed; }
     /* Mobile: lift the sticky Submit bar above the floating bottom-nav
        pill so the violet avatar doesn't peek out from behind the button.
        The pill body sits ~72px tall + safe-area; we add 16px breathing
@@ -1124,6 +1151,8 @@ export class SampleResultEntryComponent {
   private readonly _sample = signal<OrderSample | null>(null);
   private readonly _loading = signal<boolean>(true);
   private readonly _submitting = signal<boolean>(false);
+  private readonly _savingDraft = signal<boolean>(false);
+  readonly savingDraft = this._savingDraft.asReadonly();
   // values per OrderTestId → param.name → value
   private readonly _values = signal<Record<string, Record<string, unknown>>>({});
   private readonly _flags = signal<Array<{ label: string; note?: string; critical: boolean }>>([]);
@@ -1439,6 +1468,42 @@ export class SampleResultEntryComponent {
       this.toasts.error('Could not submit — try again');
     } finally {
       this._submitting.set(false);
+    }
+  }
+
+  /** Save whatever is filled so far WITHOUT finalising — the tech can leave
+   *  and come back to finish. Persists partial values to each test's draft
+   *  (status stays in_progress) so reopening pre-fills them, and the tube shows
+   *  as in-progress under "My Work". Mirrors submitAll but targets the draft
+   *  endpoint (no plausibility/critical engine, no validation transition). */
+  async saveDraft() {
+    const s = this._sample();
+    if (!s || this._submitting() || this._savingDraft()) return;
+    const all = this._values();
+    const writable = (s.tests ?? []).filter(t =>
+      t.status !== 'validated' && t.status !== 'entered'
+    );
+    const payload = {
+      results: writable
+        .filter(t => all[t.id] && Object.keys(all[t.id]).length > 0)
+        .map(t => ({ orderTestId: t.id, values: all[t.id], note: undefined }))
+    };
+    if (payload.results.length === 0) {
+      this.toasts.warning('Nothing to save yet — enter a value first.');
+      return;
+    }
+    this._savingDraft.set(true);
+    try {
+      const resp = await firstValueFrom(
+        this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
+      );
+      this._sample.set(resp?.sample ?? s);
+      this.toasts.success('Draft saved — you can finish this tube later');
+      setTimeout(() => this.router.navigate(['/lab/my-work']), 600);
+    } catch (e) {
+      this.toasts.error('Could not save draft — try again');
+    } finally {
+      this._savingDraft.set(false);
     }
   }
 
