@@ -7,6 +7,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -974,6 +975,7 @@ const DRAG_THRESHOLD_PX = 4;
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly entitlements = inject(TenantEntitlementsService);
   private readonly router = inject(Router);
   /** Theme + people drawer are now reachable from the bottom-nav More
    *  popover instead of the top chrome (which is hidden on mobile). */
@@ -1213,6 +1215,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.labCfg.ensureLoaded();
+    this.entitlements.ensureLoaded();
     this.tenantState.ensureLoaded();
     this.process.loadActive();
 
@@ -1317,6 +1320,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
       // Inventory work area only appears when the branch has it enabled.
       if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
+      // Product-module entitlement: hide a whole work area the tenant's plan
+      // doesn't include (inventory / messages / home collection / reports).
+      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
       // Hide a nav item whose action is switched off in /admin/process.
       if (i.action && !this.process.isEnabled(i.action)) return false;
       return true;
@@ -1337,7 +1343,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Workflow-derived nav has no Stores work area; append it when inventory is
    *  enabled and the user can use it (idempotent vs the PRIMARY_NAV fallback). */
   private withInventory(items: NavItem[]): NavItem[] {
-    if (!this.labCfg.inventoryEnabled()) return items;
+    if (!this.entitlements.moduleEnabled('inventory') || !this.labCfg.inventoryEnabled()) return items;
     if (items.some(i => i.id === 'stores' || i.href === '/stores')) return items;
     const inv = PRIMARY_NAV.find(i => i.id === 'stores');
     if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;

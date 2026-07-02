@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -37,6 +38,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly entitlements = inject(TenantEntitlementsService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   protected readonly chat = inject(ChatService);
@@ -65,6 +67,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
       if (i.billingModes && !i.billingModes.includes(bMode)) return false;
       // Inventory work area only appears when the branch has it enabled.
       if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
+      // Product-module entitlement: hide a whole work area the tenant's plan
+      // doesn't include (inventory / messages / home collection / reports).
+      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
       // Workflow source-of-truth: hide a nav item whose action the admin
       // switched off in /admin/process (the screen itself is unchanged).
       if (i.action && !this.process.isEnabled(i.action)) return false;
@@ -88,7 +93,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  enabled and the user holds an inventory permission (idempotent — the
    *  PRIMARY_NAV fallback already includes it). */
   private withInventory(items: NavItem[]): NavItem[] {
-    if (!this.labCfg.inventoryEnabled()) return items;
+    if (!this.entitlements.moduleEnabled('inventory') || !this.labCfg.inventoryEnabled()) return items;
     if (items.some(i => i.id === 'stores' || i.href === '/stores')) return items;
     const inv = PRIMARY_NAV.find(i => i.id === 'stores');
     if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;
@@ -184,6 +189,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
+    this.entitlements.ensureLoaded();
     this.process.loadActive();
   }
   ngOnDestroy() { /* no-op */ }
@@ -240,6 +246,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // ── (5) Reset cached tenant/config data ────────────────────────
     this.tenantState.reset();
     this.labCfg.reset();
+    this.entitlements.reset();
 
     // ── (6) Final auth sign-out + redirect ─────────────────────────
     await this.auth.signOut();

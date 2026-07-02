@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 
 interface NavLink {
@@ -40,7 +41,7 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
         <span class="font-semibold tracking-tight">Prefrontal · Lab Management System</span>
       </a>
       <nav class="flex-1 overflow-y-auto py-4">
-        @if (!labCfg.loaded()) {
+        @if (!labCfg.loaded() || !entitlements.loaded()) {
           <!-- Skeleton: branch-lab config gates which links render (billing /
                sample collection sections depend on the active mode). Show a
                muted placeholder while it loads instead of flashing the wrong
@@ -93,6 +94,7 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
 export class SidebarComponent {
   protected readonly auth = inject(AuthService);
   protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly entitlements = inject(TenantEntitlementsService);
   // Static placeholder counts for the skeleton — picked to match the average
   // sidebar shape so the layout doesn't jump when real items render.
   protected readonly skeletonSections = [0, 1, 2, 3];
@@ -103,6 +105,9 @@ export class SidebarComponent {
     // branch-lab config. Other components that read collection/billing mode
     // benefit from the cached value.
     this.labCfg.ensureLoaded();
+    // Module entitlements gate whole work areas (inventory / messages / home
+    // collection / reports) — prime here alongside branch-lab config.
+    this.entitlements.ensureLoaded();
   }
 
   // Each link declares what permission lets the user see it. `perms: ['*']`
@@ -192,8 +197,9 @@ export class SidebarComponent {
       links: [
         { label: 'Stores',            href: '/stores',               icon: '📦',
           perms: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
-          // The Lab Settings master switch governs whether the desk appears.
-          visible: () => this.labCfg.inventoryEnabled() }
+          // Gated by the tenant's inventory entitlement AND the branch-level
+          // Lab Settings master switch — both must be on for the desk to appear.
+          visible: () => this.entitlements.moduleEnabled('inventory') && this.labCfg.inventoryEnabled() }
       ]
     },
     {
@@ -211,7 +217,8 @@ export class SidebarComponent {
     {
       title: 'Operations',
       links: [
-        { label: 'TAT Dashboard',     href: '/dashboard',            icon: '📊', perms: ['view_tat_dashboard', 'view_dashboard'] }
+        { label: 'TAT Dashboard',     href: '/dashboard',            icon: '📊', perms: ['view_tat_dashboard', 'view_dashboard'],
+          visible: () => this.entitlements.moduleEnabled('reports') }
       ]
     },
     {
@@ -219,7 +226,8 @@ export class SidebarComponent {
       // (any role in the tenant can message colleagues).
       title: 'Workspace',
       links: [
-        { label: 'Messages',          href: '/messages',             icon: '💬', perms: ['*'] }
+        { label: 'Messages',          href: '/messages',             icon: '💬', perms: ['*'],
+          visible: () => this.entitlements.moduleEnabled('messages') }
       ]
     }
   ];

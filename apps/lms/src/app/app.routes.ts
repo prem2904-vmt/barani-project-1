@@ -3,6 +3,7 @@ import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
+import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
@@ -138,7 +139,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/inventory',
-        canActivate: [permissionGuard('manage_inventory')],
+        canActivate: [permissionGuard('manage_inventory'), moduleGuard('inventory')],
         loadComponent: () => import('./features/admin/inventory/inventory.component').then(m => m.InventoryComponent)
       },
       {
@@ -210,13 +211,13 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/home-collection',
-        canActivate: [permissionGuard(['manage_home_collection', 'manage_branches'])],
+        canActivate: [permissionGuard(['manage_home_collection', 'manage_branches']), moduleGuard('homeCollection')],
         loadComponent: () => import('./features/admin/home-collection/home-collection-agents.component').then(m => m.HomeCollectionAgentsComponent)
       },
       {
         // Agent's own home-collection visit list.
         path: 'home-collections',
-        canActivate: [permissionGuard('collect_sample'), workflowGuard('home_visits')],
+        canActivate: [permissionGuard('collect_sample'), workflowGuard('home_visits'), moduleGuard('homeCollection')],
         loadComponent: () => import('./features/home-collection/my-home-collections.component').then(m => m.MyHomeCollectionsComponent)
       },
 
@@ -260,7 +261,7 @@ export const appRoutes: Route[] = [
           {
             // Reception: assign home collections no agent area covered.
             path: 'home-collection',
-            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order']), workflowGuard('home_visits')],
+            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order']), workflowGuard('home_visits'), moduleGuard('homeCollection')],
             loadComponent: () => import('./features/frontdesk/home-collection-assign/home-collection-assign.component').then(m => m.HomeCollectionAssignComponent)
           },
           {
@@ -358,7 +359,7 @@ export const appRoutes: Route[] = [
       // count). Gated on any inventory permission.
       {
         path: 'stores',
-        canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'])],
+        canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']), moduleGuard('inventory')],
         loadComponent: () => import('./features/stores/stores.component').then(m => m.StoresComponent)
       },
 
@@ -387,14 +388,14 @@ export const appRoutes: Route[] = [
       // Messages — Teams-style chat + group calling.
       {
         path: 'messages',
-        canActivate: [workflowGuard('messages')],
+        canActivate: [workflowGuard('messages'), moduleGuard('messages')],
         loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
       },
 
       // Ops
       {
         path: 'dashboard',
-        canActivate: [permissionGuard(['view_tat_dashboard', 'view_dashboard'])],
+        canActivate: [permissionGuard(['view_tat_dashboard', 'view_dashboard']), moduleGuard('reports')],
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
 

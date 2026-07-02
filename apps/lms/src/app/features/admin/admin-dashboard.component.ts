@@ -669,9 +669,9 @@ export class AdminDashboardComponent implements OnInit {
           iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4',
           iconExtra: 'M9 9h.01M9 13h.01M9 17h.01',
           subtitle: () => 'Hospitals + doctors that send patients to your lab' },
-        { title: 'Setup wizard', href: '/setup', gradient: 'violet',
+        { title: 'Branding', href: '/setup', gradient: 'violet',
           iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', iconExtra: 'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z',
-          subtitle: () => 'First-time install · onboard a new branch' },
+          subtitle: () => 'Logo & lab name shown in the top bar' },
       ]
     },
     {

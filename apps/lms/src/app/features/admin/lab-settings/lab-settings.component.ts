@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -185,7 +186,9 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         </div>
       </pf-tile>
 
-      <!-- Inventory master switch -->
+      <!-- Inventory master switch — only when the tenant is entitled to the
+           inventory module, so an admin can't turn on a module they don't have. -->
+      @if (entitlements.moduleEnabled('inventory')) {
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
@@ -202,6 +205,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
           </label>
         </div>
       </pf-tile>
+      }
 
       <!-- Require payment before collection -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
@@ -496,6 +500,7 @@ export class LabSettingsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
+  protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
@@ -607,6 +612,7 @@ export class LabSettingsComponent implements OnInit {
   ngOnInit() {
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
+    this.entitlements.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
       next: c => {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);

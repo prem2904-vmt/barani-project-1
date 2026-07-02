@@ -1,4 +1,5 @@
 import { ProcessWorkflowConfig, catalogFor, workAreaRoute } from '../shared/models/process-workflow.model';
+import { ModuleKey } from '../core/services/tenant-entitlements.service';
 
 export interface NavItem {
   id: string;
@@ -37,6 +38,13 @@ export interface NavItem {
    * admin toggle in Lab Settings actually surfaces / hides the work area.
    */
   requiresInventory?: boolean;
+  /**
+   * Only render when the tenant is entitled to this product module
+   * (TenantEntitlementsService.moduleEnabled). Gates whole work areas
+   * (inventory / messages / home collection / reports) that a tenant's plan
+   * may not include. AND-ed with the other visibility checks.
+   */
+  module?: ModuleKey;
 }
 
 // Admin is intentionally NOT in the primary nav anymore — it's a
@@ -82,7 +90,8 @@ export const PRIMARY_NAV: NavItem[] = [
     href: '/stores',
     iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
     permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
-    requiresInventory: true
+    requiresInventory: true,
+    module: 'inventory'
   },
   {
     id: 'sample-collection',
@@ -118,7 +127,8 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Home Visits',
     href: '/home-collections',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
-    permissions: ['collect_sample']
+    permissions: ['collect_sample'],
+    module: 'homeCollection'
   },
   // Order: Validate before Results — Validate is the pathologist's
   // sign-off step that produces a Result. Following the actual lab
@@ -139,6 +149,8 @@ export const PRIMARY_NAV: NavItem[] = [
     href: '/reports',
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
     permissions: ['deliver_report', 'view_report']
+    // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
+    // reports module, which covers only the TAT/analytics dashboard.
   },
   {
     // Teams-style chat + group calling. No permissions = open to every
@@ -147,7 +159,8 @@ export const PRIMARY_NAV: NavItem[] = [
     action: 'messages',
     label: 'Messages',
     href: '/messages',
-    iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']
+    iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+    module: 'messages'
   }
 ];
 
@@ -203,7 +216,7 @@ export const MORE_NAV: NavItem[] = [
   },
   {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
-    permissions: ['view_tat_dashboard', 'view_dashboard']
+    permissions: ['view_tat_dashboard', 'view_dashboard'], module: 'reports'
   },
   {
     id: 'users', label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
@@ -227,7 +240,7 @@ export const MORE_NAV: NavItem[] = [
   },
   {
     id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    permissions: ['manage_inventory']
+    permissions: ['manage_inventory'], module: 'inventory'
   },
   {
     id: 'reports-t', label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
@@ -265,7 +278,7 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
-    permissions: ['manage_home_collection', 'register_patient', 'create_order']
+    permissions: ['manage_home_collection', 'register_patient', 'create_order'], module: 'homeCollection'
   },
   {
     id: 'audit', label: 'Audit trail', href: '/admin/audit',
@@ -275,7 +288,7 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['view_audit_log']
   },
   {
-    id: 'setup', label: 'Setup', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+    id: 'setup', label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
     permissions: ['manage_branches', 'manage_users']
   }
 ];
