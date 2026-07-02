@@ -135,6 +135,21 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
         <!-- LEFT COLUMN — flex column, only params inside scroll -->
         <div class="pf-col-left min-w-0">
 
+          <!-- Sent-back banner — the pathologist rejected this result and
+               sent it back for re-entry. Surfaces the WHY at the top so
+               the tech reads it before touching the values. Visual pattern
+               mirrors sample-result-entry's reject banner. -->
+          @if (orderTest(); as t) {
+            @if (t.status === 're_entry' && t.rejectionReason) {
+              <div class="pf-reject-banner pf-col-static">
+                <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
+                <p class="pf-reject-banner__text">
+                  <strong>Sent back:</strong> {{ t.rejectionReason }}
+                </p>
+              </div>
+            }
+          }
+
           <!-- Patient + TAT — single compact row -->
           @if (orderTest(); as t) {
             <pf-tile [tone]="panelTone()" padding="sm" class="pf-col-static pf-patient-tile">
@@ -932,6 +947,31 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
   `,
   styles: [`
+    /* ── Sent-back banner (result rejected by pathologist) ─────
+       Visual pattern copied from sample-result-entry's reject banner. */
+    .pf-reject-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04));
+      border: 1px solid rgba(239, 68, 68, 0.34);
+    }
+    .pf-reject-banner__icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      font-size: 13px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pf-reject-banner__text {
+      margin: 0;
+      font-size: 13px; line-height: 1.4;
+      color: var(--text-secondary);
+    }
+    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
+
     /* ── Patient bar (compact one-row banner) ─────────────────── */
     .pf-patient-tile { padding: 10px 14px !important; }
     .pf-patient-bar {

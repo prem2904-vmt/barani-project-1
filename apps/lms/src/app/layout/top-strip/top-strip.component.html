@@ -1,13 +1,6 @@
-<!-- Offline banner — only renders on Capacitor (or any host whose
-         CapacitorService.isOnline signal flips). Sits above the top
-         strip so it's the first thing the user sees and doesn't push
-         the rest of the chrome around when it appears. -->
-@if (capacitor.initialised() && !capacitor.isOnline()) {
-<div class="pf-offline-banner" role="status" aria-live="polite">
-  <span class="pf-offline-banner__dot" aria-hidden="true"></span>
-  <span class="pf-offline-banner__msg">No internet — some features may not work</span>
-</div>
-}
+<!-- Offline banner moved to the shell root: the top strip lives inside
+     .pf-chrome, which is display:none on phones/tablets/native — exactly
+     where connectivity drops matter — so a banner here never rendered. -->
 <div class="pf-topstrip-bar relative flex items-center gap-2">
 
     <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
@@ -214,6 +207,10 @@
         <button type="button" class="pf-avatar-btn press" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()"
           [attr.aria-label]="'Profile menu — ' + userName()">
           <span class="pf-avatar-circle">{{ initials() }}</span>
+          <!-- My presence status — small colored dot pinned bottom-right of
+               the avatar (solid / white-dash for DND-grade / hollow for Away). -->
+          <span class="pf-status-dot pf-avatar-status"
+                [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
           @if (profileOpen()) { <span class="pf-avatar-ring" aria-hidden="true"></span> }
         </button>
 
@@ -222,13 +219,60 @@
           <span class="pf-profile-accent" aria-hidden="true"></span>
 
           <header class="pf-profile-head">
-            <span class="pf-profile-bigcircle">{{ initials() }}</span>
+            <span class="pf-profile-bigcircle pf-profile-bigcircle--presence">
+              {{ initials() }}
+              <span class="pf-status-dot pf-avatar-status pf-avatar-status--big"
+                    [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+            </span>
             <div class="min-w-0 flex-1">
               <p class="text-[14px] font-semibold truncate" style="color: var(--text-primary);">{{ userName() }}</p>
               <p class="text-[11px] font-mono uppercase tracking-[0.16em] mt-0.5" style="color: var(--text-muted);">
                 admin · mock</p>
             </div>
           </header>
+
+          <div class="pf-profile-divider"></div>
+
+          <!-- Presence status — current status row; tap to expand the 7
+               presets (Teams-style). DND-grade statuses note that calls +
+               pushes are silenced while set. -->
+          <button type="button" class="pf-profile-item pf-status-row press"
+                  (click)="toggleStatusList()" [attr.aria-expanded]="statusListOpen()"
+                  aria-label="Change status">
+            <span class="pf-status-dot" [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+            <span class="pf-status-row__txt min-w-0 flex-1">
+              <span class="pf-status-row__lbl truncate">{{ myStatusLabel() }}</span>
+              @if (presence.myStatusIsDnd()) {
+                <span class="pf-status-row__sub">Calls &amp; alerts silenced</span>
+              }
+            </span>
+            <svg class="pf-status-row__chev" [class.pf-status-row__chev--open]="statusListOpen()"
+                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          @if (statusListOpen()) {
+            <div class="pf-status-list" role="menu" aria-label="Set status">
+              @for (o of statusOptions; track o.key) {
+                <button type="button" role="menuitemradio" class="pf-status-opt press"
+                        [attr.aria-checked]="o.key === presence.myStatus()"
+                        [class.pf-status-opt--on]="o.key === presence.myStatus()"
+                        (click)="pickStatus(o)">
+                  <span class="pf-status-dot" [attr.data-presence]="o.key" aria-hidden="true"></span>
+                  <span class="flex-1 truncate">{{ o.label }}</span>
+                  @if (o.key === presence.myStatus()) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m5 12 4 4L19 6" />
+                    </svg>
+                  }
+                </button>
+              }
+              <p class="pf-status-note">“In surgery” &amp; “Do not disturb” block incoming calls and silence push alerts.</p>
+            </div>
+          }
 
           <div class="pf-profile-divider"></div>
 

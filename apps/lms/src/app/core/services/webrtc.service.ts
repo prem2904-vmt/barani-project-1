@@ -204,6 +204,7 @@ export class WebrtcService implements OnDestroy {
       await this.refreshIceServers();
       const res = await this.signaling.startCall(targetUserId, 'audio', source);
       this.sessionId.set(res.sessionId);
+      this.armOutgoingRingTimeout();
       return res.sessionId;
     } catch (err) {
       this.handleFatal(err, 'startCall');
@@ -228,6 +229,7 @@ export class WebrtcService implements OnDestroy {
       await this.refreshIceServers();
       const res = await this.signaling.startGroupCall(conversationId, 'audio', this.currentSource);
       this.sessionId.set(res.sessionId);
+      this.armOutgoingRingTimeout();
       return res.sessionId;
     } catch (err) {
       this.handleFatal(err, 'startGroupCall');
@@ -255,6 +257,7 @@ export class WebrtcService implements OnDestroy {
   async acceptIncoming(): Promise<void> {
     const info = this.incomingCall();
     if (!info) return;
+    this.clearIncomingRingTimer();
     this.status.set('connecting');
     try {
       await this.acquireLocalStream();
@@ -333,6 +336,7 @@ export class WebrtcService implements OnDestroy {
       this.signaling.incomingCall.subscribe(info => this.onIncomingCall(info)),
       this.signaling.callRejected.subscribe(p => this.onCallRejected(p)),
       this.signaling.callCancelled.subscribe(p => this.onCallCancelled(p)),
+      this.signaling.callHandledElsewhere.subscribe(p => this.onCallHandledElsewhere(p)),
       this.signaling.participantJoined.subscribe(p => this.onParticipantJoined(p)),
       this.signaling.participantLeft.subscribe(p => this.onParticipantLeft(p)),
       this.signaling.sessionOffer.subscribe(p => this.onSessionOffer(p)),
@@ -357,6 +361,18 @@ export class WebrtcService implements OnDestroy {
     this.status.set('incoming');
     this.callType.set(info.callType);
     this.localCallerName.set(info.callerName);
+    this.armIncomingRingTimeout();
+  }
+
+  /** This user accepted/declined on ANOTHER device — dismiss the ring here.
+   *  On the device that actually handled the call this is a no-op (its
+   *  incoming state is already cleared and the session is live). */
+  private onCallHandledElsewhere(p: { sessionId: string }) {
+    const inc = this.incomingCall();
+    if (inc?.sessionId === p.sessionId && this.status() === 'incoming') {
+      this.incomingCall.set(null);
+      this.teardown('idle'); // dismisses CallKit via pf-end-callkit
+    }
   }
 
   private onCallRejected(p: { sessionId: string; userId: string }) {
@@ -425,7 +441,11 @@ export class WebrtcService implements OnDestroy {
     if (pc.iceGatheringState === 'complete') return Promise.resolve();
     return new Promise<void>(resolve => {
       const cleanup = () => pc.removeEventListener('icegatheringstatechange', onStateChange);
-      const timer = setTimeout(() => { cleanup(); resolve(); }, 5000);
+      // 2.5s cap (was 5s): host+srflx typically land <1s and a reachable TURN
+      // <2s — waiting longer only helps when TURN is DOWN, where waiting is
+      // pointless anyway. Both offer and answer legs pay this wait, so the
+      // saving is doubled on the answer→audio path.
+      const timer = setTimeout(() => { cleanup(); resolve(); }, 2500);
       const onStateChange = () => {
         if (pc.iceGatheringState === 'complete') {
           clearTimeout(timer); cleanup(); resolve();
@@ -661,7 +681,6 @@ export class WebrtcService implements OnDestroy {
 
   private async refreshIceServers(): Promise<void> {
     if (this.iceServers.length > 0 && Date.now() < this.iceTtlExpires) return;
-    const creds = await this.signaling.getTurnCredentials();
     // Public Google STUN servers as fallback — same as HMS. If Cloudflare
     // TURN is briefly unreachable, ICE can still surface server-reflexive
     // (srflx) candidates so peers behind NAT can usually still connect.
@@ -670,19 +689,71 @@ export class WebrtcService implements OnDestroy {
       { urls: ['stun:stun.l.google.com:19302'] },
       { urls: ['stun:stun1.l.google.com:19302'] }
     ];
-    this.iceServers = [...creds.iceServers, ...stunFallback];
-    console.log('[webrtc] iceServers refreshed — count:', this.iceServers.length,
-      'urls:', this.iceServers.flatMap(s => s.urls));
-    this.iceTtlExpires = Date.now() + (creds.ttl * 1000 * 0.8); // refresh at 80% of TTL
+    // Never let a slow TURN-credential fetch sit on the call-setup path — it
+    // used to block start/accept for up to the server's Cloudflare HTTP
+    // timeout (~10s), a big slice of the observed answer→audio lag. Cap the
+    // wait at 3s and proceed STUN-only; the fetch keeps running in the
+    // background and warms the cache for the next call.
+    const fetch = this.signaling.getTurnCredentials()
+      .then(creds => {
+        this.iceServers = [...creds.iceServers, ...stunFallback];
+        this.iceTtlExpires = Date.now() + (creds.ttl * 1000 * 0.8); // refresh at 80% of TTL
+        console.log('[webrtc] iceServers refreshed — count:', this.iceServers.length,
+          'urls:', this.iceServers.flatMap(s => s.urls));
+      })
+      .catch(err => console.warn('[webrtc] getTurnCredentials failed — STUN-only', err));
+    await Promise.race([fetch, new Promise<void>(r => setTimeout(r, 3000))]);
+    if (this.iceServers.length === 0) {
+      console.warn('[webrtc] TURN creds not ready in 3s — proceeding STUN-only');
+      this.iceServers = stunFallback;
+      this.iceTtlExpires = 0; // retry the fetch on the next call
+    }
   }
 
   // ── State helpers ────────────────────────────────────────────────
 
   private markActive() {
     this.status.set('active');
+    this.clearRingTimers();
     if (!this.callStartedAt()) this.callStartedAt.set(Date.now());
     this.startKeepAlive();
   }
+
+  // ── Ring timeouts ────────────────────────────────────────────────
+  // Caller: an unanswered outgoing call auto-cancels after 60s ("No answer")
+  // instead of ringing forever. Callee: an incoming ring auto-dismisses after
+  // 90s — covers a caller whose tab/app died without sending CancelCall (the
+  // server reaper also backstops this, but the client shouldn't depend on it).
+  private outgoingRingTimer: ReturnType<typeof setTimeout> | null = null;
+  private incomingRingTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private armOutgoingRingTimeout() {
+    this.clearOutgoingRingTimer();
+    this.outgoingRingTimer = setTimeout(() => {
+      if (this.status() === 'outgoing') {
+        this.callError.set('No answer.');
+        void this.cancelOutgoing();
+      }
+    }, 60_000);
+  }
+
+  private armIncomingRingTimeout() {
+    this.clearIncomingRingTimer();
+    this.incomingRingTimer = setTimeout(() => {
+      if (this.status() === 'incoming' && this.incomingCall()) {
+        this.incomingCall.set(null);
+        this.teardown('idle'); // dismisses CallKit via pf-end-callkit
+      }
+    }, 90_000);
+  }
+
+  private clearOutgoingRingTimer() {
+    if (this.outgoingRingTimer) { clearTimeout(this.outgoingRingTimer); this.outgoingRingTimer = null; }
+  }
+  private clearIncomingRingTimer() {
+    if (this.incomingRingTimer) { clearTimeout(this.incomingRingTimer); this.incomingRingTimer = null; }
+  }
+  private clearRingTimers() { this.clearOutgoingRingTimer(); this.clearIncomingRingTimer(); }
 
   private assertIdle() {
     if (this.inCall() || this.status() === 'outgoing') {
@@ -701,6 +772,7 @@ export class WebrtcService implements OnDestroy {
 
   private teardown(nextStatus: CallStatus) {
     this.stopKeepAlive();
+    this.clearRingTimers();
     for (const id of Array.from(this.peers.keys())) this.tearDownPeer(id);
     this.pendingIceCandidates.clear();
     this.localStream?.getTracks().forEach(t => t.stop());

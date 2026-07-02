@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, map, throwError } from 'rxjs';
+import { Observable, catchError, map, throwError, timeout } from 'rxjs';
 import { ApiResponse } from '../../shared/models/api-response.model';
 import { PlatformService } from './platform.service';
 
@@ -37,10 +37,20 @@ export class ApiService {
     return this.wrap(this.http.delete<ApiResponse<T>>(`${this.baseUrl}${path}`));
   }
 
+  /** Hard ceiling on any API round-trip. Flaky mobile networks otherwise
+   *  leave requests hanging forever with spinners that never resolve.
+   *  File uploads don't go through ApiService (they post FormData via
+   *  HttpClient directly), so a flat 20s is safe here. */
+  private static readonly TIMEOUT_MS = 20_000;
+
   private wrap<T>(source: Observable<ApiResponse<T>>): Observable<T> {
     this._isLoading.set(true);
     this._error.set(null);
     return source.pipe(
+      timeout({
+        each: ApiService.TIMEOUT_MS,
+        with: () => throwError(() => new Error('Request timed out — check your connection')),
+      }),
       map(resp => {
         this._isLoading.set(false);
         if (!resp.success) throw new Error(resp.message ?? resp.error ?? 'Request failed');

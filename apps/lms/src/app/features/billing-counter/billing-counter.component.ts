@@ -1,11 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { ToastService } from '../../core/services/toast.service';
 import { Order } from '../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../shared/models/patient.model';
+import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
@@ -13,6 +14,35 @@ import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../shared/components/kpi-strip/kpi-strip.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+
+/** One row of GET /api/billing/outstanding — a bill with money still moving
+ *  (balance > 0 → patient owes; balance < 0 → lab owes a refund). */
+interface OutstandingRow {
+  billId: string;
+  orderId: string;
+  patientName: string;
+  totalPayable: number;
+  totalPaid: number;
+  balance: number;
+  status: string;
+  createdAt: string;
+}
+
+interface ReconcileModeRow {
+  mode: string;
+  count: number;
+  total: number;
+}
+
+/** GET /api/billing/reconcile?date=YYYY-MM-DD — day-end closeout totals. */
+interface ReconcileSummary {
+  date: string;
+  payments: ReconcileModeRow[];
+  refunds: ReconcileModeRow[];
+  totalCollected: number;
+  totalRefunded: number;
+  net: number;
+}
 
 /**
  * Billing counter — for branches in `billing_mode = separate_counter`.
@@ -25,7 +55,7 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
   selector: 'pf-billing-counter',
   standalone: true,
   imports: [
-    FormsModule, DatePipe,
+    FormsModule, DatePipe, CurrencyInrPipe,
     AvatarComponent, ChipComponent,
     ScreenHeaderComponent, TileComponent, TouchButtonComponent, KpiStripComponent,
     LoadingLogoComponent
@@ -156,6 +186,126 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
           </ul>
         }
       }
+
+      <!-- ── Outstanding money: pay-later balances + refunds the lab owes ── -->
+      <h3 class="pf-section mt-6">Balances due / refunds owed</h3>
+      @if (loadingOutstanding()) {
+        <pf-tile tone="default" padding="lg" class="block">
+          <div class="flex justify-center py-6">
+            <pf-loading-logo size="lg" color="purple"
+                             [showText]="true" text="Loading balances…"></pf-loading-logo>
+          </div>
+        </pf-tile>
+      } @else if (due().length === 0 && refundsOwed().length === 0) {
+        <pf-tile tone="default" padding="lg" class="block">
+          <p class="text-[13px]" style="color: var(--text-tertiary);">
+            No balances due and no refunds owed — everything is settled.
+          </p>
+        </pf-tile>
+      } @else {
+        @if (due().length > 0) {
+          <h4 class="pf-subsection">Due · {{ due().length }}</h4>
+          <ul class="pf-list">
+            @for (r of due(); track r.billId) {
+              <li>
+                <button type="button" class="pf-row pf-row--inline" (click)="openOutstanding(r)">
+                  <div class="min-w-0 flex-1">
+                    <p class="pf-row__name">{{ r.patientName || '—' }}</p>
+                    <p class="pf-row__meta">
+                      {{ r.createdAt | date:'mediumDate' }} · paid {{ r.totalPaid | inr }} of {{ r.totalPayable | inr }}
+                    </p>
+                  </div>
+                  <span class="pf-balance pf-balance--due">{{ r.balance | inr }}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (refundsOwed().length > 0) {
+          <h4 class="pf-subsection">Refunds owed · {{ refundsOwed().length }}</h4>
+          <ul class="pf-list">
+            @for (r of refundsOwed(); track r.billId) {
+              <li>
+                <button type="button" class="pf-row pf-row--inline" (click)="openOutstanding(r)">
+                  <div class="min-w-0 flex-1">
+                    <p class="pf-row__name">{{ r.patientName || '—' }}</p>
+                    <p class="pf-row__meta">
+                      {{ r.createdAt | date:'mediumDate' }} · paid {{ r.totalPaid | inr }} of {{ r.totalPayable | inr }}
+                    </p>
+                  </div>
+                  <span class="pf-balance pf-balance--refund">{{ refundAmount(r) | inr }}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      }
+
+      <!-- ── Day-end summary: per-mode payment/refund totals for one day ── -->
+      <h3 class="pf-section mt-6">Day-end summary</h3>
+      <pf-tile tone="default" padding="lg" class="block">
+        <div class="pf-recon-head">
+          <label class="pf-label" for="pf-recon-date">Business day</label>
+          <input id="pf-recon-date" type="date" class="pf-input pf-recon-date"
+                 [ngModel]="reconcileDate()" (ngModelChange)="setReconcileDate($event)" />
+        </div>
+        @if (loadingReconcile()) {
+          <div class="flex justify-center py-6">
+            <pf-loading-logo size="lg" color="purple"
+                             [showText]="true" text="Loading summary…"></pf-loading-logo>
+          </div>
+        } @else if (reconcile(); as r) {
+          <table class="pf-recon-table">
+            <thead>
+              <tr><th>Mode</th><th class="num">Count</th><th class="num">Total</th></tr>
+            </thead>
+            <tbody>
+              @for (p of r.payments; track p.mode) {
+                <tr>
+                  <td>{{ p.mode }}</td>
+                  <td class="num">{{ p.count }}</td>
+                  <td class="num">{{ p.total | inr }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="pf-recon-empty">No payments on this day</td></tr>
+              }
+              @for (f of r.refunds; track f.mode) {
+                <tr class="pf-recon-refund">
+                  <td>{{ f.mode }} · refund</td>
+                  <td class="num">{{ f.count }}</td>
+                  <td class="num">−{{ f.total | inr }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Collected</td><td class="num"></td>
+                <td class="num">{{ r.totalCollected | inr }}</td>
+              </tr>
+              <tr>
+                <td>Refunded</td><td class="num"></td>
+                <td class="num">{{ r.totalRefunded | inr }}</td>
+              </tr>
+              <tr class="pf-recon-net">
+                <td>Net</td><td class="num"></td>
+                <td class="num">{{ r.net | inr }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        } @else {
+          <p class="text-[13px]" style="color: var(--text-tertiary);">
+            Could not load the summary for this day.
+          </p>
+        }
+      </pf-tile>
       </div>
     </section>
   `,
@@ -238,6 +388,66 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
     .pf-lookup { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .pf-lookup__input { flex: 1; min-width: 180px; }
 
+    /* ── Outstanding balances / refunds ── */
+    .pf-subsection {
+      margin: 10px 0 6px;
+      font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-balance {
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px; font-weight: 700;
+      padding: 6px 10px; border-radius: 999px;
+      white-space: nowrap;
+    }
+    .pf-balance--due {
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.28);
+    }
+    .pf-balance--refund {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+    }
+
+    /* ── Day-end reconciliation ── */
+    .pf-recon-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .pf-recon-head .pf-label { margin: 0; }
+    .pf-recon-date { width: 170px; }
+    .pf-recon-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px; color: var(--text-primary);
+    }
+    .pf-recon-table th {
+      text-align: left; padding: 6px 8px;
+      font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-muted);
+    }
+    .pf-recon-table td {
+      padding: 8px; border-bottom: 1px solid var(--border-muted);
+    }
+    .pf-recon-table .num { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-recon-table tbody tr:last-child td { border-bottom: 1px solid var(--border-muted); }
+    .pf-recon-refund td { color: #f87171; }
+    .pf-recon-empty { color: var(--text-tertiary); }
+    .pf-recon-table tfoot td { border-bottom: none; color: var(--text-secondary); padding: 6px 8px; }
+    .pf-recon-net td {
+      color: var(--text-primary); font-weight: 700;
+      border-top: 1px solid var(--glass-border) !important;
+    }
+
+    /* Phone: iOS zooms sub-16px inputs on focus — lift the date field. */
+    @media (max-width: 640px) {
+      .pf-recon-date { font-size: 16px; }
+    }
+
     .pf-scan { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .pf-scan__bd { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
     .pf-scan__panel {
@@ -278,10 +488,77 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
     }
   `]
 })
-export class BillingCounterComponent implements OnDestroy {
+export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+
+  ngOnInit() {
+    this.loadOutstanding();
+    this.loadReconcile();
+  }
+
+  // ── Outstanding balances / refunds owed ──
+  private readonly _due = signal<OutstandingRow[]>([]);
+  private readonly _refundsOwed = signal<OutstandingRow[]>([]);
+  protected readonly loadingOutstanding = signal(false);
+  readonly due = this._due.asReadonly();
+  readonly refundsOwed = this._refundsOwed.asReadonly();
+
+  private loadOutstanding() {
+    this.loadingOutstanding.set(true);
+    this.api.get<{ due: OutstandingRow[]; refundsOwed: OutstandingRow[] }>('/api/billing/outstanding').subscribe({
+      next: res => {
+        this._due.set(res?.due ?? []);
+        this._refundsOwed.set(res?.refundsOwed ?? []);
+        this.loadingOutstanding.set(false);
+      },
+      error: () => {
+        this.loadingOutstanding.set(false);
+        this.toasts.error('Could not load outstanding balances');
+      }
+    });
+  }
+
+  /** Open the standard billing screen on the row's order — same hand-off as
+   *  the lookup + unbilled-order flows above. */
+  openOutstanding(r: OutstandingRow) {
+    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: r.orderId } });
+  }
+
+  /** Refund rows carry a negative balance — render the amount owed back. */
+  refundAmount(r: OutstandingRow): number {
+    return Math.abs(r.balance);
+  }
+
+  // ── Day-end reconciliation ──
+  protected readonly reconcileDate = signal(BillingCounterComponent.todayIso());
+  private readonly _reconcile = signal<ReconcileSummary | null>(null);
+  protected readonly loadingReconcile = signal(false);
+  readonly reconcile = this._reconcile.asReadonly();
+
+  private static todayIso(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  setReconcileDate(date: string) {
+    if (!date || date === this.reconcileDate()) return;
+    this.reconcileDate.set(date);
+    this.loadReconcile();
+  }
+
+  private loadReconcile() {
+    this.loadingReconcile.set(true);
+    this.api.get<ReconcileSummary>(`/api/billing/reconcile?date=${encodeURIComponent(this.reconcileDate())}`).subscribe({
+      next: res => { this._reconcile.set(res ?? null); this.loadingReconcile.set(false); },
+      error: () => {
+        this._reconcile.set(null);
+        this.loadingReconcile.set(false);
+        this.toasts.error('Could not load the day-end summary');
+      }
+    });
+  }
 
   // ── Scan / lookup (invoice number · order id · tracking QR) ──
   protected readonly lookupCode = signal('');

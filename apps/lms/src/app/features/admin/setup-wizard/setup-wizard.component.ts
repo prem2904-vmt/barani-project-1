@@ -56,7 +56,8 @@ interface BranchDraft {
 interface DepartmentDraft {
   name: string;
   code: string;
-  branchId?: string;
+  /** Index into the branches draft list; resolved to the created branch id on finish. */
+  branchIndex: number;
 }
 
 @Component({
@@ -437,16 +438,26 @@ interface DepartmentDraft {
               @for (d of departments(); let i = $index; track i) {
                 <div class="grid grid-cols-12 gap-2"
                      [class.dept-row-dup]="duplicateDeptIndices().has(i)">
-                  <div class="col-span-7 md:col-span-7">
+                  <div [class]="multiBranch() ? 'col-span-12 md:col-span-4' : 'col-span-7 md:col-span-7'">
                     <input type="text" class="pf-input" [ngModel]="d.name"
                            (ngModelChange)="updateDept(i, { name: $event })"
                            placeholder="Department name" />
                   </div>
-                  <div class="col-span-3 md:col-span-4">
+                  <div [class]="multiBranch() ? 'col-span-4 md:col-span-3' : 'col-span-3 md:col-span-4'">
                     <input type="text" class="pf-input uppercase" [ngModel]="d.code"
                            (ngModelChange)="updateDept(i, { code: $event.toUpperCase() })"
                            placeholder="CODE" />
                   </div>
+                  @if (multiBranch()) {
+                    <div class="col-span-6 md:col-span-4">
+                      <pf-select size="md"
+                                 [options]="deptBranchOptions()"
+                                 [value]="'' + d.branchIndex"
+                                 placeholder="Branch…"
+                                 (valueChange)="setDeptBranch(i, $event)">
+                      </pf-select>
+                    </div>
+                  }
                   <div class="col-span-2 md:col-span-1 flex items-center justify-end">
                     <button type="button" class="row-remove"
                             (click)="removeDept(i)" aria-label="Remove">
@@ -960,6 +971,15 @@ export class SetupWizardComponent {
   });
   readonly hasBrand = computed(() => this.showLogoPreview() || this.showNamePreview());
 
+  // Per-department branch assignment — only surfaced when more than one
+  // branch was configured (single-branch labs keep the implicit default).
+  readonly multiBranch = computed(() => this._branches().length > 1);
+  readonly deptBranchOptions = computed<PfSelectOption<string>[]>(() =>
+    this._branches().map((b, i) => ({
+      value: String(i),
+      label: b.name.trim() || b.code.trim() || `Branch ${i + 1}`
+    })));
+
   readonly barcodePreview = computed(() => {
     const vc = this._org().vendorCode || '??';
     return `PF-${vc.toUpperCase()}-${this.year}-00001-HAEM`;
@@ -1080,6 +1100,11 @@ export class SetupWizardComponent {
   removeBranch(i: number) {
     if (this._branches().length <= 1) return;
     this._branches.update(list => list.filter((_, idx) => idx !== i));
+    // Keep department → branch assignments pointing at the right rows.
+    this._departments.update(list => list.map(d => ({
+      ...d,
+      branchIndex: d.branchIndex === i ? 0 : d.branchIndex > i ? d.branchIndex - 1 : d.branchIndex
+    })));
   }
 
   addSubBranch(branchIndex: number) {
@@ -1105,14 +1130,17 @@ export class SetupWizardComponent {
   }
 
   addDepartment() {
-    this._departments.update(list => [...list, { name: '', code: '' }]);
+    this._departments.update(list => [...list, { name: '', code: '', branchIndex: 0 }]);
   }
   addQuickDept(q: { name: string; code: string }) {
     if (this._departments().some(d => d.code.toUpperCase() === q.code)) return;
-    this._departments.update(list => [...list, { name: q.name, code: q.code }]);
+    this._departments.update(list => [...list, { name: q.name, code: q.code, branchIndex: 0 }]);
   }
   updateDept(i: number, patch: Partial<DepartmentDraft>) {
     this._departments.update(list => list.map((d, idx) => idx === i ? { ...d, ...patch } : d));
+  }
+  setDeptBranch(i: number, value: string) {
+    this.updateDept(i, { branchIndex: Number(value) || 0 });
   }
   removeDept(i: number) {
     this._departments.update(list => list.filter((_, idx) => idx !== i));
@@ -1166,8 +1194,25 @@ export class SetupWizardComponent {
       for (const d of this._departments()) {
         await firstValueOfApi(this.api.post<Department>('/api/tenants/departments', {
           name: d.name, code: d.code,
-          branchId: createdBranches[0]?.id
+          branchId: (createdBranches[d.branchIndex] ?? createdBranches[0])?.id
         }));
+      }
+
+      // Seed a default billing config for the new tenant (same body shape the
+      // Admin → Billing Config screen posts). Best-effort: setup still
+      // completes if this call fails — the admin can configure it later.
+      try {
+        const invoicePrefix = (br.brandingName || o.vendorCode || 'INV')
+          .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'INV';
+        await firstValueOfApi(this.api.post('/api/config/billing', {
+          gstEnabled: true,
+          gstScope: 'branch', filingFrequency: 'monthly',
+          allowDiscounts: true, maxDiscountPct: 10,
+          overrideDiscountPct: 25, approvalThresholdPct: 50,
+          invoicePrefix, invoiceStartNumber: 1000
+        }));
+      } catch {
+        this.toasts.warning('Default billing config could not be saved — set it up in Admin → Billing Config.');
       }
 
       this.toasts.success('Setup complete!');

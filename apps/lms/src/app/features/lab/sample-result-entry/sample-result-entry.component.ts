@@ -1279,6 +1279,7 @@ export class SampleResultEntryComponent {
   cultureValueFor(t: OrderTest): CultureResult { return (this._values()[t.id] ?? {}) as CultureResult; }
   setCulture(testId: string, v: CultureResult) {
     this._values.update(all => ({ ...all, [testId]: v as unknown as Record<string, unknown> }));
+    this.scheduleDraftSave();
   }
 
   inputKindFor(p: TestParameter): 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text' {
@@ -1348,17 +1349,62 @@ export class SampleResultEntryComponent {
       ...all,
       [testId]: { ...(all[testId] ?? {}), [paramName]: v }
     }));
+    this.scheduleDraftSave();
+  }
+
+  // ── Local draft persistence ───────────────────────────────────────
+  // Typed-but-unsubmitted values survive an app kill / reload: every
+  // change autosaves the whole _values map to localStorage (debounced),
+  // and the draft is overlaid on top of the server prefill on the next
+  // load (draft wins — it's newer typing that never reached the server).
+  // Cleared once the values DO reach the server (submitAll / saveDraft).
+  private draftKey: string | null = null;
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleDraftSave() {
+    if (!this.draftKey) return;
+    if (this.draftTimer !== null) clearTimeout(this.draftTimer);
+    this.draftTimer = setTimeout(() => {
+      this.draftTimer = null;
+      try { localStorage.setItem(this.draftKey!, JSON.stringify(this._values())); } catch { /* private mode */ }
+    }, 500);
+  }
+
+  private restoreDraft() {
+    if (!this.draftKey) return;
+    try {
+      const raw = localStorage.getItem(this.draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as Record<string, Record<string, unknown>>;
+      this._values.update(all => {
+        const merged = { ...all };
+        for (const [testId, vals] of Object.entries(draft)) {
+          merged[testId] = { ...(merged[testId] ?? {}), ...vals };
+        }
+        return merged;
+      });
+    } catch { /* private mode / malformed draft */ }
+  }
+
+  private clearDraft() {
+    if (this.draftTimer !== null) { clearTimeout(this.draftTimer); this.draftTimer = null; }
+    if (!this.draftKey) return;
+    try { localStorage.removeItem(this.draftKey); } catch { /* private mode */ }
   }
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get('sampleId');
     if (!id) { this._loading.set(false); return; }
+    this.draftKey = `pf-lms.sre-draft.${id}`;
     try {
       const sample = await firstValueFrom(this.api.get<OrderSample>(`/api/samples/${id}/tests`));
       this._sample.set(sample ?? null);
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
       this.prefillValues(sample ?? null);
+      // Then overlay any locally-autosaved draft — typing that never
+      // reached the server (app killed mid-entry) beats the prefill.
+      this.restoreDraft();
       await this.loadComments();
     } catch (e) {
       this.toasts.error('Could not load sample');
@@ -1454,6 +1500,8 @@ export class SampleResultEntryComponent {
       }
       this._flags.set(flags);
       this._sample.set(resp?.sample ?? s);
+      // Values reached the server — the local crash-recovery draft is done.
+      this.clearDraft();
       // Backend auto-resolves correction threads on submit (see
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
@@ -1498,6 +1546,9 @@ export class SampleResultEntryComponent {
         this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
       );
       this._sample.set(resp?.sample ?? s);
+      // Draft now lives on the server (currentResult prefills it next
+      // open) — drop the local crash-recovery copy.
+      this.clearDraft();
       this.toasts.success('Draft saved — you can finish this tube later');
       setTimeout(() => this.router.navigate(['/lab/my-work']), 600);
     } catch (e) {

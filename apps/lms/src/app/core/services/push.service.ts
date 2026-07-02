@@ -138,6 +138,24 @@ export class PushService {
       });
     } catch (err) { console.warn('[push] registerActionTypes failed', err); }
 
+    // Android 8+ requires the notification channel to EXIST before a push
+    // referencing it can display. The FCM payload hardcodes
+    // channel_id "pf_messages", but nothing ever created it — so pushes
+    // could silently no-op on Android.
+    if (this.detectPlatform() === 'android') {
+      try {
+        await PushNotifications.createChannel({
+          id: 'pf_messages',
+          name: 'Messages & alerts',
+          description: 'Chat messages, lab work and critical alerts',
+          importance: 5,
+          visibility: 1,
+          sound: 'default',
+          vibration: true,
+        });
+      } catch (err) { console.warn('[push] createChannel failed', err); }
+    }
+
     // ── (2) Permissions ─────────────────────────────────────────────
     try {
       const status = await PushNotifications.checkPermissions();
@@ -314,6 +332,28 @@ export class PushService {
         if (opened && callId) {
           this.router.navigate(['/messages'], { queryParams: { acceptCall: callId } });
         }
+        break;
+      }
+      // Business notifications (now pushed to devices, not just the bell) —
+      // a TAP routes to the screen where the work lives; foreground delivery
+      // stays a toast.
+      case 'critical_value':
+      case 'test_assigned':
+      case 'tests_assigned':
+      case 'result_rejected': {
+        if (opened) this.router.navigate(['/lab/my-work']);
+        else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
+        break;
+      }
+      case 'lms.report_ready': {
+        if (opened) this.router.navigate(['/reports']);
+        else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
+        break;
+      }
+      case 'lms.sample_rejection':
+      case 'lms.sample_ready_collection': {
+        if (opened) this.router.navigate(['/frontdesk']);
+        else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
       }
       default:

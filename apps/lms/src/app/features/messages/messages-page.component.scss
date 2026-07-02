@@ -310,7 +310,24 @@
   background: #6b7280;
   &[data-status='active']    { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25); }
   &[data-status='in-a-call'] { background: #f43f5e; box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.25); }
-  &[data-status='away']      { background: #fbbf24; box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25); }
+  // Custom Teams-style statuses (colors from shared/models/presence.model.ts).
+  &[data-status='available']    { background: #34d399; box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25); }
+  &[data-status='busy'],
+  &[data-status='with_patient'] { background: #f87171; box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25); }
+  &[data-status='rounds']       { background: #fbbf24; box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25); }
+  &[data-status='surgery'],
+  &[data-status='dnd']          { background: #dc2626; box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25); }
+  &[data-status='surgery']::after,
+  &[data-status='dnd']::after {
+    content: ''; position: absolute; left: 20%; right: 20%; top: 50%;
+    height: 1.5px; margin-top: -0.75px; border-radius: 2px; background: #fff;
+  }
+  // Away — hollow/ring style (both the auto connection-away and the
+  // user-set Away preset render the same way).
+  &[data-status='away'] {
+    background: var(--bg-card-solid);
+    box-shadow: inset 0 0 0 2px #9ca3af;
+  }
 }
 
 // ── Right pane / thread ──────────────────────────────────────────────

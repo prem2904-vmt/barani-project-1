@@ -107,6 +107,19 @@ interface ValueRow {
             }
           </div>
 
+          <!-- Sent-back banner — this result was previously rejected and
+               re-entered by the tech. Repeats the rejection reason so the
+               validator remembers WHY it was sent back before signing off.
+               Visual pattern mirrors sample-result-entry's reject banner. -->
+          @if (t.rejectionReason) {
+            <div class="pf-reject-banner">
+              <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
+              <p class="pf-reject-banner__text">
+                <strong>Sent back:</strong> {{ t.rejectionReason }}
+              </p>
+            </div>
+          }
+
           <!-- Validator ↔ tech overall conversation. Bidirectional —
                tech can post observations ("patient was nervous, two
                attempts"); validator posts corrections ("recheck
@@ -590,6 +603,32 @@ interface ValueRow {
       font-size: 13px;
       color: var(--text-tertiary);
     }
+
+    /* ── Sent-back banner (previously rejected, now re-entered) ─
+       Visual pattern copied from sample-result-entry's reject banner. */
+    .pf-reject-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04));
+      border: 1px solid rgba(239, 68, 68, 0.34);
+    }
+    .pf-reject-banner__icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      font-size: 13px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pf-reject-banner__text {
+      margin: 0;
+      font-size: 13px; line-height: 1.4;
+      color: var(--text-secondary);
+    }
+    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
 
     /* ── Patient context strip ─────────────────────────────── */
     .pf-ctx {

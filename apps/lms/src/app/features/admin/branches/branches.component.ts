@@ -151,13 +151,24 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                               <span class="text-[12px]" style="color: var(--text-tertiary);">None assigned</span>
                             } @else {
                               @for (d of deptsForSubBranch(sb.id); track d.id) {
-                                <div class="pf-dept-pill">
+                                <div class="pf-dept-pill" [class.pf-dept-pill--inactive]="!d.isActive">
                                   <span>{{ d.name }}</span>
+                                  @if (!d.isActive) {
+                                    <pf-chip tone="default" size="sm">Inactive</pf-chip>
+                                  }
                                   <input type="number" inputmode="numeric" min="1" max="99"
                                          class="pf-input pf-sample-input pf-sample-input--pill" placeholder="01"
                                          title="Sample # — 2-digit code (01–99) prefixing the short sample barcode"
                                          [value]="d.sampleCode ?? ''"
                                          (change)="saveSampleCode(d, $any($event.target).value)" />
+                                  <button type="button" class="pf-unassign pf-dept-power"
+                                          (click)="toggleDeptActive(d)"
+                                          [title]="d.isActive ? 'Deactivate department' : 'Reactivate department'">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                      <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                                      <line x1="12" y1="2" x2="12" y2="12"/>
+                                    </svg>
+                                  </button>
                                   <button type="button" class="pf-unassign"
                                           (click)="unassignDepartment(sb.id, d.id)"
                                           title="Unassign from sub-branch">
@@ -230,7 +241,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                   } @else {
                     <div class="space-y-1.5">
                       @for (d of unassignedDeptsFor(b.id); track d.id) {
-                        <div class="pf-dept-row">
+                        <div class="pf-dept-row" [class.pf-dept-row--inactive]="!d.isActive">
                           <div>
                             <span class="text-[14px] font-medium" style="color: var(--text-primary);">{{ d.name }}</span>
                             <span class="text-[11px] font-mono ml-2" style="color: var(--text-muted);">{{ d.code }}</span>
@@ -256,8 +267,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                             @if (d.isActive) {
                               <span class="pf-dot-on" aria-label="Active"></span>
                             } @else {
-                              <span class="pf-dot-off" aria-label="Inactive"></span>
+                              <pf-chip tone="default" size="sm">Inactive</pf-chip>
                             }
+                            <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleDeptActive(d)">
+                              {{ d.isActive ? 'Deactivate' : 'Reactivate' }}
+                            </pf-touch-btn>
                           </div>
                         </div>
                       }
@@ -457,6 +471,14 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       width: 8px; height: 8px; border-radius: 9999px;
       background: var(--text-muted); opacity: 0.4;
     }
+
+    /* ── Inactive departments: greyed but still operable (the toggle must
+       stay clickable so an admin can reactivate). ── */
+    .pf-dept-row--inactive > div:first-child,
+    .pf-dept-pill--inactive > span:first-child,
+    .pf-dept-pill--inactive .pf-sample-input { opacity: 0.5; }
+    .pf-dept-row--inactive,
+    .pf-dept-pill--inactive { border-style: dashed; }
 
     /* ── Touch sizing: larger tap target for the inline unassign control ── */
     @media (pointer: coarse) {
@@ -728,6 +750,23 @@ export class BranchesComponent implements OnInit {
             : `Sample code set to ${String(sampleCode).padStart(2, '0')}`);
       },
       error: () => this.toasts.error('Could not save sample code')
+    });
+  }
+
+  /**
+   * Soft lifecycle toggle: PATCH { isActive } (same endpoint/pattern as the
+   * sample-code edit above). Deactivating hides the department from pickers
+   * server-side but keeps every order/sample that references it.
+   */
+  toggleDeptActive(dept: Department) {
+    const isActive = !dept.isActive;
+    this.api.patch<Department>('/api/tenants/departments/' + dept.id, { isActive }).subscribe({
+      next: () => {
+        this._departments.update(list =>
+          list.map(d => d.id === dept.id ? { ...d, isActive } : d));
+        this.toasts.success(isActive ? `${dept.name} reactivated` : `${dept.name} deactivated`);
+      },
+      error: () => this.toasts.error('Could not update department')
     });
   }
 

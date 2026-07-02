@@ -47,6 +47,9 @@ export class SignalingService implements OnDestroy {
   readonly incomingCall = new Subject<IncomingCallInfo>();
   readonly callRejected = new Subject<{ sessionId: string; userId: string }>();
   readonly callCancelled = new Subject<{ sessionId: string }>();
+  /** This user accepted/declined the call on ANOTHER device — dismiss the
+   *  ring here (multi-device). */
+  readonly callHandledElsewhere = new Subject<{ sessionId: string }>();
   readonly participantJoined = new Subject<{ sessionId: string; userId: string }>();
   readonly participantLeft = new Subject<{ sessionId: string; userId: string }>();
 
@@ -155,6 +158,7 @@ export class SignalingService implements OnDestroy {
     this.connection.on('IncomingCall', (info: IncomingCallInfo) => this.incomingCall.next(info));
     this.connection.on('CallRejected',  (p: { sessionId: string; userId: string }) => this.callRejected.next(p));
     this.connection.on('CallCancelled', (p: { sessionId: string }) => this.callCancelled.next(p));
+    this.connection.on('CallHandledElsewhere', (p: { sessionId: string }) => this.callHandledElsewhere.next(p));
     this.connection.on('ParticipantJoined', (p: { sessionId: string; userId: string }) => this.participantJoined.next(p));
     this.connection.on('ParticipantLeft',   (p: { sessionId: string; userId: string }) => this.participantLeft.next(p));
 

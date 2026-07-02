@@ -1527,3 +1527,18 @@
   border: 0;
   background: #525659; /* matches native PDF-viewer letterbox */
 }
+
+/* ── Reprint label sheet ──────────────────────────────────────────
+   Off-screen holder for the "Reprint Labels" label cards. Invisible on
+   screen (parked far left, not display:none — the cards must still lay
+   out so their barcode/QR canvases paint); the global label-only print
+   pass (body.pf-printing-label in styles.scss) snaps .pf-print-label
+   back to the page origin with !important, so only the labels print. */
+.pf-reprint-sheet {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 640px;
+  display: grid;
+  gap: 12px;
+}

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -12,6 +13,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
 type Tab = 'users' | 'roles';
@@ -236,7 +238,9 @@ export class UsersAccessComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
+  private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
+  private readonly dialog = inject(DialogService);
 
   /** Returns true if calling this user makes sense (active, not self). */
   canCall(u: User): boolean {
@@ -288,7 +292,13 @@ export class UsersAccessComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.api.get<User[]>('/api/users/').subscribe({ next: l => this._users.set(l ?? []) });
+    this.api.get<User[]>('/api/users/').subscribe({ next: l => {
+      this._users.set(l ?? []);
+      // The users list carries each user's persisted presenceStatus —
+      // seed the presence map so people lists show statuses set before
+      // this session's SignalR connection existed.
+      this.presence.seedFromUsers(l ?? []);
+    } });
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
   }
 
@@ -299,12 +309,22 @@ export class UsersAccessComponent implements OnInit {
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
   openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
 
-  deactivate(u: User) {
+  async deactivate(u: User) {
+    // Destructive, one-click, no undo path in the UI — confirm first (same
+    // pattern as the data-wipe tile).
+    const ok = await this.dialog.confirm({
+      title: `Deactivate ${u.displayName || u.firstName || 'this user'}?`,
+      message: 'They lose access immediately. Their history and assignments are kept.',
+      tone: 'danger',
+      confirmLabel: 'Deactivate',
+    });
+    if (!ok) return;
     this.api.delete(`/api/users/${u.id}`).subscribe({
       next: () => {
         this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
         this.toasts.success('User deactivated');
-      }
+      },
+      error: e => this.toasts.error(e?.message ?? 'Could not deactivate user')
     });
   }
 }

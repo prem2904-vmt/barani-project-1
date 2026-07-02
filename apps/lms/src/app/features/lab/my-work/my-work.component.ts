@@ -370,6 +370,15 @@ const COUNTERS: CounterSpec[] = [
                 Queue
                 <span class="pf-mw-tab__count">{{ countFor('service_queue') }}</span>
               </button>
+              <!-- Supervisor view: also show tubes other techs already claimed,
+                   so stuck work (tech on leave) can be found and delegated. -->
+              @if (tab() === 'service_queue') {
+                <button type="button" class="pf-mw-claimed-toggle press"
+                        [class.pf-mw-claimed-toggle--on]="showClaimed()"
+                        (click)="toggleShowClaimed()">
+                  {{ showClaimed() ? '✓ ' : '' }}Show claimed
+                </button>
+              }
             </div>
             <p class="pf-mw-pane__meta">
               {{ rows().length }} items
@@ -451,6 +460,14 @@ const COUNTERS: CounterSpec[] = [
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
                                 {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
                               </span>
+                              @if (tube.hasDraft && !tube.allDone) {
+                                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
+                                      style="background: rgba(245, 158, 11, 0.16); color: #fbbf24;">Draft</span>
+                              }
+                              @if (tab() === 'service_queue' && tube.assignedTo) {
+                                <span class="px-1.5 py-0.5 text-[10px] font-medium rounded truncate" style="max-width: 110px;
+                                      background: rgba(139, 92, 246, 0.16); color: #c4b5fd;">{{ assigneeName(tube.assignedTo) }}</span>
+                              }
                               @if (tube.barcode) {
                                 <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ tube.barcode }}</span>
                               }
@@ -501,10 +518,20 @@ const COUNTERS: CounterSpec[] = [
                             <div class="flex justify-end gap-2">
                               @switch (tab()) {
                                 @case ('service_queue') {
-                                  <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, g.patientName)">Pick · view tests</button>
-                                  <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests[0])">Delegate</button>
+                                  @if (!tube.assignedTo || tube.assignedTo === myUserId()) {
+                                    <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, g.patientName)">Pick · view tests</button>
+                                  }
+                                  <!-- Routing pool/others' work is supervisor-grade
+                                       (backend enforces reassign_result) — don't
+                                       show a button that would 403. -->
+                                  @if (canReassign()) {
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                  }
                                 }
                                 @default {
+                                  @if (!tube.allDone) {
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                  }
                                   @if (tube.rejections.length > 0) {
                                     <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
                                   } @else if (tube.allDone) {
@@ -561,9 +588,11 @@ const COUNTERS: CounterSpec[] = [
                             </svg>
                             Scan vial to pick
                           </button>
-                          <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">
-                            Delegate…
-                          </button>
+                          @if (canReassign()) {
+                            <button type="button" class="pf-delegate-btn press" (click)="openDelegate(t)">
+                              Delegate…
+                            </button>
+                          }
                         }
                         @case ('rejected') {
                           <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
@@ -616,7 +645,7 @@ const COUNTERS: CounterSpec[] = [
 
     @if (delegateTarget(); as t) {
       <pf-delegate-modal
-        [testName]="t.test?.name ?? 'Test'"
+        [testName]="delegateLabel()"
         (chose)="onDelegate($event)"
         (cancelled)="cancelDelegate()">
       </pf-delegate-modal>
@@ -647,11 +676,20 @@ const COUNTERS: CounterSpec[] = [
             }
           </ul>
           <div class="pf-claim__actions">
-            <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
-              {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
-            </button>
+            @if (allowNoScanClaim()) {
+              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="confirmClaim()">
+                {{ claiming() ? 'Claiming…' : 'Claim into my work' }}
+              </button>
+            } @else {
+              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
+                {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
+              </button>
+            }
           </div>
-          <p class="pf-claim__foot">Scan this tube's barcode to confirm you have the right sample — it then moves into My Work.</p>
+          <p class="pf-claim__foot">
+            @if (allowNoScanClaim()) { The tube moves into My Work — you can scan or type it later to enter results. }
+            @else { Scan this tube's barcode to confirm you have the right sample — it then moves into My Work. }
+          </p>
         </div>
       </div>
     }
@@ -1692,6 +1730,18 @@ const COUNTERS: CounterSpec[] = [
       .pf-mw-scan.pf-intake-open .pf-mw-scan__icon { display: none; }
     }
 
+    /* Queue supervisor toggle — include tubes other techs already claimed. */
+    .pf-mw-claimed-toggle {
+      margin-left: 8px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+      font-size: 11.5px; font-weight: 600; white-space: nowrap;
+      background: transparent; color: var(--text-tertiary);
+      border: 1px solid var(--glass-border);
+    }
+    .pf-mw-claimed-toggle--on {
+      color: #c4b5fd; border-color: rgba(139, 92, 246, 0.45);
+      background: rgba(139, 92, 246, 0.12);
+    }
+
     /* ── Claim popup: pick a tube → see its tests → claim into My Work ── */
     .pf-claim { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .pf-claim__backdrop { position: absolute; inset: 0; background: rgba(8, 10, 16, 0.62); backdrop-filter: blur(4px); }
@@ -2105,8 +2155,37 @@ export class MyWorkComponent implements OnInit {
   }
 
   private endpointFor(t: Tab): string {
-    if (t === 'service_queue') return '/api/results/service-queue';
+    if (t === 'service_queue')
+      return this.showClaimed() ? '/api/results/service-queue?includeAssigned=true' : '/api/results/service-queue';
     return '/api/results/my-work';
+  }
+
+  // ── Queue "Show claimed" — supervisor view ─────────────────────
+  // The queue is normally the unclaimed pool. This toggle also lists tubes
+  // other techs already claimed (badged with the owner) so stuck work — e.g.
+  // a tech on leave — can be found and delegated.
+  readonly showClaimed = signal(false);
+  private readonly _userById = signal<Record<string, string>>({});
+  readonly myUserId = computed(() => this.auth.user()?.id ?? '');
+  readonly allowNoScanClaim = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
+  /** Routing the pool / other techs' work is supervisor-grade — mirrors the
+   *  backend's reassign_result check on the delegate endpoint. */
+  readonly canReassign = computed(() => this.auth.hasPermission('reassign_result'));
+
+  toggleShowClaimed() {
+    this.showClaimed.update(v => !v);
+    if (this.showClaimed() && Object.keys(this._userById()).length === 0) {
+      this.api.get<Array<{ id: string; displayName?: string; firstName?: string; email?: string }>>('/api/users/').subscribe({
+        next: l => this._userById.set(Object.fromEntries(
+          (l ?? []).map(u => [u.id, u.displayName || u.firstName || u.email || 'User'])))
+      });
+    }
+    this.refresh();
+  }
+  assigneeName(id: string | null): string {
+    if (!id) return '';
+    if (id === this.myUserId()) return 'You';
+    return this._userById()[id] ?? 'Claimed';
   }
   private matchesTab(t: OrderTest, tab: Tab): boolean {
     // Rejected tab: focused view, only re_entry rows.
@@ -2154,7 +2233,13 @@ export class MyWorkComponent implements OnInit {
       this.api.get<{ sampleId: string; orderId: string }>(
         `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).subscribe({
         next: r => {
-          if (r?.sampleId) { this._scan.set(''); this.router.navigate(['/lab/sample', r.sampleId]); }
+          if (r?.sampleId) {
+            this._scan.set('');
+            // Not in this tech's queue — opening is allowed, but make the
+            // ownership consequence explicit (entry auto-claims server-side).
+            this.toasts.info('This tube isn’t in your queue — entering results will claim it to you.');
+            this.router.navigate(['/lab/sample', r.sampleId]);
+          }
           else this.toasts.warning('No match for that code');
         },
         error: () => this.toasts.warning('No match for that code'),
@@ -2234,6 +2319,8 @@ export class MyWorkComponent implements OnInit {
     barcode: string;
     tests: Enriched[];
     allDone: boolean;
+    hasDraft: boolean;
+    assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
   }> {
     const bySample = new Map<string, Enriched[]>();
@@ -2247,6 +2334,13 @@ export class MyWorkComponent implements OnInit {
       const deptName = first.subOrder?.department?.name ?? first.test?.department?.name ?? '';
       const barcode = first.subOrder?.barcode ?? '';
       const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      // A half-finished tube: partial values saved (draft keeps CurrentResult
+      // and status in_progress) but not yet submitted. Badged so the tech can
+      // spot what they left off.
+      const hasDraft = tests.some(x => x.status === 'in_progress' && !!x.currentResult);
+      // Owner (when the queue is showing claimed work): tube-level = first
+      // assigned test's owner.
+      const assignedTo = tests.find(x => x.assignedTo)?.assignedTo ?? null;
       // Surface every rejected test's reason so the tile can show a
       // banner explaining WHY the pathologist sent it back. Without this
       // the tech sees only the ↻ icon and has to dig into the test to
@@ -2254,7 +2348,7 @@ export class MyWorkComponent implements OnInit {
       const rejections = tests
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
-      return { sampleId, deptName, barcode, tests, allDone, rejections };
+      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
     });
   }
 
@@ -2330,7 +2424,9 @@ export class MyWorkComponent implements OnInit {
     const c = this._claimTarget();
     if (!c || this._claiming()) return;
     this._claiming.set(true);
-    this.api.post(`/api/samples/${c.sampleId}/claim`, {}).subscribe({
+    // The barcode travels to the server so the scan is verified there too —
+    // the client-side scanner gate alone would be spoofable.
+    this.api.post(`/api/samples/${c.sampleId}/claim`, { barcode: c.barcode || null }).subscribe({
       next: () => {
         this._claiming.set(false);
         this._claimTarget.set(null);
@@ -2349,25 +2445,41 @@ export class MyWorkComponent implements OnInit {
   }
 
   // ── Supervisor delegation ─────────────────────────────
-  // Thin wrapper over POST /api/results/:id/delegate. The UI gate (who
-  // sees the button) is visual-only for now; the backend endpoint is
-  // open. Add role-based gating once permission infra lands.
-  private readonly _delegateTarget = signal<OrderTest | null>(null);
-  readonly delegateTarget = this._delegateTarget.asReadonly();
+  // Tube-level: delegating hands EVERY writable test on the tube to the new
+  // owner (the tube is the unit of work), not just the row that was clicked.
+  // The UI gate (who sees the button) is visual-only for now; the backend
+  // endpoint is open. Add role-based gating once permission infra lands.
+  private readonly _delegateTests = signal<OrderTest[] | null>(null);
+  readonly delegateTarget = computed(() => this._delegateTests()?.[0] ?? null);
+  readonly delegateLabel = computed(() => {
+    const l = this._delegateTests() ?? [];
+    return l.length <= 1 ? (l[0]?.test?.name ?? 'Test') : `${l.length} tests on this tube`;
+  });
 
-  openDelegate(t: OrderTest) { this._delegateTarget.set(t); }
-  cancelDelegate() { this._delegateTarget.set(null); }
+  openDelegate(t: OrderTest | OrderTest[]) {
+    const list = (Array.isArray(t) ? t : [t]).filter(x => x.status !== 'entered' && x.status !== 'validated');
+    if (!list.length) { this.toasts.warning('Nothing to delegate — every test is already submitted.'); return; }
+    this._delegateTests.set(list);
+  }
+  cancelDelegate() { this._delegateTests.set(null); }
 
   onDelegate(toUserId: string) {
-    const t = this._delegateTarget();
-    if (!t) return;
-    this.api.post(`/api/results/${t.id}/delegate`, { toUserId }).subscribe({
-      next: () => {
-        this._delegateTarget.set(null);
-        this.toasts.success('Delegated — the new assignee must scan to pick up.');
-        this.refresh();
-      },
-      error: e => this.toasts.error(e.message ?? 'Delegate failed')
-    });
+    const list = this._delegateTests();
+    if (!list?.length) return;
+    let done = 0, failed = 0;
+    const finish = () => {
+      if (done + failed < list.length) return;
+      this._delegateTests.set(null);
+      if (failed) this.toasts.error(`Delegated ${done} of ${list.length} — ${failed} failed`);
+      else this.toasts.success('Delegated — the new assignee must scan to pick up.');
+      this.refresh();
+      this.refreshAllCounts();
+    };
+    for (const t of list) {
+      this.api.post(`/api/results/${t.id}/delegate`, { toUserId }).subscribe({
+        next: () => { done++; finish(); },
+        error: () => { failed++; finish(); }
+      });
+    }
   }
 }

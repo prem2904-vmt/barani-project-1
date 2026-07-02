@@ -6,6 +6,8 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { PeopleDrawerService } from '../../../core/services/people-drawer.service';
+import { PresenceService } from '../../../core/services/presence.service';
+import { isPresenceKey, presenceLabel as presetLabel } from '../../models/presence.model';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
@@ -202,9 +204,22 @@ import { AvatarComponent } from '../../primitives/avatar.component';
       background: var(--text-muted); }
     .pf-pd__row-dot[data-status='active']      { background: #10b981; }
     .pf-pd__row-dot[data-status='in-a-call']   { background: #f43f5e; }
-    .pf-pd__row-dot[data-status='away']        { background: #fbbf24; }
     .pf-pd__row-dot[data-status='offline'],
     .pf-pd__row-dot[data-status='']            { background: #6b7280; }
+    /* Custom Teams-style statuses (presence.model.ts colors). */
+    .pf-pd__row-dot[data-status='available']    { background: #34d399; }
+    .pf-pd__row-dot[data-status='busy'],
+    .pf-pd__row-dot[data-status='with_patient'] { background: #f87171; }
+    .pf-pd__row-dot[data-status='rounds']       { background: #fbbf24; }
+    .pf-pd__row-dot[data-status='surgery'],
+    .pf-pd__row-dot[data-status='dnd']          { background: #dc2626; }
+    .pf-pd__row-dot[data-status='surgery']::after,
+    .pf-pd__row-dot[data-status='dnd']::after {
+      content: ''; position: absolute; left: 20%; right: 20%; top: 50%;
+      height: 1.5px; margin-top: -0.75px; border-radius: 2px; background: #fff; }
+    .pf-pd__row-dot[data-status='away'] {
+      background: var(--bg-card-solid, #14142a);
+      box-shadow: inset 0 0 0 1.5px #9ca3af; }
     .pf-pd__row-body { flex: 1; min-width: 0; }
     .pf-pd__row-name { margin: 0; font-size: 13.5px; font-weight: 500;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -218,13 +233,26 @@ import { AvatarComponent } from '../../primitives/avatar.component';
       color: var(--text-tertiary); font-size: 13px; }
 
     /* ── Chat panel ────────────────────────────────────────────── */
-    .pf-pd__dot { display: inline-block; width: 8px; height: 8px;
+    .pf-pd__dot { position: relative; display: inline-block; width: 8px; height: 8px;
       border-radius: 50%; vertical-align: middle; margin-right: 4px; }
     .pf-pd__dot[data-status='active']    { background: #10b981; }
     .pf-pd__dot[data-status='in-a-call'] { background: #f43f5e; }
-    .pf-pd__dot[data-status='away']      { background: #fbbf24; }
     .pf-pd__dot[data-status='offline'],
     .pf-pd__dot[data-status='']          { background: #6b7280; }
+    /* Custom Teams-style statuses (presence.model.ts colors). */
+    .pf-pd__dot[data-status='available']    { background: #34d399; }
+    .pf-pd__dot[data-status='busy'],
+    .pf-pd__dot[data-status='with_patient'] { background: #f87171; }
+    .pf-pd__dot[data-status='rounds']       { background: #fbbf24; }
+    .pf-pd__dot[data-status='surgery'],
+    .pf-pd__dot[data-status='dnd']          { background: #dc2626; }
+    .pf-pd__dot[data-status='surgery']::after,
+    .pf-pd__dot[data-status='dnd']::after {
+      content: ''; position: absolute; left: 18%; right: 18%; top: 50%;
+      height: 1.5px; margin-top: -0.75px; border-radius: 2px; background: #fff; }
+    .pf-pd__dot[data-status='away'] {
+      background: transparent;
+      box-shadow: inset 0 0 0 1.5px #9ca3af; }
     .pf-pd__chat-id { flex: 1; min-width: 0; }
     .pf-pd__chat-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-pd__chat-status { margin: 1px 0 0; font-size: 11px; color: var(--text-tertiary); }
@@ -281,6 +309,7 @@ export class PeopleDrawerComponent {
   private readonly auth = inject(AuthService);
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
+  private readonly presenceSvc = inject(PresenceService);
   protected readonly webrtc = inject(WebrtcService);
   private readonly drawer = inject(PeopleDrawerService);
   private readonly toasts = inject(ToastService);
@@ -456,11 +485,18 @@ export class PeopleDrawerComponent {
 
   // ── Presence helpers ────────────────────────────────────────────
 
+  /** Display presence: the hub's connection presence decides reachability
+   *  (offline / in-a-call always win); otherwise the user's custom
+   *  Teams-style status (In surgery, On rounds, …) when one is known,
+   *  falling back to the plain connection presence. */
   protected presence(userId: string): string {
-    return this.signaling.userPresences().get(userId) ?? 'offline';
+    const conn = this.signaling.userPresences().get(userId) ?? 'offline';
+    if (conn === 'offline' || conn === 'in-a-call') return conn;
+    return this.presenceSvc.statusFor(userId) ?? conn;
   }
   protected presenceLabel(p: string): string {
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline';
+    if (isPresenceKey(p)) return presetLabel(p);
+    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
   }
   protected isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);

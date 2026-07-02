@@ -8,6 +8,10 @@ export interface User {
   email: string;
   phone?: string;
   authId?: string;
+  /** Teams-style custom status ('available' | 'busy' | 'with_patient' |
+   *  'rounds' | 'surgery' | 'dnd' | 'away') — serialized on every user
+   *  object by the API. See shared/models/presence.model.ts. */
+  presenceStatus?: string;
   isActive: boolean;
   createdAt: string;
 }

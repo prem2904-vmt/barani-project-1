@@ -191,7 +191,7 @@
             @if (conv.isGroup) {
               {{ conv.participants.length }} members
             } @else if (presenceFor(conv); as p) {
-              {{ p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline' }}
+              {{ presenceText(p) }}
             }
           </p>
           @if (conv.contextType && conv.contextLabel) {

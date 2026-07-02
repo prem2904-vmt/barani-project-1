@@ -4,7 +4,7 @@ import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { permissionGuard } from './core/auth/permission.guard';
-import { workflowGuard } from './core/auth/workflow.guard';
+import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
 
 const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
@@ -236,7 +236,9 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'order',
-            canActivate: [permissionGuard('create_order'), workflowGuard('walk_in_order')],
+            // Order-create serves walk-ins AND appointment→order conversion —
+            // appointment-only tenants (walk_in_order off) must still reach it.
+            canActivate: [permissionGuard('create_order'), workflowGuardAny('walk_in_order', 'appointment')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
           {

@@ -16,6 +16,8 @@ import { ChatNotifyService } from '../../core/services/chat-notify.service';
 import { RingtoneService } from '../../core/services/ringtone.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
+import { PresenceService } from '../../core/services/presence.service';
+import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 
@@ -53,6 +55,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly signaling = inject(SignalingService);
   protected readonly webrtc = inject(WebrtcService);
   protected readonly auth = inject(AuthService);
+  private readonly presenceSvc = inject(PresenceService);
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
@@ -273,12 +276,24 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
-  /** Presence dot for 1:1 conversations — group rows show member count instead. */
+  /** Presence dot for 1:1 conversations — group rows show member count instead.
+   *  Connection presence decides reachability (offline / in-a-call win);
+   *  otherwise the other user's custom Teams-style status (In surgery,
+   *  On rounds, …) when known, falling back to online/away. */
   protected presenceFor(c: Conversation): string | null {
     if (c.isGroup) return null;
     const other = c.participants.find(p => p.userId !== this.me());
     if (!other) return null;
-    return this.signaling.userPresences().get(other.userId) ?? 'offline';
+    const conn = this.signaling.userPresences().get(other.userId) ?? 'offline';
+    if (conn === 'offline' || conn === 'in-a-call') return conn;
+    return this.presenceSvc.statusFor(other.userId) ?? conn;
+  }
+
+  /** Human label for a presence value — custom preset labels first,
+   *  then the connection-presence vocabulary. */
+  protected presenceText(p: string): string {
+    if (isPresenceKey(p)) return presenceLabel(p);
+    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
   }
 
   /** Subline beneath name — last message preview or "No messages yet". */

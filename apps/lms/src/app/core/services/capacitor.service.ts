@@ -37,6 +37,14 @@ export class CapacitorService {
   async init(): Promise<void> {
     if (this._initialised()) return;
     if (!this.platform.isCapacitor()) {
+      // Web / Electron: no Network plugin, but the browser knows. Seed from
+      // navigator.onLine and track the window online/offline events so the
+      // shell's offline banner works on every host, not just native.
+      try {
+        this.isOnline.set(navigator.onLine);
+        window.addEventListener('online', () => this.isOnline.set(true));
+        window.addEventListener('offline', () => this.isOnline.set(false));
+      } catch { /* SSR guard */ }
       this._initialised.set(true);
       return;
     }

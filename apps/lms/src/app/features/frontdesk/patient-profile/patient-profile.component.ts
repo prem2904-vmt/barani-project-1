@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -21,6 +22,20 @@ interface DirectoryUser { id: string; displayName: string; email: string; isActi
 interface ProfilePayload {
   patient: Patient;
   history: Order[];
+}
+
+/** POST /api/patients/{sourceId}/merge-into/{targetId} response. */
+interface MergeResult {
+  merged: {
+    orders: number;
+    bills: number;
+    appointments: number;
+    messages: number;
+    documents: number;
+    reports: number;
+  };
+  sourceDeactivated: boolean;
+  targetId: string;
 }
 
 export interface Vitals {
@@ -148,6 +163,7 @@ export class PatientProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly locationSvc = inject(Location);
   private readonly chat = inject(ChatService);
+  private readonly dialog = inject(DialogService);
   protected readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   protected readonly navBack = inject(NavBackService);
@@ -538,6 +554,73 @@ export class PatientProfileComponent implements OnInit {
       this.toasts.error((err as Error).message ?? 'Could not share patient.');
     } finally {
       this.chatPickerSending.set(false);
+    }
+  }
+
+  // ── Merge duplicate into this patient ─────────────────────────────
+  // Search the same /api/patients?q= endpoint the app uses everywhere, pick
+  // the DUPLICATE (source), confirm (danger), then POST merge-into with THIS
+  // profile as the target. The duplicate's history moves here and the
+  // duplicate record is deactivated server-side.
+
+  protected readonly mergeOpen = signal(false);
+  protected readonly mergeSearch = signal('');
+  protected readonly mergeResults = signal<Patient[]>([]);
+  protected readonly merging = signal(false);
+
+  displayOf(p: Patient): string { return patientDisplayName(p); }
+
+  openMerge(): void {
+    this.mergeOpen.set(true);
+    this.mergeSearch.set('');
+    this.mergeResults.set([]);
+  }
+  closeMerge(): void {
+    if (this.merging()) return;
+    this.mergeOpen.set(false);
+  }
+
+  onMergeSearch(q: string): void {
+    this.mergeSearch.set(q);
+    const term = q.trim();
+    if (!term) { this.mergeResults.set([]); return; }
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}`).subscribe({
+      next: list => {
+        const targetId = this.patient()?.id;
+        // Can't merge a record into itself — drop the open profile from results.
+        this.mergeResults.set((list ?? []).filter(p => p.id !== targetId));
+      },
+      error: () => this.mergeResults.set([])
+    });
+  }
+
+  async mergeFrom(source: Patient): Promise<void> {
+    const target = this.patient();
+    if (!target || this.merging()) return;
+    const ok = await this.dialog.confirm({
+      title: `Merge ${patientDisplayName(source)} into ${this.displayName()}?`,
+      message: 'All orders, bills and appointments of the duplicate move into this record, '
+        + 'and the duplicate is deactivated. This cannot be undone.',
+      tone: 'danger',
+      confirmLabel: 'Merge records',
+    });
+    if (!ok) return;
+    this.merging.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.api.post<MergeResult>(`/api/patients/${source.id}/merge-into/${target.id}`, {}));
+      const m = res?.merged;
+      this.toasts.success(m
+        ? `Merged ${m.orders} order${m.orders === 1 ? '' : 's'}, `
+          + `${m.bills} bill${m.bills === 1 ? '' : 's'}, `
+          + `${m.appointments} appointment${m.appointments === 1 ? '' : 's'} into this record`
+        : 'Patients merged');
+      this.mergeOpen.set(false);
+      this.load(target.id); // refresh — history now includes the moved records
+    } catch (e) {
+      this.toasts.error((e as Error)?.message ?? 'Could not merge patients');
+    } finally {
+      this.merging.set(false);
     }
   }
 

@@ -284,6 +284,7 @@ const STATUS_CLASS: Record<string, string> = {
                 <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
               }
               @if (a.status === 'checked_in') {
+                <button class="pf-appt-btn" (click)="run(queue.complete(a.id))">Complete</button>
                 @if (a.type !== 'urgent') {
                   <button class="pf-appt-btn" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
                 }

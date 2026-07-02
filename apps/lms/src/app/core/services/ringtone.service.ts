@@ -9,22 +9,23 @@ const MUTE_STORAGE_KEY = 'pf.chat.sounds.muted';
  * every sound is synthesised on the fly so the bundle stays lean and
  * the build never depends on external mp3/ogg files.
  *
- * Sounds:
+ * Sounds (deliberately soft — this is a lab floor, not a call centre):
  *   - ringtone  (callee-side incoming-call ring)
- *       4-note rising arpeggio (E maj7: E5 → G#5 → B5 → D#6) layered
- *       with a soft sine pad. ~1.2s pattern, ~1.8s silence, loops.
- *       Distinctive enough to recognise across a noisy floor without
- *       being the cliché telephone bell.
+ *       Warm two-note chime motif: G5 (784Hz) then E5 (659Hz), each with
+ *       a ~10ms attack and a long exponential decay, doubled one octave
+ *       below at low gain for warmth and rounded off with a gentle
+ *       lowpass. The motif plays twice ~350ms apart, then rests ~2.2s
+ *       before the cycle repeats. Peak gain stays at or below 0.18 —
+ *       noticeably softer than a phone ring.
  *
  *   - ringback  (caller-side "calling…" tone)
- *       Single warm sine pulse at A4 (440Hz) with a slow attack/decay.
- *       0.8s on / 1.6s off. Quieter than the ringtone — it's a status
- *       cue, not an alert.
+ *       Even softer: a single mellow 440Hz sine that fades in and out
+ *       over ~300ms each side, about 1s on, repeating every 3s. Peak
+ *       gain at or below 0.1 — a status cue, not an alert.
  *
  *   - ping       (new-message notification, one-shot)
- *       Two-note chime C6 → G6 with overlapping bell envelopes. ~280ms.
- *       Modeled on Slack/Teams: short, pleasant, clearly "incoming
- *       message" without breaking concentration.
+ *       A single soft high chime at E6 with a ~150ms decay, gain at or
+ *       below 0.12. Short and pleasant without breaking concentration.
  *
  * Browsers require a user gesture before AudioContext starts. play()
  * is idempotent; calling play() before a gesture lazily creates the
@@ -35,6 +36,9 @@ export class RingtoneService implements OnDestroy {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private active: { stop: () => void; tone: Tone } | null = null;
+
+  /** Minimum value for exponential ramps — never ramp to a true 0. */
+  private static readonly SILENT = 0.0001;
 
   /**
    * User-controlled mute. When true, both play() and playPing() are
@@ -64,7 +68,10 @@ export class RingtoneService implements OnDestroy {
     if (!this.ctx || !this.master) return;
 
     let cancelled = false;
-    const cycleMs = tone === 'ringtone' ? 3000 : 2400;
+    // ringtone: two motif plays (~1.2s) + ~2.2s rest. ringback: 1s tone
+    // every 3s. Nodes are created fresh per cycle and self-release on
+    // stop, so long calls never accumulate audio-graph garbage.
+    const cycleMs = tone === 'ringtone' ? 4200 : 3000;
     const start = () => {
       if (cancelled) return;
       const t0 = this.ctx!.currentTime + 0.02;
@@ -77,15 +84,14 @@ export class RingtoneService implements OnDestroy {
     this.active = { tone, stop: () => { cancelled = true; } };
   }
 
-  /** Short one-shot chime for new chat messages. ~280ms. No-op when muted. */
+  /** Soft one-shot chime for new chat messages. ~200ms. No-op when muted. */
   playPing(): void {
     if (this.muted()) return;
     this.ensureCtx();
     if (!this.ctx || !this.master) return;
     const t0 = this.ctx.currentTime + 0.01;
-    // C6 (1047) → G6 (1568), bell envelopes overlapping ~120ms apart.
-    this.scheduleBellNote(1046.5, t0,         0.30, 0.20);
-    this.scheduleBellNote(1567.98, t0 + 0.12, 0.28, 0.22);
+    // Single gentle E6 chime — quick attack, ~150ms decay, quiet.
+    this.scheduleChimeNote(1318.51 /* E6 */, t0, 0.16, 0.10);
   }
 
   stop(): void {
@@ -96,84 +102,91 @@ export class RingtoneService implements OnDestroy {
 
   // ── Pattern schedulers ─────────────────────────────────────────────
 
-  /** 4-note rising motif (E major-ish), layered with a soft pad. */
+  /** Warm two-note motif (G5 → E5), played twice, then silence. */
   private scheduleRingtoneCycle(t0: number): void {
-    // E5, G#5, B5, D#6 — bright open-voicing major-7 feel.
-    const motif = [659.25, 830.61, 987.77, 1244.51];
-    const noteSpacing = 0.16;       // sec between attacks
-    const noteDuration = 0.40;
-    motif.forEach((freq, i) => {
-      const t = t0 + i * noteSpacing;
-      this.scheduleBellNote(freq, t, noteDuration, 0.16);
-    });
-    // Brief sub-pad underneath for warmth (low fifth, slow attack).
-    this.schedulePadNote(164.81 /* E3 */, t0 + 0.04, noteSpacing * motif.length + 0.25, 0.08);
+    const motif = (t: number) => {
+      this.scheduleChimeNote(783.99 /* G5 */, t,        0.62, 0.16);
+      this.scheduleChimeNote(659.25 /* E5 */, t + 0.28, 0.66, 0.14);
+    };
+    motif(t0);
+    motif(t0 + 0.28 + 0.66 + 0.35); // second play ~350ms after the first fades
   }
 
-  /** Single soft pulse at A4 — calm "calling…" cue. */
+  /** Single mellow 440Hz sine — slow 300ms fade-in/out, ~1s on. */
   private scheduleRingbackCycle(t0: number): void {
-    this.schedulePadNote(440, t0, 0.80, 0.12);
+    const ctx = this.ctx!;
+    const out = this.master!;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 440;
+
+    const g = ctx.createGain();
+    const S = RingtoneService.SILENT;
+    g.gain.setValueAtTime(S, t0);
+    g.gain.exponentialRampToValueAtTime(0.09, t0 + 0.30);   // slow fade-in
+    g.gain.setValueAtTime(0.09, t0 + 0.70);                 // ~1s on overall
+    g.gain.exponentialRampToValueAtTime(S, t0 + 1.00);      // slow fade-out
+
+    osc.connect(g); g.connect(out);
+    osc.start(t0);
+    osc.stop(t0 + 1.05);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch { /* already gone */ } };
   }
 
   // ── Voice helpers ──────────────────────────────────────────────────
 
   /**
-   * Bell-like note: sine fundamental + sine octave (mixed quieter) +
-   * fast attack, exponential decay. Creates a pleasing pluck without
-   * sounding metallic.
+   * Soft chime voice: a lightly-detuned triangle fundamental plus a sine
+   * one octave BELOW at low gain for warmth, both rolled off through a
+   * gentle lowpass. Fast (~10ms) attack, long exponential decay. All
+   * nodes are per-note and disconnect themselves when the note ends.
    */
-  private scheduleBellNote(freq: number, t: number, dur: number, peakGain: number): void {
+  private scheduleChimeNote(freq: number, t: number, decay: number, peakGain: number): void {
     const ctx = this.ctx!;
     const out = this.master!;
+    const S = RingtoneService.SILENT;
 
-    // Fundamental
+    // Fundamental — triangle for a rounder, mellower body than sine+octave.
     const osc1 = ctx.createOscillator();
-    osc1.type = 'sine';
+    osc1.type = 'triangle';
     osc1.frequency.value = freq;
+    osc1.detune.value = 4;               // light detune → gentle shimmer
 
-    // Octave above, quieter — gives sparkle, no chord clash.
+    // One octave below, quiet — adds warmth without ringing.
     const osc2 = ctx.createOscillator();
     osc2.type = 'sine';
-    osc2.frequency.value = freq * 2;
+    osc2.frequency.value = freq / 2;
 
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peakGain, t + 0.012);          // fast attack
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);              // exponential decay
+    const g1 = ctx.createGain();
+    g1.gain.setValueAtTime(S, t);
+    g1.gain.exponentialRampToValueAtTime(peakGain, t + 0.01);       // ~10ms attack
+    g1.gain.exponentialRampToValueAtTime(S, t + decay);             // long exp decay
 
     const g2 = ctx.createGain();
-    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.setValueAtTime(S, t);
     g2.gain.exponentialRampToValueAtTime(peakGain * 0.35, t + 0.012);
-    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.7);       // octave decays faster
+    g2.gain.exponentialRampToValueAtTime(S, t + decay * 0.85);
 
-    osc1.connect(g);  g.connect(out);
-    osc2.connect(g2); g2.connect(out);
+    // Gentle lowpass takes the edge off the triangle's upper harmonics.
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = Math.min(freq * 3.2, 4200);
+    lp.Q.value = 0.5;
+
+    osc1.connect(g1); g1.connect(lp);
+    osc2.connect(g2); g2.connect(lp);
+    lp.connect(out);
+
     osc1.start(t); osc2.start(t);
-    osc1.stop(t + dur + 0.05);
-    osc2.stop(t + dur + 0.05);
-  }
-
-  /**
-   * Pad note: triangle wave with slow attack & slow release. Used as
-   * the ringback main voice and as the sub-pad under the ringtone.
-   */
-  private schedulePadNote(freq: number, t: number, dur: number, peakGain: number): void {
-    const ctx = this.ctx!;
-    const out = this.master!;
-
-    const osc = ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peakGain, t + 0.08);           // slow attack
-    g.gain.setValueAtTime(peakGain, t + dur - 0.15);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);              // slow release
-
-    osc.connect(g); g.connect(out);
-    osc.start(t);
-    osc.stop(t + dur + 0.05);
+    osc1.stop(t + decay + 0.05);
+    osc2.stop(t + decay + 0.05);
+    osc1.onended = () => {
+      try {
+        osc1.disconnect(); osc2.disconnect();
+        g1.disconnect(); g2.disconnect(); lp.disconnect();
+      } catch { /* already gone */ }
+    };
   }
 
   // ── Context lifecycle ──────────────────────────────────────────────

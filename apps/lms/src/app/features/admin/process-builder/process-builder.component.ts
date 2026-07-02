@@ -563,14 +563,21 @@ export class ProcessBuilderComponent implements OnInit {
     if (entry && !isRepeatable(item.type)) this.palette.update(p => [...p, entry]);
     // Removing an action cascades off its dependents + coupled partner (e.g. drop
     // dispatch → lab intake off; drop collection → dispatch/results off).
-    const { desired } = this.cascade(item.type, false);
-    this.lanes.update(l => l.map(ln => ({
-      ...ln,
-      items: ln.items.map(it => {
-        const d = desired.get(it.type);
-        return d === undefined || isMandatory(it.type) ? it : { ...it, enabled: d };
-      }),
-    })));
+    // Repeatable actions (sample_collection) can be placed in several work-areas:
+    // dropping ONE copy must NOT cascade while another enabled copy still
+    // satisfies the dependency — only removing the LAST enabled copy does.
+    const stillSatisfied = this.lanes().some(ln =>
+      ln.items.some(it => it.type === item.type && it.enabled && it.id !== item.id));
+    if (!stillSatisfied) {
+      const { desired } = this.cascade(item.type, false);
+      this.lanes.update(l => l.map(ln => ({
+        ...ln,
+        items: ln.items.map(it => {
+          const d = desired.get(it.type);
+          return d === undefined || isMandatory(it.type) ? it : { ...it, enabled: d };
+        }),
+      })));
+    }
     this.dirty.set(true);
   }
 

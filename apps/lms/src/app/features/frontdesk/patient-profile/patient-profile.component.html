@@ -135,6 +135,14 @@
                 Send to Chat
               </button>
             </div>
+            @if (canEdit()) {
+              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openMerge()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/>
+                </svg>
+                Merge Duplicate Into This Patient
+              </button>
+            }
           </div>
         </div>
 
@@ -1170,6 +1178,51 @@
               </li>
             } @empty {
               <li class="pf-pp__chat-pick-empty">No colleagues match.</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- Merge-duplicate picker. Reuses the chat-picker sheet styling: search
+         the shared /api/patients?q= endpoint, pick the DUPLICATE (source) —
+         its history moves into THIS profile (target) after a danger-confirm. -->
+    @if (mergeOpen()) {
+      <div class="pf-pp__chat-pick-backdrop pf-sheet" (click)="closeMerge()">
+        <div class="pf-pp__chat-pick pf-sheet__panel" (click)="$event.stopPropagation()">
+          <header class="pf-pp__chat-pick-hdr">
+            <div>
+              <h3>Merge a duplicate into {{ displayName() }}</h3>
+              <p>Pick the duplicate record — its orders, bills and appointments move here, then it is deactivated.</p>
+            </div>
+            <button type="button" class="pf-pp__chat-pick-close" (click)="closeMerge()" aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="pf-pp__chat-pick-search">
+            <input type="text" placeholder="Search patients by name, MRN or phone"
+                   [value]="mergeSearch()" (input)="onMergeSearch($any($event.target).value)" autofocus>
+          </div>
+          <ul class="pf-pp__chat-pick-list">
+            @for (dup of mergeResults(); track dup.id) {
+              <li>
+                <button type="button" class="pf-pp__chat-pick-row" [disabled]="merging()"
+                        (click)="mergeFrom(dup)">
+                  <div class="pf-pp__chat-pick-avatar">
+                    {{ (displayOf(dup).charAt(0) + (displayOf(dup).split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}
+                  </div>
+                  <div class="pf-pp__chat-pick-meta">
+                    <span class="pf-pp__chat-pick-name">{{ displayOf(dup) }}</span>
+                    <span class="pf-pp__chat-pick-email">
+                      {{ dup.mrn || '—' }}@if (dup.phone) { · {{ dup.phone }}}@if (dup.sex) { · {{ dup.sex }}} · {{ ageLabel(dup) }}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            } @empty {
+              <li class="pf-pp__chat-pick-empty">
+                @if (mergeSearch().trim()) { No other patients match. } @else { Search for the duplicate record to merge. }
+              </li>
             }
           </ul>
         </div>

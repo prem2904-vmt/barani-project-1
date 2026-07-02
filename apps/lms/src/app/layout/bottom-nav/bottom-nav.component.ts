@@ -11,6 +11,9 @@ import { TenantStateService } from '../../core/services/tenant-state.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
+import { PresenceService } from '../../core/services/presence.service';
+import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
+import { PushService } from '../../core/services/push.service';
 import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
@@ -190,6 +193,10 @@ const DRAG_THRESHOLD_PX = 4;
               d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
               fill="url(#pfMoreBrandGradient)" />
           </svg>
+          <!-- My presence status — small dot bottom-right of the account
+               glyph, mirroring the desktop avatar dot. -->
+          <span class="pf-status-dot pf-more-status"
+                [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
         </button>
       </div>
 
@@ -199,6 +206,46 @@ const DRAG_THRESHOLD_PX = 4;
         <div class="pf-more-bd" (click)="closeMore()"></div>
         <div class="pf-more-pop" role="menu" aria-label="More actions"
              (click)="$event.stopPropagation()">
+          <!-- Presence status — current status row; tap to expand the 7
+               Teams-style presets. DND-grade statuses (In surgery / Do not
+               disturb) block calls + silence pushes server-side. -->
+          <button type="button" role="menuitem" class="pf-more-item pf-status-row press"
+                  (click)="toggleStatusList($event)" [attr.aria-expanded]="statusListOpen()"
+                  aria-label="Change status">
+            <span class="pf-status-dot" [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+            <span class="pf-status-row__txt">
+              <span>{{ myStatusLabel() }}</span>
+              @if (presence.myStatusIsDnd()) {
+                <span class="pf-status-row__sub">Calls &amp; alerts silenced</span>
+              }
+            </span>
+            <svg class="pf-status-row__chev" [class.pf-status-row__chev--open]="statusListOpen()"
+                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
+          @if (statusListOpen()) {
+            <div class="pf-status-list" role="menu" aria-label="Set status">
+              @for (o of statusOptions; track o.key) {
+                <button type="button" role="menuitemradio" class="pf-more-item pf-status-opt press"
+                        [attr.aria-checked]="o.key === presence.myStatus()"
+                        [class.pf-status-opt--on]="o.key === presence.myStatus()"
+                        (click)="pickStatus(o)">
+                  <span class="pf-status-dot" [attr.data-presence]="o.key" aria-hidden="true"></span>
+                  <span class="pf-status-opt__lbl">{{ o.label }}</span>
+                  @if (o.key === presence.myStatus()) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m5 12 4 4L19 6"/>
+                    </svg>
+                  }
+                </button>
+              }
+              <p class="pf-status-note">“In surgery” &amp; “Do not disturb” block incoming calls and silence push alerts.</p>
+            </div>
+          }
+          <div class="pf-more-sep"></div>
           <!-- Notifications + People are standalone rail buttons in
                iPad rail mode, so the popover only lists them on phone
                (where the bottom pill has no room for extra icons). -->
@@ -837,6 +884,91 @@ const DRAG_THRESHOLD_PX = 4;
       background: var(--glass-border, rgba(255, 255, 255, 0.08));
       margin: 4px 8px;
     }
+
+    /* ── Presence status (Teams-style presets) ────────────────────────
+       Dot: solid per preset; DND-grade (dnd/surgery) carries a white
+       dash; Away is a hollow ring. Colors mirror presence.model.ts. */
+    .pf-status-dot {
+      position: relative;
+      display: inline-flex;
+      width: 10px; height: 10px;
+      border-radius: 9999px;
+      flex-shrink: 0;
+      background: #9ca3af;
+    }
+    .pf-status-dot[data-presence='available'] { background: #34d399; }
+    .pf-status-dot[data-presence='busy'],
+    .pf-status-dot[data-presence='with_patient'] { background: #f87171; }
+    .pf-status-dot[data-presence='rounds'] { background: #fbbf24; }
+    .pf-status-dot[data-presence='surgery'],
+    .pf-status-dot[data-presence='dnd'] { background: #dc2626; }
+    .pf-status-dot[data-presence='surgery']::after,
+    .pf-status-dot[data-presence='dnd']::after {
+      content: '';
+      position: absolute;
+      left: 22%; right: 22%; top: 50%;
+      height: 2px; margin-top: -1px;
+      border-radius: 2px;
+      background: #fff;
+    }
+    .pf-status-dot[data-presence='away'] {
+      background: transparent;
+      box-shadow: inset 0 0 0 2px #9ca3af;
+    }
+
+    /* Dot pinned bottom-right of the account (PF glyph) button. */
+    .pf-more-status {
+      position: absolute;
+      bottom: 5px; right: 4px;
+      width: 10px; height: 10px;
+      border: 2px solid var(--header-bg, rgba(15, 15, 25, 0.9));
+      box-sizing: content-box;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .pf-more-status[data-presence='away'] {
+      background: var(--header-bg, rgba(15, 15, 25, 0.9));
+    }
+
+    /* Status row + expanded preset list inside the account popover. */
+    .pf-more-pop .pf-status-row { min-height: 44px; }
+    .pf-status-row__txt {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+    }
+    .pf-status-row__sub {
+      font-size: 11px;
+      color: var(--text-muted, rgba(148, 163, 184, 0.6));
+      margin-top: 1px;
+    }
+    .pf-status-row__chev {
+      margin-left: auto;
+      flex-shrink: 0;
+      color: var(--text-tertiary, rgba(148, 163, 184, 0.7));
+      transition: transform 0.16s ease;
+    }
+    .pf-status-row__chev--open { transform: rotate(180deg); }
+    .pf-status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: 0 2px;
+    }
+    .pf-more-pop .pf-status-opt { min-height: 44px; }
+    .pf-status-opt__lbl { flex: 1; min-width: 0; }
+    .pf-more-pop .pf-status-opt--on {
+      background: var(--bg-hover, rgba(255, 255, 255, 0.06)) !important;
+    }
+    .pf-status-opt svg { color: var(--color-violet-300, #c4b5fd); }
+    .pf-status-note {
+      margin: 4px 2px 2px;
+      padding: 0 12px;
+      font-size: 10.5px;
+      line-height: 1.45;
+      color: var(--text-muted, rgba(148, 163, 184, 0.6));
+    }
   `]
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
@@ -847,8 +979,14 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  popover instead of the top chrome (which is hidden on mobile). */
   protected readonly theme = inject(ThemeService);
   protected readonly peopleDrawer = inject(PeopleDrawerService);
+  /** Teams-style presence — my status dot on the account button + the
+   *  status picker row in the account popover. */
+  protected readonly presence = inject(PresenceService);
   /** Hide the floating pill while the soft keyboard is up (phone typing). */
   protected readonly kbd = inject(KeyboardService);
+  /** Push token must be unregistered on sign-out (mirrors the top-strip's
+   *  logout) — otherwise the device keeps receiving this user's pushes. */
+  private readonly push = inject(PushService);
   /** Scroll listener is registered runOutsideAngular (it fires very often),
    *  so signal writes that must trigger OnPush re-render re-enter the zone. */
   private readonly zone = inject(NgZone);
@@ -919,12 +1057,27 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     this._branch.set(list[(i + 1) % list.length]);
   }
 
+  // ─── Presence status picker ───────────────────────────────────────
+  protected readonly statusOptions = PRESENCE_OPTIONS;
+  protected readonly statusListOpen = signal(false);
+  protected readonly myStatusLabel = computed(() => presenceLabel(this.presence.myStatus()));
+  protected toggleStatusList(ev?: Event): void {
+    ev?.stopPropagation?.();
+    this.statusListOpen.update(v => !v);
+  }
+  protected pickStatus(o: PresenceOption): void {
+    this.statusListOpen.set(false);
+    this.closeMore();
+    void this.presence.setStatus(o.key);
+  }
+
   // ─── More popover handlers ────────────────────────────────────────
   protected toggleMore(ev?: Event): void {
     ev?.stopPropagation?.();
     this.moreOpen.update(v => !v);
+    if (!this.moreOpen()) this.statusListOpen.set(false);
   }
-  protected closeMore(): void { this.moreOpen.set(false); }
+  protected closeMore(): void { this.moreOpen.set(false); this.statusListOpen.set(false); }
 
   protected onMoreNotifications(): void {
     this.closeMore();
@@ -947,9 +1100,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     };
     this.theme.setMode(next[this.theme.mode()]);
   }
-  protected onMoreLogout(): void {
+  protected async onMoreLogout(): Promise<void> {
     this.closeMore();
-    void this.auth.signOut().then(() => this.router.navigateByUrl('/login'));
+    // Unregister push BEFORE the auth session is cleared (the call needs
+    // a valid token) — same order as the top-strip's logout.
+    await this.push.unregister().catch(() => undefined);
+    await this.auth.signOut();
+    void this.router.navigateByUrl('/login');
   }
 
   /** Tap outside the popover closes it. The transparent .pf-more-bd
@@ -959,7 +1116,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     if (!this.moreOpen()) return;
     // The popover is responsible for stopPropagation on inside clicks,
     // so any click that bubbles to document means "outside" → close.
-    this.moreOpen.set(false);
+    this.closeMore();
   }
 
   // ─── Active state ────────────────────────────────────────────────

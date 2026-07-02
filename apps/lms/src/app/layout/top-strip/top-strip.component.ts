@@ -10,6 +10,8 @@ import { NotificationBellComponent } from '../../shared/components/notification-
 import { ChatService } from '../../core/services/chat.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { SignalingService } from '../../core/services/signaling.service';
+import { PresenceService } from '../../core/services/presence.service';
+import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
@@ -40,6 +42,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
   protected readonly peopleDrawer = inject(PeopleDrawerService);
+  protected readonly presence = inject(PresenceService);
   private readonly push = inject(PushService);
   private readonly webrtc = inject(WebrtcService);
   private readonly patientProfile = inject(PatientProfileService);
@@ -205,7 +208,17 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.closeAll();
     this.profileOpen.set(next);
   }
-  closeProfile() { this.profileOpen.set(false); }
+  closeProfile() { this.profileOpen.set(false); this.statusListOpen.set(false); }
+
+  // ── Presence status picker (Teams-style presets) ───────────────────
+  protected readonly statusOptions = PRESENCE_OPTIONS;
+  protected readonly statusListOpen = signal(false);
+  protected readonly myStatusLabel = computed(() => presenceLabel(this.presence.myStatus()));
+  toggleStatusList() { this.statusListOpen.update(v => !v); }
+  pickStatus(o: PresenceOption) {
+    this.statusListOpen.set(false);
+    void this.presence.setStatus(o.key);
+  }
 
   async logout() {
     this.profileOpen.set(false);
@@ -237,6 +250,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.branchOpen.set(false);
     this.moreOpen.set(false);
     this.profileOpen.set(false);
+    this.statusListOpen.set(false);
   }
 
   pickLanding() {

@@ -16,6 +16,7 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
@@ -24,6 +25,8 @@ import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { LabelCardComponent } from '../post-payment/label-card.component';
+import { printLabelOnly } from '../../../shared/utils/print-label';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -80,7 +83,7 @@ interface StaffMember {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -1169,7 +1172,41 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // ── Navigation & actions ──────────────────────────────────
 
   openRegister() { this.router.navigate(['/frontdesk/patients/new']); }
-  searchFocus() { this.toasts.success('QR scanner · coming soon'); }
+
+  // ── QR / barcode scanner ──────────────────────────────────
+  // The header's "Scan QR" button opens the shared scanner modal; a
+  // decoded value routes exactly like the search bar would. Rendered in
+  // this component's template (like my-work) — the landing's other
+  // fixed-position modals already overlay the full viewport, so there's
+  // no backdrop-filter containing-block problem here.
+  private readonly _qrScannerOpen = signal(false);
+  readonly qrScannerOpen = this._qrScannerOpen.asReadonly();
+  openQrScanner() { this._qrScannerOpen.set(true); }
+  closeQrScanner() { this._qrScannerOpen.set(false); }
+
+  /** A scanned code → same paths the typed search uses. Order/track QRs
+   *  encode full URLs (…/o/{id} on invoices, …/track/{token} on the
+   *  patient copy) — open those directly. Anything else (MRN / phone on
+   *  a patient card) runs through the same lookup the search field's
+   *  typeahead uses and opens the top match, mirroring how Enter picks
+   *  the highlighted first result. */
+  onQrScanned(code: string) {
+    this._qrScannerOpen.set(false);
+    const text = (code || '').trim();
+    if (!text) return;
+    const order = text.match(/\/o\/([0-9a-fA-F-]{6,})/);
+    if (order) { this.router.navigate(['/o', order[1]]); return; }
+    const track = text.match(/\/track\/([^/?#\s]+)/);
+    if (track) { this.router.navigate(['/track', track[1]]); return; }
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(text)}&limit=10`).subscribe({
+      next: list => {
+        const p = (list ?? [])[0];
+        if (p) this.openProfile(p);
+        else this.toasts.warning('No match for that code');
+      },
+      error: () => this.toasts.warning('No match for that code'),
+    });
+  }
   openProfile(p: Patient) { this.router.navigate(['/frontdesk/patients', p.id]); }
   /** Order-drawer shortcut → the patient's profile page. */
   openPatientProfile(o: Order) {
@@ -1243,8 +1280,44 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (this.labCfg.billingMode() !== 'front_desk') return false;
     return this.auth.hasPermission('create_bill') && o.status === 'created';
   }
+  // ── Label reprint (no bill, no navigation) ───────────────────────
+  /** Order whose tube labels are being reprinted — renders the hidden
+   *  print-only label sheet in the template while set. */
+  private readonly _reprintOrder = signal<Order | null>(null);
+  readonly reprintOrder = this._reprintOrder.asReadonly();
+  private readonly _reprintLoading = signal(false);
+  readonly reprintLoading = this._reprintLoading.asReadonly();
+
+  /** Reprint the tube labels straight from the landing. Fetches the full
+   *  order (guarantees samples + barcodes regardless of how slim the
+   *  today-feed row was), renders the same label cards post-payment
+   *  uses into an off-screen `.pf-print-label` block, then runs the
+   *  label-only print path — no bill required, no route change. */
   reprintLabels(o: Order) {
-    this.router.navigate(['/frontdesk/post-payment'], { queryParams: { orderId: o.id } });
+    if (this._reprintLoading()) return;
+    this._reprintLoading.set(true);
+    this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
+      next: full => {
+        this._reprintLoading.set(false);
+        if (!full?.samples?.length) {
+          this.toasts.warning('No samples on this order to print');
+          return;
+        }
+        this._reprintOrder.set(full);
+        // Give the off-screen label cards a beat to paint their barcodes
+        // (JsBarcode is sync but QRCode.toCanvas is async) before printing.
+        setTimeout(() => {
+          printLabelOnly();
+          // Keep the sheet mounted until the print dialog has definitely
+          // consumed it (print() isn't blocking on every platform).
+          setTimeout(() => this._reprintOrder.set(null), 2000);
+        }, 350);
+      },
+      error: () => {
+        this._reprintLoading.set(false);
+        this.toasts.error('Could not load the order for label reprint');
+      }
+    });
   }
 
   // ── Post-billing modify / cancel (supervisor-gated) ──────────────

@@ -191,7 +191,7 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
                       </a>
                     }
                   </div>
-                  <div class="flex-shrink-0">
+                  <div class="flex-shrink-0 flex flex-wrap items-center gap-2">
                     @if (a.status === 'booked') {
                       <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" (pressed)="checkInAndCollect(a)">
                         Check in &amp; collect
@@ -200,6 +200,11 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
                       <pf-touch-btn size="sm" variant="secondary" class="w-full sm:w-auto" (pressed)="goCollect()">
                         Collect samples
                       </pf-touch-btn>
+                      @if (a.status === 'checked_in' || a.status === 'in_progress') {
+                        <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" (pressed)="completeVisit(a)">
+                          Complete visit
+                        </pf-touch-btn>
+                      }
                     }
                   </div>
                 </div>
@@ -239,6 +244,15 @@ export class MyHomeCollectionsComponent implements OnInit {
     this.svc.checkIn(a.id).subscribe({
       next: () => { this.toast.success('Checked in — collect the samples.'); this.goCollect(); },
       error: () => { this.toast.error('Check-in failed.'); this.load(); }
+    });
+  }
+
+  completeVisit(a: Appointment) {
+    // Closes the visit once the samples are collected — the appointment moves
+    // to `completed` and drops out of the agent's queue on the next load.
+    this.svc.complete(a.id).subscribe({
+      next: () => { this.toast.success('Visit completed.'); this.load(); },
+      error: () => { this.toast.error('Could not complete the visit.'); this.load(); }
     });
   }
 

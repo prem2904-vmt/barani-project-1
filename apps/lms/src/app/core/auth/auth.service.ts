@@ -70,11 +70,41 @@ export class AuthService {
       return s?.access_token ? (s as Session) : null;
     } catch { return null; }
   }
+  /** Single-flight guard: concurrent 401s (e.g. a burst of API calls after
+   *  the token expires) must NOT each burn the one-time-use refresh token —
+   *  Supabase rotates it, so the second concurrent exchange fails and signs
+   *  the user out. All callers await the same in-flight refresh. */
+  private _refreshInFlight: Promise<boolean> | null = null;
+
+  // ── Stale-permission refresh ──────────────────────────────────────
+  // Long-lived tabs keep serving day-old roles/permissions: an admin revokes
+  // a perm but the open session never re-fetches /api/auth/me. Re-load the
+  // profile when the window regains focus and the last load is older than
+  // this window. Single-flight so a focus+visibilitychange burst (both fire
+  // on tab switch) doesn't stack concurrent loads.
+  private static readonly PROFILE_STALE_MS = 5 * 60_000;
+  private _lastProfileLoadedAt = 0;
+  private _staleProfileRefresh: Promise<void> | null = null;
+
+  private refreshProfileIfStale(): void {
+    if (!this._session()) return; // no session — nothing to refresh
+    if (Date.now() - this._lastProfileLoadedAt < AuthService.PROFILE_STALE_MS) return;
+    this._staleProfileRefresh ??= this.loadProfile()
+      .catch(() => { /* best-effort — next focus retries */ })
+      .finally(() => { this._staleProfileRefresh = null; });
+  }
+
   /** Exchange the stored refresh token for a fresh access token, straight
    *  against Supabase's token endpoint (the SDK refresh flow hangs on native).
    *  Updates + persists the session. Returns false if there's no refresh token
-   *  or the exchange fails. */
-  private async refreshAccessToken(): Promise<boolean> {
+   *  or the exchange fails. Deduped: concurrent callers share one refresh. */
+  refreshAccessToken(): Promise<boolean> {
+    this._refreshInFlight ??= this.doRefreshAccessToken()
+      .finally(() => { this._refreshInFlight = null; });
+    return this._refreshInFlight;
+  }
+
+  private async doRefreshAccessToken(): Promise<boolean> {
     const refresh = this._session()?.refresh_token;
     if (!refresh) return false;
     const ctrl = new AbortController();
@@ -172,6 +202,15 @@ export class AuthService {
         await this.loadProfile();
       }
     });
+
+    // Stale-permission refresh: re-pull the profile when the app comes back
+    // to the foreground after sitting idle (see refreshProfileIfStale).
+    try {
+      window.addEventListener('focus', () => this.refreshProfileIfStale());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.refreshProfileIfStale();
+      });
+    } catch { /* SSR/native guard */ }
   }
 
   waitForAuth(): Promise<void> {
@@ -394,6 +433,7 @@ export class AuthService {
         permissions: data.permissions ?? [],
         branches: data.branches ?? []
       });
+      this._lastProfileLoadedAt = Date.now();
 
       // Seed / validate the active branch against what this user may access.
       // Clear a stale stored branch so the header doesn't send a rejected id.

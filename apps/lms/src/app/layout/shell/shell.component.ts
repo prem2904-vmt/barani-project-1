@@ -30,6 +30,7 @@ import { AuthService } from "../../core/auth/auth.service";
 import { ScanService } from "../../core/services/scan.service";
 import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
+import { CapacitorService } from "../../core/services/capacitor.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
@@ -55,6 +56,17 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
     <!-- Everything above sits in a stacking context on top of the ambient. -->
     <div class="shell-stack">
+      <!-- Offline banner — slim fixed strip pinned to the very top of the
+           viewport (above the chrome AND on phones/native where the chrome
+           is hidden). Driven by CapacitorService.isOnline: the Network
+           plugin on native, window online/offline events on web. -->
+      @if (capacitor.initialised() && !capacitor.isOnline()) {
+        <div class="pf-offline-banner" role="status" aria-live="polite">
+          <span class="pf-offline-banner__dot" aria-hidden="true"></span>
+          <span>No connection — changes won't save until you're back online</span>
+        </div>
+      }
+
       <!-- Unified chrome card: single navbar row. Tenant + branch
            moved into the top-strip's right cluster; second row removed. -->
       <div class="pf-chrome">
@@ -195,6 +207,49 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         display: flex;
         flex-direction: column;
         overflow: hidden;
+      }
+
+      /* ── Offline banner ── slim glass strip fixed to the top of the
+         viewport. position:fixed (not in-flow) so it never pushes the
+         chrome or page content around when connectivity flaps. The
+         banner carries its own env(safe-area-inset-top) padding: fixed
+         elements anchor to the viewport, above the body's global
+         safe-area padding, so it must clear the notch itself. */
+      .pf-offline-banner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 70; /* above toasts (60) — connectivity trumps everything */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: calc(env(safe-area-inset-top, 0px) + 6px) 16px 6px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        color: #fecaca;
+        background: rgba(127, 29, 29, 0.55);
+        border-bottom: 1px solid rgba(248, 113, 113, 0.35);
+        backdrop-filter: blur(16px) saturate(140%);
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+      }
+      .pf-offline-banner__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex-shrink: 0;
+        background: #f87171;
+        box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
+        animation: pf-offline-pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pf-offline-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .pf-offline-banner__dot { animation: none; }
       }
 
       /* Chrome card — the single navbar row sits inside this floating
@@ -393,6 +448,8 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 export class ShellComponent {
   readonly toasts = inject(ToastService);
   readonly scan = inject(ScanService);
+  /** Drives the offline banner (Network plugin on native, window events on web). */
+  protected readonly capacitor = inject(CapacitorService);
   /** When the soft keyboard is up the bottom-nav hides, so shell-main drops its
    *  nav-clearance padding — otherwise that reserved space becomes a dead gap
    *  between the content (e.g. the chat composer) and the keyboard. */

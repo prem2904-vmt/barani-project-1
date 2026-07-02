@@ -21,3 +21,17 @@ export const workflowGuard = (actionType: string): CanActivateFn => async () => 
   // Feature switched off for this tenant — send them back to the landing.
   return router.createUrlTree(['/']);
 };
+
+/**
+ * OR-variant: admits the route when ANY of the listed actions is enabled.
+ * Needed where one screen serves several workflow actions — e.g. order-create
+ * is the target of BOTH walk-in orders and appointment→order conversion, so
+ * disabling walk_in_order alone must not break converting an appointment.
+ */
+export const workflowGuardAny = (...actionTypes: string[]): CanActivateFn => async () => {
+  const process = inject(ProcessWorkflowService);
+  const router = inject(Router);
+  await process.ensureLoaded();
+  if (actionTypes.some(t => process.isEnabled(t))) return true;
+  return router.createUrlTree(['/']);
+};

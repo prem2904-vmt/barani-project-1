@@ -107,7 +107,7 @@
            search expands the full field in place; it collapses back
            when the field loses focus. Shown on every viewport. -->
       <div class="pf-mbar">
-        <button type="button" class="pf-mbar__btn press" (click)="searchFocus()"
+        <button type="button" class="pf-mbar__btn press" (click)="openQrScanner()"
                 aria-label="Scan QR code" title="Scan QR">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -719,7 +719,8 @@
                               <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
                                 (click)="markDispatched(o)">Dispatch</button>
                             } @else if (o.status === 'billed') {
-                              <button type="button" class="pf-ghostbtn press" (click)="reprintLabels(o)">Reprint Labels</button>
+                              <button type="button" class="pf-ghostbtn press" [disabled]="reprintLoading()"
+                                (click)="reprintLabels(o)">Reprint Labels</button>
                             }
                           </div>
                         </div>
@@ -987,7 +988,7 @@
       }
 
       @if (so.status === 'billed') {
-      <button type="button" class="pf-actbtn press" (click)="reprintLabels(so)"
+      <button type="button" class="pf-actbtn press" [disabled]="reprintLoading()" (click)="reprintLabels(so)"
         title="Reprint the sample labels" aria-label="Reprint labels">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1270,5 +1271,27 @@
         (click)="closeDispatchPackage()">Done</button>
     </footer>
   </div>
+</div>
+}
+
+<!-- QR / barcode scanner — opened from the header's Scan QR button. A
+     decoded order/track URL routes directly; anything else runs the same
+     patient lookup the typed search uses. -->
+@if (qrScannerOpen()) {
+<pf-barcode-scanner-modal title="Scan order or patient QR"
+  (matched)="onQrScanned($event)"
+  (cancelled)="closeQrScanner()"></pf-barcode-scanner-modal>
+}
+
+<!-- Hidden label sheet for "Reprint Labels" — parked off-screen; the
+     label-only print path (printLabelOnly → body.pf-printing-label) hides
+     everything except this .pf-print-label block, so only the tube labels
+     land on paper. Reuses the post-payment label cards so reprints match
+     the originals, without needing a bill or leaving the landing. -->
+@if (reprintOrder(); as ro) {
+<div class="pf-print-label pf-reprint-sheet" aria-hidden="true">
+  @for (s of ro.samples; track s.id; let i = $index) {
+  <pf-label-card [sample]="s" [patient]="ro.patient" [index]="i" [printing]="true"></pf-label-card>
+  }
 </div>
 }

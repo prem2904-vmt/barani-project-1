@@ -18,11 +18,14 @@ interface DirectoryUser {
 }
 
 /**
- * Global call overlay — mounted once in the shell. Renders two states:
+ * Global call overlay — mounted once in the shell. Renders four surfaces:
  *
- * - Incoming-call ringer: full-screen card with caller name, Accept / Decline.
- * - Active-call mini-panel: floating bottom-right pill with call duration,
- *   mic mute toggle, and end-call button. Auto-hides when idle.
+ * - Incoming-call ringer: centered glass card (full sheet on phone) with
+ *   caller name, pulsing avatar rings, Accept / Decline.
+ * - Outgoing ringer: same card family with a single Cancel action.
+ * - Active-call screen: glass card with timer, connection-type dot,
+ *   participants, in-call chat and circular controls. Minimisable.
+ * - Active-call mini-pill: floating bottom-right capsule.
  *
  * The overlay reads everything from `WebrtcService` signals — no @Input
  * plumbing needed. Audio playback uses a hidden `<audio>` per remote peer.
@@ -53,6 +56,7 @@ interface DirectoryUser {
             @else { Incoming call }
           </p>
           <div class="pf-call-ring__avatar-wrap">
+            <span class="pf-call-ring__glow" aria-hidden="true"></span>
             <span class="pf-call-ring__pulse-ring" aria-hidden="true"></span>
             <span class="pf-call-ring__pulse-ring pf-call-ring__pulse-ring--delay" aria-hidden="true"></span>
             <div class="pf-call-ring__avatar">
@@ -61,31 +65,34 @@ interface DirectoryUser {
           </div>
           <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group call') : ic.callerName }}</h2>
           @if (ic.isGroup) {
-            <p class="pf-call-ring__source">{{ ic.callerName }} is calling</p>
+            <p class="pf-call-ring__source">{{ ic.callerName }} is calling…</p>
           } @else if (ic.source) {
             <p class="pf-call-ring__source">{{ sourceLabel(ic.source) }}</p>
           } @else {
-            <p class="pf-call-ring__source">Voice call</p>
+            <p class="pf-call-ring__source">Incoming call…</p>
           }
           <div class="pf-call-ring__actions">
-            <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject"
-                    (click)="reject()" aria-label="Decline">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
-                      transform="rotate(135 12 12)"/>
-              </svg>
-            </button>
-            <button type="button" class="pf-call-ring__btn pf-call-ring__btn--accept"
-                    (click)="accept()" aria-label="Accept">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/>
-              </svg>
-            </button>
-          </div>
-          <div class="pf-call-ring__labels">
-            <span>Decline</span><span>Accept</span>
+            <div class="pf-call-ring__action">
+              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject press"
+                      (click)="reject()" aria-label="Decline">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
+                        transform="rotate(135 12 12)"/>
+                </svg>
+              </button>
+              <span class="pf-call-ring__action-lbl">Decline</span>
+            </div>
+            <div class="pf-call-ring__action">
+              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--accept press"
+                      (click)="accept()" aria-label="Accept">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              </button>
+              <span class="pf-call-ring__action-lbl">Accept</span>
+            </div>
           </div>
         </div>
       </div>
@@ -109,15 +116,23 @@ interface DirectoryUser {
             </button>
             <div class="pf-call-screen__hdr-info">
               <span class="pf-call-screen__hdr-status"
-                    [class.pf-call-screen__hdr-status--live]="webrtc.status() === 'active'">
+                    [class.pf-call-screen__hdr-status--live]="webrtc.status() === 'active'"
+                    [class.pf-call-screen__hdr-status--pulse]="webrtc.status() !== 'active'">
                 <span class="pf-call-screen__live-dot"></span>
                 {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
               </span>
               <span class="pf-call-screen__hdr-meta">
                 <span class="pf-call-screen__time">{{ duration() }}</span>
-                <span class="pf-call-screen__route-chip" [attr.data-cost]="routeCost()" [title]="routeTitle()">
-                  {{ routeCost() === 'paid' ? 'Relay' : 'Direct' }}
-                </span>
+                @if (webrtc.status() === 'active') {
+                  <span class="pf-call-screen__conn"
+                        [class.pf-call-screen__conn--relay]="webrtc.usingTurnRelay()"
+                        [title]="webrtc.usingTurnRelay()
+                          ? 'Relayed via TURN server'
+                          : 'Direct peer-to-peer connection'">
+                    <span class="pf-call-screen__conn-dot" aria-hidden="true"></span>
+                    {{ webrtc.usingTurnRelay() ? 'Relay' : 'Direct' }}
+                  </span>
+                }
                 @if (showRemaining()) {
                   <span class="pf-call-screen__remaining" [class.pf-call-screen__remaining--urgent]="remainingUrgent()"
                         title="Call auto-ends at this point">
@@ -142,6 +157,17 @@ interface DirectoryUser {
               </svg>
             </button>
           </header>
+
+          @if (webrtc.callError(); as err) {
+            <div class="pf-call-screen__error" role="alert">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>{{ err }}</span>
+            </div>
+          }
 
           <div class="pf-call-screen__participants" [attr.data-count]="participants().length">
             @for (p of participants(); track p.id) {
@@ -255,9 +281,9 @@ interface DirectoryUser {
                     (click)="leave()" aria-label="End call">
               <div class="pf-call-screen__ctrl-circle">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
-                          transform="rotate(135 12 12)"/>
+                        transform="rotate(135 12 12)"/>
                 </svg>
               </div>
               <span class="pf-call-screen__ctrl-lbl">End</span>
@@ -317,8 +343,8 @@ interface DirectoryUser {
             {{ remainingLabel() }}
           </span>
         }
-        <!-- Compact route badge: green "Free" when peer-to-peer, amber
-             "Paid" when media is relayed via TURN (CF egress = billable). -->
+        <!-- Compact route badge: green "Direct" when peer-to-peer, amber
+             "Relay" when media is relayed via TURN (CF egress = billable). -->
         <span class="pf-call-pill__route" [attr.data-cost]="routeCost()" [title]="routeTitle()">
           {{ routeLabel() }}
         </span>
@@ -405,137 +431,170 @@ interface DirectoryUser {
     }
 
     @if (webrtc.status() === 'outgoing' && !webrtc.incomingCall()) {
-      <div class="pf-call-pill pf-call-pill--ringing" role="region" aria-label="Ringing">
-        <div class="pf-call-pill__avatar">
-          <span class="pf-call-pill__avatar-pulse" aria-hidden="true"></span>
-          {{ initials(webrtc.localCallerName() ?? 'Calling') }}
+      <div class="pf-call-ring pf-call-ring--outgoing pf-modal-centered" role="dialog" aria-modal="true" aria-label="Outgoing call">
+        <div class="pf-call-ring__backdrop"></div>
+        <div class="pf-call-ring__card pf-modal-centered">
+          <p class="pf-call-ring__eyebrow">Calling</p>
+          <div class="pf-call-ring__avatar-wrap">
+            <span class="pf-call-ring__glow" aria-hidden="true"></span>
+            <span class="pf-call-ring__pulse-ring" aria-hidden="true"></span>
+            <span class="pf-call-ring__pulse-ring pf-call-ring__pulse-ring--delay" aria-hidden="true"></span>
+            <div class="pf-call-ring__avatar">
+              {{ initials(webrtc.localCallerName() ?? 'Calling') }}
+            </div>
+          </div>
+          <h2 class="pf-call-ring__name">{{ webrtc.localCallerName() ?? 'Calling' }}</h2>
+          <p class="pf-call-ring__source">Ringing…</p>
+          <div class="pf-call-ring__actions">
+            <div class="pf-call-ring__action">
+              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject press"
+                      (click)="cancelOutgoing()" aria-label="Cancel call">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
+                        transform="rotate(135 12 12)"/>
+                </svg>
+              </button>
+              <span class="pf-call-ring__action-lbl">Cancel</span>
+            </div>
+          </div>
         </div>
-        <div class="pf-call-pill__meta">
-          <span class="pf-call-pill__label">{{ webrtc.localCallerName() ?? 'Calling' }}</span>
-          <span class="pf-call-pill__time">Ringing…</span>
-        </div>
-        <button type="button" class="pf-call-pill__btn pf-call-pill__btn--end"
-                (click)="cancelOutgoing()" aria-label="Cancel call">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
-                  transform="rotate(135 12 12)"/>
-          </svg>
-        </button>
       </div>
     }
   `,
   styles: [`
-    /* Call overlay — themed against the app's violet glass tokens
-       (--gradient-primary, --glass-*, --color-violet-*). No hardcoded
-       hex/rgba except small inline shadows that need fixed alpha. */
+    /* Call overlay — glass/ambient theme. Centered glass cards on desktop
+       and iPad, full-height sheets (100dvh + safe areas) on phones.
+       Themed via the app tokens (--glass-*, --card-bg, --gradient-primary,
+       --text-*); the only hardcoded colors are the accept/decline gradients
+       and the connection-dot semantics (green = direct, red = relay). */
     :host { display: contents; }
 
-    /* ── Shared mono accent for time/duration ─────────────────── */
-    .pf-call-mono { font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    /* Soft pulse used by the "Incoming call…" / "Ringing…" / "Connecting…"
+       status lines — a calm breathe instead of an animated ellipsis. */
+    @keyframes pf-call-status-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.45; }
+    }
 
     /* ─────────────────────────────────────────────────────────
-       INCOMING-CALL RINGER — fullscreen, avatar-centric, big
-       circular accept/decline buttons. Pulse rings emanate from
-       the avatar (one solid + one delayed) for a phone-style
-       "someone's calling you" feel.
+       RING CARD (incoming + outgoing) — dimmed blurred backdrop,
+       centered glass card with an ambient violet glow behind the
+       avatar and two expanding pulse rings.
        ───────────────────────────────────────────────────────── */
     .pf-call-ring {
       position: fixed; inset: 0; z-index: 100;
-      display: flex;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
     }
-    /* Immersive full-bleed background — a real "someone's calling you"
-       screen, not a card. Deep violet radial wash over near-black so
-       the avatar + buttons read against a calm field. */
     .pf-call-ring__backdrop {
       position: absolute; inset: 0;
       background:
-        radial-gradient(120% 70% at 50% 18%, rgba(124, 58, 237, 0.42) 0%, transparent 62%),
-        radial-gradient(90% 60% at 50% 100%, rgba(236, 72, 153, 0.20) 0%, transparent 60%),
-        #07050f;
+        radial-gradient(90% 60% at 50% 12%, rgba(124, 58, 237, 0.22) 0%, transparent 60%),
+        rgba(8, 10, 16, 0.62);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
     .pf-call-ring__card {
       position: relative;
-      width: 100%; height: 100%;
+      width: 100%; max-width: 400px;
       display: flex; flex-direction: column; align-items: center;
-      /* Avatar sits in the upper third; actions hug the bottom thumb
-         zone. safe-area insets keep clear of the notch + home bar. */
-      padding:
-        calc(env(safe-area-inset-top, 0px) + 72px)
-        24px
-        calc(env(safe-area-inset-bottom, 0px) + 40px);
+      padding: 30px 24px 28px;
+      border-radius: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(124, 58, 237, 0.12);
       color: var(--text-primary); text-align: center;
-      background: transparent; border: 0; border-radius: 0;
-      animation: pf-call-ring-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+      animation: pf-call-ring-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes pf-call-ring-in {
-      from { opacity: 0; }
-      to   { opacity: 1; }
+      from { opacity: 0; transform: translateY(14px) scale(0.96); }
+      to   { opacity: 1; transform: none; }
     }
     .pf-call-ring__eyebrow {
-      font-size: 12px; font-weight: 600;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: rgba(196, 181, 253, 0.9);
-      margin: 0 0 44px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin: 0 0 26px;
     }
     .pf-call-ring__avatar-wrap {
       position: relative;
-      width: 132px; height: 132px;
-      margin: 0 auto 28px;
+      width: 124px; height: 124px;
+      margin: 0 auto 22px;
       display: flex; align-items: center; justify-content: center;
     }
-    .pf-call-ring__pulse-ring {
-      position: absolute; inset: 0;
+    /* Ambient glow: soft violet radial halo behind the avatar. */
+    .pf-call-ring__glow {
+      position: absolute; inset: -56px;
       border-radius: 50%;
-      border: 2px solid rgba(167, 139, 250, 0.7);
+      background: radial-gradient(circle,
+        rgba(139, 92, 246, 0.28) 0%,
+        rgba(236, 72, 153, 0.10) 45%,
+        transparent 70%);
+      pointer-events: none;
+    }
+    .pf-call-ring__pulse-ring {
+      position: absolute; inset: 8px;
+      border-radius: 50%;
+      border: 2px solid rgba(167, 139, 250, 0.6);
       animation: pf-call-ring-pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       opacity: 0;
     }
     .pf-call-ring__pulse-ring--delay { animation-delay: 1.2s; }
     @keyframes pf-call-ring-pulse {
-      0%   { transform: scale(0.8);  opacity: 0.7; }
-      70%  { transform: scale(1.6);  opacity: 0;   }
-      100% { transform: scale(1.6);  opacity: 0;   }
+      0%   { transform: scale(0.82); opacity: 0.65; }
+      70%  { transform: scale(1.45); opacity: 0;    }
+      100% { transform: scale(1.45); opacity: 0;    }
     }
     .pf-call-ring__avatar {
       position: relative;
-      width: 116px; height: 116px; border-radius: 50%;
+      width: 104px; height: 104px; border-radius: 50%;
       background: var(--gradient-primary);
       display: flex; align-items: center; justify-content: center;
-      font-size: 40px; font-weight: 700; color: #fff;
+      font-size: 36px; font-weight: 700; color: #fff;
       letter-spacing: 0.02em;
       box-shadow:
-        0 0 60px rgba(139, 92, 246, 0.55),
-        0 16px 40px rgba(0, 0, 0, 0.45),
+        0 0 44px rgba(139, 92, 246, 0.45),
+        0 12px 32px rgba(0, 0, 0, 0.35),
         inset 0 0 0 2px rgba(255, 255, 255, 0.16);
     }
     .pf-call-ring__card--group .pf-call-ring__avatar {
       background: linear-gradient(135deg, #06b6d4, #6366f1);
       box-shadow:
-        0 0 60px rgba(99, 102, 241, 0.5),
-        0 16px 40px rgba(0, 0, 0, 0.45),
+        0 0 44px rgba(99, 102, 241, 0.42),
+        0 12px 32px rgba(0, 0, 0, 0.35),
         inset 0 0 0 2px rgba(255, 255, 255, 0.16);
     }
     .pf-call-ring__card--group .pf-call-ring__pulse-ring {
-      border-color: rgba(129, 140, 248, 0.7);
+      border-color: rgba(129, 140, 248, 0.6);
     }
     .pf-call-ring__name {
-      font-size: 30px; font-weight: 700; margin: 0;
-      letter-spacing: -0.02em;
-      color: #fff;
+      font-size: 20px; font-weight: 700; margin: 0;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .pf-call-ring__source {
-      font-size: 15px; color: rgba(226, 232, 240, 0.62);
-      margin: 8px 0 0;
+      font-size: 14px; color: var(--text-secondary);
+      margin: 7px 0 0;
+      animation: pf-call-status-pulse 2s ease-in-out infinite;
     }
-    /* Spacer pushes the action row to the bottom of the screen. */
     .pf-call-ring__actions {
-      margin-top: auto;
-      display: flex; gap: 72px; justify-content: center;
+      margin-top: 34px;
+      display: flex; gap: 56px; justify-content: center;
+    }
+    .pf-call-ring__action {
+      display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .pf-call-ring__action-lbl {
+      font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary);
     }
     .pf-call-ring__btn {
-      width: 76px; height: 76px;
+      width: 64px; height: 64px;
       display: inline-flex; align-items: center; justify-content: center;
       border-radius: 50%; border: none; cursor: pointer; color: #fff;
       transition: transform 0.12s, box-shadow 0.2s, filter 0.2s;
@@ -544,25 +603,21 @@ interface DirectoryUser {
     .pf-call-ring__btn:active { transform: scale(0.92); }
     .pf-call-ring__btn--reject {
       background: linear-gradient(135deg, #f43f5e, #e11d48);
-      box-shadow: 0 12px 32px rgba(244, 63, 94, 0.5);
+      box-shadow: 0 10px 26px rgba(244, 63, 94, 0.45);
     }
     .pf-call-ring__btn--accept {
       background: linear-gradient(135deg, #22c55e, #16a34a);
-      box-shadow: 0 12px 32px rgba(34, 197, 94, 0.5);
+      box-shadow: 0 10px 26px rgba(34, 197, 94, 0.45);
       animation: pf-call-accept-breathe 1.8s ease-in-out infinite;
     }
     @keyframes pf-call-accept-breathe {
-      0%, 100% { transform: scale(1);    box-shadow: 0 12px 32px rgba(34, 197, 94, 0.5); }
-      50%      { transform: scale(1.06); box-shadow: 0 18px 44px rgba(34, 197, 94, 0.66); }
+      0%, 100% { transform: scale(1);    box-shadow: 0 10px 26px rgba(34, 197, 94, 0.45); }
+      50%      { transform: scale(1.06); box-shadow: 0 16px 38px rgba(34, 197, 94, 0.6); }
     }
-    .pf-call-ring__labels {
-      display: flex; gap: 72px; justify-content: center;
-      margin-top: 14px;
-      font-size: 13px; font-weight: 500;
-      color: rgba(226, 232, 240, 0.7);
-    }
-    .pf-call-ring__labels span {
-      flex-basis: 76px; text-align: center;
+
+    /* iPad / mid widths: slightly larger centered card. */
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-call-ring__card { max-width: 440px; }
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -611,12 +666,6 @@ interface DirectoryUser {
       box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
       animation: pf-call-pill-ring 1.8s ease-in-out infinite;
     }
-    .pf-call-pill__avatar-pulse {
-      position: absolute; inset: -4px;
-      border-radius: 50%;
-      border: 2px solid var(--color-violet-400);
-      animation: pf-call-pill-ring 1.4s ease-in-out infinite;
-    }
     @keyframes pf-call-pill-ring {
       0%, 100% { transform: scale(1);   opacity: 0.85; }
       50%      { transform: scale(1.15); opacity: 0.25; }
@@ -641,6 +690,7 @@ interface DirectoryUser {
       color: var(--text-secondary);
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer;
+      flex-shrink: 0;
       transition: background 0.12s, color 0.12s, transform 0.08s, border-color 0.12s;
     }
     .pf-call-pill__btn:hover {
@@ -704,67 +754,68 @@ interface DirectoryUser {
       .pf-call-pill__route { display: none; }
     }
 
-    .pf-call-pill--ringing .pf-call-pill__avatar {
-      background: linear-gradient(135deg, #a78bfa, #8b5cf6);
-    }
-
     /* ─────────────────────────────────────────────────────────
-       FULL-SCREEN ACTIVE CALL — wider card, clean header with
-       live-dot status + duration + relay chip, larger participant
-       tiles with a pulsing ring around connected (unmuted) people,
-       and Teams-style circular control buttons at the bottom.
+       ACTIVE CALL SCREEN — centered glass card with a compact
+       header (status + timer + connection dot), participant
+       tiles, in-call chat, and circular glass controls.
        ───────────────────────────────────────────────────────── */
     .pf-call-screen {
       position: fixed; inset: 0; z-index: 90;
-      display: flex;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
     }
-    /* Immersive full-bleed active-call background — same violet wash
-       family as the ringer so accepting a call feels continuous. */
     .pf-call-screen__backdrop {
       position: absolute; inset: 0;
       background:
-        radial-gradient(110% 60% at 50% 0%, rgba(124, 58, 237, 0.34) 0%, transparent 60%),
-        radial-gradient(90% 55% at 50% 100%, rgba(236, 72, 153, 0.16) 0%, transparent 58%),
-        #07050f;
+        radial-gradient(90% 55% at 50% 8%, rgba(124, 58, 237, 0.18) 0%, transparent 60%),
+        rgba(8, 10, 16, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
     .pf-call-screen__card {
       position: relative;
-      width: 100%; height: 100%;
-      padding:
-        calc(env(safe-area-inset-top, 0px) + 14px)
-        20px
-        calc(env(safe-area-inset-bottom, 0px) + 24px);
-      background: transparent; border: 0; border-radius: 0;
+      width: 100%; max-width: 440px;
+      height: min(640px, calc(100dvh - 64px));
+      padding: 16px 18px 20px;
+      border-radius: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(124, 58, 237, 0.1);
       color: var(--text-primary);
-      display: flex; flex-direction: column; gap: 16px;
+      display: flex; flex-direction: column; gap: 14px;
       animation: pf-call-screen-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes pf-call-screen-in {
-      from { opacity: 0; }
-      to   { opacity: 1; }
+      from { opacity: 0; transform: translateY(14px) scale(0.97); }
+      to   { opacity: 1; transform: none; }
+    }
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-call-screen__card { max-width: 480px; }
     }
 
-    /* Header: icon-btn left (minimise) + status pill + chips + icon-btn right (close).
-       Compact, glass surfaces, no borders that look like form fields. */
+    /* Header: icon-btn left (minimise) + status pill + chips + icon-btns right. */
     .pf-call-screen__hdr {
       display: flex; align-items: center; gap: 10px;
       flex-shrink: 0;
     }
     .pf-call-screen__icon-btn {
-      width: 36px; height: 36px; border-radius: 10px;
+      width: 36px; height: 36px; border-radius: 12px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      color: rgba(226, 232, 240, 0.85);
+      background: var(--glass-bg-hover);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
       cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
       flex-shrink: 0;
     }
     .pf-call-screen__icon-btn:hover {
-      background: rgba(255, 255, 255, 0.14);
-      color: #fff;
-      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(139, 92, 246, 0.16);
+      color: var(--text-primary);
+      border-color: rgba(139, 92, 246, 0.35);
     }
+    .pf-call-screen__icon-btn:active { transform: scale(0.94); }
     .pf-call-screen__hdr-info {
       flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
       min-width: 0;
@@ -777,6 +828,9 @@ interface DirectoryUser {
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
       color: var(--text-tertiary);
+    }
+    .pf-call-screen__hdr-status--pulse {
+      animation: pf-call-status-pulse 2s ease-in-out infinite;
     }
     .pf-call-screen__hdr-status--live {
       background: rgba(16, 185, 129, 0.15);
@@ -798,7 +852,7 @@ interface DirectoryUser {
       50%      { opacity: 1;    transform: scale(1.15); }
     }
     .pf-call-screen__hdr-meta {
-      display: inline-flex; align-items: center; gap: 6px;
+      display: inline-flex; align-items: center; gap: 8px;
       flex-wrap: wrap; justify-content: center;
     }
     .pf-call-screen__time {
@@ -806,17 +860,23 @@ interface DirectoryUser {
       font-variant-numeric: tabular-nums;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
-    .pf-call-screen__route-chip {
-      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
-      padding: 2px 7px; border-radius: 9999px;
-      text-transform: uppercase;
+
+    /* Connection-type indicator: green dot = direct P2P, red dot = TURN
+       relay. Only rendered while the call is active. */
+    .pf-call-screen__conn {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600;
+      color: var(--text-tertiary);
       cursor: help;
     }
-    .pf-call-screen__route-chip[data-cost='free'] {
-      background: var(--success-bg); color: var(--success-text);
+    .pf-call-screen__conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
     }
-    .pf-call-screen__route-chip[data-cost='paid'] {
-      background: var(--warning-bg); color: var(--warning-text);
+    .pf-call-screen__conn--relay .pf-call-screen__conn-dot {
+      background: #f87171;
+      box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
     }
     .pf-call-screen__remaining {
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
@@ -829,18 +889,28 @@ interface DirectoryUser {
       animation: pf-call-remaining-pulse 1s ease-in-out infinite;
     }
 
-    /* Participants grid — bigger cards, ring around the avatar that
+    /* Soft red glass banner for call errors (mic denied etc.). */
+    .pf-call-screen__error {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: #fda4af;
+      font-size: 12.5px; font-weight: 500;
+      flex-shrink: 0;
+    }
+    .pf-call-screen__error svg { flex-shrink: 0; }
+
+    /* Participants grid — glass tiles, ring around the avatar that
        pulses for connected (unmuted) participants, mute badge in the
        corner. Phone gets a 2-col stack. */
     .pf-call-screen__participants {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 12px;
       padding: 4px 0;
       overflow-y: auto;
-      /* Fill the space between header and controls, and centre the
-         avatar cards vertically — gives the immersive call the
-         "people floating in the middle" look. */
       flex: 1; min-height: 0;
       align-content: center;
     }
@@ -848,32 +918,35 @@ interface DirectoryUser {
     .pf-call-screen__participants[data-count='2'] {
       grid-template-columns: repeat(2, 1fr);
     }
+    .pf-call-screen__participants[data-count='1'] {
+      grid-template-columns: 1fr;
+    }
     @media (max-width: 520px) {
       .pf-call-screen__participants {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
       }
+      .pf-call-screen__participants[data-count='1'] {
+        grid-template-columns: 1fr;
+      }
     }
     .pf-call-screen__pcard {
       display: flex; flex-direction: column; align-items: center; gap: 10px;
-      padding: 22px 12px 18px;
-      /* Translucent glass tile against the immersive backdrop. */
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.09);
+      padding: 20px 12px 16px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
       border-radius: 18px;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
       transition: border-color 0.2s, background 0.2s;
     }
     .pf-call-screen__pcard--mine {
       border-color: rgba(167, 139, 250, 0.4);
-      background: rgba(124, 58, 237, 0.14);
+      background: rgba(124, 58, 237, 0.12);
     }
     .pf-call-screen__pcard--muted { opacity: 0.7; }
 
     .pf-call-screen__avatar-wrap {
       position: relative;
-      width: 64px; height: 64px;
+      width: 60px; height: 60px;
       display: flex; align-items: center; justify-content: center;
     }
     .pf-call-screen__avatar-ring {
@@ -893,10 +966,10 @@ interface DirectoryUser {
       50%      { transform: scale(1.08); opacity: 0.2; }
     }
     .pf-call-screen__avatar {
-      width: 64px; height: 64px; border-radius: 50%;
+      width: 60px; height: 60px; border-radius: 50%;
       background: var(--gradient-primary);
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 700; color: #fff;
+      font-size: 20px; font-weight: 700; color: #fff;
       letter-spacing: 0.02em;
       box-shadow: 0 8px 24px rgba(139, 92, 246, 0.32), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
     }
@@ -935,16 +1008,12 @@ interface DirectoryUser {
       .pf-call-screen__pmeta       { font-size: 10px; }
     }
 
-    /* Control row: 3 buttons each as a {circle + label} stack.
-       The circles look like Teams/Zoom — large, solid, with the
-       End button in danger red and the active state on Add. */
+    /* Control row: buttons as {glass circle + label} stacks; 48px circles
+       on desktop, 56px on touch. End is a red gradient disc. */
     .pf-call-screen__ctrls {
-      display: flex; align-items: flex-start; justify-content: center; gap: 28px;
-      padding-top: 8px;
+      display: flex; align-items: flex-start; justify-content: center; gap: 26px;
+      padding-top: 6px;
       flex-shrink: 0;
-    }
-    @media (max-width: 520px) {
-      .pf-call-screen__ctrls { gap: 18px; }
     }
     .pf-call-screen__ctrl {
       display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
@@ -955,23 +1024,20 @@ interface DirectoryUser {
     }
     .pf-call-screen__ctrl:hover { color: var(--text-primary); }
     .pf-call-screen__ctrl-circle {
-      width: 60px; height: 60px;
+      width: 48px; height: 48px;
       border-radius: 50%;
-      /* Glass discs against the immersive backdrop — translucent so the
-         violet wash shows through, like FaceTime / Meet controls. */
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: var(--glass-bg-hover);
+      border: 1px solid var(--glass-border);
       display: inline-flex; align-items: center; justify-content: center;
       transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.15s;
     }
+    .pf-call-screen__ctrl-circle svg { width: 20px; height: 20px; }
     .pf-call-screen__ctrl:hover .pf-call-screen__ctrl-circle {
       background: rgba(139, 92, 246, 0.18);
       border-color: rgba(139, 92, 246, 0.4);
     }
     .pf-call-screen__ctrl:active .pf-call-screen__ctrl-circle {
-      transform: scale(0.94);
+      transform: scale(0.92);
     }
     .pf-call-screen__ctrl--on .pf-call-screen__ctrl-circle {
       background: rgba(244, 63, 94, 0.2);
@@ -996,18 +1062,31 @@ interface DirectoryUser {
     .pf-call-screen__ctrl--end { color: #fb7185; }
     .pf-call-screen__ctrl-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
 
+    /* Touch devices: comfortable 56px discs + bigger ring buttons. */
+    @media (pointer: coarse) {
+      .pf-call-screen__ctrl-circle { width: 56px; height: 56px; }
+      .pf-call-screen__ctrl-circle svg { width: 22px; height: 22px; }
+      .pf-call-ring__btn { width: 72px; height: 72px; }
+    }
+
     /* ── In-call chat side panel ─────────────────────────────── */
     .pf-call-screen__card--with-chat {
+      max-width: 840px;
       display: grid;
       grid-template-areas:
         "hdr      hdr"
+        "err      err"
         "people   chat"
         "ctrls    ctrls";
-      grid-template-columns: 1fr min(360px, 32vw);
-      grid-template-rows: auto 1fr auto;
+      grid-template-columns: 1fr min(340px, 40%);
+      grid-template-rows: auto auto 1fr auto;
       gap: 12px;
     }
+    @media (min-width: 641px) and (max-width: 1279px) {
+      .pf-call-screen__card--with-chat { max-width: min(840px, calc(100vw - 48px)); }
+    }
     .pf-call-screen__card--with-chat .pf-call-screen__hdr           { grid-area: hdr; }
+    .pf-call-screen__card--with-chat .pf-call-screen__error         { grid-area: err; }
     .pf-call-screen__card--with-chat .pf-call-screen__participants  { grid-area: people; }
     .pf-call-screen__card--with-chat .pf-call-screen__chat          { grid-area: chat; }
     .pf-call-screen__card--with-chat .pf-call-screen__ctrls         { grid-area: ctrls; }
@@ -1015,10 +1094,11 @@ interface DirectoryUser {
       .pf-call-screen__card--with-chat {
         grid-template-areas:
           "hdr"
+          "err"
           "chat"
           "ctrls";
         grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
+        grid-template-rows: auto auto 1fr auto;
       }
       .pf-call-screen__card--with-chat .pf-call-screen__participants { display: none; }
     }
@@ -1045,6 +1125,7 @@ interface DirectoryUser {
     }
     .pf-call-screen__icon-btn--sm {
       width: 24px; height: 24px;
+      border-radius: 8px;
       padding: 0;
     }
     .pf-call-screen__icon-btn--active {
@@ -1195,64 +1276,67 @@ interface DirectoryUser {
     }
 
     /* ────────────────────────────────────────────────────────────
-       MOBILE — phone-first overrides
-       The call surface is the most safety-critical UX in the app
-       (incoming call must be impossible to miss + impossible to
-       accidentally accept/decline). On phone we:
-         - take the full viewport, edge-to-edge
-         - push action buttons into the natural thumb-zone (bottom 1/3)
-         - bump button targets to 64-72px diameter
-         - honour safe-area-inset-bottom so the home indicator doesn't
-           sit on top of the End button
+       MOBILE — phone-first overrides (max-width 640, additive only)
+       The call surface is the most safety-critical UX in the app.
+       On phone the cards become full-height sheets:
+         - 100dvh (never vh) with env(safe-area-inset-*) padding
+         - action buttons pushed into the natural thumb-zone
+         - bigger tap targets, home indicator never covers End
        ──────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
-      /* Incoming ringer fills the screen — feels like a real phone call */
+      /* Ring card (incoming + outgoing) fills the screen like a real
+         phone call. */
       .pf-call-ring { padding: 0; }
       .pf-call-ring__card {
-        width: 100%; max-width: none;
-        min-height: 100vh;
+        max-width: none;
+        height: 100dvh;
         border-radius: 0;
-        padding: max(28px, env(safe-area-inset-top)) 28px max(28px, env(safe-area-inset-bottom));
-        display: flex; flex-direction: column;
-        justify-content: center;
-        animation: pf-call-ring-fade 0.18s ease-out;
+        border: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding:
+          calc(env(safe-area-inset-top, 0px) + 56px)
+          28px
+          calc(env(safe-area-inset-bottom, 0px) + 36px);
+        justify-content: flex-start;
       }
-      @keyframes pf-call-ring-fade { from { opacity: 0; } to { opacity: 1; } }
-      .pf-call-ring__avatar-wrap { width: 132px; height: 132px; }
-      .pf-call-ring__avatar      { width: 116px; height: 116px; font-size: 38px; }
-      .pf-call-ring__name        { font-size: 28px; }
-      .pf-call-ring__source      { font-size: 14px; }
+      .pf-call-ring__eyebrow     { margin-bottom: 48px; }
+      .pf-call-ring__avatar-wrap { width: 144px; height: 144px; margin-bottom: 28px; }
+      .pf-call-ring__avatar      { width: 120px; height: 120px; font-size: 40px; }
+      .pf-call-ring__name        { font-size: 27px; }
+      .pf-call-ring__source      { font-size: 15px; }
       .pf-call-ring__actions {
         gap: 64px;
         margin-top: auto;       /* push to bottom thumb-zone */
-        padding-top: 64px;
+        padding-top: 48px;
       }
-      .pf-call-ring__btn  { width: 76px; height: 76px; }
-      .pf-call-ring__labels { gap: 64px;
-        span { flex-basis: 76px; }
-      }
+      .pf-call-ring__btn { width: 74px; height: 74px; }
 
-      /* Full-screen active call — edge-to-edge, thicker controls */
-      .pf-call-screen { padding: 0; align-items: stretch; }
+      /* Active call — edge-to-edge sheet, thicker controls */
+      .pf-call-screen { padding: 0; }
       .pf-call-screen__card {
-        width: 100%; max-width: none;
-        max-height: none;
-        height: 100vh; min-height: 100vh;
+        max-width: none;
+        height: 100dvh;
         border-radius: 0;
-        padding: max(12px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
+        border: 0;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding:
+          calc(env(safe-area-inset-top, 0px) + 12px)
+          14px
+          calc(env(safe-area-inset-bottom, 0px) + 18px);
       }
-      .pf-call-screen__ctrls { gap: 24px; padding-top: 16px; }
-      .pf-call-screen__ctrl-circle { width: 60px; height: 60px; }
-      .pf-call-screen__ctrl-lbl    { font-size: 11px; }
+      .pf-call-screen__ctrls       { gap: 24px; padding-top: 14px; }
+      .pf-call-screen__ctrl-circle { width: 56px; height: 56px; }
       .pf-call-screen__hdr-info    { gap: 6px; }
-      .pf-call-screen__hdr-meta    { gap: 6px; }
+      .pf-call-screen__hdr-meta    { gap: 8px; }
 
       /* In-call chat: when open on phone, it takes the participants
          space + controls area becomes a slim bar at the bottom. */
       .pf-call-screen__card--with-chat {
-        grid-template-areas: "hdr" "chat" "ctrls" !important;
+        grid-template-areas: "hdr" "err" "chat" "ctrls" !important;
         grid-template-columns: 1fr !important;
-        grid-template-rows: auto 1fr auto !important;
+        grid-template-rows: auto auto 1fr auto !important;
       }
       .pf-call-screen__card--with-chat .pf-call-screen__participants {
         display: none !important;
@@ -1265,12 +1349,13 @@ interface DirectoryUser {
         font-size: 13px;
       }
       .pf-call-pill__avatar { width: 38px; height: 38px; font-size: 13px; }
-      .pf-call-pill__btn    { width: 36px; height: 36px; }
+      .pf-call-pill__btn    { width: 40px; height: 40px; }
     }
 
-    @media (max-width: 360px) {
+    @media (max-width: 400px) {
       .pf-call-pill__meta { max-width: 90px; }
       .pf-call-pill__btn--add { display: none; }
+      .pf-call-ring__actions { gap: 52px; }
     }
   `]
 })
@@ -1399,11 +1484,11 @@ export class CallOverlayComponent {
   protected readonly routeCost = computed<'free' | 'paid'>(() =>
     this.webrtc.usingTurnRelay() ? 'paid' : 'free');
   protected readonly routeLabel = computed(() =>
-    this.webrtc.usingTurnRelay() ? '● Paid' : '● Free');
+    this.webrtc.usingTurnRelay() ? '● Relay' : '● Direct');
   protected readonly routeTitle = computed(() =>
     this.webrtc.usingTurnRelay()
-      ? 'Media is relayed via TURN — billable Cloudflare egress'
-      : 'Peer-to-peer direct media — no relay cost');
+      ? 'Relayed via TURN server'
+      : 'Direct peer-to-peer connection');
 
   /** Online users in my tenant who AREN'T already in the call (and aren't me). */
   protected readonly availableToInvite = computed<DirectoryUser[]>(() => {

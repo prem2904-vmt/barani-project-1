@@ -522,6 +522,127 @@
   background: var(--border-muted);
 }
 
+/* ── Presence status (Teams-style presets) ─────────────────────────
+   The dot itself: solid color per preset; DND-grade (dnd / surgery)
+   carries a white dash; Away is a hollow ring. Colors come from
+   shared/models/presence.model.ts — keep them in sync. */
+.pf-status-dot {
+  position: relative;
+  display: inline-flex;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: #9ca3af;
+}
+.pf-status-dot[data-presence='available'] { background: #34d399; }
+.pf-status-dot[data-presence='busy'],
+.pf-status-dot[data-presence='with_patient'] { background: #f87171; }
+.pf-status-dot[data-presence='rounds'] { background: #fbbf24; }
+.pf-status-dot[data-presence='surgery'],
+.pf-status-dot[data-presence='dnd'] { background: #dc2626; }
+.pf-status-dot[data-presence='surgery']::after,
+.pf-status-dot[data-presence='dnd']::after {
+  content: '';
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: #fff;
+}
+.pf-status-dot[data-presence='away'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #9ca3af;
+}
+
+/* Avatar-anchored variant — pinned bottom-right with a bg-colored ring
+   so it reads over the gradient avatar. */
+.pf-avatar-status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--bg-card-solid, #14142a);
+  box-sizing: content-box;
+  z-index: 1;
+}
+.pf-avatar-status[data-presence='away'] {
+  background: var(--bg-card-solid, #14142a);
+}
+.pf-profile-bigcircle--presence { position: relative; }
+.pf-avatar-status--big {
+  width: 12px;
+  height: 12px;
+  bottom: -1px;
+  right: -1px;
+}
+
+/* Status row inside the profile popover. */
+.pf-status-row { min-height: 44px; }
+.pf-status-row__txt { display: flex; flex-direction: column; }
+.pf-status-row__lbl { color: var(--text-primary); font-weight: 600; }
+.pf-status-row__sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.pf-status-row__chev {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.16s ease;
+}
+.pf-status-row__chev--open { transform: rotate(180deg); }
+
+/* Expanded preset list. */
+.pf-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px 4px;
+  animation: pf-pop-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-status-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pf-status-opt:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.pf-status-opt--on {
+  color: var(--text-primary);
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+}
+.pf-status-opt svg { color: var(--color-violet-300, #c4b5fd); }
+.pf-status-note {
+  margin: 4px 2px 2px;
+  padding: 0 10px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+@media (pointer: coarse) {
+  .pf-status-opt { min-height: 44px; }
+}
+
 .pf-profile-item {
   display: flex;
   align-items: center;
