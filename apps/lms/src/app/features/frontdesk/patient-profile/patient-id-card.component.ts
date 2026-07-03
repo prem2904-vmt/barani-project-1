@@ -33,7 +33,9 @@ import { printLabelOnly } from '../../../shared/utils/print-label';
             @if (patient.bloodGroup) { <p class="pf-idc__meta">Blood: {{ patient.bloodGroup }}</p> }
           </div>
           <div class="pf-idc__qr">
-            <pf-barcode-display mode="qr" [code]="qrValue" [bare]="true" [size]="112"></pf-barcode-display>
+            <div class="pf-idc__qrbox">
+              <pf-barcode-display mode="qr" [code]="qrValue" [bare]="true" [showValue]="false" [size]="112"></pf-barcode-display>
+            </div>
             <p class="pf-idc__scan">Scan at front desk</p>
           </div>
         </div>
@@ -45,23 +47,28 @@ import { printLabelOnly } from '../../../shared/utils/print-label';
     </div>
   `,
   styles: [`
-    .pf-idc { display: inline-flex; flex-direction: column; gap: 10px; }
+    :host { display: block; }
+    .pf-idc { display: flex; flex-direction: column; gap: 10px; width: 100%; }
     .pf-idc__card {
-      width: 320px; border-radius: 14px; overflow: hidden; background: #fff; color: #0f172a;
+      width: 100%; border-radius: 14px; overflow: hidden;
+      background: var(--bg-card-solid, #fff); color: var(--text-primary, #0f172a);
       border: 1px solid var(--glass-border, rgba(0,0,0,0.08));
-      box-shadow: 0 6px 20px rgba(0,0,0,0.10);
+      box-shadow: var(--shadow-md, 0 6px 20px rgba(0,0,0,0.10));
     }
     .pf-idc__head {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
       padding: 8px 14px; background: var(--gradient-primary, #6d28d9); color: #fff;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     .pf-idc__brand { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; }
     .pf-idc__mrn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 700; }
     .pf-idc__body { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; }
     .pf-idc__name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 6px; }
-    .pf-idc__meta { font-size: 12.5px; color: #475569; margin: 2px 0; }
-    .pf-idc__qr { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .pf-idc__scan { font-size: 9.5px; color: #64748b; letter-spacing: 0.04em; margin: 0; }
+    .pf-idc__meta { font-size: 12.5px; color: var(--text-tertiary, #475569); margin: 2px 0; }
+    .pf-idc__qr { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    /* White backing so the QR stays scannable on a dark card (and on paper). */
+    .pf-idc__qrbox { display: inline-flex; padding: 6px; border-radius: 8px; background: #fff; }
+    .pf-idc__scan { font-size: 9.5px; color: var(--text-muted, #64748b); letter-spacing: 0.04em; margin: 0; }
     .pf-idc__print {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -69,6 +76,14 @@ import { printLabelOnly } from '../../../shared/utils/print-label';
     }
     .pf-idc__print:hover { background: var(--glass-bg-hover, #f1f5f9); }
     @media (pointer: coarse) { .pf-idc__print { min-height: 44px; } }
+
+    /* Print: force a light card + dark text so the paper copy is legible even
+       when the app is in dark mode (on screen the card follows the theme). */
+    @media print {
+      .pf-idc__card { background: #fff !important; color: #0f172a !important; }
+      .pf-idc__meta { color: #475569 !important; }
+      .pf-idc__scan { color: #64748b !important; }
+    }
   `]
 })
 export class PatientIdCardComponent {
