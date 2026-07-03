@@ -689,7 +689,7 @@ export class AdminDashboardComponent implements OnInit {
       tiles: [
         { title: 'Billing Config',  href: '/admin/billing', gradient: 'amber',
           iconPath: 'M3 5h18v14H3z', iconExtra: 'M3 10h18M7 15h3',
-          subtitle: () => 'GST, discounts, invoice prefix, approval thresholds' },
+          subtitle: () => 'GST, discounts, invoice numbering, UPI / online payment' },
         { title: 'Vendor Wallets',  href: '/admin/vendors', gradient: 'fuchsia',
           iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
           iconExtra: 'M17 14h.01',

@@ -32,6 +32,8 @@ interface TenantBillingConfig {
   approvalThresholdPct: number;
   invoicePrefix: string;
   invoiceStartNumber: number;
+  upiVpa?: string;
+  upiPayeeName?: string;
 }
 
 interface GstRow {
@@ -244,6 +246,29 @@ interface GstRow {
             <p class="font-mono text-[16px] font-semibold" style="color: var(--text-primary);">
               {{ invoicePreview() }}
             </p>
+          </div>
+        </pf-tile>
+
+        <!-- Online payment (UPI): powers the "Pay via UPI" link + QR on the
+             public status page a patient reaches by scanning the invoice QR. -->
+        <pf-tile tone="default" padding="lg" class="block mt-5">
+          <h3 class="pf-label" style="margin-bottom:2px;">Online payment (UPI)</h3>
+          <p class="text-[12px] mb-4" style="color: var(--text-tertiary);">
+            Add your UPI address so patients can pay from the status page — it opens Google&nbsp;Pay / PhonePe / any UPI app with the amount prefilled. Leave blank to hide the pay option.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">UPI address (VPA)</label>
+              <input type="text" class="pf-input" placeholder="clinic@axis" autocapitalize="none" spellcheck="false"
+                     [ngModel]="config().upiVpa || ''"
+                     (ngModelChange)="patch({ upiVpa: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Payee name</label>
+              <input type="text" class="pf-input" placeholder="Prefrontal Lab"
+                     [ngModel]="config().upiPayeeName || ''"
+                     (ngModelChange)="patch({ upiPayeeName: $event })" />
+            </div>
           </div>
         </pf-tile>
 
@@ -686,7 +711,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       gstScope: c.gstScope, filingFrequency: c.filingFrequency,
       allowDiscounts: c.allowDiscounts, maxDiscountPct: c.maxDiscountPct,
       overrideDiscountPct: c.overrideDiscountPct, approvalThresholdPct: c.approvalThresholdPct,
-      invoicePrefix: c.invoicePrefix, invoiceStartNumber: c.invoiceStartNumber
+      invoicePrefix: c.invoicePrefix, invoiceStartNumber: c.invoiceStartNumber,
+      upiVpa: c.upiVpa?.trim() || null, upiPayeeName: c.upiPayeeName?.trim() || null
     }).subscribe({
       next: () => this.toasts.success('Billing config saved')
     });
