@@ -710,10 +710,14 @@
                           </div>
                           <pf-chip [tone]="orderTone(o)" size="sm">{{ effectiveStatusLabel(o) }}</pf-chip>
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
+                            <!-- Bill is still offered on an unbilled order (incl. pay-later,
+                                 which stays 'created'); Collect shows alongside it since
+                                 collection is decoupled from payment. -->
                             @if (o.status === 'created' && showCreateBillOn(o)) {
                               <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
                                 (click)="goToBilling(o)">Bill</button>
-                            } @else if (sampleStatus(o) === 'partially_collected' || (o.status === 'billed' && showCollectOn(o))) {
+                            }
+                            @if (sampleStatus(o) === 'partially_collected' || showCollectOn(o)) {
                               <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
                             } @else if (showDispatchOn(o)) {
                               <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"

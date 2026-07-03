@@ -1265,7 +1265,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   showCollectOn(o: Order): boolean {
     if (!this.labCfg.collectsAtFrontdesk()) return false;
     if (!this.auth.hasPermission('collect_sample')) return false;
-    if (o.status !== 'billed') return false;
+    // Collection is decoupled from payment: a pay-later order stays 'created'
+    // (invoice may be unpaid) but its tubes can still be drawn. Allow collect
+    // on both 'created' and 'billed' as long as no tube has moved past pending.
+    if (o.status !== 'billed' && o.status !== 'created') return false;
     const samples = o.samples ?? [];
     if (samples.length === 0) return false;
     return samples.every(s => !s.status || s.status === 'pending');
