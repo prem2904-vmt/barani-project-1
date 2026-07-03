@@ -1,4 +1,4 @@
-import { ProcessWorkflowConfig, catalogFor, workAreaRoute } from '../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, catalogFor, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
 
 export interface NavItem {
@@ -193,11 +193,14 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
         return e && (!e.permissions?.length || ctx.isSuper || ctx.hasAnyPermission(e.permissions));
       });
     if (!accessible.length) continue;
+    // Render the work-area's own icon (the one picked in the builder), via the
+    // SAME resolver the builder uses — so the top-strip / sidebar match the
+    // builder exactly. Unknown/empty falls back to the folder default.
     items.push({
       id: area.id,
       label: area.name,
       href: workAreaRoute(area, cfg),
-      iconPath: catalogFor(accessible[0].type)?.iconPath ?? ['M4 5h5v5H4zM15 5h5v5h-5zM9 16h5v4H9z'],
+      iconPath: workAreaIconPath(area.icon),
     });
   }
   return items.length ? items : null;

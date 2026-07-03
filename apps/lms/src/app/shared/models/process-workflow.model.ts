@@ -78,6 +78,10 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
     iconPath: ['M20 6 9 17l-5-5'], hint: 'Pathologist sign-off' },
   { type: 'results', label: 'Results', route: '/reports', permissions: ['deliver_report', 'view_report'],
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'], hint: 'Deliver / view reports' },
+  { type: 'lost_and_found', label: 'Lost & Found', route: '/lost-and-found',
+    permissions: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'],
+    iconPath: ['M22 12h-6l-2 3h-4l-2-3H2', 'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z'],
+    hint: 'Recover records stranded by a workflow change' },
   { type: 'messages', label: 'Messages', route: '/messages',
     iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], hint: 'Team chat & calls' },
 ];
@@ -91,6 +95,39 @@ export const KNOWN_ROLES = [
 
 export function catalogFor(type: string): ActionCatalogEntry | undefined {
   return ACTION_CATALOG.find(a => a.type === type);
+}
+
+/** A pickable work-area icon (rendered as an inline stroke SVG, viewBox 0 0 24 24). */
+export interface WorkAreaIcon { key: string; label: string; path: string[]; }
+
+/** The curated icon set shown in the work-area icon picker (process builder).
+ *  A ProcessCategory.icon holds one of these keys; the builder + nav render it
+ *  via workAreaIconPath(). Keep viewBox 0 0 24 24, stroke-style (no fills). */
+export const WORKAREA_ICONS: WorkAreaIcon[] = [
+  { key: 'folder',     label: 'Folder',      path: ['M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'] },
+  { key: 'clipboard',  label: 'Clipboard',   path: ['M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z'] },
+  { key: 'reception',  label: 'Reception',   path: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0', 'M19 8v6M16 11h6'] },
+  { key: 'calendar',   label: 'Calendar',    path: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'] },
+  { key: 'billing',    label: 'Billing',     path: ['M3 5h18v14H3zM3 10h18M7 15h3'] },
+  { key: 'tube',       label: 'Test tube',   path: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'] },
+  { key: 'droplet',    label: 'Blood drop',  path: ['M12 2.7 6.34 8.36a8 8 0 1 0 11.32 0z'] },
+  { key: 'dispatch',   label: 'Dispatch',    path: ['M3 7h11v8H3z', 'M14 10h4l3 3v2h-7z', 'M7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'] },
+  { key: 'flask',      label: 'Lab flask',   path: ['M3 12h5l2 3h4l2-3h5', 'M5 12 8 4h8l3 8v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6Z'] },
+  { key: 'microscope', label: 'Microscope',  path: ['M6 18h8', 'M3 22h18', 'M14 22a7 7 0 1 0 0-14h-1', 'M9 14h2', 'M9 12a2 2 0 0 1-2-2V6h4v4a2 2 0 0 1-2 2Z', 'M12 6V3a1 1 0 0 0-1-1H8'] },
+  { key: 'check',      label: 'Validate',    path: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M8 12l3 3 5-6'] },
+  { key: 'report',     label: 'Report',      path: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M9 13h6M9 17h6'] },
+  { key: 'inbox',      label: 'Inbox',       path: ['M22 12h-6l-2 3h-4l-2-3H2', 'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z'] },
+  { key: 'home',       label: 'Home',        path: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'] },
+  { key: 'users',      label: 'Team',        path: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
+  { key: 'chat',       label: 'Messages',    path: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'] },
+  { key: 'pill',       label: 'Pharmacy',    path: ['M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z', 'M8.5 8.5l7 7'] },
+  { key: 'shield',     label: 'Shield',      path: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'] },
+  { key: 'grid',       label: 'Grid',        path: ['M4 5h5v5H4zM15 5h5v5h-5zM9 16h5v4H9z'] },
+];
+
+/** Resolve a work-area icon key to its SVG path list; unknown/empty → Folder. */
+export function workAreaIconPath(key: string | null | undefined): string[] {
+  return WORKAREA_ICONS.find(i => i.key === key)?.path ?? WORKAREA_ICONS[0].path;
 }
 
 /**
@@ -132,13 +169,19 @@ export function coupledTypes(type: string): string[] {
  * One-way prerequisites: an action only makes sense when the actions it REQUIRES
  * are also live in the flow. Enabling/adding an action enables its prerequisites;
  * disabling/removing a prerequisite cascades off the actions that depend on it —
- * so a screen can't be half-built (no collection ⇒ no dispatch/results either).
+ * so a screen can't be half-built (no collection ⇒ no dispatch either).
  * Registration is mandatory so deps on it are always satisfied.
+ *
+ * NOTE: result_entry does NOT require sample_collection. A lab can run without a
+ * collection stage — when the collection step is removed, samples are born
+ * already "received" at the lab (backend OrderService.CreateAsync), so result
+ * entry / validate / results stay live and the order lands straight in the lab.
+ * Only dispatch (and its coupled lab_intake) fall away with collection, which is
+ * the intended bypass: skip collection + dispatch, land received.
  */
 export const ACTION_REQUIRES: Record<string, string[]> = {
   billing:       ['patient_registration'],
   dispatch:      ['sample_collection'],
-  result_entry:  ['sample_collection'],
   validate:      ['result_entry'],
   results:       ['validate'],
 };
@@ -160,6 +203,7 @@ export const SYSTEM_AREA_SCREEN: Record<string, string> = {
 export const COUNTER_SCREEN: Record<string, string> = {
   billing: '/billing-counter', sample_collection: '/sample-collection',
   queue: '/frontdesk/queue', home_visits: '/home-collections', messages: '/messages',
+  lost_and_found: '/lost-and-found',
 };
 export function workAreaRoute(area: ProcessCategory, cfg: ProcessWorkflowConfig): string {
   if (SYSTEM_AREA_SCREEN[area.id]) return SYSTEM_AREA_SCREEN[area.id];

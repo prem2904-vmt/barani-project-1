@@ -5,7 +5,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
-import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf } from '../../../shared/models/process-workflow.model';
+import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -88,11 +88,31 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
           @for (lane of lanes(); track lane.cat.id; let li = $index) {
             <div class="pb-lane" [class.pb-lane--collapsed]="!isExpanded(lane.cat.id)" [style.borderTopColor]="lane.cat.color" [style.--lane]="lane.cat.color">
               <div class="pb-lane-hd">
-                <span class="pb-dot" [style.background]="lane.cat.color"></span>
+                <!-- Single icon = the identity AND the picker: click it to choose. -->
+                <div class="pb-icon-wrap">
+                  <button type="button" class="pb-iconbtn" [style.color]="lane.cat.color"
+                          (click)="toggleIconMenu(li)" title="Change icon" [attr.aria-expanded]="iconMenuLane() === li">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="17" height="17">
+                      @for (p of catIconPath(lane.cat.icon); track $index) { <path [attr.d]="p" /> }
+                    </svg>
+                  </button>
+                  @if (iconMenuLane() === li) {
+                    <div class="pb-iconmenu" role="menu">
+                      @for (ic of workAreaIcons; track ic.key) {
+                        <button type="button" class="pb-iconopt" [class.pb-iconopt--on]="lane.cat.icon === ic.key"
+                                [style.color]="lane.cat.icon === ic.key ? lane.cat.color : null"
+                                (click)="setIcon(li, ic.key)" [title]="ic.label" [attr.aria-label]="ic.label">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                            @for (p of ic.path; track $index) { <path [attr.d]="p" /> }
+                          </svg>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
                 <input class="pb-lane-name" [ngModel]="lane.cat.name" (ngModelChange)="renameCategory(li, $event)" />
                 <span class="pb-lane-count" [style.background]="lane.cat.color">{{ lane.items.length }}</span>
                 <div class="pb-lane-tools">
-                  <input type="color" class="pb-color" [ngModel]="lane.cat.color" (ngModelChange)="recolor(li, $event)" title="Colour" />
                   <button type="button" class="pb-mini" [disabled]="li === 0" (click)="moveCategory(li, -1)" title="Move left">‹</button>
                   <button type="button" class="pb-mini" [disabled]="li === lanes().length - 1" (click)="moveCategory(li, 1)" title="Move right">›</button>
                   <button type="button" class="pb-mini pb-mini--del" (click)="deleteCategory(li)" title="Delete work-area">×</button>
@@ -208,6 +228,31 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-lane-name:hover, .pb-lane-name:focus { background: rgba(255,255,255,0.05); outline: none; }
     .pb-lane-tools { display: flex; align-items: center; gap: 3px; }
     .pb-color { width: 22px; height: 22px; padding: 0; border: none; background: none; cursor: pointer; border-radius: 6px; }
+    /* Icon picker: the leading icon is both the work-area identity and the
+       trigger — click it to open a grid of choices. */
+    .pb-icon-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+    .pb-iconbtn {
+      width: 23px; height: 23px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--glass-border); background: var(--glass-bg); cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .pb-iconbtn:hover { background: rgba(255,255,255,0.07); border-color: var(--text-tertiary); }
+    .pb-iconmenu {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+      display: grid; grid-template-columns: repeat(5, 34px); gap: 4px;
+      padding: 8px; border-radius: 12px;
+      background: var(--bg-card-solid, #14141f); border: 1px solid var(--glass-border);
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pb-iconopt {
+      width: 34px; height: 34px; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid transparent; background: transparent; color: var(--text-secondary); cursor: pointer;
+      transition: background .12s, border-color .12s, color .12s;
+    }
+    .pb-iconopt:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
+    .pb-iconopt--on { border-color: currentColor; background: rgba(255,255,255,0.06); }
     .pb-mini { width: 23px; height: 23px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; font-size: 13px; line-height: 1; transition: background .15s, color .15s; }
     .pb-mini:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text-primary); }
     .pb-mini:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -374,6 +419,11 @@ export class ProcessBuilderComponent implements OnInit {
 
   readonly roles = signal<string[]>(KNOWN_ROLES);
   readonly roleMenuLane = signal(-1);
+  /** Which lane's icon picker is open (-1 = none). */
+  readonly iconMenuLane = signal(-1);
+  readonly workAreaIcons = WORKAREA_ICONS;
+  /** SVG paths for a work-area icon key (unknown/empty → default folder). */
+  catIconPath(key: string | null | undefined): string[] { return workAreaIconPath(key); }
   /** Accordion state (phone): the id of the one expanded work-area, or null
    *  (all collapsed). Only honoured by the <=640px CSS — desktop shows every
    *  lane fully, so this is a no-op there. */
@@ -589,6 +639,12 @@ export class ProcessBuilderComponent implements OnInit {
   }
   renameCategory(i: number, name: string) { this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, name } } : ln)); this.dirty.set(true); }
   recolor(i: number, color: string) { this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, color } } : ln)); this.dirty.set(true); }
+  toggleIconMenu(i: number) { this.iconMenuLane.set(this.iconMenuLane() === i ? -1 : i); }
+  setIcon(i: number, icon: string) {
+    this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, icon } } : ln));
+    this.iconMenuLane.set(-1);
+    this.dirty.set(true);
+  }
   moveCategory(i: number, dir: number) {
     this.lanes.update(l => { const a = [...l]; const j = i + dir; if (j < 0 || j >= a.length) return a; [a[i], a[j]] = [a[j], a[i]]; return a; });
     this.dirty.set(true);

@@ -330,6 +330,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       {
+        // Lost & Found — triage records stranded when a workflow stage is
+        // disabled mid-flight. Gated by the workflow action + any of the
+        // action permissions (send-to-lab / reject / cancel).
+        path: 'lost-and-found',
+        canActivate: [permissionGuard(['receive_sample', 'reject_sample', 'cancel_order', 'manage_users']), workflowGuard('lost_and_found')],
+        loadComponent: () => import('./features/lost-and-found/lost-and-found.component').then(m => m.LostAndFoundComponent)
+      },
+      {
         path: 'lab/receive',
         canActivate: [permissionGuard('receive_sample'), workflowGuard('lab_intake')],
         loadComponent: () => import('./features/lab/receive-samples/receive-samples.component').then(m => m.ReceiveSamplesComponent)
@@ -390,10 +398,13 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/billing-counter/billing-counter.component').then(m => m.BillingCounterComponent)
       },
 
-      // Messages — Teams-style chat + group calling.
+      // Messages — Teams-style chat + group calling. No moduleGuard here on
+      // purpose: when the module is off we want the page to render its locked
+      // "upgrade" screen on direct access rather than silently redirect. The
+      // component gates itself (moduleOff) and skips connecting the hubs.
       {
         path: 'messages',
-        canActivate: [workflowGuard('messages'), moduleGuard('messages')],
+        canActivate: [workflowGuard('messages')],
         loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
       },
 
