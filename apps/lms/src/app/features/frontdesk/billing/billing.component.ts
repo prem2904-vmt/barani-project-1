@@ -459,7 +459,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                           <input type="number" inputmode="numeric" min="0" [attr.max]="effectivePayable()"
                                  class="pf-adv__input" [value]="advance()"
                                  (input)="setAdvance(asInput($event))" placeholder="0"/>
-                          <button type="button" class="pf-adv__max" (click)="setAdvanceFull()">Full</button>
                         </div>
                         <div class="pf-adv__tenders">
                           @for (t of advanceModes; track t.id) {
@@ -1725,7 +1724,6 @@ export class BillingComponent implements OnInit, OnChanges {
     return Math.min(n, this.effectivePayable());
   });
   setAdvance(v: string) { this._advance.set(v); }
-  setAdvanceFull() { this._advance.set(String(this.effectivePayable())); }
   setAdvanceMode(m: 'cash' | 'upi' | 'card') { this._advanceMode.set(m); }
 
   /** Resolved ₹ value of the discount: either the entered flat amount,

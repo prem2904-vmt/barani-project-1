@@ -18,6 +18,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
 
@@ -834,11 +835,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }
-  showPaidInvoice() { void this.emitPaidInvoice('blob'); }
+
+  /** Post-payment "Share on WhatsApp". On the native shell we hand the real
+   *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
+   *  file). On the web, wa.me can't attach a file, so we open a click-to-chat
+   *  pre-filled with the invoice details — same fallback the billing counter's
+   *  "Send on WhatsApp" uses. Replaces the old "Show invoice" preview, which was
+   *  redundant since the itemised cart is already on screen. */
+  sharePaidInvoice() {
+    const bill = this.paidBill;
+    if (!bill) return;
+    if (this.isNativePlatform()) { void this.emitPaidInvoice('share'); return; }
+    const p = this._patient();
+    const lab = this.auth.user()?.tenantName || 'our lab';
+    const lines = [
+      `Hi ${p?.displayName ?? ''}, your invoice from ${lab}:`.replace(/\s+/g, ' ').trim(),
+      `${bill.invoiceNumber ?? ''} — Paid ₹${bill.totalPayable}`.trim(),
+      'Your report will be shared here once it is ready. Thank you for choosing us.',
+    ];
+    window.open(waLink(p?.phone, lines.join('\n')), '_blank', 'noopener');
+  }
 
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
-  private async emitPaidInvoice(action: 'print' | 'blob') {
+  private async emitPaidInvoice(action: 'print' | 'blob' | 'share') {
     const bill = this.paidBill;
     const oid = this.paidOrderId();
     if (!bill || !oid) return;
@@ -878,10 +898,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       },
     };
 
-    // Print on native: the hidden-iframe window.print() is a no-op in the
+    // Print/share on native: the hidden-iframe window.print() is a no-op in the
     // Capacitor WKWebView, so render to a blob and hand it to the native share
-    // sheet (Print, Save to Files, AirDrop…) via the Web Share API.
-    if (action === 'print' && this.isNativePlatform()) {
+    // sheet (WhatsApp, Print, Save to Files, AirDrop…) via the Web Share API —
+    // this is how "Share on WhatsApp" attaches the actual invoice PDF.
+    if ((action === 'print' || action === 'share') && this.isNativePlatform()) {
       const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
       if (!blobUrl) return;
       const blob = await (await fetch(blobUrl)).blob();
@@ -899,8 +920,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       action = 'blob';
     }
 
-    const blobUrl = generateInvoicePdf({ ...input, action });
-    if (action === 'blob' && blobUrl) {
+    // 'share' only reaches here as the non-native no-canShare fallback → treat
+    // as the in-app preview ('blob'); web share is handled in sharePaidInvoice.
+    const finalAction: 'print' | 'blob' = action === 'print' ? 'print' : 'blob';
+    const blobUrl = generateInvoicePdf({ ...input, action: finalAction });
+    if (finalAction === 'blob' && blobUrl) {
       this.closeInvoicePreview();
       this.invoiceBlobUrl = blobUrl;
       this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));

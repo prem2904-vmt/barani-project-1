@@ -139,7 +139,6 @@ interface ModeDef { id: PayMode; label: string; iconPath: string; }
                 <input type="number" inputmode="numeric" min="0" [attr.max]="amount()"
                        class="pf-ipp__input pf-adv__input" [value]="advance()"
                        (input)="setAdvance(asVal($event))" placeholder="0"/>
-                <button type="button" class="pf-adv__max" (click)="setAdvanceFull()">Full</button>
               </div>
               @if (advanceNum() > 0) {
                 <div class="pf-adv__tenders">
@@ -300,7 +299,6 @@ export class InlinePaymentPanelComponent implements OnInit {
     { id: 'cash', label: 'Cash' }, { id: 'upi', label: 'UPI' }, { id: 'card', label: 'Card' },
   ];
   setAdvance(v: string) { this.advance.set((v || '').replace(/\D/g, '')); }
-  setAdvanceFull() { this.advance.set(String(this.amount())); }
   setAdvanceMode(m: PayMode) { this.advanceMode.set(m); }
 
   // Wallet

@@ -207,14 +207,16 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
       </pf-tile>
       }
 
-      <!-- Require payment before collection -->
+      <!-- Require payment before sharing report -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <h3 class="pf-ls__title">Require payment before collection</h3>
+            <h3 class="pf-ls__title">Require payment before sharing report</h3>
             <p class="pf-ls__hint">
-              When ON, a sample can't be collected until its order is <strong>paid in full</strong>.
-              Leave OFF to let collection and billing run independently (default).
+              When ON, an order must be <strong>paid in full</strong> before its report can be generated or shared —
+              the patient settles any outstanding balance at report handover. Sample collection is never blocked,
+              so you can bill pay-later / part-advance and still collect. Leave OFF to let billing and reporting
+              run independently (default).
             </p>
           </div>
           <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireBill()">
