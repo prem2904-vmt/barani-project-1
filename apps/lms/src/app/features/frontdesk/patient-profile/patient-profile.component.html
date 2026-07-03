@@ -146,6 +146,12 @@
           </div>
         </div>
 
+        <!-- Patient ID card — printable, with a scan-to-open QR. -->
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
+          <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">ID Card</h3>
+          <pf-patient-id-card [patient]="p"></pf-patient-id-card>
+        </div>
+
         <!-- Vitals Summary Card — not captured by the lab module (OPD/IPD intake). -->
         <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
           <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">Current Vitals</h3>

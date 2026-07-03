@@ -16,6 +16,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { PatientDocumentsComponent } from './patient-documents.component';
+import { PatientIdCardComponent } from './patient-id-card.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -152,7 +153,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']

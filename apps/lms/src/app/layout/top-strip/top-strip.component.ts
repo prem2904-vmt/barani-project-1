@@ -109,9 +109,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  Messages capability, so hide its nav button when the Messages work-area
    *  is disabled in the active workflow — mirrors the Messages screen going away. */
   readonly canMessages = computed(() => this.process.isEnabled('messages'));
-  /** A scanned order QR / barcode → resolve to an order and open it. */
+  /** A scanned QR / barcode → open the patient (ID-card QR) or the order. */
   onScanOrder(code: string) {
     this.scan.close();
+    // Patient ID-card QR encodes `…/p/<guid>` (see PatientIdCardComponent). Match
+    // it first and jump straight to the patient — no server round-trip needed.
+    const pm = code.match(/\/p\/([0-9a-fA-F-]{36})/);
+    if (pm) { this.router.navigate(['/frontdesk/patients', pm[1]]); return; }
     this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
       next: r => { if (r?.orderId) this.router.navigate(['/o', r.orderId]); },
       error: () => { /* no match — silently ignore */ }

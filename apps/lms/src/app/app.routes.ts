@@ -62,6 +62,11 @@ export const appRoutes: Route[] = [
         path: 'o/:id',
         loadComponent: () => import('./features/order-open/order-open.component').then(m => m.OrderOpenComponent)
       },
+      {
+        // Scanned patient ID-card QR (`/p/:id`) → opens the patient's profile.
+        path: 'p/:id',
+        loadComponent: () => import('./features/patient-open/patient-open.component').then(m => m.PatientOpenComponent)
+      },
 
       // Admin — gated: hidden from nav + blocked at route level if the user
       // doesn't hold any admin permission (manage_tests/users/workflows/branches).
