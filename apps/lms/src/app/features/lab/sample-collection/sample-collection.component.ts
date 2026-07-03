@@ -14,6 +14,8 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { LabelCardComponent } from '../../frontdesk/post-payment/label-card.component';
+import { printLabelOnly } from '../../../shared/utils/print-label';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -83,7 +85,7 @@ interface OrderGroup {
 @Component({
   selector: 'pf-sample-collection',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent, LabelCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
@@ -99,14 +101,14 @@ interface OrderGroup {
         eyebrow="Lab · Collection"
         title="Sample collection"
         subtitle="Scan the barcode from reception, or tap a patient to draw vials.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="refresh()">
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="refresh()" aria-label="Refresh">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 12a9 9 0 1 1-3-6.7"/>
               <path d="M21 4v6h-6"/>
             </svg>
           </span>
-          Refresh
+          <span class="pf-refresh-txt">Refresh</span>
         </pf-touch-btn>
       </pf-screen-header>
       }
@@ -127,15 +129,22 @@ interface OrderGroup {
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
-        <button class="pf-scan__cam" (click)="openScanner()" title="Scan with camera" aria-label="Open camera scanner">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 7l-7 5 7 5V7z"/>
-            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        <button class="pf-scan__cam" (click)="openScanner()" title="Scan QR / barcode" aria-label="Scan QR or barcode">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="5" height="5" rx="1"/>
+            <rect x="16" y="3" width="5" height="5" rx="1"/>
+            <rect x="3" y="16" width="5" height="5" rx="1"/>
+            <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/>
+            <path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/>
+            <path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
           </svg>
-          <span>Scan</span>
+          <span class="pf-scan__cam-txt">Scan</span>
         </button>
-        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="runSearch()">
-          {{ searching() ? 'Searching…' : 'Find' }}
+        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="runSearch()" aria-label="Find">
+          <svg class="pf-scan__find-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <span class="pf-scan__btn-txt">{{ searching() ? 'Searching…' : 'Find' }}</span>
         </button>
       </div>
 
@@ -484,6 +493,15 @@ interface OrderGroup {
                 <span class="pf-btn__text">Can't collect</span>
               </button>
             }
+            <!-- Print the order's tube labels (barcode + QR) — available any time
+                 in the drawer so tubes can be labelled before or after the draw. -->
+            <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
+                    aria-label="Print labels" data-label="Print labels">
+              <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
+              </svg>
+              <span class="pf-btn__text">Print labels</span>
+            </button>
             @if (isDispatched(g)) {
               <span class="pf-drawer__done-stamp">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -528,6 +546,16 @@ interface OrderGroup {
               <span class="pf-btn__text">{{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}</span>
             </button>
           </footer>
+
+          <!-- Tube labels for printing. Hidden on screen; the global
+               pf-print-label rule reveals ONLY this block during
+               printLabels(). One barcode+QR label per tube, reusing the
+               shared front-desk label card so labels match everywhere. -->
+          <div class="pf-sc-labels pf-print-label" aria-hidden="true">
+            @for (s of g.samples; track s.id; let i = $index) {
+              <pf-label-card [sample]="s" [patient]="s.order?.patient" [index]="i" [printing]="true"></pf-label-card>
+            }
+          </div>
         </div>
       </div>
     }
@@ -621,25 +649,25 @@ interface OrderGroup {
     .pf-scan {
       display: flex; align-items: stretch; gap: 14px;
       padding: 14px 16px;
-      background: linear-gradient(180deg, rgba(45, 212, 191, 0.06), rgba(168, 85, 247, 0.04));
-      border: 1px solid rgba(45, 212, 191, 0.25);
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(168, 85, 247, 0.05));
+      border: 1px solid rgba(139, 92, 246, 0.28);
       border-radius: 18px;
       margin: 0 0 24px;
-      box-shadow: 0 8px 24px rgba(45, 212, 191, 0.06);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.07);
     }
     .pf-scan__icon-btn {
       all: unset;
       cursor: pointer;
       width: 54px; height: 54px; border-radius: 14px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, rgba(45,212,191,0.22), rgba(20,184,166,0.08));
-      color: #14b8a6;
+      background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(124,58,237,0.08));
+      color: #a78bfa;
       flex-shrink: 0; align-self: center;
       transition: background 0.15s ease, transform 0.1s ease;
     }
-    .pf-scan__icon-btn:hover { background: linear-gradient(135deg, rgba(45,212,191,0.3), rgba(20,184,166,0.15)); }
+    .pf-scan__icon-btn:hover { background: linear-gradient(135deg, rgba(139,92,246,0.32), rgba(124,58,237,0.16)); }
     .pf-scan__icon-btn:active { transform: scale(0.96); }
-    .pf-scan__icon-btn:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+    .pf-scan__icon-btn:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.7); outline-offset: 2px; }
     .pf-scan__body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .pf-scan__label {
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
@@ -659,31 +687,33 @@ interface OrderGroup {
     .pf-scan__cam {
       align-self: center;
       display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(45, 212, 191, 0.08);
-      color: #2dd4bf;
+      background: rgba(139, 92, 246, 0.1);
+      color: #a78bfa;
       font-weight: 600; font-size: 12.5px;
       padding: 0 14px; height: 42px;
-      border: 1px solid rgba(45, 212, 191, 0.35);
+      border: 1px solid rgba(139, 92, 246, 0.38);
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.15s ease, transform 0.1s ease;
     }
-    .pf-scan__cam:hover { background: rgba(45, 212, 191, 0.15); }
+    .pf-scan__cam:hover { background: rgba(139, 92, 246, 0.18); }
     .pf-scan__cam:active { transform: scale(0.98); }
-    .pf-scan__cam:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+    .pf-scan__cam:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.7); outline-offset: 2px; }
 
     .pf-scan__btn {
       align-self: center;
-      background: linear-gradient(135deg, #14b8a6, #2dd4bf);
-      color: #04221e;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+      color: #fff;
       font-weight: 700; font-size: 13.5px;
       padding: 0 22px; height: 42px; min-width: 96px;
       border: 0; border-radius: 12px;
       cursor: pointer;
-      box-shadow: 0 6px 18px rgba(45, 212, 191, 0.35);
+      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
       transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.15s ease;
     }
-    .pf-scan__btn:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 10px 24px rgba(45, 212, 191, 0.45); }
+    .pf-scan__btn:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 10px 24px rgba(124, 58, 237, 0.5); }
+    .pf-scan__find-ic { display: none; }
     .pf-scan__btn:active:not(:disabled) { transform: scale(0.98); }
     .pf-scan__btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
@@ -1090,6 +1120,12 @@ interface OrderGroup {
 
     .hidden { display: none; }
 
+    /* Tube-label print block: never shown on screen (it lives inside the
+       drawer purely so barcode/QR render). The global body.pf-printing-label
+       rule + this @media print flip reveal it only while printing. */
+    .pf-sc-labels { display: none; }
+    @media print { .pf-sc-labels { display: block; } }
+
     /* Footer action buttons: the inline-SVG icon is hidden everywhere by
        default so desktop (>=641px) keeps the existing TEXT buttons exactly as
        before. The phone media query below flips this — text out, icon in. */
@@ -1362,12 +1398,12 @@ interface OrderGroup {
       border-color: rgba(245, 158, 11, 0.4);
     }
     :host-context([data-theme="light"]) .pf-scan {
-      background: linear-gradient(180deg, rgba(45, 212, 191, 0.08), rgba(168, 85, 247, 0.05));
-      border-color: rgba(20, 184, 166, 0.45);
-      box-shadow: 0 8px 24px rgba(45, 212, 191, 0.08);
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.06));
+      border-color: rgba(124, 58, 237, 0.4);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.08);
     }
     :host-context([data-theme="light"]) .pf-scan__btn {
-      color: #042f2e;
+      color: #fff;
     }
 
     :host-context([data-theme="light"]) .pf-drawer {
@@ -1513,16 +1549,21 @@ interface OrderGroup {
       }
       .pf-scan__icon-btn { align-self: center; }
       .pf-scan__body { flex: 1 1 140px; }
+      /* Phone: collapse Scan + Find to icon-only squares (>=44px tap target). */
       .pf-scan__cam,
       .pf-scan__btn {
-        flex: 1 1 auto;
-        align-self: stretch;
-        height: 46px;            /* >=44px touch target */
+        flex: 0 0 auto;
+        align-self: center;
+        width: 46px; min-width: 46px; height: 46px; padding: 0;
         justify-content: center;
       }
+      .pf-scan__cam-txt, .pf-scan__btn-txt { display: none; }
+      .pf-scan__find-ic { display: inline-flex; }
+      /* Header Refresh → icon-only on phones. */
+      .pf-refresh-txt { display: none; }
       /* Push the two actions onto their own row below the input. */
       .pf-scan__cam { order: 2; }
-      .pf-scan__btn { order: 3; min-width: 0; }
+      .pf-scan__btn { order: 3; }
       .pf-scan__icon-btn { order: 0; }
       .pf-scan__body { order: 1; }
 
@@ -1955,6 +1996,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.api.get<OrderSample[]>('/api/samples/pending-collection').subscribe({
       next: l => this._pending.set(l ?? [])
     });
+  }
+
+  /** Print every tube label for this order (barcode + QR). The hidden
+   *  `.pf-print-label` block in the drawer already holds the rendered labels;
+   *  `printLabelOnly()` toggles the global label-print stylesheet so ONLY those
+   *  labels reach paper — nothing else on the screen prints. */
+  printLabels(g: OrderGroup) {
+    if (!g.samples.length) { this.toasts.warning('No tubes to label'); return; }
+    printLabelOnly();
   }
 
   openScanner() { this.scannerOpen.set(true); }

@@ -71,7 +71,7 @@ const COUNTERS: CounterSpec[] = [
              a direct [actions] element so the header lays them out with the
              standard gap. Hidden above 640px, where the inline chips show. -->
         <div actions class="pf-kpi-statbtn-m">
-          <button type="button" class="pf-kpi-statbtn"
+          <button #kpiBtn type="button" class="pf-kpi-statbtn"
                   [class.is-open]="kpiOpen()"
                   aria-label="Stats"
                   [attr.aria-expanded]="kpiOpen()"
@@ -82,17 +82,22 @@ const COUNTERS: CounterSpec[] = [
             </svg>
           </button>
           @if (kpiOpen()) {
-            <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
-            <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats">
-              @for (c of counters; track c.id) {
-                <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
-                        [attr.data-tone]="c.tone"
-                        (click)="setCounter(c.id); kpiOpen.set(false)">
-                  <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
-                  <span class="pf-kpi-stat__label">{{ c.label }}</span>
-                  <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
-                </button>
-              }
+            <!-- Teleported to <body> (see _kpiPortal effect) so no ancestor
+                 overflow / backdrop-filter stacking context can trap it. -->
+            <div #kpiPop class="pf-kpi-portal">
+              <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
+              <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats"
+                   [style.top.px]="kpiPos().top" [style.right.px]="kpiPos().right">
+                @for (c of counters; track c.id) {
+                  <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
+                          [attr.data-tone]="c.tone"
+                          (click)="setCounter(c.id); kpiOpen.set(false)">
+                    <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
+                    <span class="pf-kpi-stat__label">{{ c.label }}</span>
+                    <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
+                  </button>
+                }
+              </div>
             </div>
           }
         </div>
@@ -1569,10 +1574,12 @@ const COUNTERS: CounterSpec[] = [
 
       /* Stats icon + popover — same size/shape as the Refresh button beside it
          and the same pattern as the Report queue stats button. */
-      /* z-index lifts the Stats button's popover subtree above the queue list
-         below (which has its own glass stacking contexts), so the popover comes
-         to the front instead of being painted under the cards. */
-      .pf-kpi-statbtn-m { display: inline-flex; position: relative; z-index: 30; }
+      /* This one stacking context contains the whole popover subtree (button,
+         backdrop, panel), so raising it lifts all of them above the page. It
+         must beat the top-strip nav (z-40) and the content cards' own glass
+         stacking contexts below — 30 wasn't enough and the popover painted
+         under them, so it's lifted well clear here. */
+      .pf-kpi-statbtn-m { display: inline-flex; position: relative; z-index: 1000; }
       .pf-kpi-statbtn {
         display: inline-flex; align-items: center; justify-content: center;
         width: 40px; height: 40px;
@@ -1587,12 +1594,16 @@ const COUNTERS: CounterSpec[] = [
         color: #c4b5fd;
         background: rgba(124, 58, 247, 0.16);
       }
-      .pf-kpi-pop__backdrop { position: fixed; inset: 0; z-index: 70; background: transparent; }
+      /* Popover is teleported to <body>; positioned via inline top/right from
+         the button's rect, so it can't be clipped or stacked under anything. */
+      .pf-kpi-pop__backdrop { position: fixed; inset: 0; z-index: 2000; background: transparent; }
       .pf-kpi-pop {
-        position: absolute; top: calc(100% + 8px); right: 0;
-        z-index: 80;
+        position: fixed;
+        z-index: 2001;
         display: flex; flex-direction: column; gap: 2px;
-        min-width: 180px;
+        /* Definite width — as a fixed el with only a right offset, min-width let
+           it stretch nearly full-viewport (the flex:1 labels filled the space). */
+        width: min(240px, calc(100vw - 24px));
         padding: 8px;
         background: var(--bg-card-solid, rgba(20, 22, 30, 0.96));
         border: 1px solid var(--glass-border);
@@ -1890,6 +1901,41 @@ export class MyWorkComponent implements OnInit {
   // right pane loads the matching data — no new fetch logic.
   protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue'>('intake');
   protected readonly kpiOpen = signal(false);
+
+  // ── Stats popover teleport (phone) ──────────────────────────────
+  // The popover is nested deep under the shell (which has a backdrop-filter
+  // stacking context) + glass cards, so z-index alone can't lift it. Move its
+  // DOM to <body> while open and position it as `fixed` under the button, so
+  // nothing can clip it or paint over it. Mirrors the collect-drawer teleport.
+  private readonly kpiBtn = viewChild<ElementRef<HTMLButtonElement>>('kpiBtn');
+  private readonly kpiPopEl = viewChild<ElementRef<HTMLElement>>('kpiPop');
+  protected readonly kpiPos = signal<{ top: number; right: number }>({ top: 0, right: 0 });
+  private kpiTeleported: HTMLElement | null = null;
+  private readonly _kpiPortal = effect(() => {
+    const open = this.kpiOpen();
+    const el = this.kpiPopEl()?.nativeElement;
+    if (!open || !el) { this.detachKpi(); return; }
+    // Anchor under the stats button (fixed → viewport coords).
+    const btn = this.kpiBtn()?.nativeElement;
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      this.kpiPos.set({ top: Math.round(r.bottom + 8), right: Math.round(Math.max(8, window.innerWidth - r.right)) });
+    }
+    // Teleport a frame later so the element is rendered first.
+    queueMicrotask(() => {
+      const node = this.kpiPopEl()?.nativeElement;
+      if (node && node.parentNode !== document.body) {
+        document.body.appendChild(node);
+        this.kpiTeleported = node;
+      }
+    });
+  });
+  private detachKpi() {
+    if (this.kpiTeleported && this.kpiTeleported.parentNode === document.body) {
+      document.body.removeChild(this.kpiTeleported);
+    }
+    this.kpiTeleported = null;
+  }
   /** When Lab Intake is switched off, don't strand the phone view on the
    *  now-hidden Intake tab. */
   private readonly _intakeTabGuard = effect(() => {
