@@ -4,6 +4,7 @@ import { environment } from '../../../../environments/environment';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -131,14 +132,16 @@ function coerceCellText(raw: unknown): string {
               </span>
               <span class="pf-rv-action-label">Print</span>
             </pf-touch-btn>
-            <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openSharePicker()">
-              <span icon-left aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </span>
-              <span class="pf-rv-action-label">Share with…</span>
-            </pf-touch-btn>
+            @if (entitlements.moduleEnabled('messages')) {
+              <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openSharePicker()">
+                <span icon-left aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </span>
+                <span class="pf-rv-action-label">Share with…</span>
+              </pf-touch-btn>
+            }
             <pf-touch-btn class="pf-rv-action" size="sm" variant="primary" (pressed)="deliverWhatsApp()">
               <span icon-left aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1151,6 +1154,7 @@ function coerceCellText(raw: unknown): string {
 })
 export class ReportViewerComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

@@ -128,12 +128,14 @@
                 </svg>
                 Book Appointment
               </button>
-              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                Send to Chat
-              </button>
+              @if (entitlements.moduleEnabled('messages')) {
+                <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  Send to Chat
+                </button>
+              }
             </div>
             @if (canEdit()) {
               <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openMerge()">

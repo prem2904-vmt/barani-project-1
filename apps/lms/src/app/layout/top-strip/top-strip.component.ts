@@ -86,7 +86,15 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
-  readonly primary = computed(() => this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)));
+  readonly primary = computed(() => this.gateModules(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV))));
+
+  /** The workflow-driven nav (menusFromWorkflow) is NOT module-gated, so drop
+   *  work areas the tenant's plan doesn't include. Messages specifically must
+   *  leave no nav trace when its module is off. */
+  private gateModules(items: NavItem[]): NavItem[] {
+    if (this.entitlements.moduleEnabled('messages')) return items;
+    return items.filter(i => i.href !== '/messages' && i.id !== 'messages');
+  }
 
   /** The workflow-derived nav is built from process categories and so never
    *  contains the Stores work area. Append it when the branch has inventory
@@ -108,7 +116,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** The People drawer (tenant contacts + 1:1 chat + calls) is part of the
    *  Messages capability, so hide its nav button when the Messages work-area
    *  is disabled in the active workflow — mirrors the Messages screen going away. */
-  readonly canMessages = computed(() => this.process.isEnabled('messages'));
+  readonly canMessages = computed(() => this.process.isEnabled('messages') && this.entitlements.moduleEnabled('messages'));
   /** A scanned QR / barcode → open the patient (ID-card QR) or the order. */
   onScanOrder(code: string) {
     this.scan.close();

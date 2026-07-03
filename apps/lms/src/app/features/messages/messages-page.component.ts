@@ -17,6 +17,7 @@ import { RingtoneService } from '../../core/services/ringtone.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { PresenceService } from '../../core/services/presence.service';
+import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
@@ -55,6 +56,11 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly signaling = inject(SignalingService);
   protected readonly webrtc = inject(WebrtcService);
   protected readonly auth = inject(AuthService);
+  private readonly entitlements = inject(TenantEntitlementsService);
+  /** True when the Messages module isn't in the tenant's plan — the page then
+   *  renders the locked "upgrade" screen instead of the chat UI, and never
+   *  connects the chat/signaling hubs. */
+  protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
   private readonly presenceSvc = inject(PresenceService);
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
@@ -539,6 +545,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    // Module not in the plan → show the locked screen only; never open the
+    // chat/signaling hubs (no presence, no incoming calls for this tenant).
+    if (this.moduleOff()) return;
     // Both hubs must be live before the page is usable.
     await Promise.all([
       this.chat.connect().catch(() => undefined),

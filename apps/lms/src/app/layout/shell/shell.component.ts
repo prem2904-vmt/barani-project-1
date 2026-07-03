@@ -22,6 +22,7 @@ import { CallOverlayComponent } from "../../shared/components/call-overlay/call-
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
 import { SignalingService } from "../../core/services/signaling.service";
 import { ChatService } from "../../core/services/chat.service";
+import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
 // on first shell render (it's @Injectable providedIn root, so the inject()
 // pull below boots it lazily without ever being read).
@@ -98,11 +99,15 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       <!-- Themed prompt / confirm overlay (replaces window.prompt/confirm). -->
       <pf-dialog-host></pf-dialog-host>
 
-      <!-- Global voice-consult overlay: incoming ringer + active-call pill. -->
-      <pf-call-overlay></pf-call-overlay>
+      <!-- Chat/calls only exist when the Messages module is in the plan. Gate
+           the overlay + people drawer so a disabled tenant has no trace. -->
+      @if (messagesEnabled()) {
+        <!-- Global voice-consult overlay: incoming ringer + active-call pill. -->
+        <pf-call-overlay></pf-call-overlay>
 
-      <!-- Tenant people drawer: contacts + 1:1 chat + call entry. -->
-      <pf-people-drawer></pf-people-drawer>
+        <!-- Tenant people drawer: contacts + 1:1 chat + call entry. -->
+        <pf-people-drawer></pf-people-drawer>
+      }
 
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
@@ -469,6 +474,11 @@ export class ShellComponent {
   }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
+  protected readonly entitlements = inject(TenantEntitlementsService);
+  /** Messages module in the tenant's plan — gates the call overlay, people
+   *  drawer, and the chat/signaling hub connection (a gated tenant never
+   *  connects, so no calls/presence ever reach it). */
+  protected readonly messagesEnabled = computed(() => this.entitlements.moduleEnabled('messages'));
   // Boots the WebRTC service so it subscribes to signaling events.
   // The variable is unused on purpose — the side effect is what we want.
   private readonly _webrtc = inject(WebrtcService);
@@ -488,6 +498,10 @@ export class ShellComponent {
     // own reconnect via withAutomaticReconnect.
     queueMicrotask(async () => {
       try {
+        // Gated tenant → never open the chat/signaling hubs (no presence, no
+        // incoming calls). Wait for entitlements so we decide on real data.
+        await this.entitlements.ensureLoaded().catch(() => undefined);
+        if (!this.entitlements.moduleEnabled('messages')) return;
         const token = await this.auth.getAccessToken();
         if (token) {
           await this.signaling.connect();

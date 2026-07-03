@@ -1310,7 +1310,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly process = inject(ProcessWorkflowService);
   /** People (contacts + chat + calls) is part of the Messages capability —
    *  hide its rail/menu button when the Messages work-area is disabled. */
-  readonly canMessages = computed(() => this.process.isEnabled('messages'));
+  readonly canMessages = computed(() => this.process.isEnabled('messages') && this.entitlements.moduleEnabled('messages'));
   private readonly visible = (items: NavItem[]): NavItem[] => {
     const cMode = this.labCfg.collectionMode();
     const bMode = this.labCfg.billingMode();

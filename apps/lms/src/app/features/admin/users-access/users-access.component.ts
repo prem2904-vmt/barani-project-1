@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
@@ -241,10 +242,12 @@ export class UsersAccessComponent implements OnInit {
   private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
+  private readonly entitlements = inject(TenantEntitlementsService);
 
-  /** Returns true if calling this user makes sense (active, not self). */
+  /** Returns true if calling this user makes sense: the Messages module is in
+   *  the plan (calls are part of it), the user is active, and not yourself. */
   canCall(u: User): boolean {
-    return u.isActive && u.id !== this.auth.user()?.id;
+    return this.entitlements.moduleEnabled('messages') && u.isActive && u.id !== this.auth.user()?.id;
   }
 
   /** Online presence check — used to disable the Call button when offline. */

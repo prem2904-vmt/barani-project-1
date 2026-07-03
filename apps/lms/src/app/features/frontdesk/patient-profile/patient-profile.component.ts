@@ -17,6 +17,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { PatientDocumentsComponent } from './patient-documents.component';
 import { PatientIdCardComponent } from './patient-id-card.component';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -160,6 +161,7 @@ const SYMPTOMS_DIAGNOSES = [
 })
 export class PatientProfileComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly locationSvc = inject(Location);

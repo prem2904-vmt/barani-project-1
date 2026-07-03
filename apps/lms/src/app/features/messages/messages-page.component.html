@@ -1,3 +1,18 @@
+@if (moduleOff()) {
+  <!-- Messages module isn't in the tenant's plan → locked/upgrade screen. -->
+  <div class="pf-msgs-locked">
+    <div class="pf-msgs-locked__card">
+      <span class="pf-msgs-locked__icon" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+        </svg>
+      </span>
+      <h1 class="pf-msgs-locked__title">Messages isn't in your plan</h1>
+      <p class="pf-msgs-locked__body">Team chat and calls aren't part of your current plan. Contact us to upgrade and switch Messages on for your workspace.</p>
+      <a class="pf-msgs-locked__btn" routerLink="/">Back to app</a>
+    </div>
+  </div>
+} @else {
 @if (showReconnectBanner()) {
   <div class="pf-msgs__reconnect" role="status" aria-live="polite">
     <span class="pf-msgs__reconnect-dot"></span>
@@ -872,4 +887,6 @@
       </ul>
     </div>
   </div>
+}
+
 }
