@@ -8,6 +8,7 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
+import { DialogService } from '../../core/services/dialog.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -975,6 +976,7 @@ const DRAG_THRESHOLD_PX = 4;
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);
+  private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
   private readonly router = inject(Router);
   /** Theme + people drawer are now reachable from the bottom-nav More
@@ -1053,10 +1055,20 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
   private readonly _branch = signal<string>(this.auth.user()?.branchName ?? 'Chennai Main');
   protected readonly currentBranch = this._branch.asReadonly();
-  protected onMoreBranch(): void {
+  protected async onMoreBranch(): Promise<void> {
     const list = this.branches;
-    const i = list.indexOf(this._branch());
-    this._branch.set(list[(i + 1) % list.length]);
+    const current = this._branch();
+    const i = list.indexOf(current);
+    const nextBranch = list[(i + 1) % list.length];
+    const ok = await this.dialog.confirm({
+      title: 'Switch active branch?',
+      message: `Are you sure you want to switch the active branch to "${nextBranch}"?`,
+      confirmLabel: 'Yes, switch branch',
+      cancelLabel: 'Cancel',
+      tone: 'primary'
+    });
+    if (!ok) return;
+    this._branch.set(nextBranch);
   }
 
   // ─── Presence status picker ───────────────────────────────────────
