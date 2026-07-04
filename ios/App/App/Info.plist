@@ -39,6 +39,10 @@
 	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Prefrontal lets you pick photos from your library to attach to reports, messages, and patient records.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Prefrontal saves report PDFs and shared images to your photo library when you export them.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
