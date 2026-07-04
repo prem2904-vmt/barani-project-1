@@ -901,7 +901,7 @@
   border-radius: 22px;
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--glass-shadow);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
 }
@@ -926,7 +926,7 @@
   border-radius: 22px;
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   z-index: 45;
   animation: pf-drawer-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   overflow-y: auto;
