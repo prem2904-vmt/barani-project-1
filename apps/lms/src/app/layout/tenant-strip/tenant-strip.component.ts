@@ -5,6 +5,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
+import { DialogService } from '../../core/services/dialog.service';
 
 /**
  * Page-level tenant + branch context strip. Lives between the top
@@ -276,6 +277,7 @@ export class TenantStripComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly dialog = inject(DialogService);
 
   protected readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
   protected readonly branch = signal<string>('Chennai Main');
@@ -321,7 +323,22 @@ export class TenantStripComponent implements OnInit {
   }
 
   toggleBranch(): void { this.branchOpen.update(v => !v); }
-  selectBranch(b: string): void { this.branch.set(b); this.branchOpen.set(false); }
+  async selectBranch(b: string): Promise<void> {
+    if (b === this.branch()) {
+      this.branchOpen.set(false);
+      return;
+    }
+    const ok = await this.dialog.confirm({
+      title: 'Switch active branch?',
+      message: `Are you sure you want to switch the active branch to "${b}"?`,
+      confirmLabel: 'Yes, switch branch',
+      cancelLabel: 'Cancel',
+      tone: 'primary'
+    });
+    if (!ok) return;
+    this.branch.set(b);
+    this.branchOpen.set(false);
+  }
 
   @HostListener('document:click', ['$event'])
   onDocClick(ev: MouseEvent): void {

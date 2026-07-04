@@ -21,7 +21,6 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
     WorkflowRendererComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent,
     LoadingLogoComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,14 +31,6 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
         eyebrow="Frontdesk · Registration"
         title="Register Patient"
         subtitle="Capture the patient's details — name, contact, ID, and any extras you collect.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
       </pf-screen-header>
 
       <pf-tile tone="default" padding="lg" class="block">
