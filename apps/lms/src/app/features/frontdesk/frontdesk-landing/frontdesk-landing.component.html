@@ -253,6 +253,19 @@
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('appt')" role="button"
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'appt'">
                 
+                <!-- Calendar link (placed on the left side) -->
+                @if (showAppt()) {
+                  <a routerLink="/frontdesk/appointments" class="pf-appt-split__link--left-icon"
+                    title="Open calendar" aria-label="Open calendar" (click)="$event.stopPropagation()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/>
+                      <path d="M16 2v4M8 2v4M3 10h18"/>
+                      <path d="M9 16h6"/>
+                    </svg>
+                  </a>
+                }
+
                 <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
                   @if (showAppt()) {
                     <button type="button" role="tab" class="pf-tabs__btn press"
@@ -302,19 +315,8 @@
                     </div>
                   }
 
-                  <!-- Calendar link -->
+                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
                   @if (showAppt()) {
-                    <a routerLink="/frontdesk/appointments" class="pf-appt-split__link--left-icon"
-                      title="Open calendar" aria-label="Open calendar">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                          stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="3" y="4" width="18" height="18" rx="2"/>
-                        <path d="M16 2v4M8 2v4M3 10h18"/>
-                        <path d="M9 16h6"/>
-                      </svg>
-                    </a>
-                    
-                    <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
                     <div class="pf-hdr-filter">
                       <button type="button" class="pf-hdr-filter__btn"
                         [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
