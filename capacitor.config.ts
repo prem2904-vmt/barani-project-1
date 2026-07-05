@@ -82,7 +82,22 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: true,
     captureInput: true,
-    webContentsDebuggingEnabled: false
+    webContentsDebuggingEnabled: false,
+    // capacitor-plugin-callkit-voip is iOS-only (CallKit) and its 2021-era
+    // Android module fails the AGP manifest merge (a service with an
+    // intent-filter but no android:exported, illegal on Android 12+). Exclude
+    // it from the Android build; Android call alerts arrive via FCM push.
+    includePlugins: [
+      '@capacitor/app',
+      '@capacitor/camera',
+      '@capacitor/haptics',
+      '@capacitor/keyboard',
+      '@capacitor/local-notifications',
+      '@capacitor/network',
+      '@capacitor/push-notifications',
+      '@capacitor/splash-screen',
+      '@capacitor/status-bar'
+    ]
   }
 };
 
