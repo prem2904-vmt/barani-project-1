@@ -8,6 +8,7 @@ import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
+import { DialogService } from '../../core/services/dialog.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { SignalingService } from '../../core/services/signaling.service';
@@ -52,6 +53,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly process = inject(ProcessWorkflowService);
   protected readonly scan = inject(ScanService);
   private readonly api = inject(ApiService);
+  private readonly dialog = inject(DialogService);
 
   readonly moduleLabel = 'LMS';
   /** Real branches this user may switch between (from /api/auth/me). */
@@ -212,7 +214,22 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.closeAll();
     this.branchOpen.set(next);
   }
-  selectBranch(b: BranchRef) { this.branchOpen.set(false); this.auth.setActiveBranch(b.id); }
+  async selectBranch(b: BranchRef) {
+    if (b.id === this.activeBranchId()) {
+      this.branchOpen.set(false);
+      return;
+    }
+    const ok = await this.dialog.confirm({
+      title: 'Switch active branch?',
+      message: `Are you sure you want to switch the active branch to "${b.name}"?`,
+      confirmLabel: 'Yes, switch branch',
+      cancelLabel: 'Cancel',
+      tone: 'primary'
+    });
+    if (!ok) return;
+    this.branchOpen.set(false);
+    this.auth.setActiveBranch(b.id);
+  }
 
   toggleMore() {
     const next = !this.moreOpen();
