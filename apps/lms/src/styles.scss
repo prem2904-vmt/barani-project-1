@@ -247,11 +247,10 @@ html.cap-native {
     padding-top: max(env(safe-area-inset-top), 24px);
   }
 }
-/* iPad: the app disables the WebView overlay (capacitor.service), so iOS
-   already reserves the status bar — any CSS floor here would double it into a
-   dead gap below the clock. Zero the top pad; env() is 0 with overlay off. */
-html.cap-native.cap-ipad,
-html.cap-ipad {
+/* Android: the app reserves the status bar natively (capacitor.service sets
+   overlay off), so the CSS floor above would double it into a dead gap below
+   the clock. Zero the top pad; env() is 0 with the bar reserved. */
+html.cap-native.cap-android {
   padding-top: 0;
 }
 
