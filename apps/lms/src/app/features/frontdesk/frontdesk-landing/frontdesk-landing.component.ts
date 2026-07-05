@@ -813,9 +813,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._ordersSig = null;
     }
 
-    // Fetch Bills (always global)
-    this.api.get<Bill[]>('/api/billing/lookup?code=1223').subscribe({
-      next: l => this._bills.set(l ?? []),
+    // Fetch outstanding bills (branch-scoped): pay-later remainders / partial
+    // payments (balance > 0) and refunds owed (balance < 0). This is what the
+    // "Payments due" drawer lists so a returning patient with a balance can be
+    // found and their remaining balance collected. (Previously this hit the
+    // /lookup resolver with a dummy code, so the drawer was always empty.)
+    this.api.get<{ due: Bill[]; refundsOwed: Bill[] }>('/api/billing/outstanding').subscribe({
+      next: r => this._bills.set([...(r?.due ?? []), ...(r?.refundsOwed ?? [])]),
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
 

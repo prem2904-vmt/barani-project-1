@@ -2202,8 +2202,15 @@ export class BillingComponent implements OnInit, OnChanges {
       return;
     }
     const pay = (bill: Bill) => {
+      // Collect the amount still OUTSTANDING, not the whole invoice again.
+      // On the first payment this equals the full payable (nothing paid yet);
+      // on a returning partially-paid bill it's the remaining balance, so
+      // reopening billing for that patient collects only what's left instead
+      // of double-charging (which would push the bill into an overpaid /
+      // refund-owed state).
+      const amountDue = this.alreadyPaid() > 0 ? this.effectivePayable() : bill.totalPayable;
       this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-        amount: bill.totalPayable,
+        amount: amountDue,
         mode: this._mode(),
         referenceNo: this._referenceNo() || undefined
       }).subscribe({
