@@ -86,6 +86,19 @@ export class CapacitorService {
       await StatusBar.setStyle({ style: Style.Dark });
       // setBackgroundColor is Android-only; ignore the iOS no-op.
       await StatusBar.setBackgroundColor({ color: '#1B3A6B' }).catch(() => undefined);
+
+      // iPad status-bar overlap: iOS reports safe-area-inset-top = 0 on
+      // NON-notched devices (iPad), so the env()-based CSS floor never
+      // reliably clears the ~24px status bar and the header sits under the
+      // clock. Turn OFF the overlay on iPad so iOS reserves the bar itself
+      // (guaranteed clearance); the .cap-ipad class then zeroes the CSS floor
+      // so there's no double gap. Phones keep the immersive overlay (their
+      // real notch inset drives the 50px floor).
+      const isIpad =
+        Capacitor.getPlatform() === 'ios' &&
+        Math.min(window.screen.width, window.screen.height) >= 768;
+      await StatusBar.setOverlaysWebView({ overlay: !isIpad }).catch(() => undefined);
+      if (isIpad) document.documentElement.classList.add('cap-ipad');
     } catch { /* StatusBar plugin only available on native */ }
 
     try {
