@@ -71,7 +71,11 @@ interface InviteForm {
           <div>
             <label class="pf-label">Email</label>
             <input type="email" class="pf-input"
-                   [ngModel]="form().email" (ngModelChange)="patch({ email: $event })" />
+                   [class.pf-input-error]="!!emailError()"
+                   [ngModel]="form().email" (ngModelChange)="onEmailChange($event)" />
+            @if (emailError()) {
+              <p class="pf-field-error">{{ emailError() }}</p>
+            }
           </div>
           <div>
             <label class="pf-label">Phone</label>
@@ -131,6 +135,11 @@ interface InviteForm {
     .pf-radio { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
     .pf-radio input { cursor: pointer; }
 
+    /* Inline field-level validation (e.g. duplicate email) so the failure lands
+       on the offending input instead of only as a transient toast. */
+    .pf-input-error { border-color: var(--danger, #ef4444) !important; }
+    .pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
+
     /* ===== Cross-platform overrides (additive only; desktop >=1280 untouched) ===== */
 
     /* Phone: give radio rows comfortable >=44px tap targets and keep the
@@ -166,9 +175,11 @@ export class UserInviteComponent implements OnInit {
     method: 'email', password: ''
   });
   private readonly _saving = signal(false);
+  private readonly _emailError = signal<string | null>(null);
 
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
+  readonly emailError = this._emailError.asReadonly();
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
     this._roles().map(r => ({ value: r.id, label: r.name }))
@@ -209,6 +220,12 @@ export class UserInviteComponent implements OnInit {
   patch(p: Partial<InviteForm>) { this._form.update(v => ({ ...v, ...p })); }
   back() { this.router.navigateByUrl('/admin/users'); }
 
+  // Clear a stale duplicate-email error as soon as the admin edits the address.
+  onEmailChange(v: string) {
+    if (this._emailError()) this._emailError.set(null);
+    this.patch({ email: v });
+  }
+
   onScopeChange(v: string) {
     if (!v) { this.patch({ branchId: '', subBranchId: '' }); return; }
     if (v.startsWith('sb:')) {
@@ -225,6 +242,7 @@ export class UserInviteComponent implements OnInit {
   submit() {
     const i = this._form();
     this._saving.set(true);
+    this._emailError.set(null);
     this.api.post<User>('/api/users/invite', {
       firstName: i.firstName,
       fathersName: i.fathersName,
@@ -245,7 +263,16 @@ export class UserInviteComponent implements OnInit {
       },
       error: e => {
         this._saving.set(false);
-        this.toasts.error(e.message ?? 'Failed to invite');
+        const body = e?.error;
+        const code = body?.error as string | undefined;
+        const message = (body?.message as string | undefined) ?? e?.message ?? 'Failed to invite';
+        // A duplicate email is a field-level problem — surface it on the email
+        // input rather than as a transient toast the admin might miss.
+        if (code === 'email_exists' || /already exists/i.test(message)) {
+          this._emailError.set(message);
+        } else {
+          this.toasts.error(message);
+        }
       }
     });
   }
