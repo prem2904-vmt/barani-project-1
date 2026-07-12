@@ -31,12 +31,6 @@ interface EditForm {
         eyebrow="Admin · Users"
         [title]="'Edit ' + (loadedName() || 'user')"
         subtitle="Update the user's details, roles and branch scope.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </span>
-          Back
-        </pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
         </pf-touch-btn>
@@ -45,26 +39,33 @@ interface EditForm {
       <pf-tile tone="default" padding="lg" class="block">
         <div class="space-y-3">
           <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">First name</label>
               <input type="text" class="pf-input" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
             </div>
             <div>
-              <label class="pf-label">Father's name</label>
+              <label class="pf-label">Last name</label>
               <input type="text" class="pf-input" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
             </div>
           </div>
-          @if (username()) {
-            <div>
-              <label class="pf-label">Username</label>
-              <input type="text" class="pf-input" [value]="username()" disabled />
-              <p class="text-[11px] mt-1" style="color: var(--text-muted);">The login handle can't be changed. Use “Reset password” to issue a new password.</p>
-            </div>
-          }
-          <div>
-            <label class="pf-label">Phone</label>
-            <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            @if (username()) {
+              <div>
+                <label class="pf-label">Username</label>
+                <input type="text" class="pf-input" [value]="username()" disabled />
+                <p class="text-[11px] mt-1" style="color: var(--text-muted);">The login handle can't be changed. Use “Reset password” to issue a new password.</p>
+              </div>
+              <div>
+                <label class="pf-label">Phone</label>
+                <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+              </div>
+            } @else {
+              <div class="col-span-full">
+                <label class="pf-label">Phone</label>
+                <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+              </div>
+            }
           </div>
           <div>
             <label class="pf-label">Roles <span class="pf-req">*</span></label>
@@ -78,7 +79,7 @@ interface EditForm {
             </div>
           </div>
           <div>
-            <label class="pf-label">Scope</label>
+            <label class="pf-label">Branch</label>
             <pf-select [options]="scopeOptions()" [value]="scopeValue()" placeholder="All branches" (valueChange)="onScopeChange($event)"></pf-select>
           </div>
         </div>
@@ -90,7 +91,7 @@ interface EditForm {
     .pf-input-error { border-color: var(--danger, #ef4444) !important; }
     .pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
     .pf-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
-    .pf-role-chip { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; padding: 8px 12px; min-height: 40px; border-radius: 10px; border: 1px solid var(--glass-border); font-size: 13px; color: var(--text-primary); transition: border-color .15s, background .15s; }
+    .pf-role-chip { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; padding: 8px 12px; min-height: 40px; border-radius: 10px; border: 1px solid transparent; font-size: 13px; color: var(--text-primary); transition: border-color .15s, background .15s; }
     .pf-role-chip input { cursor: pointer; width: 16px; height: 16px; flex: 0 0 auto; }
     .pf-role-chip--on { border-color: var(--brand, #6366f1); background: color-mix(in srgb, var(--brand, #6366f1) 12%, transparent); }
     @media (pointer: coarse) { :host .pf-role-chip { min-height: 44px; } :host .pf-role-chip input { width: 20px; height: 20px; } :host .pf-input { min-height: 44px; } }
