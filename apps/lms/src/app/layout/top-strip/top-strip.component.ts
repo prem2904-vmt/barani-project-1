@@ -157,6 +157,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   readonly isDark = computed(() => this.themeService.isDark());
   readonly userName = () => this.auth.user()?.displayName || 'User';
+  /** The user's REAL role(s) for the profile header (was a hardcoded mock). */
+  readonly userRoleLabel = () => {
+    const u = this.auth.user();
+    if (!u) return '';
+    return u.roles?.length ? u.roles.join(' · ') : (u.tenantName ?? '');
+  };
   readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
   readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
 

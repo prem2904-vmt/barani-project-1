@@ -226,8 +226,8 @@
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-[14px] font-semibold truncate" style="color: var(--text-primary);">{{ userName() }}</p>
-              <p class="text-[11px] font-mono uppercase tracking-[0.16em] mt-0.5" style="color: var(--text-muted);">
-                admin · mock</p>
+              <p class="text-[11px] font-mono uppercase tracking-[0.16em] mt-0.5 truncate" style="color: var(--text-muted);">
+                {{ userRoleLabel() }}</p>
             </div>
           </header>
 
@@ -308,16 +308,19 @@
 
           <!-- Multi-account (shared lab machines): tapping a profile leaves this
                account and opens the full-screen switch (target's PIN gates it;
-               PIN-less profiles open directly). -->
-          @for (a of otherAccounts(); track a.userId) {
-            <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
-              <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
-              <span class="min-w-0 flex-1 text-left">
-                <span class="block truncate">{{ a.displayName }}</span>
-                <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.org }}</span>
-              </span>
-            </button>
-          }
+               PIN-less profiles open directly). Scrolls past ~4 profiles so the
+               popover never outgrows the screen. -->
+          <div class="pf-acct-list">
+            @for (a of otherAccounts(); track a.userId) {
+              <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
+                <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
+                <span class="min-w-0 flex-1 text-left">
+                  <span class="block truncate">{{ a.displayName }}</span>
+                  <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.org }}</span>
+                </span>
+              </button>
+            }
+          </div>
           <button type="button" class="pf-profile-item press" (click)="addAccount()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round">
