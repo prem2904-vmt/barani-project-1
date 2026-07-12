@@ -17,6 +17,8 @@ export interface CurrentUser {
   permissions: string[];
   /** Branches this user may switch between (from their role grants). */
   branches?: BranchRef[];
+  /** Whether a quick-switch/unlock PIN is set for this account. */
+  hasPin?: boolean;
 }
 
 export interface BranchRef {

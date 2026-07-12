@@ -5,14 +5,19 @@ import { CapacitorService } from './core/services/capacitor.service';
 import { PushService } from './core/services/push.service';
 import { PlatformService } from './core/services/platform.service';
 import { VersionService } from './core/services/version.service';
+import { LockService } from './core/auth/lock.service';
+import { LockScreenComponent } from './shared/components/lock-screen.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, LockScreenComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet></router-outlet>
+
+    <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
+    <pf-lock-screen />
 
     <!-- Version gate: shown only when the API's minClientVersion outruns this
          bundle (see VersionService). Persistent + blocking by design — an
@@ -133,8 +138,11 @@ export class App implements OnInit {
   private readonly _push = inject(PushService);
   private readonly _platform = inject(PlatformService);
   protected readonly version = inject(VersionService);
+  private readonly _lock = inject(LockService);
 
   async ngOnInit() {
+    // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).
+    this._lock.start();
     // Version handshake — best-effort, fire-and-forget (errors are ignored
     // inside the service so an offline boot never hangs on it).
     void this.version.init();

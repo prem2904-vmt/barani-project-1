@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
+import { StoredAccount } from '../../core/auth/accounts.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
@@ -27,7 +29,7 @@ import { LANDINGS } from '../../core/auth/landing.guard';
 @Component({
   selector: 'pf-top-strip',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, NotificationBellComponent],
+  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './top-strip.component.html',
   styleUrl: './top-strip.component.scss'
@@ -280,6 +282,78 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // ── (6) Final auth sign-out + redirect ─────────────────────────
     await this.auth.signOut();
     this.router.navigateByUrl('/login');
+  }
+
+  // ── Multi-account switching + PIN (shared lab machines) ───────────
+  protected readonly otherAccounts = computed(() =>
+    this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
+  protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
+
+  protected readonly switchTarget = signal<StoredAccount | null>(null);
+  protected switchPin = '';
+  protected readonly switchBusy = signal(false);
+  protected readonly switchError = signal<string | null>(null);
+
+  protected readonly pinFormOpen = signal(false);
+  protected pinCurrent = '';
+  protected pinNew = '';
+  protected readonly pinBusy = signal(false);
+  protected readonly pinError = signal<string | null>(null);
+  protected readonly pinSaved = signal(false);
+
+  accountInitials(a: StoredAccount): string { return this.auth.accounts.initials(a); }
+
+  openSwitch(a: StoredAccount) {
+    this.switchTarget.set(a);
+    this.switchPin = '';
+    this.switchError.set(null);
+  }
+  cancelSwitch() { this.switchTarget.set(null); }
+
+  async confirmSwitch() {
+    const a = this.switchTarget();
+    if (!a || this.switchBusy() || this.switchPin.length < 4) return;
+    this.switchBusy.set(true);
+    this.switchError.set(null);
+    try {
+      await this.auth.switchAccount(a, this.switchPin);
+      // Full reload: every per-user service (chat, signaling, entitlements,
+      // workflow, push) re-bootstraps cleanly for the new profile.
+      location.assign('/');
+    } catch (e) {
+      this.switchError.set((e as Error).message || 'Could not switch.');
+      this.switchBusy.set(false);
+    }
+  }
+
+  /** Gmail-style "Add account": keep every session, sign in one more. */
+  addAccount() {
+    this.closeProfile();
+    this.router.navigateByUrl('/login?add=1');
+  }
+
+  openPinForm() {
+    this.pinFormOpen.set(true);
+    this.pinCurrent = '';
+    this.pinNew = '';
+    this.pinError.set(null);
+    this.pinSaved.set(false);
+  }
+  closePinForm() { this.pinFormOpen.set(false); }
+
+  async savePin() {
+    if (this.pinBusy() || !/^\d{4,6}$/.test(this.pinNew)) { this.pinError.set('PIN must be 4–6 digits.'); return; }
+    this.pinBusy.set(true);
+    this.pinError.set(null);
+    try {
+      await this.auth.setPin(this.pinNew, this.hasPin() ? this.pinCurrent : undefined);
+      this.pinSaved.set(true);
+      setTimeout(() => { this.closePinForm(); }, 900);
+    } catch (e) {
+      this.pinError.set((e as Error).message || 'Could not update the PIN.');
+    } finally {
+      this.pinBusy.set(false);
+    }
   }
 
   private closeAll() {

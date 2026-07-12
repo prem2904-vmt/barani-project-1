@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
 import { BranchLabConfigService } from '../services/branch-lab-config.service';
+import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
 import { supabase } from './supabase.client';
 
@@ -21,11 +22,14 @@ interface MeResponse {
   roles: string[];
   permissions: string[];
   branches?: BranchRef[];
+  hasPin?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly labCfg = inject(BranchLabConfigService);
+  /** Gmail-style multi-account registry (shared lab machines). */
+  readonly accounts = inject(AccountsService);
 
   private readonly _session = signal<Session | null>(null);
   private readonly _user = signal<CurrentUser | null>(null);
@@ -122,8 +126,32 @@ export class AuthService {
       if (!s?.access_token) return false;
       this._session.set(s);
       this.persistSession(s);
+      // Keep the multi-account registry's copy fresh — Supabase rotates the
+      // refresh token on every exchange, so a stale registry copy goes dead.
+      const activeId = this.accounts.activeUserId();
+      if (activeId) this.accounts.updateTokens(activeId, s.access_token, s.refresh_token!);
       return true;
     } catch { return false; }
+    finally { clearTimeout(killer); }
+  }
+
+  /** Exchange ANY refresh token for a fresh session (used when switching to a
+   *  non-active profile — proves this device holds that account's session). */
+  private async exchangeRefreshToken(refresh: string): Promise<Session | null> {
+    const ctrl = new AbortController();
+    const killer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: environment.auth.supabaseAnonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refresh }),
+        cache: 'no-store',
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      const s = await res.json() as Session;
+      return s?.access_token ? s : null;
+    } catch { return null; }
     finally { clearTimeout(killer); }
   }
 
@@ -349,10 +377,85 @@ export class AuthService {
   }
 
   async signOut(): Promise<void> {
+    // Remove ONLY the active profile from the device registry — other signed-in
+    // accounts stay so their owners can still switch in with their PIN.
+    const activeId = this.accounts.activeUserId();
+    if (activeId) this.accounts.remove(activeId);
     this.persistSession(null);   // clear our stored tokens
     this._session.set(null);
     this._user.set(null);
     try { await supabase.auth.signOut(); } catch { /* SDK may hang on native — already cleared locally */ }
+  }
+
+  // ── Multi-account switching + PIN (shared lab machines) ──────────────
+
+  /** Switch to another signed-in profile. Two proofs are required: this
+   *  device must hold a live session for the target (its refresh token still
+   *  exchanges), AND the person must know that account's PIN (verified
+   *  server-side, rate-limited). Throws with a user-readable message. */
+  async switchAccount(acc: StoredAccount, pin: string): Promise<void> {
+    if (!acc.refreshToken) throw new Error('This profile’s session has expired — sign in again.');
+    const sess = await this.exchangeRefreshToken(acc.refreshToken);
+    if (!sess) {
+      // Dead session: drop the stale profile so the switcher stops offering it.
+      this.accounts.remove(acc.userId);
+      throw new Error('This profile’s session has expired — sign in again.');
+    }
+    // Supabase rotated the refresh token — save it even if the PIN fails,
+    // otherwise the stored one is dead and the profile bricks.
+    this.accounts.updateTokens(acc.userId, sess.access_token, sess.refresh_token!);
+
+    const res = await fetch(`${environment.apiUrl}/api/auth/pin/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.access_token}` },
+      body: JSON.stringify({ pin }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
+    }
+
+    this._session.set(sess);
+    this.persistSession(sess);
+    this.accounts.setActive(acc.userId);
+    this._mustChangePassword.set(false);
+    await this.loadProfile();
+  }
+
+  /** Verify the ACTIVE account's PIN (idle-lock unlock). */
+  async verifyPin(pin: string): Promise<void> {
+    const token = await this.getAccessToken();
+    const res = await fetch(`${environment.apiUrl}/api/auth/pin/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ pin }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
+    }
+  }
+
+  /** Set or change the account's PIN (change requires the current PIN). */
+  async setPin(newPin: string, currentPin?: string): Promise<void> {
+    const token = await this.getAccessToken();
+    const res = await fetch(`${environment.apiUrl}/api/auth/pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ newPin, currentPin: currentPin || null }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error?.message || json?.message || 'Could not update the PIN.');
+    }
+    const u = this._user();
+    if (u) {
+      this._user.set({ ...u, hasPin: true });
+      this.accounts.setHasPin(u.id, true);
+    }
   }
 
   async getAccessToken(): Promise<string | null> {
@@ -431,9 +534,28 @@ export class AuthService {
         subBranchName: data.subBranchName ?? null,
         roles: data.roles ?? [],
         permissions: data.permissions ?? [],
-        branches: data.branches ?? []
+        branches: data.branches ?? [],
+        hasPin: data.hasPin ?? false
       });
       this._lastProfileLoadedAt = Date.now();
+
+      // Sync the multi-account registry: this profile is now the device's
+      // active account, with its current tokens and display info.
+      const sess = this._session();
+      if (sess?.access_token) {
+        this.accounts.upsert({
+          userId: data.id,
+          org: data.tenantName,
+          tenantId: data.tenantId,
+          displayName: data.displayName || [data.firstName, data.fathersName].filter(Boolean).join(' '),
+          email: data.email,
+          accessToken: sess.access_token,
+          refreshToken: sess.refresh_token ?? '',
+          hasPin: data.hasPin ?? false,
+          addedAt: new Date().toISOString(),
+        });
+        this.accounts.setActive(data.id);
+      }
 
       // Seed / validate the active branch against what this user may access.
       // Clear a stale stored branch so the header doesn't send a rejected id.
