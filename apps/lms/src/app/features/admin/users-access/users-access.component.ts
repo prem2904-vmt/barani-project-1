@@ -101,8 +101,8 @@ type Tab = 'users' | 'roles';
                       {{ u.email }} · {{ u.phone || 'no phone' }}
                     </p>
                   </div>
-                  @if (u.isActive) {
-                    <div class="pf-row-actions">
+                  <div class="pf-row-actions">
+                    @if (u.isActive) {
                       @if (canCall(u) && u.authId) {
                         <pf-touch-btn size="sm" variant="ghost"
                                       [disabled]="!isOnline(u.authId)"
@@ -117,9 +117,13 @@ type Tab = 'users' | 'roles';
                           Call
                         </pf-touch-btn>
                       }
+                      <pf-touch-btn size="sm" variant="ghost" (pressed)="editUser(u)">Edit</pf-touch-btn>
+                      <pf-touch-btn size="sm" variant="ghost" (pressed)="resetPassword(u)">Reset password</pf-touch-btn>
                       <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivate(u)">Deactivate</pf-touch-btn>
-                    </div>
-                  }
+                    } @else {
+                      <pf-touch-btn size="sm" variant="secondary" (pressed)="reactivate(u)">Reactivate</pf-touch-btn>
+                    }
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -311,6 +315,45 @@ export class UsersAccessComponent implements OnInit {
   openInvite() { this.router.navigateByUrl('/admin/users/invite'); }
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
   openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
+  editUser(u: User) { this.router.navigate(['/admin/users', u.id, 'edit']); }
+
+  async reactivate(u: User) {
+    const ok = await this.dialog.confirm({
+      title: `Reactivate ${u.displayName || u.firstName || 'this user'}?`,
+      message: 'They regain access immediately with their previous roles.',
+      confirmLabel: 'Reactivate',
+    });
+    if (!ok) return;
+    this.api.patch(`/api/users/${u.id}`, { isActive: true }).subscribe({
+      next: () => {
+        this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
+        this.toasts.success('User reactivated');
+      },
+      error: e => this.toasts.error(e?.message ?? 'Could not reactivate user')
+    });
+  }
+
+  async resetPassword(u: User) {
+    const ok = await this.dialog.confirm({
+      title: `Reset password for ${u.displayName || u.firstName || 'this user'}?`,
+      message: 'A new temporary password is generated and shown once — share it securely. They must change it at next login.',
+      confirmLabel: 'Reset password',
+    });
+    if (!ok) return;
+    // Readable temp password that satisfies the 8+ char policy; the user is
+    // forced to change it on first login (MustChangePassword set server-side).
+    const temp = 'Pf-' + Math.random().toString(36).slice(2, 8) + Math.floor(10 + Math.random() * 89);
+    this.api.post(`/api/users/${u.id}/reset-password`, { newPassword: temp }).subscribe({
+      next: () => {
+        this.dialog.confirm({
+          title: 'Password reset',
+          message: `Temporary password for ${u.displayName}:\n\n${temp}\n\nShare it securely — it won't be shown again.`,
+          confirmLabel: 'Done',
+        });
+      },
+      error: e => this.toasts.error(e?.error?.message ?? e?.message ?? 'Could not reset password')
+    });
+  }
 
   async deactivate(u: User) {
     // Destructive, one-click, no undo path in the UI — confirm first (same

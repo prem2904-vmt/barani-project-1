@@ -183,8 +183,10 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
   if (!cfg?.categories?.length) return null;
   const items: NavItem[] = [];
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
-    const roleOk = ctx.isSuper || !area.roles?.length || area.roles.some(r => ctx.roles.includes(r));
-    if (!roleOk) continue;
+    // Visibility is PERMISSION-driven (not role NAME): the area shows when the
+    // user can run at least one of its actions (checked below). The old
+    // area.roles name-match gate hid areas from custom roles that held the right
+    // permissions — the exact "works by role name" bug we want gone.
     const accessible = (cfg.actions ?? [])
       .filter(a => a.categoryId === area.id && a.enabled)
       .sort((a, b) => a.order - b.order)

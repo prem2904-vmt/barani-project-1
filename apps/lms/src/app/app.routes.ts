@@ -93,6 +93,11 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
       },
       {
+        path: 'admin/users/:id/edit',
+        canActivate: [permissionGuard('manage_users')],
+        loadComponent: () => import('./features/admin/users-access/user-edit.component').then(m => m.UserEditComponent)
+      },
+      {
         path: 'admin/roles/new',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)

@@ -41,17 +41,18 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
       @if (!editing()?.id) {
         <pf-tile tone="default" padding="lg" class="block mb-4">
-          <label class="pf-label">Role name</label>
-          <input type="text" class="pf-input"
-                 [ngModel]="newRoleName()" (ngModelChange)="newRoleName.set($event)"
+          <label class="pf-label">Role name <span style="color: var(--danger, #ef4444); font-weight:700;">*</span></label>
+          <input type="text" class="pf-input" [class.pf-input-error]="!!nameError()"
+                 [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
                  placeholder="e.g. Billing Supervisor" />
+          @if (nameError()) { <p class="text-[12px] mt-1" style="color: var(--danger, #ef4444);">{{ nameError() }}</p> }
         </pf-tile>
       } @else if (editing()?.isPreSeeded) {
         <pf-tile tone="violet" padding="md" class="block mb-4">
           <div class="flex items-center gap-2 flex-wrap">
             <pf-chip tone="violet" size="sm">Pre-seeded</pf-chip>
             <p class="text-[13px]" style="color: var(--text-secondary);">
-              System role — name is locked, but you can edit the permissions.
+              System role — the name is locked. Editing the permissions saves a copy for your organization only; other organizations are unaffected.
             </p>
           </div>
         </pf-tile>
@@ -88,6 +89,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
     </section>
   `,
   styles: [`
+    .pf-input-error { border-color: var(--danger, #ef4444) !important; }
     .section-title {
       font-size: 15px;
       font-weight: 600;
@@ -191,8 +193,11 @@ export class RoleEditorComponent implements OnInit {
   private readonly _permissions = signal<Permission[]>([]);
   private readonly _grantedIds = signal<Set<string>>(new Set());
   private readonly _saving = signal(false);
+  private readonly _allRoles = signal<Role[]>([]);
+  private readonly _nameError = signal<string | null>(null);
 
   readonly newRoleName = signal('');
+  readonly nameError = this._nameError.asReadonly();
   readonly editing = this._editing.asReadonly();
   readonly permissions = this._permissions.asReadonly();
   readonly saving = this._saving.asReadonly();
@@ -225,18 +230,22 @@ export class RoleEditorComponent implements OnInit {
     });
 
     const id = this.route.snapshot.paramMap.get('id');
+    // Load the full roles list always — for edit it identifies the role, and for
+    // create it lets us reject a duplicate name before hitting the server.
+    this.api.get<Role[]>('/api/roles/').subscribe({
+      next: roles => {
+        this._allRoles.set(roles ?? []);
+        if (id) this._editing.set((roles ?? []).find(x => x.id === id) ?? null);
+      }
+    });
     if (id) {
-      this.api.get<Role[]>('/api/roles/').subscribe({
-        next: roles => {
-          const r = (roles ?? []).find(x => x.id === id) ?? null;
-          this._editing.set(r);
-        }
-      });
       this.api.get<string[]>(`/api/roles/${id}/permissions`).subscribe({
         next: ids => this._grantedIds.set(new Set(ids ?? []))
       });
     }
   }
+
+  onNameChange(v: string) { this.newRoleName.set(v); if (this._nameError()) this._nameError.set(null); }
 
   isGranted(pid: string) { return this._grantedIds().has(pid); }
   toggle(pid: string, ev: Event) {
@@ -259,10 +268,19 @@ export class RoleEditorComponent implements OnInit {
       });
     } else {
       const name = this.newRoleName().trim();
-      if (!name) { this._saving.set(false); this.toasts.warning('Role name required'); return; }
+      if (!name) { this._saving.set(false); this._nameError.set('Role name is required.'); return; }
+      // Reject a duplicate name up front (case-insensitive) against tenant + shared
+      // roles — the backend enforces it too, but this is immediate feedback.
+      if (this._allRoles().some(r => r.name.trim().toLowerCase() === name.toLowerCase())) {
+        this._saving.set(false); this._nameError.set(`A role named "${name}" already exists.`); return;
+      }
       this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids }).subscribe({
         next: r => { this._saving.set(false); this.toasts.success(`Role ${r.name} created`); this.back(); },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Save failed'); }
+        error: e => {
+          this._saving.set(false);
+          const msg = e?.error?.message ?? e?.message ?? 'Save failed';
+          if (/already exists/i.test(msg)) this._nameError.set(msg); else this.toasts.error(msg);
+        }
       });
     }
   }

@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Branch, SubBranch } from '../../../shared/models/tenant.model';
-import { Role, User } from '../../../shared/models/user.model';
+import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -12,12 +12,17 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
 type InviteMethod = 'email' | 'password';
 
+interface InviteResult {
+  id: string; email: string; username?: string; displayName: string;
+  method: 'email' | 'password'; inviteSent: boolean; inviteError?: string | null;
+}
+
 interface InviteForm {
   firstName: string;
   fathersName: string;
   email: string;
   phone: string;
-  roleId: string;
+  roleIds: string[];
   branchId: string;
   subBranchId: string;
   method: InviteMethod;
@@ -56,9 +61,10 @@ interface InviteForm {
 
       <pf-tile tone="default" padding="lg" class="block">
         <div class="space-y-3">
+          <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label class="pf-label">First name</label>
+              <label class="pf-label">First name <span class="pf-req">*</span></label>
               <input type="text" class="pf-input"
                      [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
             </div>
@@ -69,7 +75,7 @@ interface InviteForm {
             </div>
           </div>
           <div>
-            <label class="pf-label">Email</label>
+            <label class="pf-label">Email <span class="pf-req">*</span></label>
             <input type="email" class="pf-input"
                    [class.pf-input-error]="!!emailError()"
                    [ngModel]="form().email" (ngModelChange)="onEmailChange($event)" />
@@ -82,22 +88,28 @@ interface InviteForm {
             <input type="tel" class="pf-input"
                    [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <label class="pf-label">Role</label>
-              <pf-select [options]="roleOptions()" [value]="form().roleId"
-                         placeholder="— Select role —"
-                         (valueChange)="patch({ roleId: $event })"></pf-select>
+          <div>
+            <label class="pf-label">Roles <span class="pf-req">*</span></label>
+            <div class="pf-roles">
+              @for (r of roleOptions(); track r.value) {
+                <label class="pf-role-chip" [class.pf-role-chip--on]="hasRole(r.value)">
+                  <input type="checkbox" [checked]="hasRole(r.value)" (change)="toggleRole(r.value)" />
+                  <span>{{ r.label }}</span>
+                </label>
+              }
             </div>
-            <div>
-              <label class="pf-label">Scope</label>
-              <pf-select [options]="scopeOptions()" [value]="scopeValue()"
-                         placeholder="All branches"
-                         (valueChange)="onScopeChange($event)"></pf-select>
-              <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-                Pick a sub-branch (indented →) to scope the user to that lab only.
-              </p>
-            </div>
+            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+              Pick one or more roles — the user gets the combined permissions of all selected roles.
+            </p>
+          </div>
+          <div>
+            <label class="pf-label">Scope</label>
+            <pf-select [options]="scopeOptions()" [value]="scopeValue()"
+                       placeholder="All branches"
+                       (valueChange)="onScopeChange($event)"></pf-select>
+            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+              Pick a sub-branch (indented →) to scope the user to that lab only.
+            </p>
           </div>
 
           <div class="pf-method">
@@ -117,6 +129,7 @@ interface InviteForm {
               </label>
             </div>
             @if (form().method === 'password') {
+              <label class="pf-label" style="margin-top:8px">Password <span class="pf-req">*</span></label>
               <input type="text" class="pf-input" autocomplete="off"
                      placeholder="Minimum 6 characters"
                      [ngModel]="form().password" (ngModelChange)="patch({ password: $event })" />
@@ -139,6 +152,21 @@ interface InviteForm {
        on the offending input instead of only as a transient toast. */
     .pf-input-error { border-color: var(--danger, #ef4444) !important; }
     .pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
+
+    /* Required-field marker */
+    .pf-req { color: var(--danger, #ef4444); font-weight: 700; margin-left: 2px; }
+
+    /* Multi-role picker: wrapping selectable chips (checkbox-backed). */
+    .pf-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+    .pf-role-chip {
+      display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+      padding: 8px 12px; min-height: 40px; border-radius: 10px;
+      border: 1px solid var(--glass-border); font-size: 13px; color: var(--text-primary);
+      transition: border-color .15s, background .15s;
+    }
+    .pf-role-chip input { cursor: pointer; width: 16px; height: 16px; flex: 0 0 auto; }
+    .pf-role-chip--on { border-color: var(--brand, #6366f1); background: color-mix(in srgb, var(--brand, #6366f1) 12%, transparent); }
+    @media (pointer: coarse) { :host .pf-role-chip { min-height: 44px; } :host .pf-role-chip input { width: 20px; height: 20px; } }
 
     /* ===== Cross-platform overrides (additive only; desktop >=1280 untouched) ===== */
 
@@ -171,7 +199,7 @@ export class UserInviteComponent implements OnInit {
   private readonly _branches = signal<Branch[]>([]);
   private readonly _form = signal<InviteForm>({
     firstName: '', fathersName: '', email: '', phone: '',
-    roleId: '', branchId: '', subBranchId: '',
+    roleIds: [], branchId: '', subBranchId: '',
     method: 'email', password: ''
   });
   private readonly _saving = signal(false);
@@ -204,13 +232,23 @@ export class UserInviteComponent implements OnInit {
     return '';
   });
 
+  // Required: first name, email, at least one role, and (password method only) a
+  // 6+ char password. Father's name and phone are optional.
   readonly canInvite = computed(() => {
     const i = this._form();
-    if (i.firstName.trim().length === 0 || i.fathersName.trim().length === 0) return false;
-    if (i.email.trim().length === 0 || !i.roleId) return false;
+    if (i.firstName.trim().length === 0) return false;
+    if (i.email.trim().length === 0 || i.roleIds.length === 0) return false;
     if (i.method === 'password' && i.password.length < 6) return false;
     return true;
   });
+
+  hasRole(id: string) { return this._form().roleIds.includes(id); }
+  toggleRole(id: string) {
+    this._form.update(v => ({
+      ...v,
+      roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id]
+    }));
+  }
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
@@ -243,22 +281,28 @@ export class UserInviteComponent implements OnInit {
     const i = this._form();
     this._saving.set(true);
     this._emailError.set(null);
-    this.api.post<User>('/api/users/invite', {
+    this.api.post<InviteResult>('/api/users/invite', {
       firstName: i.firstName,
       fathersName: i.fathersName,
       email: i.email,
       phone: i.phone || undefined,
-      roleIds: [i.roleId],
+      roleIds: i.roleIds,
       branchId: i.branchId || undefined,
       subBranchId: i.subBranchId || undefined,
       password: i.method === 'password' ? i.password : undefined
     }).subscribe({
       next: u => {
         this._saving.set(false);
-        const msg = i.method === 'password'
-          ? `${u.displayName} created. Share the password with them securely.`
-          : `Invite sent to ${u.email}`;
-        this.toasts.success(msg);
+        if (i.method === 'password') {
+          this.toasts.success(`${u.displayName} created. Share the password with them securely.`);
+        } else if (u.inviteSent) {
+          this.toasts.success(`Invite email sent to ${u.email}`);
+        } else {
+          // The account was created but Supabase didn't send the email — tell the
+          // truth instead of a false "sent", so the admin can resend or set a
+          // password. (Common causes: Supabase email rate limit / no SMTP set up.)
+          this.toasts.error(`User created, but the invite email failed to send${u.inviteError ? ': ' + u.inviteError : ''}. Reset their password to share credentials instead.`);
+        }
         this.back();
       },
       error: e => {
