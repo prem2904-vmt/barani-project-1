@@ -1,56 +1,127 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
+import { AccountsService, StoredAccount } from '../../core/auth/accounts.service';
 import { LockService } from '../../core/auth/lock.service';
+import { PinDotsComponent } from './pin-dots.component';
 
-/** Full-screen idle lock (shared lab machines). Mirrors the version-gate glass
- *  card; unlock = the active account's PIN, verified server-side. */
+/** OTT-style lock screen (shared lab machines): when locked, the screen
+ *  becomes a "Who's working?" profile picker — every signed-in profile is a
+ *  tile. Picking your own profile unlocks in place; picking someone else's
+ *  switches to them. Either way the tile's PIN (4 digits, server-verified)
+ *  gates entry; PIN-less profiles open directly. */
 @Component({
   selector: 'pf-lock-screen',
   standalone: true,
-  imports: [FormsModule],
+  imports: [PinDotsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (lock.locked() && auth.isAuthenticated()) {
       <div class="pf-lk-root" role="alertdialog" aria-modal="true" aria-label="Screen locked">
         <div class="pf-lk-backdrop"></div>
-        <div class="pf-lk-card">
-          <div class="pf-lk-avatar">{{ initials() }}</div>
-          <h2 class="pf-lk-name">{{ auth.user()?.displayName }}</h2>
-          <p class="pf-lk-hint">Locked after inactivity — enter your PIN to continue.</p>
-          <input class="pf-lk-pin" type="password" inputmode="numeric" autocomplete="off"
-                 maxlength="6" placeholder="••••"
-                 [ngModel]="pin()" (ngModelChange)="onPin($event)"
-                 (keydown.enter)="unlock()" [disabled]="busy()" #pinInput />
-          @if (error()) { <p class="pf-lk-error">{{ error() }}</p> }
-          <button class="pf-lk-btn" (click)="unlock()" [disabled]="busy() || pin().length < 4">
-            {{ busy() ? 'Checking…' : 'Unlock' }}
-          </button>
-          <button class="pf-lk-alt" (click)="lock.abandonToLogin()">Forgot PIN? Sign in with password</button>
-        </div>
+
+        @if (!selected()) {
+          <div class="pf-lk-picker">
+            <h2 class="pf-lk-heading">Who's working?</h2>
+            <div class="pf-lk-tiles">
+              @for (a of accounts.accounts(); track a.userId) {
+                <button class="pf-lk-tile" (click)="select(a)">
+                  <span class="pf-lk-tile-avatar">{{ accounts.initials(a) }}</span>
+                  <span class="pf-lk-tile-name">{{ a.displayName }}</span>
+                  <span class="pf-lk-tile-org">{{ a.org }}</span>
+                </button>
+              }
+            </div>
+            <button class="pf-lk-alt" (click)="lock.abandonToLogin()">Sign in with a different account</button>
+          </div>
+        } @else {
+          <div class="pf-lk-card">
+            <button class="pf-lk-back" (click)="back()" [disabled]="busy()">‹ Profiles</button>
+            <div class="pf-lk-avatar">{{ accounts.initials(selected()!) }}</div>
+            <h2 class="pf-lk-name">{{ selected()!.displayName }}</h2>
+            <p class="pf-lk-org">{{ selected()!.org }}</p>
+
+            @if (pinNeeded()) {
+              <p class="pf-lk-hint">Enter PIN</p>
+              <pf-pin-dots #dots [disabled]="busy()" (completed)="attempt($event)" />
+            } @else {
+              <p class="pf-lk-hint">{{ busy() ? 'Opening profile…' : 'No PIN — opening directly.' }}</p>
+            }
+            @if (error()) { <p class="pf-lk-error">{{ error() }}</p> }
+            <button class="pf-lk-alt" (click)="lock.abandonToLogin()">Forgot PIN? Sign in with password</button>
+          </div>
+        }
       </div>
     }
   `,
   styles: [`
     .pf-lk-root {
-      position: fixed; inset: 0; z-index: 190; /* below only the version gate */
+      position: fixed; inset: 0; z-index: 190;
       display: flex; align-items: center; justify-content: center; padding: 20px;
     }
     .pf-lk-backdrop {
       position: absolute; inset: 0;
       background:
         radial-gradient(1200px 800px at 50% 100%, rgba(124, 58, 237, 0.15), transparent 60%),
-        rgba(5, 5, 15, 0.82);
-      backdrop-filter: blur(18px) saturate(1.2);
-      -webkit-backdrop-filter: blur(18px) saturate(1.2);
+        rgba(5, 5, 15, 0.9);
+      backdrop-filter: blur(20px) saturate(1.2);
+      -webkit-backdrop-filter: blur(20px) saturate(1.2);
     }
+
+    /* ── Profile picker (OTT style) ── */
+    .pf-lk-picker {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; gap: 26px;
+      max-width: 640px;
+    }
+    .pf-lk-heading {
+      margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+    .pf-lk-tiles {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 26px;
+    }
+    .pf-lk-tile {
+      display: flex; flex-direction: column; align-items: center; gap: 9px;
+      width: 118px; padding: 8px; border: none; background: transparent;
+      cursor: pointer; border-radius: 14px;
+      transition: transform .15s ease;
+    }
+    .pf-lk-tile:hover { transform: scale(1.05); }
+    .pf-lk-tile:focus-visible { outline: 2px solid rgba(168,85,247,.6); outline-offset: 2px; }
+    .pf-lk-tile-avatar {
+      width: 84px; height: 84px; border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 700; color: #c4b5fd;
+      background: linear-gradient(135deg, rgba(168,85,247,.24), rgba(236,72,153,.12));
+      border: 1.5px solid rgba(168,85,247,.32);
+      transition: border-color .15s ease;
+    }
+    .pf-lk-tile:hover .pf-lk-tile-avatar { border-color: rgba(168,85,247,.7); }
+    .pf-lk-tile-name {
+      max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+    }
+    .pf-lk-tile-org {
+      max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--text-muted);
+    }
+
+    /* ── Selected profile / PIN card ── */
     .pf-lk-card {
-      position: relative; width: 100%; max-width: 21rem; padding: 28px 24px;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      position: relative; width: 100%; max-width: 21rem; padding: 24px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
       border-radius: 20px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border);
       box-shadow: 0 1px 0 0 rgba(255,255,255,.04) inset, 0 30px 70px rgba(0,0,0,.55);
     }
+    .pf-lk-back {
+      align-self: flex-start;
+      border: none; background: transparent; cursor: pointer;
+      font-size: 13px; color: var(--text-muted); padding: 4px 6px; min-height: 34px;
+    }
+    .pf-lk-back:hover { color: var(--text-primary); }
     .pf-lk-avatar {
       width: 56px; height: 56px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -59,55 +130,69 @@ import { LockService } from '../../core/auth/lock.service';
       border: 1px solid rgba(168,85,247,.3);
     }
     .pf-lk-name { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
-    .pf-lk-hint { margin: 0 0 6px; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
-    .pf-lk-pin {
-      width: 140px; text-align: center; font-size: 22px; letter-spacing: 10px;
-      padding: 10px 0; border-radius: 12px;
-      background: rgba(255,255,255,.04); border: 1px solid var(--glass-border);
-      color: var(--text-primary); outline: none;
-    }
-    .pf-lk-pin:focus { border-color: rgba(168,85,247,.5); }
+    .pf-lk-org { margin: -4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
+    .pf-lk-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
     .pf-lk-error { margin: 2px 0 0; font-size: 12px; color: #f87171; }
-    .pf-lk-btn {
-      margin-top: 8px; width: 100%; min-height: 44px; border-radius: 12px;
-      border: none; cursor: pointer; font-size: 14px; font-weight: 600;
-      color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7);
-    }
-    .pf-lk-btn:disabled { opacity: .55; cursor: default; }
     .pf-lk-alt {
-      margin-top: 2px; border: none; background: transparent; cursor: pointer;
+      margin-top: 6px; border: none; background: transparent; cursor: pointer;
       font-size: 12px; color: var(--text-muted); text-decoration: underline;
-      min-height: 34px;
+      min-height: 34px; position: relative;
     }
   `]
 })
 export class LockScreenComponent {
   readonly auth = inject(AuthService);
+  readonly accounts = inject(AccountsService);
   readonly lock = inject(LockService);
 
-  readonly pin = signal('');
+  readonly selected = signal<StoredAccount | null>(null);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  readonly pinNeeded = signal(true);
+  private dots = viewChild(PinDotsComponent);
 
-  initials(): string {
-    return (this.auth.user()?.displayName || '?')
-      .split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?';
+  select(a: StoredAccount) {
+    this.selected.set(a);
+    this.error.set(null);
+    const isMe = a.userId === this.auth.user()?.id;
+    // My own profile: the lock only arms for PIN-enabled users, so always ask.
+    // Someone else's: their PIN — or straight in when they don't have one
+    // (the blank attempt lets the SERVER confirm; a stale flag can't bypass).
+    this.pinNeeded.set(isMe ? true : a.hasPin);
+    if (!isMe && !a.hasPin) void this.attempt('');
   }
 
-  onPin(v: string) {
-    this.pin.set(v.replace(/\D/g, '').slice(0, 6));
-    if (this.error()) this.error.set(null);
+  back() {
+    this.selected.set(null);
+    this.error.set(null);
   }
 
-  async unlock() {
-    if (this.busy() || this.pin().length < 4) return;
+  async attempt(pin: string) {
+    const target = this.selected();
+    if (!target || this.busy()) return;
     this.busy.set(true);
     this.error.set(null);
     try {
-      await this.lock.unlock(this.pin());
-      this.pin.set('');
+      if (target.userId === this.auth.user()?.id) {
+        await this.lock.unlock(pin);          // unlock in place, session resumes
+        this.selected.set(null);
+      } else {
+        await this.auth.switchAccount(target, pin);
+        this.lock.clearAfterSwitch();         // don't boot the new profile locked
+        location.assign('/');                 // clean re-bootstrap as the new user
+        return;
+      }
     } catch (e) {
-      this.error.set((e as Error).message || 'Incorrect PIN.');
+      const err = e as Error & { code?: string };
+      if (pin === '' && (err.code === 'wrong_pin' || err.code === 'locked')) {
+        // Stale local "no PIN" — the server says otherwise. Ask for it.
+        this.pinNeeded.set(true);
+        this.accounts.setHasPin(target.userId, true);
+        this.error.set(err.code === 'locked' ? err.message : null);
+      } else {
+        this.error.set(err.message || 'Incorrect PIN.');
+        this.dots()?.clear();
+      }
     } finally {
       this.busy.set(false);
     }

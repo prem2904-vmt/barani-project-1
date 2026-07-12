@@ -328,8 +328,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
   closePinForm() { this.pinFormOpen.set(false); }
 
+  /** PIN fields accept digits only, capped at 4 (iPhone-style). */
+  sanitizePin(v: string): string { return (v ?? '').replace(/\D/g, '').slice(0, 4); }
+
   async savePin() {
-    if (this.pinBusy() || !/^\d{4,6}$/.test(this.pinNew)) { this.pinError.set('PIN must be 4–6 digits.'); return; }
+    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) { this.pinError.set('PIN must be exactly 4 digits.'); return; }
     this.pinBusy.set(true);
     this.pinError.set(null);
     try {

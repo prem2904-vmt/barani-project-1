@@ -330,14 +330,16 @@
 
           @if (pinFormOpen()) {
             <div class="pf-switch-form">
-              <p class="pf-switch-lbl">{{ hasPin() ? 'Change PIN' : 'Set a PIN (4–6 digits)' }}</p>
+              <p class="pf-switch-lbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
               @if (hasPin()) {
                 <input class="pf-pin-input pf-pin-wide" type="password" inputmode="numeric" autocomplete="off"
-                       maxlength="6" placeholder="Current PIN" [(ngModel)]="pinCurrent" [disabled]="pinBusy()" />
+                       maxlength="4" placeholder="Current PIN"
+                       [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)" [disabled]="pinBusy()" />
               }
               <div class="pf-switch-row">
                 <input class="pf-pin-input" type="password" inputmode="numeric" autocomplete="off"
-                       maxlength="6" placeholder="New PIN" [(ngModel)]="pinNew"
+                       maxlength="4" placeholder="New PIN"
+                       [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
                        (keydown.enter)="savePin()" [disabled]="pinBusy()" />
                 <button type="button" class="pf-pin-go press" (click)="savePin()" [disabled]="pinBusy()">
                   {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}

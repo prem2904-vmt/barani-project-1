@@ -68,6 +68,14 @@ export class LockService {
     try { localStorage.removeItem(LockService.LOCKED_KEY); } catch { /* */ }
   }
 
+  /** Clear the lock WITHOUT a PIN check — used after switchAccount() has
+   *  already verified the TARGET profile's PIN from the lock screen, so the
+   *  new profile doesn't boot straight back into a stale lock. */
+  clearAfterSwitch(): void {
+    this._locked.set(false);
+    try { localStorage.removeItem(LockService.LOCKED_KEY); } catch { /* */ }
+  }
+
   /** Escape hatch when the PIN is forgotten: sign the profile out entirely. */
   async abandonToLogin(): Promise<void> {
     this._locked.set(false);

@@ -1,17 +1,17 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, effect, inject, signal, viewChild } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountsService } from '../../core/auth/accounts.service';
 import { LockService } from '../../core/auth/lock.service';
+import { PinDotsComponent } from './pin-dots.component';
 
 /** Full-screen profile switch (Windows-style): leaves the current account's
- *  UI entirely and meets the TARGET account's PIN gate. PIN-less profiles
- *  open directly — the auto-attempt lets the server confirm that, so a stale
- *  local "no PIN" flag can't bypass a real PIN. */
+ *  UI and meets the TARGET account's 4-digit PIN gate. PIN-less profiles
+ *  open directly — the blank auto-attempt lets the server confirm that, so a
+ *  stale local "no PIN" flag can't bypass a real PIN. */
 @Component({
   selector: 'pf-switch-screen',
   standalone: true,
-  imports: [FormsModule],
+  imports: [PinDotsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (lock.switchTarget(); as target) {
@@ -23,19 +23,12 @@ import { LockService } from '../../core/auth/lock.service';
           <p class="pf-sw-org">{{ target.org }}</p>
 
           @if (pinNeeded()) {
-            <p class="pf-sw-hint">Enter {{ target.displayName.split(' ')[0] }}'s PIN to switch.</p>
-            <input class="pf-sw-pin" type="password" inputmode="numeric" autocomplete="off"
-                   maxlength="6" placeholder="••••"
-                   [ngModel]="pin()" (ngModelChange)="onPin($event)"
-                   (keydown.enter)="confirm()" [disabled]="busy()" />
-            @if (error()) { <p class="pf-sw-error">{{ error() }}</p> }
-            <button class="pf-sw-btn" (click)="confirm()" [disabled]="busy() || pin().length < 4">
-              {{ busy() ? 'Switching…' : 'Switch profile' }}
-            </button>
+            <p class="pf-sw-hint">Enter {{ target.displayName.split(' ')[0] }}'s PIN</p>
+            <pf-pin-dots #dots [disabled]="busy()" (completed)="attempt($event)" />
           } @else {
-            <p class="pf-sw-hint">{{ busy() ? 'Opening profile…' : 'This profile has no PIN — opening it directly.' }}</p>
-            @if (error()) { <p class="pf-sw-error">{{ error() }}</p> }
+            <p class="pf-sw-hint">{{ busy() ? 'Opening profile…' : 'No PIN — opening directly.' }}</p>
           }
+          @if (error()) { <p class="pf-sw-error">{{ error() }}</p> }
 
           <button class="pf-sw-alt" (click)="cancel()" [disabled]="busy()">Cancel — stay as {{ auth.user()?.displayName }}</button>
         </div>
@@ -72,20 +65,7 @@ import { LockService } from '../../core/auth/lock.service';
     .pf-sw-name { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
     .pf-sw-org { margin: -4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
     .pf-sw-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
-    .pf-sw-pin {
-      width: 140px; text-align: center; font-size: 22px; letter-spacing: 10px;
-      padding: 10px 0; border-radius: 12px; margin-top: 4px;
-      background: rgba(255,255,255,.04); border: 1px solid var(--glass-border);
-      color: var(--text-primary); outline: none;
-    }
-    .pf-sw-pin:focus { border-color: rgba(168,85,247,.5); }
     .pf-sw-error { margin: 4px 0 0; font-size: 12px; color: #f87171; }
-    .pf-sw-btn {
-      margin-top: 10px; width: 100%; min-height: 44px; border-radius: 12px;
-      border: none; cursor: pointer; font-size: 14px; font-weight: 600;
-      color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7);
-    }
-    .pf-sw-btn:disabled { opacity: .55; cursor: default; }
     .pf-sw-alt {
       margin-top: 4px; border: none; background: transparent; cursor: pointer;
       font-size: 12px; color: var(--text-muted); text-decoration: underline;
@@ -98,10 +78,10 @@ export class SwitchScreenComponent {
   readonly accounts = inject(AccountsService);
   readonly lock = inject(LockService);
 
-  readonly pin = signal('');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly pinNeeded = signal(false);
+  private dots = viewChild(PinDotsComponent);
 
   constructor() {
     // Each time a target is picked: reset state; PIN-less profiles auto-open
@@ -109,24 +89,13 @@ export class SwitchScreenComponent {
     effect(() => {
       const target = this.lock.switchTarget();
       if (!target) return;
-      this.pin.set('');
       this.error.set(null);
       this.pinNeeded.set(target.hasPin);
       if (!target.hasPin) void this.attempt('');
     });
   }
 
-  onPin(v: string) {
-    this.pin.set(v.replace(/\D/g, '').slice(0, 6));
-    if (this.error()) this.error.set(null);
-  }
-
-  confirm() {
-    if (this.busy() || this.pin().length < 4) return;
-    void this.attempt(this.pin());
-  }
-
-  private async attempt(pin: string) {
+  async attempt(pin: string) {
     const target = this.lock.switchTarget();
     if (!target || this.busy()) return;
     this.busy.set(true);
@@ -141,9 +110,10 @@ export class SwitchScreenComponent {
         // Local cache said "no PIN" but the server disagrees — ask for it.
         this.pinNeeded.set(true);
         this.accounts.setHasPin(target.userId, true);
-        this.error.set(err.code === 'locked' ? err.message : 'This profile has a PIN.');
+        this.error.set(err.code === 'locked' ? err.message : null);
       } else {
         this.error.set(err.message || 'Could not switch.');
+        this.dots()?.clear();
       }
       this.busy.set(false);
     }
