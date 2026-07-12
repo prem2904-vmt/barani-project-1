@@ -181,7 +181,16 @@ export interface WorkflowNavCtx {
  */
 export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
   if (!cfg?.categories?.length) return null;
+  // The flask/tube "Collect" icon (matches the PRIMARY_NAV sample-collection item).
+  const COLLECT_ICON = ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'];
+  const canCollect = ctx.isSuper || ctx.hasAnyPermission(['collect_sample']);
+  // Work-areas that hold an enabled sample_collection action.
+  const collectAreas = new Set((cfg.actions ?? [])
+    .filter(a => a.type === 'sample_collection' && a.enabled)
+    .map(a => a.categoryId));
+
   const items: NavItem[] = [];
+  let collectAdded = false;
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
     // Visibility is PERMISSION-driven (not role NAME): the area shows when the
     // user can run at least one of its actions (checked below). The old
@@ -198,12 +207,24 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // Render the work-area's own icon (the one picked in the builder), via the
     // SAME resolver the builder uses — so the top-strip / sidebar match the
     // builder exactly. Unknown/empty falls back to the folder default.
+    const route = workAreaRoute(area, cfg);
     items.push({
       id: area.id,
       label: area.name,
-      href: workAreaRoute(area, cfg),
+      href: route,
       iconPath: workAreaIconPath(area.icon),
     });
+    // Sample collection is a repeatable action that's often dropped INTO a
+    // system area (e.g. Lab), whose bespoke screen (/lab/my-work) opens directly
+    // and never exposes the collection action — leaving it unreachable. When the
+    // area a collection sits in doesn't already open the collect/queue screen,
+    // surface a dedicated "Collect" item right beside it (once, if the user can
+    // actually draw samples).
+    if (!collectAdded && canCollect && collectAreas.has(area.id)
+        && route !== '/sample-collection' && route !== '/frontdesk/queue') {
+      items.push({ id: 'sample-collection', label: 'Collect', href: '/sample-collection', iconPath: COLLECT_ICON });
+      collectAdded = true;
+    }
   }
   return items.length ? items : null;
 }
