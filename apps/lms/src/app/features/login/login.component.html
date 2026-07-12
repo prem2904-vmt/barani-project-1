@@ -40,7 +40,7 @@
                  [ngModel]="org()"
                  (ngModelChange)="org.set($event); error.set(null)"
                  name="org"
-                 placeholder="Your organization" />
+                 placeholder="Your organization name" />
           <datalist id="pf-orgs">
             @for (o of orgs(); track o) { <option [value]="o"></option> }
           </datalist>
