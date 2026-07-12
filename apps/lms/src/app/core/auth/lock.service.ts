@@ -35,12 +35,13 @@ export class LockService {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.tick();
     });
-    // Manual lock: Ctrl+L on EVERY platform — browsers reserve ⌘L for the
-    // address bar (Safari/Chrome never deliver it to the page), but Ctrl+L is
-    // free, including on macOS. ⌘L stays wired for installed-PWA/desktop runs
-    // where there is no address bar to compete with.
+    // Manual lock shortcuts. Browsers NEVER deliver bare ⌘L (address bar), so
+    // the working combos are: Ctrl+L (free on every platform, incl. macOS) and
+    // ⌘⇧L (delivered + overridable in Safari/Chrome, unlike bare ⌘L). Matching
+    // on e.code makes Shift irrelevant to the key identity; bare ⌘L stays
+    // wired for installed-PWA/desktop runs where no address bar competes.
     window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) {
+      if (e.code === 'KeyL' && (e.ctrlKey || e.metaKey)) {
         if (this.auth.isAuthenticated() && this.auth.user()?.hasPin && !this._locked()) {
           e.preventDefault();
           e.stopPropagation();
