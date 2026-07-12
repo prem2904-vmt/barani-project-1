@@ -60,7 +60,9 @@ export class AccountsService {
 
   upsert(acc: StoredAccount): void {
     const list = this._accounts().filter((a) => a.userId !== acc.userId);
-    this.persist([acc, ...list].slice(0, 8)); // sanity cap for a shared machine
+    // Cap for a shared machine — sized for a full lab shift; the switcher
+    // list scrolls, so a big roster stays usable. Oldest profile drops first.
+    this.persist([acc, ...list].slice(0, 25));
   }
 
   /** Keep a profile's tokens fresh (after refresh grants) without other edits. */
