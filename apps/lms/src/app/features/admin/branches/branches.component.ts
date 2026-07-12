@@ -723,7 +723,8 @@ export class BranchesComponent implements OnInit {
     const b = this._newBranch();
     if (!b.name.trim() || !b.code.trim()) { this.toasts.warning('Name and code required'); return; }
     this.api.post<Branch>('/api/tenants/branches', b).subscribe({
-      next: saved => { this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); }
+      next: saved => { this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -744,7 +745,8 @@ export class BranchesComponent implements OnInit {
         this._subBranches.update(list => [...list, saved]);
         this.toasts.success('Sub-branch added');
         this.cancelAddSubBranch();
-      }
+      },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
   deactivateSubBranch(sb: SubBranch) {
@@ -768,7 +770,8 @@ export class BranchesComponent implements OnInit {
     const d = this._deptDraft();
     if (!d.name.trim() || !d.code.trim()) { this.toasts.warning('Name and code required'); return; }
     this.api.post<Department>('/api/tenants/departments', { name: d.name, code: d.code, branchId }).subscribe({
-      next: saved => { this._departments.update(list => [...list, saved]); this.toasts.success('Department added'); this.cancelAddDept(); }
+      next: saved => { this._departments.update(list => [...list, saved]); this.toasts.success('Department added'); this.cancelAddDept(); },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
