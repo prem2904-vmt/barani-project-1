@@ -6,6 +6,8 @@ export interface User {
   /** Server computes this. Falls back to `firstName + ' ' + fathersName`. */
   displayName?: string;
   email: string;
+  /** Login handle for username-only accounts (blank email). */
+  username?: string | null;
   phone?: string;
   authId?: string;
   /** Teams-style custom status ('available' | 'busy' | 'with_patient' |

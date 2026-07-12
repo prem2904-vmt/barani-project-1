@@ -14,7 +14,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 interface EditForm {
   firstName: string;
   fathersName: string;
-  email: string;
   phone: string;
   roleIds: string[];
   branchId: string;
@@ -48,7 +47,7 @@ interface EditForm {
           <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label class="pf-label">First name <span class="pf-req">*</span></label>
+              <label class="pf-label">First name</label>
               <input type="text" class="pf-input" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
             </div>
             <div>
@@ -56,12 +55,13 @@ interface EditForm {
               <input type="text" class="pf-input" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
             </div>
           </div>
-          <div>
-            <label class="pf-label">Email <span class="pf-req">*</span></label>
-            <input type="email" class="pf-input" [class.pf-input-error]="!!emailError()"
-                   [ngModel]="form().email" (ngModelChange)="onEmailChange($event)" />
-            @if (emailError()) { <p class="pf-field-error">{{ emailError() }}</p> }
-          </div>
+          @if (username()) {
+            <div>
+              <label class="pf-label">Username</label>
+              <input type="text" class="pf-input" [value]="username()" disabled />
+              <p class="text-[11px] mt-1" style="color: var(--text-muted);">The login handle can't be changed. Use “Reset password” to issue a new password.</p>
+            </div>
+          }
           <div>
             <label class="pf-label">Phone</label>
             <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
@@ -105,14 +105,14 @@ export class UserEditComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<EditForm>({ firstName: '', fathersName: '', email: '', phone: '', roleIds: [], branchId: '', subBranchId: '' });
+  private readonly _form = signal<EditForm>({ firstName: '', fathersName: '', phone: '', roleIds: [], branchId: '', subBranchId: '' });
   private readonly _saving = signal(false);
-  private readonly _emailError = signal<string | null>(null);
+  private readonly _username = signal('');
   private readonly _loadedName = signal('');
 
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
-  readonly emailError = this._emailError.asReadonly();
+  readonly username = this._username.asReadonly();
   readonly loadedName = this._loadedName.asReadonly();
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() => this._roles().map(r => ({ value: r.id, label: r.name })));
@@ -132,10 +132,7 @@ export class UserEditComponent implements OnInit {
     return '';
   });
 
-  readonly canSave = computed(() => {
-    const i = this._form();
-    return i.firstName.trim().length > 0 && i.email.trim().length > 0 && i.roleIds.length > 0;
-  });
+  readonly canSave = computed(() => this._form().roleIds.length > 0);
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
@@ -148,8 +145,9 @@ export class UserEditComponent implements OnInit {
       next: ({ users, roles }) => {
         const u = (users ?? []).find(x => x.id === this.id);
         if (u) {
-          this._loadedName.set(u.displayName || u.firstName || '');
-          this._form.update(v => ({ ...v, firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', email: u.email ?? '', phone: u.phone ?? '' }));
+          this._loadedName.set(u.displayName || u.firstName || u.username || '');
+          this._username.set(u.username || '');
+          this._form.update(v => ({ ...v, firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
         }
         const rs = roles ?? [];
         const first = rs[0];
@@ -165,7 +163,6 @@ export class UserEditComponent implements OnInit {
 
   patch(p: Partial<EditForm>) { this._form.update(v => ({ ...v, ...p })); }
   back() { this.router.navigateByUrl('/admin/users'); }
-  onEmailChange(v: string) { if (this._emailError()) this._emailError.set(null); this.patch({ email: v }); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
     this._form.update(v => ({ ...v, roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id] }));
@@ -180,10 +177,9 @@ export class UserEditComponent implements OnInit {
     if (!this.canSave()) return;
     const i = this._form();
     this._saving.set(true);
-    this._emailError.set(null);
     // Details first, then roles (full-replace). Both must land for a clean save.
     this.api.patch<User>(`/api/users/${this.id}`, {
-      firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined, email: i.email,
+      firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
     }).subscribe({
       next: () => {
         this.api.put(`/api/users/${this.id}/roles`, {
@@ -193,13 +189,7 @@ export class UserEditComponent implements OnInit {
           error: e => { this._saving.set(false); this.toasts.error(this.msg(e) ?? 'Saved details, but roles failed'); },
         });
       },
-      error: e => {
-        this._saving.set(false);
-        const code = e?.error?.error as string | undefined;
-        const message = this.msg(e) ?? 'Could not save';
-        if (code === 'email_exists' || /already exists/i.test(message)) this._emailError.set(message);
-        else this.toasts.error(message);
-      },
+      error: e => { this._saving.set(false); this.toasts.error(this.msg(e) ?? 'Could not save'); },
     });
   }
 

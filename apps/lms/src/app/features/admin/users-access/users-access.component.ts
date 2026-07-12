@@ -37,7 +37,7 @@ type Tab = 'users' | 'roles';
       <pf-screen-header
         eyebrow="Admin"
         title="Users & Access"
-        subtitle="Invite users, assign roles, and control permissions across your branches.">
+        subtitle="Create users, assign roles, and control permissions across your branches.">
         @if (tab() === 'users') {
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openInvite()">
             <span icon-left aria-hidden="true">
@@ -46,7 +46,7 @@ type Tab = 'users' | 'roles';
                 <path d="M5 12h14"/>
               </svg>
             </span>
-            Invite
+            Create user
           </pf-touch-btn>
         } @else {
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openNewRole()">
@@ -98,7 +98,7 @@ type Tab = 'users' | 'roles';
                       }
                     </div>
                     <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
-                      {{ u.email }} · {{ u.phone || 'no phone' }}
+                      {{ u.username || u.email || 'no login' }} · {{ u.phone || 'no phone' }}
                     </p>
                   </div>
                   <div class="pf-row-actions">
@@ -294,7 +294,7 @@ export class UsersAccessComponent implements OnInit {
   readonly filteredUsers = computed(() => {
     const s = this._search().toLowerCase();
     return s
-      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
+      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
       : this._users();
   });
 
