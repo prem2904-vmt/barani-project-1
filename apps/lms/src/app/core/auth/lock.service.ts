@@ -35,10 +35,12 @@ export class LockService {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.tick();
     });
-    // Manual lock: Ctrl+L (Windows/Linux) / ⌘L (macOS). Captured before the
-    // browser grabs it for the address bar; only when a PIN can unlock it.
+    // Manual lock: Ctrl+L on EVERY platform — browsers reserve ⌘L for the
+    // address bar (Safari/Chrome never deliver it to the page), but Ctrl+L is
+    // free, including on macOS. ⌘L stays wired for installed-PWA/desktop runs
+    // where there is no address bar to compete with.
     window.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'l' || e.key === 'L')) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) {
         if (this.auth.isAuthenticated() && this.auth.user()?.hasPin && !this._locked()) {
           e.preventDefault();
           e.stopPropagation();
