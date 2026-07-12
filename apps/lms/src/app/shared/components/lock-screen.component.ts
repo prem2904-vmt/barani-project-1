@@ -80,6 +80,12 @@ import { PinDotsComponent } from './pin-dots.component';
     .pf-lk-tiles {
       display: flex; flex-wrap: wrap; justify-content: center;
       gap: 26px;
+      /* 25-profile devices: the grid scrolls instead of outgrowing the screen. */
+      max-height: min(58vh, 520px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 4px;
+      scrollbar-width: thin;
     }
     .pf-lk-tile {
       display: flex; flex-direction: column; align-items: center; gap: 9px;
