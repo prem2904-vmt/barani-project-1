@@ -556,14 +556,21 @@ export class ProcessBuilderComponent implements OnInit {
 
   /** Keep couplings + prerequisites consistent on load: an enabled action whose
    *  coupled partner or a prerequisite is off/missing is switched off too (runs to
-   *  a fixed point so cascades settle). Matches dispatch↔intake + the requires graph. */
+   *  a fixed point so cascades settle). Matches dispatch↔intake + the requires graph.
+   *  Also collapses the transport pair (dispatch + lab intake) when collection is
+   *  placed in the lab work-area — the tube is drawn at the bench, so there is
+   *  nothing to dispatch/receive and collection auto-receives into the queue. */
   private healDeps(lanes: Lane[]) {
+    const collapseInLab = new Set(['dispatch', 'lab_intake']);
     let changed = true;
     while (changed) {
       changed = false;
       const on = new Set(lanes.flatMap(l => l.items).filter(i => i.enabled).map(i => i.type));
+      const collectInLab = lanes.some(l => l.cat.id === 'lab'
+        && l.items.some(i => i.type === 'sample_collection' && i.enabled));
       for (const ln of lanes) for (const it of ln.items) {
         if (!it.enabled || isMandatory(it.type)) continue;
+        if (collectInLab && collapseInLab.has(it.type)) { it.enabled = false; changed = true; continue; }
         const partnerOff = coupledTypes(it.type).some(p => !on.has(p));
         const reqOff = requiresOf(it.type).some(r => !on.has(r));
         if (partnerOff || reqOff) { it.enabled = false; changed = true; }
@@ -601,6 +608,9 @@ export class ProcessBuilderComponent implements OnInit {
     }
     this.lanes.update(l => [...l]);
     if (addedType) this.applyEnabled(addedType, true);   // pull in prerequisites
+    // Settle collect-in-lab: dropping collection into the lab collapses the
+    // transport pair (dispatch + intake) so the canvas reflects it immediately.
+    this.lanes.update(l => { this.healDeps(l); return [...l]; });
     this.dirty.set(true);
   }
   dropToPalette(ev: CdkDragDrop<ActionCatalogEntry[]>) {
@@ -707,6 +717,9 @@ export class ProcessBuilderComponent implements OnInit {
     if (missing.length) {
       this.toasts.info(`Also needs ${missing.map(m => catalogFor(m)?.label ?? m).join(', ')} — add it to a work-area`);
     }
+    // Settle collect-in-lab after the cascade (e.g. enabling collection in the
+    // lab must switch the transport pair off).
+    this.lanes.update(l => { this.healDeps(l); return [...l]; });
     this.dirty.set(true);
   }
 

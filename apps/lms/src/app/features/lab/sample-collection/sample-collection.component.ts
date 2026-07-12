@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -91,14 +91,18 @@ interface OrderGroup {
   imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent, LabelCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.lg:px-10]="!embedded"
+             [class.pt-6]="!embedded" [class.pb-10]="!embedded">
       <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
            row entirely. The user clicked Collect on a specific order
            — show them THAT order's drawer immediately as if it's a
            dedicated page. The queue UI used to flash for ~500ms while
            the order data loaded and felt like "two pages" before
-           the drawer appeared. -->
-      @if (!deepLinkMode()) {
+           the drawer appeared.
+           Embedded mode: rendered inside the lab "My Work" Collect pane —
+           suppress our own KPI strip + screen header (the pane supplies its
+           own header) but keep the queue + scan so the tech can draw tubes. -->
+      @if (!deepLinkMode() && !embedded) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Lab · Collection"
@@ -1743,6 +1747,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+
+  /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
+   *  host supplies its own pane header, so we suppress our KPI strip + screen
+   *  header + outer page padding while keeping the queue + scan + drawer. */
+  @Input() embedded = false;
 
   /** Whether this user can dispatch (hand collected tubes to the lab). */
   readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
