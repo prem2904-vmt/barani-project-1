@@ -11,6 +11,7 @@ import {
   ReferenceRange,
   WorkflowField
 } from '../../../shared/models/workflow.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -100,9 +101,13 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
                 <span style="color: var(--text-muted);" class="font-normal">(storage key — fixed)</span>
               </label>
               <input type="text" class="pf-input font-mono"
+                     [class.pf-input--error]="!!nameError()"
                      [ngModel]="draft().name"
                      [readonly]="mode() === 'edit'"
-                     (ngModelChange)="patch({ name: $event })" />
+                     (ngModelChange)="nameError.set(null); patch({ name: $event })" />
+              @if (nameError(); as ne) {
+                <p class="pf-field-error">{{ ne }}</p>
+              }
             </div>
           </div>
 
@@ -335,6 +340,14 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       letter-spacing: -0.01em;
       margin: 0;
     }
+    .pf-input--error {
+      border-color: #f87171 !important;
+    }
+    .pf-field-error {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: #f87171;
+    }
     .field-remove {
       width: 32px;
       height: 32px;
@@ -455,6 +468,10 @@ export class FieldEditorComponent implements OnInit {
   private readonly _fieldId = signal<string | null>(null);
   private readonly _draft = signal<Partial<WorkflowField>>(emptyDraft());
 
+  /** Inline error for the storage-key Name input (set when a save is
+   *  rejected with field === 'name'); otherwise failures surface as a toast. */
+  readonly nameError = signal<string | null>(null);
+
   readonly draft = this._draft.asReadonly();
   readonly mode = computed<'create' | 'edit'>(() => this._fieldId() ? 'edit' : 'create');
   readonly title = computed(() => this.mode() === 'edit' ? 'Edit field' : 'Add field');
@@ -491,7 +508,7 @@ export class FieldEditorComponent implements OnInit {
     if (screen && !this.builder.workflow()) {
       this.builder.loadWorkflow(screen).subscribe({
         next: () => this.seedDraft(),
-        error: () => this.toasts.error('Could not load workflow')
+        error: e => this.toasts.error(ApiError.from(e).message)
       });
     } else {
       this.seedDraft();
@@ -622,10 +639,19 @@ export class FieldEditorComponent implements OnInit {
       id: d.id ?? uuid()
     };
 
-    if (this.mode() === 'edit' && payload.id) {
-      this.builder.updateField(stepId, payload.id, payload);
-    } else {
-      this.builder.addField(stepId, payload);
+    this.nameError.set(null);
+    try {
+      if (this.mode() === 'edit' && payload.id) {
+        this.builder.updateField(stepId, payload.id, payload);
+      } else {
+        this.builder.addField(stepId, payload);
+      }
+    } catch (e) {
+      const err = ApiError.from(e);
+      // Field-named failures highlight the offending input; everything else toasts.
+      if (err.field === 'name') this.nameError.set(err.message);
+      else this.toasts.error(err.message);
+      return;
     }
     this.backToBuilder();
   }

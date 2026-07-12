@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -294,9 +295,9 @@ export class AuditLogComponent implements OnInit {
         this._total.set(res.total ?? 0);
         this._loading.set(false);
       },
-      error: () => {
+      error: (e) => {
         this._loading.set(false);
-        this.toast.error('Could not load the audit trail.');
+        this.toast.error(ApiError.from(e).message);
       }
     });
   }

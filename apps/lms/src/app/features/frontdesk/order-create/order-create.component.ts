@@ -8,6 +8,7 @@ import { FrontdeskSettingsService } from '../../../core/services/frontdesk-setti
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Patient } from '../../../shared/models/patient.model';
@@ -89,6 +90,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly refDoctorOpen = signal(false);
   readonly refDoctorSuggestions = signal<string[]>([]);
   private refDoctorDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Inline field-level errors from field-tagged API validation ────
+  // Backend order-placement failures can carry a `field` (e.g. refDoctorName,
+  // refHospitalName). Bind these under the matching input with a
+  // `<p class="pf-field-error">` + `[class.pf-input-error]` on the control;
+  // they clear as soon as the user edits that field (see the input handlers).
+  readonly refHospitalError = signal<string | null>(null);
+  readonly refDoctorError = signal<string | null>(null);
+
+  /** Surface a mutation failure with the REAL backend message. Field-tagged
+   *  validation for a form input highlights that input inline; everything else
+   *  falls back to a toast so nothing fails silently. */
+  private surfaceMutationError(e: unknown): void {
+    const err = ApiError.from(e);
+    switch (err.field) {
+      case 'refHospitalName': this.refHospitalError.set(err.message); return;
+      case 'refDoctorName':   this.refDoctorError.set(err.message);   return;
+      default:                this.toasts.error(err.message);
+    }
+  }
 
   /** Per-patient localStorage key for draft order carts. We keep one
    *  draft per patient so reception can resume any half-built order
@@ -800,8 +821,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           : 'Order placed — payment pending');
       // Auto-open the invoice print dialog (best-effort).
       //this.printPaidInvoice();
-    } catch (e: any) {
-      this.toasts.error(e?.message ?? 'Could not complete payment');
+    } catch (e) {
+      this.surfaceMutationError(e);
     } finally {
       this.confirming.set(false);
     }
@@ -974,7 +995,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.toasts.success('Order updated — reconcile payment');
           this.router.navigate(['/frontdesk/billing'], { queryParams: this.billingQueryParams(editId) });
         },
-        error: e => { this._saving.set(false); this.toasts.error(e?.error?.error?.message ?? e?.message ?? 'Update failed'); }
+        error: e => { this._saving.set(false); this.surfaceMutationError(e); }
       });
       return;
     }
@@ -1032,7 +1053,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           });
         }
       },
-      error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Order failed'); }
+      error: e => { this._saving.set(false); this.surfaceMutationError(e); }
     });
   }
 
@@ -1056,12 +1077,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       ? this.api.delete<unknown>(`/api/test-picker/favorites/${testId}`)
       : this.api.post<unknown>(`/api/test-picker/favorites/${testId}`, {});
     obs.subscribe({
-      error: () => {
+      error: e => {
         // Revert.
         const revert = new Set(this.favouriteIds());
         if (wasFav) revert.add(testId); else revert.delete(testId);
         this.favouriteIds.set(revert);
-        this.toasts.error('Could not update favourites');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1075,6 +1096,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onRefHospitalInput(value: string): void {
     this.refHospitalName.set(value);
+    this.refHospitalError.set(null);
     this.refHospitalOpen.set(true);
     if (this.refHospitalDebounce) clearTimeout(this.refHospitalDebounce);
     this.refHospitalDebounce = setTimeout(() => {
@@ -1089,6 +1111,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   pickRefHospital(name: string): void {
     const prev = this.refHospitalName();
     this.refHospitalName.set(name);
+    this.refHospitalError.set(null);
     this.refHospitalOpen.set(false);
     // Hospital changed — wipe the doctor since it might be from a different hospital.
     if (name !== prev) {
@@ -1113,6 +1136,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Reception types in the ref-doctor input — fetch suggestions debounced. */
   onRefDoctorInput(value: string): void {
     this.refDoctorName.set(value);
+    this.refDoctorError.set(null);
     this.refDoctorOpen.set(true);
     if (this.refDoctorDebounce) clearTimeout(this.refDoctorDebounce);
     this.refDoctorDebounce = setTimeout(() => this.fetchDoctorSuggestions(value), 200);
@@ -1120,6 +1144,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   pickRefDoctor(name: string): void {
     this.refDoctorName.set(name);
+    this.refDoctorError.set(null);
     this.refDoctorOpen.set(false);
   }
 

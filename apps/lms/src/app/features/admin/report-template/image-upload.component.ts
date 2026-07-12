@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject
 import { HttpClient } from '@angular/common/http';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 /** Small reusable image-upload tile used by the report-template editor
  *  for the lab logo, NABL badge, and signature scans. POSTs the file to
@@ -110,7 +111,7 @@ export class ImageUploadComponent {
         this.toasts.error(resp?.message ?? 'Upload failed');
       }
     } catch (err) {
-      this.toasts.error('Upload failed — ' + ((err as Error).message ?? ''));
+      this.toasts.error(ApiError.from(err).message);
     } finally {
       this.uploading.set(false);
     }

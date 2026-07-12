@@ -9,6 +9,7 @@ import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { ChipComponent } from '../../shared/primitives/chip.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { ApiError } from '../../shared/models/api-response.model';
 
 @Component({
   selector: 'pf-my-home-collections',
@@ -234,7 +235,7 @@ export class MyHomeCollectionsComponent implements OnInit {
     this._loading.set(true);
     this.svc.myHomeCollections().subscribe({
       next: l => { this._items.set(l ?? []); this._loading.set(false); },
-      error: () => { this._loading.set(false); this.toast.error('Could not load visits.'); }
+      error: e => { this._loading.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
 
@@ -243,7 +244,7 @@ export class MyHomeCollectionsComponent implements OnInit {
     // collects the samples on the standard collection screen.
     this.svc.checkIn(a.id).subscribe({
       next: () => { this.toast.success('Checked in — collect the samples.'); this.goCollect(); },
-      error: () => { this.toast.error('Check-in failed.'); this.load(); }
+      error: e => { this.toast.error(ApiError.from(e).message); this.load(); }
     });
   }
 
@@ -252,7 +253,7 @@ export class MyHomeCollectionsComponent implements OnInit {
     // to `completed` and drops out of the agent's queue on the next load.
     this.svc.complete(a.id).subscribe({
       next: () => { this.toast.success('Visit completed.'); this.load(); },
-      error: () => { this.toast.error('Could not complete the visit.'); this.load(); }
+      error: e => { this.toast.error(ApiError.from(e).message); this.load(); }
     });
   }
 

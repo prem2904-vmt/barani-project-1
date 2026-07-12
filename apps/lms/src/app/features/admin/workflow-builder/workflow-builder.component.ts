@@ -15,6 +15,7 @@ import {
   WorkflowField,
   WorkflowStep
 } from '../../../shared/models/workflow.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -962,7 +963,7 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
     // Route-driven load.
     const name = this.screenName();
     if (name && this.builder.record()?.screenName !== name) {
-      this.builder.loadWorkflow(name).subscribe({ error: () => this.toasts.error('Could not load workflow') });
+      this.builder.loadWorkflow(name).subscribe({ error: e => this.toasts.error(ApiError.from(e).message) });
     }
   });
 
@@ -1101,7 +1102,7 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
     this.saving.set(true);
     this.builder.saveDraft('Manual edit').subscribe({
       next: () => { this.saving.set(false); this.toasts.success('Draft saved'); },
-      error: () => { this.saving.set(false); this.toasts.error('Save failed'); }
+      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1109,7 +1110,7 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
     this.saving.set(true);
     this.builder.publish('Manual edit').subscribe({
       next: () => { this.saving.set(false); this.toasts.success('Published'); },
-      error: () => { this.saving.set(false); this.toasts.error('Publish failed'); }
+      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1124,7 +1125,8 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
     });
     if (!ok) return;
     this.builder.resetToDefault().subscribe({
-      next: () => this.toasts.info('Reloaded from server')
+      next: () => this.toasts.info('Reloaded from server'),
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -1143,7 +1145,7 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
     this.historyLoading.set(true);
     this.api.get<HistoryRow[]>(`/api/workflows/${name}/history`).subscribe({
       next: rows => { this._historyRows.set(rows ?? []); this.historyLoading.set(false); },
-      error: () => { this._historyRows.set([]); this.historyLoading.set(false); this.toasts.error('Could not load history'); }
+      error: e => { this._historyRows.set([]); this.historyLoading.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
   closeHistory() { this.historyOpen.set(false); }
@@ -1163,7 +1165,7 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
         this.closeHistory();
         this.builder.loadWorkflow(name).subscribe();
       },
-      error: e => this.toasts.error(e.message ?? 'Restore failed')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

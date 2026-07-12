@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 interface InvItem { id: string; name: string; uom: string; }
 
@@ -99,7 +100,7 @@ export class TestConsumablesComponent {
       const lines = this.lines().filter(l => l.itemId && l.qtyPerTest > 0);
       await firstValueFrom(this.http.put(`${environment.apiUrl}/api/inventory/tests/${id}/consumables`, { lines }));
       this.toasts.success('Consumables saved');
-    } catch { this.toasts.error('Save failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.saving.set(false);
   }
 }

@@ -1,8 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, tap, throwError } from 'rxjs';
+import { Observable, catchError, map, of, switchMap, tap, throwError } from 'rxjs';
 import { v4 as uuid } from 'uuid';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import {
   ConditionalRoute,
   ConditionRule,
@@ -107,8 +107,9 @@ export class WorkflowBuilderService {
       }),
       catchError((err: unknown) => {
         this._isLoading.set(false);
-        this._error.set(err instanceof HttpErrorResponse ? err.message : 'Could not load workflow');
-        return throwError(() => err);
+        const apiErr = ApiError.from(err);
+        this._error.set(apiErr.message);
+        return throwError(() => apiErr);
       })
     );
   }
@@ -369,19 +370,15 @@ export class WorkflowBuilderService {
 
     const saveBody = { configJson: JSON.stringify(cfg), changeSummary };
     return this.api.post<void>(`/api/workflows/${record.screenName}`, saveBody).pipe(
-      map(() => undefined),
+      tap(() => this._isDirty.set(false)),
+      // then publish — errors here propagate to the caller instead of being
+      // swallowed in a detached subscribe.
+      switchMap(() => this.api.post<void>(`/api/workflows/${record.screenName}/publish`, {})),
       tap(() => {
-        this._isDirty.set(false);
+        const existing = this._record();
+        if (existing) this._record.set({ ...existing, status: 'published', version: existing.version + 1 });
       }),
-      // then publish
-      tap(() => {
-        this.api.post<void>(`/api/workflows/${record.screenName}/publish`, {}).subscribe({
-          next: () => {
-            const existing = this._record();
-            if (existing) this._record.set({ ...existing, status: 'published', version: existing.version + 1 });
-          }
-        });
-      })
+      map(() => undefined)
     );
   }
 

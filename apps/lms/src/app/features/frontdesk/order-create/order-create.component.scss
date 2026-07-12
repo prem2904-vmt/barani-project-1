@@ -1569,3 +1569,7 @@
   /* Anchor offset so a jumped-to section clears the top chrome / safe area. */
   :host [data-dept-letter] { scroll-margin-top: 12px; }
 }
+
+/* Field-level error: red border on the offending ref input + inline message. */
+.pf-input-error { border-color: var(--danger, #ef4444) !important; }
+.pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }

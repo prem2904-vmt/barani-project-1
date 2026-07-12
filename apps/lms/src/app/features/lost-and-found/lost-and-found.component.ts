@@ -5,6 +5,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { ToastService } from '../../core/services/toast.service';
 import { OrderSample } from '../../shared/models/order.model';
+import { ApiError } from '../../shared/models/api-response.model';
 import { patientDisplayName } from '../../shared/models/patient.model';
 import { AvatarComponent } from '../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
@@ -206,7 +207,7 @@ export class LostAndFoundComponent {
     this.setBusy(s.id, true);
     this.api.patch(`/api/lost-and-found/samples/${s.id}/send-to-lab`).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeSample(s.id); this.toasts.success('Sent to the lab'); },
-      error: () => { this.setBusy(s.id, false); this.toasts.error('Could not send to the lab'); }
+      error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -222,7 +223,7 @@ export class LostAndFoundComponent {
     this.setBusy(s.id, true);
     this.api.patch(`/api/samples/${s.id}/reject`, { reason }).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeSample(s.id); this.toasts.success('Marked failed'); },
-      error: () => { this.setBusy(s.id, false); this.toasts.error('Could not mark failed'); }
+      error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -239,7 +240,7 @@ export class LostAndFoundComponent {
     this.setBusy(s.id, true);
     this.api.patch(`/api/orders/${s.orderId}/cancel`, { reason: reason || undefined }).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeOrder(s.orderId); this.toasts.success('Order cancelled'); },
-      error: () => { this.setBusy(s.id, false); this.toasts.error('Could not cancel the order'); }
+      error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

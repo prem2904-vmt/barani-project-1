@@ -20,6 +20,7 @@ import { TileComponent, TileTone } from '../../../shared/primitives/tile.compone
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 
@@ -2295,7 +2296,7 @@ export class MyWorkComponent implements OnInit {
     const scannedBarcode = hit.subOrder?.barcode ?? q;
     this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
       next: () => { this._scan.set(''); this.enterJustScanned(hit); },
-      error: e => this.toasts.error(e.message ?? 'Scan rejected')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2339,7 +2340,7 @@ export class MyWorkComponent implements OnInit {
         this._scanTarget.set(null);
         this.enterJustScanned(t);
       },
-      error: e => this.toasts.error(e.message ?? 'Scan rejected')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2480,7 +2481,7 @@ export class MyWorkComponent implements OnInit {
         this.setMobileTab('mywork');
         this.refreshAllCounts();
       },
-      error: e => { this._claiming.set(false); this.toasts.error(e?.message ?? 'Could not claim — try again'); }
+      error: e => { this._claiming.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -2512,11 +2513,13 @@ export class MyWorkComponent implements OnInit {
   onDelegate(toUserId: string) {
     const list = this._delegateTests();
     if (!list?.length) return;
-    let done = 0, failed = 0;
+    let done = 0, failed = 0, lastError = '';
     const finish = () => {
       if (done + failed < list.length) return;
       this._delegateTests.set(null);
-      if (failed) this.toasts.error(`Delegated ${done} of ${list.length} — ${failed} failed`);
+      if (failed) this.toasts.error(
+        failed === list.length ? lastError
+                               : `Delegated ${done} of ${list.length} — ${failed} failed: ${lastError}`);
       else this.toasts.success('Delegated — the new assignee must scan to pick up.');
       this.refresh();
       this.refreshAllCounts();
@@ -2524,7 +2527,7 @@ export class MyWorkComponent implements OnInit {
     for (const t of list) {
       this.api.post(`/api/results/${t.id}/delegate`, { toUserId }).subscribe({
         next: () => { done++; finish(); },
-        error: () => { failed++; finish(); }
+        error: e => { failed++; lastError = ApiError.from(e).message; finish(); }
       });
     }
   }

@@ -16,6 +16,7 @@ import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 type Tab = 'users' | 'roles';
 
@@ -329,7 +330,7 @@ export class UsersAccessComponent implements OnInit {
         this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
         this.toasts.success('User reactivated');
       },
-      error: e => this.toasts.error(e?.message ?? 'Could not reactivate user')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -351,7 +352,7 @@ export class UsersAccessComponent implements OnInit {
           confirmLabel: 'Done',
         });
       },
-      error: e => this.toasts.error(e?.error?.message ?? e?.message ?? 'Could not reset password')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -370,7 +371,7 @@ export class UsersAccessComponent implements OnInit {
         this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
         this.toasts.success('User deactivated');
       },
-      error: e => this.toasts.error(e?.message ?? 'Could not deactivate user')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

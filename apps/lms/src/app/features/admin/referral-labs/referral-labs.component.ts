@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -54,9 +55,11 @@ const EMPTY: LabDraft = {
           <h3 class="pf-section-title mb-3">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label class="pf-label">Name *</label>
-              <input type="text" class="pf-input" [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" placeholder="Apollo Diagnostics"/></div>
+              <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" placeholder="Apollo Diagnostics"/>
+              @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
             <div><label class="pf-label">Code</label>
-              <input type="text" class="pf-input uppercase" [ngModel]="draft().code" (ngModelChange)="patch({ code: $event.toUpperCase() })" placeholder="APOLLO"/></div>
+              <input type="text" class="pf-input uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patch({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
+              @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
             <div><label class="pf-label">Contact name</label>
               <input type="text" class="pf-input" [ngModel]="draft().contactName" (ngModelChange)="patch({ contactName: $event })"/></div>
             <div><label class="pf-label">Contact phone</label>
@@ -134,6 +137,9 @@ const EMPTY: LabDraft = {
     .pf-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 4px; }
     .pf-input { width: 100%; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); border-radius: 10px; font-size: 13px; outline: none; }
     .pf-input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18); }
+    .pf-input--error { border-color: #f43f5e; }
+    .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
+    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: #f43f5e; }
     .pf-dept-chip { padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; }
     .pf-dept-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
     .pf-rl__name { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
@@ -182,6 +188,8 @@ export class ReferralLabsComponent implements OnInit {
   protected readonly saving = signal<boolean>(false);
   protected readonly formOpen = signal<boolean>(false);
   protected readonly draft = signal<LabDraft>({ ...EMPTY });
+  protected readonly nameError = signal<string | null>(null);
+  protected readonly codeError = signal<string | null>(null);
   private readonly _departments = signal<Department[]>([]);
 
   /** Distinct department code→name options for the picker. */
@@ -209,9 +217,14 @@ export class ReferralLabsComponent implements OnInit {
 
   toggleForm() {
     this.formOpen.update(v => !v);
-    if (!this.formOpen()) this.draft.set({ ...EMPTY });
+    if (!this.formOpen()) { this.draft.set({ ...EMPTY }); this.clearFieldErrors(); }
   }
-  patch(p: Partial<LabDraft>) { this.draft.update(d => ({ ...d, ...p })); }
+  patch(p: Partial<LabDraft>) {
+    if ('name' in p) this.nameError.set(null);
+    if ('code' in p) this.codeError.set(null);
+    this.draft.update(d => ({ ...d, ...p }));
+  }
+  private clearFieldErrors() { this.nameError.set(null); this.codeError.set(null); }
   toggleDept(code: string) {
     this.draft.update(d => ({
       ...d,
@@ -236,12 +249,14 @@ export class ReferralLabsComponent implements OnInit {
       contactEmail: l.contactEmail ?? '', address: l.address ?? '',
       departmentCodes: this.deptCodesOf(l),
     });
+    this.clearFieldErrors();
     this.formOpen.set(true);
   }
 
   save() {
     const d = this.draft();
     if (!d.name.trim()) return;
+    this.clearFieldErrors();
     this.saving.set(true);
     const body = {
       name: d.name.trim(),
@@ -263,7 +278,13 @@ export class ReferralLabsComponent implements OnInit {
         this.draft.set({ ...EMPTY });
         this.refresh();
       },
-      error: e => { this.saving.set(false); this.toasts.error(e?.message ?? 'Could not save referral lab'); }
+      error: e => {
+        this.saving.set(false);
+        const err = ApiError.from(e);
+        if (err.field === 'name') this.nameError.set(err.message);
+        else if (err.field === 'code') this.codeError.set(err.message);
+        else this.toasts.error(err.message);
+      }
     });
   }
 
@@ -276,7 +297,7 @@ export class ReferralLabsComponent implements OnInit {
       isActive: !l.isActive,
     }).subscribe({
       next: () => { this.toasts.success(l.isActive ? 'Deactivated' : 'Reactivated'); this.refresh(); },
-      error: e => this.toasts.error(e?.message ?? 'Could not update referral lab')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

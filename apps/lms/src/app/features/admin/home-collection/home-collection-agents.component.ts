@@ -12,6 +12,7 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 type AreaMode = 'pincode' | 'radius';
 interface Draft {
@@ -214,14 +215,14 @@ export class HomeCollectionAgentsComponent implements OnInit {
       isActive: true
     }).subscribe({
       next: () => { this._saving.set(false); this._formOpen.set(false); this.toast.success('Saved.'); this.load(); },
-      error: () => { this._saving.set(false); this.toast.error('Could not save agent.'); }
+      error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
 
   remove(a: HomeCollectionAgent) {
     this.svc.removeAgent(a.id).subscribe({
       next: () => { this.toast.success('Removed.'); this.load(); },
-      error: () => this.toast.error('Could not remove.')
+      error: e => this.toast.error(ApiError.from(e).message)
     });
   }
 

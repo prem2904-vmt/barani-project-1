@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { Department } from '../../../shared/models/tenant.model';
 import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import {
   ConditionEditorComponent,
   FieldOption,
@@ -151,7 +152,10 @@ function newFieldId(): string {
           <div class="space-y-3 mt-4">
             <div><label class="pf-label">Name</label>
               <input type="text" class="pf-input"
-                     [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" /></div>
+                     [class.pf-input--error]="fieldError('name')"
+                     [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" />
+              @if (fieldError('name')) { <p class="pf-field-err">{{ fieldError('name') }}</p> }
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label class="pf-label">Type</label>
                 <pf-select [options]="typeOptions" [value]="d.type" (valueChange)="patch({ type: $event })"></pf-select>
@@ -180,6 +184,7 @@ function newFieldId(): string {
             <div><label class="pf-label">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
+              @if (fieldError('price')) { <p class="pf-field-err">{{ fieldError('price') }}</p> }
             </div>
             <div><label class="pf-label">Tax slab</label>
               <pf-number-input [value]="d.taxSlab" [min]="0" [max]="50" [step]="0.5" suffix="%"
@@ -745,6 +750,14 @@ function newFieldId(): string {
 
     .pf-input--compact { padding: 7px 10px; font-size: 13px; }
 
+    /* Field-level API error (e.g. duplicate name) — red border + message. */
+    .pf-input--error { border-color: rgba(244, 63, 94, 0.7) !important; }
+    .pf-field-err {
+      margin-top: 4px;
+      font-size: 11.5px;
+      color: #fda4af;
+    }
+
     .pf-mini-lbl {
       font-size: 10px; font-weight: 700;
       letter-spacing: 0.14em; text-transform: uppercase;
@@ -1108,7 +1121,7 @@ export class TestEditorComponent implements OnInit {
     if (id) {
       this.api.get<Test>(`/api/tests/${id}`).subscribe({
         next: t => this.hydrateFrom(t),
-        error: () => this.toasts.error('Could not load test')
+        error: e => this.toasts.error(ApiError.from(e).message)
       });
     } else {
       // Honour `?type=package` from the admin tests list, so the "Create
@@ -1337,7 +1350,22 @@ export class TestEditorComponent implements OnInit {
     this.persistFieldsToDraft();
   }
 
-  patch(p: Partial<DraftTest>) { this._draft.update(d => ({ ...d, ...p })); }
+  // Field-level API errors (backend `field` → offending input). Rendered
+  // inline as a red border + message and cleared as soon as the admin edits
+  // that field, so a duplicate name/price lands on the input, not a toast.
+  private readonly _fieldErrors = signal<Record<string, string>>({});
+  fieldError(f: string): string | null { return this._fieldErrors()[f] ?? null; }
+  private clearFieldError(f: string) {
+    this._fieldErrors.update(m => {
+      if (!(f in m)) return m;
+      const next = { ...m }; delete next[f]; return next;
+    });
+  }
+
+  patch(p: Partial<DraftTest>) {
+    this._draft.update(d => ({ ...d, ...p }));
+    for (const k of Object.keys(p)) this.clearFieldError(k);
+  }
 
   back() { this.router.navigateByUrl('/admin/tests'); }
 
@@ -1375,13 +1403,26 @@ export class TestEditorComponent implements OnInit {
     if (d.id) {
       this.api.patch<Test>(`/api/tests/${d.id}`, body).subscribe({
         next: () => { this._saving.set(false); this.toasts.success('Updated'); this.back(); },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Save failed'); }
+        error: e => this.handleSaveError(e)
       });
     } else {
       this.api.post<Test>('/api/tests/', body).subscribe({
         next: () => { this._saving.set(false); this.toasts.success('Created'); this.back(); },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Save failed'); }
+        error: e => this.handleSaveError(e)
       });
+    }
+  }
+
+  /** Surface the real backend failure: route field-named errors (e.g. a
+   *  duplicate name/price) to the offending input; everything else to a toast. */
+  private handleSaveError(e: unknown) {
+    this._saving.set(false);
+    const err = ApiError.from(e);
+    const field = err.field ?? '';
+    if (field === 'name' || field === 'price') {
+      this._fieldErrors.update(m => ({ ...m, [field]: err.message }));
+    } else {
+      this.toasts.error(err.message);
     }
   }
 }

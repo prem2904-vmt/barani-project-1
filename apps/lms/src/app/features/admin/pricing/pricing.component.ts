@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -313,8 +314,8 @@ export class PricingComponent implements OnInit {
         return u ? { ...r, orig: u.price } : r;
       }));
       this.toasts.success(`Updated ${updates.length} price${updates.length === 1 ? '' : 's'}`);
-    } catch {
-      this.toasts.error('Failed to save prices');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.saving.set(false);
     }

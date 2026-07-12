@@ -20,6 +20,7 @@ import { PresenceService } from '../../core/services/presence.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
+import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
@@ -593,7 +594,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       await this.webrtc.startCall(c.peer.userId, 'calls_tab');
       this.toasts.info(`Ringing ${c.peer.displayName}…`);
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not start call.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -604,7 +605,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       await this.chat.openDirectConversation(c.peer.userId);
       this.activeTab.set('chats');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not open chat.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -654,7 +655,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.toasts.info('Member added.');
       this.closeAddMember();
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not add member.');
+      this.toasts.error(ApiError.from(err).message);
     } finally { this.addMemberBusy.set(false); }
   }
 
@@ -665,7 +666,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       await this.chat.removeMember(conv.id, userId);
       this.toasts.info('Member removed.');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not remove member.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -678,7 +679,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.toasts.info('You left the group.');
       this.closeMembers();
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not leave group.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -686,7 +687,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   protected async openThread(c: Conversation): Promise<void> {
     try { await this.chat.openConversation(c.id); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not open chat.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
     queueMicrotask(() => this.composerEl?.nativeElement.focus());
   }
 
@@ -714,7 +715,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       if (editId) this.editingMessageId.set(editId);
       if (reply) this.replyingTo.set(reply);
       if (att) this.pendingAttachment.set(att);
-      this.toasts.error((err as Error).message ?? 'Could not send.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -770,7 +771,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
         }
       }
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Upload failed.');
+      this.toasts.error(ApiError.from(err).message);
     } finally { this.attachmentUploading.set(false); }
   }
 
@@ -1009,7 +1010,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.closeSharePicker();
       this.toasts.info(`Shared ${this.patientName(p)}`);
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not share patient.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -1083,7 +1084,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       // Auto-send: voice messages are usually meant to send immediately.
       await this.sendDraft();
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Voice upload failed.');
+      this.toasts.error(ApiError.from(err).message);
     } finally { this.attachmentUploading.set(false); }
   }
 
@@ -1121,17 +1122,17 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   protected async deleteOwnMessage(messageId: string): Promise<void> {
     try { await this.chat.deleteMessage(messageId); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not delete message.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
   }
 
   protected async togglePin(messageId: string, currentlyPinned: boolean): Promise<void> {
     try { await this.chat.setPinned(messageId, !currentlyPinned); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not pin/unpin.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
   }
 
   protected async addReaction(messageId: string, emoji: string): Promise<void> {
     try { await this.chat.toggleReaction(messageId, emoji); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not react.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
   }
 
   /** Default reactions surfaced inline on every bubble hover. */
@@ -1165,7 +1166,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.toasts.info(`Forwarded to ${this.displayName(c)}`);
       this.cancelForward();
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not forward.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -1175,7 +1176,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const conv = this.chat.activeConversation();
     if (!conv) return;
     try { await this.chat.setConversationMute(conv.id, !conv.isMuted); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not update mute.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
   }
 
   // ── In-thread search ────────────────────────────────────────────────
@@ -1207,7 +1208,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   protected async openNotesToSelf(): Promise<void> {
     try { await this.chat.openNotesToSelf(); }
-    catch (err) { this.toasts.error((err as Error).message ?? 'Could not open Notes.'); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
   }
 
   // ── Mention autocomplete ────────────────────────────────────────────
@@ -1340,7 +1341,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
         this.toasts.info(`Ringing ${other.displayName}…`);
       }
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not start call.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -1388,7 +1389,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       }
       this.closeNewChatModal();
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Failed to create chat.');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 }

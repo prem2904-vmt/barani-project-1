@@ -10,6 +10,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 interface EditForm {
   firstName: string;
@@ -42,11 +43,13 @@ interface EditForm {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">First name</label>
-              <input type="text" class="pf-input" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+              <input type="text" class="pf-input" [class.pf-input-error]="!!fieldError()['firstName']" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+              @if (fieldError()['firstName']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
             </div>
             <div>
               <label class="pf-label">Last name</label>
-              <input type="text" class="pf-input" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+              <input type="text" class="pf-input" [class.pf-input-error]="!!fieldError()['fathersName']" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+              @if (fieldError()['fathersName']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -58,12 +61,14 @@ interface EditForm {
               </div>
               <div>
                 <label class="pf-label">Phone</label>
-                <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                <input type="tel" class="pf-input" [class.pf-input-error]="!!fieldError()['phone']" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                @if (fieldError()['phone']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
               </div>
             } @else {
               <div class="col-span-full">
                 <label class="pf-label">Phone</label>
-                <input type="tel" class="pf-input" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                <input type="tel" class="pf-input" [class.pf-input-error]="!!fieldError()['phone']" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                @if (fieldError()['phone']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
               </div>
             }
           </div>
@@ -110,11 +115,13 @@ export class UserEditComponent implements OnInit {
   private readonly _saving = signal(false);
   private readonly _username = signal('');
   private readonly _loadedName = signal('');
+  private readonly _fieldError = signal<Record<string, string>>({});
 
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
   readonly username = this._username.asReadonly();
   readonly loadedName = this._loadedName.asReadonly();
+  readonly fieldError = this._fieldError.asReadonly();
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() => this._roles().map(r => ({ value: r.id, label: r.name })));
 
@@ -162,7 +169,12 @@ export class UserEditComponent implements OnInit {
     });
   }
 
-  patch(p: Partial<EditForm>) { this._form.update(v => ({ ...v, ...p })); }
+  patch(p: Partial<EditForm>) {
+    this._form.update(v => ({ ...v, ...p }));
+    // Editing a field clears its stale inline error.
+    const keys = Object.keys(p);
+    if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
+  }
   back() { this.router.navigateByUrl('/admin/users'); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
@@ -178,6 +190,7 @@ export class UserEditComponent implements OnInit {
     if (!this.canSave()) return;
     const i = this._form();
     this._saving.set(true);
+    this._fieldError.set({});
     // Details first, then roles (full-replace). Both must land for a clean save.
     this.api.patch<User>(`/api/users/${this.id}`, {
       firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
@@ -187,12 +200,21 @@ export class UserEditComponent implements OnInit {
           roleIds: i.roleIds, branchId: i.branchId || undefined, subBranchId: i.subBranchId || undefined,
         }).subscribe({
           next: () => { this._saving.set(false); this.toasts.success('User updated'); this.back(); },
-          error: e => { this._saving.set(false); this.toasts.error(this.msg(e) ?? 'Saved details, but roles failed'); },
+          error: e => { this._saving.set(false); this.showError(e); },
         });
       },
-      error: e => { this._saving.set(false); this.toasts.error(this.msg(e) ?? 'Could not save'); },
+      error: e => { this._saving.set(false); this.showError(e); },
     });
   }
 
-  private msg(e: any): string | undefined { return e?.error?.message ?? e?.message; }
+  /** Route field-named backend failures to the offending input; toast the rest. */
+  private showError(e: unknown) {
+    const err = ApiError.from(e);
+    const inputs = ['firstName', 'fathersName', 'phone'];
+    if (err.field && inputs.includes(err.field)) {
+      this._fieldError.update(fe => ({ ...fe, [err.field!]: err.message }));
+    } else {
+      this.toasts.error(err.message);
+    }
+  }
 }

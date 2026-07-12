@@ -3,6 +3,8 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { ApiError } from '../../shared/models/api-response.model';
+import { ToastService } from '../../core/services/toast.service';
 
 interface SeedSummary {
   tenants: number; branches: number; departments: number;
@@ -248,6 +250,7 @@ interface KpiCard {
 export class AdminOverviewComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly toasts = inject(ToastService);
 
   readonly today = new Date();
   readonly userName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'Admin');
@@ -303,7 +306,7 @@ export class AdminOverviewComponent implements OnInit {
     const url = `/api/dashboard/metrics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     this.api.get<DashMetrics>(url).subscribe({
       next: m => { this.metrics.set(m); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      error: e => { this.loading.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
 

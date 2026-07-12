@@ -11,6 +11,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
@@ -256,7 +257,7 @@ export class PatientProfileComponent implements OnInit {
       this.toasts.success('Patient updated');
       this._editDraft.set(null);
     } catch (e) {
-      this.toasts.error((e as Error)?.message ?? 'Could not update patient');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.savingEdit.set(false);
     }
@@ -554,7 +555,7 @@ export class PatientProfileComponent implements OnInit {
       this.closeChatPicker();
       this.router.navigate(['/messages']);
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not share patient.');
+      this.toasts.error(ApiError.from(err).message);
     } finally {
       this.chatPickerSending.set(false);
     }
@@ -621,7 +622,7 @@ export class PatientProfileComponent implements OnInit {
       this.mergeOpen.set(false);
       this.load(target.id); // refresh — history now includes the moved records
     } catch (e) {
-      this.toasts.error((e as Error)?.message ?? 'Could not merge patients');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.merging.set(false);
     }

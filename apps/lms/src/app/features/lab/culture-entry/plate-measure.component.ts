@@ -6,6 +6,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PlateMeasurement } from '../../../shared/models/culture.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 type Pt = { x: number; y: number };
 type Mode = 'capture' | 'calibrate' | 'measure';
@@ -422,7 +423,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       const n = this.zones().length;
       if (n) this.toasts.success(`Detected ${n} zone${n === 1 ? '' : 's'} — fit each, then drag its antibiotic on.`);
       else this.toasts.warning('Dish calibrated, but no zones detected — draw them manually.');
-    } catch { this.toasts.error('Auto-detect failed — measure manually.'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     finally { this.analyzing.set(false); }
   }
 
@@ -618,7 +619,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
         this.zones.update(zs => zs.map((zz, k) => k === i ? { ...zz, cx: c.cx, cy: c.cy, r: c.r } : zz));
         this.selected.set(i); void this.cap.impact();
       } else { this.toasts.warning('Could not snap — adjust the circle manually.'); }
-    } catch { this.toasts.error('Snap-to-fit failed.'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
   }
 
   // ── Keyboard (desktop power-use) ─────────────────────────────────
@@ -697,7 +698,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   async apply() {
     this.busy.set(true);
     try { if (this.photoBlob && !this.uploadedUrl) this.uploadedUrl = await this.upload(this.photoBlob); }
-    catch { this.toasts.error('Plate photo upload failed — zones not applied'); this.busy.set(false); return; }
+    catch (e) { this.toasts.error(ApiError.from(e).message); this.busy.set(false); return; }
     const measurements: PlateMeasurement[] = this.zones().filter(z => z.abIndex != null && z.r > 0).map(z => ({ index: z.abIndex as number, zoneMm: this.mmOf(z) }));
     this.applied.emit({ measurements, imageUrl: this.uploadedUrl });
     this.busy.set(false);

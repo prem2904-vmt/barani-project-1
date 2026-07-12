@@ -8,6 +8,7 @@ import { BarcodeDisplayComponent } from '../../../shared/components/barcode-disp
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
@@ -223,7 +224,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            min="0"
                            step="1"
                            [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
-                           [class.pf-discount__input--err]="discountOverCap()"
+                           [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
                            (keydown)="blockDiscountChars($event)"
@@ -236,6 +237,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 </div>
                 @if (discountOverCap()) {
                   <p class="pf-discount__err">Discount {{ discountPct().toFixed(0) }}% exceeds your {{ discountCapPct() }}% limit — reduce it to confirm.</p>
+                }
+                @if (discountError()) {
+                  <p class="pf-discount__err">{{ discountError() }}</p>
                 }
                 <div class="pf-bill-line pf-bill-line--total">
                   <span>Total</span>
@@ -1661,6 +1665,9 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly _mode = signal<PayMode>('upi');
   private readonly _cash = signal<string>('');
   private readonly _discount = signal<string>('');
+  /** Server-side discount failure (e.g. cap exceeded) surfaced inline on the
+   *  discount input rather than as a toast. Cleared when the user edits it. */
+  private readonly _discountError = signal<string | null>(null);
   /** 'flat' = ₹ amount, 'percent' = % of subtotal+tax. */
   private readonly _discountKind = signal<'flat' | 'percent'>('flat');
   private readonly _referenceNo = signal<string>('');
@@ -1708,6 +1715,7 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly mode = this._mode.asReadonly();
   readonly cashAmount = this._cash.asReadonly();
   readonly discount = this._discount.asReadonly();
+  readonly discountError = this._discountError.asReadonly();
   readonly discountKind = this._discountKind.asReadonly();
   readonly referenceNo = this._referenceNo.asReadonly();
   readonly advance = this._advance.asReadonly();
@@ -1754,6 +1762,15 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly refundMode = signal('cash');
   readonly refunding = signal(false);
 
+  /** Route a failed discount mutation: a field-named backend error highlights
+   *  the discount input inline; anything else falls back to a toast. Both carry
+   *  the REAL backend message. */
+  private showDiscountError(e: unknown) {
+    const err = ApiError.from(e);
+    if (err.field === 'discount' || err.field === 'amount') this._discountError.set(err.message);
+    else this.toasts.error(err.message);
+  }
+
   /** Record a refund for the overpaid amount against this bill. */
   doRefund() {
     const b = this._bill();
@@ -1767,7 +1784,7 @@ export class BillingComponent implements OnInit, OnChanges {
           this._bill.set(updated);
           this.toasts.success(`Refunded ${amt}`);
         },
-        error: e => { this.refunding.set(false); this.toasts.error(e?.error?.error?.message ?? 'Refund failed'); }
+        error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); }
       });
   }
   readonly cashAmountNum = computed(() => {
@@ -1940,7 +1957,7 @@ export class BillingComponent implements OnInit, OnChanges {
           this.setDiscount(String(d));
         }
       },
-      error: e => this.toasts.error(e.message ?? 'Could not create bill')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
     // Tests catalogue — used to derive the report TAT estimate.
     this.api.get<Test[]>('/api/tests/').subscribe({
@@ -2049,6 +2066,7 @@ export class BillingComponent implements OnInit, OnChanges {
   clearCash() { this._cash.set(''); }
 
   setDiscount(v: string) {
+    this._discountError.set(null); // clear any inline server error on edit
     // Strip anything non-numeric. For 'flat' we cap at the bill's
     // pre-discount total so the discount can't exceed payable; for
     // 'percent' we cap at 100. Empty input clears.
@@ -2066,6 +2084,7 @@ export class BillingComponent implements OnInit, OnChanges {
   }
   setDiscountKind(k: 'flat' | 'percent') {
     if (k === this._discountKind()) return;
+    this._discountError.set(null);
     this._discountKind.set(k);
     // Reset the entered value when toggling — different units, different
     // numbers; clearing avoids surprising clamps (e.g. ₹500 reinterpreted
@@ -2126,7 +2145,7 @@ export class BillingComponent implements OnInit, OnChanges {
               if (this.embedded) { this.paymentDone.emit(); }
               this._paymentDoneOpen.set(true);
             },
-            error: e => { this._saving.set(false); this.toasts.error(e?.error?.message ?? e?.message ?? 'Advance payment failed'); }
+            error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
           });
         };
         const d = this.discountNum();
@@ -2134,7 +2153,7 @@ export class BillingComponent implements OnInit, OnChanges {
           this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: d, reason: 'Reception discount' })
             .subscribe({
               next: updated => { this._bill.set(updated); collectAdvance(updated); },
-              error: e => { this._saving.set(false); this.toasts.error(e?.message ?? 'Could not apply discount'); }
+              error: e => { this._saving.set(false); this.showDiscountError(e); }
             });
         } else {
           collectAdvance(b);
@@ -2179,13 +2198,12 @@ export class BillingComponent implements OnInit, OnChanges {
                 this.billingEvents.notifyPaid();
                 this._paymentDoneOpen.set(true);
               },
-              error: e => { this._saving.set(false); this.toasts.error(e?.error?.message ?? e?.message ?? 'Payment record failed'); }
+              error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
             });
           },
           error: e => {
             this._saving.set(false);
-            const msg = e?.error?.message ?? e?.message ?? 'Wallet charge failed';
-            this.toasts.error(msg);
+            this.toasts.error(ApiError.from(e).message);
           }
         });
       };
@@ -2194,7 +2212,7 @@ export class BillingComponent implements OnInit, OnChanges {
         this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: d, reason: 'Reception discount' })
           .subscribe({
             next: updated => { this._bill.set(updated); applyAndPay(updated); },
-            error: e => { this._saving.set(false); this.toasts.error(e?.message ?? 'Could not apply discount'); }
+            error: e => { this._saving.set(false); this.showDiscountError(e); }
           });
       } else {
         applyAndPay(b);
@@ -2230,7 +2248,7 @@ export class BillingComponent implements OnInit, OnChanges {
           if (this.embedded) { this.paymentDone.emit(); }
           this._paymentDoneOpen.set(true);
         },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Payment failed'); }
+        error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
       });
     };
 
@@ -2242,7 +2260,7 @@ export class BillingComponent implements OnInit, OnChanges {
         reason: 'Reception discount'
       }).subscribe({
         next: updated => { this._bill.set(updated); pay(updated); },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Could not apply discount'); }
+        error: e => { this._saving.set(false); this.showDiscountError(e); }
       });
     } else {
       pay(b);

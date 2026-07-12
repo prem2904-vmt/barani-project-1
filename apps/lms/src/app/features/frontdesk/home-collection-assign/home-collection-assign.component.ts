@@ -7,6 +7,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 @Component({
   selector: 'pf-home-collection-assign',
@@ -109,7 +110,7 @@ export class HomeCollectionAssignComponent implements OnInit {
     this._loading.set(true);
     this.svc.unassignedHomeCollections().subscribe({
       next: l => { this._items.set(l ?? []); this._loading.set(false); },
-      error: () => { this._loading.set(false); this.toast.error('Could not load requests.'); }
+      error: e => { this._loading.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
 
@@ -122,7 +123,7 @@ export class HomeCollectionAssignComponent implements OnInit {
     if (!agentUserId) return;
     this.svc.assignAgent(a.id, agentUserId).subscribe({
       next: () => { this.toast.success('Assigned.'); this.load(); },
-      error: () => this.toast.error('Could not assign.')
+      error: e => this.toast.error(ApiError.from(e).message)
     });
   }
 

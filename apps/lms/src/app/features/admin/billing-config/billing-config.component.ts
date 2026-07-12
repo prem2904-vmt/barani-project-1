@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { generateInvoicePdf, loadImageDataUrl, InvoiceTemplateStyle } from '../../frontdesk/billing/invoice-pdf';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -545,7 +546,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.savingTpl.set(true);
     this.api.post('/api/config/invoice-template', this._tpl()).subscribe({
       next: () => { this.savingTpl.set(false); this.toasts.success('Letterhead saved'); },
-      error: () => { this.savingTpl.set(false); this.toasts.error('Could not save letterhead'); }
+      error: e => { this.savingTpl.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -700,7 +701,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     const row = this._gstinByBranch().get(bid);
     if (!row) return;
     this.api.post('/api/config/gst', { branchId: bid, gstin: row.gstin, stateCode: row.stateCode }).subscribe({
-      next: () => this.toasts.success('GSTIN saved')
+      next: () => this.toasts.success('GSTIN saved'),
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -714,7 +716,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       invoicePrefix: c.invoicePrefix, invoiceStartNumber: c.invoiceStartNumber,
       upiVpa: c.upiVpa?.trim() || null, upiPayeeName: c.upiPayeeName?.trim() || null
     }).subscribe({
-      next: () => this.toasts.success('Billing config saved')
+      next: () => this.toasts.success('Billing config saved'),
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

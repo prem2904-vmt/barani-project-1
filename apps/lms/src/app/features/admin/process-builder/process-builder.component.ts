@@ -5,6 +5,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
@@ -724,21 +725,30 @@ export class ProcessBuilderComponent implements OnInit {
     const base = this.workflows().find(w => (w.branchId ?? null) === null) ?? this.workflows()[0];
     let cfg: ProcessWorkflowConfig = { categories: [], actions: [] };
     try { cfg = JSON.parse(base?.configJson ?? '{}'); } catch { /* */ }
-    this.svc.create('New workflow', cfg, this.scope()).subscribe(w => { this.reload(w.id); this.toasts.success('Workflow created'); });
+    this.svc.create('New workflow', cfg, this.scope()).subscribe({
+      next: w => { this.reload(w.id); this.toasts.success('Workflow created'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   duplicate() {
     const id = this.currentId(); if (!id) return;
-    this.svc.duplicate(id).subscribe(w => { this.reload(w.id); this.toasts.success('Duplicated'); });
+    this.svc.duplicate(id).subscribe({
+      next: w => { this.reload(w.id); this.toasts.success('Duplicated'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   activate() {
     const id = this.currentId(); if (!id) return;
-    this.svc.activate(id).subscribe(() => { this.svc.refreshActive(); this.reload(id); this.toasts.success('Workflow activated — navigation updated'); });
+    this.svc.activate(id).subscribe({
+      next: () => { this.svc.refreshActive(); this.reload(id); this.toasts.success('Workflow activated — navigation updated'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   save() {
     const id = this.currentId(); const cfg = this.buildConfig(); const nm = this.name().trim() || 'Workflow';
     this.saving.set(true);
     const done = (w: ProcessWorkflowRecord) => { this.saving.set(false); if (this.isActive()) this.svc.refreshActive(); this.reload(w.id); this.toasts.success('Saved'); };
-    const fail = () => { this.saving.set(false); this.toasts.error('Save failed'); };
+    const fail = (e: unknown) => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); };
     if (id) this.svc.update(id, nm, cfg).subscribe({ next: done, error: fail });
     else this.svc.create(nm, cfg, this.scope()).subscribe({ next: done, error: fail });
   }

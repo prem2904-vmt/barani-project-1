@@ -5,6 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -1158,7 +1159,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     // Send every field — the server merges with defaults and writes one row.
     this.api.post('/api/config/report-template', this._tpl()).subscribe({
       next: () => { this.toasts.success('Template saved'); this.saving.set(false); },
-      error: () => { this.saving.set(false); },
+      error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
     });
   }
 }

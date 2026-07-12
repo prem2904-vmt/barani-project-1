@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 interface PatientDocument {
   id: string;
@@ -148,10 +149,10 @@ export class PatientDocumentsComponent {
         this.note.set('');
         this.toasts.success('Document uploaded');
       } else {
-        this.toasts.error(r?.error?.message ?? 'Upload failed');
+        this.toasts.error(r?.error?.message ?? r?.message ?? 'Upload failed');
       }
-    } catch (e: any) {
-      this.toasts.error(e?.error?.error?.message ?? 'Upload failed — is storage configured?');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.busy.set(false);
       input.value = '';
@@ -163,7 +164,7 @@ export class PatientDocumentsComponent {
     try {
       await firstValueFrom(this.http.delete(`${this.base()}/${d.id}`));
       this.docs.update(list => list.filter(x => x.id !== d.id));
-    } catch { this.toasts.error('Delete failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
   }
 
   isImage(d: PatientDocument) { return (d.contentType || '').startsWith('image/'); }

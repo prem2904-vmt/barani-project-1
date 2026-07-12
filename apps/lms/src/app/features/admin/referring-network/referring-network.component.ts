@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -220,11 +221,13 @@ interface Doctor {
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input type="text" [(ngModel)]="he.name" placeholder="Apollo Hospitals" />
+              <input type="text" [(ngModel)]="he.name" (input)="clearHospErr('name')" [class.pf-rn-err]="hospErr('name')" placeholder="Apollo Hospitals" />
+              @if (hospErr('name')) { <p class="pf-rn-fld__err">{{ hospErr('name') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Code</span>
-              <input type="text" [(ngModel)]="he.code" placeholder="APO" />
+              <input type="text" [(ngModel)]="he.code" (input)="clearHospErr('code')" [class.pf-rn-err]="hospErr('code')" placeholder="APO" />
+              @if (hospErr('code')) { <p class="pf-rn-fld__err">{{ hospErr('code') }}</p> }
             </label>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Address</span>
@@ -278,7 +281,8 @@ interface Doctor {
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input type="text" [(ngModel)]="de.name" placeholder="Dr. Priya Krishnan" />
+              <input type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.pf-rn-err]="docErr('name')" placeholder="Dr. Priya Krishnan" />
+              @if (docErr('name')) { <p class="pf-rn-fld__err">{{ docErr('name') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Designation</span>
@@ -453,6 +457,8 @@ interface Doctor {
     }
     .pf-rn-fld textarea { height: auto; padding: 8px 10px; resize: vertical; min-height: 60px; }
     .pf-rn-fld input:focus, .pf-rn-fld textarea:focus { border-color: rgba(168, 85, 247, 0.55); }
+    .pf-rn-fld input.pf-rn-err, .pf-rn-fld textarea.pf-rn-err { border-color: #f43f5e; }
+    .pf-rn-fld__err { margin: 2px 0 0; font-size: 11.5px; color: #f43f5e; text-transform: none; letter-spacing: 0; font-weight: 500; }
     .pf-rn-modal__ftr {
       display: flex; align-items: center; gap: 8px;
       padding: 12px 16px;
@@ -557,6 +563,18 @@ export class ReferringNetworkComponent implements OnInit {
   readonly doctorEditor = signal<Partial<Doctor> | null>(null);
   readonly savingDoctor = signal(false);
 
+  // Inline, per-field backend errors for the editors (e.g. duplicate name/code).
+  readonly hospitalFieldErr = signal<Record<string, string>>({});
+  readonly doctorFieldErr = signal<Record<string, string>>({});
+  hospErr(f: string): string | undefined { return this.hospitalFieldErr()[f]; }
+  docErr(f: string): string | undefined { return this.doctorFieldErr()[f]; }
+  clearHospErr(f: string): void {
+    if (this.hospitalFieldErr()[f]) this.hospitalFieldErr.update(e => { const n = { ...e }; delete n[f]; return n; });
+  }
+  clearDocErr(f: string): void {
+    if (this.doctorFieldErr()[f]) this.doctorFieldErr.update(e => { const n = { ...e }; delete n[f]; return n; });
+  }
+
   // ── Derived ─────────────────────────────────────────────────────
   readonly filteredHospitals = computed(() => {
     const q = this.hospitalSearch().trim().toLowerCase();
@@ -627,6 +645,7 @@ export class ReferringNetworkComponent implements OnInit {
   // ── Hospital editor ────────────────────────────────────────────
 
   openHospitalEditor(h: Hospital | null): void {
+    this.hospitalFieldErr.set({});
     this.hospitalEditor.set(h ? { ...h } : { name: '', isActive: true });
   }
   closeHospitalEditor(): void { this.hospitalEditor.set(null); }
@@ -658,7 +677,9 @@ export class ReferringNetworkComponent implements OnInit {
       this.closeHospitalEditor();
       this.toasts.success(draft.id ? 'Hospital updated' : 'Hospital added');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Save failed');
+      const e = ApiError.from(err);
+      if (e.field === 'name' || e.field === 'code') this.hospitalFieldErr.set({ [e.field]: e.message });
+      else this.toasts.error(e.message);
     } finally {
       this.savingHospital.set(false);
     }
@@ -680,7 +701,7 @@ export class ReferringNetworkComponent implements OnInit {
       this.closeHospitalEditor();
       this.toasts.success('Hospital deactivated');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not deactivate');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 
@@ -688,6 +709,7 @@ export class ReferringNetworkComponent implements OnInit {
 
   openDoctorEditor(d: Doctor | null): void {
     const hospitalId = this.selectedHospitalId();
+    this.doctorFieldErr.set({});
     this.doctorEditor.set(d ? { ...d } : { name: '', hospitalId, isActive: true });
   }
   closeDoctorEditor(): void { this.doctorEditor.set(null); }
@@ -723,7 +745,9 @@ export class ReferringNetworkComponent implements OnInit {
       this.closeDoctorEditor();
       this.toasts.success(draft.id ? 'Doctor updated' : 'Doctor added');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Save failed');
+      const e = ApiError.from(err);
+      if (e.field === 'name') this.doctorFieldErr.set({ name: e.message });
+      else this.toasts.error(e.message);
     } finally {
       this.savingDoctor.set(false);
     }
@@ -743,7 +767,7 @@ export class ReferringNetworkComponent implements OnInit {
       this.hospitals.update(h => h.map(x => x.id === d.hospitalId ? { ...x, doctorCount: Math.max(0, x.doctorCount - 1) } : x));
       this.toasts.success('Doctor deactivated');
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not deactivate');
+      this.toasts.error(ApiError.from(err).message);
     }
   }
 }

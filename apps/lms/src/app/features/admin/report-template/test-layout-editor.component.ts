@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, si
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import {
   GridRow,
   GridRowParameter,
@@ -610,8 +611,7 @@ export class TestLayoutEditorComponent implements OnInit {
       this.toasts.success('Layout saved');
       this.refreshPreview();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Save failed';
-      this.toasts.error(msg);
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.saving.set(false);
     }
@@ -659,7 +659,7 @@ export class TestLayoutEditorComponent implements OnInit {
       const resolved = await this.layout.preview(testId, this.sampleValues(), [], { sex: 'Female', age: 35 });
       this.preview.set(resolved);
     } catch (e: unknown) {
-      this.previewError.set(e instanceof Error ? e.message : 'Preview failed');
+      this.previewError.set(ApiError.from(e).message);
     } finally {
       this.previewing.set(false);
     }

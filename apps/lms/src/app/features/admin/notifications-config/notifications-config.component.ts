@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -304,7 +305,10 @@ export class NotificationsConfigComponent implements OnInit {
     this._alerts.update(list => list.map((a, idx) => idx === i ? { ...a, ...p } : a));
   }
   saveAlert(a: AlertCfg) {
-    this.api.post('/api/config/notifications', a).subscribe({ next: () => this.toasts.success(`Saved ${a.eventType}`) });
+    this.api.post('/api/config/notifications', a).subscribe({
+      next: () => this.toasts.success(`Saved ${a.eventType}`),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
   }
 
   private readonly _escalations = signal<EscalationCfg[]>([
@@ -317,7 +321,10 @@ export class NotificationsConfigComponent implements OnInit {
     this._escalations.update(list => list.map((e, idx) => idx === i ? { ...e, ...p } : e));
   }
   saveEscalation(e: EscalationCfg) {
-    this.api.post('/api/config/escalations', e).subscribe({ next: () => this.toasts.success(`Saved escalation for ${e.eventType}`) });
+    this.api.post('/api/config/escalations', e).subscribe({
+      next: () => this.toasts.success(`Saved escalation for ${e.eventType}`),
+      error: err => this.toasts.error(ApiError.from(err).message)
+    });
   }
 
   private readonly _patientTemplates = signal<PatientTemplate[]>([

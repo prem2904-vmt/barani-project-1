@@ -71,6 +71,7 @@
                   <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/>
                 </svg>
                 <input type="text" class="pf-refdoc__input"
+                       [class.pf-input-error]="!!refHospitalError()"
                        [value]="refHospitalName()"
                        (input)="onRefHospitalInput(asInput($event))"
                        (focus)="onRefHospitalFocus()"
@@ -94,6 +95,9 @@
                   }
                 </div>
               }
+              @if (refHospitalError()) {
+                <p class="pf-field-error">{{ refHospitalError() }}</p>
+              }
             </div>
 
             <!-- Referring Doctor -->
@@ -104,6 +108,7 @@
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
                 <input type="text" class="pf-refdoc__input"
+                       [class.pf-input-error]="!!refDoctorError()"
                        [value]="refDoctorName()"
                        (input)="onRefDoctorInput(asInput($event))"
                        (focus)="onRefDoctorFocus()"
@@ -126,6 +131,9 @@
                             (mousedown)="pickRefDoctor(name)">{{ name }}</button>
                   }
                 </div>
+              }
+              @if (refDoctorError()) {
+                <p class="pf-field-error">{{ refDoctorError() }}</p>
               }
             </div>
           </div>

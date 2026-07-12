@@ -7,6 +7,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureResult } from '../../../shared/models/culture.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
@@ -1476,7 +1477,7 @@ export class ValidateResultComponent implements OnInit {
       ));
       await this.loadComments();
     } catch (e) {
-      this.toasts.error('Could not post comment');
+      this.toasts.error(ApiError.from(e).message);
     }
   }
 
@@ -1717,7 +1718,7 @@ export class ValidateResultComponent implements OnInit {
       },
       error: e => {
         this._saving.set(false);
-        this.toasts.error(e.message ?? 'Save failed');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1734,7 +1735,7 @@ export class ValidateResultComponent implements OnInit {
       },
       error: e => {
         this._saving.set(false);
-        this.toasts.error(e.message ?? 'Validation failed');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1757,7 +1758,7 @@ export class ValidateResultComponent implements OnInit {
         this.toasts.success('Rejected — lab tech notified');
         this.back();
       },
-      error: e => this.toasts.error(e.message ?? 'Reject failed')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -1777,7 +1778,7 @@ export class ValidateResultComponent implements OnInit {
         this.toasts.success('Reassigned');
         this.back();
       },
-      error: e => this.toasts.error(e.message ?? 'Reassign failed')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

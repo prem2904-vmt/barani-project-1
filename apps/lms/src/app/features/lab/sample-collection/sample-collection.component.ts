@@ -8,6 +8,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -1766,8 +1767,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
       this.toasts.success('Dispatched to lab');
-    } catch {
-      this.toasts.error('Could not dispatch — try again');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._dispatching.set(false);
     }
@@ -1783,8 +1784,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'dispatched' ? { ...s, status: 'collected' } : s));
       this.toasts.success('Dispatch undone');
-    } catch {
-      this.toasts.error('Could not undo — the lab may have received it');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._dispatching.set(false);
     }
@@ -2117,7 +2118,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       : x));
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
-      error: () => {
+      error: e => {
         // Only roll back if the local state still says 'collected'. If the
         // user has already toggled away (rapid tap-back), respect their newer
         // intent — its own PATCH will reconcile against the server.
@@ -2126,7 +2127,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         this._pending.update(list => list.map(x => x.id === s.id
           ? { ...x, status: 'pending', collectedAt: undefined }
           : x));
-        this.toasts.error('Could not mark collected — try again');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -2145,7 +2146,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const current = this._pending().find(x => x.id === s.id);
         if (current?.status !== 'pending') return;
         this._pending.update(list => list.map(x => x.id === s.id ? { ...x, ...prev } : x));
-        this.toasts.error(e?.message ?? 'Could not undo — tube may have moved to the lab');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -2180,10 +2181,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const label = this.REJECT_REASONS.find(r => r.code === m.reason)?.label ?? m.reason;
     const reason = m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
     const pending = m.group.samples.filter(s => s.status === 'pending');
-    await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    const failures = await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
     ));
-    this.toasts.success(`${pending.length} tube${pending.length === 1 ? '' : 's'} flagged for re-collection`);
+    const failed = failures.filter((e): e is ApiError => e !== null);
+    const ok = pending.length - failed.length;
+    if (ok > 0) this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} flagged for re-collection`);
+    if (failed.length) this.toasts.error(failed[0].message);
     this._rejectModal.set(null);
     this._openOrderId.set(null);
     this.refresh();
@@ -2203,10 +2207,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       confirmLabel: 'Reject vials'
     });
     if (!reason) return;
-    await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    const failures = await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
     ));
-    this.toasts.success('Marked for re-collection');
+    const failed = failures.filter((e): e is ApiError => e !== null);
+    if (failed.length < pending.length) this.toasts.success('Marked for re-collection');
+    if (failed.length) this.toasts.error(failed[0].message);
     this._openOrderId.set(null);
     this.refresh();
   }

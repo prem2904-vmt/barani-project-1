@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -918,9 +919,9 @@ export class KpiConfigComponent implements OnInit {
         this.toasts.success('KPI layout saved');
         this.refreshScreenCounts();
       },
-      error: () => {
+      error: e => {
         this._saving.set(false);
-        this.toasts.error('Could not save — check permissions');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
