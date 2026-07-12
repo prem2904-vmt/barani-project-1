@@ -34,14 +34,6 @@ interface CreateForm {
         eyebrow="Admin · Users"
         title="Create user"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
         </pf-touch-btn>
@@ -51,16 +43,36 @@ interface CreateForm {
         <div class="space-y-3">
           <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
 
-          <div>
-            <label class="pf-label">Username <span class="pf-req">*</span></label>
-            <input type="text" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
-                   [class.pf-input-error]="!!usernameError()"
-                   placeholder="e.g. drpriya"
-                   [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" />
-            @if (usernameError()) { <p class="pf-field-error">{{ usernameError() }}</p> }
-            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-              3–32 characters: lowercase letters, digits, dot, underscore or hyphen. This is what they type to sign in.
-            </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">First name</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Last name</label>
+              <input type="text" class="pf-input"
+                     [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Username <span class="pf-req">*</span></label>
+              <input type="text" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
+                     [class.pf-input-error]="!!usernameError()"
+                     placeholder="e.g. drpriya"
+                     [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" />
+              @if (usernameError()) { <p class="pf-field-error">{{ usernameError() }}</p> }
+              <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+                3–32 characters: lowercase letters, digits, dot, underscore or hyphen. This is what they type to sign in.
+              </p>
+            </div>
+            <div>
+              <label class="pf-label">Phone</label>
+              <input type="tel" class="pf-input"
+                     [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+            </div>
           </div>
 
           <div>
@@ -71,24 +83,6 @@ interface CreateForm {
             <p class="text-[11px] mt-1" style="color: var(--text-muted);">
               Share this with the user securely — they can change it after signing in, and you can reset it anytime.
             </p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <label class="pf-label">First name</label>
-              <input type="text" class="pf-input"
-                     [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
-            </div>
-            <div>
-              <label class="pf-label">Father's name</label>
-              <input type="text" class="pf-input"
-                     [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
-            </div>
-          </div>
-          <div>
-            <label class="pf-label">Phone</label>
-            <input type="tel" class="pf-input"
-                   [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
           </div>
 
           <div>
@@ -106,7 +100,7 @@ interface CreateForm {
             </p>
           </div>
           <div>
-            <label class="pf-label">Scope</label>
+            <label class="pf-label">Branch</label>
             <pf-select [options]="scopeOptions()" [value]="scopeValue()"
                        placeholder="All branches"
                        (valueChange)="onScopeChange($event)"></pf-select>
@@ -127,7 +121,7 @@ interface CreateForm {
     .pf-role-chip {
       display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
       padding: 8px 12px; min-height: 40px; border-radius: 10px;
-      border: 1px solid var(--glass-border); font-size: 13px; color: var(--text-primary);
+      border: 1px solid transparent; font-size: 13px; color: var(--text-primary);
       transition: border-color .15s, background .15s;
     }
     .pf-role-chip input { cursor: pointer; width: 16px; height: 16px; flex: 0 0 auto; }
