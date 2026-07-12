@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch, Department, SubBranch } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -159,8 +160,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                                   <input type="number" inputmode="numeric" min="1" max="99"
                                          class="pf-input pf-sample-input pf-sample-input--pill" placeholder="01"
                                          title="Sample # — 2-digit code (01–99) prefixing the short sample barcode"
+                                         [class.pf-input-error]="!!sampleCodeError()[d.id]"
                                          [value]="d.sampleCode ?? ''"
+                                         (input)="clearSampleCodeError(d.id)"
                                          (change)="saveSampleCode(d, $any($event.target).value)" />
+                                  @if (sampleCodeError()[d.id]) {
+                                    <p class="pf-field-error">{{ sampleCodeError()[d.id] }}</p>
+                                  }
                                   <button type="button" class="pf-unassign pf-dept-power"
                                           (click)="toggleDeptActive(d)"
                                           [title]="d.isActive ? 'Deactivate department' : 'Reactivate department'">
@@ -251,8 +257,13 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                               <span class="pf-sample-label">Sample #</span>
                               <input type="number" inputmode="numeric" min="1" max="99"
                                      class="pf-input pf-sample-input" placeholder="01"
+                                     [class.pf-input-error]="!!sampleCodeError()[d.id]"
                                      [value]="d.sampleCode ?? ''"
+                                     (input)="clearSampleCodeError(d.id)"
                                      (change)="saveSampleCode(d, $any($event.target).value)" />
+                              @if (sampleCodeError()[d.id]) {
+                                <p class="pf-field-error">{{ sampleCodeError()[d.id] }}</p>
+                              }
                             </label>
                             <label class="pf-sample-field pf-container-field" title="Sample container / tube colour shown to collectors">
                               <span class="pf-sample-label">Container</span>
@@ -441,6 +452,18 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       width: 52px;
       padding: 2px 6px;
       font-size: 12px;
+    }
+
+    /* ── Inline field error (routed from the shared ApiError contract) ── */
+    .pf-input-error {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+    }
+    .pf-field-error {
+      flex-basis: 100%;
+      margin-top: 3px;
+      font-size: 11px;
+      color: #ef4444;
     }
 
     .pf-mini-select {
@@ -641,6 +664,15 @@ export class BranchesComponent implements OnInit {
   private readonly _subBranchDraft = signal({ name: '', code: '', type: 'lab', city: '' });
   readonly subBranchDraft = this._subBranchDraft.asReadonly();
 
+  /** Per-department inline sample-code error (deptId → message), routed from
+   *  the shared ApiError contract (field "sampleCode" / code "sample_code_taken"). */
+  private readonly _sampleCodeError = signal<Record<string, string>>({});
+  readonly sampleCodeError = this._sampleCodeError.asReadonly();
+  clearSampleCodeError(deptId: string) {
+    if (!this._sampleCodeError()[deptId]) return;
+    this._sampleCodeError.update(m => { const { [deptId]: _drop, ...rest } = m; return rest; });
+  }
+
   ngOnInit() {
     // Hierarchical fetch pulls branches with their sub-branches+departments eagerly
     this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
@@ -761,6 +793,7 @@ export class BranchesComponent implements OnInit {
 
     this.api.patch<Department>('/api/tenants/departments/' + dept.id, { sampleCode }).subscribe({
       next: () => {
+        this.clearSampleCodeError(dept.id);
         this._departments.update(list =>
           list.map(d => d.id === dept.id ? { ...d, sampleCode: sampleCode ?? undefined } : d));
         this.toasts.success(
@@ -768,7 +801,14 @@ export class BranchesComponent implements OnInit {
             ? 'Sample code cleared'
             : `Sample code set to ${String(sampleCode).padStart(2, '0')}`);
       },
-      error: () => this.toasts.error('Could not save sample code')
+      error: e => {
+        const err = ApiError.from(e);
+        if (err.field === 'sampleCode' || err.code === 'sample_code_taken') {
+          this._sampleCodeError.update(m => ({ ...m, [dept.id]: err.message }));
+        } else {
+          this.toasts.error(err.message);
+        }
+      }
     });
   }
 
@@ -784,7 +824,7 @@ export class BranchesComponent implements OnInit {
           list.map(d => d.id === dept.id ? { ...d, containerColor, containerLabel } : d));
         this.toasts.success('Container updated');
       },
-      error: () => this.toasts.error('Could not save container')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -801,7 +841,7 @@ export class BranchesComponent implements OnInit {
           list.map(d => d.id === dept.id ? { ...d, isActive } : d));
         this.toasts.success(isActive ? `${dept.name} reactivated` : `${dept.name} deactivated`);
       },
-      error: () => this.toasts.error('Could not update department')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 

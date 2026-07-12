@@ -29,6 +29,14 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 
+  /** Back-compat shim: lots of existing handlers read `e.error.message` /
+   *  `e.error.error` / `e.error.field` (the old HttpErrorResponse body shape).
+   *  Exposing this getter keeps every un-migrated component working unchanged
+   *  while new code uses the flat `.code` / `.field` / `.message`. */
+  get error(): { message: string; error?: string; field?: string } {
+    return { message: this.message, error: this.code, field: this.field };
+  }
+
   /** Normalize ANY error (ApiError, HttpErrorResponse, Error) into ApiError. */
   static from(e: unknown): ApiError {
     if (e instanceof ApiError) return e;

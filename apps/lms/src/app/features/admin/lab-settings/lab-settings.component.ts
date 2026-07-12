@@ -11,6 +11,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
 import { Department, Tenant } from '../../../shared/models/tenant.model';
 import { Role, User } from '../../../shared/models/user.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -593,21 +594,21 @@ export class LabSettingsComponent implements OnInit {
         if (cfg) this.labCfg.update(cfg);
         this.toasts.success(v ? 'Inventory enabled for this branch' : 'Inventory disabled');
       },
-      error: () => { this.inventoryEnabled.set(!v); this.toasts.error('Could not update setting'); }
+      error: e => { this.inventoryEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireBill(v: boolean) {
     this.requireBill.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
       next: () => this.toasts.success(v ? 'Payment now required before collection' : 'Payment no longer required before collection'),
-      error: () => { this.requireBill.set(!v); this.toasts.error('Could not update setting'); }
+      error: e => { this.requireBill.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
     this.requireValidation.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).subscribe({
       next: () => this.toasts.success(v ? 'All results now require validation' : 'Direct-flow tests auto-validate again'),
-      error: () => { this.requireValidation.set(!v); this.toasts.error('Could not update setting'); }
+      error: e => { this.requireValidation.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -667,7 +668,7 @@ export class LabSettingsComponent implements OnInit {
       letterCount: this.pidLetters(),
     }).subscribe({
       next: () => { this.pidSaving.set(false); this.toasts.success('Patient ID format saved'); },
-      error: () => { this.pidSaving.set(false); this.toasts.error('Could not save patient ID format'); },
+      error: e => { this.pidSaving.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
@@ -676,7 +677,7 @@ export class LabSettingsComponent implements OnInit {
     this.autoAssignEnabled.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).subscribe({
       next: () => this.toasts.success(v ? 'Auto-assign on for this branch' : 'Auto-assign off — tests go to the queue'),
-      error: () => { this.autoAssignEnabled.set(!v); this.toasts.error('Could not update setting'); }
+      error: e => { this.autoAssignEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -734,14 +735,14 @@ export class LabSettingsComponent implements OnInit {
             : [...list, patch];
         });
       },
-      error: e => this.toasts.error(e?.message ?? 'Could not save')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
   setAllowNoScan(v: boolean) {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
       next: t => this.tenantState.update(t),
-      error: e => this.toasts.error(e?.message ?? 'Could not save')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -751,7 +752,7 @@ export class LabSettingsComponent implements OnInit {
     this.sampleNumberWidth.set(width);
     this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
-      error: e => this.toasts.error(e?.message ?? 'Could not save sample number width')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -796,7 +797,7 @@ export class LabSettingsComponent implements OnInit {
       },
       error: e => {
         this.wiping.set(false);
-        this.toasts.error(e?.message ?? 'Could not wipe data');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
