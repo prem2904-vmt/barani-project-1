@@ -3,9 +3,12 @@ import {
   computed, effect, inject, signal, viewChild, viewChildren
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { StoredAccount } from '../../core/auth/accounts.service';
+import { LockService } from '../../core/auth/lock.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../core/services/dialog.service';
@@ -24,7 +27,7 @@ const DRAG_THRESHOLD_PX = 4;
 @Component({
   selector: 'pf-bottom-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
@@ -318,6 +321,72 @@ const DRAG_THRESHOLD_PX = 4;
             <span>Branch</span>
             <span class="pf-more-item__val">{{ currentBranch() }}</span>
           </button>
+          <div class="pf-more-sep"></div>
+          <!-- Multi-account (shared lab machines): scrolls past ~4 profiles. -->
+          @if (otherAccounts().length) {
+            <div class="pf-acct-scroll">
+              @for (a of otherAccounts(); track a.userId) {
+                <button type="button" role="menuitem" class="pf-more-item press"
+                        (click)="onSwitchAccount(a)">
+                  <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
+                  <span class="pf-acct-txt">
+                    <span class="pf-acct-name">{{ a.displayName }}</span>
+                    <span class="pf-acct-org">{{ a.org }}</span>
+                  </span>
+                </button>
+              }
+            </div>
+          }
+          <button type="button" role="menuitem" class="pf-more-item press" (click)="onAddAccount()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M2 21v-2a4 4 0 0 1 4-4h6"/>
+              <line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>
+            </svg>
+            <span>Add account</span>
+          </button>
+          @if (pinFormOpen()) {
+            <div class="pf-acct-pinform">
+              <p class="pf-acct-pinlbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
+              @if (hasPin()) {
+                <input class="pf-acct-pin" type="password" inputmode="numeric" autocomplete="off"
+                       maxlength="4" placeholder="Current PIN"
+                       [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)" [disabled]="pinBusy()" />
+              }
+              <div class="pf-acct-pinrow">
+                <input class="pf-acct-pin" type="password" inputmode="numeric" autocomplete="off"
+                       maxlength="4" placeholder="New PIN"
+                       [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
+                       (keydown.enter)="savePin()" [disabled]="pinBusy()" />
+                <button type="button" class="pf-acct-pingo press" (click)="savePin()" [disabled]="pinBusy()">
+                  {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}
+                </button>
+                <button type="button" class="pf-acct-pinx press" (click)="pinFormOpen.set(false)">✕</button>
+              </div>
+              @if (pinError()) { <p class="pf-acct-pinerr">{{ pinError() }}</p> }
+            </div>
+          } @else {
+            <button type="button" role="menuitem" class="pf-more-item press" (click)="onSetPin()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
+            </button>
+          }
+          @if (hasPin()) {
+            <button type="button" role="menuitem" class="pf-more-item press" (click)="onLockScreen()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <circle cx="12" cy="16" r="1.6"/>
+              </svg>
+              <span>Lock screen</span>
+            </button>
+          }
           <div class="pf-more-sep"></div>
           <button type="button" role="menuitem" class="pf-more-item pf-more-item--danger press"
                   (click)="onMoreLogout()">
@@ -767,6 +836,58 @@ const DRAG_THRESHOLD_PX = 4;
       border-color: transparent !important;
     }
 
+    /* ── Multi-account switcher + PIN (mobile/iPad more sheet) ── */
+    .pf-acct-scroll {
+      max-height: 208px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .pf-acct-circle {
+      flex: 0 0 auto;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 10.5px; font-weight: 700; color: #c4b5fd;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+    .pf-acct-txt { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+    .pf-acct-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-acct-org { font-size: 10.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-acct-pinform {
+      padding: 8px 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+    }
+    .pf-acct-pinlbl { margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); }
+    .pf-acct-pinrow { display: flex; align-items: center; gap: 6px; }
+    .pf-acct-pin {
+      flex: 1; min-width: 0; width: 100%;
+      text-align: center; font-size: 16px; letter-spacing: 6px;
+      padding: 9px 6px; border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary); outline: none;
+    }
+    .pf-acct-pin:focus { border-color: rgba(168, 85, 247, 0.5); }
+    .pf-acct-pinrow .pf-acct-pin { margin-bottom: 0; }
+    .pf-acct-pinform > .pf-acct-pin { margin-bottom: 6px; }
+    .pf-acct-pingo {
+      flex: 0 0 auto; min-height: 40px; padding: 0 14px; border-radius: 10px;
+      border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+      color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7);
+    }
+    .pf-acct-pingo:disabled { opacity: 0.55; }
+    .pf-acct-pinx {
+      flex: 0 0 auto; min-height: 40px; min-width: 40px; border-radius: 10px;
+      border: 1px solid var(--glass-border); background: transparent;
+      color: var(--text-muted); cursor: pointer;
+    }
+    .pf-acct-pinerr { margin: 6px 0 0; font-size: 11.5px; color: #f87171; }
+
     @media (prefers-reduced-motion: reduce) {
       .pf-nav-indicator--ready { transition: none; }
       .pf-nav-btn--active svg { animation: none; }
@@ -1121,6 +1242,57 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     await this.push.unregister().catch(() => undefined);
     await this.auth.signOut();
     void this.router.navigateByUrl('/login');
+  }
+
+  // ─── Multi-account switching + PIN (mobile/iPad — mirrors the top strip) ──
+  private readonly lock = inject(LockService);
+  protected readonly otherAccounts = computed(() =>
+    this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
+  protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
+  protected accountInitials(a: StoredAccount): string { return this.auth.accounts.initials(a); }
+
+  protected onSwitchAccount(a: StoredAccount): void {
+    this.closeMore();
+    this.lock.switchTarget.set(a); // full-screen switch screen takes over
+  }
+  protected onAddAccount(): void {
+    this.closeMore();
+    void this.router.navigateByUrl('/login?add=1');
+  }
+  protected onLockScreen(): void {
+    this.closeMore();
+    this.lock.lock();
+  }
+
+  protected readonly pinFormOpen = signal(false);
+  protected pinCurrent = '';
+  protected pinNew = '';
+  protected readonly pinBusy = signal(false);
+  protected readonly pinError = signal<string | null>(null);
+  protected readonly pinSaved = signal(false);
+
+  protected onSetPin(): void {
+    this.pinFormOpen.set(true);
+    this.pinCurrent = '';
+    this.pinNew = '';
+    this.pinError.set(null);
+    this.pinSaved.set(false);
+  }
+  protected sanitizePin(v: string): string { return (v ?? '').replace(/\D/g, '').slice(0, 4); }
+
+  protected async savePin(): Promise<void> {
+    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) { this.pinError.set('PIN must be exactly 4 digits.'); return; }
+    this.pinBusy.set(true);
+    this.pinError.set(null);
+    try {
+      await this.auth.setPin(this.pinNew, this.hasPin() ? this.pinCurrent : undefined);
+      this.pinSaved.set(true);
+      setTimeout(() => this.pinFormOpen.set(false), 900);
+    } catch (e) {
+      this.pinError.set((e as Error).message || 'Could not update the PIN.');
+    } finally {
+      this.pinBusy.set(false);
+    }
   }
 
   /** Tap outside the popover closes it. The transparent .pf-more-bd
