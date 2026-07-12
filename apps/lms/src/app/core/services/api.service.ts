@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, map, throwError, timeout } from 'rxjs';
-import { ApiResponse } from '../../shared/models/api-response.model';
+import { ApiError, ApiResponse } from '../../shared/models/api-response.model';
 import { PlatformService } from './platform.service';
 
 @Injectable({ providedIn: 'root' })
@@ -53,24 +53,34 @@ export class ApiService {
       }),
       map(resp => {
         this._isLoading.set(false);
-        if (!resp.success) throw new Error(resp.message ?? resp.error ?? 'Request failed');
+        // Preserve the CODE and FIELD, not just the message — pages route
+        // field-level failures (email_exists → email input) off these.
+        if (!resp.success) throw new ApiError(resp.message ?? resp.error ?? 'Request failed', resp.error, resp.field);
         return resp.data as T;
       }),
       catchError((err: HttpErrorResponse | Error) => {
         this._isLoading.set(false);
-        const message = this.messageFrom(err);
-        this._error.set(message);
-        return throwError(() => err);
+        const apiErr = err instanceof ApiError ? err : this.toApiError(err);
+        this._error.set(apiErr.message);
+        return throwError(() => apiErr);
       })
     );
   }
 
-  private messageFrom(err: HttpErrorResponse | Error): string {
+  /** Normalize HTTP-layer failures into the same ApiError contract the
+   *  success:false path throws, keeping code + field from the JSON body. */
+  private toApiError(err: HttpErrorResponse | Error): ApiError {
     if (err instanceof HttpErrorResponse) {
       const body = err.error;
-      if (body && typeof body === 'object' && 'message' in body) return String(body.message);
-      return err.message;
+      if (body && typeof body === 'object' && ('message' in body || 'error' in body)) {
+        return new ApiError(
+          String(body.message ?? body.error ?? err.message),
+          typeof body.error === 'string' ? body.error : undefined,
+          typeof body.field === 'string' ? body.field : undefined,
+        );
+      }
+      return new ApiError(err.status === 0 ? 'Network error — check your connection' : err.message);
     }
-    return err.message ?? 'Unknown error';
+    return new ApiError(err.message ?? 'Unknown error');
   }
 }
