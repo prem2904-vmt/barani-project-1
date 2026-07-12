@@ -254,6 +254,17 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                                      [value]="d.sampleCode ?? ''"
                                      (change)="saveSampleCode(d, $any($event.target).value)" />
                             </label>
+                            <label class="pf-sample-field pf-container-field" title="Sample container / tube colour shown to collectors">
+                              <span class="pf-sample-label">Container</span>
+                              <span class="pf-container-ctl">
+                                <input type="color" class="pf-container-color"
+                                       [value]="d.containerColor || '#6b7280'"
+                                       (change)="saveContainer(d, $any($event.target).value, d.containerLabel || '')" />
+                                <input type="text" class="pf-input pf-container-label" placeholder="e.g. EDTA · Lavender"
+                                       [value]="d.containerLabel ?? ''"
+                                       (change)="saveContainer(d, d.containerColor || '#6b7280', $any($event.target).value)" />
+                              </span>
+                            </label>
                             @if (subBranchesFor(b.id).length > 0) {
                               <pf-select
                                 style="width: 150px"
@@ -417,6 +428,14 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       -webkit-appearance: none;
       margin: 0;
     }
+    .pf-container-ctl { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-container-color {
+      width: 30px; height: 30px; padding: 0; border: 1px solid var(--glass-border);
+      border-radius: 8px; background: transparent; cursor: pointer;
+    }
+    .pf-container-color::-webkit-color-swatch { border: none; border-radius: 6px; }
+    .pf-container-color::-moz-color-swatch { border: none; border-radius: 6px; }
+    .pf-container-label { width: 140px; padding: 6px 8px; }
     /* Compact variant inside the assigned-department pill */
     .pf-sample-input--pill {
       width: 52px;
@@ -750,6 +769,22 @@ export class BranchesComponent implements OnInit {
             : `Sample code set to ${String(sampleCode).padStart(2, '0')}`);
       },
       error: () => this.toasts.error('Could not save sample code')
+    });
+  }
+
+  /** Persist the department's sample container colour + label (the collector's
+   *  tube guide). Same PATCH endpoint as sample code. */
+  saveContainer(dept: Department, color: string, label: string) {
+    const containerColor = /^#[0-9a-fA-F]{6}$/.test((color ?? '').trim()) ? color.trim().toLowerCase() : null;
+    const containerLabel = (label ?? '').trim() || null;
+    if ((dept.containerColor ?? null) === containerColor && (dept.containerLabel ?? null) === containerLabel) return;
+    this.api.patch<Department>('/api/tenants/departments/' + dept.id, { containerColor: containerColor ?? '', containerLabel: containerLabel ?? '' }).subscribe({
+      next: () => {
+        this._departments.update(list =>
+          list.map(d => d.id === dept.id ? { ...d, containerColor, containerLabel } : d));
+        this.toasts.success('Container updated');
+      },
+      error: () => this.toasts.error('Could not save container')
     });
   }
 

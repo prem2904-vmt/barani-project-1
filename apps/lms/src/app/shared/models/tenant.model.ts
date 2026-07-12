@@ -89,6 +89,10 @@ export interface Department {
   /** 2-digit department code (01–99) that prefixes the short sample barcode
    * (DD + YY + running number). Optional; null/undefined when unset. */
   sampleCode?: number;
+  /** Sample container/tube colour (hex) shown in collection. */
+  containerColor?: string | null;
+  /** Human label for the container (e.g. "EDTA · Lavender"). */
+  containerLabel?: string | null;
   isActive: boolean;
   createdAt: string;
 }

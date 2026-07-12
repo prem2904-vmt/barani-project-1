@@ -47,7 +47,7 @@ const URINE_FILL = '#f59e0b';
  * first test (authoritative — "Urine", "Blood - EDTA", …), then fall back to
  * the sample's department code for colour.
  */
-function containerFor(s: OrderSample): Container {
+function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
   const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
   if (sampleType.includes('urine')) {
     return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
@@ -63,13 +63,15 @@ function containerFor(s: OrderSample): Container {
   if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
   if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
   if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
-  const dept = DEPT_VACUTAINER[s.department?.code ?? ''];
-  return {
-    kind: 'vacutainer',
-    color: dept?.color ?? '#6b7280',
-    fill: BLOOD_FILL,
-    label: dept?.label ?? 'Tube'
-  };
+  // Department container: the admin-configured colour/label wins (set per
+  // department in Branches → Departments), then the sample's own department
+  // record, then the built-in convention, then a neutral grey tube.
+  const code = s.department?.code ?? '';
+  const cfg = deptCfg?.[code];
+  const conv = DEPT_VACUTAINER[code];
+  const color = s.department?.containerColor || cfg?.color || conv?.color || '#6b7280';
+  const label = s.department?.containerLabel || cfg?.label || conv?.label || 'Tube';
+  return { kind: 'vacutainer', color, fill: BLOOD_FILL, label };
 }
 
 interface OrderGroup {
@@ -1835,6 +1837,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
   private readonly _openOrderId = signal<string | null>(null);
+  /** Admin-configured container colour/label per department code (Branches →
+   *  Departments). Loaded once so the tube guide reflects the lab's own scheme. */
+  private readonly _deptContainers = signal<Record<string, { color?: string | null; label?: string | null }>>({});
   /** True when the user landed here via ?orderId=… (e.g. FD's "Collect"
    *  button on an order row). Suppresses the queue list + scan row so
    *  the page reads as a direct order-collection view, not a queue +
@@ -1907,6 +1912,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   });
 
   async ngOnInit() {
+    // Load the lab's configured container colours (best-effort — falls back to
+    // the built-in conventions if it fails or a department has none set).
+    this.api.get<{ code: string; containerColor?: string | null; containerLabel?: string | null }[]>('/api/tenants/departments')
+      .subscribe({ next: list => {
+        const map: Record<string, { color?: string | null; label?: string | null }> = {};
+        for (const d of list ?? []) map[d.code] = { color: d.containerColor, label: d.containerLabel };
+        this._deptContainers.set(map);
+      }, error: () => {} });
+
     const oid = this.route.snapshot.queryParamMap.get('orderId');
     if (oid) {
       this._openOrderId.set(oid);
@@ -1943,8 +1957,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
   }
 
-  tube(s: OrderSample) { return containerFor(s); }
-  container(s: OrderSample) { return containerFor(s); }
+  tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+  container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   testList(s: OrderSample): string {
     return s.tests.map(t => t.test?.name ?? 'Test').join(', ');
   }

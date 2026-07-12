@@ -302,7 +302,10 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_branches', 'manage_tenant']
   },
   {
-    id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection',
+    // Front-desk home-collection assignment — tied to the home_visits action:
+    // disabling Home Visits in the workflow removes home collection from the
+    // front desk too (they're the two ends of the same capability).
+    id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection', action: 'home_visits',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
     permissions: ['manage_home_collection', 'register_patient', 'create_order'], module: 'homeCollection'
   },
