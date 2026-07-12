@@ -225,6 +225,15 @@ export class AuthService {
       // login + persisted tokens) and signOut() clears it explicitly — letting
       // the SDK's empty state null us out would sign the user out on boot.
       if (session) {
+        // Multi-account guard: after a profile switch the SDK's storage can
+        // still hold the PREVIOUS account and background-refresh it — blindly
+        // adopting that session silently switches the user back. Only adopt
+        // when it belongs to the same auth user as our locally-owned session.
+        const mySub = AuthService.jwtSub(this._session()?.access_token ?? '');
+        const sdkSub = AuthService.jwtSub(session.access_token);
+        if (mySub && sdkSub && mySub !== sdkSub) {
+          return; // stale SDK session from another profile — ours is authoritative
+        }
         this._session.set(session);
         this.persistSession(session);
         await this.loadProfile();
@@ -243,6 +252,17 @@ export class AuthService {
 
   waitForAuth(): Promise<void> {
     return this._ready;
+  }
+
+  /** Auth user id (sub claim) from a JWT — used to tell profiles apart when
+   *  reconciling our locally-owned session with the SDK's. Null on any parse
+   *  failure so callers fail open (treat as "unknown", not "different"). */
+  private static jwtSub(token: string): string | null {
+    try {
+      const payload = token.split('.')[1];
+      const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      return json?.sub ?? null;
+    } catch { return null; }
   }
 
   hasPermission(code: string): boolean {
@@ -415,6 +435,17 @@ export class AuthService {
     if (!res.ok || !json?.success) {
       throw new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
     }
+
+    // Point the SDK's own storage at the NEW profile too — otherwise it keeps
+    // background-refreshing the previous account and (on the next boot) would
+    // try to clobber the switch. Non-fatal: the onAuthStateChange sub-guard
+    // also refuses cross-profile adoption if this hangs.
+    try {
+      await Promise.race([
+        supabase.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token! }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('setSession timed out')), 2000)),
+      ]);
+    } catch { console.warn('[auth] setSession hung during switch — continuing with local session'); }
 
     this._session.set(sess);
     this.persistSession(sess);
