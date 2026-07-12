@@ -1522,7 +1522,20 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
-  readonly primary = computed(() => this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)));
+  readonly primary = computed(() => this.withCollection(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV))));
+
+  /** Guarantee a reachable "Collect" work area for anyone who can draw samples
+   *  (the Lab area excludes collect_sample and the workflow-derived nav omits
+   *  Collect unless placed). Append it when no collection surface is visible.
+   *  Mirrors withInventory. */
+  private withCollection(items: NavItem[]): NavItem[] {
+    if (!this.auth.hasEffectivePermission('collect_sample')) return items;
+    if (!this.process.isEnabled('sample_collection')) return items;
+    if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
+                     || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
+    const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
+    return collect ? [...items, collect] : items;
+  }
 
   /** Workflow-derived nav has no Stores work area; append it when inventory is
    *  enabled and the user can use it (idempotent vs the PRIMARY_NAV fallback). */

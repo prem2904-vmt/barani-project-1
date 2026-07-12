@@ -92,7 +92,23 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
-  readonly primary = computed(() => this.gateModules(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV))));
+  readonly primary = computed(() => this.gateModules(this.withCollection(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)))));
+
+  /** Guarantee a reachable "Collect" work area for anyone who can draw samples.
+   *  The Lab work area intentionally excludes collect_sample, and the
+   *  workflow-derived nav only shows Collect if an admin placed it — so lab-side
+   *  collectors were left with no way to collect (it only appeared at front-desk
+   *  or the dedicated counter). Append it (mode-independent) when the user holds
+   *  collect_sample and no collection surface is already visible. Mirrors
+   *  withInventory. */
+  private withCollection(items: NavItem[]): NavItem[] {
+    if (!this.auth.hasEffectivePermission('collect_sample')) return items;
+    if (!this.process.isEnabled('sample_collection')) return items;
+    if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
+                     || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
+    const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
+    return collect ? [...items, collect] : items;
+  }
 
   /** The workflow-driven nav (menusFromWorkflow) is NOT module-gated, so drop
    *  work areas the tenant's plan doesn't include. Messages specifically must
