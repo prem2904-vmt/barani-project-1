@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
+import { LockService } from '../../core/auth/lock.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
@@ -39,6 +40,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);
+  private readonly lock = inject(LockService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly entitlements = inject(TenantEntitlementsService);
@@ -289,11 +291,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
   protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
 
-  protected readonly switchTarget = signal<StoredAccount | null>(null);
-  protected switchPin = '';
-  protected readonly switchBusy = signal(false);
-  protected readonly switchError = signal<string | null>(null);
-
   protected readonly pinFormOpen = signal(false);
   protected pinCurrent = '';
   protected pinNew = '';
@@ -303,27 +300,17 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   accountInitials(a: StoredAccount): string { return this.auth.accounts.initials(a); }
 
+  /** Hand off to the full-screen switch screen (Windows-style): leave this
+   *  account's UI and meet the TARGET's PIN gate there. */
   openSwitch(a: StoredAccount) {
-    this.switchTarget.set(a);
-    this.switchPin = '';
-    this.switchError.set(null);
+    this.closeProfile();
+    this.lock.switchTarget.set(a);
   }
-  cancelSwitch() { this.switchTarget.set(null); }
 
-  async confirmSwitch() {
-    const a = this.switchTarget();
-    if (!a || this.switchBusy() || this.switchPin.length < 4) return;
-    this.switchBusy.set(true);
-    this.switchError.set(null);
-    try {
-      await this.auth.switchAccount(a, this.switchPin);
-      // Full reload: every per-user service (chat, signaling, entitlements,
-      // workflow, push) re-bootstraps cleanly for the new profile.
-      location.assign('/');
-    } catch (e) {
-      this.switchError.set((e as Error).message || 'Could not switch.');
-      this.switchBusy.set(false);
-    }
+  /** Manual lock (also Ctrl+L / ⌘L). Only offered when a PIN can unlock it. */
+  lockNow() {
+    this.closeProfile();
+    this.lock.lock();
   }
 
   /** Gmail-style "Add account": keep every session, sign in one more. */

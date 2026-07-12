@@ -428,12 +428,20 @@ export class AuthService {
     const res = await fetch(`${environment.apiUrl}/api/auth/pin/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.access_token}` },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ pin: pin ?? '' }),
       cache: 'no-store',
     });
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.success) {
-      throw new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
+      const code = typeof json?.error === 'string' ? json.error : json?.error?.code;
+      // No PIN set on the target → the profile opens directly (the server is
+      // authoritative here, not the possibly-stale local hasPin cache).
+      if (code !== 'no_pin') {
+        const err = new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
+        (err as Error & { code?: string }).code = code || 'wrong_pin';
+        throw err;
+      }
+      this.accounts.setHasPin(acc.userId, false);
     }
 
     // Point the SDK's own storage at the NEW profile too — otherwise it keeps

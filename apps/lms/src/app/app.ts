@@ -7,17 +7,21 @@ import { PlatformService } from './core/services/platform.service';
 import { VersionService } from './core/services/version.service';
 import { LockService } from './core/auth/lock.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
+import { SwitchScreenComponent } from './shared/components/switch-screen.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet></router-outlet>
 
     <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
     <pf-lock-screen />
+
+    <!-- Full-screen profile switch (Windows-style) — target's PIN gates it. -->
+    <pf-switch-screen />
 
     <!-- Version gate: shown only when the API's minClientVersion outruns this
          bundle (see VersionService). Persistent + blocking by design — an

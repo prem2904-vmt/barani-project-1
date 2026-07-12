@@ -306,33 +306,17 @@
 
           <div class="pf-profile-divider"></div>
 
-          <!-- Multi-account (shared lab machines): switch with the target's PIN. -->
+          <!-- Multi-account (shared lab machines): tapping a profile leaves this
+               account and opens the full-screen switch (target's PIN gates it;
+               PIN-less profiles open directly). -->
           @for (a of otherAccounts(); track a.userId) {
-            @if (switchTarget()?.userId === a.userId) {
-              <div class="pf-switch-form">
-                <p class="pf-switch-lbl">Enter {{ a.displayName }}'s PIN</p>
-                <div class="pf-switch-row">
-                  <input class="pf-pin-input" type="password" inputmode="numeric" autocomplete="off"
-                         maxlength="6" placeholder="••••" [(ngModel)]="switchPin"
-                         (keydown.enter)="confirmSwitch()" [disabled]="switchBusy()" />
-                  <button type="button" class="pf-pin-go press" (click)="confirmSwitch()"
-                          [disabled]="switchBusy() || switchPin.length < 4">
-                    {{ switchBusy() ? '…' : 'Switch' }}
-                  </button>
-                  <button type="button" class="pf-pin-cancel press" (click)="cancelSwitch()">✕</button>
-                </div>
-                @if (switchError()) { <p class="pf-pin-error">{{ switchError() }}</p> }
-              </div>
-            } @else {
-              <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
-                <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
-                <span class="min-w-0 flex-1 text-left">
-                  <span class="block truncate">{{ a.displayName }}</span>
-                  <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.org }}</span>
-                </span>
-                @if (!a.hasPin) { <span class="pf-acct-nopin">no PIN</span> }
-              </button>
-            }
+            <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
+              <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
+              <span class="min-w-0 flex-1 text-left">
+                <span class="block truncate">{{ a.displayName }}</span>
+                <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.org }}</span>
+              </span>
+            </button>
           }
           <button type="button" class="pf-profile-item press" (click)="addAccount()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -370,6 +354,19 @@
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
+            </button>
+          }
+
+          @if (hasPin()) {
+            <button type="button" class="pf-profile-item press" (click)="lockNow()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                <circle cx="12" cy="16" r="1.6" />
+              </svg>
+              <span class="flex-1">Lock screen</span>
+              <span class="pf-kbd-hint">⌘L / Ctrl+L</span>
             </button>
           }
 

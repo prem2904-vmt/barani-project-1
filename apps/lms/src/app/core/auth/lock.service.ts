@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
+import { StoredAccount } from './accounts.service';
 
 /** 15-minute idle lock for shared lab machines. Arms only while a PIN-enabled
  *  account is signed in (locking a PIN-less user would strand them). The lock
@@ -12,6 +13,10 @@ export class LockService {
   private readonly auth = inject(AuthService);
   private readonly _locked = signal<boolean>(this.restoreLocked());
   readonly locked = this._locked.asReadonly();
+
+  /** Profile being switched INTO — drives the full-screen switch screen
+   *  (Windows-style: leave the current account, meet the target's PIN gate). */
+  readonly switchTarget = signal<StoredAccount | null>(null);
 
   private lastActivity = Date.now();
   private started = false;
@@ -30,6 +35,17 @@ export class LockService {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.tick();
     });
+    // Manual lock: Ctrl+L (Windows/Linux) / ⌘L (macOS). Captured before the
+    // browser grabs it for the address bar; only when a PIN can unlock it.
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'l' || e.key === 'L')) {
+        if (this.auth.isAuthenticated() && this.auth.user()?.hasPin && !this._locked()) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.lock();
+        }
+      }
+    }, { capture: true });
   }
 
   private tick(): void {
