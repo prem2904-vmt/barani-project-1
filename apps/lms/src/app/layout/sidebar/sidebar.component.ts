@@ -8,7 +8,10 @@ import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 interface NavLink {
   label: string;
   href: string;
-  icon: string;
+  /** Legacy emoji glyph (existing links). Prefer `iconPath` for new links. */
+  icon?: string;
+  /** Single SVG path (24×24) — rendered as a stroked icon, no emoji. */
+  iconPath?: string;
   /** Permission codes — link visible if the user holds ANY of these. */
   perms: string[];
   /**
@@ -67,7 +70,14 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
                        routerLinkActive="bg-white/10"
                        [routerLinkActiveOptions]="{ exact: link.href === '/admin' }"
                        class="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-white/5 transition">
-                      <span class="opacity-80">{{ link.icon }}</span>
+                      @if (link.iconPath) {
+                        <svg class="opacity-80 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path [attr.d]="link.iconPath"></path>
+                        </svg>
+                      } @else {
+                        <span class="opacity-80">{{ link.icon }}</span>
+                      }
                       <span>{{ link.label }}</span>
                     </a>
                   </li>
@@ -200,6 +210,18 @@ export class SidebarComponent {
           // Gated by the tenant's inventory entitlement AND the branch-level
           // Lab Settings master switch — both must be on for the desk to appear.
           visible: () => this.entitlements.moduleEnabled('inventory') && this.labCfg.inventoryEnabled() }
+      ]
+    },
+    {
+      // À-la-carte modules — each link appears only when its module is enabled
+      // in Admin → Modules (the section auto-hides when none are on). `perms:['*']`
+      // = any authenticated user; the module toggle is the real gate for now.
+      title: 'Modules',
+      links: [
+        { label: 'OPD',      href: '/opd',      iconPath: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2', perms: ['*'], visible: () => this.entitlements.moduleEnabled('opd') },
+        { label: 'IPD',      href: '/ipd',      iconPath: 'M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', perms: ['*'], visible: () => this.entitlements.moduleEnabled('ipd') },
+        { label: 'Pharmacy', href: '/pharmacy', iconPath: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7', perms: ['*'], visible: () => this.entitlements.moduleEnabled('pharmacy') },
+        { label: 'Payroll',  href: '/payroll',  iconPath: 'M3 7h18v12H3zM3 11h18M7 15h4M12 3v4', perms: ['*'], visible: () => this.entitlements.moduleEnabled('payroll') }
       ]
     },
     {

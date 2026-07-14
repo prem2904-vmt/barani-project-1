@@ -709,6 +709,9 @@ export class AdminDashboardComponent implements OnInit {
         'Notifications + KPI cards: alerts on key events and the metrics pinned to each screen.'
       ],
       tiles: [
+        { title: 'Modules', href: '/admin/modules', gradient: 'violet',
+          iconPath: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+          subtitle: () => 'Enable products & features — Lab, OPD, IPD, Pharmacy, Inventory, Payroll' },
         { title: 'Process builder', href: '/admin/process', gradient: 'pink',
           iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',
           subtitle: () => 'Menus, actions & role access — drives the live nav' },

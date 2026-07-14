@@ -83,6 +83,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       },
       {
+        // Modules (Extensions) — enable/disable product modules + their features.
+        path: 'admin/modules',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/modules/modules.component').then(m => m.AdminModulesComponent)
+      },
+      {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
@@ -379,6 +385,35 @@ export const appRoutes: Route[] = [
         path: 'stores',
         canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']), moduleGuard('inventory')],
         loadComponent: () => import('./features/stores/stores.component').then(m => m.StoresComponent)
+      },
+
+      // Clinical modules (OPD / IPD / Pharmacy / Payroll) — placeholder shells
+      // gated purely on tenant entitlement. When a module is off the guard
+      // bounces to landing; when on, its "coming soon" shell renders until the
+      // real screens ship. Each supplies its catalog id via route data.
+      {
+        path: 'opd',
+        canActivate: [moduleGuard('opd')],
+        data: { moduleId: 'opd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'ipd',
+        canActivate: [moduleGuard('ipd')],
+        data: { moduleId: 'ipd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'pharmacy',
+        canActivate: [moduleGuard('pharmacy')],
+        data: { moduleId: 'pharmacy' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'payroll',
+        canActivate: [moduleGuard('payroll')],
+        data: { moduleId: 'payroll' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
 
       // Reports — only roles that actively deliver reports land here. Lab

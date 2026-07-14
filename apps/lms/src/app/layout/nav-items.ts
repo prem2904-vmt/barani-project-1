@@ -230,9 +230,37 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
 }
 
 export const MORE_NAV: NavItem[] = [
+  // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
+  // the module toggle IS the gate (no per-module roles yet). Shown here in More
+  // until each ships as a first-class workflow work-area. Icons mirror the catalog.
+  {
+    id: 'm-opd', label: 'OPD', href: '/opd',
+    iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],
+    module: 'opd'
+  },
+  {
+    id: 'm-ipd', label: 'IPD', href: '/ipd',
+    iconPath: ['M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'],
+    module: 'ipd'
+  },
+  {
+    id: 'm-pharmacy', label: 'Pharmacy', href: '/pharmacy',
+    iconPath: ['M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7'],
+    module: 'pharmacy'
+  },
+  {
+    id: 'm-payroll', label: 'Payroll', href: '/payroll',
+    iconPath: ['M3 7h18v12H3zM3 11h18M7 15h4M12 3v4'],
+    module: 'payroll'
+  },
   {
     id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
     iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
+    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+  },
+  {
+    id: 'admin-modules', label: 'Modules', href: '/admin/modules',
+    iconPath: ['M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
     permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
   },
   {
