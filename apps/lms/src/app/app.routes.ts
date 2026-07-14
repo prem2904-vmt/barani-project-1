@@ -89,6 +89,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/modules/modules.component').then(m => m.AdminModulesComponent)
       },
       {
+        // Lab module settings hub — lab-SPECIFIC config lives inside the Lab
+        // world (not the global admin): catalog, report template, lab settings,
+        // referrals, notifications, KPIs. Gated on any lab-admin permission.
+        path: 'lab/settings',
+        canActivate: [permissionGuard(['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments']), moduleGuard('lab')],
+        loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
+      },
+      {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
@@ -147,6 +155,11 @@ export const appRoutes: Route[] = [
         path: 'admin/lab-settings',
         canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
+      },
+      {
+        path: 'admin/organization',
+        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
       },
       {
         path: 'admin/billing',

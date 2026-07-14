@@ -589,35 +589,6 @@ export class AdminDashboardComponent implements OnInit {
   // doubles as a quick status glance.
   readonly categories: Category[] = [
     {
-      id: 'catalog',
-      label: 'Tests & Catalog',
-      gradient: 'emerald',
-      iconPath: 'M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9',
-      iconExtra: 'M6 21h14M9 17h8',
-      blurb: 'The menu your lab offers and what it consumes — tests, packages, report layout, stock.',
-      tips: [
-        'Add a test → set parameters, units, reference ranges (M/F segments supported).',
-        'Bundle tests into packages, and design the per-test report layout + columns.',
-        'Track consumable stock with batches, expiry alerts and per-test usage.'
-      ],
-      tiles: [
-        { title: 'Tests & Packages', href: '/admin/tests', gradient: 'emerald',
-          iconPath: 'M11 4h3v9M11 13h3M11 4v9c-4-1-4-7 0-9ZM14 7h2a3 3 0 0 1 3 3',
-          iconExtra: 'M6 21h14M9 17h8',
-          subtitle: () => `${this._summary()?.tests ?? '—'} tests configured` },
-        { title: 'Referral Labs', href: '/admin/referral-labs', gradient: 'fuchsia',
-          iconPath: 'M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3',
-          iconExtra: 'M9 3h6M7.5 14h9',
-          subtitle: () => 'Outsourced / external labs' },
-        { title: 'Inventory', href: '/admin/inventory', gradient: 'amber',
-          iconPath: 'M3 7l9-4 9 4v10l-9 4-9-4V7Z', iconExtra: 'M12 3v18M3 7l9 4 9-4',
-          subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
-        { title: 'Report Template',  href: '/admin/reports', gradient: 'fuchsia',
-          iconPath: 'M4 4h11l5 5v11H4z', iconExtra: 'M15 4v5h5M8 14h8M8 18h6',
-          subtitle: () => 'Branding, header, columns, signatures, colours' },
-      ]
-    },
-    {
       id: 'people',
       label: 'People & Access',
       gradient: 'violet',
@@ -656,19 +627,18 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Branches & Departments', href: '/admin/branches', gradient: 'sky',
           iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
           subtitle: () => `${this._summary()?.branches ?? '—'} branches · ${this._summary()?.departments ?? '—'} departments` },
-        { title: 'Lab settings', href: '/admin/lab-settings', gradient: 'teal',
-          iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z', iconExtra: 'M8 12h8',
-          subtitle: () => 'Collection mode, billing mode, patient ID format' },
+        { title: 'Organization & Identity', href: '/admin/organization', gradient: 'sky',
+          iconPath: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2',
+          subtitle: () => 'Patient ID format · data tools' },
         { title: 'Appointments & queue', href: '/admin/appointments', gradient: 'amber',
           iconPath: 'M8 2v4M16 2v4M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', iconExtra: 'M3 10h18M8 14h.01M12 14h.01M16 14h.01',
           subtitle: () => 'Queue mode · slots · priority engine' },
         { title: 'Home-collection agents', href: '/admin/home-collection', gradient: 'teal',
           iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', iconExtra: 'M9 21v-6h6v6',
           subtitle: () => 'Agents · coverage areas · weightage' },
-        { title: 'Referring Network', href: '/admin/referring-network', gradient: 'amber',
-          iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4',
-          iconExtra: 'M9 9h.01M9 13h.01M9 17h.01',
-          subtitle: () => 'Hospitals + doctors that send patients to your lab' },
+        { title: 'Inventory', href: '/admin/inventory', gradient: 'amber',
+          iconPath: 'M3 7l9-4 9 4v10l-9 4-9-4V7Z', iconExtra: 'M12 3v18M3 7l9 4 9-4',
+          subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
         { title: 'Branding', href: '/setup', gradient: 'violet',
           iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', iconExtra: 'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z',
           subtitle: () => 'Logo & lab name shown in the top bar' },
@@ -698,15 +668,15 @@ export class AdminDashboardComponent implements OnInit {
     },
     {
       id: 'automation',
-      label: 'Workflow & Automation',
+      label: 'Platform & Automation',
       gradient: 'pink',
       iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z',
       iconExtra: 'M9 7h6M12 14V10',
-      blurb: 'Design the menus and forms staff use, the alerts that fire, and the KPIs each screen shows.',
+      blurb: 'Cross-module platform controls — enable modules, and design the menus/forms staff use.',
       tips: [
+        'Modules: turn products (Lab, OPD, IPD, Pharmacy…) and their features on or off.',
         'Process builder: which menus exist, what actions sit inside, and who can use them.',
-        'Form flows: drag-build the Patient Register, Order Create and Appointment fields.',
-        'Notifications + KPI cards: alerts on key events and the metrics pinned to each screen.'
+        'Form flows: drag-build the Patient Register, Order Create and Appointment fields.'
       ],
       tiles: [
         { title: 'Modules', href: '/admin/modules', gradient: 'violet',
@@ -718,12 +688,6 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Form Flows',    href: '/admin/workflows', gradient: 'pink',
           iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z', iconExtra: 'M9 7h6M12 14V10',
           subtitle: () => `${this._summary()?.workflows ?? '—'} screen forms configured` },
-        { title: 'Notifications', href: '/admin/notifications', gradient: 'rose',
-          iconPath: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Z', iconExtra: 'M11 20a1 1 0 0 0 2 0',
-          subtitle: () => 'Alerts, escalations, patient messages' },
-        { title: 'KPI cards',     href: '/admin/kpis', gradient: 'violet',
-          iconPath: 'M3 12h4l3-9 4 18 3-9h4',
-          subtitle: () => 'Pick which KPIs show on each screen' },
       ]
     },
   ];

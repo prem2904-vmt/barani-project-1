@@ -121,7 +121,8 @@ interface KpiCard {
       <p class="pf-ov__section">Manage</p>
       <div class="pf-ov__cards">
         @for (g of groups; track g.cat) {
-          <a [routerLink]="['/admin/manage']" [queryParams]="{ cat: g.cat }" class="pf-ov__card press">
+          <a [routerLink]="g.href ? [g.href] : ['/admin/manage']"
+             [queryParams]="g.href ? null : { cat: g.cat }" class="pf-ov__card press">
             <span class="pf-ov__card-ic" [attr.data-g]="g.cat">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path [attr.d]="g.icon"/>
@@ -281,12 +282,12 @@ export class AdminOverviewComponent implements OnInit {
     { key: 'tests',      label: 'Tests',        kind: 'count', color: 'pink',    icon: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 14h9' },
   ];
 
-  readonly groups = [
-    { cat: 'catalog',    label: 'Tests & Catalog',        blurb: 'Tests, packages, inventory, report layout',          icon: 'M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9' },
+  readonly groups: Array<{ cat: string; label: string; blurb: string; icon: string; href?: string }> = [
+    { cat: 'modules',    label: 'Modules',                 blurb: 'Enable products & features — Lab, OPD, IPD, Pharmacy…', icon: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', href: '/admin/modules' },
     { cat: 'people',     label: 'People & Access',         blurb: 'Users, roles and the audit trail',                   icon: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
-    { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, lab settings, queue, referrers',           icon: 'M4 21V7l8-4 8 4v14' },
+    { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, departments, queue, inventory',            icon: 'M4 21V7l8-4 8 4v14' },
     { cat: 'finance',    label: 'Billing & Finance',       blurb: 'GST, discounts, invoices, vendor wallets',           icon: 'M3 5h18v14H3z' },
-    { cat: 'automation', label: 'Workflow & Automation',   blurb: 'Process, form flows, notifications, KPIs',           icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
+    { cat: 'automation', label: 'Platform & Automation',   blurb: 'Modules, process builder, form flows',               icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
   ];
 
   ngOnInit(): void {

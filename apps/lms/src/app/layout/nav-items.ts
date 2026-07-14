@@ -264,6 +264,13 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
   },
   {
+    // Lab module's own settings hub — lab-specific config lives in the Lab world.
+    id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
+    iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
+    permissions: ['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'],
+    module: 'lab'
+  },
+  {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
     permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
