@@ -24,26 +24,48 @@
 
     <form class="pf-auth__form" (ngSubmit)="submit()" novalidate
           [class.pf-auth__form--busy]="busy()">
-      <h1 class="pf-auth__title">Sign in</h1>
+      <h1 class="pf-auth__title">{{ addMode() ? 'Add account' : 'Sign in' }}</h1>
+
+      @if (orgLocked()) {
+        <p class="pf-auth__note">
+          Adding an account to <strong>{{ lockedOrg() }}</strong>. On this device you
+          can only add profiles from your current organization.
+        </p>
+      }
 
       <label class="pf-auth__field">
         <span class="pf-auth__field-label">Organization</span>
         <span class="pf-auth__field-row">
-          <input class="pf-auth__field-input"
-                 type="text"
-                 list="pf-orgs"
-                 autocapitalize="off"
-                 autocorrect="off"
-                 spellcheck="false"
-                 enterkeyhint="next"
-                 required
-                 [ngModel]="org()"
-                 (ngModelChange)="org.set($event); error.set(null)"
-                 name="org"
-                 placeholder="Your organization name" />
-          <datalist id="pf-orgs">
-            @for (o of orgs(); track o) { <option [value]="o"></option> }
-          </datalist>
+          @if (orgLocked()) {
+            <!-- Tenant is fixed in add-account mode: show it read-only with a lock. -->
+            <input class="pf-auth__field-input pf-auth__field-input--locked"
+                   type="text"
+                   readonly
+                   aria-readonly="true"
+                   [value]="org()"
+                   name="org" />
+            <span class="pf-auth__field-lock" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+              </svg>
+            </span>
+          } @else {
+            <input class="pf-auth__field-input"
+                   type="text"
+                   list="pf-orgs"
+                   autocapitalize="off"
+                   autocorrect="off"
+                   spellcheck="false"
+                   enterkeyhint="next"
+                   required
+                   [ngModel]="org()"
+                   (ngModelChange)="org.set($event); error.set(null)"
+                   name="org"
+                   placeholder="Your organization name" />
+            <datalist id="pf-orgs">
+              @for (o of orgs(); track o) { <option [value]="o"></option> }
+            </datalist>
+          }
         </span>
       </label>
 
@@ -116,9 +138,9 @@
               [disabled]="busy()">
         @if (busy()) {
           <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
-          <span>Signing in…</span>
+          <span>{{ addMode() ? 'Adding account…' : 'Signing in…' }}</span>
         } @else {
-          <span>Sign in</span>
+          <span>{{ addMode() ? 'Add account' : 'Sign in' }}</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 12h14M13 6l6 6-6 6"/>
           </svg>
