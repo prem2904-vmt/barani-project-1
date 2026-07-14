@@ -240,6 +240,18 @@ interface KpiCard {
       .pf-ov__range-dd { display: inline-flex; }
       .pf-ov__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .pf-ov__kpi-v { font-size: 21px; }
+
+      /* Phone: the MANAGE cards become a single-column LIST — icon left, title
+         over subtitle, no 2-up tiles. (Grid layout keeps title/subtitle grouped
+         beside the icon without a template wrapper.) */
+      .pf-ov__cards { grid-template-columns: 1fr; gap: 8px; }
+      .pf-ov__card {
+        display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto;
+        column-gap: 14px; row-gap: 2px; align-items: center; padding: 13px 14px;
+      }
+      .pf-ov__card-ic { grid-row: 1 / 3; align-self: center; margin-bottom: 0; }
+      .pf-ov__card-t { grid-column: 2; grid-row: 1; }
+      .pf-ov__card-s { grid-column: 2; grid-row: 2; }
     }
 
     /* ---- Web-below-desktop band (641-1279, incl. iPad + narrow browsers) ---- */
@@ -283,11 +295,19 @@ export class AdminOverviewComponent implements OnInit {
   ];
 
   readonly groups: Array<{ cat: string; label: string; blurb: string; icon: string; href?: string }> = [
-    { cat: 'modules',    label: 'Modules',                 blurb: 'Enable products & features — Lab, OPD, IPD, Pharmacy…', icon: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', href: '/admin/modules' },
+    // Module-first admin: one card per MODULE (Lab here; OPD/IPD/Pharmacy slot in
+    // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
+    // the platform console (admin.prefrontal.health) — not here.
+    { cat: 'lab',        label: 'Lab',                     blurb: 'Tests & catalog, report layout, lab settings, referrals, alerts, KPIs', icon: 'M9 3h6M10 3v5.5L5.5 17A2 2 0 0 0 7.3 20h9.4a2 2 0 0 0 1.8-3L14 8.5V3', href: '/lab/settings' },
+    { cat: 'opd',        label: 'OPD',                     blurb: 'Appointments, consultation, vitals, prescriptions — coming soon', icon: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2', href: '/admin/opd' },
+    { cat: 'ipd',        label: 'IPD',                     blurb: 'Admissions, beds & wards, nursing, discharge — coming soon', icon: 'M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', href: '/admin/ipd' },
+    { cat: 'pharmacy',   label: 'Pharmacy',                blurb: 'Dispensing, stock, formulary, purchase — coming soon', icon: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7', href: '/admin/pharmacy' },
+    { cat: 'inventory',  label: 'Inventory',               blurb: 'Stock, batches, expiry alerts, per-item usage',      icon: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8', href: '/admin/inventory' },
+    { cat: 'payroll',    label: 'Payroll',                 blurb: 'Employees, attendance, payslips — coming soon',      icon: 'M3 7h18v12H3zM3 11h18M7 15h4M12 3v4', href: '/admin/payroll' },
     { cat: 'people',     label: 'People & Access',         blurb: 'Users, roles and the audit trail',                   icon: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
     { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, departments, queue, inventory',            icon: 'M4 21V7l8-4 8 4v14' },
     { cat: 'finance',    label: 'Billing & Finance',       blurb: 'GST, discounts, invoices, vendor wallets',           icon: 'M3 5h18v14H3z' },
-    { cat: 'automation', label: 'Platform & Automation',   blurb: 'Modules, process builder, form flows',               icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
+    { cat: 'automation', label: 'Platform & Automation',   blurb: 'Process builder & form flows',                       icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
   ];
 
   ngOnInit(): void {

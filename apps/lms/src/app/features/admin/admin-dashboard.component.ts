@@ -633,12 +633,6 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Appointments & queue', href: '/admin/appointments', gradient: 'amber',
           iconPath: 'M8 2v4M16 2v4M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', iconExtra: 'M3 10h18M8 14h.01M12 14h.01M16 14h.01',
           subtitle: () => 'Queue mode · slots · priority engine' },
-        { title: 'Home-collection agents', href: '/admin/home-collection', gradient: 'teal',
-          iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', iconExtra: 'M9 21v-6h6v6',
-          subtitle: () => 'Agents · coverage areas · weightage' },
-        { title: 'Inventory', href: '/admin/inventory', gradient: 'amber',
-          iconPath: 'M3 7l9-4 9 4v10l-9 4-9-4V7Z', iconExtra: 'M12 3v18M3 7l9 4 9-4',
-          subtitle: () => 'Stock, batches, expiry alerts · per-test usage' },
         { title: 'Branding', href: '/setup', gradient: 'violet',
           iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', iconExtra: 'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z',
           subtitle: () => 'Logo & lab name shown in the top bar' },
@@ -679,9 +673,6 @@ export class AdminDashboardComponent implements OnInit {
         'Form flows: drag-build the Patient Register, Order Create and Appointment fields.'
       ],
       tiles: [
-        { title: 'Modules', href: '/admin/modules', gradient: 'violet',
-          iconPath: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
-          subtitle: () => 'Enable products & features — Lab, OPD, IPD, Pharmacy, Inventory, Payroll' },
         { title: 'Process builder', href: '/admin/process', gradient: 'pink',
           iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',
           subtitle: () => 'Menus, actions & role access — drives the live nav' },

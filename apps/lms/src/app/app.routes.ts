@@ -96,6 +96,26 @@ export const appRoutes: Route[] = [
         canActivate: [permissionGuard(['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments']), moduleGuard('lab')],
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
       },
+      // Admin settings placeholders for not-yet-built modules — each opens a
+      // "coming soon" hub listing that module's planned config, so the module-
+      // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
+      // placeholder is visible regardless of entitlement.
+      {
+        path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/pharmacy', canActivate: [adminGuard], data: { moduleId: 'pharmacy' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/payroll', canActivate: [adminGuard], data: { moduleId: 'payroll' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
       {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],

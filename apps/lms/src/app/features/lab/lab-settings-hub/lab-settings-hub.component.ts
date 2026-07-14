@@ -38,8 +38,14 @@ interface LabTile {
                 <path [attr.d]="t.iconPath"></path>
               </svg>
             </span>
-            <span class="pf-lsh__t">{{ t.title }}</span>
-            <span class="pf-lsh__s">{{ t.subtitle }}</span>
+            <span class="pf-lsh__text">
+              <span class="pf-lsh__t">{{ t.title }}</span>
+              <span class="pf-lsh__s">{{ t.subtitle }}</span>
+            </span>
+            <svg class="pf-lsh__chev" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6"></path>
+            </svg>
           </a>
         }
       </div>
@@ -61,11 +67,24 @@ interface LabTile {
     .pf-lsh__tile:active { transform: scale(.99); }
     .pf-lsh__ic {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px;
+      width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; flex-shrink: 0;
       color: #c4b5fd; background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
     }
+    .pf-lsh__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .pf-lsh__t { font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }
     .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
+    .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
+
+    /* Phones: drop the 2-up tile grid to a single-column LIST — icon left,
+       text beside it, chevron right. Reads as a settings list, not cards. */
+    @media (max-width: 640px) {
+      .pf-lsh { grid-template-columns: 1fr; gap: 8px; }
+      .pf-lsh__tile { flex-direction: row; align-items: center; gap: 14px; padding: 13px 14px; }
+      .pf-lsh__ic { width: 36px; height: 36px; margin-bottom: 0; }
+      .pf-lsh__text { flex: 1; }
+      .pf-lsh__s { font-size: 12px; }
+      .pf-lsh__chev { display: block; }
+    }
   `],
 })
 export class LabSettingsHubComponent {
@@ -85,6 +104,9 @@ export class LabSettingsHubComponent {
     { title: 'Referring Network', href: '/admin/referring-network',
       subtitle: 'Hospitals + doctors that send patients to your lab',
       iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01' },
+    { title: 'Home-collection agents', href: '/admin/home-collection',
+      subtitle: 'Agents · coverage areas · weightage',
+      iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6' },
     { title: 'Notifications', href: '/admin/notifications',
       subtitle: 'Alerts, escalations, patient messages',
       iconPath: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2ZM11 20a1 1 0 0 0 2 0' },
