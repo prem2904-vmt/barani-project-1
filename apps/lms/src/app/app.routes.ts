@@ -117,6 +117,10 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
       {
+        path: 'admin/insurance', canActivate: [adminGuard], data: { moduleId: 'insurance' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)

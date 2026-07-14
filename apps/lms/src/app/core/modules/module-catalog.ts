@@ -10,7 +10,7 @@
  * catalog, so nothing else needs editing to introduce one.
  */
 
-export type ModuleId = 'lab' | 'opd' | 'ipd' | 'pharmacy' | 'inventory' | 'payroll';
+export type ModuleId = 'lab' | 'opd' | 'ipd' | 'pharmacy' | 'inventory' | 'payroll' | 'insurance';
 
 export interface ModuleFeatureDef {
   /** Stable key stored in ModulesJson (camelCase). Lab's `reports`/`messages`/
@@ -125,6 +125,22 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'employees', label: 'Employees' },
       { key: 'attendance', label: 'Attendance' },
       { key: 'payslips', label: 'Payslips' },
+    ],
+  },
+  {
+    id: 'insurance',
+    label: 'Insurance',
+    iconPath: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4',
+    status: 'coming_soon',
+    defaultEnabled: false,
+    route: '/insurance',
+    blurb: 'Policies, claims, pre-authorization, TPA and reimbursement.',
+    features: [
+      { key: 'policies', label: 'Policies' },
+      { key: 'claims', label: 'Claims' },
+      { key: 'preAuth', label: 'Pre-authorization' },
+      { key: 'tpa', label: 'TPA' },
+      { key: 'reimbursement', label: 'Reimbursement' },
     ],
   },
 ];

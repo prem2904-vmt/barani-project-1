@@ -304,6 +304,7 @@ export class AdminOverviewComponent implements OnInit {
     { cat: 'pharmacy',   label: 'Pharmacy',                blurb: 'Dispensing, stock, formulary, purchase — coming soon', icon: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7', href: '/admin/pharmacy' },
     { cat: 'inventory',  label: 'Inventory',               blurb: 'Stock, batches, expiry alerts, per-item usage',      icon: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8', href: '/admin/inventory' },
     { cat: 'payroll',    label: 'Payroll',                 blurb: 'Employees, attendance, payslips — coming soon',      icon: 'M3 7h18v12H3zM3 11h18M7 15h4M12 3v4', href: '/admin/payroll' },
+    { cat: 'insurance',  label: 'Insurance',               blurb: 'Policies, claims, pre-auth, TPA, reimbursement — coming soon', icon: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4', href: '/admin/insurance' },
     { cat: 'people',     label: 'People & Access',         blurb: 'Users, roles and the audit trail',                   icon: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
     { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, departments, queue, inventory',            icon: 'M4 21V7l8-4 8 4v14' },
     { cat: 'finance',    label: 'Billing & Finance',       blurb: 'GST, discounts, invoices, vendor wallets',           icon: 'M3 5h18v14H3z' },
