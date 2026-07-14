@@ -10,7 +10,9 @@
  * catalog, so nothing else needs editing to introduce one.
  */
 
-export type ModuleId = 'lab' | 'opd' | 'ipd' | 'pharmacy' | 'inventory' | 'payroll' | 'insurance';
+export type ModuleId =
+  | 'lab' | 'opd' | 'ipd' | 'pharmacy' | 'inventory' | 'payroll' | 'insurance'
+  | 'radiology' | 'emergency' | 'bloodbank';
 
 export interface ModuleFeatureDef {
   /** Stable key stored in ModulesJson (camelCase). Lab's `reports`/`messages`/
@@ -141,6 +143,52 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'preAuth', label: 'Pre-authorization' },
       { key: 'tpa', label: 'TPA' },
       { key: 'reimbursement', label: 'Reimbursement' },
+    ],
+  },
+  {
+    id: 'radiology',
+    label: 'Radiology / Imaging',
+    iconPath: 'M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z',
+    status: 'coming_soon',
+    defaultEnabled: false,
+    route: '/radiology',
+    blurb: 'Imaging diagnostics — X-ray, CT, MRI, ultrasound.',
+    features: [
+      { key: 'modalities', label: 'Modalities' },
+      { key: 'orders', label: 'Orders' },
+      { key: 'reporting', label: 'Reporting' },
+      { key: 'pacs', label: 'PACS link' },
+      { key: 'templates', label: 'Templates' },
+    ],
+  },
+  {
+    id: 'emergency',
+    label: 'Emergency (ER)',
+    iconPath: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
+    status: 'coming_soon',
+    defaultEnabled: false,
+    route: '/emergency',
+    blurb: 'Casualty / emergency — triage, ER registration, observation.',
+    features: [
+      { key: 'triage', label: 'Triage' },
+      { key: 'registration', label: 'ER registration' },
+      { key: 'observation', label: 'Observation' },
+      { key: 'disposition', label: 'Disposition' },
+    ],
+  },
+  {
+    id: 'bloodbank',
+    label: 'Blood Bank',
+    iconPath: 'M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10Z',
+    status: 'coming_soon',
+    defaultEnabled: false,
+    route: '/blood-bank',
+    blurb: 'Donors, cross-match, blood-unit inventory, transfusion.',
+    features: [
+      { key: 'donors', label: 'Donors' },
+      { key: 'crossmatch', label: 'Cross-match' },
+      { key: 'inventory', label: 'Unit inventory' },
+      { key: 'issue', label: 'Issue / Transfusion' },
     ],
   },
 ];

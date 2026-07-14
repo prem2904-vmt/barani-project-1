@@ -121,6 +121,18 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
       {
+        path: 'admin/radiology', canActivate: [adminGuard], data: { moduleId: 'radiology' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/emergency', canActivate: [adminGuard], data: { moduleId: 'emergency' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/blood-bank', canActivate: [adminGuard], data: { moduleId: 'bloodbank' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)

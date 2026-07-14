@@ -299,11 +299,14 @@ export class AdminOverviewComponent implements OnInit {
     // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
     // the platform console (admin.prefrontal.health) — not here.
     { cat: 'lab',        label: 'Lab',                     blurb: 'Tests & catalog, report layout, lab settings, referrals, alerts, KPIs', icon: 'M9 3h6M10 3v5.5L5.5 17A2 2 0 0 0 7.3 20h9.4a2 2 0 0 0 1.8-3L14 8.5V3', href: '/lab/settings' },
+    { cat: 'radiology',  label: 'Radiology / Imaging',     blurb: 'X-ray, CT, MRI, ultrasound, PACS — coming soon',     icon: 'M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z', href: '/admin/radiology' },
     { cat: 'opd',        label: 'OPD',                     blurb: 'Appointments, consultation, vitals, prescriptions — coming soon', icon: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2', href: '/admin/opd' },
     { cat: 'ipd',        label: 'IPD',                     blurb: 'Admissions, beds & wards, nursing, discharge — coming soon', icon: 'M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', href: '/admin/ipd' },
     { cat: 'pharmacy',   label: 'Pharmacy',                blurb: 'Dispensing, stock, formulary, purchase — coming soon', icon: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7', href: '/admin/pharmacy' },
     { cat: 'inventory',  label: 'Inventory',               blurb: 'Stock, batches, expiry alerts, per-item usage',      icon: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8', href: '/admin/inventory' },
     { cat: 'payroll',    label: 'Payroll',                 blurb: 'Employees, attendance, payslips — coming soon',      icon: 'M3 7h18v12H3zM3 11h18M7 15h4M12 3v4', href: '/admin/payroll' },
+    { cat: 'emergency',  label: 'Emergency (ER)',          blurb: 'Triage, ER registration, observation — coming soon', icon: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z', href: '/admin/emergency' },
+    { cat: 'bloodbank',  label: 'Blood Bank',              blurb: 'Donors, cross-match, unit inventory — coming soon',  icon: 'M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10Z', href: '/admin/blood-bank' },
     { cat: 'insurance',  label: 'Insurance',               blurb: 'Policies, claims, pre-auth, TPA, reimbursement — coming soon', icon: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4', href: '/admin/insurance' },
     { cat: 'people',     label: 'People & Access',         blurb: 'Users, roles and the audit trail',                   icon: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
     { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, departments, queue, inventory',            icon: 'M4 21V7l8-4 8 4v14' },
