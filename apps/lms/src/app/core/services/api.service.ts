@@ -60,7 +60,7 @@ export class ApiService {
       }),
       catchError((err: HttpErrorResponse | Error) => {
         this._isLoading.set(false);
-        const apiErr = err instanceof ApiError ? err : this.toApiError(err);
+        const apiErr = ApiError.from(err);
         this._error.set(apiErr.message);
         return throwError(() => apiErr);
       })
@@ -69,41 +69,6 @@ export class ApiService {
 
   private messageFrom(err: HttpErrorResponse | Error): string {
     return ApiError.from(err).message;
-  }
-}
-
-export class ApiError {
-  constructor(public readonly message: string, public readonly originalError?: any) {}
-
-  static from(err: any): ApiError {
-    let message = 'An unexpected error occurred';
-    
-    if (err instanceof HttpErrorResponse) {
-      const body = err.error;
-      if (body && typeof body === 'object') {
-        if ('message' in body && body.message) {
-          message = String(body.message);
-        } else if ('error' in body && body.error) {
-          if (typeof body.error === 'object' && 'message' in body.error && body.error.message) {
-            message = String(body.error.message);
-          } else if (typeof body.error === 'string') {
-            message = body.error;
-          }
-        }
-      } else if (typeof body === 'string') {
-        message = body;
-      } else {
-        message = err.message || err.statusText || message;
-      }
-    } else if (err instanceof Error) {
-      message = err.message;
-    } else if (err && typeof err === 'object' && 'message' in err && err.message) {
-      message = String(err.message);
-    } else if (typeof err === 'string') {
-      message = err;
-    }
-    
-    return new ApiError(message, err);
   }
 }
 
