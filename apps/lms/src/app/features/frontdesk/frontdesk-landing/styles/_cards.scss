@@ -191,7 +191,8 @@
 
 .pf-card:hover {
   background: var(--glass-bg-hover);
-  border-color: var(--glass-border-hover);
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08);
 }
 
 .pf-card:active {

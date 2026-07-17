@@ -42,7 +42,7 @@ interface DispatchPackage {
   orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
 }
 import flatpickr from 'flatpickr';
-import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advanced-patient-search.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
@@ -491,6 +491,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.inApptRange(a.appointmentDate)
       && a.status !== 'checked_in'
       && a.status !== 'cancelled'
+      && a.collectionType !== 'home_collection'
     )
   );
   /** "In progress" — actively-moving orders. Excludes terminal /
@@ -2112,6 +2113,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   patientName(id: string): string {
     return patientDisplayName(this.patientFor(id)) || 'Patient';
   }
+  protected readonly formatPatient = formatPatientInfo;
   hasOutstanding(pid?: string): boolean {
     if (!pid) return false;
     return this._bills().some(b => b.patientId === pid && b.balance > 0);

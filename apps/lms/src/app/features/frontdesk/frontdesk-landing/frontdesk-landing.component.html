@@ -406,22 +406,17 @@
                           </div>
                           <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                           <div class="pf-card__body">
-                            <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
-                            <p class="pf-card__meta">
-                              @if (a.patient?.sex || a.patient?.age != null) {
-                                {{ a.patient?.sex }}@if (a.patient?.sex && a.patient?.age != null) { · }
-                                @if (a.patient?.age != null) { {{ a.patient?.age }}y }
-                              }
-                              @if (a.patient?.phone) {
-                                @if (a.patient?.sex || a.patient?.age != null) { · }
+                            <p class="pf-card__name">{{ formatPatient(a.patient) }}</p>
+                            @if (a.patient?.phone) {
+                              <p class="pf-card__meta">
                                 {{ a.patient?.phone }}
-                              }
+                              </p>
+                            }
                               @if (hasOutstanding(a.patient?.id)) {
                                 <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
                                   ● ₹ owed
                                 </span>
                               }
-                            </p>
                           </div>
                           <div class="pf-card__actions" (click)="$event.stopPropagation()">
                             @if (a.patient?.phone) {
@@ -488,10 +483,7 @@
                           }
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
-                              <p class="pf-card__name">{{ a.patient?.displayName ?? 'Patient' }}</p>
-                              @if (a.patient?.mrn) {
-                                <span class="pf-card__mrn" [title]="'MRN: ' + a.patient?.mrn">{{ a.patient?.mrn }}</span>
-                              }
+                              <p class="pf-card__name">{{ formatPatient(a.patient) }}</p>
                             </div>
                             <p class="pf-card__meta">
                               {{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}
@@ -561,70 +553,72 @@
                   </button>
                 </div>
 
-                <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
-                  <!-- Date filters for Right Pane -->
-                  <div class="pf-hdr-date-pills">
-                    @for (opt of workDateOptions; track opt.id) {
-                      @if (opt.id === 'custom') {
-                        <button #workCustomBtn type="button" class="pf-hdr-date-pill"
-                          [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
-                          [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
-                          (click)="openWorkDatePicker(workCustomBtn, $event)">
-                          {{ workCustomRangeLabel() }}
-                        </button>
-                        @if (workDateRange() === 'custom' && workCustomStart()) {
-                          <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
-                            aria-label="Clear custom range">×</button>
-                        }
-                      } @else {
-                        <button type="button" class="pf-hdr-date-pill"
-                          [class.pf-hdr-date-pill--on]="workDateRange() === opt.id" (click)="setWorkDateRange(opt.id)">
-                          {{ opt.label }}
-                        </button>
-                      }
-                    }
-                  </div>
-
-                  <!-- Dropdown filter for Work (visible on mobile/tablet only < 1024px) -->
-                  <div class="pf-hdr-filter">
-                    <button type="button" class="pf-hdr-filter__btn"
-                      [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today'"
-                      (click)="toggleWorkFilter()"
-                      aria-haspopup="true" [attr.aria-expanded]="workFilterOpen()"
-                      [attr.aria-label]="'Filter by date: ' + workRangeLabel()"
-                      [attr.title]="'Filter by date: ' + workRangeLabel()">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M4 6h16M7 12h10M10 18h4"/>
-                      </svg>
-                    </button>
-                    @if (workFilterOpen()) {
-                      <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
-                      <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
-                        @for (opt of workDateOptions; track opt.id) {
-                          @if (opt.id === 'custom') {
-                            <button #workCustomBtnDropdown type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
-                              [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
-                              (click)="openWorkDatePicker(workCustomBtnDropdown, $event)">
-                              {{ workCustomRangeLabel() }}
-                            </button>
-                            @if (workDateRange() === 'custom' && workCustomStart()) {
-                              <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom(); closeDateFilters()"
-                                aria-label="Clear custom range">×</button>
-                            }
-                          } @else {
-                            <button type="button" class="pf-hdr-date-pill"
-                              [class.pf-hdr-date-pill--on]="workDateRange() === opt.id"
-                              (click)="setWorkDateRange(opt.id); closeDateFilters()">
-                              {{ opt.label }}
-                            </button>
+                @if (rightTab() !== 'done') {
+                  <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
+                    <!-- Date filters for Right Pane -->
+                    <div class="pf-hdr-date-pills">
+                      @for (opt of workDateOptions; track opt.id) {
+                        @if (opt.id === 'custom') {
+                          <button #workCustomBtn type="button" class="pf-hdr-date-pill"
+                            [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
+                            [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
+                            (click)="openWorkDatePicker(workCustomBtn, $event)">
+                            {{ workCustomRangeLabel() }}
+                          </button>
+                          @if (workDateRange() === 'custom' && workCustomStart()) {
+                            <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
+                              aria-label="Clear custom range">×</button>
                           }
+                        } @else {
+                          <button type="button" class="pf-hdr-date-pill"
+                            [class.pf-hdr-date-pill--on]="workDateRange() === opt.id" (click)="setWorkDateRange(opt.id)">
+                            {{ opt.label }}
+                          </button>
                         }
-                      </div>
-                    }
+                      }
+                    </div>
+
+                    <!-- Dropdown filter for Work (visible on mobile/tablet only < 1024px) -->
+                    <div class="pf-hdr-filter">
+                      <button type="button" class="pf-hdr-filter__btn"
+                        [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today'"
+                        (click)="toggleWorkFilter()"
+                        aria-haspopup="true" [attr.aria-expanded]="workFilterOpen()"
+                        [attr.aria-label]="'Filter by date: ' + workRangeLabel()"
+                        [attr.title]="'Filter by date: ' + workRangeLabel()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M4 6h16M7 12h10M10 18h4"/>
+                        </svg>
+                      </button>
+                      @if (workFilterOpen()) {
+                        <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
+                        <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
+                          @for (opt of workDateOptions; track opt.id) {
+                            @if (opt.id === 'custom') {
+                              <button #workCustomBtnDropdown type="button" class="pf-hdr-date-pill"
+                                [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
+                                [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
+                                (click)="openWorkDatePicker(workCustomBtnDropdown, $event)">
+                                {{ workCustomRangeLabel() }}
+                              </button>
+                              @if (workDateRange() === 'custom' && workCustomStart()) {
+                                <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom(); closeDateFilters()"
+                                  aria-label="Clear custom range">×</button>
+                              }
+                            } @else {
+                              <button type="button" class="pf-hdr-date-pill"
+                                [class.pf-hdr-date-pill--on]="workDateRange() === opt.id"
+                                (click)="setWorkDateRange(opt.id); closeDateFilters()">
+                                {{ opt.label }}
+                              </button>
+                            }
+                          }
+                        </div>
+                      }
+                    </div>
                   </div>
-                </div>
+                }
 
                 <svg class="pf-appt-split__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
@@ -694,9 +688,7 @@
                           }
                           <div class="pf-card__body">
                             <div class="pf-card__name-row">
-                              <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
-                              <span class="pf-card__mrn"
-                                [title]="o.patient?.mrn ? ('MRN: ' + (o.patient?.mrn ?? '')) : null">{{ o.patient?.mrn || '—' }}</span>
+                              <p class="pf-card__name">{{ formatPatient(o.patient) }}</p>
                               <span class="pf-card__meta-inline">{{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }} · {{ o.createdAt | date:'shortTime' }}</span>
                             </div>
                             @if (o.samples.length > 0) {
@@ -775,7 +767,7 @@
                             </div>
                           }
                           <div class="min-w-0 flex-1">
-                            <p class="pf-card__name">{{ o.patient?.displayName ?? 'Patient' }}</p>
+                            <p class="pf-card__name">{{ formatPatient(o.patient) }}</p>
                             <p class="pf-card__meta">
                               {{ o.patient?.mrn || '—' }} · {{ effectiveStatusLabel(o) }}
                               · {{ o.samples.length }} sample{{ o.samples.length === 1 ? '' : 's' }}
@@ -844,7 +836,7 @@
         <p class="pf-drawer__hdr-eyebrow">
           {{ so.patient?.mrn || '—' }} · Order #{{ so.id.slice(0, 8) }}
         </p>
-        <p class="pf-drawer__hdr-name">{{ so.patient?.displayName ?? 'Patient' }}</p>
+        <p class="pf-drawer__hdr-name">{{ formatPatient(so.patient) }}</p>
       </div>
       <div class="pf-drawer__hdr-actions">
         <pf-chip [tone]="orderTone(so)" size="sm">{{ effectiveStatusLabel(so) }}</pf-chip>
@@ -1102,7 +1094,7 @@
       <pf-avatar [name]="hc.patient?.displayName ?? 'Patient'" [size]="48"></pf-avatar>
       <div class="pf-drawer__hdr-info">
         <p class="pf-drawer__hdr-eyebrow">Home collection · {{ hc.assignedAgentId ? 'Assigned' : 'Unassigned' }}</p>
-        <p class="pf-drawer__hdr-name">{{ hc.patient?.displayName ?? 'Patient' }}</p>
+        <p class="pf-drawer__hdr-name">{{ formatPatient(hc.patient) }}</p>
       </div>
       <button type="button" class="pf-drawer__close" (click)="closeHomeCollection()" aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
