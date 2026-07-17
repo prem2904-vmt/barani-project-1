@@ -10,7 +10,7 @@ import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
-import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -179,6 +179,20 @@ export class PatientProfileComponent implements OnInit {
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly displayName = computed(() => patientDisplayName(this._patient()));
+  protected readonly formatPatient = formatPatientInfo;
+
+  readonly copied = signal(false);
+
+  copyToClipboard(text: string | undefined) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      this.copied.set(true);
+      setTimeout(() => this.copied.set(false), 2000);
+      this.toasts.success('Patient ID copied to clipboard');
+    }).catch(() => {
+      this.toasts.error('Failed to copy to clipboard');
+    });
+  }
 
   /** "37y" — a DOB (real or synthesized from an entered age, anchored to the
    *  registration date) always wins so the age stays live and increments; falls

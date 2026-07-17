@@ -15,6 +15,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { CultureResult } from '../../../shared/models/culture.model';
+import { formatPatientInfo } from '../../../shared/models/patient.model';
 
 interface BulkSubmitResponse {
   sample: OrderSample;
@@ -68,7 +69,7 @@ function defaultResultParam(): TestParameter {
         @if (sample(); as s) {
           <div class="pf-sre__hdr-title">
             <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.barcode || '—' }}</p>
-            <h1 class="pf-sre__title">{{ s.order?.patient?.displayName ?? 'Patient' }}</h1>
+            <h1 class="pf-sre__title">{{ formatPatient(s.order?.patient) }}</h1>
             <p class="pf-sre__sub">{{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
           </div>
         }
@@ -1148,6 +1149,7 @@ export class SampleResultEntryComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
+  protected readonly formatPatient = formatPatientInfo;
 
   private readonly _sample = signal<OrderSample | null>(null);
   private readonly _loading = signal<boolean>(true);

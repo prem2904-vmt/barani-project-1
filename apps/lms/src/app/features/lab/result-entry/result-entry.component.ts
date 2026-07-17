@@ -7,7 +7,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
-import { patientDisplayName } from '../../../shared/models/patient.model';
+import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -157,9 +157,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               <div class="pf-patient-bar">
                 <pf-avatar [name]="patientName()" [size]="40"></pf-avatar>
                 <div class="pf-patient-bar__id">
-                  <p class="pf-patient-bar__name">{{ patientName() }}</p>
+                  <p class="pf-patient-bar__name">{{ patientInfoString() }}</p>
                   <p class="pf-patient-bar__meta">
-                    {{ patientSex() }} · {{ patientAge() }}y · {{ t.test?.department?.name ?? '—' }}
+                    {{ t.test?.department?.name ?? '—' }}
                     <span class="pf-patient-bar__sep">·</span> TAT {{ t.test?.tatHours }}h
                   </p>
                 </div>
@@ -2830,6 +2830,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly patientName = computed(() => patientDisplayName(this._ot()?.subOrder?.order?.patient) || '—');
   readonly patientSex  = computed(() => this._ot()?.subOrder?.order?.patient?.sex ?? '—');
   readonly patientAge  = computed(() => this._ot()?.subOrder?.order?.patient?.age ?? '—');
+  readonly patientInfoString = computed(() => formatPatientInfo(this._ot()?.subOrder?.order?.patient));
 
   readonly subtitle = computed(() => {
     if (!this._ot()) return 'Capturing parameter values for this test.';

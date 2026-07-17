@@ -9,6 +9,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -747,8 +748,13 @@ interface OrderGroup {
     .pf-sc__list {
       list-style: none; padding: 0; margin: 0;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      grid-template-columns: repeat(1, minmax(0, 1fr));
       gap: 12px;
+    }
+    @media (min-width: 768px) {
+      .pf-sc__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .pf-sc__list > li { min-width: 0; }
     /* Card row: Avatar · Name/meta · Rack of chips · Count · Chevron.
@@ -1875,15 +1881,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       let g = byOrder.get(s.orderId);
       if (!g) {
         const p = s.order?.patient;
-        const meta = [
-          p?.sex,
-          p?.age != null ? `${p.age}y` : null,
-          `#${s.orderId.slice(0, 8)}`
-        ].filter(Boolean).join(' · ');
         g = {
           orderId: s.orderId,
-          patientName: p?.displayName ?? 'Patient',
-          patientMeta: meta,
+          patientName: formatPatientInfo(p),
+          patientMeta: `Order #${s.orderId.slice(0, 8)}`,
           createdAt: s.createdAt,
           samples: [],
           totalVials: 0,

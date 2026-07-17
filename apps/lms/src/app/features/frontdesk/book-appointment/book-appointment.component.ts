@@ -9,7 +9,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
 import { Appointment } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
+import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -66,14 +66,6 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
         eyebrow="Frontdesk · Appointments"
         title="Book appointment"
         subtitle="Pick a date and slot. WhatsApp confirmation queues automatically.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
       </pf-screen-header>
 
       <!-- Grid Layout Container for Desktop (3 columns) -->
@@ -91,11 +83,12 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
               <div class="flex items-center gap-4 p-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl hover:border-purple-500/30 transition-all duration-200">
                 <pf-avatar [name]="patientName()" [size]="40" class="shrink-0"></pf-avatar>
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-semibold text-[var(--text-primary)] truncate">{{ patientName() }}</p>
-                  <p class="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-                    {{ patient()!.age ?? "—" }} yrs / {{ patient()!.sex ?? "—" }} ·
-                    <span class="font-mono tracking-wider text-[var(--text-muted)]">{{ patient()!.phone ?? "no phone" }}</span>
-                  </p>
+                  <p class="text-sm font-semibold text-[var(--text-primary)] truncate">{{ formatPatient(patient()) }}</p>
+                  @if (patient()!.phone) {
+                    <p class="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
+                      <span class="font-mono tracking-wider text-[var(--text-muted)]">{{ patient()!.phone }}</span>
+                    </p>
+                  }
                 </div>
                 <button
                   type="button"
@@ -415,8 +408,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
               <span class="text-[var(--text-secondary)] font-medium">Patient</span>
               <div class="text-right">
                 @if (patient()) {
-                  <span class="font-semibold text-[var(--text-primary)]">{{ patientName() }}</span>
-                  <p class="text-[10px] text-[var(--text-muted)] mt-0.5">{{ patient()!.age ?? '—' }} yrs / {{ patient()!.sex ?? '—' }}</p>
+                  <span class="font-semibold text-[var(--text-primary)]">{{ formatPatient(patient()) }}</span>
                 } @else {
                   <span class="text-[var(--text-muted)] italic">No patient selected</span>
                 }
@@ -835,6 +827,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   readonly errorMsg = this._errorMsg.asReadonly();
 
   readonly patientName = computed(() => patientDisplayName(this.patient()));
+  protected readonly formatPatient = formatPatientInfo;
   readonly canSubmit = computed(() => {
     if (!this.patient() || !this.selectedDate() || !this.selectedTime()) {
       return false;

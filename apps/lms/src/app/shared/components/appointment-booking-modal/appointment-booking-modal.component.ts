@@ -24,7 +24,7 @@ import {
 import { ApiService } from "../../../core/services/api.service";
 import { AppointmentBookingService } from "../../../core/services/appointment-booking.service";
 import { ToastService } from "../../../core/services/toast.service";
-import { Patient, patientDisplayName } from "../../models/patient.model";
+import { Patient, patientDisplayName, formatPatientInfo } from "../../models/patient.model";
 import { Appointment } from "../../models/appointment.model";
 import { Test } from "../../models/test.model";
 import { AvatarComponent } from "../../primitives/avatar.component";
@@ -105,11 +105,12 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 <div class="flex items-center gap-4 p-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl hover:border-purple-500/30 transition-all duration-200">
                   <pf-avatar [name]="patientName()" [size]="40" class="shrink-0"></pf-avatar>
                   <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-[var(--text-primary)] truncate">{{ patientName() }}</p>
-                    <p class="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-                      {{ patient()!.age ?? "—" }} yrs / {{ patient()!.sex ?? "—" }} ·
-                      <span class="font-mono tracking-wider text-[var(--text-muted)]">{{ patient()!.phone ?? "no phone" }}</span>
-                    </p>
+                    <p class="text-sm font-semibold text-[var(--text-primary)] truncate">{{ formatPatient(patient()) }}</p>
+                    @if (patient()!.phone) {
+                      <p class="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
+                        <span class="font-mono tracking-wider text-[var(--text-muted)]">{{ patient()!.phone }}</span>
+                      </p>
+                    }
                   </div>
                   <button
                     type="button"
@@ -573,6 +574,7 @@ export class AppointmentBookingModalComponent {
   readonly open = computed(() => this.booking.request() !== null);
 
   readonly patientName = computed(() => patientDisplayName(this.patient()));
+  protected readonly formatPatient = formatPatientInfo;
   readonly canSubmit = computed(() => {
     if (!this.patient() || !this.selectedDate() || !this.selectedTime()) {
       return false;
