@@ -45,6 +45,26 @@ export function patientMrnLabel(p: Pick<Patient, 'mrn'> | null | undefined): str
   return p?.mrn?.trim() || '—';
 }
 
+/** Formats patient details consistently: <Name(First 15 characters followed by ellipsis)> | <age> /<sex> | <P-ID> */
+export function formatPatientInfo(
+  p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex' | 'mrn'> | null | undefined
+): string {
+  if (!p) return '—';
+  const name = patientDisplayName(p);
+  const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
+  const age = p.age != null ? p.age : '—';
+  let sexCode = '—';
+  if (p.sex) {
+    const s = p.sex.trim().toLowerCase();
+    if (s.startsWith('m')) sexCode = 'M';
+    else if (s.startsWith('f')) sexCode = 'F';
+    else if (s.startsWith('o')) sexCode = 'O';
+    else sexCode = p.sex.charAt(0).toUpperCase();
+  }
+  const pid = p.mrn?.trim() || '—';
+  return `${truncatedName} | ${age}/${sexCode} | ${pid}`;
+}
+
 export interface RegisterPatientInput {
   firstName: string;
   fathersName: string;

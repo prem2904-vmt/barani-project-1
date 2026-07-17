@@ -7,6 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -112,7 +113,7 @@ interface ResultSnapshot {
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                           (click)="openOrder(g)"
                           [attr.aria-label]="'Validate ' + g.patientName">
-                    <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                    <pf-avatar [name]="g.displayName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
                         <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
@@ -315,6 +316,7 @@ export class PendingValidationComponent implements OnInit {
   patientGroups(items: Enriched[]): Array<{
     orderId: string;
     patientName: string;
+    displayName: string;
     items: Enriched[];
     testNames: string[];
     level: Level;
@@ -332,7 +334,8 @@ export class PendingValidationComponent implements OnInit {
       const worst = [...group].sort((a, b) => rank[a._level] - rank[b._level])[0];
       return {
         orderId,
-        patientName: worst.subOrder?.order?.patient?.displayName ?? '—',
+        patientName: formatPatientInfo(worst.subOrder?.order?.patient),
+        displayName: worst.subOrder?.order?.patient?.displayName || 'Patient',
         items: group,
         testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
         level: worst._level,

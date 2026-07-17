@@ -13,8 +13,9 @@ import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
+import { formatPatientInfo } from '../../../shared/models/patient.model';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -95,10 +96,8 @@ interface ValueRow {
           <div class="pf-ctx">
             <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
             <div class="pf-ctx__id">
-              <p class="pf-ctx__name">{{ t.subOrder?.order?.patient?.displayName ?? '—' }}</p>
+              <p class="pf-ctx__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
               <p class="pf-ctx__meta">
-                {{ t.subOrder?.order?.patient?.sex ?? '—' }} ·
-                {{ t.subOrder?.order?.patient?.age ?? '—' }}y ·
                 {{ t.test?.department?.name ?? '—' }} ·
                 entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}
               </p>
@@ -1414,6 +1413,7 @@ export class ValidateResultComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
+  protected readonly formatPatient = formatPatientInfo;
 
   private readonly _id = signal<string | null>(null);
   // Validator ↔ tech conversation. Loaded whenever a new OrderTest

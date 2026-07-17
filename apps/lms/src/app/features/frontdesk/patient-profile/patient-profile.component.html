@@ -1,4 +1,4 @@
-﻿<section class="pf-pp__root bg-[var(--bg-primary)] text-[var(--text-primary)] p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+<section class="pf-pp__root bg-[var(--bg-primary)] text-[var(--text-primary)] p-4 md:p-6 lg:p-8 flex flex-col gap-6">
 
   @if (patient(); as p) {
 
@@ -31,19 +31,15 @@
             <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
             <div class="flex-1 min-w-0">
               <h1 class="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-tight truncate mb-1">
-                {{ displayName() }}
+                {{ formatPatient(p) }}
               </h1>
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-400"
-                  [title]="p.mrn ? ('MRN: ' + p.mrn) : 'No MRN on file'">
-                  {{ p.mrn?.trim() || '—' }}
-                </span>
-                @if (p.isMinor) {
+              @if (p.isMinor) {
+                <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
                     MINOR
                   </span>
-                }
-              </div>
+                </div>
+              }
             </div>
             @if (canEdit()) {
               <button type="button" title="Edit patient info"

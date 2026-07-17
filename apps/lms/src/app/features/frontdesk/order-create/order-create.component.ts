@@ -11,7 +11,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
-import { Patient } from '../../../shared/models/patient.model';
+import { Patient, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -182,6 +182,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   readonly patient = this._patient.asReadonly();
   readonly isChangingPatient = signal(false);
+  protected readonly formatPatient = formatPatientInfo;
   readonly saving = this._saving.asReadonly();
   readonly selected = this._selected.asReadonly();
   readonly priority = this._priority.asReadonly();

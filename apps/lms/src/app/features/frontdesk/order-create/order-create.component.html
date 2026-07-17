@@ -84,7 +84,7 @@
                   <div class="pf-patient-inline">
                     <pf-avatar [name]="p.displayName" [size]="32" class="shrink-0"></pf-avatar>
                     <div class="min-w-0 flex-1">
-                      <p class="pf-patient__name">{{ p.displayName }} ({{ p.age ?? '—' }}y/{{ p.sex ?? '—' }})</p>
+                      <p class="pf-patient__name">{{ formatPatient(p) }}</p>
                     </div>
                     @if (!isReadOnly()) {
                       <button type="button" class="pf-patient__change press" (click)="changePatient()">
