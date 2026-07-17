@@ -60,27 +60,15 @@ export class ApiService {
       }),
       catchError((err: HttpErrorResponse | Error) => {
         this._isLoading.set(false);
-        const apiErr = err instanceof ApiError ? err : this.toApiError(err);
+        const apiErr = ApiError.from(err);
         this._error.set(apiErr.message);
         return throwError(() => apiErr);
       })
     );
   }
 
-  /** Normalize HTTP-layer failures into the same ApiError contract the
-   *  success:false path throws, keeping code + field from the JSON body. */
-  private toApiError(err: HttpErrorResponse | Error): ApiError {
-    if (err instanceof HttpErrorResponse) {
-      const body = err.error;
-      if (body && typeof body === 'object' && ('message' in body || 'error' in body)) {
-        return new ApiError(
-          String(body.message ?? body.error ?? err.message),
-          typeof body.error === 'string' ? body.error : undefined,
-          typeof body.field === 'string' ? body.field : undefined,
-        );
-      }
-      return new ApiError(err.status === 0 ? 'Network error — check your connection' : err.message);
-    }
-    return new ApiError(err.message ?? 'Unknown error');
+  private messageFrom(err: HttpErrorResponse | Error): string {
+    return ApiError.from(err).message;
   }
 }
+
