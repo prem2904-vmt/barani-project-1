@@ -776,7 +776,10 @@
 }
 
 .pf-card--token-layout {
+  /* Keep original grid-template-columns with 60px token column for future enablement:
   grid-template-columns: 22px 60px 1fr auto auto;
+  */
+  grid-template-columns: 22px 1fr auto auto;
 }
 
 .pf-card--ip .pf-card__actions {
@@ -792,7 +795,10 @@
   }
 
   .pf-card--token-layout {
+    /* Keep original mobile grid-template-columns with 60px token column:
     grid-template-columns: 60px 1fr auto;
+    */
+    grid-template-columns: 1fr auto;
   }
 
   .pf-card__meta-inline {
@@ -1124,7 +1130,7 @@
 
 /* ── Bulk action bar (in In-Progress pane) ────────────────── */
 .pf-bulk-bar {
-  margin: 8px 0;
+  margin: 8px 10px;
   padding: 8px 10px;
   display: flex;
   align-items: center;
@@ -1218,4 +1224,4 @@
 
 
 
-
+
