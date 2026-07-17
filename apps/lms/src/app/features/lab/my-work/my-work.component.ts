@@ -11,6 +11,7 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
 import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
+import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -20,6 +21,7 @@ import { TileComponent, TileTone } from '../../../shared/primitives/tile.compone
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 
@@ -49,7 +51,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
+    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -250,7 +252,12 @@ const COUNTERS: CounterSpec[] = [
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
-        @if (showIntake()) {
+        @if (showCollect()) {
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'intake'"
+                [attr.aria-selected]="mobileTab() === 'intake'"
+                (click)="setMobileTab('intake')">Collect</button>
+        } @else if (showIntake()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
@@ -275,14 +282,30 @@ const COUNTERS: CounterSpec[] = [
       <div class="pf-mw-split" #mwSplit
            [class.pf-mw-split--dragging]="mwDragging()">
 
-        <!-- LEFT: Lab Intake (always visible) — header hosts an inline
-             scan bar: barcode icon, manual-typing input, camera shortcut,
-             and a Receive button. Hits Enter or clicks Receive to intake.
-             The camera button opens the same scanner the standalone
-             /lab/receive page uses; on match it auto-intakes.
-             On phones this pane only shows under the Intake tab.
-             Hidden entirely when lab_intake is switched off in /admin/process. -->
-        @if (showIntake()) {
+        <!-- LEFT: Collect (collect-in-lab) OR Lab Intake. Shown when either
+             mode is active; on phones this pane shows under the first tab.
+             Hidden entirely when neither lab_intake nor collect-in-lab apply. -->
+        @if (showLeftPane()) {
+
+        <!-- Collect-in-lab: the tube is drawn at the bench. Embed the sample
+             collection screen (its own KPI/header suppressed) so the tech draws
+             + prints labels here; the backend auto-receives into the queue. -->
+        @if (showCollect()) {
+        <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
+                 [class.pf-mobile-hide]="mobileTab() !== 'intake'">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            <span class="pf-mw-pane__title">Collect</span>
+          </header>
+          <div class="pf-mw-pane__body">
+            <pf-sample-collection [embedded]="true"></pf-sample-collection>
+          </div>
+        </section>
+        } @else {
+
+        <!-- Lab Intake — header hosts an inline scan bar: barcode icon,
+             manual-typing input, camera shortcut, and a Receive button.
+             Hits Enter or clicks Receive to intake. The camera button opens
+             the same scanner the standalone /lab/receive page uses. -->
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
@@ -340,6 +363,7 @@ const COUNTERS: CounterSpec[] = [
             <pf-receive-samples #intakeRef [embedded]="true"></pf-receive-samples>
           </div>
         </section>
+        }
 
         <!-- Drag handle -->
         <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
@@ -357,7 +381,7 @@ const COUNTERS: CounterSpec[] = [
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
-                 [class.pf-mw-pane--solo]="!showIntake()"
+                 [class.pf-mw-pane--solo]="!showLeftPane()"
                  [class.pf-mobile-hide]="mobileTab() === 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
@@ -1796,9 +1820,20 @@ export class MyWorkComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly process = inject(ProcessWorkflowService);
 
+  /** Collect-in-lab: sample collection is placed in the lab work-area, so the
+   *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
+   *  print label) instead of Lab Intake, and collection auto-receives into the
+   *  work queue (backend SampleService). Takes priority over showIntake so a
+   *  stale config (collect in lab but intake still on) still shows Collect. */
+  readonly showCollect = computed(() => this.process.collectsInLab());
+
   /** Lab Intake is a placeable workflow action — hide the intake pane/tab when
-   *  an admin switches `lab_intake` OFF in /admin/process. */
-  readonly showIntake = computed(() => this.process.isEnabled('lab_intake'));
+   *  an admin switches `lab_intake` OFF in /admin/process, or when collection
+   *  happens in the lab (Collect replaces intake). */
+  readonly showIntake = computed(() => !this.showCollect() && this.process.isEnabled('lab_intake'));
+
+  /** Either left pane (Collect or Lab Intake) occupies the split's left slot. */
+  readonly showLeftPane = computed(() => this.showCollect() || this.showIntake());
 
   // Rejected tab dropped — re-entry rows now show inline in My Work
   // with their rejection reason in the tube tile, so the tech sees WHY
@@ -1936,10 +1971,10 @@ export class MyWorkComponent implements OnInit {
     }
     this.kpiTeleported = null;
   }
-  /** When Lab Intake is switched off, don't strand the phone view on the
-   *  now-hidden Intake tab. */
+  /** When the left pane (Collect or Lab Intake) is switched off, don't strand
+   *  the phone view on the now-hidden first tab. */
   private readonly _intakeTabGuard = effect(() => {
-    if (!this.showIntake() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
+    if (!this.showLeftPane() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
   });
   setMobileTab(t: 'intake' | 'mywork' | 'queue') {
     this.mobileTab.set(t);
@@ -2295,7 +2330,7 @@ export class MyWorkComponent implements OnInit {
     const scannedBarcode = hit.subOrder?.barcode ?? q;
     this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
       next: () => { this._scan.set(''); this.enterJustScanned(hit); },
-      error: e => this.toasts.error(e.message ?? 'Scan rejected')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2339,7 +2374,7 @@ export class MyWorkComponent implements OnInit {
         this._scanTarget.set(null);
         this.enterJustScanned(t);
       },
-      error: e => this.toasts.error(e.message ?? 'Scan rejected')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2480,7 +2515,7 @@ export class MyWorkComponent implements OnInit {
         this.setMobileTab('mywork');
         this.refreshAllCounts();
       },
-      error: e => { this._claiming.set(false); this.toasts.error(e?.message ?? 'Could not claim — try again'); }
+      error: e => { this._claiming.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -2512,11 +2547,13 @@ export class MyWorkComponent implements OnInit {
   onDelegate(toUserId: string) {
     const list = this._delegateTests();
     if (!list?.length) return;
-    let done = 0, failed = 0;
+    let done = 0, failed = 0, lastError = '';
     const finish = () => {
       if (done + failed < list.length) return;
       this._delegateTests.set(null);
-      if (failed) this.toasts.error(`Delegated ${done} of ${list.length} — ${failed} failed`);
+      if (failed) this.toasts.error(
+        failed === list.length ? lastError
+                               : `Delegated ${done} of ${list.length} — ${failed} failed: ${lastError}`);
       else this.toasts.success('Delegated — the new assignee must scan to pick up.');
       this.refresh();
       this.refreshAllCounts();
@@ -2524,7 +2561,7 @@ export class MyWorkComponent implements OnInit {
     for (const t of list) {
       this.api.post(`/api/results/${t.id}/delegate`, { toUserId }).subscribe({
         next: () => { done++; finish(); },
-        error: () => { failed++; finish(); }
+        error: e => { failed++; lastError = ApiError.from(e).message; finish(); }
       });
     }
   }

@@ -10,6 +10,7 @@ import { OrderTest } from '../../../shared/models/order.model';
 import { patientDisplayName } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { CultureResult } from '../../../shared/models/culture.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
@@ -359,6 +360,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                   <div class="pf-param"
                        [class.pf-param--active]="activeParam() === p.name"
                        [class.pf-param--critical]="isParamCritical(p)"
+                       [class.pf-param--error]="hasErrorFor(p.name)"
                        [attr.data-kind]="inputKindFor(p)"
                        (click)="setActive(p.name)">
                     <div class="pf-param__head">
@@ -1628,6 +1630,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-color: rgba(239, 68, 68, 0.4);
       color: #b91c1c;
     }
+    /* Field-level failure — red border on the card + its input so the tech's
+       eye lands on the offending parameter. */
+    .pf-param--error {
+      border-color: rgba(239, 68, 68, 0.55) !important;
+    }
+    .pf-param--error .pf-param__input {
+      border-color: rgba(239, 68, 68, 0.55);
+    }
     .pf-radio-row {
       display: inline-flex;
       align-items: center;
@@ -2621,6 +2631,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly _ot = signal<OrderTest | null>(null);
   private readonly _saving = signal(false);
   private readonly _values = signal<Record<string, unknown>>({});
+  // Backend field errors from the last submit, keyed by param name. Surfaced
+  // inline via errorFor() and cleared the moment the tech edits that field.
+  private readonly _serverErrors = signal<Record<string, string>>({});
   private readonly _note = signal<string>('');
   private readonly _active = signal<string | null>(null);
   private readonly _lastSavedAt = signal<Date | null>(null);
@@ -2756,9 +2769,19 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // first failing message or null. Drives the inline error under each input
   // and gates canSubmit.
   errorFor(name: string): string | null {
+    // Backend field error (e.g. from a failed submit) takes precedence over
+    // client validation so the tech sees the REAL server message on the input.
+    const serverErr = this._serverErrors()[name];
+    if (serverErr) return serverErr;
     const field = this._fieldByName().get(name);
     if (!field) return null;
     return validateFieldValue(field, this._values()[name]);
+  }
+
+  /** Drop the backend error for a field once the tech edits it. */
+  private clearServerError(name: string) {
+    if (!this._serverErrors()[name]) return;
+    this._serverErrors.update(s => { const next = { ...s }; delete next[name]; return next; });
   }
   hasErrorFor(name: string): boolean { return !!this.errorFor(name); }
 
@@ -3095,6 +3118,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return Array.isArray(v) && (v as unknown[]).map(String).includes(opt);
   }
   toggleOption(name: string, opt: string) {
+    this.clearServerError(name);
     this._values.update(s => {
       const current = Array.isArray(s[name]) ? (s[name] as unknown[]).map(String) : [];
       const idx = current.indexOf(opt);
@@ -3106,6 +3130,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return this._values()[name] === true;
   }
   setBoolValue(name: string, v: boolean) {
+    this.clearServerError(name);
     this._values.update(s => ({ ...s, [name]: v }));
   }
   // <select> change handler — emits the chosen option value.
@@ -3375,6 +3400,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   setValue(name: string, value: string) {
+    this.clearServerError(name);
     this._values.update(s => ({ ...s, [name]: value }));
   }
 
@@ -3488,7 +3514,18 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         else this.toasts.success('Result submitted');
         this.back();
       },
-      error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Submit failed'); }
+      error: e => {
+        this._saving.set(false);
+        const err = ApiError.from(e);
+        // Field-named failure → highlight that input inline; otherwise toast the
+        // real backend message.
+        if (err.field && this.parameters().some(p => p.name === err.field)) {
+          this._serverErrors.update(s => ({ ...s, [err.field!]: err.message }));
+          this._active.set(err.field);
+        } else {
+          this.toasts.error(err.message);
+        }
+      }
     });
   }
 
@@ -3506,7 +3543,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     });
     if (!reason) return;
     this.api.post(`/api/results/${id}/reject-sample`, { reason }).subscribe({
-      next: () => { this.toasts.success('Sample rejected'); this.back(); }
+      next: () => { this.toasts.success('Sample rejected'); this.back(); },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 

@@ -12,6 +12,7 @@ import { ReportLayoutService } from '../../../core/services/report-layout.servic
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
@@ -1206,7 +1207,7 @@ export class ReportViewerComponent implements OnInit {
       this.closeSharePicker();
       this.router.navigate(['/messages']);
     } catch (err) {
-      this.toasts.error((err as Error).message ?? 'Could not share report.');
+      this.toasts.error(ApiError.from(err).message);
     } finally { this.chatPickerSending.set(false); }
   }
 

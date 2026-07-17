@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -78,8 +79,10 @@ interface CreateForm {
           <div>
             <label class="pf-label">Password <span class="pf-req">*</span></label>
             <input type="text" class="pf-input" autocomplete="off"
+                   [class.pf-input-error]="!!passwordError()"
                    placeholder="Minimum 8 characters"
-                   [ngModel]="form().password" (ngModelChange)="patch({ password: $event })" />
+                   [ngModel]="form().password" (ngModelChange)="onPasswordChange($event)" />
+            @if (passwordError()) { <p class="pf-field-error">{{ passwordError() }}</p> }
             <p class="text-[11px] mt-1" style="color: var(--text-muted);">
               Share this with the user securely — they can change it after signing in, and you can reset it anytime.
             </p>
@@ -142,10 +145,12 @@ export class UserInviteComponent implements OnInit {
   });
   private readonly _saving = signal(false);
   private readonly _usernameError = signal<string | null>(null);
+  private readonly _passwordError = signal<string | null>(null);
 
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
   readonly usernameError = this._usernameError.asReadonly();
+  readonly passwordError = this._passwordError.asReadonly();
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
     this._roles().map(r => ({ value: r.id, label: r.name }))
@@ -197,6 +202,11 @@ export class UserInviteComponent implements OnInit {
     this.patch({ username: (v || '').toLowerCase() });
   }
 
+  onPasswordChange(v: string) {
+    if (this._passwordError()) this._passwordError.set(null);
+    this.patch({ password: v });
+  }
+
   onScopeChange(v: string) {
     if (!v) { this.patch({ branchId: '', subBranchId: '' }); return; }
     if (v.startsWith('sb:')) { this.patch({ branchId: '', subBranchId: v.substring(3) }); return; }
@@ -225,13 +235,14 @@ export class UserInviteComponent implements OnInit {
       },
       error: e => {
         this._saving.set(false);
-        const code = e?.error?.error as string | undefined;
-        const message = (e?.error?.message as string | undefined) ?? e?.message ?? 'Could not create the user';
-        // A taken username is a field-level problem — surface it on the input.
-        if (code === 'username_exists' || /already taken|already exists/i.test(message)) {
-          this._usernameError.set(message);
+        const err = ApiError.from(e);
+        // Field-level failures land on the offending input; anything else toasts.
+        if (err.field === 'username' || err.code === 'username_exists' || err.code === 'invalid_username') {
+          this._usernameError.set(err.message);
+        } else if (err.field === 'password' || err.code === 'weak_password') {
+          this._passwordError.set(err.message);
         } else {
-          this.toasts.error(message);
+          this.toasts.error(err.message);
         }
       }
     });

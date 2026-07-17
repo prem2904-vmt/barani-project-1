@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -56,6 +57,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                                    [showText]="true" text="Loading…"></pf-loading-logo>
                 </div>
               }
+              @else if (loadError()) { {{ loadError() }} }
               @else { No matching user. }
             </li>
           }
@@ -160,6 +162,7 @@ export class DelegateModalComponent implements OnInit {
   private readonly _users = signal<User[]>([]);
   private readonly _query = signal('');
   readonly loading = signal(true);
+  readonly loadError = signal<string | null>(null);
 
   readonly filtered = () => {
     const q = this._query().trim().toLowerCase();
@@ -171,7 +174,7 @@ export class DelegateModalComponent implements OnInit {
   ngOnInit() {
     this.api.get<User[]>('/api/users/').subscribe({
       next: l => { this._users.set(l ?? []); this.loading.set(false); },
-      error: () => this.loading.set(false)
+      error: e => { this.loadError.set(ApiError.from(e).message); this.loading.set(false); }
     });
   }
 

@@ -21,6 +21,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/appointment.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -1370,9 +1371,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this.toasts.success('Order cancelled — any payment refunded');
           this.refresh();
         },
-        error: (e: any) => {
+        error: (e) => {
           this.cancelling.set(false);
-          this.toasts.error(e?.error?.error?.message ?? 'Could not cancel the order');
+          this.toasts.error(ApiError.from(e).message);
         }
       });
   }
@@ -1415,8 +1416,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); }
       catch { /* letterhead is optional */ }
       await this.emitInvoicePdf(o, bill, tpl);
-    } catch {
-      this.toasts.error('Could not load the invoice');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.invoiceLoading.set(false);
     }
@@ -1731,7 +1732,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         // poll to confirm the order's overall status flipped.
         this.fetchOrdersWithEtag();
       },
-      error: e => this.toasts.error(e?.message ?? 'Could not mark dispatched')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
   closeOrder() { this._selectedOrder.set(null); }
@@ -1770,7 +1771,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           });
         }
       },
-      error: () => this.toasts.error('Could not check in')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2052,7 +2053,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.clearSelection();
         this.refresh();
       },
-      error: e => this.toasts.error(e?.message ?? 'Bulk dispatch failed')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -2083,7 +2084,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.clearSelection();
         this.refresh();
       },
-      error: e => this.toasts.error(e?.message ?? 'Could not create package')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
   closeDispatchPackage() { this._activePackage.set(null); }

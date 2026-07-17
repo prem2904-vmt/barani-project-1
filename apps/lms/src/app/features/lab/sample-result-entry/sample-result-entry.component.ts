@@ -9,6 +9,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
@@ -1192,7 +1193,7 @@ export class SampleResultEntryComponent {
       if (updated) { this._sample.set(updated); this.prefillValues(updated); }
       this.toasts.success('Reopened — edit and submit again');
     } catch (e) {
-      this.toasts.error((e as Error)?.message ?? 'Could not reopen — it may already be validated');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._submitting.set(false);
     }
@@ -1449,7 +1450,7 @@ export class SampleResultEntryComponent {
       ));
       await this.loadComments();
     } catch (e) {
-      this.toasts.error('Could not post comment');
+      this.toasts.error(ApiError.from(e).message);
     }
   }
 
@@ -1513,7 +1514,7 @@ export class SampleResultEntryComponent {
       // the user was stuck on the now-empty entry page.
       setTimeout(() => this.router.navigate(['/lab/my-work']), 700);
     } catch (e) {
-      this.toasts.error('Could not submit — try again');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._submitting.set(false);
     }
@@ -1552,7 +1553,7 @@ export class SampleResultEntryComponent {
       this.toasts.success('Draft saved — you can finish this tube later');
       setTimeout(() => this.router.navigate(['/lab/my-work']), 600);
     } catch (e) {
-      this.toasts.error('Could not save draft — try again');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._savingDraft.set(false);
     }

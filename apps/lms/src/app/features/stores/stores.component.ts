@@ -3,6 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { ApiError } from '../../shared/models/api-response.model';
 import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../shared/components/barcode-display/barcode-display.component';
@@ -630,7 +631,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
       }
       this.term.set('');
       this.focusScan();
-    } catch { this.toasts.error('Lookup failed'); this.focusScan(); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); this.focusScan(); }
   }
 
   pick(it: InvItem) {
@@ -658,7 +659,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
       if (res?.lotBarcode) this.lastLabel.set(res.lotBarcode);
       this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 0 });
       await this.loadItems();
-    } catch (e: any) { this.toasts.error(e?.error?.error?.message ?? 'Receive failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.busy.set(false);
   }
 
@@ -669,7 +670,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
       const r: any = await firstValueFrom(this.api.post('/api/inventory/issue', { itemId: item.id, qty }));
       if (r?.success === false) { this.toasts.error(r?.error?.message ?? 'Issue failed'); }
       else { this.toasts.success(`Issued ${qty} ${item.uom} of ${item.name}`); this.issueQty.set(0); this.resolved.set(null); this.term.set(''); await this.loadItems(); this.focusScan(); }
-    } catch (e: any) { this.toasts.error(e?.error?.error?.message ?? 'Issue failed — out of stock?'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.busy.set(false);
   }
 
@@ -682,7 +683,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
       const v = r?.variance ?? 0;
       this.toasts.success(v === 0 ? 'Count matches system' : `Adjusted by ${v > 0 ? '+' : ''}${v}`);
       const it = this.resolved()?.item; if (it) await this.loadBatchesFor(it.id);
-    } catch { this.toasts.error('Count failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.busy.set(false);
   }
 

@@ -3,6 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
@@ -67,8 +68,12 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
         <div class="p-4 rounded-xl border mb-5" style="background:var(--bg-card-solid);border-color:var(--glass-border-hover)">
           <div class="text-sm font-bold mb-3">{{ form().id ? 'Edit item' : 'New item' }}</div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <label class="block"><span class="lbl">SKU *</span><input class="inp" [ngModel]="form().sku" (ngModelChange)="setF('sku',$event)"/></label>
-            <label class="block md:col-span-2"><span class="lbl">Name *</span><input class="inp" [ngModel]="form().name" (ngModelChange)="setF('name',$event)"/></label>
+            <label class="block"><span class="lbl">SKU *</span><input class="inp" [class.inp--err]="itemError()?.field==='sku'||itemError()?.field==='code'" [ngModel]="form().sku" (ngModelChange)="setF('sku',$event)"/>
+              @if (itemError()?.field==='sku'||itemError()?.field==='code') { <span class="fld-err">{{ itemError()!.message }}</span> }
+            </label>
+            <label class="block md:col-span-2"><span class="lbl">Name *</span><input class="inp" [class.inp--err]="itemError()?.field==='name'" [ngModel]="form().name" (ngModelChange)="setF('name',$event)"/>
+              @if (itemError()?.field==='name') { <span class="fld-err">{{ itemError()!.message }}</span> }
+            </label>
             <label class="block"><span class="lbl">Category</span>
               <select class="inp" [ngModel]="form().category" (ngModelChange)="setF('category',$event)">
                 @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
@@ -118,7 +123,9 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                         <label class="block"><span class="lbl">Lot #</span><input class="inp" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
                         <label class="block"><span class="lbl">Expiry</span><input class="inp" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
                         <label class="block"><span class="lbl">Unit cost</span><input class="inp" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
-                        <label class="block"><span class="lbl">Qty *</span><input class="inp" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/></label>
+                        <label class="block"><span class="lbl">Qty *</span><input class="inp" [class.inp--err]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/>
+                          @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="fld-err">{{ rcvError()!.message }}</span> }
+                        </label>
                         <button class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--green,#10b981)" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
                       </div>
                     }
@@ -200,6 +207,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     .lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:4px; }
     .inp { width:100%; padding:9px 11px; border-radius:10px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13.5px; }
     .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); box-shadow:0 0 0 3px rgba(124,58,237,.16); }
+    .inp--err { border-color:var(--red,#ef4444); }
+    .fld-err { display:block; font-size:11px; color:var(--red,#ef4444); margin-top:4px; }
     table tbody tr:hover td { background:rgba(139,92,246,.06); }
     thead th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
     .rowbtn { font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; margin-left:6px; border:1px solid var(--glass-border); background:var(--glass-bg); color:var(--text-secondary); transition:color .14s, border-color .14s; }
@@ -294,6 +303,11 @@ export class InventoryComponent implements OnInit {
   readonly form = signal<Partial<InvItem>>({});
   readonly rcv = signal<{ lot: string; expiry: string; cost: number; qty: number }>({ lot: '', expiry: '', cost: 0, qty: 0 });
 
+  // Field-aware API failures: a matching `.field` highlights the input inline;
+  // anything else falls back to a toast with the real backend message.
+  readonly itemError = signal<{ field?: string; message: string } | null>(null);
+  readonly rcvError = signal<{ field?: string; message: string } | null>(null);
+
   // Printable barcode/QR label — set after a receive (the lot barcode) or via
   // the per-item "Label" action. `labelMode` lets the operator pick the symbology.
   readonly labelCode = signal<string | null>(null);
@@ -335,7 +349,7 @@ export class InventoryComponent implements OnInit {
       const lines = this.bomLines().filter(l => l.itemId && l.qtyPerTest > 0);
       await firstValueFrom(this.api.put(`/api/inventory/tests/${id}/consumables`, { lines }));
       this.toasts.success('Consumables saved');
-    } catch { this.toasts.error('Save failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.bomSaving.set(false);
   }
 
@@ -355,15 +369,20 @@ export class InventoryComponent implements OnInit {
   setF(k: string, v: unknown) { this.form.update(f => ({ ...f, [k]: v })); }
   setR(k: string, v: unknown) { this.rcv.update(r => ({ ...r, [k]: v })); }
 
-  startNew() { this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); }
-  startEdit(it: InvItem) { this.form.set({ ...it }); this.editing.set(true); }
+  startNew() { this.itemError.set(null); this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); }
+  startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.editing.set(true); }
 
   async saveItem() {
     if (!this.canSave()) return;
+    this.itemError.set(null);
     try {
       await firstValueFrom(this.api.post('/api/inventory/items', this.form()));
       this.editing.set(false); this.toasts.success('Item saved'); await this.load(); await this.loadAlerts();
-    } catch { this.toasts.error('Save failed'); }
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.field === 'sku' || err.field === 'code' || err.field === 'name') this.itemError.set({ field: err.field, message: err.message });
+      else this.toasts.error(err.message);
+    }
   }
 
   async toggleBatches(it: InvItem) {
@@ -374,6 +393,7 @@ export class InventoryComponent implements OnInit {
   openReceive(it: InvItem) {
     this.expandedId.set(it.id); this.receiveFor.set(it.id);
     this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 0 });
+    this.rcvError.set(null);
     this.loadBatches(it.id);
   }
   /** Show a printable barcode/QR label for the item itself (its barcode, or SKU
@@ -392,6 +412,7 @@ export class InventoryComponent implements OnInit {
   async receive(it: InvItem) {
     const r = this.rcv();
     if (r.qty <= 0) return;
+    this.rcvError.set(null);
     try {
       const res: any = await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
         lotNumber: r.lot || null, expiryDate: r.expiry ? r.expiry + 'T00:00:00Z' : null, unitCost: r.cost, qty: r.qty,
@@ -400,13 +421,17 @@ export class InventoryComponent implements OnInit {
       // Surface the freshly-minted lot barcode so the operator can print a label.
       if (res?.lotBarcode) this.labelCode.set(res.lotBarcode);
       await Promise.all([this.loadBatches(it.id), this.load(), this.loadAlerts()]);
-    } catch { this.toasts.error('Receive failed'); }
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.field === 'qty' || err.field === 'quantity') this.rcvError.set({ field: err.field, message: err.message });
+      else this.toasts.error(err.message);
+    }
   }
 
   async adjust(b: InvBatch, delta: number) {
     try {
       await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/adjust`, { delta, reason: delta < 0 ? 'manual decrement' : 'manual increment' }));
       const id = this.expandedId(); if (id) await Promise.all([this.loadBatches(id), this.load(), this.loadAlerts()]);
-    } catch { this.toasts.error('Adjust failed'); }
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
   }
 }

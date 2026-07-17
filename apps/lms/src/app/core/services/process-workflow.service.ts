@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ProcessWorkflowConfig, ProcessWorkflowRecord } from '../../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, enforceCollectInLab } from '../../shared/models/process-workflow.model';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -59,6 +59,13 @@ export class ProcessWorkflowService {
     return a?.categoryId ?? null;
   }
 
+  /** True when sample collection happens inside the lab (the tube is drawn at the
+   *  bench, so the lab shows a Collect step instead of Lab Intake and the sample
+   *  auto-receives into the work queue). Silent workflow ⇒ false (classic flow). */
+  collectsInLab(): boolean {
+    return collectsInLab(this._active());
+  }
+
   private parse(json?: string | null): ProcessWorkflowConfig | null {
     if (!json) return null;
     try {
@@ -70,10 +77,12 @@ export class ProcessWorkflowService {
   // ── Builder CRUD ─────────────────────────────────────────────────
   list(): Observable<ProcessWorkflowRecord[]> { return this.api.get<ProcessWorkflowRecord[]>('/api/process-workflows'); }
   create(name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(config), branchId });
+    const cfg = enforceCollectInLab(config);
+    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(cfg), branchId });
   }
   update(id: string, name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(config), branchId });
+    const cfg = enforceCollectInLab(config);
+    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(cfg), branchId });
   }
   activate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/activate`, {}); }
   duplicate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/duplicate`, {}); }

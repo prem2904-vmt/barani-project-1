@@ -6,6 +6,7 @@ import {
 } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -1432,8 +1433,8 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   private parseError(err: unknown): string {
-    const e = err as { error?: { message?: string }; message?: string };
-    return e?.error?.message ?? e?.message ?? 'Search failed — try again';
+    // Surface the REAL backend message for a failed search instead of a generic.
+    return ApiError.from(err).message;
   }
 
   private loadBranches() {

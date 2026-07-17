@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { AccountsService } from '../../core/auth/accounts.service';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 import { PlatformService } from '../../core/services/platform.service';
@@ -38,6 +39,7 @@ const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage
 })
 export class LoginComponent {
   private readonly auth = inject(AuthService);
+  private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
   private readonly platform = inject(PlatformService);
   private readonly route = inject(ActivatedRoute);
@@ -49,6 +51,18 @@ export class LoginComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly showPassword = signal(false);
 
+  /**
+   * "Add account" mode (…/login?add=1): a signed-in user is appending another
+   * profile on this shared device. The tenant is LOCKED to the account that
+   * launched it — every appended profile must belong to the same organization,
+   * so the org field is pre-filled + read-only and the sign-in is tenant-guarded.
+   */
+  protected readonly addMode = signal(false);
+  private readonly lockedTenantId = signal<string | null>(null);
+  protected readonly lockedOrg = signal<string | null>(null);
+  /** Org field is fixed when adding an account onto an existing tenant. */
+  protected readonly orgLocked = computed(() => this.addMode() && !!this.lockedTenantId());
+
   constructor() {
     // Credentials-email deep link (…/login?org=<slug>&username=<u>): pre-fill
     // org + username so the admin only enters the temp password, then the
@@ -58,6 +72,21 @@ export class LoginComponent {
     const username = qp.get('username');
     if (org) this.org.set(org);
     if (username) this.username.set(username);
+
+    // Add-account: lock the organization to the currently-active profile's
+    // tenant. Prefer the on-device registry (survives on the login screen);
+    // fall back to the live user. No active account ⇒ behave as a normal login.
+    if (qp.get('add') === '1') {
+      const active = this.accounts.active();
+      const tenantId = active?.tenantId ?? this.auth.user()?.tenantId ?? null;
+      const orgName = active?.org ?? this.auth.user()?.tenantName ?? null;
+      if (tenantId && orgName) {
+        this.addMode.set(true);
+        this.lockedTenantId.set(tenantId);
+        this.lockedOrg.set(orgName);
+        this.org.set(orgName);
+      }
+    }
   }
 
   /** Previously-used organizations for the login dropdown. */
@@ -115,7 +144,11 @@ export class LoginComponent {
     this.busy.set(true);
     try {
       await Promise.race([
-        this.auth.signIn(this.org().trim(), this.username().trim(), this.password()),
+        // In add-account mode the sign-in is tenant-locked: signIn rejects with
+        // `tenant_mismatch` (before touching the current session) if the account
+        // belongs to a different organization.
+        this.auth.signIn(this.org().trim(), this.username().trim(), this.password(),
+          this.orgLocked() ? this.lockedTenantId()! : undefined),
         new Promise<never>((_, rej) => setTimeout(
           () => rej(new Error('Sign-in timed out — check your connection')),
           15_000

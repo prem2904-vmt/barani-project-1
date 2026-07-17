@@ -181,7 +181,16 @@ export interface WorkflowNavCtx {
  */
 export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
   if (!cfg?.categories?.length) return null;
+  // The flask/tube "Collect" icon (matches the PRIMARY_NAV sample-collection item).
+  const COLLECT_ICON = ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'];
+  const canCollect = ctx.isSuper || ctx.hasAnyPermission(['collect_sample']);
+  // Work-areas that hold an enabled sample_collection action.
+  const collectAreas = new Set((cfg.actions ?? [])
+    .filter(a => a.type === 'sample_collection' && a.enabled)
+    .map(a => a.categoryId));
+
   const items: NavItem[] = [];
+  let collectAdded = false;
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
     // Visibility is PERMISSION-driven (not role NAME): the area shows when the
     // user can run at least one of its actions (checked below). The old
@@ -198,21 +207,63 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // Render the work-area's own icon (the one picked in the builder), via the
     // SAME resolver the builder uses — so the top-strip / sidebar match the
     // builder exactly. Unknown/empty falls back to the folder default.
+    const route = workAreaRoute(area, cfg);
     items.push({
       id: area.id,
       label: area.name,
-      href: workAreaRoute(area, cfg),
+      href: route,
       iconPath: workAreaIconPath(area.icon),
     });
+    // Sample collection is a repeatable action that's often dropped INTO a
+    // system area (e.g. Lab), whose bespoke screen (/lab/my-work) opens directly
+    // and never exposes the collection action — leaving it unreachable. When the
+    // area a collection sits in doesn't already open the collect/queue screen,
+    // surface a dedicated "Collect" item right beside it (once, if the user can
+    // actually draw samples).
+    if (!collectAdded && canCollect && collectAreas.has(area.id)
+        && route !== '/sample-collection' && route !== '/frontdesk/queue') {
+      items.push({ id: 'sample-collection', label: 'Collect', href: '/sample-collection', iconPath: COLLECT_ICON });
+      collectAdded = true;
+    }
   }
   return items.length ? items : null;
 }
 
 export const MORE_NAV: NavItem[] = [
+  // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
+  // the module toggle IS the gate (no per-module roles yet). Shown here in More
+  // until each ships as a first-class workflow work-area. Icons mirror the catalog.
+  {
+    id: 'm-opd', label: 'OPD', href: '/opd',
+    iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],
+    module: 'opd'
+  },
+  {
+    id: 'm-ipd', label: 'IPD', href: '/ipd',
+    iconPath: ['M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'],
+    module: 'ipd'
+  },
+  {
+    id: 'm-pharmacy', label: 'Pharmacy', href: '/pharmacy',
+    iconPath: ['M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7'],
+    module: 'pharmacy'
+  },
+  {
+    id: 'm-payroll', label: 'Payroll', href: '/payroll',
+    iconPath: ['M3 7h18v12H3zM3 11h18M7 15h4M12 3v4'],
+    module: 'payroll'
+  },
   {
     id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
     iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
     permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+  },
+  {
+    // Lab module's own settings hub — lab-specific config lives in the Lab world.
+    id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
+    iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
+    permissions: ['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'],
+    module: 'lab'
   },
   {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
@@ -281,7 +332,10 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_branches', 'manage_tenant']
   },
   {
-    id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection',
+    // Front-desk home-collection assignment — tied to the home_visits action:
+    // disabling Home Visits in the workflow removes home collection from the
+    // front desk too (they're the two ends of the same capability).
+    id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection', action: 'home_visits',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
     permissions: ['manage_home_collection', 'register_patient', 'create_order'], module: 'homeCollection'
   },

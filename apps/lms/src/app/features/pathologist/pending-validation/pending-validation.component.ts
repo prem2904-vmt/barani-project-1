@@ -6,6 +6,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -424,7 +425,8 @@ export class PendingValidationComponent implements OnInit {
       next: () => {
         this.toasts.success('Rejected — lab tech notified');
         this._rows.update(l => l.filter(x => x.id !== t.id));
-      }
+      },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
@@ -438,7 +440,8 @@ export class PendingValidationComponent implements OnInit {
     });
     if (!id) return;
     this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
-      next: () => { this.toasts.success('Reassigned'); this._rows.update(l => l.filter(x => x.id !== t.id)); }
+      next: () => { this.toasts.success('Reassigned'); this._rows.update(l => l.filter(x => x.id !== t.id)); },
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

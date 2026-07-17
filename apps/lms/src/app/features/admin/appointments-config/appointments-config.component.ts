@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { AppointmentConfig, QueueMode } from '../../../shared/models/appointment.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -177,7 +178,7 @@ export class AppointmentsConfigComponent implements OnInit {
     this._saving.set(true);
     this.svc.saveConfig(cur).subscribe({
       next: c => { this._cfg.set(c); this._saving.set(false); this.toast.success('Saved.'); },
-      error: () => { this._saving.set(false); this.toast.error('Could not save.'); }
+      error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
 }

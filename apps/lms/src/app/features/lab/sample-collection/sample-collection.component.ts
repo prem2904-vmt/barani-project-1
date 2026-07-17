@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -8,6 +8,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -47,7 +48,7 @@ const URINE_FILL = '#f59e0b';
  * first test (authoritative — "Urine", "Blood - EDTA", …), then fall back to
  * the sample's department code for colour.
  */
-function containerFor(s: OrderSample): Container {
+function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
   const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
   if (sampleType.includes('urine')) {
     return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
@@ -63,13 +64,15 @@ function containerFor(s: OrderSample): Container {
   if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
   if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
   if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
-  const dept = DEPT_VACUTAINER[s.department?.code ?? ''];
-  return {
-    kind: 'vacutainer',
-    color: dept?.color ?? '#6b7280',
-    fill: BLOOD_FILL,
-    label: dept?.label ?? 'Tube'
-  };
+  // Department container: the admin-configured colour/label wins (set per
+  // department in Branches → Departments), then the sample's own department
+  // record, then the built-in convention, then a neutral grey tube.
+  const code = s.department?.code ?? '';
+  const cfg = deptCfg?.[code];
+  const conv = DEPT_VACUTAINER[code];
+  const color = s.department?.containerColor || cfg?.color || conv?.color || '#6b7280';
+  const label = s.department?.containerLabel || cfg?.label || conv?.label || 'Tube';
+  return { kind: 'vacutainer', color, fill: BLOOD_FILL, label };
 }
 
 interface OrderGroup {
@@ -88,14 +91,18 @@ interface OrderGroup {
   imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent, LabelCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.lg:px-10]="!embedded"
+             [class.pt-6]="!embedded" [class.pb-10]="!embedded">
       <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
            row entirely. The user clicked Collect on a specific order
            — show them THAT order's drawer immediately as if it's a
            dedicated page. The queue UI used to flash for ~500ms while
            the order data loaded and felt like "two pages" before
-           the drawer appeared. -->
-      @if (!deepLinkMode()) {
+           the drawer appeared.
+           Embedded mode: rendered inside the lab "My Work" Collect pane —
+           suppress our own KPI strip + screen header (the pane supplies its
+           own header) but keep the queue + scan so the tech can draw tubes. -->
+      @if (!deepLinkMode() && !embedded) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
         eyebrow="Lab · Collection"
@@ -1741,6 +1748,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
 
+  /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
+   *  host supplies its own pane header, so we suppress our KPI strip + screen
+   *  header + outer page padding while keeping the queue + scan + drawer. */
+  @Input() embedded = false;
+
   /** Whether this user can dispatch (hand collected tubes to the lab). */
   readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
   private readonly _dispatching = signal(false);
@@ -1764,8 +1776,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
       this.toasts.success('Dispatched to lab');
-    } catch {
-      this.toasts.error('Could not dispatch — try again');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._dispatching.set(false);
     }
@@ -1781,8 +1793,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'dispatched' ? { ...s, status: 'collected' } : s));
       this.toasts.success('Dispatch undone');
-    } catch {
-      this.toasts.error('Could not undo — the lab may have received it');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this._dispatching.set(false);
     }
@@ -1835,6 +1847,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
   private readonly _openOrderId = signal<string | null>(null);
+  /** Admin-configured container colour/label per department code (Branches →
+   *  Departments). Loaded once so the tube guide reflects the lab's own scheme. */
+  private readonly _deptContainers = signal<Record<string, { color?: string | null; label?: string | null }>>({});
   /** True when the user landed here via ?orderId=… (e.g. FD's "Collect"
    *  button on an order row). Suppresses the queue list + scan row so
    *  the page reads as a direct order-collection view, not a queue +
@@ -1907,6 +1922,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   });
 
   async ngOnInit() {
+    // Load the lab's configured container colours (best-effort — falls back to
+    // the built-in conventions if it fails or a department has none set).
+    this.api.get<{ code: string; containerColor?: string | null; containerLabel?: string | null }[]>('/api/tenants/departments')
+      .subscribe({ next: list => {
+        const map: Record<string, { color?: string | null; label?: string | null }> = {};
+        for (const d of list ?? []) map[d.code] = { color: d.containerColor, label: d.containerLabel };
+        this._deptContainers.set(map);
+      }, error: () => {} });
+
     const oid = this.route.snapshot.queryParamMap.get('orderId');
     if (oid) {
       this._openOrderId.set(oid);
@@ -1943,8 +1967,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
   }
 
-  tube(s: OrderSample) { return containerFor(s); }
-  container(s: OrderSample) { return containerFor(s); }
+  tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+  container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   testList(s: OrderSample): string {
     return s.tests.map(t => t.test?.name ?? 'Test').join(', ');
   }
@@ -2103,7 +2127,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       : x));
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
-      error: () => {
+      error: e => {
         // Only roll back if the local state still says 'collected'. If the
         // user has already toggled away (rapid tap-back), respect their newer
         // intent — its own PATCH will reconcile against the server.
@@ -2112,7 +2136,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         this._pending.update(list => list.map(x => x.id === s.id
           ? { ...x, status: 'pending', collectedAt: undefined }
           : x));
-        this.toasts.error('Could not mark collected — try again');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -2131,7 +2155,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const current = this._pending().find(x => x.id === s.id);
         if (current?.status !== 'pending') return;
         this._pending.update(list => list.map(x => x.id === s.id ? { ...x, ...prev } : x));
-        this.toasts.error(e?.message ?? 'Could not undo — tube may have moved to the lab');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -2166,10 +2190,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const label = this.REJECT_REASONS.find(r => r.code === m.reason)?.label ?? m.reason;
     const reason = m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
     const pending = m.group.samples.filter(s => s.status === 'pending');
-    await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    const failures = await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
     ));
-    this.toasts.success(`${pending.length} tube${pending.length === 1 ? '' : 's'} flagged for re-collection`);
+    const failed = failures.filter((e): e is ApiError => e !== null);
+    const ok = pending.length - failed.length;
+    if (ok > 0) this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} flagged for re-collection`);
+    if (failed.length) this.toasts.error(failed[0].message);
     this._rejectModal.set(null);
     this._openOrderId.set(null);
     this.refresh();
@@ -2189,10 +2216,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       confirmLabel: 'Reject vials'
     });
     if (!reason) return;
-    await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).catch(() => null)
+    const failures = await Promise.all(pending.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
     ));
-    this.toasts.success('Marked for re-collection');
+    const failed = failures.filter((e): e is ApiError => e !== null);
+    if (failed.length < pending.length) this.toasts.success('Marked for re-collection');
+    if (failed.length) this.toasts.error(failed[0].message);
     this._openOrderId.set(null);
     this.refresh();
   }

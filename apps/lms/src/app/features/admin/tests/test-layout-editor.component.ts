@@ -5,6 +5,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { RouterLink } from '@angular/router';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import {
   ColumnLock,
   ConditionRule,
@@ -2446,8 +2447,8 @@ export class TestLayoutEditorComponent {
     try {
       await this.layout.deleteLock(id, p);
       this.toasts.success(`Locks cleared for ${p}`);
-    } catch {
-      this.toasts.error('Could not clear locks on the server');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     }
   }
   async saveLocks(p: string) {
@@ -2466,8 +2467,7 @@ export class TestLayoutEditorComponent {
       this._locks.update(all => ({ ...all, [p]: cleaned }));
       this.toasts.success(`Locks saved for ${p}`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Save failed';
-      this.toasts.error(msg);
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.savingLock.set(null);
     }
@@ -2803,8 +2803,7 @@ export class TestLayoutEditorComponent {
       // Refresh preview if visible.
       if (this.previewOpen()) this.refreshPreview();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Save failed';
-      this.toasts.error(msg);
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.saving.set(false);
     }
@@ -2836,7 +2835,7 @@ export class TestLayoutEditorComponent {
       const pv = await this.layout.preview(id, this.sampleValues(), []);
       this.preview.set(pv);
     } catch (e: unknown) {
-      this.toasts.error('Preview failed');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.previewLoading.set(false);
     }

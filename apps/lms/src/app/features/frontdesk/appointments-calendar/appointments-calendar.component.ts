@@ -15,6 +15,7 @@ import { AppointmentQueueService } from '../../../core/services/appointment-queu
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Appointment } from '../../../shared/models/appointment.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
 type CalView = 'day' | 'week' | 'month';
@@ -1179,7 +1180,7 @@ export class AppointmentsCalendarComponent {
   protected run(obs: Observable<unknown>) {
     obs.subscribe({
       next: () => { this.refresh(); this.closeAppt(); },
-      error: () => { this.toasts.error('Action failed.'); this.refresh(); }
+      error: (e) => { this.toasts.error(ApiError.from(e).message); this.refresh(); }
     });
   }
 

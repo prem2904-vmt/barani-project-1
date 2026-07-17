@@ -8,6 +8,7 @@ import {
   splitByStorage
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 import { Patient } from '../../../shared/models/patient.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -176,7 +177,11 @@ export class PatientRegisterComponent implements OnInit {
       },
       error: e => {
         this._saving.set(false);
-        this.toasts.error(e.message ?? 'Registration failed');
+        // Surface the REAL backend failure (duplicate patient, invalid phone/
+        // name/email, …). The registration inputs live inside the child
+        // workflow-renderer, so field-level highlighting isn't reachable from
+        // here — show the exact message instead of a generic.
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }

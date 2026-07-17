@@ -183,6 +183,25 @@
 }
 .pf-auth__field-row .pf-auth__field-input:focus { box-shadow: none; }
 
+/* Add-account mode: banner + locked (read-only) organization field. */
+.pf-auth__note {
+  margin: -4px 0 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary, #cbd5e1);
+}
+.pf-auth__note strong { color: var(--text-primary, #f8fafc); font-weight: 600; }
+.pf-auth__field-input--locked { color: var(--text-secondary, #cbd5e1); cursor: default; }
+.pf-auth__field-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--text-muted, rgba(148, 163, 184, 0.6));
+  flex-shrink: 0;
+}
+
 .pf-auth__eye {
   all: unset;
   display: inline-flex;

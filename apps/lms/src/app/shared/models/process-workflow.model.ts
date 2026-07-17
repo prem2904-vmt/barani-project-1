@@ -265,3 +265,37 @@ export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undef
   const fd = frontdeskMenu(cfg);
   return collectionLocations(cfg).some(m => m !== fd);
 }
+
+/** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */
+export const LAB_MENU_ID = 'lab';
+
+/**
+ * True when sample collection is placed in the LAB work-area — the tube is drawn
+ * inside the lab itself, so there is no courier dispatch / transit / intake-scan
+ * hop: collection IS the intake and auto-receives straight into the work queue
+ * (backend SampleService.CollectAsync, gated by ShouldAutoReceiveAsync). The lab
+ * "My Work" screen surfaces a Collect pane in place of Lab Intake for this mode.
+ */
+export function collectsInLab(cfg: ProcessWorkflowConfig | null | undefined): boolean {
+  return collectionLocations(cfg).includes(LAB_MENU_ID);
+}
+
+/**
+ * Normalize a config so "collect in the lab" is internally consistent: when the
+ * collection step lives in the lab, the transport pair (dispatch + lab_intake)
+ * must be OFF — there is nothing to dispatch or separately receive when the tube
+ * is drawn at the bench. Returns the SAME object when already consistent, else a
+ * shallow copy with those two actions disabled. Apply on every builder mutation
+ * and before persisting so an admin can't recreate the stranded-tube state
+ * (collection in the lab but intake still asking to scan a never-collected tube).
+ */
+export function enforceCollectInLab(cfg: ProcessWorkflowConfig): ProcessWorkflowConfig {
+  if (!collectsInLab(cfg)) return cfg;
+  const collapse = new Set(['dispatch', 'lab_intake']);
+  const needsFix = (cfg.actions ?? []).some(a => collapse.has(a.type) && a.enabled);
+  if (!needsFix) return cfg;
+  return {
+    ...cfg,
+    actions: (cfg.actions ?? []).map(a => collapse.has(a.type) && a.enabled ? { ...a, enabled: false } : a),
+  };
+}

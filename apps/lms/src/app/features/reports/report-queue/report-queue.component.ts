@@ -7,6 +7,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report } from '../../../shared/models/report.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Order, OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -1181,7 +1182,7 @@ export class ReportQueueComponent implements OnInit {
       },
       error: e => {
         this._generating.set(null);
-        this.toasts.error(e?.message ?? 'Could not generate the partial PDF');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1461,7 +1462,10 @@ export class ReportQueueComponent implements OnInit {
     }
     this.api.post(`/api/reports/${r.id}/deliver`, { via, note: via === 'whatsapp' ? 'wa.me link' : null }).subscribe({
       next: () => { if (via !== 'whatsapp') this.toasts.success(`Delivered via ${via}`); this.refresh(); },
-      error: () => { /* best-effort; the wa.me window already opened */ }
+      // WhatsApp already opened the wa.me window (the real handover), so its
+      // delivery record is best-effort; for print/other, the POST *is* the
+      // delivery — surface the backend's real reason on failure.
+      error: e => { if (via !== 'whatsapp') this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1476,7 +1480,7 @@ export class ReportQueueComponent implements OnInit {
     if (!oid) return;
     this.api.post<Report>('/api/reports/generate', { orderId: oid, type: 'final' }).subscribe({
       next: r => { this.toasts.success('Report generated'); this.router.navigate(['/reports/view', r.id]); },
-      error: e => this.toasts.error(e.message ?? 'Generation failed')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

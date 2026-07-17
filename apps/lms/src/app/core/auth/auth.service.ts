@@ -310,7 +310,7 @@ export class AuthService {
    * resolves the tenant + user and performs the Supabase password grant against
    * the user's synthetic auth email, returning tokens + mustChangePassword.
    */
-  async signIn(org: string, username: string, password: string): Promise<void> {
+  async signIn(org: string, username: string, password: string, expectedTenantId?: string): Promise<void> {
     const res = await fetch(`${environment.apiUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -321,6 +321,23 @@ export class AuthService {
     const data = json?.data;
     if (!res.ok || !json?.success || !data?.accessToken) {
       throw new Error(json?.error?.message || json?.message || 'Invalid organization, username or password.');
+    }
+
+    // Add-account tenant lock: when appending a profile on a shared device, the
+    // new account MUST belong to the same tenant as the one that launched "Add
+    // account". Verify BEFORE touching any session state so a mismatch leaves the
+    // current profile fully intact. Fail closed if the tenant can't be read.
+    if (expectedTenantId) {
+      const newTenantId: string | undefined = data.tenant?.id;
+      if (!newTenantId || newTenantId !== expectedTenantId) {
+        throw Object.assign(
+          new Error(
+            `That account belongs to a different organization${data.tenant?.name ? ` (${data.tenant.name})` : ''}. ` +
+            `On this device you can only add accounts from your current organization.`,
+          ),
+          { code: 'tenant_mismatch' },
+        );
+      }
     }
 
     const session = {

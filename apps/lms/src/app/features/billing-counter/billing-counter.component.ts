@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { ToastService } from '../../core/services/toast.service';
+import { ApiError } from '../../shared/models/api-response.model';
 import { Order } from '../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
@@ -704,7 +705,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
         if (r?.orderId) this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: r.orderId } });
         else this.toasts.error('No order matches that code');
       },
-      error: () => { this.resolving.set(false); this.toasts.error('No order matches that code'); }
+      error: e => { this.resolving.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

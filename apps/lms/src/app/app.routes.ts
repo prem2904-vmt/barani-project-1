@@ -83,6 +83,56 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       },
       {
+        // Modules (Extensions) — enable/disable product modules + their features.
+        path: 'admin/modules',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/modules/modules.component').then(m => m.AdminModulesComponent)
+      },
+      {
+        // Lab module settings hub — lab-SPECIFIC config lives inside the Lab
+        // world (not the global admin): catalog, report template, lab settings,
+        // referrals, notifications, KPIs. Gated on any lab-admin permission.
+        path: 'lab/settings',
+        canActivate: [permissionGuard(['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments']), moduleGuard('lab')],
+        loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
+      },
+      // Admin settings placeholders for not-yet-built modules — each opens a
+      // "coming soon" hub listing that module's planned config, so the module-
+      // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
+      // placeholder is visible regardless of entitlement.
+      {
+        path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/pharmacy', canActivate: [adminGuard], data: { moduleId: 'pharmacy' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/payroll', canActivate: [adminGuard], data: { moduleId: 'payroll' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/insurance', canActivate: [adminGuard], data: { moduleId: 'insurance' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/radiology', canActivate: [adminGuard], data: { moduleId: 'radiology' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/emergency', canActivate: [adminGuard], data: { moduleId: 'emergency' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'admin/blood-bank', canActivate: [adminGuard], data: { moduleId: 'bloodbank' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
         path: 'admin/users',
         canActivate: [permissionGuard('manage_users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
@@ -141,6 +191,11 @@ export const appRoutes: Route[] = [
         path: 'admin/lab-settings',
         canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
+      },
+      {
+        path: 'admin/organization',
+        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
       },
       {
         path: 'admin/billing',
@@ -378,6 +433,35 @@ export const appRoutes: Route[] = [
         path: 'stores',
         canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']), moduleGuard('inventory')],
         loadComponent: () => import('./features/stores/stores.component').then(m => m.StoresComponent)
+      },
+
+      // Clinical modules (OPD / IPD / Pharmacy / Payroll) — placeholder shells
+      // gated purely on tenant entitlement. When a module is off the guard
+      // bounces to landing; when on, its "coming soon" shell renders until the
+      // real screens ship. Each supplies its catalog id via route data.
+      {
+        path: 'opd',
+        canActivate: [moduleGuard('opd')],
+        data: { moduleId: 'opd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'ipd',
+        canActivate: [moduleGuard('ipd')],
+        data: { moduleId: 'ipd' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'pharmacy',
+        canActivate: [moduleGuard('pharmacy')],
+        data: { moduleId: 'pharmacy' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+      },
+      {
+        path: 'payroll',
+        canActivate: [moduleGuard('payroll')],
+        data: { moduleId: 'payroll' },
+        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
 
       // Reports — only roles that actively deliver reports land here. Lab

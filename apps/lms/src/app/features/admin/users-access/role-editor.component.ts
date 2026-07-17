@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Permission, Role } from '../../../shared/models/user.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -264,7 +265,12 @@ export class RoleEditorComponent implements OnInit {
     if (editing?.id) {
       this.api.patch(`/api/roles/${editing.id}/permissions`, { permissionIds: ids }).subscribe({
         next: () => { this._saving.set(false); this.toasts.success('Permissions updated'); this.back(); },
-        error: e => { this._saving.set(false); this.toasts.error(e.message ?? 'Save failed'); }
+        error: e => {
+          this._saving.set(false);
+          const err = ApiError.from(e);
+          if (err.field === 'name' || err.code === 'name_exists') this._nameError.set(err.message);
+          else this.toasts.error(err.message);
+        }
       });
     } else {
       const name = this.newRoleName().trim();
@@ -278,8 +284,9 @@ export class RoleEditorComponent implements OnInit {
         next: r => { this._saving.set(false); this.toasts.success(`Role ${r.name} created`); this.back(); },
         error: e => {
           this._saving.set(false);
-          const msg = e?.error?.message ?? e?.message ?? 'Save failed';
-          if (/already exists/i.test(msg)) this._nameError.set(msg); else this.toasts.error(msg);
+          const err = ApiError.from(e);
+          if (err.field === 'name' || err.code === 'name_exists') this._nameError.set(err.message);
+          else this.toasts.error(err.message);
         }
       });
     }

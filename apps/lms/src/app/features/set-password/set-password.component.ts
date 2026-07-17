@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { ApiError } from '../../shared/models/api-response.model';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 
@@ -63,8 +64,14 @@ export class SetPasswordComponent {
       // Gate cleared — land on the app root and let the landing guard route
       // by permission.
       await this.router.navigateByUrl('/');
-    } catch (e: any) {
-      this.error.set(e?.message || 'Could not update your password. Try again.');
+    } catch (e: unknown) {
+      // auth.changePassword throws a plain Error; ApiError.from normalises it
+      // (and any HttpErrorResponse) so the REAL backend reason surfaces. This
+      // is a password-only form, so field-named failures (field 'newPassword'/
+      // 'password', code weak_password/breached_password) route to the same
+      // inline error surface beneath the password inputs — cleared on edit via
+      // the inputs' (ngModelChange)="error.set(null)".
+      this.error.set(ApiError.from(e).message);
     } finally {
       this.busy.set(false);
     }

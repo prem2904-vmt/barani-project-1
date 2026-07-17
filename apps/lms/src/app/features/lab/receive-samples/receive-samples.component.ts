@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { patientDisplayName } from '../../../shared/models/patient.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -950,7 +951,7 @@ export class ReceiveSamplesComponent implements OnInit {
       },
       error: e => {
         this.pkgBusy.set(false);
-        this.pkgError.set(e?.error?.message ?? e?.message ?? 'Receive failed');
+        this.pkgError.set(ApiError.from(e).message);
       }
     });
   }
@@ -994,7 +995,7 @@ export class ReceiveSamplesComponent implements OnInit {
       },
       error: e => {
         this.busy.set(false);
-        this.toasts.error(e?.message ?? 'Could not mark arrived');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1018,7 +1019,7 @@ export class ReceiveSamplesComponent implements OnInit {
       },
       error: e => {
         this.busy.set(false);
-        this.toasts.error(e.message ?? 'Receive failed');
+        this.toasts.error(ApiError.from(e).message);
       }
     });
   }
@@ -1053,7 +1054,7 @@ export class ReceiveSamplesComponent implements OnInit {
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
       next: s => this.api.patch<OrderSample>(`/api/samples/${s.id}/receive`).subscribe({
         next: () => { this.busy.set(false); this.scanValue.set(''); this.toasts.success(`Received ${s.barcode}`); this.refresh(); },
-        error: e => { this.busy.set(false); this.toasts.error(e.message ?? 'Receive failed'); }
+        error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),
       error: () => { this.busy.set(false); this.toasts.error('Barcode not found'); }
     });
@@ -1061,7 +1062,8 @@ export class ReceiveSamplesComponent implements OnInit {
 
   receiveOne(id: string) {
     this.api.patch<OrderSample>(`/api/samples/${id}/receive`).subscribe({
-      next: () => { this.toasts.success('Received'); this.refresh(); }
+      next: () => { this.toasts.success('Received'); this.refresh(); },
+      error: e => { this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1071,7 +1073,7 @@ export class ReceiveSamplesComponent implements OnInit {
     this.busy.set(true);
     this.api.post<OrderSample[]>('/api/samples/receive-batch', { sampleIds: ids }).subscribe({
       next: () => { this.busy.set(false); this.toasts.success(`Received ${ids.length}`); this.refresh(); },
-      error: e => { this.busy.set(false); this.toasts.error(e.message ?? 'Batch receive failed'); }
+      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1105,7 +1107,7 @@ export class ReceiveSamplesComponent implements OnInit {
           this.seqValue.set('');
           this.refresh();
         },
-        error: e => { this.busy.set(false); this.toasts.error(e.message ?? 'Receive failed'); }
+        error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),
       error: () => { this.busy.set(false); this.toasts.error(`Barcode ${code} not found`); }
     });

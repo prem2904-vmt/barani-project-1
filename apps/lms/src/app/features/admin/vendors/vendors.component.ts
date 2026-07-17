@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -81,9 +82,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
           <h3 class="pf-section-title mb-3">New vendor</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label class="pf-label">Name *</label>
-              <input type="text" class="pf-input" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/></div>
+              <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/>
+              @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
             <div><label class="pf-label">Code</label>
-              <input type="text" class="pf-input uppercase" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/></div>
+              <input type="text" class="pf-input uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
+              @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
             <div><label class="pf-label">Contact name</label>
               <input type="text" class="pf-input" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/></div>
             <div><label class="pf-label">Contact phone</label>
@@ -249,6 +252,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
       border-color: var(--input-border-focus);
       box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
     }
+    .pf-input--error { border-color: #f43f5e; }
+    .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
+    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: #f43f5e; }
 
     /* Vendor row */
     .pf-vendor__name {
@@ -419,6 +425,8 @@ export class VendorsComponent implements OnInit {
   protected readonly saving = signal<boolean>(false);
   protected readonly newVendorOpen = signal<boolean>(false);
   protected readonly draft = signal<NewVendorDraft>({ ...EMPTY_DRAFT });
+  protected readonly nameError = signal<string | null>(null);
+  protected readonly codeError = signal<string | null>(null);
 
   protected readonly topUpVendorId = signal<string | null>(null);
   protected readonly topUpAmount = signal<string>('');
@@ -445,13 +453,19 @@ export class VendorsComponent implements OnInit {
 
   toggleNewVendor() {
     this.newVendorOpen.update(v => !v);
-    if (!this.newVendorOpen()) this.draft.set({ ...EMPTY_DRAFT });
+    if (!this.newVendorOpen()) { this.draft.set({ ...EMPTY_DRAFT }); this.clearFieldErrors(); }
   }
-  patchDraft(patch: Partial<NewVendorDraft>) { this.draft.update(d => ({ ...d, ...patch })); }
+  patchDraft(patch: Partial<NewVendorDraft>) {
+    if ('name' in patch) this.nameError.set(null);
+    if ('code' in patch) this.codeError.set(null);
+    this.draft.update(d => ({ ...d, ...patch }));
+  }
+  private clearFieldErrors() { this.nameError.set(null); this.codeError.set(null); }
 
   createVendor() {
     const d = this.draft();
     if (!d.name.trim()) return;
+    this.clearFieldErrors();
     this.saving.set(true);
     const opening = parseInt(d.openingCredit || '0', 10);
     this.api.post<VendorRow>('/api/vendors', {
@@ -471,7 +485,13 @@ export class VendorsComponent implements OnInit {
         this.draft.set({ ...EMPTY_DRAFT });
         this.refresh();
       },
-      error: e => { this.saving.set(false); this.toasts.error(e?.message ?? 'Could not create vendor'); }
+      error: e => {
+        this.saving.set(false);
+        const err = ApiError.from(e);
+        if (err.field === 'name') this.nameError.set(err.message);
+        else if (err.field === 'code') this.codeError.set(err.message);
+        else this.toasts.error(err.message);
+      }
     });
   }
 
@@ -496,7 +516,7 @@ export class VendorsComponent implements OnInit {
         // If this vendor's history is open, refresh it too.
         if (this.openTxnsId() === v.id) this.loadTxns(v.id);
       },
-      error: e => { this.saving.set(false); this.toasts.error(e?.message ?? 'Top-up failed'); }
+      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -509,7 +529,7 @@ export class VendorsComponent implements OnInit {
       isActive: !v.isActive
     }).subscribe({
       next: () => { this.toasts.success(v.isActive ? 'Vendor deactivated' : 'Vendor reactivated'); this.refresh(); },
-      error: e => this.toasts.error(e?.message ?? 'Could not update vendor')
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 

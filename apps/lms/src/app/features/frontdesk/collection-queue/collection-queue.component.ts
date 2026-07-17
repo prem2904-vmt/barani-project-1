@@ -6,6 +6,7 @@ import { AppointmentQueueService } from '../../../core/services/appointment-queu
 import { ToastService } from '../../../core/services/toast.service';
 import { Patient } from '../../../shared/models/patient.model';
 import { QueueItem, QueueMode } from '../../../shared/models/appointment.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -294,7 +295,7 @@ export class CollectionQueueComponent implements OnInit {
   addWalkIn(p: Patient) {
     this.svc.addWalkIn(p.id).subscribe({
       next: () => { this.toast.success('Added to queue.'); this._walkInOpen.set(false); this.load(); },
-      error: () => this.toast.error('Could not add walk-in.')
+      error: e => this.toast.error(ApiError.from(e).message)
     });
   }
 
@@ -302,7 +303,7 @@ export class CollectionQueueComponent implements OnInit {
   act(obs: { subscribe: (o: { next: () => void; error: (e: unknown) => void }) => void }) {
     obs.subscribe({
       next: () => this.load(),
-      error: () => { this.toast.error('Action failed.'); this.load(); }
+      error: (e) => { this.toast.error(ApiError.from(e).message); this.load(); }
     });
   }
 

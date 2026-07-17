@@ -8,6 +8,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
 import { Appointment } from '../../../shared/models/appointment.model';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -1303,8 +1304,10 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this._saving.set(false);
-          const msg = (err as { error?: { message?: string } })?.error?.message;
-          this._errorMsg.set(msg ?? 'Could not book — try again');
+          // Surface the real backend message inline. Field-named failures
+          // (patient / slot) are inherently shown inline via errorMsg beside
+          // the offending step rather than as a toast.
+          this._errorMsg.set(ApiError.from(err).message);
         },
       });
   }

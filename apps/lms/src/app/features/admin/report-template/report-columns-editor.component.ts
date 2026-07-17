@@ -3,6 +3,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import {
   COLUMN_TYPE_OPTIONS,
   DEFAULT_RESULT_COLUMNS,
@@ -423,12 +424,14 @@ export class ReportColumnsEditorComponent implements OnInit {
     this.applyingAll.set(true);
     const cols = this.columns().map((c, i) => ({ ...c, order: i + 1 }));
     let ok = 0;
+    let lastError = '';
     for (const d of depts) {
-      try { await this.layout.saveDeptColumns(d.id, cols); ok++; } catch { /* keep going */ }
+      try { await this.layout.saveDeptColumns(d.id, cols); ok++; }
+      catch (e: unknown) { lastError = ApiError.from(e).message; /* keep going */ }
     }
     this.applyingAll.set(false);
     if (ok === depts.length) this.toasts.success(`Applied to all ${ok} departments`);
-    else this.toasts.error(`Applied to ${ok} of ${depts.length} departments`);
+    else this.toasts.error(`Applied to ${ok} of ${depts.length} departments — ${lastError}`);
     this.configured.set(true);
   }
 
@@ -442,7 +445,7 @@ export class ReportColumnsEditorComponent implements OnInit {
       this.configured.set(true);
       this.toasts.success('Column structure saved');
     } catch (e: unknown) {
-      this.toasts.error(e instanceof Error ? e.message : 'Save failed');
+      this.toasts.error(ApiError.from(e).message);
     } finally {
       this.saving.set(false);
     }

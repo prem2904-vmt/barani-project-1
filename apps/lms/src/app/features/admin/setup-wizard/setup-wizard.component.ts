@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, ef
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Tenant, TenantBrandingMode } from '../../../shared/models/tenant.model';
@@ -115,6 +116,9 @@ interface BrandingDraft {
               <p class="text-[11px] mt-1" style="color: var(--text-muted);">
                 Hard-capped at {{ nameMax }} characters so the header stays tidy.
               </p>
+              @if (nameError()) {
+                <p class="brand-error">{{ nameError() }}</p>
+              }
             </div>
           }
         </pf-tile>
@@ -312,11 +316,13 @@ export class SetupWizardComponent {
   private readonly _branding = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
   private readonly _draggingLogo = signal(false);
   private readonly _logoError = signal<string | null>(null);
+  private readonly _nameError = signal<string | null>(null);
   private readonly _saving = signal(false);
 
   readonly branding = this._branding.asReadonly();
   readonly draggingLogo = this._draggingLogo.asReadonly();
   readonly logoError = this._logoError.asReadonly();
+  readonly nameError = this._nameError.asReadonly();
   readonly saving = this._saving.asReadonly();
 
   // Seed the editor from the current tenant once it loads (edit, not create).
@@ -348,6 +354,7 @@ export class SetupWizardComponent {
   readonly hasBrand = computed(() => this.showLogoPreview() || this.showNamePreview());
 
   updateBranding(patch: Partial<BrandingDraft>) {
+    if ('brandingName' in patch) this._nameError.set(null);
     this._branding.update(b => ({ ...b, ...patch }));
   }
   openLogoPicker() { this.logoInput?.nativeElement?.click(); }
@@ -389,6 +396,8 @@ export class SetupWizardComponent {
   async save() {
     if (this._saving()) return;
     this._saving.set(true);
+    this._nameError.set(null);
+    this._logoError.set(null);
     try {
       const br = this._branding();
       // Persist through the dedicated tenant update endpoint so the navbar
@@ -401,9 +410,11 @@ export class SetupWizardComponent {
       }));
       this.tenantState.update(updated);
       this.toasts.success('Branding saved.');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not save branding';
-      this.toasts.error(msg);
+    } catch (e: unknown) {
+      const err = ApiError.from(e);
+      if (err.field === 'brandingName') this._nameError.set(err.message);
+      else if (err.field === 'logoUrl') this._logoError.set(err.message);
+      else this.toasts.error(err.message);
     } finally {
       this._saving.set(false);
     }

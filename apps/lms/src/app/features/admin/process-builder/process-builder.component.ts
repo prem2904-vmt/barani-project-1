@@ -5,6 +5,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
@@ -555,14 +556,21 @@ export class ProcessBuilderComponent implements OnInit {
 
   /** Keep couplings + prerequisites consistent on load: an enabled action whose
    *  coupled partner or a prerequisite is off/missing is switched off too (runs to
-   *  a fixed point so cascades settle). Matches dispatch↔intake + the requires graph. */
+   *  a fixed point so cascades settle). Matches dispatch↔intake + the requires graph.
+   *  Also collapses the transport pair (dispatch + lab intake) when collection is
+   *  placed in the lab work-area — the tube is drawn at the bench, so there is
+   *  nothing to dispatch/receive and collection auto-receives into the queue. */
   private healDeps(lanes: Lane[]) {
+    const collapseInLab = new Set(['dispatch', 'lab_intake']);
     let changed = true;
     while (changed) {
       changed = false;
       const on = new Set(lanes.flatMap(l => l.items).filter(i => i.enabled).map(i => i.type));
+      const collectInLab = lanes.some(l => l.cat.id === 'lab'
+        && l.items.some(i => i.type === 'sample_collection' && i.enabled));
       for (const ln of lanes) for (const it of ln.items) {
         if (!it.enabled || isMandatory(it.type)) continue;
+        if (collectInLab && collapseInLab.has(it.type)) { it.enabled = false; changed = true; continue; }
         const partnerOff = coupledTypes(it.type).some(p => !on.has(p));
         const reqOff = requiresOf(it.type).some(r => !on.has(r));
         if (partnerOff || reqOff) { it.enabled = false; changed = true; }
@@ -600,6 +608,9 @@ export class ProcessBuilderComponent implements OnInit {
     }
     this.lanes.update(l => [...l]);
     if (addedType) this.applyEnabled(addedType, true);   // pull in prerequisites
+    // Settle collect-in-lab: dropping collection into the lab collapses the
+    // transport pair (dispatch + intake) so the canvas reflects it immediately.
+    this.lanes.update(l => { this.healDeps(l); return [...l]; });
     this.dirty.set(true);
   }
   dropToPalette(ev: CdkDragDrop<ActionCatalogEntry[]>) {
@@ -706,6 +717,9 @@ export class ProcessBuilderComponent implements OnInit {
     if (missing.length) {
       this.toasts.info(`Also needs ${missing.map(m => catalogFor(m)?.label ?? m).join(', ')} — add it to a work-area`);
     }
+    // Settle collect-in-lab after the cascade (e.g. enabling collection in the
+    // lab must switch the transport pair off).
+    this.lanes.update(l => { this.healDeps(l); return [...l]; });
     this.dirty.set(true);
   }
 
@@ -724,21 +738,30 @@ export class ProcessBuilderComponent implements OnInit {
     const base = this.workflows().find(w => (w.branchId ?? null) === null) ?? this.workflows()[0];
     let cfg: ProcessWorkflowConfig = { categories: [], actions: [] };
     try { cfg = JSON.parse(base?.configJson ?? '{}'); } catch { /* */ }
-    this.svc.create('New workflow', cfg, this.scope()).subscribe(w => { this.reload(w.id); this.toasts.success('Workflow created'); });
+    this.svc.create('New workflow', cfg, this.scope()).subscribe({
+      next: w => { this.reload(w.id); this.toasts.success('Workflow created'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   duplicate() {
     const id = this.currentId(); if (!id) return;
-    this.svc.duplicate(id).subscribe(w => { this.reload(w.id); this.toasts.success('Duplicated'); });
+    this.svc.duplicate(id).subscribe({
+      next: w => { this.reload(w.id); this.toasts.success('Duplicated'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   activate() {
     const id = this.currentId(); if (!id) return;
-    this.svc.activate(id).subscribe(() => { this.svc.refreshActive(); this.reload(id); this.toasts.success('Workflow activated — navigation updated'); });
+    this.svc.activate(id).subscribe({
+      next: () => { this.svc.refreshActive(); this.reload(id); this.toasts.success('Workflow activated — navigation updated'); },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   save() {
     const id = this.currentId(); const cfg = this.buildConfig(); const nm = this.name().trim() || 'Workflow';
     this.saving.set(true);
     const done = (w: ProcessWorkflowRecord) => { this.saving.set(false); if (this.isActive()) this.svc.refreshActive(); this.reload(w.id); this.toasts.success('Saved'); };
-    const fail = () => { this.saving.set(false); this.toasts.error('Save failed'); };
+    const fail = (e: unknown) => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); };
     if (id) this.svc.update(id, nm, cfg).subscribe({ next: done, error: fail });
     else this.svc.create(nm, cfg, this.scope()).subscribe({ next: done, error: fail });
   }

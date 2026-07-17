@@ -3,6 +3,8 @@ import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { ApiError } from '../../shared/models/api-response.model';
+import { ToastService } from '../../core/services/toast.service';
 
 interface SeedSummary {
   tenants: number; branches: number; departments: number;
@@ -119,7 +121,8 @@ interface KpiCard {
       <p class="pf-ov__section">Manage</p>
       <div class="pf-ov__cards">
         @for (g of groups; track g.cat) {
-          <a [routerLink]="['/admin/manage']" [queryParams]="{ cat: g.cat }" class="pf-ov__card press">
+          <a [routerLink]="g.href ? [g.href] : ['/admin/manage']"
+             [queryParams]="g.href ? null : { cat: g.cat }" class="pf-ov__card press">
             <span class="pf-ov__card-ic" [attr.data-g]="g.cat">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path [attr.d]="g.icon"/>
@@ -237,6 +240,18 @@ interface KpiCard {
       .pf-ov__range-dd { display: inline-flex; }
       .pf-ov__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .pf-ov__kpi-v { font-size: 21px; }
+
+      /* Phone: the MANAGE cards become a single-column LIST — icon left, title
+         over subtitle, no 2-up tiles. (Grid layout keeps title/subtitle grouped
+         beside the icon without a template wrapper.) */
+      .pf-ov__cards { grid-template-columns: 1fr; gap: 8px; }
+      .pf-ov__card {
+        display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto;
+        column-gap: 14px; row-gap: 2px; align-items: center; padding: 13px 14px;
+      }
+      .pf-ov__card-ic { grid-row: 1 / 3; align-self: center; margin-bottom: 0; }
+      .pf-ov__card-t { grid-column: 2; grid-row: 1; }
+      .pf-ov__card-s { grid-column: 2; grid-row: 2; }
     }
 
     /* ---- Web-below-desktop band (641-1279, incl. iPad + narrow browsers) ---- */
@@ -248,6 +263,7 @@ interface KpiCard {
 export class AdminOverviewComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly toasts = inject(ToastService);
 
   readonly today = new Date();
   readonly userName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'Admin');
@@ -278,12 +294,24 @@ export class AdminOverviewComponent implements OnInit {
     { key: 'tests',      label: 'Tests',        kind: 'count', color: 'pink',    icon: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 14h9' },
   ];
 
-  readonly groups = [
-    { cat: 'catalog',    label: 'Tests & Catalog',        blurb: 'Tests, packages, inventory, report layout',          icon: 'M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9' },
+  readonly groups: Array<{ cat: string; label: string; blurb: string; icon: string; href?: string }> = [
+    // Module-first admin: one card per MODULE (Lab here; OPD/IPD/Pharmacy slot in
+    // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
+    // the platform console (admin.prefrontal.health) — not here.
+    { cat: 'lab',        label: 'Lab',                     blurb: 'Tests & catalog, report layout, lab settings, referrals, alerts, KPIs', icon: 'M9 3h6M10 3v5.5L5.5 17A2 2 0 0 0 7.3 20h9.4a2 2 0 0 0 1.8-3L14 8.5V3', href: '/lab/settings' },
+    { cat: 'radiology',  label: 'Radiology / Imaging',     blurb: 'X-ray, CT, MRI, ultrasound, PACS — coming soon',     icon: 'M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z', href: '/admin/radiology' },
+    { cat: 'opd',        label: 'OPD',                     blurb: 'Appointments, consultation, vitals, prescriptions — coming soon', icon: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2', href: '/admin/opd' },
+    { cat: 'ipd',        label: 'IPD',                     blurb: 'Admissions, beds & wards, nursing, discharge — coming soon', icon: 'M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', href: '/admin/ipd' },
+    { cat: 'pharmacy',   label: 'Pharmacy',                blurb: 'Dispensing, stock, formulary, purchase — coming soon', icon: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7', href: '/admin/pharmacy' },
+    { cat: 'inventory',  label: 'Inventory',               blurb: 'Stock, batches, expiry alerts, per-item usage',      icon: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8', href: '/admin/inventory' },
+    { cat: 'payroll',    label: 'Payroll',                 blurb: 'Employees, attendance, payslips — coming soon',      icon: 'M3 7h18v12H3zM3 11h18M7 15h4M12 3v4', href: '/admin/payroll' },
+    { cat: 'emergency',  label: 'Emergency (ER)',          blurb: 'Triage, ER registration, observation — coming soon', icon: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z', href: '/admin/emergency' },
+    { cat: 'bloodbank',  label: 'Blood Bank',              blurb: 'Donors, cross-match, unit inventory — coming soon',  icon: 'M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10Z', href: '/admin/blood-bank' },
+    { cat: 'insurance',  label: 'Insurance',               blurb: 'Policies, claims, pre-auth, TPA, reimbursement — coming soon', icon: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4', href: '/admin/insurance' },
     { cat: 'people',     label: 'People & Access',         blurb: 'Users, roles and the audit trail',                   icon: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
-    { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, lab settings, queue, referrers',           icon: 'M4 21V7l8-4 8 4v14' },
+    { cat: 'org',        label: 'Branches & Organization', blurb: 'Branches, departments, queue, inventory',            icon: 'M4 21V7l8-4 8 4v14' },
     { cat: 'finance',    label: 'Billing & Finance',       blurb: 'GST, discounts, invoices, vendor wallets',           icon: 'M3 5h18v14H3z' },
-    { cat: 'automation', label: 'Workflow & Automation',   blurb: 'Process, form flows, notifications, KPIs',           icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
+    { cat: 'automation', label: 'Platform & Automation',   blurb: 'Process builder & form flows',                       icon: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z' },
   ];
 
   ngOnInit(): void {
@@ -303,7 +331,7 @@ export class AdminOverviewComponent implements OnInit {
     const url = `/api/dashboard/metrics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     this.api.get<DashMetrics>(url).subscribe({
       next: m => { this.metrics.set(m); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      error: e => { this.loading.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
