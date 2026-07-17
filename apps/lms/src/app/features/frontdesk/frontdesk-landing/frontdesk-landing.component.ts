@@ -1514,7 +1514,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.invoicePreviewUrl.set(null);
   }
   goToBilling(o: Order) {
-    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: o.id } });
+    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: o.id } });
   }
   /** Friendly label for the status chip. snake_case statuses → Title Case. */
   statusLabel(status: string): string {
@@ -1743,7 +1743,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (o.patientId) this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId } });
   }
   collectPayment(b: Bill) {
-    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: b.orderId } });
+    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: b.orderId } });
   }
   checkIn(a: Appointment) {
     // Backend returns { appointment, order, next }:

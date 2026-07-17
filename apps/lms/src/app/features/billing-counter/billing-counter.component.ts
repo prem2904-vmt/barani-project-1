@@ -647,7 +647,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   /** Open the standard billing screen on the row's order — same hand-off as
    *  the lookup + unbilled-order flows above. */
   openOutstanding(r: OutstandingRow) {
-    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: r.orderId } });
+    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: r.orderId } });
   }
 
   /** Refund rows carry a negative balance — render the amount owed back. */
@@ -701,7 +701,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     this.api.get<{ orderId: string }>(`/api/billing/lookup?code=${encodeURIComponent(raw)}`).subscribe({
       next: r => {
         this.resolving.set(false);
-        if (r?.orderId) this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: r.orderId } });
+        if (r?.orderId) this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: r.orderId } });
         else this.toasts.error('No order matches that code');
       },
       error: () => { this.resolving.set(false); this.toasts.error('No order matches that code'); }
@@ -794,7 +794,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
 
   bill(o: Order) {
     // Hand off to the existing billing screen with the order id pre-loaded.
-    this.router.navigate(['/frontdesk/billing'], { queryParams: { orderId: o.id } });
+    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: o.id } });
   }
 
   totalTests(o: Order): number {

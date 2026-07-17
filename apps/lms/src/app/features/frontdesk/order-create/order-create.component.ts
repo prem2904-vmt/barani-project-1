@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, c
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ApiService } from '../../../core/services/api.service';
+import { ApiService, ApiError } from '../../../core/services/api.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
@@ -69,6 +69,65 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _priority = signal<Priority>('Normal');
   private readonly _query = signal<string>('');
   private readonly _cartOpen = signal<boolean>(false);
+
+  private readonly _order = signal<Order | null>(null);
+  readonly order = this._order.asReadonly();
+
+  readonly viewOrderId = signal<string | null>(null);
+  readonly currentBill = signal<Bill | null>(null);
+
+  readonly isReadOnly = computed(() => !!this.viewOrderId());
+
+  readonly isPaymentDueMode = computed(() => {
+    const bill = this.currentBill();
+    return !!this.viewOrderId() && !!bill && bill.balance > 0;
+  });
+
+  readonly pageTitle = computed(() => {
+    // if (this.isReadOnly()) {
+    //   const bill = this.currentBill();
+    //   if (bill && bill.balance <= 0) return 'Order Settled';
+    //   return 'Pending Payment';
+    // }
+    return 'Order & Payments';
+  });
+
+  readonly pageSubtitle = computed(() => {
+    if (this.isReadOnly()) {
+      const bill = this.currentBill();
+      if (bill && bill.balance <= 0) return 'This order is settled and payment is recorded.';
+      return 'Collect outstanding payment balance.';
+    }
+    return 'Pick tests, set priority, review cart.';
+  });
+
+  readonly refundDue = computed(() => {
+    const bill = this.currentBill();
+    if (!bill) return 0;
+    return Math.max(0, bill.totalPaid - bill.totalPayable);
+  });
+  
+  readonly refundModeDefs = [{ key: 'cash', label: 'Cash' }, { key: 'upi', label: 'UPI' }, { key: 'card', label: 'Card' }];
+  readonly refundMode = signal('cash');
+  readonly refunding = signal(false);
+
+  doRefund() {
+    const b = this.currentBill();
+    const amt = this.refundDue();
+    if (!b || amt <= 0 || this.refunding()) return;
+    this.refunding.set(true);
+    this.api.post<Bill>(`/api/billing/${b.id}/refund`, { amount: amt, mode: this.refundMode(), reason: 'order modified — test removed' })
+      .subscribe({
+        next: updated => {
+          this.refunding.set(false);
+          this.currentBill.set(updated);
+          this.toasts.success(`Refunded ${amt}`);
+          this.paidBill = updated;
+          this.paidOrderId.set(b.orderId);
+        },
+        error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); }
+      });
+  }
 
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
@@ -464,6 +523,42 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // Deep-link support — if the route carries ?patientId= (e.g. coming
     // from a patient profile), pre-attach. Otherwise the inline picker
     // handles selection in-page.
+    const orderId = this.route.snapshot.queryParamMap.get('orderId');
+    if (orderId) {
+      this.viewOrderId.set(orderId);
+      this.api.get<Order>(`/api/orders/${orderId}`).subscribe({
+        next: o => {
+          this._order.set(o);
+          if (o?.patient) this._patient.set(o.patient);
+          this.refDoctorName.set(o.refDoctorName ?? '');
+          this.refHospitalName.set(o.refHospitalName ?? '');
+          this.setPriority(o.priority as Priority ?? 'Normal');
+          
+          // Pre-fill tests
+          const testIds: string[] = [];
+          for (const s of o.samples ?? []) {
+            for (const t of s.tests ?? []) {
+              if (t.testId) testIds.push(t.testId);
+            }
+          }
+          this._selected.set(testIds);
+        },
+        error: () => this.toasts.error('Could not load order details')
+      });
+      
+      this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
+        next: b => {
+          this.currentBill.set(b);
+          if (b.totalDiscount > 0) {
+            this.discountValue.set(String(b.totalDiscount));
+            this.discountKind.set('flat');
+          }
+        },
+        error: () => this.toasts.error('Could not load billing details')
+      });
+      return;
+    }
+
     const pid = this.route.snapshot.queryParamMap.get('patientId');
     const fromOrderId = this.route.snapshot.queryParamMap.get('fromOrderId');
     const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
@@ -744,7 +839,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Inline payment (front_desk: live pay pane in the right column) ──
   /** Show the live payment pane: billing is part of this workflow and we're
    *  creating a fresh order (not editing). */
-  readonly showInlinePay = computed(() => this.labCfg.billingMode() === 'front_desk' && !this.editOrderId());
+  readonly showInlinePay = computed(() => 
+    this.isReadOnly() || (this.labCfg.billingMode() === 'front_desk' && !this.editOrderId())
+  );
   readonly confirming = signal(false);
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
@@ -753,6 +850,53 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Called by the inline payment pane's Confirm: create the order, the bill
    *  (with the cart discount), record the payment, then print the invoice. */
   async confirmPayment(d: InlinePaymentResult) {
+    if (this.isPaymentDueMode()) {
+      const bill = this.currentBill();
+      if (!bill) return;
+      this.confirming.set(true);
+      try {
+        const amount = bill.balance;
+        if (d.mode === 'wallet') {
+          if (!d.vendorId) throw new Error('No vendor selected');
+          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
+            amount, billId: bill.id,
+            reason: `Bill #${bill.id.substring(0, 8)}`
+          }));
+          const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
+          }));
+          this.currentBill.set(updated);
+        } else if (d.mode === 'split' && d.splitParts?.length) {
+          for (const part of d.splitParts) {
+            await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
+          }
+          const updated = await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId: bill.orderId, discount: 0 }));
+          this.currentBill.set(updated);
+        } else if (d.mode === 'later') {
+          if (d.advanceAmount && d.advanceAmount > 0) {
+            const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+              amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+            }));
+            this.currentBill.set(updated);
+          }
+        } else {
+          const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount, mode: d.mode, referenceNo: d.referenceNo
+          }));
+          this.currentBill.set(updated);
+        }
+        
+        this.paidBill = this.currentBill();
+        this.paidOrderId.set(bill.orderId);
+        this.toasts.success('Payment collected');
+      } catch (e) {
+        this.toasts.error(ApiError.from(e).message);
+      } finally {
+        this.confirming.set(false);
+      }
+      return;
+    }
+
     const p = this._patient();
     if (!p || this.confirming() || this._selected().length === 0) return;
     if (this.discountOverCap()) {
@@ -812,7 +956,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly canCollectHere = computed(() =>
     this.labCfg.collectsAtFrontdesk() &&
     this.process.isEnabled('sample_collection') &&
-    this.auth.hasPermission('collect_sample'));
+    this.auth.hasPermission('collect_sample') &&
+    (!this.viewOrderId() || (this.order()?.samples ?? []).some(s => s.status === 'pending'))
+  );
   collectPaidSample() {
     const oid = this.paidOrderId();
     if (!oid) return;
@@ -972,7 +1118,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         next: () => {
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
-          this.router.navigate(['/frontdesk/billing'], { queryParams: this.billingQueryParams(editId) });
+          this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(editId) });
         },
         error: e => { this._saving.set(false); this.toasts.error(e?.error?.error?.message ?? e?.message ?? 'Update failed'); }
       });
@@ -1010,7 +1156,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           // Front-desk collects via the inline pay pane (Confirm payment), so
           // submit() isn't the path here — fall back to the billing screen if
           // it's ever reached (e.g. edit-mode proceed).
-          this.router.navigate(['/frontdesk/billing'], { queryParams: this.billingQueryParams(order.id) });
+          this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(order.id) });
         } else {
           // Billing lives on a separate counter. Generate the invoice HERE
           // (allocates the invoice number + tracking QR) so the patient leaves

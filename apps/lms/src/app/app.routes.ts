@@ -254,8 +254,7 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'billing',
-            canActivate: [permissionGuard(['create_bill', 'collect_payment']), workflowGuard('billing')],
-            loadComponent: () => import('./features/frontdesk/billing/billing.component').then(m => m.BillingComponent)
+            redirectTo: 'order'
           },
           {
             path: 'appointments',
@@ -299,7 +298,7 @@ export const appRoutes: Route[] = [
       // Legacy /reception redirects so existing bookmarks still work.
       { path: 'reception',                  redirectTo: 'frontdesk' },
       { path: 'reception/order-create',     redirectTo: 'frontdesk/order' },
-      { path: 'reception/billing',          redirectTo: 'frontdesk/billing' },
+      { path: 'reception/billing',          redirectTo: 'frontdesk/order' },
       { path: 'reception/appointments/new', redirectTo: 'frontdesk/appointments/new' },
       { path: 'reception/patients/new',     redirectTo: 'frontdesk/patients/new' },
       { path: 'reception/patients/:id',     redirectTo: 'frontdesk/patients/:id' },

@@ -60,7 +60,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
     iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0', 'M19 8v6M16 11h6'], hint: 'New patient registration' },
   { type: 'walk_in_order', label: 'New Order', route: '/frontdesk/order', permissions: ['create_order', 'register_patient'],
     iconPath: ['M9 2h6a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z', 'M12 8v6M9 11h6'], hint: 'Walk-in / create an order' },
-  { type: 'billing', label: 'Billing', route: '/frontdesk/billing', permissions: ['create_bill', 'collect_payment'],
+  { type: 'billing', label: 'Billing', route: '/frontdesk/order', permissions: ['create_bill', 'collect_payment'],
     iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'], hint: 'Collect payment' },
   { type: 'queue', label: 'Queue', route: '/frontdesk/queue', permissions: ['register_patient', 'create_order', 'collect_sample'],
     iconPath: ['M3 6h18M3 12h18M3 18h18', 'M7 6v0M7 12v0M7 18v0'], hint: 'Live collection queue' },

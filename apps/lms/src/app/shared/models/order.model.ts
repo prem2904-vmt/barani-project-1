@@ -8,6 +8,7 @@ export interface Order {
   branchId: string;
   refDoctorId?: string;
   refDoctorName?: string;
+  refHospitalName?: string;
   priority: string;
   source: string;
   status: string;
