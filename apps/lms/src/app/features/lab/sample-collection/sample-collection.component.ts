@@ -748,8 +748,13 @@ interface OrderGroup {
     .pf-sc__list {
       list-style: none; padding: 0; margin: 0;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      grid-template-columns: repeat(1, minmax(0, 1fr));
       gap: 12px;
+    }
+    @media (min-width: 768px) {
+      .pf-sc__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .pf-sc__list > li { min-width: 0; }
     /* Card row: Avatar · Name/meta · Rack of chips · Count · Chevron.

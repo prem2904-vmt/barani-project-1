@@ -181,6 +181,19 @@ export class PatientProfileComponent implements OnInit {
   readonly displayName = computed(() => patientDisplayName(this._patient()));
   protected readonly formatPatient = formatPatientInfo;
 
+  readonly copied = signal(false);
+
+  copyToClipboard(text: string | undefined) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      this.copied.set(true);
+      setTimeout(() => this.copied.set(false), 2000);
+      this.toasts.success('Patient ID copied to clipboard');
+    }).catch(() => {
+      this.toasts.error('Failed to copy to clipboard');
+    });
+  }
+
   /** "37y" — a DOB (real or synthesized from an entered age, anchored to the
    *  registration date) always wins so the age stays live and increments; falls
    *  back to a stored static age, else "—". */

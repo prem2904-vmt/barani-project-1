@@ -81,10 +81,12 @@ interface StaffMember {
   status: 'on_duty' | 'on_break' | 'busy';
 }
 
+import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
+
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -246,16 +248,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done'>(this.loadRightTab());
+  private readonly _rightTab = signal<'ip' | 'done' | 'billing'>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
-  setRightTab(t: 'ip' | 'done') {
+  setRightTab(t: 'ip' | 'done' | 'billing') {
     this._rightTab.set(t);
     try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadRightTab(): 'ip' | 'done' {
+  private loadRightTab(): 'ip' | 'done' | 'billing' {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : 'ip';
+      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
     } catch { return 'ip'; }
   }
 
@@ -265,17 +267,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home'>(() =>
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing'>(() =>
     this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
       case 'ip': return 'In progress';
       case 'home': return 'Home collection';
+      case 'billing': return 'Payments due';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done' | 'home') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing') {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);
@@ -531,6 +534,119 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly paymentsDue = computed(() =>
     this._bills().filter(b => b.balance > 0)
   );
+
+  private readonly _billingOrdersMap = signal<Record<string, Order>>({});
+  private readonly _fetchingOrderIds = new Set<string>();
+
+  readonly paymentsDueOrders = computed(() => {
+    const map = this._billingOrdersMap();
+    const ordersToday = this._orders();
+    const pendingBills = this._bills().filter(b => b.balance > 0);
+    const list: Order[] = [];
+    for (const b of pendingBills) {
+      let o = ordersToday.find(ord => ord.id === b.orderId);
+      if (!o) {
+        o = map[b.orderId];
+      }
+      if (o) {
+        list.push(o);
+      }
+    }
+    return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  });
+
+  getBillBalance(orderId: string): number {
+    return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;
+  }
+
+  private fetchOrdersForBills(bills: Bill[]) {
+    const map = { ...this._billingOrdersMap() };
+    const ordersToday = this._orders();
+    const pendingBills = bills.filter(b => b.balance > 0);
+    for (const b of pendingBills) {
+      if (ordersToday.some(ord => ord.id === b.orderId)) {
+        continue;
+      }
+      if (map[b.orderId]) {
+        continue;
+      }
+      if (this._fetchingOrderIds.has(b.orderId)) {
+        continue;
+      }
+      this._fetchingOrderIds.add(b.orderId);
+      this.api.get<Order>(`/api/orders/${b.orderId}`).subscribe({
+        next: o => {
+          if (o) {
+            this._billingOrdersMap.update(m => ({ ...m, [b.orderId]: o }));
+          }
+          this._fetchingOrderIds.delete(b.orderId);
+        },
+        error: () => {
+          this._fetchingOrderIds.delete(b.orderId);
+        }
+      });
+    }
+  }
+
+  readonly selectedBillingOrder = signal<Order | null>(null);
+  readonly selectedBill = signal<Bill | null>(null);
+  readonly confirmingPayment = signal(false);
+
+  openPaymentDrawer(o: Order) {
+    this.selectedBillingOrder.set(o);
+    this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
+      next: fullOrder => {
+        if (fullOrder) {
+          this.selectedBillingOrder.set(fullOrder);
+        }
+      }
+    });
+
+    const b = this._bills().find(bill => bill.orderId === o.id);
+    if (b) {
+      this.selectedBill.set(b);
+    } else {
+      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).subscribe({
+        next: bill => this.selectedBill.set(bill)
+      });
+    }
+  }
+
+  closePaymentDrawer() {
+    this.selectedBillingOrder.set(null);
+    this.selectedBill.set(null);
+  }
+
+  orderTests(o: Order): any[] {
+    const list: any[] = [];
+    for (const s of o.samples ?? []) {
+      for (const t of s.tests ?? []) {
+        list.push(t);
+      }
+    }
+    return list;
+  }
+
+  confirmOutstandingPayment(o: Order, b: Bill, ev: InlinePaymentResult) {
+    this.confirmingPayment.set(true);
+    const amount = b.balance;
+    this.api.post<Bill>(`/api/billing/${b.id}/payment`, {
+      amount,
+      mode: ev.mode,
+      referenceNo: ev.referenceNo
+    }).subscribe({
+      next: () => {
+        this.confirmingPayment.set(false);
+        this.toasts.success('Payment recorded successfully');
+        this.closePaymentDrawer();
+        this.refresh();
+      },
+      error: err => {
+        this.confirmingPayment.set(false);
+        this.toasts.error(err.message || 'Failed to record payment');
+      }
+    });
+  }
 
   // Stragglers -----------------------------------------------
   readonly stragglers = computed<StragglerItem[]>(() => {
@@ -821,7 +937,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // found and their remaining balance collected. (Previously this hit the
     // /lookup resolver with a dummy code, so the drawer was always empty.)
     this.api.get<{ due: Bill[]; refundsOwed: Bill[] }>('/api/billing/outstanding').subscribe({
-      next: r => this._bills.set([...(r?.due ?? []), ...(r?.refundsOwed ?? [])]),
+      next: r => {
+        const bills = [...(r?.due ?? []), ...(r?.refundsOwed ?? [])];
+        this._bills.set(bills);
+        this.fetchOrdersForBills(bills);
+      },
       error: () => { /* endpoint may not exist; silently ignore */ }
     });
 

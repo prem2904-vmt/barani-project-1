@@ -593,6 +593,12 @@
   border-color: rgba(16, 185, 129, 0.4);
   color: #34d399;
 }
+.pf-tabs__count[data-tone='warning'] {
+  background: rgba(244, 63, 94, 0.22);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+  font-weight: 700;
+}
 .pf-tabs__btn--on .pf-tabs__count {
   background: rgba(255, 255, 255, 0.22);
   border-color: transparent;
@@ -780,7 +786,7 @@
   /* Keep original grid-template-columns with 60px token column for future enablement:
   grid-template-columns: 22px 60px 1fr auto auto;
   */
-  grid-template-columns: 22px 1fr auto auto;
+  grid-template-columns: 22px 40px 1fr auto auto;
 }
 
 .pf-card--ip .pf-card__actions {
@@ -799,7 +805,7 @@
     /* Keep original mobile grid-template-columns with 60px token column:
     grid-template-columns: 60px 1fr auto;
     */
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 22px 36px 1fr auto;
   }
 
   .pf-card__meta-inline {
