@@ -56,7 +56,6 @@ const STATUS_CLASS: Record<string, string> = {
             <path d="M19 12H5"/>
             <path d="m12 19-7-7 7-7"/>
           </svg>
-          <span>Back</span>
         </button>
         @if (navBack.showBack()) {
           <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
