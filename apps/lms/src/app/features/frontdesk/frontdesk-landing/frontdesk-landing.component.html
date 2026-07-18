@@ -740,11 +740,16 @@
                         @if (sampleStatus(o) === 'partially_collected' || showCollectOn(o)) {
                         <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
                         } @else if (showDispatchOn(o)) {
-                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
-                          (click)="markDispatched(o)">Dispatch</button>
+                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Dispatch</button>
                         } @else if (o.status === 'billed') {
                         <button type="button" class="pf-ghostbtn press" [disabled]="reprintLoading()"
                           (click)="reprintLabels(o)">Reprint Labels</button>
+                        }
+                        @if (o.status === 'partially_validated') {
+                        <button type="button" class="pf-ghostbtn press" [disabled]="downloadingReport()"
+                          (click)="downloadReport(o)">
+                          @if (downloadingReport()) { Preparing… } @else { Download }
+                        </button>
                         }
                       </div>
                     </div>

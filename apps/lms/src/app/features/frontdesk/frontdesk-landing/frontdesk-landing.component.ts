@@ -501,22 +501,30 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  ready-to-deliver states; those land in completedOrders below so
    *  the FD board has two clear panes. */
   readonly visibleOrders = computed(() =>
-    this._orders().filter(o =>
-      this.inWorkRange(o.createdAt)
-      && o.status !== 'completed'
-      && o.status !== 'validated'
-      && o.status !== 'partially_validated'
-      && o.status !== 'delivered'
-      && o.status !== 'cancelled'
-    )
+    this._orders().filter(o => {
+      const active = o.status !== 'completed'
+        && o.status !== 'validated'
+        && o.status !== 'delivered'
+        && o.status !== 'cancelled';
+      if (!active) return false;
+
+      // If the order is partially validated and we are viewing today's work,
+      // it should be visible in the queue (since today's validation activity
+      // brought it into the Today feed).
+      if (o.status === 'partially_validated' && this.workBounds().isToday) {
+        return true;
+      }
+
+      return this.inWorkRange(o.createdAt);
+    })
   );
   /** "Completed" — work the lab has signed off on (validated /
-   *  partially_validated / delivered / completed). Drives the new
+   *  delivered / completed). Drives the new
    *  third FD pane next to In Progress so reception can see at a
    *  glance which patients are ready to hand over. */
   readonly completedOrders = computed(() =>
     this._orders().filter(o => {
-      const done = o.status === 'validated' || o.status === 'partially_validated'
+      const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
       // A report completed TODAY for an order created on an earlier day must
