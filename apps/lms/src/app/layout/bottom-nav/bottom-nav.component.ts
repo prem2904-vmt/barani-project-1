@@ -93,7 +93,7 @@ const DRAG_THRESHOLD_PX = 4;
           <div class="pf-rail-sep" aria-hidden="true"></div>
         }
 
-        @for (n of primary(); track n.id; let i = $index) {
+        @for (n of displayedItems(); track n.id; let i = $index) {
           <!-- Buttons auto-scale to the visible-tab count. With many
                tabs (≥4) we stay icon-only on mobile to keep the pill
                compact; with few tabs (≤3) we always show the label
@@ -173,31 +173,39 @@ const DRAG_THRESHOLD_PX = 4;
                        shrink-0 transition-colors"
                 [class.pf-nav-btn--compact]="compactMode()"
                 [class.pf-nav-btn--more-on]="moreOpen()"
+                [class.pf-nav-btn--active]="isOverflowActive()"
                 (click)="toggleMore($event)"
                 [attr.aria-label]="railMode() ? 'Account & more' : 'More'"
                 [attr.aria-expanded]="moreOpen()">
-          <!-- The account button shows the PF brand glyph on BOTH the phone
-               bottom pill and the iPad rail's bottom account button. Tapping
-               opens the account popover (notifications / people / theme /
-               sign-out). -->
-          <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
-               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <defs>
-              <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%"   stop-color="#7c3aed" />
-                <stop offset="25%"  stop-color="#8b5cf6" />
-                <stop offset="50%"  stop-color="#a855f7" />
-                <stop offset="75%"  stop-color="#d946ef" />
-                <stop offset="100%" stop-color="#ec4899" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-              fill="url(#pfMoreBrandGradient)" />
-            <path
-              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-              fill="url(#pfMoreBrandGradient)" />
-          </svg>
+          @if (!railMode() && primary().length > 5) {
+            <!-- 3 dots icon -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>
+            </svg>
+          } @else {
+            <!-- The account button shows the PF brand glyph on BOTH the phone
+                 bottom pill and the iPad rail's bottom account button. Tapping
+                 opens the account popover (notifications / people / theme /
+                 sign-out). -->
+            <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#7c3aed" />
+                  <stop offset="25%"  stop-color="#8b5cf6" />
+                  <stop offset="50%"  stop-color="#a855f7" />
+                  <stop offset="75%"  stop-color="#d946ef" />
+                  <stop offset="100%" stop-color="#ec4899" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+                fill="url(#pfMoreBrandGradient)" />
+              <path
+                d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+                fill="url(#pfMoreBrandGradient)" />
+            </svg>
+          }
           <!-- My presence status — small dot bottom-right of the account
                glyph, mirroring the desktop avatar dot. -->
           <span class="pf-status-dot pf-more-status"
@@ -211,6 +219,23 @@ const DRAG_THRESHOLD_PX = 4;
         <div class="pf-more-bd" (click)="closeMore()"></div>
         <div class="pf-more-pop" role="menu" aria-label="More actions"
              (click)="$event.stopPropagation()">
+          <!-- Overflow navigation options -->
+          @if (!railMode() && overflowItems().length > 0) {
+            @for (opt of overflowItems(); track opt.item.id) {
+              <button type="button" role="menuitem" class="pf-more-item press"
+                      [class.pf-more-item--active]="activeIdx() === opt.index"
+                      (click)="onTabClick(opt.index, $event); closeMore()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  @for(path of opt.item.iconPath; track path) {
+                    <path [attr.d]="path"/>
+                  }
+                </svg>
+                <span>{{ opt.item.label }}</span>
+              </button>
+            }
+            <div class="pf-more-sep"></div>
+          }
           <!-- Presence status — current status row; tap to expand the 7
                Teams-style presets. DND-grade statuses (In surgery / Do not
                disturb) block calls + silence pushes server-side. -->
@@ -473,6 +498,7 @@ const DRAG_THRESHOLD_PX = 4;
       position: relative;
       border-radius: 9999px;
       overflow-x: auto;
+      max-width: 100%;
       touch-action: pan-y;
       user-select: none;
       -webkit-user-select: none;
@@ -984,7 +1010,14 @@ const DRAG_THRESHOLD_PX = 4;
       color: var(--color-violet-300, #c4b5fd);
     }
     .pf-more-pop .pf-more-item--danger {
-      color: #fca5a5;
+      color: #fca5a5 !important;
+    }
+    .pf-more-pop .pf-more-item--active {
+      color: #a78bfa !important;
+      font-weight: 700;
+    }
+    .pf-more-pop .pf-more-item--active svg {
+      color: #a78bfa !important;
     }
     .pf-more-pop .pf-more-item--danger:hover {
       background: rgba(239, 68, 68, 0.12) !important;
@@ -1133,6 +1166,23 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
    *  whole component (xl:hidden) and uses the top-strip nav. */
   protected readonly railMode = signal<boolean>(this.computeRailMode());
+  protected readonly displayedItems = computed(() => {
+    const items = this.primary();
+    if (!this.railMode() && items.length > 5) {
+      return items.slice(0, 4);
+    }
+    return items;
+  });
+  protected readonly overflowItems = computed(() => {
+    const items = this.primary();
+    if (!this.railMode() && items.length > 5) {
+      return items.slice(4).map((item, idx) => ({ item, index: idx + 4 }));
+    }
+    return [];
+  });
+  protected readonly isOverflowActive = computed(() => {
+    return !this.railMode() && this.primary().length > 5 && this.activeIdx() >= 4;
+  });
   private computeRailMode(): boolean {
     if (typeof window === 'undefined') return false;
     const w = window.innerWidth;
@@ -1751,7 +1801,11 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private measureToActive(): void {
     if (this.dragging()) return;
     const btns = this.btns();
-    const ref = btns[this.activeIdx()];
+    let idx = this.activeIdx();
+    if (!this.railMode() && this.primary().length > 5 && idx >= 4) {
+      idx = 4;
+    }
+    const ref = btns[idx];
     if (!ref) return;
     const el = ref.nativeElement;
     this.indicator.set({ x: el.offsetLeft, w: el.offsetWidth, h: el.offsetHeight });

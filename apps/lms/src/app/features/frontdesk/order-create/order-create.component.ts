@@ -23,6 +23,9 @@ import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
 
+import { LabelCardComponent } from '../post-payment/label-card.component';
+import { printLabelOnly } from '../../../shared/utils/print-label';
+
 type Priority = 'Normal' | 'Urgent';
 
 /** Slimmed view of the patient-history row used for repeat-order seeding.
@@ -36,7 +39,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -868,6 +871,34 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
   private paidBill: Bill | null = null;
+
+  protected readonly _reprintOrder = signal<Order | null>(null);
+  readonly reprintOrder = this._reprintOrder.asReadonly();
+  readonly reprintLoading = signal(false);
+
+  printLabels() {
+    const oid = this.paidOrderId() || this.viewOrderId() || this.editOrderId();
+    if (!oid || this.reprintLoading()) return;
+    this.reprintLoading.set(true);
+    this.api.get<Order>(`/api/orders/${oid}`).subscribe({
+      next: full => {
+        this.reprintLoading.set(false);
+        if (!full?.samples?.length) {
+          this.toasts.warning('No samples on this order to print labels');
+          return;
+        }
+        this._reprintOrder.set(full);
+        setTimeout(() => {
+          printLabelOnly();
+          setTimeout(() => this._reprintOrder.set(null), 2000);
+        }, 350);
+      },
+      error: () => {
+        this.reprintLoading.set(false);
+        this.toasts.error('Could not load the order for label printing');
+      }
+    });
+  }
 
   /** Called by the inline payment pane's Confirm: create the order, the bill
    *  (with the cart discount), record the payment, then print the invoice. */

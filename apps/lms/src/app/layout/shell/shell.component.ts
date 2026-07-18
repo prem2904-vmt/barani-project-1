@@ -132,7 +132,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
            bottom-nav pill or sit on top of action buttons (Next, Submit)
            which usually live at the bottom of the page. -->
       <div
-        class="pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24"
+        class="pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24 md:top-auto md:right-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:items-center"
       >
         @for (t of toasts.toasts(); track t.id) {
           <div

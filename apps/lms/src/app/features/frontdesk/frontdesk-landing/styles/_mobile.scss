@@ -404,4 +404,25 @@
   color: #fff;
 }
 .pf-mtab svg { flex-shrink: 0; }
+
+.pf-mtab__count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 9999px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.15));
+  color: var(--text-secondary);
+}
+.pf-mtab--on .pf-mtab__count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.pf-mtab__count[data-tone="warning"] {
+  background: rgba(244, 63, 94, 0.15); /* rose-500 tint */
+  color: #fb7185; /* rose-400 */
+}
+.pf-mtab--on .pf-mtab__count[data-tone="warning"] {
+  background: #f43f5e; /* rose-500 solid when active */
+  color: #fff;
+}
 
