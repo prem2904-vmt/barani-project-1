@@ -700,7 +700,7 @@ export class InlinePaymentPanelComponent implements OnInit {
     },
     {
       id: "wallet",
-      label: "Wallet",
+      label: "Credit Wallet",
       iconPath:
         "M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01",
     },

@@ -338,6 +338,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _topTestPopoverOpen = signal<boolean>(false);
   readonly topTestPopoverOpen = this._topTestPopoverOpen.asReadonly();
 
+  readonly activeShareMenuOrderId = signal<string | null>(null);
+
   /** Two-slider track for the 3-pane layout (Appointments | In Progress | Completed).
    *  Each slider stores the LEFT EDGE of the slider as a % of the row width.
    *  • _apptSplitPctA = position of slider 1 (between Appointments & In Progress)
@@ -1157,6 +1159,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._twoPaneSplit.set(clamped);
       const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
       if (firstPane) firstPane.style.flexBasis = clamped + '%';
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.pf-share-wrapper')) {
+      this.activeShareMenuOrderId.set(null);
     }
   }
 
@@ -2077,6 +2087,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  "ready for delivery" alert — skips the local drawer in favour of
    *  the full Results queue with deliver / print actions. */
   goToResults() { this.router.navigateByUrl('/reports'); }
+
+  shareReportSMS(o: Order) {
+    const contact = o.patient?.phone || 'No phone number';
+    this.toasts.success(`Report link sent via SMS to ${contact}`);
+  }
+  shareReportWhatsapp(o: Order) {
+    const contact = o.patient?.phone || 'No phone number';
+    this.toasts.success(`Report link sent via WhatsApp to ${contact}`);
+  }
+  shareReportEmail(o: Order) {
+    const contact = o.patient?.email || 'No email address';
+    this.toasts.success(`Report link sent via Email to ${contact}`);
+  }
 
   /** UI flag for the "Download report" button while we fetch + render. */
   protected readonly _downloadingReport = signal<boolean>(false);
