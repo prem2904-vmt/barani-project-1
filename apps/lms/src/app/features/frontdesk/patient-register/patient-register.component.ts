@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -30,7 +30,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
 
       <pf-screen-header
         eyebrow="Frontdesk · Registration"
-        title="Register Patient"
+        [title]="patientId() ? 'Edit Patient Details' : 'Register Patient'"
         subtitle="Capture the patient's details — name, contact, ID, and any extras you collect.">
       </pf-screen-header>
 
@@ -39,9 +39,10 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
           <pf-workflow-renderer
             [config]="cfg"
             [context]="context()"
+            [initialValues]="initialValues()"
             [submitting]="saving()"
-            [finishLabel]="'Register patient'"
-            [extraActions]="registerActions"
+            [finishLabel]="patientId() ? 'Save changes' : 'Register patient'"
+            [extraActions]="patientId() ? [] : registerActions"
             (valuesChange)="values.set($event)"
             (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
@@ -81,6 +82,7 @@ export class PatientRegisterComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly _record = signal<WorkflowConfigRecord | null>(null);
   private readonly _config = signal<WorkflowConfig | null>(null);
@@ -94,6 +96,9 @@ export class PatientRegisterComponent implements OnInit {
   readonly record = this._record.asReadonly();
   readonly config = this._config.asReadonly();
   readonly saving = this._saving.asReadonly();
+
+  protected readonly patientId = signal<string | null>(null);
+  protected readonly initialValues = signal<WorkflowFormValues>({});
 
   readonly context = computed<WorkflowContext>(() => {
     const user = this.auth.user();
@@ -113,18 +118,44 @@ export class PatientRegisterComponent implements OnInit {
   });
 
   ngOnInit() {
+    const pid = this.route.snapshot.queryParamMap.get('patientId');
+    if (pid) {
+      this.patientId.set(pid);
+    }
+
     this.api.get<WorkflowConfigRecord>('/api/workflows/patient_registration').subscribe({
       next: r => {
         this._record.set(r);
         console.log('Parsing workflow config Patient', r.configJson);
-        try { this._config.set(JSON.parse(r.configJson)); }
+        try {
+          const cfg = JSON.parse(r.configJson) as WorkflowConfig;
+          this._config.set(cfg);
+
+          if (pid) {
+            this.api.get<Patient>(`/api/patients/${pid}`).subscribe({
+              next: p => {
+                const init = this.buildInitialValues(cfg, p);
+                this.initialValues.set(init);
+                this.values.set(init);
+              },
+              error: () => this.toasts.error('Could not load patient details for editing')
+            });
+          }
+        }
         catch { this.toasts.error('Could not parse workflow'); }
       },
       error: () => this.toasts.error('Could not load patient_registration workflow')
     });
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  back() {
+    const pid = this.patientId();
+    if (pid) {
+      this.router.navigate(['/frontdesk/patients', pid]);
+    } else {
+      this.router.navigateByUrl('/frontdesk');
+    }
+  }
 
   onComplete(values: WorkflowFormValues) {
     this.savePatient(values, 'profile');
@@ -153,46 +184,84 @@ export class PatientRegisterComponent implements OnInit {
       body['attributes'] = JSON.stringify(metadata);
     }
 
-    // Hybrid DOB / age: registration captures EITHER an exact date of birth OR
-    // an approximate age. When only age is given, anchor a synthetic DOB to the
-    // registration date (today − age years) so the displayed age increments over
-    // time (30 today → 31 next year). DOB always wins; once a DOB exists we drop
-    // the static age so age is recomputed from DOB everywhere (and stays live).
     this.applyHybridDob(body);
-
     this._saving.set(true);
-    this.api.post<Patient>('/api/patients/', body).subscribe({
-      next: patient => {
-        this._saving.set(false);
-        this.toasts.success(`Registered ${patient.displayName}`);
-        this.values.set({});
-        if (target === 'order') {
-          this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } });
-        } else if (target === 'appointment') {
-          this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } });
-        } else {
-          // After registration: navigate to the new patient's profile page.
+
+    const pid = this.patientId();
+    if (pid) {
+      this.api.put<Patient>(`/api/patients/${pid}`, body).subscribe({
+        next: patient => {
+          this._saving.set(false);
+          this.toasts.success(`Updated ${patient.displayName}`);
           this.router.navigate(['/frontdesk/patients', patient.id]);
+        },
+        error: e => {
+          this._saving.set(false);
+          this.toasts.error(ApiError.from(e).message);
         }
-      },
-      error: e => {
-        this._saving.set(false);
-        // Surface the REAL backend failure (duplicate patient, invalid phone/
-        // name/email, …). The registration inputs live inside the child
-        // workflow-renderer, so field-level highlighting isn't reachable from
-        // here — show the exact message instead of a generic.
-        this.toasts.error(ApiError.from(e).message);
+      });
+    } else {
+      this.api.post<Patient>('/api/patients/', body).subscribe({
+        next: patient => {
+          this._saving.set(false);
+          this.toasts.success(`Registered ${patient.displayName}`);
+          this.values.set({});
+          if (target === 'order') {
+            this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } });
+          } else if (target === 'appointment') {
+            this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } });
+          } else {
+            this.router.navigate(['/frontdesk/patients', patient.id]);
+          }
+        },
+        error: e => {
+          this._saving.set(false);
+          this.toasts.error(ApiError.from(e).message);
+        }
+      });
+    }
+  }
+
+  private buildInitialValues(cfg: WorkflowConfig, p: Patient): WorkflowFormValues {
+    const initial: WorkflowFormValues = {};
+    let parsedAttrs: Record<string, unknown> = {};
+    if (p.attributes) {
+      try {
+        parsedAttrs = JSON.parse(p.attributes);
+      } catch (e) {
+        console.error('Failed to parse patient attributes', e);
       }
-    });
+    }
+
+    for (const step of cfg.steps) {
+      for (const f of step.fields) {
+        const sk = f.storageKey;
+        const key = `${step.name}::${f.name}`;
+        if (sk.startsWith('metadata.')) {
+          const metaKey = sk.slice('metadata.'.length);
+          if (parsedAttrs[metaKey] !== undefined) {
+            initial[key] = parsedAttrs[metaKey];
+          }
+        } else {
+          const camelKey = this.toCamelCase(sk);
+          const val = (p as any)[camelKey];
+          if (val !== undefined && val !== null) {
+            if (camelKey === 'dateOfBirth' && typeof val === 'string') {
+              initial[key] = val.slice(0, 10);
+            } else {
+              initial[key] = val;
+            }
+          }
+        }
+      }
+    }
+    return initial;
   }
 
   private toCamelCase(snake: string): string {
     return snake.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
   }
 
-  /** Hybrid DOB/age on the patient body: if only an age is given, derive a DOB
-   *  anchored to today (registration date) so the age increments over time;
-   *  whenever a DOB exists, drop the static age so it's recomputed from DOB. */
   private applyHybridDob(body: Record<string, unknown>): void {
     const dob = body['dateOfBirth'];
     const ageRaw = body['age'];

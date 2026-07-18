@@ -19,6 +19,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { PatientDocumentsComponent } from './patient-documents.component';
 import { PatientIdCardComponent } from './patient-id-card.component';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -155,7 +156,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -178,6 +179,13 @@ export class PatientProfileComponent implements OnInit {
   readonly patient = this._patient.asReadonly();
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
+  readonly showIdCard = signal(false);
+  readonly qrValue = computed(() => {
+    const p = this._patient();
+    if (!p) return '';
+    const origin = typeof location !== 'undefined' ? location.origin : '';
+    return `${origin}/p/${p.id}`;
+  });
   readonly displayName = computed(() => patientDisplayName(this._patient()));
   protected readonly formatPatient = formatPatientInfo;
 
@@ -222,16 +230,7 @@ export class PatientProfileComponent implements OnInit {
   readonly savingEdit = signal(false);
 
   openEdit(p: Patient) {
-    this._editDraft.set({
-      firstName: p.firstName ?? '',
-      fathersName: p.fathersName ?? '',
-      phone: p.phone ?? '',
-      email: p.email ?? '',
-      sex: p.sex ?? '',
-      dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
-      age: p.age ?? null,
-      bloodGroup: p.bloodGroup ?? '',
-    });
+    this.router.navigate(['/frontdesk/patients/new'], { queryParams: { patientId: p.id } });
   }
   patchEdit(patch: Partial<NonNullable<ReturnType<typeof this.editDraft>>>) {
     this._editDraft.update(d => d ? { ...d, ...patch } : d);
