@@ -20,20 +20,17 @@
             BACK TO RECENTS
           </button>
 
-          <div class="h-px bg-[var(--border-muted)] -mx-6 -my-1"></div>
-
-          <div class="flex items-center gap-4">
-            @if (navBack.showBack()) {
-              <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-              </button>
-            }
-            <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
-            <div class="flex-1 min-w-0">
-              <h1 class="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-tight truncate mb-0.5">
-                {{ p.displayName }}
-              </h1>
-              <div class="flex items-center gap-1 text-m font-mono text-[var(--text-secondary)] mt-1.5 bg-white/5 border border-white/10 py-1 rounded-lg w-fit">
+          <!-- Top Row: Back button, Patient ID & Edit button -->
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              @if (navBack.showBack()) {
+                <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center animate-fade-in" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--glass-border); color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);" (click)="navBack.back()" aria-label="Go back">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+              }
+              
+              <!-- Patient ID with copy button -->
+              <div class="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg w-fit">
                 <span class="text-[var(--text-tertiary)] select-none">ID:</span>
                 <span class="font-semibold select-all">{{ p.mrn }}</span>
                 <button type="button" class="inline-flex items-center justify-center p-1 rounded hover:bg-white/10 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
@@ -49,14 +46,8 @@
                   }
                 </button>
               </div>
-              @if (p.isMinor) {
-                <div class="flex items-center gap-2 flex-wrap mt-1.5">
-                  <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                    MINOR
-                  </span>
-                </div>
-              }
             </div>
+
             @if (canEdit()) {
               <button type="button" title="Edit patient info"
                       class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40 transition-colors cursor-pointer"
@@ -69,110 +60,126 @@
             }
           </div>
 
-          <div class="h-px bg-[var(--border-muted)]"></div>
+          <!-- Divider -->
+          <div class="h-px bg-[var(--border-muted)] -mx-6"></div>
 
-          <!-- Metrics Summary -->
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span class="text-xs text-[var(--text-tertiary)] block">Age / Gender</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ ageLabel(p) }} · {{ p.sex || '—' }}</span>
-            </div>
-            <div>
-              <span class="text-xs text-[var(--text-tertiary)] block">Blood Group</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ p.bloodGroup || 'Not recorded' }}</span>
-            </div>
-            @if (p.dateOfBirth) {
-              <div>
-                <span class="text-xs text-[var(--text-tertiary)] block">Date of Birth</span>
-                <span class="font-semibold text-[var(--text-secondary)]">{{ p.dateOfBirth | date:'d MMM y' }}</span>
-              </div>
-            }
-            <div>
-              <span class="text-xs text-[var(--text-tertiary)] block">Registered On</span>
-              <span class="font-semibold text-[var(--text-secondary)]">{{ p.createdAt | date:'d MMM y' }}</span>
-            </div>
-          </div>
-
-          <div class="h-px bg-[var(--border-muted)]"></div>
-
-          <!-- Contact Information -->
-          <div class="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
-            @if (p.phone) {
-              <a [href]="'tel:' + p.phone" class="inline-flex items-center gap-2 hover:text-[var(--text-primary)] transition-colors w-fit">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.17 12a19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 3.08 1.2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.9z"/>
-                </svg>
-                {{ p.phone }}
-              </a>
-            }
-            @if (p.email) {
-              <a [href]="'mailto:' + p.email" class="inline-flex items-center gap-2 hover:text-[var(--text-primary)] transition-colors truncate">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2"/>
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                </svg>
-                {{ p.email }}
-              </a>
-            }
-            @if (p.guardianName) {
-              <div class="text-xs mt-1 p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-                <span class="text-[var(--text-tertiary)] block font-medium uppercase tracking-wider text-[9px] mb-0.5">Guardian Details</span>
-                <div class="font-semibold text-[var(--text-primary)]">{{ p.guardianName }} ({{ p.guardianRelationship ?? 'Guardian' }})</div>
-                @if (p.guardianPhone) {
-                  <div class="text-[var(--text-secondary)] font-mono">{{ p.guardianPhone }}</div>
+          <!-- Main Row: Avatar & Name/Phone/Age/Sex -->
+          <div class="flex items-start gap-4">
+            <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-tight truncate">
+                {{ p.displayName }}
+              </h1>
+              
+              <!-- Phone, Age/Sex, and Blood Group below the name -->
+              <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-xs text-[var(--text-secondary)] font-medium">
+                <span>{{ ageLabel(p).toUpperCase() }}/{{ (p.sex?.charAt(0) ?? '—').toUpperCase() }}</span>
+                @if (p.phone) {
+                  <span class="text-[var(--text-tertiary)] select-none">|</span>
+                  <a [href]="'tel:' + p.phone" class="hover:text-[var(--text-primary)] transition-colors font-mono">
+                    {{ p.phone }}
+                  </a>
+                }
+                <span class="text-[var(--text-tertiary)] select-none">|</span>
+                <span>Blood: {{ p.bloodGroup || 'Not recorded' }}</span>
+                @if (p.email) {
+                  <span class="text-[var(--text-tertiary)] select-none">|</span>
+                  <a [href]="'mailto:' + p.email" class="hover:text-[var(--text-primary)] transition-colors truncate max-w-[150px]" title="{{ p.email }}">
+                    {{ p.email }}
+                  </a>
                 }
               </div>
-            }
+              
+              @if (p.isMinor) {
+                <div class="flex items-center gap-2 flex-wrap mt-2">
+                  <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    MINOR
+                  </span>
+                </div>
+              }
+            </div>
           </div>
 
-          <!-- Quick Actions -->
-          <div class="flex flex-col gap-2 mt-2">
-            <button type="button" class="w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-sm transition-all shadow-md shadow-violet-600/20 cursor-pointer" (click)="startOrder(p)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              New Lab Order
-            </button>
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="bookAppointment(p)">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          @if (p.guardianName) {
+            <div class="h-px bg-[var(--border-muted)] -mx-6"></div>
+            <div class="text-xs p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+              <span class="text-[var(--text-tertiary)] block font-medium uppercase tracking-wider text-[9px] mb-0.5">Guardian Details</span>
+              <div class="font-semibold text-[var(--text-primary)]">{{ p.guardianName }} ({{ p.guardianRelationship ?? 'Guardian' }})</div>
+              @if (p.guardianPhone) {
+                <div class="text-[var(--text-secondary)] font-mono mt-0.5">{{ p.guardianPhone }}</div>
+              }
+            </div>
+          }
+
+          <!-- QR Code & Quick Actions -->
+          <div class="flex items-stretch gap-4 mt-2">
+            <!-- Left Side: QR Code box -->
+            <div class="shrink-0 flex flex-col items-center justify-center p-3 rounded-2xl bg-white border border-[var(--glass-border)] shadow-inner text-black" style="width: 136px; height: auto;">
+              <pf-barcode-display mode="qr" [code]="qrValue()" [bare]="true" [showValue]="false" [size]="112"></pf-barcode-display>
+              <span class="text-[9px] font-bold tracking-wider uppercase text-gray-500 mt-1 select-none">Scan Profile</span>
+            </div>
+
+            <!-- Right Side: Stack of buttons one by one -->
+            <div class="flex-1 flex flex-col gap-2 justify-center">
+              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-xs transition-all shadow-md shadow-violet-600/10 cursor-pointer" (click)="startOrder(p)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Lab Order
+              </button>
+              
+              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="bookAppointment(p)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
                 Book Appointment
               </button>
+              
               @if (entitlements.moduleEnabled('messages')) {
-                <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                   </svg>
                   Send to Chat
                 </button>
               }
-            </div>
-            @if (canEdit()) {
-              <button type="button" class="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-transparent border border-[var(--glass-border)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openMerge()">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/>
+              
+              @if (canEdit()) {
+                <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openMerge()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/>
+                  </svg>
+                  Merge Duplicate
+                </button>
+              }
+              
+              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="showIdCard.set(true)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                  <path d="M12 14h.01M12 18h.01M8 14h.01M8 18h.01M16 14h.01M16 18h.01"/>
                 </svg>
-                Merge Duplicate Into This Patient
+                Print ID Card
               </button>
-            }
+            </div>
           </div>
         </div>
-
+        
         <!-- Patient ID card — printable, with a scan-to-open QR. -->
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
+        <!-- <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
           <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">ID Card</h3>
           <pf-patient-id-card [patient]="p"></pf-patient-id-card>
-        </div>
+        </div> -->
 
         <!-- Vitals Summary Card — not captured by the lab module (OPD/IPD intake). -->
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
+        <!-- <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
           <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">Current Vitals</h3>
           <p class="text-xs text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3">
             Not recorded — vitals are captured at OPD/IPD intake, not in the lab workflow.
           </p>
-        </div>
+        </div> -->
 
       </div>
 
@@ -1249,6 +1256,24 @@
       </div>
     }
 
+    @if (showIdCard()) {
+      <div class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" (click)="showIdCard.set(false)">
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-2xl max-w-sm w-full animate-scale-in" (click)="$event.stopPropagation()">
+          <div class="flex items-center justify-between gap-4 mb-4 border-b border-[var(--glass-border)] pb-3">
+            <h3 class="text-sm font-bold tracking-wider font-mono text-[var(--text-primary)] uppercase flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Patient ID Card
+            </h3>
+            <button type="button" class="p-1 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer" (click)="showIdCard.set(false)" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <pf-patient-id-card [patient]="p"></pf-patient-id-card>
+        </div>
+      </div>
+    }
   } @else if (loading()) {
     <!-- Skeleton Loaders -->
     <div class="pf-pp__fill grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1298,49 +1323,6 @@
     </div>
   }
 
-  <!-- ── Edit patient info modal ─────────────────────────────────────── -->
-  @if (editDraft(); as d) {
-    <div class="pf-pp-edit-backdrop" (click)="closeEdit()">
-      <div class="pf-pp-edit" (click)="$event.stopPropagation()">
-        <header class="pf-pp-edit__head">
-          <h3>Edit patient info</h3>
-          <button type="button" class="pf-pp-edit__x" (click)="closeEdit()" aria-label="Close">✕</button>
-        </header>
-        <div class="pf-pp-edit__body">
-          <div class="pf-pp-edit__grid">
-            <label>First name
-              <input type="text" [ngModel]="d.firstName" (ngModelChange)="patchEdit({ firstName: $event })" /></label>
-            <label>Father's name
-              <input type="text" [ngModel]="d.fathersName" (ngModelChange)="patchEdit({ fathersName: $event })" /></label>
-            <label>Phone
-              <input type="tel" [ngModel]="d.phone" (ngModelChange)="patchEdit({ phone: $event })" /></label>
-            <label>Email
-              <input type="email" [ngModel]="d.email" (ngModelChange)="patchEdit({ email: $event })" /></label>
-            <label>Sex
-              <select [ngModel]="d.sex" (ngModelChange)="patchEdit({ sex: $event })">
-                <option value="">—</option><option value="Male">Male</option>
-                <option value="Female">Female</option><option value="Other">Other</option>
-              </select></label>
-            <label>Date of birth
-              <input type="date" [ngModel]="d.dateOfBirth" (ngModelChange)="patchEdit({ dateOfBirth: $event })" /></label>
-            <label>Age
-              <input type="number" min="0" max="150" [ngModel]="d.age" (ngModelChange)="patchEdit({ age: $event })"
-                     placeholder="auto from DOB" /></label>
-            <label>Blood group
-              <select [ngModel]="d.bloodGroup" (ngModelChange)="patchEdit({ bloodGroup: $event })">
-                <option value="">Not recorded</option>
-                @for (bg of bloodGroups; track bg) { <option [value]="bg">{{ bg }}</option> }
-              </select></label>
-          </div>
-        </div>
-        <footer class="pf-pp-edit__foot">
-          <button type="button" class="pf-btn pf-btn-ghost" (click)="closeEdit()">Cancel</button>
-          <button type="button" class="pf-btn pf-btn-primary" (click)="saveEdit()" [disabled]="savingEdit() || !d.firstName.trim()">
-            {{ savingEdit() ? 'Saving…' : 'Save changes' }}
-          </button>
-        </footer>
-      </div>
-    </div>
-  }
+
 
 </section>
