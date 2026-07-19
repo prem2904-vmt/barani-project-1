@@ -650,7 +650,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
         savedAt: Date.now(),
         priority: this._priority(),
-        testIds: this._selected()
+        testIds: this._selected(),
+        // Snapshot the patient so the front-desk Draft tab can list it without
+        // a lookup (the key only carries the id).
+        patient: p
       }));
       this._hasDraft.set(true);
       this.toasts.success('Saved as draft');

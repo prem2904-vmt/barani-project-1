@@ -81,6 +81,17 @@ interface StaffMember {
   status: 'on_duty' | 'on_break' | 'busy';
 }
 
+/** A parked order draft read back from localStorage (`pf:order-draft:<id>`).
+ *  There's no backend for drafts — order-create writes them, the Draft tab
+ *  reads them. `patient` is a snapshot so we can render without a lookup. */
+interface DraftOrder {
+  patientId: string;
+  patient: Patient;
+  testIds: string[];
+  savedAt: number;
+  priority: string;
+}
+
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
 
 @Component({
@@ -248,17 +259,75 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing'>(this.loadRightTab());
+  private readonly _rightTab = signal<'ip' | 'done' | 'billing' | 'draft'>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
-  setRightTab(t: 'ip' | 'done' | 'billing') {
+  setRightTab(t: 'ip' | 'done' | 'billing' | 'draft') {
     this._rightTab.set(t);
+    // Drafts live only in localStorage, so re-scan whenever the tab is opened
+    // to catch any saved from another tab / a prior order-create visit.
+    if (t === 'draft') this.refreshDrafts();
     try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' {
+  private loadRightTab(): 'ip' | 'done' | 'billing' | 'draft' {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
+      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : raw === 'draft' ? 'draft' : 'ip';
     } catch { return 'ip'; }
+  }
+
+  // ── Draft orders (local-only) ─────────────────────────────
+  // order-create parks an in-progress cart in localStorage under
+  // `pf:order-draft:<patientId>` so reception can resume it later. There's no
+  // backend for drafts — we scan localStorage here, drop stale (>7d) and
+  // malformed entries, and surface them as their own work-pane tab.
+  private static readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
+  private static readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  private readonly _drafts = signal<DraftOrder[]>([]);
+  readonly draftOrders = this._drafts.asReadonly();
+
+  /** Scan localStorage for saved order drafts, newest first. Skips stale
+   *  (savedAt older than 7 days) and malformed entries. */
+  private loadDrafts(): DraftOrder[] {
+    const out: DraftOrder[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(FrontdeskLandingComponent.DRAFT_KEY_PREFIX)) continue;
+        let raw: string | null;
+        try { raw = localStorage.getItem(key); } catch { continue; }
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as { savedAt?: number; priority?: string; testIds?: string[]; patient?: Patient };
+          const savedAt = parsed?.savedAt;
+          if (typeof savedAt !== 'number' || Date.now() - savedAt > FrontdeskLandingComponent.DRAFT_TTL_MS) continue;
+          if (!parsed.patient || !Array.isArray(parsed.testIds)) continue;
+          out.push({
+            patientId: key.slice(FrontdeskLandingComponent.DRAFT_KEY_PREFIX.length),
+            patient: parsed.patient,
+            testIds: parsed.testIds.filter(id => typeof id === 'string'),
+            savedAt,
+            priority: parsed.priority ?? 'Normal',
+          });
+        } catch { /* malformed JSON — skip this entry */ }
+      }
+    } catch { /* localStorage unavailable */ }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+
+  /** Re-scan localStorage and publish the draft list. */
+  private refreshDrafts() { this._drafts.set(this.loadDrafts()); }
+
+  /** Resume a parked draft — order-create auto-restores it for this patient. */
+  resumeDraft(d: DraftOrder) {
+    this.router.navigateByUrl('/frontdesk/order?patientId=' + d.patientId);
+  }
+
+  /** Discard a parked draft: drop its localStorage key, reload the list, toast. */
+  discardDraft(d: DraftOrder, ev?: Event) {
+    ev?.stopPropagation();
+    try { localStorage.removeItem(FrontdeskLandingComponent.DRAFT_KEY_PREFIX + d.patientId); } catch { /* ignore */ }
+    this.refreshDrafts();
+    this.toasts.success('Draft discarded');
   }
 
   // ── Tab visibility ────────────────────────────────────────
@@ -286,7 +355,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing'>(() =>
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'draft'>(() =>
     this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
@@ -294,10 +363,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'ip': return 'In progress';
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
+      case 'draft': return 'Draft';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing' | 'draft') {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);
@@ -909,6 +979,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // (e.g. disabling Appointments / Home visits) reflect here immediately.
     this.process.refreshActive();
     this.refresh();
+    // Drafts are local-only — load them once on init so the tab badge is
+    // correct even before the Draft tab is opened.
+    this.refreshDrafts();
     this.pollHandle = setInterval(() => {
       // Skip polls while the tab is hidden — saves bandwidth on inactive
       // tabs without changing perceived freshness once focus returns.
