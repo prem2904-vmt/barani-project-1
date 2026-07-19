@@ -15,6 +15,8 @@ export interface Test {
   parameters?: string;
   conditions?: string;
   sampleType?: string;
+  /** Tube/vial colour: 'red' | 'lavender' | 'grey' | 'blue' | null. */
+  tubeColor?: string | null;
   tatHours: number;
   isActive: boolean;
   /** When set, this test is subcontracted to a referral lab (null = in-house). */

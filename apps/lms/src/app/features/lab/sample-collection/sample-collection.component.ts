@@ -49,7 +49,19 @@ const URINE_FILL = '#f59e0b';
  * first test (authoritative — "Urine", "Blood - EDTA", …), then fall back to
  * the sample's department code for colour.
  */
+// The four vacutainer tube colours a vial can be grouped by (space, colour).
+const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
+  red:      { color: '#ef4444', label: 'Plain · Red' },
+  lavender: { color: '#a78bfa', label: 'EDTA · Lavender' },
+  grey:     { color: '#9ca3af', label: 'Fluoride · Grey' },
+  blue:     { color: '#3b82f6', label: 'Citrate · Blue' },
+};
+
 function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
+  // The vial's own colour (set on the test → grouped into this vial) is
+  // authoritative: it's what defined this tube's (space, colour) group.
+  const tc = s.tubeColor && TUBE_COLOR_MAP[s.tubeColor];
+  if (tc) return { kind: 'vacutainer', color: tc.color, fill: BLOOD_FILL, label: tc.label };
   const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
   if (sampleType.includes('urine')) {
     return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };

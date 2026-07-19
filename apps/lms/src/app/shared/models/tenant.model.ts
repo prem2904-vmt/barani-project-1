@@ -87,6 +87,8 @@ export interface Department {
   tenantId: string;
   branchId?: string;
   subBranchId?: string;
+  /** The lab space this department is assigned to (null = unassigned). */
+  spaceId?: string | null;
   name: string;
   code: string;
   /** 2-digit department code (01–99) that prefixes the short sample barcode

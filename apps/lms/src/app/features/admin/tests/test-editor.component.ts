@@ -42,6 +42,9 @@ interface DraftTest {
   departmentId: string;
   tatHours: number;
   sampleType: string;
+  /** Tube/vial colour: '' | 'red' | 'lavender' | 'grey' | 'blue'. Drives vial
+   *  grouping (one vial per space + colour). '' = fall back to dept colour. */
+  tubeColor: string;
   parametersJson: string;
   conditionsJson: string;
   isActive: boolean;
@@ -55,7 +58,7 @@ function makeEmptyDraft(): DraftTest {
   return {
     name: '', type: 'individual', flow: 'direct',
     price: 0, taxSlab: 0,
-    departmentId: '', tatHours: 24, sampleType: '',
+    departmentId: '', tatHours: 24, sampleType: '', tubeColor: '',
     parametersJson: '', conditionsJson: '[]',
     isActive: true,
     outsourcedVendorId: '', outsourcedDepartmentId: ''
@@ -173,6 +176,21 @@ function newFieldId(): string {
               <div><label class="pf-label">Sample type</label>
                 <input type="text" class="pf-input" [ngModel]="d.sampleType"
                        (ngModelChange)="patch({ sampleType: $event })" /></div>
+            </div>
+            <!-- Tube colour: drives vial grouping (one vial per space + colour). -->
+            <div class="mt-1">
+              <label class="pf-label">Tube colour</label>
+              <div class="pf-tube-swatches">
+                @for (c of tubeColors; track c.key) {
+                  <button type="button" class="pf-tube" [class.pf-tube--on]="d.tubeColor === c.key"
+                          (click)="patch({ tubeColor: d.tubeColor === c.key ? '' : c.key })"
+                          [attr.aria-pressed]="d.tubeColor === c.key" [title]="c.label">
+                    <span class="pf-tube__dot" [style.background]="c.hex"></span>
+                    <span class="pf-tube__lbl">{{ c.label }}</span>
+                  </button>
+                }
+              </div>
+              <p class="pf-hint mt-1">The vial colour this test is drawn into. Leave unset to use the department's container colour.</p>
             </div>
           </div>
         </pf-tile>
@@ -581,6 +599,18 @@ function newFieldId(): string {
       letter-spacing: -0.01em;
       margin: 0;
     }
+    /* Tube colour swatch picker */
+    .pf-tube-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .pf-tube {
+      display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 7px 9px;
+      border-radius: 999px; cursor: pointer; font-size: 12.5px; color: var(--text-secondary);
+      background: var(--glass-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); transition: border-color .15s, color .15s, background .15s;
+    }
+    .pf-tube:hover { border-color: rgba(168,85,247,.4); }
+    .pf-tube--on { border-color: rgba(168,85,247,.7); color: var(--text-primary); background: rgba(168,85,247,.1); font-weight: 600; }
+    .pf-tube__dot { width: 15px; height: 15px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset; flex-shrink: 0; }
+    .pf-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
 
     /* ── Package picker ── */
     .pf-pkg-chip {
@@ -1001,6 +1031,14 @@ export class TestEditorComponent implements OnInit {
   private readonly _draft = signal<DraftTest>(makeEmptyDraft());
   readonly draft = this._draft.asReadonly();
 
+  /** The four vacutainer tube colours used for vial grouping. */
+  readonly tubeColors = [
+    { key: 'red',      label: 'Red',      hex: '#ef4444' },
+    { key: 'lavender', label: 'Lavender', hex: '#a78bfa' },
+    { key: 'grey',     label: 'Grey',     hex: '#9ca3af' },
+    { key: 'blue',     label: 'Blue',     hex: '#3b82f6' },
+  ];
+
   // Parameter rows collapse to a one-line summary by default — admins
   // browse the list, expand the row they care about, edit, collapse. Cuts
   // vertical sprawl on long tests dramatically. Single-open per editor so
@@ -1139,7 +1177,7 @@ export class TestEditorComponent implements OnInit {
       id: t.id, name: t.name, type: t.type, flow: t.flow,
       price: t.price, taxSlab: t.taxSlab,
       departmentId: t.departmentId ?? '', tatHours: t.tatHours,
-      sampleType: t.sampleType ?? '',
+      sampleType: t.sampleType ?? '', tubeColor: t.tubeColor ?? '',
       parametersJson: t.parameters ?? '', conditionsJson: t.conditions ?? '[]',
       isActive: t.isActive,
       outsourcedVendorId: t.outsourcedVendorId ?? '',
@@ -1391,6 +1429,8 @@ export class TestEditorComponent implements OnInit {
       price: d.price, taxSlab: d.taxSlab,
       departmentId: d.type === 'package' ? undefined : (d.departmentId || undefined),
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
+      // '' clears it on PATCH (back to dept colour); a colour name sets it.
+      tubeColor: d.type === 'package' ? undefined : d.tubeColor,
       parametersJson,
       conditionsJson: d.conditionsJson || undefined,
       isActive: d.isActive,
