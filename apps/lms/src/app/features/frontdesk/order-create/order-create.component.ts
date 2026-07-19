@@ -230,6 +230,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return list.filter(t => {
       const hay = [
         t.name,
+        // Match by the test's unique code / human SKU too (#135), so typing a
+        // code finds the test even when the name doesn't contain the query.
+        t.code ?? '',
+        t.testCode ?? '',
         t.hsnSacCode ?? '',
         t.department?.name ?? ''
       ].join(' ').toLowerCase();
@@ -381,11 +385,55 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  readonly subtotal = computed(() =>
-    this._selected()
-      .map(id => this._tests().find(t => t.id === id)?.price ?? 0)
-      .reduce((a, b) => a + b, 0)
-  );
+  /** Member (individual) test ids that are already covered by a package or
+   *  profile currently in the cart (#38–44). Such tests are bundled into the
+   *  package price and must NOT be billed as separate line items. Only
+   *  individual members are collected here — a package is never zeroed out by
+   *  another package (nested-package pricing is intentionally left intact). */
+  readonly coveredMemberIds = computed<Set<string>>(() => {
+    const all = this._tests();
+    const covered = new Set<string>();
+    for (const id of this._selected()) {
+      const t = all.find(x => x.id === id);
+      if (t?.type === 'package') {
+        for (const mid of parsePackageMembers(t.parameters)) covered.add(mid);
+      }
+    }
+    return covered;
+  });
+
+  /** True when an individual test in the cart is included in a package/profile
+   *  that's also in the cart — it renders as "Included" and is not re-billed. */
+  isCoveredMember(id: string): boolean {
+    const t = this._tests().find(x => x.id === id);
+    return !!t && t.type !== 'package' && this.coveredMemberIds().has(id);
+  }
+
+  /** Name of the package/profile covering this member test — drives the cart
+   *  "Included in …" hint. Returns '' when the test isn't covered. */
+  coveringPackageName(id: string): string {
+    const all = this._tests();
+    for (const sid of this._selected()) {
+      const p = all.find(x => x.id === sid);
+      if (p?.type === 'package' && parsePackageMembers(p.parameters).includes(id)) return p.name;
+    }
+    return '';
+  }
+
+  readonly subtotal = computed(() => {
+    const all = this._tests();
+    const covered = this.coveredMemberIds();
+    return this._selected()
+      .map(id => {
+        const t = all.find(x => x.id === id);
+        if (!t) return 0;
+        // A member individual test covered by a package/profile in the cart is
+        // billed within that package — don't double-charge it (#38–44).
+        if (t.type !== 'package' && covered.has(id)) return 0;
+        return t.price ?? 0;
+      })
+      .reduce((a, b) => a + b, 0);
+  });
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);

@@ -35,6 +35,11 @@ interface TenantBillingConfig {
   invoiceStartNumber: number;
   upiVpa?: string;
   upiPayeeName?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankName?: string;
+  invoiceOnFullPaymentOnly?: boolean;
 }
 
 interface GstRow {
@@ -248,6 +253,21 @@ interface GstRow {
               {{ invoicePreview() }}
             </p>
           </div>
+
+          <div class="flex items-start justify-between gap-4 mt-5 pt-5" style="border-top: 1px solid var(--glass-border);">
+            <div class="min-w-0">
+              <p class="font-semibold text-[15px]" style="color: var(--text-primary);">Issue invoice only on full payment</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                On → a bill stays a <strong>proforma</strong> (no invoice number) until it's fully paid; the
+                invoice number is issued at settlement. Off → the invoice number is allocated when the bill is created.
+              </p>
+            </div>
+            <pf-toggle
+              [checked]="config().invoiceOnFullPaymentOnly ?? false"
+              size="md"
+              (checkedChange)="patch({ invoiceOnFullPaymentOnly: $event })">
+            </pf-toggle>
+          </div>
         </pf-tile>
 
         <!-- Online payment (UPI): powers the "Pay via UPI" link + QR on the
@@ -269,6 +289,41 @@ interface GstRow {
               <input type="text" class="pf-input" placeholder="Prefrontal Lab"
                      [ngModel]="config().upiPayeeName || ''"
                      (ngModelChange)="patch({ upiPayeeName: $event })" />
+            </div>
+          </div>
+        </pf-tile>
+
+        <!-- Bank account: the tenant's settlement / reference account. Optional;
+             used for payouts and printed bank details on invoices. -->
+        <pf-tile tone="default" padding="lg" class="block mt-5">
+          <h3 class="pf-label" style="margin-bottom:2px;">Bank account</h3>
+          <p class="text-[12px] mb-4" style="color: var(--text-tertiary);">
+            Link the bank account where payments settle. Shown for reference and can be printed on invoices. All fields optional.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Account holder name</label>
+              <input type="text" class="pf-input" placeholder="Prefrontal Diagnostics Pvt Ltd"
+                     [ngModel]="config().bankAccountName || ''"
+                     (ngModelChange)="patch({ bankAccountName: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Account number</label>
+              <input type="text" class="pf-input" placeholder="0123456789" autocapitalize="none" spellcheck="false"
+                     [ngModel]="config().bankAccountNumber || ''"
+                     (ngModelChange)="patch({ bankAccountNumber: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">IFSC</label>
+              <input type="text" class="pf-input" placeholder="HDFC0001234" autocapitalize="characters" spellcheck="false"
+                     [ngModel]="config().bankIfsc || ''"
+                     (ngModelChange)="patch({ bankIfsc: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Bank name</label>
+              <input type="text" class="pf-input" placeholder="HDFC Bank"
+                     [ngModel]="config().bankName || ''"
+                     (ngModelChange)="patch({ bankName: $event })" />
             </div>
           </div>
         </pf-tile>
@@ -714,7 +769,12 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       allowDiscounts: c.allowDiscounts, maxDiscountPct: c.maxDiscountPct,
       overrideDiscountPct: c.overrideDiscountPct, approvalThresholdPct: c.approvalThresholdPct,
       invoicePrefix: c.invoicePrefix, invoiceStartNumber: c.invoiceStartNumber,
-      upiVpa: c.upiVpa?.trim() || null, upiPayeeName: c.upiPayeeName?.trim() || null
+      upiVpa: c.upiVpa?.trim() || null, upiPayeeName: c.upiPayeeName?.trim() || null,
+      bankAccountName: c.bankAccountName?.trim() || null,
+      bankAccountNumber: c.bankAccountNumber?.trim() || null,
+      bankIfsc: c.bankIfsc?.trim() || null,
+      bankName: c.bankName?.trim() || null,
+      invoiceOnFullPaymentOnly: c.invoiceOnFullPaymentOnly ?? false
     }).subscribe({
       next: () => this.toasts.success('Billing config saved'),
       error: e => this.toasts.error(ApiError.from(e).message)

@@ -1009,6 +1009,17 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* Member test covered by a package/profile in the cart — shown, but not billed
+   separately (#38–44). Muted so it reads as "included, no charge". */
+.pf-cart-row--included { opacity: 0.82; }
+.pf-cart-amount--included {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--emerald-400, #34d399);
+}
+.pf-cart-meta--included { color: var(--emerald-400, #34d399); }
 .pf-cart-remove {
   width: 28px;
   height: 28px;

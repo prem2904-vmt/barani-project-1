@@ -1,6 +1,9 @@
+import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
@@ -29,10 +32,12 @@ interface VendorRow {
 interface VendorTxn {
   id: string;
   vendorId: string;
-  type: 'topup' | 'charge' | 'refund' | 'adjustment' | string;
+  type: 'topup' | 'charge' | 'refund' | 'adjustment' | 'payment' | string;
   amount: number;
   billId?: string | null;
   reason?: string | null;
+  paidAt?: string | null;
+  attachmentUrl?: string | null;
   createdAt: string;
 }
 
@@ -165,6 +170,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
               <div class="pf-vendor__actions">
                 <pf-touch-btn size="sm" variant="primary" (pressed)="openTopUp(v)">+ Top up</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="openPayment(v)">Record payment</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="emailStatement(v)" [disabled]="emailingId() === v.id">
+                  {{ emailingId() === v.id ? 'Sending…' : 'Email statement' }}
+                </pf-touch-btn>
                 <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleTransactions(v.id)">
                   {{ openTxnsId() === v.id ? 'Hide history' : 'View history' }}
                 </pf-touch-btn>
@@ -194,6 +203,43 @@ const EMPTY_DRAFT: NewVendorDraft = {
                 </div>
               }
 
+              @if (paymentVendorId() === v.id) {
+                <div class="pf-topup">
+                  <p class="text-[11px] text-[var(--text-tertiary)] mb-2">
+                    Record a payment received from this org (or credit granted by them). Adds to the wallet's available credit.
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div><label class="pf-label">Amount (₹)</label>
+                      <input type="number" min="1" step="1" class="pf-input"
+                             [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
+                             placeholder="50000"/></div>
+                    <div><label class="pf-label">Payment date</label>
+                      <input type="date" class="pf-input"
+                             [ngModel]="paymentDate()" (ngModelChange)="paymentDate.set($event)"/></div>
+                    <div><label class="pf-label">Note / reference</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
+                             placeholder="NEFT ref · UTR number"/></div>
+                  </div>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <label class="pf-file-btn">
+                      {{ paymentFileName() || 'Attach payment copy' }}
+                      <input type="file" class="hidden" accept="image/*,application/pdf"
+                             (change)="onPaymentFilePick($event)"/>
+                    </label>
+                    @if (paymentFileName()) {
+                      <button type="button" class="pf-file-clear" (click)="clearPaymentFile()">Remove</button>
+                    }
+                  </div>
+                  <div class="mt-3 flex gap-2 justify-end">
+                    <pf-touch-btn size="sm" variant="ghost" (pressed)="closePayment()">Cancel</pf-touch-btn>
+                    <pf-touch-btn size="sm" variant="primary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()">
+                      {{ saving() ? 'Saving…' : 'Record ₹' + (paymentAmount() || '0') }}
+                    </pf-touch-btn>
+                  </div>
+                </div>
+              }
+
               @if (openTxnsId() === v.id) {
                 <div class="pf-txns">
                   @if (loadingTxns()) {
@@ -208,11 +254,16 @@ const EMPTY_DRAFT: NewVendorDraft = {
                       @for (t of txns()[v.id]; track t.id) {
                         <li class="pf-txn">
                           <span class="pf-txn__type" [attr.data-kind]="t.type">{{ t.type }}</span>
-                          <span class="pf-txn__reason">{{ t.reason || '—' }}</span>
+                          <span class="pf-txn__reason">
+                            {{ t.reason || '—' }}
+                            @if (t.attachmentUrl) {
+                              <a class="pf-txn__proof" [href]="t.attachmentUrl" target="_blank" rel="noopener">proof</a>
+                            }
+                          </span>
                           <span class="pf-txn__amt" [class.pf-txn__amt--neg]="t.amount < 0">
                             {{ t.amount < 0 ? '−' : '+' }}{{ absMoney(t.amount) | inr }}
                           </span>
-                          <span class="pf-txn__when">{{ formatDate(t.createdAt) }}</span>
+                          <span class="pf-txn__when">{{ formatDate(t.paidAt || t.createdAt) }}</span>
                         </li>
                       }
                     </ul>
@@ -315,6 +366,26 @@ const EMPTY_DRAFT: NewVendorDraft = {
       border-radius: 12px;
     }
 
+    /* File attach button on the record-payment panel */
+    .pf-file-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 10px; cursor: pointer;
+      font-size: 12px; font-weight: 600;
+      background: rgba(168, 85, 247, 0.14);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      color: var(--text-secondary);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-file-btn:hover { background: rgba(168, 85, 247, 0.22); }
+    .pf-file-clear {
+      background: none; border: none; cursor: pointer;
+      font-size: 11.5px; color: #fca5a5; text-decoration: underline;
+    }
+    .pf-txn__proof {
+      margin-left: 6px; font-size: 11px; font-weight: 700;
+      color: #93c5fd; text-decoration: underline;
+    }
+
     /* Transactions list */
     .pf-txns {
       margin-top: 14px;
@@ -342,6 +413,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-txn__type[data-kind="topup"]    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
     .pf-txn__type[data-kind="charge"]   { background: rgba(244, 63, 94, 0.18); color: #fda4af; }
     .pf-txn__type[data-kind="refund"]   { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+    .pf-txn__type[data-kind="payment"]  { background: rgba(20, 184, 166, 0.18); color: #5eead4; }
     .pf-txn__type[data-kind="adjustment"] { background: rgba(156, 163, 175, 0.18); color: #d1d5db; }
     .pf-txn__reason { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pf-txn__amt {
@@ -418,6 +490,8 @@ const EMPTY_DRAFT: NewVendorDraft = {
 })
 export class VendorsComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
+  private readonly platform = inject(PlatformService);
   private readonly toasts = inject(ToastService);
 
   protected readonly vendors = signal<VendorRow[]>([]);
@@ -436,8 +510,22 @@ export class VendorsComponent implements OnInit {
   protected readonly txns = signal<Record<string, VendorTxn[] | undefined>>({});
   protected readonly loadingTxns = signal<boolean>(false);
 
+  // Record-payment panel state
+  protected readonly paymentVendorId = signal<string | null>(null);
+  protected readonly paymentAmount = signal<string>('');
+  protected readonly paymentDate = signal<string>('');
+  protected readonly paymentNote = signal<string>('');
+  protected readonly paymentFile = signal<File | null>(null);
+  protected readonly paymentFileName = signal<string>('');
+  protected readonly emailingId = signal<string | null>(null);
+
   protected readonly topUpAmountValid = computed(() => {
     const n = parseInt(this.topUpAmount() || '0', 10);
+    return Number.isFinite(n) && n > 0;
+  });
+
+  protected readonly paymentAmountValid = computed(() => {
+    const n = parseInt(this.paymentAmount() || '0', 10);
     return Number.isFinite(n) && n > 0;
   });
 
@@ -517,6 +605,71 @@ export class VendorsComponent implements OnInit {
         if (this.openTxnsId() === v.id) this.loadTxns(v.id);
       },
       error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+
+  // ── Record payment received (144/146) ───────────────────────────
+  openPayment(v: VendorRow) {
+    this.paymentVendorId.set(v.id);
+    this.paymentAmount.set('');
+    this.paymentDate.set('');
+    this.paymentNote.set('');
+    this.clearPaymentFile();
+    // Close the inline top-up panel if it was open on the same card.
+    if (this.topUpVendorId() === v.id) this.topUpVendorId.set(null);
+  }
+  closePayment() { this.paymentVendorId.set(null); this.clearPaymentFile(); }
+  clearPaymentFile() { this.paymentFile.set(null); this.paymentFileName.set(''); }
+
+  onPaymentFilePick(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0] ?? null;
+    this.paymentFile.set(f);
+    this.paymentFileName.set(f ? f.name : '');
+  }
+
+  async confirmPayment(v: VendorRow) {
+    const amount = parseInt(this.paymentAmount() || '0', 10);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.saving.set(true);
+    try {
+      // Multipart (optional file) — bypass ApiService, which is JSON-only.
+      // The auth interceptor still attaches the token to raw HttpClient calls.
+      const fd = new FormData();
+      fd.append('amount', String(amount));
+      if (this.paymentDate().trim()) fd.append('paidAt', this.paymentDate().trim());
+      if (this.paymentNote().trim()) fd.append('note', this.paymentNote().trim());
+      const f = this.paymentFile();
+      if (f) fd.append('file', f);
+      const url = `${this.platform.getApiUrl()}/api/vendors/${v.id}/payment`;
+      const r: any = await firstValueFrom(this.http.post(url, fd));
+      if (r?.success) {
+        this.toasts.success(`Payment of ₹${amount} recorded`);
+        this.closePayment();
+        this.refresh();
+        if (this.openTxnsId() === v.id) this.loadTxns(v.id);
+      } else {
+        this.toasts.error(r?.error?.message ?? r?.message ?? 'Could not record payment');
+      }
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  // ── Email account statement (143) ───────────────────────────────
+  emailStatement(v: VendorRow) {
+    this.emailingId.set(v.id);
+    this.api.post<any>(`/api/vendors/${v.id}/email-statement`, {}).subscribe({
+      next: res => {
+        this.emailingId.set(null);
+        // Delivery is stubbed server-side (no mail provider yet) — surface the
+        // server's message so the admin knows whether anything was sent.
+        if (res?.delivered) this.toasts.success(res?.message ?? 'Statement emailed');
+        else this.toasts.info(res?.message ?? 'Statement assembled; email delivery is not configured.');
+      },
+      error: e => { this.emailingId.set(null); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

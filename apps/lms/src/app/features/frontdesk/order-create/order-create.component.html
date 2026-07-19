@@ -534,14 +534,21 @@
           }
           @for (id of selected(); track id) {
             @if (findTest(id); as t) {
-              <li class="pf-cart-row">
+              <li class="pf-cart-row" [class.pf-cart-row--included]="isCoveredMember(t.id)">
                 <div class="min-w-0 flex-1">
                   <p class="pf-cart-name">{{ t.name }}</p>
-                  @if (t.department?.name) {
+                  @if (isCoveredMember(t.id)) {
+                    <p class="pf-cart-meta pf-cart-meta--included">Included in {{ coveringPackageName(t.id) }}</p>
+                  } @else if (t.department?.name) {
                     <p class="pf-cart-meta">{{ t.department?.name }}</p>
                   }
                 </div>
-                <span class="pf-cart-amount">{{ t.price | inr }}</span>
+                @if (isCoveredMember(t.id)) {
+                  <span class="pf-cart-amount pf-cart-amount--included"
+                        [title]="'Covered by ' + coveringPackageName(t.id) + ' — not billed separately'">Included</span>
+                } @else {
+                  <span class="pf-cart-amount">{{ t.price | inr }}</span>
+                }
                  @if (!paidOrderId() && !isReadOnly()) {
                   <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
