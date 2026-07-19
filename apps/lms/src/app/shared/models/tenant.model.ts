@@ -36,6 +36,9 @@ export interface Branch {
   name: string;
   code: string;
   type: string;
+  /** How departments are physically organised: 'integrated' (all depts share
+   *  one lab) or 'individual' (each dept is its own lab). Drives tube counting. */
+  labStructure?: 'integrated' | 'individual';
   address?: string;
   city?: string;
   state?: string;

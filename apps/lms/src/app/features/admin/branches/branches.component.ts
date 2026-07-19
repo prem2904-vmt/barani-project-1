@@ -99,6 +99,32 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
               @if (isOpen(b.id)) {
                 <div class="pf-branch-body">
+                  <!-- LAB STRUCTURE — integrated (all depts one lab) vs
+                       individual (each dept its own lab). Drives tube counting. -->
+                  <div class="pf-labstruct">
+                    <div class="pf-labstruct__head">
+                      <h4 class="text-[11px] font-mono uppercase tracking-[0.16em]"
+                          style="color: var(--text-muted);">Lab structure</h4>
+                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                        How this lab's departments are organised — affects how many tubes are collected.
+                      </p>
+                    </div>
+                    <div class="pf-labstruct__opts">
+                      <button type="button" class="pf-labstruct__opt"
+                              [class.pf-labstruct__opt--on]="(b.labStructure || 'integrated') === 'integrated'"
+                              (click)="setLabStructure(b, 'integrated')">
+                        <span class="pf-labstruct__opt-t">Integrated</span>
+                        <span class="pf-labstruct__opt-s">All departments share one lab — one tube can serve several depts.</span>
+                      </button>
+                      <button type="button" class="pf-labstruct__opt"
+                              [class.pf-labstruct__opt--on]="b.labStructure === 'individual'"
+                              (click)="setLabStructure(b, 'individual')">
+                        <span class="pf-labstruct__opt-t">Individual</span>
+                        <span class="pf-labstruct__opt-s">Each department is its own lab — a separate tube per dept.</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <!-- SUB-BRANCHES -->
                   <div class="flex items-center justify-between mb-3">
                     <h4 class="text-[11px] font-mono uppercase tracking-[0.16em]"
@@ -454,6 +480,25 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       font-size: 12px;
     }
 
+    /* ── Lab structure (integrated / individual) picker ── */
+    .pf-labstruct { margin-bottom: 18px; }
+    .pf-labstruct__head { margin-bottom: 10px; }
+    .pf-labstruct__opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 560px) { .pf-labstruct__opts { grid-template-columns: 1fr; } }
+    .pf-labstruct__opt {
+      display: flex; flex-direction: column; gap: 3px; text-align: left;
+      padding: 12px 14px; border-radius: 12px; cursor: pointer;
+      background: var(--glass-bg, rgba(255,255,255,0.03));
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+      transition: border-color .15s, background .15s;
+    }
+    .pf-labstruct__opt:hover { border-color: rgba(168,85,247,.35); }
+    .pf-labstruct__opt--on {
+      border-color: rgba(45,212,191,.55); background: rgba(45,212,191,.08);
+    }
+    .pf-labstruct__opt-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-labstruct__opt-s { font-size: 11.5px; line-height: 1.45; color: var(--text-tertiary); }
+
     /* ── Inline field error (routed from the shared ApiError contract) ── */
     .pf-input-error {
       border-color: #ef4444 !important;
@@ -725,6 +770,21 @@ export class BranchesComponent implements OnInit {
     this.api.post<Branch>('/api/tenants/branches', b).subscribe({
       next: saved => { this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
       error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Set a branch's lab structure (integrated / individual) and persist it.
+   *  Optimistic — reverts the signal if the PATCH fails. */
+  setLabStructure(b: Branch, value: 'integrated' | 'individual') {
+    if ((b.labStructure || 'integrated') === value) return;
+    const prev = b.labStructure;
+    this._branches.update(list => list.map(x => x.id === b.id ? { ...x, labStructure: value } : x));
+    this.api.patch<Branch>(`/api/tenants/branches/${b.id}`, { labStructure: value }).subscribe({
+      next: () => this.toasts.success(value === 'individual' ? 'Each department runs as its own lab' : 'Departments share one integrated lab'),
+      error: e => {
+        this._branches.update(list => list.map(x => x.id === b.id ? { ...x, labStructure: prev } : x));
+        this.toasts.error(ApiError.from(e).message);
+      }
     });
   }
 
