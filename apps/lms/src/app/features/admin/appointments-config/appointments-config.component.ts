@@ -95,7 +95,7 @@ const MODES: ModeOption[] = [
           <h3 class="pf-section-title mb-3">Booking slots</h3>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="flex flex-col gap-1">
-              <span class="pf-label">Slot length (min)</span>
+              <span class="pf-label">Time between appointments (min)</span>
               <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240"
                 (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
             </label>
@@ -109,6 +109,25 @@ const MODES: ModeOption[] = [
               <span class="text-[13px]" style="color: var(--text-secondary);">Open 24×7</span>
             </label>
           </div>
+
+          @if (!cfg()!.open24h) {
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <label class="flex flex-col gap-1">
+                <span class="pf-label">Start time</span>
+                <input type="time" class="pf-input" [value]="startTime()"
+                  (change)="setStart($any($event.target).value)" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="pf-label">End time</span>
+                <input type="time" class="pf-input" [value]="endTime()"
+                  (change)="setEnd($any($event.target).value)" />
+              </label>
+            </div>
+            <p class="text-[12px] mt-2" style="color: var(--text-tertiary);">
+              Booking is open every day from {{ startTime() }} to {{ endTime() }},
+              in {{ cfg()!.slotMinutes }}-minute steps.
+            </p>
+          }
         </pf-tile>
 
         <!-- Priority engine -->
@@ -153,8 +172,26 @@ export class AppointmentsConfigComponent implements OnInit {
   readonly cfg = this._cfg.asReadonly();
   readonly saving = this._saving.asReadonly();
 
+  // Daily open window (start → end). Persisted inside the config's
+  // weeklyScheduleJson as the same window for every weekday — the booking
+  // modal already reads that shape, so no schema/endpoint change is needed.
+  private readonly _startTime = signal('09:00');
+  private readonly _endTime = signal('17:00');
+  readonly startTime = this._startTime.asReadonly();
+  readonly endTime = this._endTime.asReadonly();
+
   ngOnInit() {
-    this.svc.getConfig().subscribe({ next: c => this._cfg.set(c) });
+    this.svc.getConfig().subscribe({ next: c => { this._cfg.set(c); this.hydrateHours(c); } });
+  }
+
+  setStart(v: string) { if (v) this._startTime.set(v); }
+  setEnd(v: string) { if (v) this._endTime.set(v); }
+
+  /** Pull a representative start/end from the stored weekly schedule so the
+   *  time pickers reflect what's actually saved. Falls back to 09:00–17:00. */
+  private hydrateHours(c: AppointmentConfig) {
+    const win = firstWindow(c.weeklyScheduleJson);
+    if (win) { this._startTime.set(win.from); this._endTime.set(win.to); }
   }
 
   setMode(m: QueueMode) { this.patch({ queueMode: m }); }
@@ -175,10 +212,45 @@ export class AppointmentsConfigComponent implements OnInit {
   save() {
     const cur = this._cfg();
     if (!cur) return;
+
+    // Fold the start/end pickers into weeklyScheduleJson (same window every
+    // day) when the branch isn't open 24×7. When it is, clear the schedule —
+    // the booking modal ignores it and opens the full day.
+    const payload: AppointmentConfig = { ...cur };
+    if (payload.open24h) {
+      payload.weeklyScheduleJson = null;
+    } else {
+      const from = this._startTime();
+      const to = this._endTime();
+      if (from >= to) { this.toast.error('End time must be after start time.'); return; }
+      const window = [{ from, to }];
+      const schedule: Record<string, { from: string; to: string }[]> = {};
+      for (const d of DOW_KEYS) schedule[d] = window;
+      payload.weeklyScheduleJson = JSON.stringify(schedule);
+    }
+
     this._saving.set(true);
-    this.svc.saveConfig(cur).subscribe({
-      next: c => { this._cfg.set(c); this._saving.set(false); this.toast.success('Saved.'); },
+    this.svc.saveConfig(payload).subscribe({
+      next: c => { this._cfg.set(c); this.hydrateHours(c); this._saving.set(false); this.toast.success('Saved.'); },
       error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
+}
+
+const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+/** First open window found in a weekly-schedule JSON blob, or null. Used to
+ *  seed the start/end pickers from whatever was previously saved. */
+function firstWindow(json?: string | null): { from: string; to: string } | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json) as Record<string, Array<{ from: string; to: string }>>;
+    for (const key of Object.keys(parsed)) {
+      const windows = parsed[key];
+      if (Array.isArray(windows) && windows.length > 0 && windows[0]?.from && windows[0]?.to) {
+        return { from: windows[0].from, to: windows[0].to };
+      }
+    }
+  } catch { /* malformed JSON → fall back to defaults */ }
+  return null;
 }

@@ -65,7 +65,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     <section class="px-4 md:px-8 pt-6 pb-10">
       <pf-screen-header
         eyebrow="Admin"
-        title="Vendor wallets"
+        title="Vendor Credit Wallets"
         subtitle="Pre-loaded credit accounts for partner hospitals & aggregators. Reception charges bills against these wallets from the billing screen.">
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewVendor()">
           <span icon-left aria-hidden="true">

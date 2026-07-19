@@ -388,6 +388,15 @@ interface PrelimOrder {
                   <span class="pf-rq-row__badge">
                     <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{ statusLabel(r.deliveryStatus) }}</pf-chip>
                   </span>
+                  <!-- Report is ready (it's in the queue) but the order's bill
+                       still owes money → warn reception before handover. Kept
+                       visible on phone (unlike the status chip) since there's no
+                       accent-strip equivalent carrying "unpaid". -->
+                  @if (isUnpaid(r)) {
+                    <span class="pf-rq-row__unpaid">
+                      <pf-chip tone="rose" size="sm">Unpaid</pf-chip>
+                    </span>
+                  }
                 </div>
                 <!-- Phone-only (<=640px) subline: sex · age, shown under the
                      name since the full meta line is hidden on phone. Same
@@ -1070,6 +1079,20 @@ export class ReportQueueComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
+  // Order IDs (lower-cased) that still carry an outstanding balance
+  // (payment due). Populated once from /api/billing/outstanding on
+  // refresh — a single branch-scoped bulk call, NOT a per-row fetch.
+  // Every row in this queue is a generated ("report ready") report, so
+  // a row whose order is in this set is "report ready + payment due" and
+  // gets the Unpaid badge.
+  private readonly _dueOrderIds = signal<Set<string>>(new Set());
+
+  /** True when the report is ready (it's in the queue) AND the order's
+   *  bill still has a balance due (> 0). Drives the "Unpaid" badge. */
+  isUnpaid(r: Report): boolean {
+    return this._dueOrderIds().has((r.orderId ?? '').toLowerCase());
+  }
+
   readonly counts = computed(() => {
     const l = this._items();
     return {
@@ -1296,6 +1319,15 @@ export class ReportQueueComponent implements OnInit {
     this.api.get<Order[]>('/api/orders/today').subscribe({
       next: l => this._todayOrders.set(l ?? []),
       error: () => { /* non-fatal */ }
+    });
+    // One bulk, branch-scoped call for every bill that still owes money
+    // (balance > 0). We only need the order IDs to flag "Unpaid" rows —
+    // no per-row bill lookups. Non-fatal: if the user lacks billing
+    // permission (403) or the call fails, we simply show no Unpaid tags.
+    this.api.get<{ due?: { orderId: string }[] }>('/api/billing/outstanding').subscribe({
+      next: res => this._dueOrderIds.set(
+        new Set((res?.due ?? []).map(d => (d.orderId ?? '').toLowerCase()))),
+      error: () => { /* non-fatal — no Unpaid tags shown */ }
     });
   }
 

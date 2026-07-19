@@ -261,6 +261,25 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     } catch { return 'ip'; }
   }
 
+  // ── Tab visibility ────────────────────────────────────────
+  // In progress + Completed are ALWAYS displayed. Payments due is
+  // hide/show-configurable per branch by an admin. We read an optional
+  // `showPaymentsDueTab` flag off the branch lab config: absent/undefined
+  // keeps the tab visible (preserves today's behaviour), an explicit `false`
+  // hides it. NOTE: the flag is not yet part of the BranchLabConfig model,
+  // the backend, or the admin Lab Settings UI, so until those are added this
+  // always resolves to visible (see the wiring note in the delivery report).
+  readonly showPaymentsDue = computed(() =>
+    (this.labCfg.config() as { showPaymentsDueTab?: boolean } | null)?.showPaymentsDueTab !== false
+  );
+  /** If Payments due is hidden while it happens to be the active tab, fall
+   *  back to In progress so the pane never renders an empty/absent tab. */
+  private readonly _rightTabGuard = effect(() => {
+    if (!this.showPaymentsDue() && this._rightTab() === 'billing') {
+      this._rightTab.set('ip');
+    }
+  });
+
   // ── Mobile list selector ──────────────────────────────────
   // Phones (≤640px) drop the pane accordion for a single list with a
   // dropdown picker (Appointments / In progress / Completed). It's a
@@ -520,22 +539,36 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       return this.inWorkRange(o.createdAt);
     })
   );
-  /** "Completed" — work the lab has signed off on (validated /
-   *  delivered / completed). Drives the new
-   *  third FD pane next to In Progress so reception can see at a
-   *  glance which patients are ready to hand over. */
-  readonly completedOrders = computed(() =>
-    this._orders().filter(o => {
+  /** Order ids that still carry an outstanding balance (from the branch's
+   *  /api/billing/outstanding feed — which only returns non-settled bills).
+   *  Fully-paid orders never appear here. Used to keep unpaid work OUT of the
+   *  Completed pane: a validated-but-unpaid order belongs in Payments due. */
+  private readonly _unpaidOrderIds = computed(() => {
+    const s = new Set<string>();
+    for (const b of this._bills()) if (b.balance > 0) s.add(b.orderId);
+    return s;
+  });
+  /** "Completed" — orders that are BOTH report-generated (validated /
+   *  delivered / completed) AND payment-completed (no outstanding balance).
+   *  Drives the third FD pane next to In Progress so reception can see at a
+   *  glance which patients are ready to hand over. Sorted ascending by
+   *  creation time so the oldest ready-for-handover sits on top. */
+  readonly completedOrders = computed(() => {
+    const unpaid = this._unpaidOrderIds();
+    return this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
+      // Payment must be completed too — an order with an outstanding balance
+      // stays in Payments due until it's settled, not here.
+      if (unpaid.has(o.id)) return false;
       // A report completed TODAY for an order created on an earlier day must
       // still surface for hand-over. The Today feed includes such orders (see
       // ListTodayAsync), so don't gate completed work by creation date in the
       // today view; only constrain by creation date for historical ranges.
       return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
-    })
-  );
+    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  });
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
   readonly readyForPickup = computed(() =>

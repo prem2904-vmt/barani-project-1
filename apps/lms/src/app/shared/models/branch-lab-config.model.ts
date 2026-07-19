@@ -13,6 +13,9 @@ export interface BranchLabConfig {
   /** Per-branch master switch for the inventory/Stores work area. When false
    *  the Stores nav entry is hidden even for users holding inventory perms. */
   inventoryEnabled?: boolean;
+  /** Whether the front-desk "Payments due" tab is shown (In Progress + Completed
+   *  are always shown). Default true when absent. */
+  showPaymentsDueTab?: boolean;
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

@@ -45,6 +45,19 @@ interface DraftTest {
   /** Tube/vial colour: '' | 'red' | 'lavender' | 'grey' | 'blue'. Drives vial
    *  grouping (one vial per space + colour). '' = fall back to dept colour. */
   tubeColor: string;
+  // ── Master-data details ('' / 0 = unset) ──
+  testCode: string;
+  shortName: string;
+  section: string;
+  sampleVolumeMl: number | null;
+  fastingRequired: boolean;
+  methodology: string;
+  resultType: string;
+  unit: string;
+  reportFormat: string;
+  adultReferenceRange: string;
+  criticalLow: number | null;
+  criticalHigh: number | null;
   parametersJson: string;
   conditionsJson: string;
   isActive: boolean;
@@ -59,6 +72,10 @@ function makeEmptyDraft(): DraftTest {
     name: '', type: 'individual', flow: 'direct',
     price: 0, taxSlab: 0,
     departmentId: '', tatHours: 24, sampleType: '', tubeColor: '',
+    testCode: '', shortName: '', section: '',
+    sampleVolumeMl: null, fastingRequired: false,
+    methodology: '', resultType: '', unit: '', reportFormat: '',
+    adultReferenceRange: '', criticalLow: null, criticalHigh: null,
     parametersJson: '', conditionsJson: '[]',
     isActive: true,
     outsourcedVendorId: '', outsourcedDepartmentId: ''
@@ -236,6 +253,82 @@ function newFieldId(): string {
                   </p>
                 </div>
               }
+            </div>
+          </pf-tile>
+        }
+
+        <!-- Test details — master-data descriptors (code, section, specimen
+             handling). Individual tests only. -->
+        @if (d.type !== 'package') {
+          <pf-tile tone="default" padding="lg" class="block">
+            <h3 class="section-title">Details</h3>
+            <div class="space-y-3 mt-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><label class="pf-label">Test code</label>
+                  <input type="text" class="pf-input" [ngModel]="d.testCode"
+                         (ngModelChange)="patch({ testCode: $event })"
+                         placeholder="e.g. CBC001" /></div>
+                <div><label class="pf-label">Short name</label>
+                  <input type="text" class="pf-input" [ngModel]="d.shortName"
+                         (ngModelChange)="patch({ shortName: $event })"
+                         placeholder="e.g. CBC" /></div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><label class="pf-label">Section</label>
+                  <input type="text" class="pf-input" [ngModel]="d.section"
+                         (ngModelChange)="patch({ section: $event })"
+                         placeholder="Sub-group under the department" /></div>
+                <div><label class="pf-label">Methodology</label>
+                  <input type="text" class="pf-input" [ngModel]="d.methodology"
+                         (ngModelChange)="patch({ methodology: $event })"
+                         placeholder="e.g. Photometry" /></div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+                <div><label class="pf-label">Sample volume (mL)</label>
+                  <pf-number-input [value]="d.sampleVolumeMl" [allowEmpty]="true" [min]="0" [step]="0.5" suffix="mL"
+                                   (valueChange)="patch({ sampleVolumeMl: $event ?? null })"></pf-number-input>
+                </div>
+                <div><label class="pf-label">Fasting required</label>
+                  <pf-segmented [options]="fastingOptions" [value]="d.fastingRequired" size="md"
+                                (valueChange)="patch({ fastingRequired: $event })"></pf-segmented>
+                </div>
+              </div>
+            </div>
+          </pf-tile>
+
+          <!-- Result & report — how the result is captured and rendered, plus
+               test-level reference/critical limits. -->
+          <pf-tile tone="default" padding="lg" class="block">
+            <h3 class="section-title">Result &amp; report</h3>
+            <div class="space-y-3 mt-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><label class="pf-label">Result type</label>
+                  <pf-select [options]="resultTypeOptions" [value]="d.resultType"
+                             (valueChange)="patch({ resultType: $event })"></pf-select>
+                </div>
+                <div><label class="pf-label">Unit</label>
+                  <input type="text" class="pf-input" [ngModel]="d.unit"
+                         (ngModelChange)="patch({ unit: $event })"
+                         placeholder="e.g. mg/dL" /></div>
+              </div>
+              <div><label class="pf-label">Report format</label>
+                <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
+                           (valueChange)="patch({ reportFormat: $event })"></pf-select>
+              </div>
+              <div><label class="pf-label">Adult reference range</label>
+                <input type="text" class="pf-input" [ngModel]="d.adultReferenceRange"
+                       (ngModelChange)="patch({ adultReferenceRange: $event })"
+                       placeholder="e.g. 13.0 – 17.0 g/dL" /></div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+                <div><label class="pf-label">Critical low</label>
+                  <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
+                                   (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
+                </div>
+                <div><label class="pf-label">Critical high</label>
+                  <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
+                                   (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
+                </div>
+              </div>
             </div>
           </pf-tile>
         }
@@ -952,6 +1045,23 @@ export class TestEditorComponent implements OnInit {
     { value: 'direct',   label: 'Direct',   hint: 'Result goes straight to reports' },
     { value: 'approval', label: 'Approval', hint: 'Needs pathologist validation' }
   ];
+  // Test-level result shape. Blank = unset (fall back to per-parameter types).
+  readonly resultTypeOptions: PfSelectOption<string>[] = [
+    { value: '',                  label: '— Not set —' },
+    { value: 'numeric',           label: 'Numeric' },
+    { value: 'text',              label: 'Text' },
+    { value: 'positive_negative', label: 'Positive / Negative' }
+  ];
+  readonly reportFormatOptions: PfSelectOption<string>[] = [
+    { value: '',            label: '— Not set —' },
+    { value: 'tabular',     label: 'Tabular' },
+    { value: 'descriptive', label: 'Descriptive' }
+  ];
+  // Fasting requirement — segmented Yes/No toggle bound to a boolean.
+  readonly fastingOptions: SegmentedOption<boolean>[] = [
+    { value: false, label: 'No' },
+    { value: true,  label: 'Yes' }
+  ];
 
   private readonly _departments = signal<Department[]>([]);
   readonly departments = this._departments.asReadonly();
@@ -1178,6 +1288,12 @@ export class TestEditorComponent implements OnInit {
       price: t.price, taxSlab: t.taxSlab,
       departmentId: t.departmentId ?? '', tatHours: t.tatHours,
       sampleType: t.sampleType ?? '', tubeColor: t.tubeColor ?? '',
+      testCode: t.testCode ?? '', shortName: t.shortName ?? '', section: t.section ?? '',
+      sampleVolumeMl: t.sampleVolumeMl ?? null, fastingRequired: t.fastingRequired ?? false,
+      methodology: t.methodology ?? '', resultType: t.resultType ?? '',
+      unit: t.unit ?? '', reportFormat: t.reportFormat ?? '',
+      adultReferenceRange: t.adultReferenceRange ?? '',
+      criticalLow: t.criticalLow ?? null, criticalHigh: t.criticalHigh ?? null,
       parametersJson: t.parameters ?? '', conditionsJson: t.conditions ?? '[]',
       isActive: t.isActive,
       outsourcedVendorId: t.outsourcedVendorId ?? '',
@@ -1410,6 +1526,7 @@ export class TestEditorComponent implements OnInit {
   saveTest() {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
+    const pkg = d.type === 'package';
 
     // Packages: serialise member-test ids into the same JSON blob as
     // `{items: [...]}` so the order-create picker + admin list both
@@ -1431,6 +1548,21 @@ export class TestEditorComponent implements OnInit {
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
       // '' clears it on PATCH (back to dept colour); a colour name sets it.
       tubeColor: d.type === 'package' ? undefined : d.tubeColor,
+      // Master-data details — individual tests only. Strings send '' so a PATCH
+      // clears them; numbers send undefined when blank (a null would read as
+      // "unchanged" on PATCH — clearing a number isn't supported here).
+      testCode: pkg ? undefined : d.testCode,
+      shortName: pkg ? undefined : d.shortName,
+      section: pkg ? undefined : d.section,
+      sampleVolumeMl: pkg ? undefined : (d.sampleVolumeMl ?? undefined),
+      fastingRequired: pkg ? undefined : d.fastingRequired,
+      methodology: pkg ? undefined : d.methodology,
+      resultType: pkg ? undefined : d.resultType,
+      unit: pkg ? undefined : d.unit,
+      reportFormat: pkg ? undefined : d.reportFormat,
+      adultReferenceRange: pkg ? undefined : d.adultReferenceRange,
+      criticalLow: pkg ? undefined : (d.criticalLow ?? undefined),
+      criticalHigh: pkg ? undefined : (d.criticalHigh ?? undefined),
       parametersJson,
       conditionsJson: d.conditionsJson || undefined,
       isActive: d.isActive,

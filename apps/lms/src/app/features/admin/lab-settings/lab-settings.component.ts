@@ -156,6 +156,23 @@ interface AutoAssignConfig {
         </div>
       </pf-tile>
 
+      <!-- Front-desk Payments-due tab visibility -->
+      <pf-tile tone="default" padding="lg" class="block">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h3 class="pf-ls__title">Show "Payments due" tab</h3>
+            <p class="pf-ls__hint">
+              When ON, the front-desk shows a <strong>Payments due</strong> tab listing every order with an
+              outstanding balance. In Progress and Completed are always shown. Leave OFF to hide it.
+            </p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="showPaymentsDue()">
+            <input type="checkbox" [checked]="showPaymentsDue()" (change)="setShowPaymentsDue($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
+      </pf-tile>
+
       <!-- Auto-assign per department -->
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
@@ -389,6 +406,7 @@ export class LabSettingsComponent implements OnInit {
   protected readonly inventoryEnabled = signal(false);
   protected readonly requireBill = signal(false);
   protected readonly requireValidation = signal(false);
+  protected readonly showPaymentsDue = signal(true);
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
@@ -415,6 +433,13 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.requireValidation.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
+  setShowPaymentsDue(v: boolean) {
+    this.showPaymentsDue.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).subscribe({
+      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success(v ? '"Payments due" tab shown at the front desk' : '"Payments due" tab hidden'); },
+      error: e => { this.showPaymentsDue.set(!v); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
 
   ngOnInit() {
     this.tenantState.ensureLoaded();
@@ -426,6 +451,7 @@ export class LabSettingsComponent implements OnInit {
         this.requireBill.set(c?.requireBillBeforeCollection === true);
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
+        this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
       }
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the

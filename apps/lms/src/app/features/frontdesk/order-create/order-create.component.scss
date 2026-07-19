@@ -1129,6 +1129,24 @@
 /* Post-payment actions (Print / Show invoice / New order). */
 .pf-paid { display: flex; flex-direction: column; gap: 10px; }
 .pf-paid__msg { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #34d399; }
+/* Post-payment Total / Paid / Balance-due breakdown (advance + full). */
+.pf-paid__summary {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.06);
+}
+.pf-paid__sumline {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; color: var(--text-muted, #94a3b8);
+}
+.pf-paid__sumline span:last-child { color: var(--text-primary, #e2e8f0); font-weight: 600; }
+.pf-paid__sumline--due {
+  padding-top: 6px; margin-top: 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  font-weight: 700;
+}
+.pf-paid__sumline--due span { color: var(--color-primary, #a78bfa); }
 .pf-paid__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pf-paid__btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;

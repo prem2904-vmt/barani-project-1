@@ -5,6 +5,12 @@ export interface Test {
   departmentId?: string;
   name: string;
   code?: string;
+  /** Human-facing test code / SKU (distinct from department code). */
+  testCode?: string | null;
+  /** Abbreviated display name. */
+  shortName?: string | null;
+  /** Sub-grouping under the department. */
+  section?: string | null;
   description?: string;
   type: 'individual' | 'package';
   flow: 'direct' | 'approval';
@@ -15,6 +21,24 @@ export interface Test {
   parameters?: string;
   conditions?: string;
   sampleType?: string;
+  /** Specimen volume required, in millilitres. */
+  sampleVolumeMl?: number | null;
+  /** Whether the patient must fast before collection. */
+  fastingRequired?: boolean;
+  /** Analytical method (e.g. 'ELISA'). */
+  methodology?: string | null;
+  /** Shape of the result — e.g. 'numeric' | 'text' | 'positive_negative'. */
+  resultType?: string | null;
+  /** Result unit at the test level (e.g. 'mg/dL'). */
+  unit?: string | null;
+  /** Report rendering format hint (e.g. 'tabular' | 'descriptive'). */
+  reportFormat?: string | null;
+  /** Free-text adult reference range at the test level. */
+  adultReferenceRange?: string | null;
+  /** Critical low panic value at the test level. */
+  criticalLow?: number | null;
+  /** Critical high panic value at the test level. */
+  criticalHigh?: number | null;
   /** Tube/vial colour: 'red' | 'lavender' | 'grey' | 'blue' | null. */
   tubeColor?: string | null;
   tatHours: number;

@@ -218,6 +218,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/referring-network/referring-network.component').then(m => m.ReferringNetworkComponent)
       },
       {
+        // Partners hub — combined landing that surfaces Referral Labs, Vendor
+        // Wallets and the Referring Network together (item 141). Each tile links
+        // to its existing dedicated page; those routes above are unchanged.
+        path: 'admin/partners',
+        canActivate: [permissionGuard(['manage_tenant', 'manage_tests', 'manage_admin'])],
+        loadComponent: () => import('./features/admin/partners/partners.component').then(m => m.PartnersComponent)
+      },
+      {
         path: 'admin/notifications',
         canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)

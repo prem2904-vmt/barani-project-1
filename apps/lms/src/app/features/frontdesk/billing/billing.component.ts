@@ -52,7 +52,7 @@ const PAY_MODES: PayModeDef[] = [
   { id: 'upi',    label: 'UPI',       hint: 'Scan QR',        iconPath: 'M12 4v16M5 8h14M5 16h14' },
   { id: 'card',   label: 'Card',      hint: 'Tap / Insert',   iconPath: 'M3 7h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 11h18' },
   { id: 'cash',   label: 'Cash',      hint: 'Collect note',   iconPath: 'M3 6h18v12H3zM7 12a5 3 0 0 1 10 0 5 3 0 0 1-10 0Z' },
-  { id: 'wallet', label: 'Wallet',    hint: 'Paytm/PhonePe',  iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01' },
+  { id: 'wallet', label: 'Credit Wallet', hint: 'Vendor credit', iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01' },
   { id: 'split',  label: 'Split',     hint: 'Mixed modes',    iconPath: 'M6 3v18M18 3v18M3 12h18' },
   // { id: 'later',  label: 'Pay later', hint: 'On report',      iconPath: 'M12 6v6l4 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
 ];

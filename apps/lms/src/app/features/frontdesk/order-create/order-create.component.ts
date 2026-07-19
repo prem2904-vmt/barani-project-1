@@ -126,7 +126,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.refunding.set(false);
           this.currentBill.set(updated);
           this.toasts.success(`Refunded ${amt}`);
-          this.paidBill = updated;
+          this._paidBill.set(updated);
           this.paidOrderId.set(b.orderId);
         },
         error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); }
@@ -870,7 +870,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly confirming = signal(false);
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
-  private paidBill: Bill | null = null;
+  /** The bill in its post-payment state (has totalPayable / totalPaid /
+   *  balance). A signal so the paid summary can render Total, Paid/Advance
+   *  and Balance Due — including after a partial (advance) payment. */
+  private readonly _paidBill = signal<Bill | null>(null);
+  readonly paidBill = this._paidBill.asReadonly();
+
+  /** Bill used to render the post-confirmation payment summary. Prefers the
+   *  freshly-paid bill; falls back to the loaded bill in read-only mode. */
+  readonly paymentSummaryBill = computed<Bill | null>(() => this._paidBill() ?? this.currentBill());
 
   protected readonly _reprintOrder = signal<Order | null>(null);
   readonly reprintOrder = this._reprintOrder.asReadonly();
@@ -939,7 +947,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.currentBill.set(updated);
         }
         
-        this.paidBill = this.currentBill();
+        this._paidBill.set(this.currentBill());
         this.paidOrderId.set(bill.orderId);
         this.toasts.success('Payment collected');
       } catch (e) {
@@ -970,26 +978,29 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
       }));
       const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }));
+      // Track the latest bill state so the paid summary reflects the actual
+      // amount paid / balance due (the payment endpoint returns the updated bill).
+      let latest = bill;
       if (d.mode !== 'later') {
         if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
-            await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
+            latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
         } else {
-          await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
           }));
         }
       } else if (d.advanceAmount && d.advanceAmount > 0) {
         // Pay-later with an advance: record the partial payment now; the rest
         // of the bill stays outstanding (due on report).
-        await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
           amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
         }));
       }
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
-      this.paidBill = bill;
+      this._paidBill.set(latest);
       this.paidOrderId.set(order.id);
       this.toasts.success(
         d.mode !== 'later' ? 'Payment collected'
@@ -1023,10 +1034,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Reset the screen for the next patient after a completed order. */
   startNewOrder() {
     this.paidOrderId.set(null);
-    this.paidBill = null;
+    this._paidBill.set(null);
     this._selected.set([]);
     this._patient.set(null);
     this.discountValue.set('');
+    // Clear the referring hospital + doctor (and their lookup state) so the
+    // next order doesn't inherit the previous patient's referral. (item 133)
+    this.refHospitalName.set('');
+    this.refHospitalSuggestions.set([]);
+    this.refHospitalError.set(null);
+    this.refDoctorName.set('');
+    this.refDoctorSuggestions.set([]);
+    this.refDoctorError.set(null);
     this.router.navigateByUrl('/frontdesk/order');
     setTimeout(() => {
       this.patientSearch()?.focus();
@@ -1042,7 +1061,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  "Send on WhatsApp" uses. Replaces the old "Show invoice" preview, which was
    *  redundant since the itemised cart is already on screen. */
   sharePaidInvoice() {
-    const bill = this.paidBill;
+    const bill = this.paidBill();
     if (!bill) return;
     if (this.isNativePlatform()) { void this.emitPaidInvoice('share'); return; }
     const p = this._patient();
@@ -1058,7 +1077,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
   private async emitPaidInvoice(action: 'print' | 'blob' | 'share') {
-    const bill = this.paidBill;
+    const bill = this.paidBill();
     const oid = this.paidOrderId();
     if (!bill || !oid) return;
     let tpl: any = null;

@@ -229,6 +229,7 @@
               <span class="pf-mtab__count">{{ homeCollections().length }}</span>
             </button>
             }
+            @if (showPaymentsDue()) {
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'billing'"
               [attr.aria-selected]="mobileList() === 'billing'" (click)="setMobileList('billing')"
               aria-label="Payments due">
@@ -239,6 +240,7 @@
               </svg>
               <span class="pf-mtab__count" data-tone="warning">{{ paymentsDueOrders().length }}</span>
             </button>
+            }
           </div>
 
           <!-- Two-pane layout: Left pane (Appointments & Home collection), Right pane (In progress & Completed).
@@ -557,12 +559,14 @@
                     Completed
                     <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
                   </button>
+                  @if (showPaymentsDue()) {
                   <button type="button" role="tab" class="pf-tabs__btn press"
                     [class.pf-tabs__btn--on]="rightTab() === 'billing'" [attr.aria-selected]="rightTab() === 'billing'"
                     (click)="setRightTab('billing')">
                     Payments due
                     <span class="pf-tabs__count" data-tone="warning">{{ paymentsDueOrders().length }}</span>
                   </button>
+                  }
                 </div>
 
                 @if (rightTab() === 'ip') {
@@ -853,7 +857,7 @@
               }
 
               <!-- PAYMENTS DUE TAB -->
-              @if (rightTab() === 'billing') {
+              @if (rightTab() === 'billing' && showPaymentsDue()) {
               @if (paymentsDueOrders().length === 0) {
               <div class="pf-empty-tile pf-empty-tile--done">
                 <span class="pf-empty-tile__icon" aria-hidden="true"

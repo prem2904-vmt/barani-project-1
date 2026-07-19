@@ -666,8 +666,31 @@
             <div class="pf-paid">
               <p class="pf-paid__msg">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
-                Payment recorded
+                @if (paymentSummaryBill(); as sb) {
+                  {{ sb.balance > 0 ? 'Advance recorded' : 'Payment recorded' }}
+                } @else {
+                  Payment recorded
+                }
               </p>
+              <!-- Advance + due summary — always show Total / Paid / Balance Due,
+                   so an advance (partial) payment is visible even after full
+                   payment. (item 123) -->
+              @if (paymentSummaryBill(); as sb) {
+                <div class="pf-paid__summary">
+                  <div class="pf-paid__sumline">
+                    <span>Total</span>
+                    <span class="tabular-nums">{{ sb.totalPayable | inr }}</span>
+                  </div>
+                  <div class="pf-paid__sumline">
+                    <span>{{ sb.balance > 0 ? 'Advance paid' : 'Paid' }}</span>
+                    <span class="tabular-nums" style="color: var(--emerald-400, #34d399);">{{ sb.totalPaid | inr }}</span>
+                  </div>
+                  <div class="pf-paid__sumline pf-paid__sumline--due">
+                    <span>Balance due</span>
+                    <span class="tabular-nums">{{ sb.balance | inr }}</span>
+                  </div>
+                </div>
+              }
               <div class="pf-paid__actions">
                 <button type="button" class="pf-paid__btn" (click)="printPaidInvoice()">Print invoice</button>
                 <button type="button" class="pf-paid__btn pf-paid__btn--wa" (click)="sharePaidInvoice()">
