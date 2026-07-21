@@ -120,16 +120,17 @@ interface AutoAssignConfig {
       </pf-tile>
       }
 
-      <!-- Require payment before sharing report -->
+      <!-- Strong payment gate: dispatch + report -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <h3 class="pf-ls__title">Require payment before sharing report</h3>
+            <h3 class="pf-ls__title">Require full payment to progress (strong)</h3>
             <p class="pf-ls__hint">
-              When ON, an order must be <strong>paid in full</strong> before its report can be generated or shared —
-              the patient settles any outstanding balance at report handover. Sample collection is never blocked,
-              so you can bill pay-later / part-advance and still collect. Leave OFF to let billing and reporting
-              run independently (default).
+              When ON, an order must be <strong>paid in full</strong> before it can move forward:
+              samples <strong>can't be dispatched</strong> to the lab, and (where there's no dispatch step) the
+              <strong>report can't be shared</strong> — only after payment. Sample <em>collection</em> is never
+              blocked, so you can bill pay-later / part-advance and still draw the tube. Leave OFF to let billing,
+              dispatch and reporting run independently (default).
             </p>
           </div>
           <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireBill()">
@@ -422,7 +423,7 @@ export class LabSettingsComponent implements OnInit {
   setRequireBill(v: boolean) {
     this.requireBill.set(v);
     this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
-      next: () => this.toasts.success(v ? 'Payment now required before collection' : 'Payment no longer required before collection'),
+      next: () => this.toasts.success(v ? 'Full payment now required before dispatch / report' : 'Payment gate removed'),
       error: e => { this.requireBill.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
