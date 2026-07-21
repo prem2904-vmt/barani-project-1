@@ -1,18 +1,14 @@
 <!-- Floating pill — mobile + tablet. Desktop uses the top strip.
-     Scrolls horizontally on narrow viewports so all nav items stay
-     reachable without overflowing off-screen.
-     The pill bottom-offset is calc(env(safe-area-inset-bottom) +
-     8px): 8px above the screen edge plus the device's bottom
-     safe-area inset so on notched iPhones it floats clear of the
-     home-indicator gesture zone (~34pt) rather than colliding with
-     it. The inset is 0 on desktop/non-notched, so it collapses to
-     8px there. See the .pf-bottom-nav rule in styles below. -->
+     Phone: a horizontally-scrollable strip of nav tabs on the left,
+     with Admin (settings wheel) and PF More always pinned to the right.
+     iPad rail: a full-height vertical sidebar on the left edge. -->
 <nav class="pf-bottom-nav xl:hidden fixed z-30"
      [class.pf-bottom-nav--rail]="railMode()"
      [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
      [class.pf-bottom-nav--min]="minimized() && !railMode()">
+
   <div #pill
-       class="pf-pill flex items-center gap-0.5 sm:gap-1 p-1 sm:p-1.5 shadow-2xl backdrop-blur-2xl"
+       class="pf-pill shadow-2xl backdrop-blur-2xl"
        [class.pf-pill--rail]="railMode()"
        [class]="pillClasses"
        [class.pf-pill--dragging]="dragging()"
@@ -20,36 +16,98 @@
        (pointermove)="onPillPointerMove($event)"
        (pointerup)="onPillPointerUp($event)"
        (pointercancel)="onPillPointerUp($event)">
-    <!-- Sliding gradient indicator. One element shared across all
-         tabs — its position + width is driven by the active button's
-         offsetLeft / offsetWidth so it glides between tabs. During a
-         drag, position follows the pointer 1:1 (transitions off);
-         on release it springs to the snapped target. -->
-    <!-- Liquid-glass slider. At rest it's the gradient highlight
-         pill behind the active tab. While dragging it transforms
-         into a translucent glass pill that glides across the bar —
-         icons stay put underneath; the slider's own backdrop blur
-         + tinted edges give the iOS Liquid-Glass feel as it slides
-         over them. -->
-    <!-- Sliding indicator — horizontal-pill only. In rail mode the
-         active state is a static highlight on the button itself
-         (the indicator's offsetLeft/offsetWidth geometry doesn't
-         translate to a vertical axis). -->
-    @if (!railMode()) {
-      <span class="pf-nav-indicator"
-            [class.pf-nav-indicator--ready]="indicatorReady()"
-            [class.pf-nav-indicator--dragging]="dragging()"
-            [style.transform]="indicatorTransform()"
-            [style.width.px]="indicatorRenderedW()"
-            [style.height.px]="indicatorRenderedH()"
-            aria-hidden="true"></span>
-    }
 
-    <!-- Rail brand mark — the CLIENT logo at the top of the rail. On iPad
-         there's no top chrome, so the rail carries the client's branding
-         (their software). The PF platform mark folds down to the account
-         button at the bottom. -->
-    @if (railMode()) {
+    @if (!railMode()) {
+      <!-- ── PHONE / TABLET PILL ──────────────────────────────────────
+           Left section: scrollable strip of primary nav tabs.
+           Right section: Admin gear + PF More — always visible, fixed. -->
+
+      <!-- Scrollable nav-items strip -->
+      <div #navScroll class="pf-nav-scroll p-1 sm:p-1.5 gap-0.5 sm:gap-1">
+        <!-- Liquid-glass sliding indicator — sits inside the scroll
+             container so it rides with its active button. -->
+        <span class="pf-nav-indicator"
+              [class.pf-nav-indicator--ready]="indicatorReady()"
+              [class.pf-nav-indicator--dragging]="dragging()"
+              [style.transform]="indicatorTransform()"
+              [style.width.px]="indicatorRenderedW()"
+              [style.height.px]="indicatorRenderedH()"
+              aria-hidden="true"></span>
+
+        @for (n of displayedItems(); track n.id; let i = $index) {
+          <button #navBtn type="button"
+                  (click)="onTabClick(i, $event)"
+                  class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
+                         shrink-0 text-[11px] font-semibold leading-none transition-colors"
+                  [class.pf-nav-btn--compact]="compactMode()"
+                  [class.pf-nav-btn--active]="activeIdx() === i">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                 @for(path of n.iconPath; track path) {
+                  <path [attr.d]="path"/>
+                 }
+            </svg>
+            <span class="pf-nav-btn__lbl">{{ n.label }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Fixed right dock — Admin + PF More. Never scrolls. -->
+      <div class="pf-nav-fixed p-1 sm:p-1.5 gap-0.5 sm:gap-1">
+        <!-- Hairline separator between the scrollable strip and the fixed dock -->
+        <div class="pf-nav-fixed__sep" aria-hidden="true"></div>
+
+        @if (showAdminTab()) {
+          <!-- Admin: direct nav to /admin; routerLinkActive handles highlight -->
+          <a routerLink="/admin" routerLinkActive="pf-nav-btn--active"
+             class="pf-nav-btn pf-nav-btn--compact press rounded-full flex items-center
+                    justify-center shrink-0 transition-colors no-underline"
+             aria-label="Admin">
+            <!-- Settings wheel icon -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+              <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+            </svg>
+          </a>
+        }
+
+        <!-- PF More / account button — always pinned -->
+        <button type="button"
+                class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
+                       shrink-0 transition-colors"
+                [class.pf-nav-btn--more-on]="moreOpen()"
+                (click)="toggleMore($event)"
+                aria-label="More"
+                [attr.aria-expanded]="moreOpen()">
+          <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="#7c3aed" />
+                <stop offset="25%"  stop-color="#8b5cf6" />
+                <stop offset="50%"  stop-color="#a855f7" />
+                <stop offset="75%"  stop-color="#d946ef" />
+                <stop offset="100%" stop-color="#ec4899" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+              fill="url(#pfMoreBrandGradient)" />
+            <path
+              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+              fill="url(#pfMoreBrandGradient)" />
+          </svg>
+          <!-- My presence status dot -->
+          <span class="pf-status-dot pf-more-status"
+                [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+        </button>
+      </div>
+
+    } @else {
+      <!-- ── RAIL MODE (iPad) — existing full-height vertical layout ── -->
+
+      <!-- Client brand mark at top -->
       <span class="pf-rail-brand" [title]="tenantName()"
             [attr.aria-label]="tenantName() || 'Client'">
         @if (tenantLogo()) {
@@ -59,57 +117,41 @@
         }
       </span>
       <div class="pf-rail-sep" aria-hidden="true"></div>
-    }
 
-    @for (n of displayedItems(); track n.id; let i = $index) {
-      <!-- Buttons auto-scale to the visible-tab count. With many
-           tabs (≥4) we stay icon-only on mobile to keep the pill
-           compact; with few tabs (≤3) we always show the label
-           on every viewport so a 2-button pill doesn't look like
-           a tiny debug widget floating at the bottom. -->
-      <button #navBtn type="button"
-              (click)="onTabClick(i, $event)"
-              class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
-                     shrink-0 text-[11px] font-semibold leading-none transition-colors"
-              [class.pf-nav-btn--compact]="compactMode()"
-              [class.pf-nav-btn--active]="activeIdx() === i">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-             @for(path of n.iconPath; track path) {
-              <path [attr.d]="path"/>
-             }
-        </svg>
-        <span class="pf-nav-btn__lbl">{{ n.label }}</span>
-      </button>
-    }
+      @for (n of displayedItems(); track n.id; let i = $index) {
+        <button #navBtn type="button"
+                (click)="onTabClick(i, $event)"
+                class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
+                       shrink-0 text-[11px] font-semibold leading-none transition-colors"
+                [class.pf-nav-btn--compact]="compactMode()"
+                [class.pf-nav-btn--active]="activeIdx() === i">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+               @for(path of n.iconPath; track path) {
+                <path [attr.d]="path"/>
+               }
+          </svg>
+          <span class="pf-nav-btn__lbl">{{ n.label }}</span>
+        </button>
+      }
 
-    @if (showAdminTab()) {
-      <div class="w-px h-8 sm:h-10 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
+      @if (showAdminTab()) {
+        <div class="w-px h-8 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
+        <a #navBtn routerLink="/admin" routerLinkActive="pf-nav-btn--active"
+           class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
+                  shrink-0 text-[11px] font-semibold leading-none transition-colors no-underline"
+           [class.pf-nav-btn--compact]="compactMode()"
+           aria-label="Admin">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+          </svg>
+          <span class="pf-nav-btn__lbl">Admin</span>
+        </a>
+      }
 
-      <!-- Admin = direct navigation to /admin (the categorised
-           dashboard), not a popover. The old "More" sheet listed
-           every admin page; that's now what the 2-panel /admin
-           page itself shows, so the popover became redundant. -->
-      <a #navBtn routerLink="/admin" routerLinkActive="pf-nav-btn--active"
-         class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
-                shrink-0 text-[11px] font-semibold leading-none transition-colors no-underline"
-         [class.pf-nav-btn--compact]="compactMode()"
-         aria-label="Admin">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-        </svg>
-        <span class="pf-nav-btn__lbl">Admin</span>
-      </a>
-    }
-
-    <!-- Rail bottom group — the chrome's whole right-side cluster
-         folds in here as distinct icons: vendor badge, notification
-         bell, people drawer, then the user-avatar (More) button.
-         margin-top:auto on the leading separator pushes the group
-         to the bottom of the rail. -->
-    @if (railMode()) {
+      <!-- Rail footer: notifications, people, then the PF More/account button -->
       <div class="pf-rail-sep pf-rail-sep--foot" aria-hidden="true"></div>
       <button type="button" class="pf-rail-action press"
               (click)="onMoreNotifications()" aria-label="Notifications">
@@ -131,34 +173,21 @@
           </svg>
         </button>
       }
-    }
 
-    <!-- "More" trigger. Phone: PF glyph pill at the end of the row.
-         iPad rail: the account/actions button at the bottom — its
-         popover carries notifications, theme, people, sign-out. -->
-    <button #navBtn type="button"
-            class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
-                   shrink-0 transition-colors"
-            [class.pf-nav-btn--compact]="compactMode()"
-            [class.pf-nav-btn--more-on]="moreOpen()"
-            [class.pf-nav-btn--active]="isOverflowActive()"
-            (click)="toggleMore($event)"
-            [attr.aria-label]="railMode() ? 'Account & more' : 'More'"
-            [attr.aria-expanded]="moreOpen()">
-      @if (!railMode() && primary().length > 5) {
-        <!-- 3 dots icon -->
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>
-        </svg>
-      } @else {
-        <!-- The account button shows the PF brand glyph on BOTH the phone
-             bottom pill and the iPad rail's bottom account button. Tapping
-             opens the account popover (notifications / people / theme /
-             sign-out). -->
+      <!-- Rail account / More button -->
+      <button #navBtn type="button"
+              class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
+                     shrink-0 transition-colors"
+              [class.pf-nav-btn--compact]="compactMode()"
+              [class.pf-nav-btn--more-on]="moreOpen()"
+              [class.pf-nav-btn--active]="isOverflowActive()"
+              (click)="toggleMore($event)"
+              aria-label="Account & more"
+              [attr.aria-expanded]="moreOpen()">
         <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
-            <linearGradient id="pfMoreBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+            <linearGradient id="pfMoreBrandGradientRail" x1="0%" y1="100%" x2="100%" y2="0%">
               <stop offset="0%"   stop-color="#7c3aed" />
               <stop offset="25%"  stop-color="#8b5cf6" />
               <stop offset="50%"  stop-color="#a855f7" />
@@ -168,17 +197,15 @@
           </defs>
           <path
             d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-            fill="url(#pfMoreBrandGradient)" />
+            fill="url(#pfMoreBrandGradientRail)" />
           <path
             d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-            fill="url(#pfMoreBrandGradient)" />
+            fill="url(#pfMoreBrandGradientRail)" />
         </svg>
-      }
-      <!-- My presence status — small dot bottom-right of the account
-           glyph, mirroring the desktop avatar dot. -->
-      <span class="pf-status-dot pf-more-status"
-            [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
-    </button>
+        <span class="pf-status-dot pf-more-status"
+              [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+      </button>
+    }
   </div>
 
   <!-- More popover — opens upward from above the pill. Tap a
@@ -187,23 +214,8 @@
     <div class="pf-more-bd" (click)="closeMore()"></div>
     <div class="pf-more-pop" role="menu" aria-label="More actions"
          (click)="$event.stopPropagation()">
-      <!-- Overflow navigation options -->
-      @if (!railMode() && overflowItems().length > 0) {
-        @for (opt of overflowItems(); track opt.item.id) {
-          <button type="button" role="menuitem" class="pf-more-item press"
-                  [class.pf-more-item--active]="activeIdx() === opt.index"
-                  (click)="onTabClick(opt.index, $event); closeMore()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              @for(path of opt.item.iconPath; track path) {
-                <path [attr.d]="path"/>
-              }
-            </svg>
-            <span>{{ opt.item.label }}</span>
-          </button>
-        }
-        <div class="pf-more-sep"></div>
-      }
+      <!-- All nav items are in the scrollable pill — account options only here. -->
+
       <!-- Presence status — current status row; tap to expand the 7
            Teams-style presets. DND-grade statuses (In surgery / Do not
            disturb) block calls + silence pushes server-side. -->
@@ -240,7 +252,7 @@
               }
             </button>
           }
-          <p class="pf-status-note">“In surgery” &amp; “Do not disturb” block incoming calls and silence push alerts.</p>
+          <p class="pf-status-note">"In surgery" &amp; "Do not disturb" block incoming calls and silence push alerts.</p>
         </div>
       }
       <div class="pf-more-sep"></div>
@@ -271,8 +283,7 @@
           </button>
         }
       }
-      <!-- Theme: cycles System → Light → Dark. "System" follows the
-           OS appearance live; Light/Dark pin an explicit choice. -->
+      <!-- Theme: cycles System → Light → Dark. -->
       <button type="button" role="menuitem" class="pf-more-item press"
               (click)="onMoreTheme()">
         @switch (theme.mode()) {
@@ -302,8 +313,7 @@
           {{ theme.mode() === 'system' ? 'System' : theme.mode() === 'light' ? 'Light' : 'Dark' }}
         </span>
       </button>
-      <!-- Branch — tap to cycle through the lab's branches. The
-           current branch shows in the trailing chip. -->
+      <!-- Branch -->
       <button type="button" role="menuitem" class="pf-more-item press"
               (click)="onMoreBranch()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -315,7 +325,7 @@
         <span class="pf-more-item__val">{{ currentBranch() }}</span>
       </button>
       <div class="pf-more-sep"></div>
-      <!-- Multi-account (shared lab machines): scrolls past ~4 profiles. -->
+      <!-- Multi-account -->
       @if (otherAccounts().length) {
         <div class="pf-acct-scroll">
           @for (a of otherAccounts(); track a.userId) {

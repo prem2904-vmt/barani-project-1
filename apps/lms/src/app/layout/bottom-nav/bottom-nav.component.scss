@@ -61,17 +61,80 @@
 .pf-pill {
   position: relative;
   border-radius: 9999px;
-  overflow-x: auto;
-  max-width: 100%;
+  /* Pill is now a flex-row wrapper; overflow is handled by the
+     inner pf-nav-scroll child, not the pill itself. overflow-x: clip
+     keeps the pill shape (rounded corners) while still letting the
+     indicator's slight overflow-y show through during drag. */
+  overflow-x: clip;
+  overflow-y: visible;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  max-width: calc(100vw - 16px);
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
-  /* box-shadow on drag; transform/opacity drive the scroll-reactive
-     minimize (see .pf-bottom-nav--min below). */
   transition:
     box-shadow 200ms ease,
     transform 220ms cubic-bezier(0.32, 0.72, 0, 1),
     opacity   220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ─── Scrollable nav-items strip (phone / tablet pill only) ──────────
+ * Flex: 1 so it fills the pill between the left edge and the fixed
+ * right dock. Scrolls horizontally to reveal tabs beyond the 5
+ * that fit on screen. Position: relative hosts the absolute indicator. */
+.pf-nav-scroll {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow-x: scroll;
+  overflow-y: visible;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  /* Show exactly 5 compact tabs (44px each) + 4 inter-tab gaps (2px)
+     + left/right padding (4px each) before scroll kicks in. */
+  max-width: calc(5 * 44px + 4 * 2px + 2 * 4px); /* = 236px */
+  &::-webkit-scrollbar { display: none; }
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+@media (min-width: 640px) {
+  .pf-nav-scroll {
+    /* sm: full tabs are 64px wide, gaps 4px, padding 6px each side */
+    max-width: calc(5 * 64px + 4 * 4px + 2 * 6px); /* = 348px */
+  }
+}
+/* Each button snaps neatly to the left edge when scrolling. */
+.pf-nav-scroll .pf-nav-btn {
+  scroll-snap-align: start;
+}
+
+/* ─── Fixed right dock (Admin + PF More) ────────────────────────────
+ * Flex-shrink: 0 keeps this dock at a fixed width regardless of how
+ * many nav tabs the scrollable strip has. Always visible on screen. */
+.pf-nav-fixed {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  /* Subtle left separator — elevates the dock as a distinct surface
+     so the user understands it doesn’t scroll with the tabs. */
+  border-left: 1px solid var(--glass-border, rgba(255,255,255,0.10));
+}
+/* Vertical hairline inside the fixed dock (between scroll area edge
+   and the admin button). */
+.pf-nav-fixed__sep {
+  width: 1px;
+  height: 28px;
+  flex-shrink: 0;
+  background: var(--border-muted, rgba(255,255,255,0.10));
+  margin: 0 2px;
 }
 
 /* ─── Scroll-reactive minimize (iOS-26 / Instagram style) ──────────
@@ -499,6 +562,10 @@
   height: 44px;
   padding: 0;
   background: transparent;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .pf-nav-btn--more { height: 56px; }
 }
 /* The brand glyph is gradient-filled (matches the top-strip's
    chrome logo), so we don't tint it via the color property; only
@@ -611,29 +678,42 @@
 .pf-status-dot {
   position: relative;
   display: inline-flex;
-  width: 10px; height: 10px;
+  width: 12px; height: 12px;
   border-radius: 9999px;
   flex-shrink: 0;
   background: #9ca3af;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.15);
 }
-.pf-status-dot[data-presence='available'] { background: #34d399; }
+.pf-status-dot[data-presence='available'] {
+  background: #10b981; /* Emerald-500 */
+  box-shadow: 0 0 0 1.5px rgba(16, 185, 129, 0.25);
+}
 .pf-status-dot[data-presence='busy'],
-.pf-status-dot[data-presence='with_patient'] { background: #f87171; }
-.pf-status-dot[data-presence='rounds'] { background: #fbbf24; }
+.pf-status-dot[data-presence='with_patient'] {
+  background: #ef4444; /* Red-500 */
+  box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.25);
+}
+.pf-status-dot[data-presence='rounds'] {
+  background: #f59e0b; /* Amber-500 */
+  box-shadow: 0 0 0 1.5px rgba(245, 158, 11, 0.25);
+}
 .pf-status-dot[data-presence='surgery'],
-.pf-status-dot[data-presence='dnd'] { background: #dc2626; }
+.pf-status-dot[data-presence='dnd'] {
+  background: #dc2626; /* Red-600 */
+  box-shadow: 0 0 0 1.5px rgba(220, 38, 38, 0.25);
+}
 .pf-status-dot[data-presence='surgery']::after,
 .pf-status-dot[data-presence='dnd']::after {
   content: '';
   position: absolute;
-  left: 22%; right: 22%; top: 50%;
+  left: 25%; right: 25%; top: 50%;
   height: 2px; margin-top: -1px;
   border-radius: 2px;
   background: #fff;
 }
 .pf-status-dot[data-presence='away'] {
   background: transparent;
-  box-shadow: inset 0 0 0 2px #9ca3af;
+  box-shadow: inset 0 0 0 2px #9ca3af, 0 0 0 1.5px rgba(255, 255, 255, 0.15);
 }
 
 /* Dot pinned bottom-right of the account (PF glyph) button. */
@@ -673,19 +753,37 @@
 .pf-status-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 0 2px;
+  gap: 2px;
+  padding: 4px;
+  margin: 2px 6px 6px 6px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 }
-.pf-more-pop .pf-status-opt { min-height: 44px; }
-.pf-status-opt__lbl { flex: 1; min-width: 0; }
+.pf-more-pop .pf-status-opt {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  gap: 10px;
+}
+.pf-status-opt__lbl {
+  flex: 1;
+  min-width: 0;
+}
 .pf-more-pop .pf-status-opt--on {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.06)) !important;
+  background: rgba(139, 92, 246, 0.15) !important;
+  color: #c4b5fd !important;
+  font-weight: 600;
 }
-.pf-status-opt svg { color: var(--color-violet-300, #c4b5fd); }
+.pf-status-opt svg {
+  color: #c4b5fd;
+}
 .pf-status-note {
-  margin: 4px 2px 2px;
-  padding: 0 12px;
+  margin: 6px 4px 2px;
+  padding: 0 8px;
   font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--text-muted, rgba(148, 163, 184, 0.6));
+  line-height: 1.4;
+  color: var(--text-muted, rgba(148, 163, 184, 0.5));
 }
+

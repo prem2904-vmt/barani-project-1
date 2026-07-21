@@ -56,6 +56,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   private readonly btns = viewChildren<ElementRef<HTMLElement>>('navBtn');
   private readonly pillRef = viewChild<ElementRef<HTMLElement>>('pill');
+  /** Inner scrollable strip (phone only). Used for drag-offset snapshotting
+   *  and scroll-into-view so only the nav items scroll, not the fixed dock. */
+  private readonly navScrollRef = viewChild<ElementRef<HTMLElement>>('navScroll');
 
   protected readonly moreOpen = signal(false);
 
@@ -71,23 +74,12 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
    *  whole component (xl:hidden) and uses the top-strip nav. */
   protected readonly railMode = signal<boolean>(this.computeRailMode());
-  protected readonly displayedItems = computed(() => {
-    const items = this.primary();
-    if (!this.railMode() && items.length > 5) {
-      return items.slice(0, 4);
-    }
-    return items;
-  });
-  protected readonly overflowItems = computed(() => {
-    const items = this.primary();
-    if (!this.railMode() && items.length > 5) {
-      return items.slice(4).map((item, idx) => ({ item, index: idx + 4 }));
-    }
-    return [];
-  });
-  protected readonly isOverflowActive = computed(() => {
-    return !this.railMode() && this.primary().length > 5 && this.activeIdx() >= 4;
-  });
+  /** Show all primary items — the pill is now a horizontally-scrollable
+   *  slider so every tab is always reachable without a "More" overflow. */
+  protected readonly displayedItems = computed(() => this.primary());
+  /** No overflow items — all tabs are in the scrollable pill. */
+  protected readonly overflowItems = computed(() => [] as {item: import('../nav-items').NavItem; index: number}[]);
+  protected readonly isOverflowActive = computed(() => false);
   private computeRailMode(): boolean {
     if (typeof window === 'undefined') return false;
     const w = window.innerWidth;
@@ -565,8 +557,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     this.dragStartIndicatorW = this.indicator().w;
     this.dragMoved = false;
 
-    // Snapshot the pill's position so we can map clientX -> pill-content
-    // X without re-querying layout on every pointermove.
+    // Snapshot the scroll container's position so we can map clientX
+    // -> content X. In slider mode the scrollable strip (navScroll) is
+    // the coordinate origin, not the outer pill.
+    const navScroll = this.navScrollRef()?.nativeElement;
     const pill = this.pillRef()?.nativeElement;
     if (pill) {
       const rect = pill.getBoundingClientRect();
@@ -702,20 +696,31 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   /** Snap the indicator to the active button's measured box. Animated
-   *  by CSS once `--ready` is on (and the drag class is off). */
+   *  by CSS once `--ready` is on (and the drag class is off). Also
+   *  scrolls the inner nav strip so the active tab is fully in view. */
   private measureToActive(): void {
     if (this.dragging()) return;
     const btns = this.btns();
-    let idx = this.activeIdx();
-    if (!this.railMode() && this.primary().length > 5 && idx >= 4) {
-      idx = 4;
-    }
+    const idx = this.activeIdx();
     const ref = btns[idx];
     if (!ref) return;
     const el = ref.nativeElement;
     this.indicator.set({ x: el.offsetLeft, w: el.offsetWidth, h: el.offsetHeight });
     if (!this.indicatorReady()) {
       requestAnimationFrame(() => this.indicatorReady.set(true));
+    }
+    // Scroll the inner strip (not the pill) so the active tab is visible.
+    const scroller = this.navScrollRef()?.nativeElement;
+    if (scroller && !this.railMode()) {
+      const elLeft = el.offsetLeft;
+      const elRight = elLeft + el.offsetWidth;
+      const scrollW = scroller.clientWidth;
+      const scrollLeft = scroller.scrollLeft;
+      if (elLeft < scrollLeft) {
+        scroller.scrollTo({ left: elLeft - 8, behavior: 'smooth' });
+      } else if (elRight > scrollLeft + scrollW) {
+        scroller.scrollTo({ left: elRight - scrollW + 8, behavior: 'smooth' });
+      }
     }
   }
 }
