@@ -200,15 +200,6 @@
               <span class="pf-mtab__count">{{ visibleAppointments().length }}</span>
             </button>
             }
-            <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'draft'"
-              [attr.aria-selected]="mobileList() === 'draft'" (click)="setMobileList('draft')" aria-label="Draft">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-              <span class="pf-mtab__count">{{ draftOrders().length }}</span>
-            </button>
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'ip'"
               [attr.aria-selected]="mobileList() === 'ip'" (click)="setMobileList('ip')" aria-label="In progress">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -216,7 +207,7 @@
                 <path d="M9 4h6l1 4-4 5-4-5z" />
                 <path d="M8 13v7a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-7" />
               </svg>
-              <span class="pf-mtab__count">{{ visibleOrders().length }}</span>
+              <span class="pf-mtab__count">{{ visibleOrders().length + draftOrders().length }}</span>
             </button>
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'done'"
               [attr.aria-selected]="mobileList() === 'done'" (click)="setMobileList('done')" aria-label="Completed">
@@ -560,16 +551,10 @@
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'work'">
                 <div class="pf-tabs" role="tablist" aria-label="Work pane tabs" (click)="$event.stopPropagation()">
                   <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="rightTab() === 'draft'" [attr.aria-selected]="rightTab() === 'draft'"
-                    (click)="setRightTab('draft')">
-                    Draft
-                    <span class="pf-tabs__count" data-tone="active">{{ draftOrders().length }}</span>
-                  </button>
-                  <button type="button" role="tab" class="pf-tabs__btn press"
                     [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-selected]="rightTab() === 'ip'"
                     (click)="setRightTab('ip')">
                     In progress
-                    <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length }}</span>
+                    <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length + draftOrders().length }}</span>
                   </button>
                   <button type="button" role="tab" class="pf-tabs__btn press"
                     [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-selected]="rightTab() === 'done'"
@@ -660,29 +645,20 @@
                 </svg>
               </header>
 
-              <!-- DRAFT TAB — local-only parked carts (localStorage). -->
-              @if (rightTab() === 'draft') {
-              @if (draftOrders().length === 0) {
-              <div class="pf-empty-tile">
-                <span class="pf-empty-tile__icon" aria-hidden="true">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                </span>
-                <p class="pf-empty-tile__title">No saved drafts</p>
-                <p class="pf-empty-tile__sub">Start an order and tap Save draft to park it here — resume any time within 7
-                  days.</p>
-              </div>
-              } @else {
-              <ul class="pf-cards">
+              <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
+                   list (parked carts, localStorage), then live in-progress orders. -->
+              @if (rightTab() === 'ip') {
+              @if (draftOrders().length > 0) {
+              <ul class="pf-cards pf-cards--drafts">
                 @for (d of draftOrders(); track d.patientId) {
                 <li>
-                  <div class="pf-card pf-card--ip pf-card--completed" (click)="resumeDraft(d)">
+                  <div class="pf-card pf-card--ip pf-card--draft" (click)="resumeDraft(d)">
                     <pf-avatar [name]="d.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                     <div class="min-w-0 flex-1">
-                      <p class="pf-card__name">{{ formatPatient(d.patient) }}</p>
+                      <p class="pf-card__name">
+                        {{ formatPatient(d.patient) }}
+                        <span class="pf-draft-tag">Draft</span>
+                      </p>
                       <p class="pf-card__meta">
                         {{ d.testIds.length }} test{{ d.testIds.length === 1 ? '' : 's' }}
                         · Saved {{ d.savedAt | date:'MMM d, h:mm a' }}
@@ -698,10 +674,6 @@
                 }
               </ul>
               }
-              }
-
-              <!-- IN-PROGRESS TAB -->
-              @if (rightTab() === 'ip') {
               @if (dispatchableSelected().length > 0) {
               <div class="pf-bulk-bar">
                 <span class="pf-bulk-bar__count">{{ dispatchableSelected().length }} selected</span>
@@ -724,7 +696,7 @@
                   aria-label="Clear">×</button>
               </div>
               }
-              @if (visibleOrders().length === 0) {
+              @if (visibleOrders().length === 0 && draftOrders().length === 0) {
               <div class="pf-empty-tile pf-empty-tile--ip">
                 <span class="pf-empty-tile__icon" aria-hidden="true">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"

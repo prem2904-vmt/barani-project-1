@@ -259,19 +259,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing' | 'draft'>(this.loadRightTab());
+  private readonly _rightTab = signal<'ip' | 'done' | 'billing'>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
-  setRightTab(t: 'ip' | 'done' | 'billing' | 'draft') {
+  setRightTab(t: 'ip' | 'done' | 'billing') {
     this._rightTab.set(t);
-    // Drafts live only in localStorage, so re-scan whenever the tab is opened
-    // to catch any saved from another tab / a prior order-create visit.
-    if (t === 'draft') this.refreshDrafts();
+    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
+    // when that tab is opened to catch any saved from a prior order-create visit.
+    if (t === 'ip') this.refreshDrafts();
     try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' | 'draft' {
+  private loadRightTab(): 'ip' | 'done' | 'billing' {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : raw === 'draft' ? 'draft' : 'ip';
+      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
     } catch { return 'ip'; }
   }
 
@@ -355,7 +355,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'draft'>(() =>
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing'>(() =>
     this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
@@ -363,11 +363,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'ip': return 'In progress';
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
-      case 'draft': return 'Draft';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing' | 'draft') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing') {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);

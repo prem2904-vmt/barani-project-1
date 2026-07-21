@@ -18,8 +18,13 @@ import {
               [class.pd-dot--filled]="value().length > i"
               [class.pd-dot--active]="focused() && value().length === i"></span>
       }
-      <input #field class="pd-input" type="password" inputmode="numeric"
-             autocomplete="one-time-code" aria-label="PIN"
+      <!-- type="tel" + inputmode="numeric" reliably summons the NUMERIC keypad on
+           iOS + Android; a password input made iOS show the alphanumeric keyboard
+           (or none). The input is opacity:0 so digits are never visible anyway —
+           the dots render the masked state. -->
+      <input #field class="pd-input" type="tel" inputmode="numeric" pattern="[0-9]*"
+             autocomplete="off" autocorrect="off" spellcheck="false"
+             maxlength="4" enterkeyhint="done" aria-label="PIN"
              (input)="onInput($any($event.target).value)"
              (focus)="focused.set(true)" (blur)="focused.set(false)"
              [disabled]="disabled()" />
