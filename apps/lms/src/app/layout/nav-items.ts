@@ -62,6 +62,10 @@ export const ADMIN_NAV: NavItem = {
 };
 
 export const PRIMARY_NAV: NavItem[] = [
+  // ── Core workflow pipeline — always the first 5 visible tabs ──────────
+  // Order mirrors the actual lab flow: register → collect → analyse →
+  // validate → deliver. Secondary / role-specific items follow and are
+  // reachable by swiping the scrollable tab strip.
   {
     id: 'frontdesk',
     label: 'Frontdesk',
@@ -75,6 +79,15 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['register_patient']
   },
   {
+    id: 'sample-collection',
+    action: 'sample_collection',
+    label: 'Collect',
+    href: '/sample-collection',
+    iconPath: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'],
+    permissions: ['collect_sample'],
+    collectionModes: ['dedicated_counter']
+  },
+  {
     id: 'lab',
     action: 'result_entry',
     label: 'Lab',
@@ -85,32 +98,24 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['enter_result', 'receive_sample']
   },
   {
-    id: 'stores',
-    label: 'Inventory',
-    href: '/stores',
-    iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
-    requiresInventory: true,
-    module: 'inventory'
+    id: 'validate',
+    action: 'validate',
+    label: 'Validate',
+    href: '/pathologist',
+    iconPath: ['M20 6 9 17l-5-5'],
+    permissions: ['validate_result']
   },
   {
-    id: 'sample-collection',
-    action: 'sample_collection',
-    label: 'Collect',
-    href: '/sample-collection',
-    iconPath: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'],
-    permissions: ['collect_sample'],
-    collectionModes: ['dedicated_counter']
+    id: 'results',
+    action: 'results',
+    label: 'Results',
+    href: '/reports',
+    iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
+    permissions: ['deliver_report', 'view_report']
+    // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
+    // reports module, which covers only the TAT/analytics dashboard.
   },
-  {
-    id: 'billing-counter',
-    action: 'billing',
-    label: 'Billing',
-    href: '/billing-counter',
-    iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
-    permissions: ['create_bill', 'collect_payment'],
-    billingModes: ['separate_counter']
-  },
+  // ── Secondary / role-specific tabs (scroll right to reach) ───────────
   {
     // Live collection queue (token / walk-up / home-collection).
     id: 'queue',
@@ -130,27 +135,23 @@ export const PRIMARY_NAV: NavItem[] = [
     permissions: ['collect_sample'],
     module: 'homeCollection'
   },
-  // Order: Validate before Results — Validate is the pathologist's
-  // sign-off step that produces a Result. Following the actual lab
-  // pipeline (Collect → Lab → Validate → Results) reads more naturally
-  // than the previous alphabetic ordering.
   {
-    id: 'validate',
-    action: 'validate',
-    label: 'Validate',
-    href: '/pathologist',
-    iconPath: ['M20 6 9 17l-5-5'],
-    permissions: ['validate_result']
+    id: 'billing-counter',
+    action: 'billing',
+    label: 'Billing',
+    href: '/billing-counter',
+    iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
+    permissions: ['create_bill', 'collect_payment'],
+    billingModes: ['separate_counter']
   },
   {
-    id: 'results',
-    action: 'results',
-    label: 'Results',
-    href: '/reports',
-    iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
-    permissions: ['deliver_report', 'view_report']
-    // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
-    // reports module, which covers only the TAT/analytics dashboard.
+    id: 'stores',
+    label: 'Inventory',
+    href: '/stores',
+    iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
+    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
+    requiresInventory: true,
+    module: 'inventory'
   },
   {
     // Teams-style chat + group calling. No permissions = open to every
