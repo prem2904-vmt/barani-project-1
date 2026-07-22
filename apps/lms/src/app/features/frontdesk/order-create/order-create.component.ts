@@ -126,7 +126,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.refunding.set(false);
           this.currentBill.set(updated);
           this.toasts.success(`Refunded ${amt}`);
-          this.paidBill = updated;
+          this._paidBill.set(updated);
           this.paidOrderId.set(b.orderId);
         },
         error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); }
@@ -230,6 +230,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return list.filter(t => {
       const hay = [
         t.name,
+        // Match by the test's unique code / human SKU too (#135), so typing a
+        // code finds the test even when the name doesn't contain the query.
+        t.code ?? '',
+        t.testCode ?? '',
         t.hsnSacCode ?? '',
         t.department?.name ?? ''
       ].join(' ').toLowerCase();
@@ -381,11 +385,55 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  readonly subtotal = computed(() =>
-    this._selected()
-      .map(id => this._tests().find(t => t.id === id)?.price ?? 0)
-      .reduce((a, b) => a + b, 0)
-  );
+  /** Member (individual) test ids that are already covered by a package or
+   *  profile currently in the cart (#38–44). Such tests are bundled into the
+   *  package price and must NOT be billed as separate line items. Only
+   *  individual members are collected here — a package is never zeroed out by
+   *  another package (nested-package pricing is intentionally left intact). */
+  readonly coveredMemberIds = computed<Set<string>>(() => {
+    const all = this._tests();
+    const covered = new Set<string>();
+    for (const id of this._selected()) {
+      const t = all.find(x => x.id === id);
+      if (t?.type === 'package') {
+        for (const mid of parsePackageMembers(t.parameters)) covered.add(mid);
+      }
+    }
+    return covered;
+  });
+
+  /** True when an individual test in the cart is included in a package/profile
+   *  that's also in the cart — it renders as "Included" and is not re-billed. */
+  isCoveredMember(id: string): boolean {
+    const t = this._tests().find(x => x.id === id);
+    return !!t && t.type !== 'package' && this.coveredMemberIds().has(id);
+  }
+
+  /** Name of the package/profile covering this member test — drives the cart
+   *  "Included in …" hint. Returns '' when the test isn't covered. */
+  coveringPackageName(id: string): string {
+    const all = this._tests();
+    for (const sid of this._selected()) {
+      const p = all.find(x => x.id === sid);
+      if (p?.type === 'package' && parsePackageMembers(p.parameters).includes(id)) return p.name;
+    }
+    return '';
+  }
+
+  readonly subtotal = computed(() => {
+    const all = this._tests();
+    const covered = this.coveredMemberIds();
+    return this._selected()
+      .map(id => {
+        const t = all.find(x => x.id === id);
+        if (!t) return 0;
+        // A member individual test covered by a package/profile in the cart is
+        // billed within that package — don't double-charge it (#38–44).
+        if (t.type !== 'package' && covered.has(id)) return 0;
+        return t.price ?? 0;
+      })
+      .reduce((a, b) => a + b, 0);
+  });
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
@@ -651,7 +699,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
         savedAt: Date.now(),
         priority: this._priority(),
-        testIds: this._selected()
+        testIds: this._selected(),
+        // Snapshot the patient so the front-desk Draft tab can list it without
+        // a lookup (the key only carries the id).
+        patient: p
       }));
       this._hasDraft.set(true);
       this.toasts.success('Saved as draft');
@@ -928,7 +979,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly confirming = signal(false);
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
-  private paidBill: Bill | null = null;
+  /** The bill in its post-payment state (has totalPayable / totalPaid /
+   *  balance). A signal so the paid summary can render Total, Paid/Advance
+   *  and Balance Due — including after a partial (advance) payment. */
+  private readonly _paidBill = signal<Bill | null>(null);
+  readonly paidBill = this._paidBill.asReadonly();
+
+  /** Bill used to render the post-confirmation payment summary. Prefers the
+   *  freshly-paid bill; falls back to the loaded bill in read-only mode. */
+  readonly paymentSummaryBill = computed<Bill | null>(() => this._paidBill() ?? this.currentBill());
 
   protected readonly _reprintOrder = signal<Order | null>(null);
   readonly reprintOrder = this._reprintOrder.asReadonly();
@@ -997,7 +1056,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.currentBill.set(updated);
         }
         
-        this.paidBill = this.currentBill();
+        this._paidBill.set(this.currentBill());
         this.paidOrderId.set(bill.orderId);
         this.toasts.success('Payment collected');
       } catch (e) {
@@ -1028,26 +1087,29 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
       }));
       const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }));
+      // Track the latest bill state so the paid summary reflects the actual
+      // amount paid / balance due (the payment endpoint returns the updated bill).
+      let latest = bill;
       if (d.mode !== 'later') {
         if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
-            await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
+            latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
         } else {
-          await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
           }));
         }
       } else if (d.advanceAmount && d.advanceAmount > 0) {
         // Pay-later with an advance: record the partial payment now; the rest
         // of the bill stays outstanding (due on report).
-        await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
           amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
         }));
       }
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
-      this.paidBill = bill;
+      this._paidBill.set(latest);
       this.paidOrderId.set(order.id);
       this.toasts.success(
         d.mode !== 'later' ? 'Payment collected'
@@ -1081,10 +1143,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Reset the screen for the next patient after a completed order. */
   startNewOrder() {
     this.paidOrderId.set(null);
-    this.paidBill = null;
+    this._paidBill.set(null);
     this._selected.set([]);
     this._patient.set(null);
     this.discountValue.set('');
+    // Clear the referring hospital + doctor (and their lookup state) so the
+    // next order doesn't inherit the previous patient's referral. (item 133)
+    this.refHospitalName.set('');
+    this.refHospitalSuggestions.set([]);
+    this.refHospitalError.set(null);
+    this.refDoctorName.set('');
+    this.refDoctorSuggestions.set([]);
+    this.refDoctorError.set(null);
     this.router.navigateByUrl('/frontdesk/order');
     setTimeout(() => {
       this.patientSearch()?.focus();
@@ -1100,7 +1170,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  "Send on WhatsApp" uses. Replaces the old "Show invoice" preview, which was
    *  redundant since the itemised cart is already on screen. */
   sharePaidInvoice() {
-    const bill = this.paidBill;
+    const bill = this.paidBill();
     if (!bill) return;
     if (this.isNativePlatform()) { void this.emitPaidInvoice('share'); return; }
     const p = this._patient();
@@ -1116,7 +1186,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
   private async emitPaidInvoice(action: 'print' | 'blob' | 'share') {
-    const bill = this.paidBill;
+    const bill = this.paidBill();
     const oid = this.paidOrderId();
     if (!bill || !oid) return;
     let tpl: any = null;

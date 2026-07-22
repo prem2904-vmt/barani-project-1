@@ -27,6 +27,11 @@ export interface OrderSample {
   departmentId: string;
   /** When set, this vial is destined for an outsourced/referral lab (null = in-house). */
   outsourcedVendorId?: string | null;
+  /** The lab space this vial belongs to (grouping key with tubeColor). */
+  spaceId?: string | null;
+  /** Vial colour ('red'|'lavender'|'grey'|'blue') — the vial was grouped by
+   *  (space, colour). Null = fall back to the department container colour. */
+  tubeColor?: string | null;
   status: string;
   barcode?: string;
   qrCode?: string;

@@ -36,6 +36,9 @@ export interface Branch {
   name: string;
   code: string;
   type: string;
+  /** How departments are physically organised: 'integrated' (all depts share
+   *  one lab) or 'individual' (each dept is its own lab). Drives tube counting. */
+  labStructure?: 'integrated' | 'individual';
   address?: string;
   city?: string;
   state?: string;
@@ -84,6 +87,8 @@ export interface Department {
   tenantId: string;
   branchId?: string;
   subBranchId?: string;
+  /** The lab space this department is assigned to (null = unassigned). */
+  spaceId?: string | null;
   name: string;
   code: string;
   /** 2-digit department code (01–99) that prefixes the short sample barcode

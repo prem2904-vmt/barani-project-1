@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges, computed, input, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ConditionLogic,
   ConditionOperator,
@@ -29,12 +30,48 @@ export interface WorkflowStepCompleteEvent {
 @Component({
   selector: 'pf-workflow-renderer',
   standalone: true,
-  imports: [DynamicInputComponent],
+  imports: [DynamicInputComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let cfg = config();
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
+    } @else if (singlePage()) {
+      <!-- SINGLE-PAGE: the first step's fields are always shown; any later steps
+           are revealed inline by "Add more"; a single Submit finishes (no Next). -->
+      <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: visibleSteps()[0] }"></ng-container>
+
+      @if (moreSteps().length > 0) {
+        @if (showMore()) {
+          @for (s of moreSteps(); track s.id) {
+            <div class="mt-6">
+              <h3 class="text-sm font-semibold text-slate-900 mb-3">{{ s.title }}</h3>
+              <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
+            </div>
+          }
+        }
+        <button type="button" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold"
+                style="color: var(--color-primary, #7c3aed);" (click)="toggleMore()">
+          {{ showMore() ? '− Show fewer fields' : '+ Add more details' }}
+        </button>
+      }
+
+      @if (validationError(); as err) {
+        <p class="mt-3 text-xs text-red-600">{{ err }}</p>
+      }
+
+      <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
+        @for (action of extraActions(); track action.id) {
+          <button type="button" class="pf-btn"
+                  [class.pf-btn-primary]="action.variant === 'primary'"
+                  [class.pf-btn-ghost]="action.variant !== 'primary'"
+                  [disabled]="submitting()"
+                  (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
+        }
+        <button type="button" class="pf-btn pf-btn-primary"
+                [disabled]="submitting()"
+                (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+      </div>
     } @else {
       @let step = visibleSteps()[currentIndex()];
 
@@ -54,6 +91,38 @@ export interface WorkflowStepCompleteEvent {
         <h2 class="text-base font-semibold text-slate-900">{{ step.title }}</h2>
       </div>
 
+      <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: step }"></ng-container>
+
+      @if (validationError(); as err) {
+        <p class="mt-3 text-xs text-red-600">{{ err }}</p>
+      }
+
+      <div class="mt-5 flex flex-wrap gap-3 justify-between items-center">
+        <button type="button" class="pf-btn pf-btn-ghost"
+                [disabled]="currentIndex() === 0"
+                (click)="back()">← Back</button>
+        @if (isLastStep()) {
+          <div class="flex items-center gap-2">
+            @for (action of extraActions(); track action.id) {
+              <button type="button" class="pf-btn"
+                      [class.pf-btn-primary]="action.variant === 'primary'"
+                      [class.pf-btn-ghost]="action.variant !== 'primary'"
+                      [disabled]="submitting()"
+                      (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
+            }
+            <button type="button" class="pf-btn pf-btn-primary"
+                    [disabled]="submitting()"
+                    (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+          </div>
+        } @else {
+          <button type="button" class="pf-btn pf-btn-primary"
+                  (click)="next()">Next →</button>
+        }
+      </div>
+    }
+
+    <!-- One field grid, reused by both single-page and stepped modes. -->
+    <ng-template #stepFields let-step>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @for (f of visibleFields(step); track f.id) {
           @if (f.type === 'test_parameters') {
@@ -108,38 +177,11 @@ export interface WorkflowStepCompleteEvent {
           }
         } @empty {
           <div class="md:col-span-2 text-sm text-slate-500 py-6 text-center">
-            This step has no fields. Hit Next to continue.
+            This step has no fields.
           </div>
         }
       </div>
-
-      @if (validationError(); as err) {
-        <p class="mt-3 text-xs text-red-600">{{ err }}</p>
-      }
-
-      <div class="mt-5 flex flex-wrap gap-3 justify-between items-center">
-        <button type="button" class="pf-btn pf-btn-ghost"
-                [disabled]="currentIndex() === 0"
-                (click)="back()">← Back</button>
-        @if (isLastStep()) {
-          <div class="flex items-center gap-2">
-            @for (action of extraActions(); track action.id) {
-              <button type="button" class="pf-btn"
-                      [class.pf-btn-primary]="action.variant === 'primary'"
-                      [class.pf-btn-ghost]="action.variant !== 'primary'"
-                      [disabled]="submitting()"
-                      (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
-            }
-            <button type="button" class="pf-btn pf-btn-primary"
-                    [disabled]="submitting()"
-                    (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
-          </div>
-        } @else {
-          <button type="button" class="pf-btn pf-btn-primary"
-                  (click)="next()">Next →</button>
-        }
-      </div>
-    }
+    </ng-template>
   `
 })
 export class WorkflowRendererComponent implements OnChanges {
@@ -149,6 +191,10 @@ export class WorkflowRendererComponent implements OnChanges {
   readonly finishLabel = input<string>('Finish');
   readonly submitting = input<boolean>(false);
   readonly extraActions = input<Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }>>([]);
+  /** Single-page mode: no step wizard. The first step's fields show always; any
+   *  later steps are revealed inline by "Add more"; one Submit finishes. Used by
+   *  the patient-registration form. */
+  readonly singlePage = input<boolean>(false);
 
   @Input() initialValues: WorkflowFormValues = {};
 
@@ -173,6 +219,37 @@ export class WorkflowRendererComponent implements OnChanges {
   });
 
   readonly isLastStep = computed(() => this.currentIndex() >= this.visibleSteps().length - 1);
+
+  // ── single-page mode ───────────────────────────────────────────
+  /** Steps after the first — revealed inline by "Add more". */
+  readonly moreSteps = computed<WorkflowStep[]>(() => this.visibleSteps().slice(1));
+  private readonly _showMore = signal(false);
+  readonly showMore = this._showMore.asReadonly();
+  toggleMore(): void { this._showMore.update(v => !v); }
+
+  /** Validate required fields across ALL steps (single-page has no per-step gate).
+   *  Auto-expands "Add more" if a missing required field is in a later step. */
+  private validateAll(): boolean {
+    const steps = this.visibleSteps();
+    const missing: string[] = [];
+    let missingInMore = false;
+    for (let i = 0; i < steps.length; i++) {
+      for (const f of this.visibleFields(steps[i])) {
+        if (!f.isRequired || f.type === 'test_parameters') continue;
+        if (this.isEmpty(this.valueFor(steps[i], f.name))) {
+          missing.push(f.title);
+          if (i > 0) missingInMore = true;
+        }
+      }
+    }
+    if (missing.length > 0) {
+      if (missingInMore) this._showMore.set(true);
+      this._validationError.set(`Please fill: ${missing.join(', ')}`);
+      return false;
+    }
+    this._validationError.set(null);
+    return true;
+  }
 
   readonly testParamFields = computed<TestParameter[]>(() =>
     this.resources().testParameters ?? []);
@@ -269,6 +346,11 @@ export class WorkflowRendererComponent implements OnChanges {
   }
 
   finish(): void {
+    if (this.singlePage()) {
+      if (!this.validateAll()) return;
+      this.workflowComplete.emit(this._formValues());
+      return;
+    }
     const steps = this.visibleSteps();
     const step = steps[this._currentIndex()];
     if (step && !this.validateStep(step)) return;
@@ -277,6 +359,11 @@ export class WorkflowRendererComponent implements OnChanges {
   }
 
   triggerExtraAction(actionId: string): void {
+    if (this.singlePage()) {
+      if (!this.validateAll()) return;
+      this.extraActionClicked.emit({ actionId, values: this._formValues() });
+      return;
+    }
     const steps = this.visibleSteps();
     const step = steps[this._currentIndex()];
     if (step && !this.validateStep(step)) return;

@@ -38,6 +38,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
         @if (config(); as cfg) {
           <pf-workflow-renderer
             [config]="cfg"
+            [singlePage]="true"
             [context]="context()"
             [initialValues]="initialValues()"
             [submitting]="saving()"

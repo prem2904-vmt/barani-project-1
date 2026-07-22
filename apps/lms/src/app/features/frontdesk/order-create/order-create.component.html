@@ -534,7 +534,9 @@
           }
           @for (id of selected(); track id) {
             @if (findTest(id); as t) {
-              <li class="pf-cart-row" [class.opacity-90]="isCollected(t.id)">
+              <li class="pf-cart-row"
+                  [class.opacity-90]="isCollected(t.id)"
+                  [class.pf-cart-row--included]="isCoveredMember(t.id)">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <p class="pf-cart-name">{{ t.name }}</p>
@@ -547,12 +549,19 @@
                       </span>
                     }
                   </div>
-                  @if (t.department?.name) {
+                  @if (isCoveredMember(t.id)) {
+                    <p class="pf-cart-meta pf-cart-meta--included">Included in {{ coveringPackageName(t.id) }}</p>
+                  } @else if (t.department?.name) {
                     <p class="pf-cart-meta">{{ t.department?.name }}</p>
                   }
                 </div>
-                <span class="pf-cart-amount">{{ t.price | inr }}</span>
-                 @if (!paidOrderId() && !isReadOnly()) {
+                @if (isCoveredMember(t.id)) {
+                  <span class="pf-cart-amount pf-cart-amount--included"
+                        [title]="'Covered by ' + coveringPackageName(t.id) + ' — not billed separately'">Included</span>
+                } @else {
+                  <span class="pf-cart-amount">{{ t.price | inr }}</span>
+                }
+                @if (!paidOrderId() && !isReadOnly()) {
                   @if (isCollected(t.id)) {
                     <span class="inline-flex items-center justify-center w-7 h-7 text-amber-500/80 dark:text-amber-400/80" title="Sample collected — test locked">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -685,8 +694,31 @@
             <div class="pf-paid">
               <p class="pf-paid__msg">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
-                Payment recorded
+                @if (paymentSummaryBill(); as sb) {
+                  {{ sb.balance > 0 ? 'Advance recorded' : 'Payment recorded' }}
+                } @else {
+                  Payment recorded
+                }
               </p>
+              <!-- Advance + due summary — always show Total / Paid / Balance Due,
+                   so an advance (partial) payment is visible even after full
+                   payment. (item 123) -->
+              @if (paymentSummaryBill(); as sb) {
+                <div class="pf-paid__summary">
+                  <div class="pf-paid__sumline">
+                    <span>Total</span>
+                    <span class="tabular-nums">{{ sb.totalPayable | inr }}</span>
+                  </div>
+                  <div class="pf-paid__sumline">
+                    <span>{{ sb.balance > 0 ? 'Advance paid' : 'Paid' }}</span>
+                    <span class="tabular-nums" style="color: var(--emerald-400, #34d399);">{{ sb.totalPaid | inr }}</span>
+                  </div>
+                  <div class="pf-paid__sumline pf-paid__sumline--due">
+                    <span>Balance due</span>
+                    <span class="tabular-nums">{{ sb.balance | inr }}</span>
+                  </div>
+                </div>
+              }
               <div class="pf-paid__actions">
                 <button type="button" class="pf-paid__btn" (click)="printPaidInvoice()">Print invoice</button>
                 <button type="button" class="pf-paid__btn pf-paid__btn--wa" (click)="sharePaidInvoice()">

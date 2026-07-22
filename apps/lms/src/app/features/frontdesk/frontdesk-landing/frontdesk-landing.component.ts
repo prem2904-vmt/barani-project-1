@@ -81,6 +81,17 @@ interface StaffMember {
   status: 'on_duty' | 'on_break' | 'busy';
 }
 
+/** A parked order draft read back from localStorage (`pf:order-draft:<id>`).
+ *  There's no backend for drafts — order-create writes them, the Draft tab
+ *  reads them. `patient` is a snapshot so we can render without a lookup. */
+interface DraftOrder {
+  patientId: string;
+  patient: Patient;
+  testIds: string[];
+  savedAt: number;
+  priority: string;
+}
+
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
 
 @Component({
@@ -252,6 +263,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly rightTab = this._rightTab.asReadonly();
   setRightTab(t: 'ip' | 'done' | 'billing') {
     this._rightTab.set(t);
+    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
+    // when that tab is opened to catch any saved from a prior order-create visit.
+    if (t === 'ip') this.refreshDrafts();
     try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
   }
   private loadRightTab(): 'ip' | 'done' | 'billing' {
@@ -260,6 +274,80 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
     } catch { return 'ip'; }
   }
+
+  // ── Draft orders (local-only) ─────────────────────────────
+  // order-create parks an in-progress cart in localStorage under
+  // `pf:order-draft:<patientId>` so reception can resume it later. There's no
+  // backend for drafts — we scan localStorage here, drop stale (>7d) and
+  // malformed entries, and surface them as their own work-pane tab.
+  private static readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
+  private static readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  private readonly _drafts = signal<DraftOrder[]>([]);
+  readonly draftOrders = this._drafts.asReadonly();
+
+  /** Scan localStorage for saved order drafts, newest first. Skips stale
+   *  (savedAt older than 7 days) and malformed entries. */
+  private loadDrafts(): DraftOrder[] {
+    const out: DraftOrder[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(FrontdeskLandingComponent.DRAFT_KEY_PREFIX)) continue;
+        let raw: string | null;
+        try { raw = localStorage.getItem(key); } catch { continue; }
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as { savedAt?: number; priority?: string; testIds?: string[]; patient?: Patient };
+          const savedAt = parsed?.savedAt;
+          if (typeof savedAt !== 'number' || Date.now() - savedAt > FrontdeskLandingComponent.DRAFT_TTL_MS) continue;
+          if (!parsed.patient || !Array.isArray(parsed.testIds)) continue;
+          out.push({
+            patientId: key.slice(FrontdeskLandingComponent.DRAFT_KEY_PREFIX.length),
+            patient: parsed.patient,
+            testIds: parsed.testIds.filter(id => typeof id === 'string'),
+            savedAt,
+            priority: parsed.priority ?? 'Normal',
+          });
+        } catch { /* malformed JSON — skip this entry */ }
+      }
+    } catch { /* localStorage unavailable */ }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+
+  /** Re-scan localStorage and publish the draft list. */
+  private refreshDrafts() { this._drafts.set(this.loadDrafts()); }
+
+  /** Resume a parked draft — order-create auto-restores it for this patient. */
+  resumeDraft(d: DraftOrder) {
+    this.router.navigateByUrl('/frontdesk/order?patientId=' + d.patientId);
+  }
+
+  /** Discard a parked draft: drop its localStorage key, reload the list, toast. */
+  discardDraft(d: DraftOrder, ev?: Event) {
+    ev?.stopPropagation();
+    try { localStorage.removeItem(FrontdeskLandingComponent.DRAFT_KEY_PREFIX + d.patientId); } catch { /* ignore */ }
+    this.refreshDrafts();
+    this.toasts.success('Draft discarded');
+  }
+
+  // ── Tab visibility ────────────────────────────────────────
+  // In progress + Completed are ALWAYS displayed. Payments due is
+  // hide/show-configurable per branch by an admin. We read an optional
+  // `showPaymentsDueTab` flag off the branch lab config: absent/undefined
+  // keeps the tab visible (preserves today's behaviour), an explicit `false`
+  // hides it. NOTE: the flag is not yet part of the BranchLabConfig model,
+  // the backend, or the admin Lab Settings UI, so until those are added this
+  // always resolves to visible (see the wiring note in the delivery report).
+  readonly showPaymentsDue = computed(() =>
+    (this.labCfg.config() as { showPaymentsDueTab?: boolean } | null)?.showPaymentsDueTab !== false
+  );
+  /** If Payments due is hidden while it happens to be the active tab, fall
+   *  back to In progress so the pane never renders an empty/absent tab. */
+  private readonly _rightTabGuard = effect(() => {
+    if (!this.showPaymentsDue() && this._rightTab() === 'billing') {
+      this._rightTab.set('ip');
+    }
+  });
 
   // ── Mobile list selector ──────────────────────────────────
   // Phones (≤640px) drop the pane accordion for a single list with a
@@ -520,22 +608,36 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       return this.inWorkRange(o.createdAt);
     })
   );
-  /** "Completed" — work the lab has signed off on (validated /
-   *  delivered / completed). Drives the new
-   *  third FD pane next to In Progress so reception can see at a
-   *  glance which patients are ready to hand over. */
-  readonly completedOrders = computed(() =>
-    this._orders().filter(o => {
+  /** Order ids that still carry an outstanding balance (from the branch's
+   *  /api/billing/outstanding feed — which only returns non-settled bills).
+   *  Fully-paid orders never appear here. Used to keep unpaid work OUT of the
+   *  Completed pane: a validated-but-unpaid order belongs in Payments due. */
+  private readonly _unpaidOrderIds = computed(() => {
+    const s = new Set<string>();
+    for (const b of this._bills()) if (b.balance > 0) s.add(b.orderId);
+    return s;
+  });
+  /** "Completed" — orders that are BOTH report-generated (validated /
+   *  delivered / completed) AND payment-completed (no outstanding balance).
+   *  Drives the third FD pane next to In Progress so reception can see at a
+   *  glance which patients are ready to hand over. Sorted ascending by
+   *  creation time so the oldest ready-for-handover sits on top. */
+  readonly completedOrders = computed(() => {
+    const unpaid = this._unpaidOrderIds();
+    return this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
+      // Payment must be completed too — an order with an outstanding balance
+      // stays in Payments due until it's settled, not here.
+      if (unpaid.has(o.id)) return false;
       // A report completed TODAY for an order created on an earlier day must
       // still surface for hand-over. The Today feed includes such orders (see
       // ListTodayAsync), so don't gate completed work by creation date in the
       // today view; only constrain by creation date for historical ranges.
       return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
-    })
-  );
+    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  });
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
   readonly readyForPickup = computed(() =>
@@ -876,6 +978,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // (e.g. disabling Appointments / Home visits) reflect here immediately.
     this.process.refreshActive();
     this.refresh();
+    // Drafts are local-only — load them once on init so the tab badge is
+    // correct even before the Draft tab is opened.
+    this.refreshDrafts();
     this.pollHandle = setInterval(() => {
       // Skip polls while the tab is hidden — saves bandwidth on inactive
       // tabs without changing perceived freshness once focus returns.

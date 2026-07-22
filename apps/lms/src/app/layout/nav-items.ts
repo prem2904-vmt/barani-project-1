@@ -320,7 +320,7 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_tenant', 'manage_branches']
   },
   {
-    id: 'vendors', label: 'Vendor wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
+    id: 'vendors', label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
     permissions: ['manage_tenant']
   },
   {
