@@ -296,6 +296,12 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_billing_config']
   },
   {
+    // Finance — day-end cash reconciliation + closure.
+    id: 'daily-statement', label: 'Daily statement', href: '/finance/daily',
+    iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
+    permissions: ['collect_payment', 'manage_tenant']
+  },
+  {
     id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
     permissions: ['manage_inventory'], module: 'inventory'
   },

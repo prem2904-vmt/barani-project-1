@@ -21,6 +21,7 @@ import { TileComponent, TileTone } from '../../../shared/primitives/tile.compone
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
 import { OrderTest } from '../../../shared/models/order.model';
+import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -455,15 +456,14 @@ const COUNTERS: CounterSpec[] = [
                             (click)="toggleExpand(g.orderId)">
                       <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap">
-                          <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <!-- Line 1: standard patient format — Name(≤15 chars)+.. | age/sex | P-ID -->
+                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientInfo }}</p>
+                        <!-- Line 2: TAT urgency + how many tests ride on this card.
+                             Expand the card (or open the tube) for test names + barcodes. -->
+                        <div class="flex items-center gap-2 flex-wrap mt-1">
                           <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
                           <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
                         </div>
-                        <p class="pf-grp-meta text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
-                          #{{ g.orderId.slice(0,8) }}
-                          @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
-                        </p>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
@@ -497,9 +497,9 @@ const COUNTERS: CounterSpec[] = [
                                 <span class="px-1.5 py-0.5 text-[10px] font-medium rounded truncate" style="max-width: 110px;
                                       background: rgba(139, 92, 246, 0.16); color: #c4b5fd;">{{ assigneeName(tube.assignedTo) }}</span>
                               }
-                              @if (tube.barcode) {
-                                <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ tube.barcode }}</span>
-                              }
+                              <!-- Sample ID (tube barcode) — always rendered so the tech can
+                                   match the physical tube; 'no label' for unprinted samples. -->
+                              <span class="text-[10.5px] font-mono" style="color: var(--text-muted);">{{ tube.barcode || 'no label' }}</span>
                             </div>
 
                             <!-- Rejection reason banner — only when one or
@@ -2165,8 +2165,8 @@ export class MyWorkComponent implements OnInit {
   patientGroups(items: Enriched[]): Array<{
     orderId: string;
     patientName: string;
+    patientInfo: string;
     items: Enriched[];
-    testNames: string[];
     level: Level;
     remainingMin: number;
   }> {
@@ -2179,11 +2179,13 @@ export class MyWorkComponent implements OnInit {
     const levelRank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
     return Array.from(byOrder.entries()).map(([orderId, group]) => {
       const worst = [...group].sort((a, b) => levelRank[a._level] - levelRank[b._level])[0];
+      const patient = worst.subOrder?.order?.patient;
       return {
         orderId,
-        patientName: worst.subOrder?.order?.patient?.displayName ?? 'Patient',
+        patientName: patient?.displayName ?? 'Patient',
+        // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
+        patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
         items: group,
-        testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
         level: worst._level,
         remainingMin: Math.min(...group.map(t => t._remainingMin))
       };

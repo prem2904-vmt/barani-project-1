@@ -2,6 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { Test } from '../../../shared/models/test.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -43,6 +46,15 @@ const UNASSIGNED = 'Unassigned';
         title="Tests"
         subtitle="Master test catalog and packages, grouped by department.">
         @if (tab() !== 'pricing') {
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="importInput.click()">
+            <span icon-left aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12M7 10l5 5 5-5"/>
+                <path d="M4 21h16"/>
+              </svg>
+            </span>
+            {{ importing() ? 'Importing…' : 'Import' }}
+          </pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openCreate()">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -54,6 +66,8 @@ const UNASSIGNED = 'Unassigned';
           </pf-touch-btn>
         }
       </pf-screen-header>
+      <!-- Hidden picker for the catalogue import (.json envelope or CSV). -->
+      <input #importInput type="file" accept=".json,.csv" class="hidden" (change)="onImportFile($event)" />
 
       <div class="mb-4">
         <pf-segmented
@@ -296,6 +310,64 @@ const UNASSIGNED = 'Unassigned';
 export class TestsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
+
+  /** Catalogue import in flight (disables the Import button label). */
+  readonly importing = signal(false);
+
+  /** Import a catalogue file. Accepts the JSON envelope
+   *  ({ department, replaceDepartment, rows: [...] }) produced from the
+   *  catalogue spreadsheet, or a bare JSON array of rows (department is then
+   *  asked via the envelope being absent → rejected with a hint). CSV support
+   *  intentionally minimal: JSON is the canonical interchange. */
+  async onImportFile(ev: Event) {
+    const inputEl = ev.target as HTMLInputElement;
+    const file = inputEl.files?.[0];
+    inputEl.value = '';   // allow re-picking the same file
+    if (!file || this.importing()) return;
+    let envelope: { department?: string; replaceDepartment?: boolean; rows?: unknown[] };
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      envelope = Array.isArray(parsed) ? { rows: parsed } : parsed;
+    } catch {
+      this.toasts.error('Could not read that file — expected the catalogue JSON.');
+      return;
+    }
+    const rows = envelope.rows ?? [];
+    if (!envelope.department || rows.length === 0) {
+      this.toasts.error('The file must be a catalogue envelope: { department, rows: [...] }.');
+      return;
+    }
+    const replace = envelope.replaceDepartment === true;
+    const ok = await this.dialog.confirm({
+      title: `Import ${rows.length} rows into ${envelope.department}?`,
+      message: replace
+        ? `All EXISTING ${envelope.department} tests will be deactivated first, then the catalogue lands as the department's active set. Past orders keep their history.`
+        : `Rows are matched by test code / name and created or updated. Nothing is removed.`,
+      confirmLabel: replace ? 'Replace & import' : 'Import',
+      tone: replace ? 'danger' : 'primary',
+    } as Parameters<DialogService['confirm']>[0]);
+    if (!ok) return;
+    this.importing.set(true);
+    this.api.post<{ department: string; created: number; updated: number; deactivated: number; unresolvedChildCodes: string[] }>(
+      '/api/tests/import',
+      { department: envelope.department, rows, replaceDepartment: replace },
+    ).subscribe({
+      next: r => {
+        this.importing.set(false);
+        const bits = [`${r.created} created`, `${r.updated} updated`];
+        if (r.deactivated > 0) bits.push(`${r.deactivated} deactivated`);
+        this.toasts.success(`${r.department}: ${bits.join(' · ')}`);
+        if (r.unresolvedChildCodes?.length) {
+          this.toasts.warning(`${r.unresolvedChildCodes.length} profile member code(s) didn't resolve — check the profiles.`);
+        }
+        this.loadTests();
+      },
+      error: e => { this.importing.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'individual', label: 'Individual tests' },

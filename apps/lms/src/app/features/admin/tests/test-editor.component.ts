@@ -49,6 +49,8 @@ interface DraftTest {
   testCode: string;
   shortName: string;
   section: string;
+  /** Profile-group tag from the test catalogue (e.g. "LFT", "Lipid Profile"). */
+  profile: string;
   sampleVolumeMl: number | null;
   fastingRequired: boolean;
   methodology: string;
@@ -72,7 +74,7 @@ function makeEmptyDraft(): DraftTest {
     name: '', type: 'individual', flow: 'direct',
     price: 0, taxSlab: 0,
     departmentId: '', tatHours: 24, sampleType: '', tubeColor: '',
-    testCode: '', shortName: '', section: '',
+    testCode: '', shortName: '', section: '', profile: '',
     sampleVolumeMl: null, fastingRequired: false,
     methodology: '', resultType: '', unit: '', reportFormat: '',
     adultReferenceRange: '', criticalLow: null, criticalHigh: null,
@@ -278,6 +280,12 @@ function newFieldId(): string {
                   <input type="text" class="pf-input" [ngModel]="d.section"
                          (ngModelChange)="patch({ section: $event })"
                          placeholder="Sub-group under the department" /></div>
+                <div><label class="pf-label">Profile</label>
+                  <input type="text" class="pf-input" [ngModel]="d.profile"
+                         (ngModelChange)="patch({ profile: $event })"
+                         placeholder="e.g. LFT, Lipid Profile" /></div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Methodology</label>
                   <input type="text" class="pf-input" [ngModel]="d.methodology"
                          (ngModelChange)="patch({ methodology: $event })"
@@ -1289,6 +1297,7 @@ export class TestEditorComponent implements OnInit {
       departmentId: t.departmentId ?? '', tatHours: t.tatHours,
       sampleType: t.sampleType ?? '', tubeColor: t.tubeColor ?? '',
       testCode: t.testCode ?? '', shortName: t.shortName ?? '', section: t.section ?? '',
+      profile: t.profile ?? '',
       sampleVolumeMl: t.sampleVolumeMl ?? null, fastingRequired: t.fastingRequired ?? false,
       methodology: t.methodology ?? '', resultType: t.resultType ?? '',
       unit: t.unit ?? '', reportFormat: t.reportFormat ?? '',
@@ -1304,7 +1313,14 @@ export class TestEditorComponent implements OnInit {
     if (t.type === 'package') {
       try {
         const blob = JSON.parse(t.parameters ?? '{}');
-        this._packageItems.set(Array.isArray(blob.items) ? blob.items : []);
+        // Accept BOTH member shapes: canonical [{ testId }] (what the backend
+        // exploder + order-create parse) and the legacy plain-string array this
+        // editor used to write (which the backend read as ZERO members — so
+        // packages saved here never exploded at order time).
+        const items = Array.isArray(blob.items) ? blob.items : [];
+        this._packageItems.set(items
+          .map((it: unknown) => typeof it === 'string' ? it : ((it as { testId?: string })?.testId ?? ''))
+          .filter((id: string) => id.length > 0));
       } catch { this._packageItems.set([]); }
     } else {
       this._packageItems.set([]);
@@ -1533,8 +1549,12 @@ export class TestEditorComponent implements OnInit {
     // recognise the bundle without a separate column. The individual-
     // test parametersJson (fields/parameters) isn't relevant for
     // packages — overwrite it.
+    // Canonical member shape { items: [{ testId }] } — the ONLY shape the
+    // backend exploder (ParsePackageChildIds) and order-create's
+    // parsePackageMembers read. The previous plain-string array parsed as zero
+    // members, so editor-saved packages silently never exploded at order time.
     const parametersJson = d.type === 'package'
-      ? JSON.stringify({ items: this._packageItems() })
+      ? JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) })
       : (d.parametersJson || undefined);
 
     // Outsourcing: only individual tests can be outsourced. When a vendor is
@@ -1554,6 +1574,7 @@ export class TestEditorComponent implements OnInit {
       testCode: pkg ? undefined : d.testCode,
       shortName: pkg ? undefined : d.shortName,
       section: pkg ? undefined : d.section,
+      profile: pkg ? undefined : d.profile,
       sampleVolumeMl: pkg ? undefined : (d.sampleVolumeMl ?? undefined),
       fastingRequired: pkg ? undefined : d.fastingRequired,
       methodology: pkg ? undefined : d.methodology,

@@ -149,23 +149,6 @@ interface OrderGroup {
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
-        <button class="pf-scan__cam" (click)="openScanner()" title="Scan QR / barcode" aria-label="Scan QR or barcode">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="5" height="5" rx="1"/>
-            <rect x="16" y="3" width="5" height="5" rx="1"/>
-            <rect x="3" y="16" width="5" height="5" rx="1"/>
-            <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/>
-            <path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/>
-            <path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
-          </svg>
-          <span class="pf-scan__cam-txt">Scan</span>
-        </button>
-        <button class="pf-scan__btn" [disabled]="!scanValue() || searching()" (click)="runSearch()" aria-label="Find">
-          <svg class="pf-scan__find-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-          </svg>
-          <span class="pf-scan__btn-txt">{{ searching() ? 'Searching…' : 'Find' }}</span>
-        </button>
       </div>
 
       @if (scannerOpen()) {
@@ -475,10 +458,22 @@ interface OrderGroup {
                   <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
 
                   @if (s.tests.length > 0) {
-                    <p class="pf-tube__tests" [title]="testList(s)">
-                      {{ s.tests[0].test?.name ?? 'Test' }}<!--
-                      -->@if (s.tests.length > 1) { <span class="pf-tube__tests-more"> +{{ s.tests.length - 1 }}</span> }
-                    </p>
+                    <!-- Every test going into this tube, each with its draw
+                         volume when the test declares one, plus a per-tube
+                         total so the phlebotomist knows how much to pull. -->
+                    <ul class="pf-tube__testlist">
+                      @for (t of s.tests; track t.id) {
+                        <li class="pf-tube__test">
+                          <span class="pf-tube__test-name">{{ t.test?.name ?? t.name }}</span>
+                          @if (t.test?.sampleVolumeMl != null) {
+                            <span class="pf-tube__test-vol">{{ t.test?.sampleVolumeMl }} mL</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                    @if (drawVolume(s); as vol) {
+                      <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
+                    }
                   }
 
                   <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
@@ -704,38 +699,6 @@ interface OrderGroup {
       outline: none;
     }
     .pf-scan__input::placeholder { color: var(--text-muted); font-weight: 400; letter-spacing: 0.06em; }
-    .pf-scan__cam {
-      align-self: center;
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(139, 92, 246, 0.1);
-      color: #a78bfa;
-      font-weight: 600; font-size: 12.5px;
-      padding: 0 14px; height: 42px;
-      border: 1px solid rgba(139, 92, 246, 0.38);
-      border-radius: 12px;
-      cursor: pointer;
-      transition: background 0.15s ease, transform 0.1s ease;
-    }
-    .pf-scan__cam:hover { background: rgba(139, 92, 246, 0.18); }
-    .pf-scan__cam:active { transform: scale(0.98); }
-    .pf-scan__cam:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.7); outline-offset: 2px; }
-
-    .pf-scan__btn {
-      align-self: center;
-      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-      color: #fff;
-      font-weight: 700; font-size: 13.5px;
-      padding: 0 22px; height: 42px; min-width: 96px;
-      border: 0; border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
-      transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.15s ease;
-    }
-    .pf-scan__btn:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 10px 24px rgba(124, 58, 237, 0.5); }
-    .pf-scan__find-ic { display: none; }
-    .pf-scan__btn:active:not(:disabled) { transform: scale(0.98); }
-    .pf-scan__btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
     .pf-sc__section { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted);
@@ -1067,24 +1030,42 @@ interface OrderGroup {
       text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
       opacity: 0.85;
     }
-    .pf-tube__tests {
-      margin: 10px 0 0;
+    /* Per-tube test list: one row per test, name on the left, its draw
+       volume right-aligned in mono so the numbers line up down the tube. */
+    .pf-tube__testlist {
+      list-style: none;
+      margin: 10px 0 0; padding: 0;
+      width: 100%;
+      display: flex; flex-direction: column;
+      gap: 3px;
+    }
+    .pf-tube__test {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px;
       font-size: 12.5px;
       color: var(--text-secondary);
-      text-align: center;
-      max-width: 100%;
+    }
+    .pf-tube__test-name {
+      min-width: 0; text-align: left;
       overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     }
-    .pf-tube__tests-more {
-      display: inline-block;
-      margin-left: 4px;
-      padding: 1px 7px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--glass-border);
+    .pf-tube__test-vol {
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 600;
       color: var(--text-muted);
-      font-size: 10.5px;
-      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    /* Total draw pill — blood-red so it reads as "this much out of the arm". */
+    .pf-tube__draw {
+      margin: 6px 0 0;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.05em;
+      color: #fca5a5;
+      background: rgba(220, 38, 38, 0.12);
+      border: 1px solid rgba(220, 38, 38, 0.3);
     }
     .pf-tube__code {
       margin: 4px 0 0;
@@ -1282,20 +1263,12 @@ interface OrderGroup {
         letter-spacing: 0.14em;
         line-height: 1.4;
       }
-      /* Test name may ellipsis to a single line if long. */
-      .pf-tube__tests  {
-        margin: 4px 0 0;
-        font-size: 12px;
-        text-align: left;
-        max-width: 100%;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-      }
-      /* Barcode is decorative on the compact card — the cap colour and
-         label already disambiguate. Hide it to give the action stamp
-         room and keep each tile under ~90px tall. */
-      .pf-tube__code { display: none; }
+      /* Test rows tighten up; each name may ellipsis to a single line. */
+      .pf-tube__testlist { margin: 4px 0 0; gap: 2px; }
+      .pf-tube__test { font-size: 12px; }
+      /* Sample barcode is the tube's identity (it replaced the order #) —
+         keep it visible on the compact card, just a notch smaller. */
+      .pf-tube__code { font-size: 10px; margin-top: 3px; }
 
       /* Action stamp: small teal pill on its own line at the end of the
          body. It used to be position:absolute, but .pf-tube__body is
@@ -1368,7 +1341,10 @@ interface OrderGroup {
 
       .pf-tube__label { font-size: 12.5px; }
       .pf-tube__dept  { font-size: 8px; letter-spacing: 0.16em; }
-      .pf-tube__tests { margin: 3px 0 0; font-size: 11px; }
+      .pf-tube__testlist { margin: 3px 0 0; gap: 2px; }
+      .pf-tube__test { font-size: 11px; }
+      .pf-tube__test-vol { font-size: 9.5px; }
+      .pf-tube__draw  { margin: 4px 0 0; font-size: 10px; padding: 2px 8px; }
       .pf-tube__code  { font-size: 9.5px; }
       .pf-tube__stamp { padding: 4px 9px; font-size: 9.5px; }
 
@@ -1426,9 +1402,6 @@ interface OrderGroup {
       background: linear-gradient(180deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.06));
       border-color: rgba(124, 58, 237, 0.4);
       box-shadow: 0 8px 24px rgba(139, 92, 246, 0.08);
-    }
-    :host-context([data-theme="light"]) .pf-scan__btn {
-      color: #fff;
     }
 
     :host-context([data-theme="light"]) .pf-drawer {
@@ -1502,9 +1475,10 @@ interface OrderGroup {
     :host-context([data-theme="light"]) .pf-tube__code {
       color: #64748b;
     }
-    :host-context([data-theme="light"]) .pf-tube__tests-more {
-      background: rgba(15, 23, 42, 0.05);
-      border-color: rgba(15, 23, 42, 0.1);
+    :host-context([data-theme="light"]) .pf-tube__draw {
+      color: #b91c1c;
+      background: rgba(220, 38, 38, 0.08);
+      border-color: rgba(220, 38, 38, 0.28);
     }
 
     :host-context([data-theme="light"]) .pf-drawer__done-stamp {
@@ -1560,37 +1534,18 @@ interface OrderGroup {
     /* ─── Cross-platform additive overrides (ADD ONLY — desktop ≥1280px
        and the existing rules above are untouched) ───────────────────── */
 
-    /* Phone: the scan strip packs an icon button, the input body, a "Scan"
-       button and a "Find" button into one non-wrapping flex row. Below
-       ~440px those four children fight for room and the input collapses or
-       the action buttons overflow the card edge. Re-flow into two rows:
-       icon + input on top, the two actions stretched underneath as full
-       44px+ tap targets. Desktop/iPad row layout is unaffected. */
+    /* Phone: the scan strip is the icon button + the input body in one row.
+       Tighten padding a touch; typing + Enter (or the icon's camera scanner)
+       does the lookup. Desktop/iPad row layout is unaffected. */
     @media (max-width: 640px) {
       .pf-scan {
-        flex-wrap: wrap;
         gap: 12px;
         padding: 14px;
       }
       .pf-scan__icon-btn { align-self: center; }
       .pf-scan__body { flex: 1 1 140px; }
-      /* Phone: collapse Scan + Find to icon-only squares (>=44px tap target). */
-      .pf-scan__cam,
-      .pf-scan__btn {
-        flex: 0 0 auto;
-        align-self: center;
-        width: 46px; min-width: 46px; height: 46px; padding: 0;
-        justify-content: center;
-      }
-      .pf-scan__cam-txt, .pf-scan__btn-txt { display: none; }
-      .pf-scan__find-ic { display: inline-flex; }
       /* Header Refresh → icon-only on phones. */
       .pf-refresh-txt { display: none; }
-      /* Push the two actions onto their own row below the input. */
-      .pf-scan__cam { order: 2; }
-      .pf-scan__btn { order: 3; }
-      .pf-scan__icon-btn { order: 0; }
-      .pf-scan__body { order: 1; }
 
       /* Loading stub: use dynamic viewport height so it doesn't jump when
          mobile browser chrome shows/hides. */
@@ -1861,7 +1816,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   protected readonly scanValue = signal('');
-  protected readonly searching = signal(false);
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
   private readonly _openOrderId = signal<string | null>(null);
@@ -1896,7 +1850,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         g = {
           orderId: s.orderId,
           patientName: formatPatientInfo(p),
-          patientMeta: `Order #${s.orderId.slice(0, 8)}`,
+          patientMeta: '',
           createdAt: s.createdAt,
           samples: [],
           totalVials: 0,
@@ -1908,8 +1862,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       g.totalVials++;
       if (s.status !== 'pending') g.collected++;
     }
-    return Array.from(byOrder.values())
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    // Meta line = the SAMPLE barcode(s), not the order number — the tube in
+    // hand is what the collector matches against. Multi-tube orders show the
+    // first barcode + a count; each tube's own barcode is on its card/row.
+    const list = Array.from(byOrder.values());
+    for (const g of list) {
+      const codes = g.samples.map(x => x.barcode).filter((b): b is string => !!b);
+      g.patientMeta = codes.length === 0 ? '—'
+        : codes.length === 1 ? codes[0]
+        : `${codes[0]} +${codes.length - 1}`;
+    }
+    return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
 
   /** Same as groups() but filtered by the live search box. Empty input shows all. */
@@ -1982,8 +1945,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
-  testList(s: OrderSample): string {
-    return s.tests.map(t => t.test?.name ?? 'Test').join(', ');
+  /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
+   *  skipping tests that don't declare one. Null when NO test declares a
+   *  volume, so the "Draw ~N mL" pill is omitted rather than lying with 0. */
+  drawVolume(s: OrderSample): number | null {
+    let sum = 0;
+    let any = false;
+    for (const t of s.tests) {
+      const v = t.test?.sampleVolumeMl;
+      if (v != null) { sum += v; any = true; }
+    }
+    return any ? Math.round(sum * 10) / 10 : null;
   }
 
   openOrder(id: string) { this._openOrderId.set(id); }
@@ -2053,7 +2025,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   /**
    * Free-text search: live-filters the local pending list while typing,
-   * then on Enter (or Find click) does an exact-barcode lookup if the input
+   * then on Enter does an exact-barcode lookup if the input
    * looks like a code (e.g. starts with "PF-"). Patient name / phone / order
    * id matches are handled in-memory against `groups()` since the backend
    * already streams every pending order to this screen.
@@ -2104,17 +2076,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   findByBarcode() {
     const code = this.scanValue().trim();
     if (!code) return;
-    this.searching.set(true);
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
       next: s => {
-        this.searching.set(false);
         if (s) {
           this._openOrderId.set(s.orderId);
           this.scanValue.set('');
         }
       },
       error: () => {
-        this.searching.set(false);
         this.toasts.error('No sample with that barcode');
       }
     });

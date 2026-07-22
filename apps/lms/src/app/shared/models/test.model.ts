@@ -11,6 +11,8 @@ export interface Test {
   shortName?: string | null;
   /** Sub-grouping under the department. */
   section?: string | null;
+  /** Profile group tag (e.g. 'LFT', 'Lipid Profile') from the test catalogue. */
+  profile?: string | null;
   description?: string;
   type: 'individual' | 'package';
   flow: 'direct' | 'approval';

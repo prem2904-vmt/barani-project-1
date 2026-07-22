@@ -511,6 +511,13 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
 
+      // Finance — daily statement + day/shift account closure.
+      {
+        path: 'finance/daily',
+        canActivate: [permissionGuard(['collect_payment', 'create_bill', 'manage_tenant'])],
+        loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
+      },
+
       // 403
       {
         path: '403',
