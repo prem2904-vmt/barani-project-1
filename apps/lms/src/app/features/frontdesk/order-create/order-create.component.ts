@@ -596,6 +596,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.api.get<Order>(`/api/orders/${editOrderId}`).subscribe({
         next: o => {
           if (o?.patient) this._patient.set(o.patient);
+          if (o) this.extractCollectedTestIds(o);
           this.preselectFromOrder(o as unknown as HistoryRow, true);
         },
         error: () => this.toasts.error('Could not load order')
@@ -709,6 +710,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  than creating a new one. Drives the submit button + PATCH-vs-POST. */
   readonly editOrderId = signal<string | null>(null);
 
+  /** Test IDs whose samples have already been collected on the order being edited.
+   *  These tests cannot be deleted/removed from the cart during order modification. */
+  readonly collectedTestIds = signal<Set<string>>(new Set());
+
+  isCollected(testId: string): boolean {
+    return this.collectedTestIds().has(testId);
+  }
+
+  private extractCollectedTestIds(o: Order) {
+    const collected = new Set<string>();
+    for (const s of (o.samples ?? []) as unknown as Array<{ status?: string; collectedAt?: string; collectedBy?: string; tests?: Array<{ testId?: string; packageTestId?: string; status?: string; test?: { id?: string } }> }>) {
+      const isSampleCollected = (!!s.status && s.status !== 'pending' && s.status !== 'requested') || !!s.collectedAt || !!s.collectedBy;
+      for (const t of s.tests ?? []) {
+        const isTestCollected = isSampleCollected || (!!t.status && t.status !== 'pending' && t.status !== 'requested');
+        if (isTestCollected) {
+          const testId = t.testId || t.test?.id;
+          if (testId) collected.add(testId);
+          if (t.packageTestId) collected.add(t.packageTestId);
+        }
+      }
+    }
+    this.collectedTestIds.set(collected);
+  }
+
   private preselectFromOrder(prior: HistoryRow, isEdit = false) {
     const want = new Set<string>();
     for (const s of prior.samples ?? []) {
@@ -723,10 +748,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     // Intersect with the catalog we just loaded so removed tests don't
-    // ride along. The catalog list arrives async — re-run this once
-    // _tests fills if it isn't there yet.
+    // ride along (retaining any tests with collected samples). The catalog
+    // list arrives async — re-run this once _tests fills if it isn't there yet.
     const apply = () => {
-      const ids = Array.from(want).filter(id => this._tests().some(x => x.id === id));
+      const collected = this.collectedTestIds();
+      const ids = Array.from(want).filter(id => collected.has(id) || this._tests().some(x => x.id === id));
       this._selected.set(ids);
       const date = new Date(prior.createdAt);
       const human = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
@@ -774,6 +800,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Swap the matching individual tests out of the cart and add the
    *  package in their place. The receptionist accepted the suggestion. */
   applyPackage(s: PackageSuggestion) {
+    const droppedCollected = s.coveredIds.filter(id => this.isCollected(id));
+    if (droppedCollected.length > 0) {
+      this.toasts.warning('Cannot switch to package — some tests already have collected samples');
+      return;
+    }
     this._selected.update(cur => {
       const dropped = new Set(s.coveredIds);
       const next = cur.filter(id => !dropped.has(id));
@@ -785,6 +816,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
   toggleTest(t: Test) {
+    if (this.isSelected(t.id) && this.isCollected(t.id)) {
+      this.toasts.warning(`Cannot remove ${t.name} — sample has already been collected`);
+      return;
+    }
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
     if (this.query().trim() !== '') {
       this.setQuery('');
@@ -792,14 +827,37 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
   removeTest(id: string) {
+    if (this.isCollected(id)) {
+      const t = this.findTest(id);
+      this.toasts.warning(`Cannot remove ${t?.name ?? 'test'} — sample has already been collected`);
+      return;
+    }
     this._selected.update(cur => cur.filter(x => x !== id));
   }
-  clearCart() { this._selected.set([]); }
+  clearCart() {
+    const collected = this.collectedTestIds();
+    if (collected.size > 0) {
+      const kept = this._selected().filter(id => collected.has(id));
+      const removedCount = this._selected().length - kept.length;
+      if (removedCount > 0) {
+        this._selected.set(kept);
+        this.toasts.info('Cleared uncollected tests. Tests with collected samples were retained.');
+      } else {
+        this.toasts.warning('Cannot clear cart — all tests have collected samples');
+      }
+      return;
+    }
+    this._selected.set([]);
+  }
 
   /** Click toggles a quick-package: add if missing, remove if already in cart.
    * Quietly mutates selection without flooding the toast stack — the cart
    * sidebar is the source of truth and visually reflects the change. */
   togglePackage(pkg: Test) {
+    if (this.isSelected(pkg.id) && this.isCollected(pkg.id)) {
+      this.toasts.warning(`Cannot remove ${pkg.name} — sample has already been collected`);
+      return;
+    }
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
@@ -1164,6 +1222,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // side and we route to billing to collect-the-difference / refund.
     const editId = this.editOrderId();
     if (editId) {
+      // Ensure all tests with collected samples remain in the selection payload
+      const collected = this.collectedTestIds();
+      if (collected.size > 0) {
+        const cur = new Set(this._selected());
+        let readded = false;
+        for (const cid of collected) {
+          if (!cur.has(cid)) {
+            cur.add(cid);
+            readded = true;
+          }
+        }
+        if (readded) {
+          this._selected.set(Array.from(cur));
+        }
+      }
+
       this._saving.set(true);
       this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
         testIds: this._selected(), reason: 'reception edit'

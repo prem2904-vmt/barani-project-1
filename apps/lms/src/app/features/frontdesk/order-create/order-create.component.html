@@ -534,20 +534,39 @@
           }
           @for (id of selected(); track id) {
             @if (findTest(id); as t) {
-              <li class="pf-cart-row">
+              <li class="pf-cart-row" [class.opacity-90]="isCollected(t.id)">
                 <div class="min-w-0 flex-1">
-                  <p class="pf-cart-name">{{ t.name }}</p>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <p class="pf-cart-name">{{ t.name }}</p>
+                    @if (isCollected(t.id)) {
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded border border-emerald-500/25" title="Sample already collected — cannot remove">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                        Sample collected
+                      </span>
+                    }
+                  </div>
                   @if (t.department?.name) {
                     <p class="pf-cart-meta">{{ t.department?.name }}</p>
                   }
                 </div>
                 <span class="pf-cart-amount">{{ t.price | inr }}</span>
                  @if (!paidOrderId() && !isReadOnly()) {
-                  <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M6 6l12 12M18 6 6 18"/>
-                    </svg>
-                  </button>
+                  @if (isCollected(t.id)) {
+                    <span class="inline-flex items-center justify-center w-7 h-7 text-amber-500/80 dark:text-amber-400/80" title="Sample collected — test locked">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    </span>
+                  } @else {
+                    <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press" aria-label="Remove">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 6l12 12M18 6 6 18"/>
+                      </svg>
+                    </button>
+                  }
                 }
               </li>
             }
