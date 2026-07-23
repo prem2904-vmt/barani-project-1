@@ -2,9 +2,6 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { DialogService } from '../../../core/services/dialog.service';
-import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { Test } from '../../../shared/models/test.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -46,15 +43,6 @@ const UNASSIGNED = 'Unassigned';
         title="Tests"
         subtitle="Master test catalog and packages, grouped by department.">
         @if (tab() !== 'pricing') {
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="importInput.click()">
-            <span icon-left aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3v12M7 10l5 5 5-5"/>
-                <path d="M4 21h16"/>
-              </svg>
-            </span>
-            {{ importing() ? 'Importing…' : 'Import' }}
-          </pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openCreate()">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -66,9 +54,6 @@ const UNASSIGNED = 'Unassigned';
           </pf-touch-btn>
         }
       </pf-screen-header>
-      <!-- Hidden picker for the catalogue import (.json envelope or CSV). -->
-      <input #importInput type="file" accept=".json,.csv" class="hidden" (change)="onImportFile($event)" />
-
       <div class="mb-4">
         <pf-segmented
           [options]="tabOptions"
@@ -163,12 +148,25 @@ const UNASSIGNED = 'Unassigned';
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
+                      @if (t.testCode) {
+                        <span class="pf-test-code">{{ t.testCode }}</span>
+                      }
                       <p class="font-semibold text-[14px] truncate" style="color: var(--text-primary);">{{ t.name }}</p>
                       @if (!t.isActive) { <pf-chip tone="default" size="sm">inactive</pf-chip> }
                     </div>
                     <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">{{ packageItemCount(t) }} tests</p>
                   </div>
                 </div>
+                @if (packageMembers(t).length > 0) {
+                  <ul class="pf-pkg-members">
+                    @for (m of packageMembers(t); track m.code) {
+                      <li class="pf-pkg-member">
+                        <span class="pf-test-code pf-test-code--sm">{{ m.code }}</span>
+                        <span class="pf-pkg-member__name">{{ m.name }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
                 <div class="mt-auto flex items-center justify-between pt-1">
                   <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ t.price | inr }}</p>
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="openEdit(t)">Edit</pf-touch-btn>
@@ -193,6 +191,9 @@ const UNASSIGNED = 'Unassigned';
 
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
+                    @if (t.testCode) {
+                      <span class="pf-test-code">{{ t.testCode }}</span>
+                    }
                     <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ t.name }}</p>
                     @if (tab() === 'individual') {
                       @if (t.flow === 'direct') {
@@ -243,6 +244,49 @@ const UNASSIGNED = 'Unassigned';
       border: 1px solid rgba(168, 85, 247, 0.3);
       color: #c4b5fd;
       flex-shrink: 0;
+    }
+
+    /* Test code / ID pill — monospace so BIO00081 reads cleanly. */
+    .pf-test-code {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #c4b5fd;
+      background: rgba(124, 58, 237, 0.14);
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      border-radius: 6px;
+      padding: 1px 6px;
+      flex-shrink: 0;
+    }
+    .pf-test-code--sm { font-size: 10px; padding: 0 5px; }
+
+    /* Profile/package member list — code + test name, one per line. */
+    .pf-pkg-members {
+      margin: 6px 0 2px;
+      padding: 8px 10px;
+      list-style: none;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 168px;
+      overflow-y: auto;
+    }
+    .pf-pkg-member {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .pf-pkg-member__name {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* ── Cross-platform overrides — ADDITIVE only, below desktop / touch.
@@ -310,64 +354,6 @@ const UNASSIGNED = 'Unassigned';
 export class TestsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
-  private readonly toasts = inject(ToastService);
-  private readonly dialog = inject(DialogService);
-
-  /** Catalogue import in flight (disables the Import button label). */
-  readonly importing = signal(false);
-
-  /** Import a catalogue file. Accepts the JSON envelope
-   *  ({ department, replaceDepartment, rows: [...] }) produced from the
-   *  catalogue spreadsheet, or a bare JSON array of rows (department is then
-   *  asked via the envelope being absent → rejected with a hint). CSV support
-   *  intentionally minimal: JSON is the canonical interchange. */
-  async onImportFile(ev: Event) {
-    const inputEl = ev.target as HTMLInputElement;
-    const file = inputEl.files?.[0];
-    inputEl.value = '';   // allow re-picking the same file
-    if (!file || this.importing()) return;
-    let envelope: { department?: string; replaceDepartment?: boolean; rows?: unknown[] };
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      envelope = Array.isArray(parsed) ? { rows: parsed } : parsed;
-    } catch {
-      this.toasts.error('Could not read that file — expected the catalogue JSON.');
-      return;
-    }
-    const rows = envelope.rows ?? [];
-    if (!envelope.department || rows.length === 0) {
-      this.toasts.error('The file must be a catalogue envelope: { department, rows: [...] }.');
-      return;
-    }
-    const replace = envelope.replaceDepartment === true;
-    const ok = await this.dialog.confirm({
-      title: `Import ${rows.length} rows into ${envelope.department}?`,
-      message: replace
-        ? `All EXISTING ${envelope.department} tests will be deactivated first, then the catalogue lands as the department's active set. Past orders keep their history.`
-        : `Rows are matched by test code / name and created or updated. Nothing is removed.`,
-      confirmLabel: replace ? 'Replace & import' : 'Import',
-      tone: replace ? 'danger' : 'primary',
-    } as Parameters<DialogService['confirm']>[0]);
-    if (!ok) return;
-    this.importing.set(true);
-    this.api.post<{ department: string; created: number; updated: number; deactivated: number; unresolvedChildCodes: string[] }>(
-      '/api/tests/import',
-      { department: envelope.department, rows, replaceDepartment: replace },
-    ).subscribe({
-      next: r => {
-        this.importing.set(false);
-        const bits = [`${r.created} created`, `${r.updated} updated`];
-        if (r.deactivated > 0) bits.push(`${r.deactivated} deactivated`);
-        this.toasts.success(`${r.department}: ${bits.join(' · ')}`);
-        if (r.unresolvedChildCodes?.length) {
-          this.toasts.warning(`${r.unresolvedChildCodes.length} profile member code(s) didn't resolve — check the profiles.`);
-        }
-        this.loadTests();
-      },
-      error: e => { this.importing.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'individual', label: 'Individual tests' },
@@ -442,6 +428,26 @@ export class TestsComponent implements OnInit {
       const blob = JSON.parse(t.parameters ?? '{}');
       return (blob.items?.length as number) ?? 0;
     } catch { return 0; }
+  }
+
+  /** Member tests of a package/profile, resolved to {code, name} against the
+   *  loaded catalogue. Accepts BOTH member shapes — canonical [{testId}] and
+   *  the legacy plain-string array — so profiles created either way expand. */
+  packageMembers(t: Test): Array<{ code: string; name: string }> {
+    let ids: string[] = [];
+    try {
+      const items = JSON.parse(t.parameters ?? '{}').items;
+      if (Array.isArray(items)) {
+        ids = items
+          .map((it: unknown) => typeof it === 'string' ? it : (it as { testId?: string })?.testId ?? '')
+          .filter((id: string) => !!id);
+      }
+    } catch { /* malformed — no members */ }
+    const byId = new Map(this._tests().map(x => [x.id, x]));
+    return ids.map(id => {
+      const m = byId.get(id);
+      return { code: m?.testCode ?? '—', name: m?.name ?? 'Unknown test' };
+    });
   }
 
   private loadTests() {

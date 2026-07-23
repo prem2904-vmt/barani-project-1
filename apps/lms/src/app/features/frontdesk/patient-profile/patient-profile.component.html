@@ -2,11 +2,13 @@
 
   @if (patient(); as p) {
 
-    <!-- Responsive Grid Layout -->
-    <div class="pf-pp__grid grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <!-- Responsive Grid Layout. The 2-column split holds off until xl (1280px)
+         so iPad-landscape (1024–1279) keeps the roomy single-column stack
+         instead of cramming the cards into 4/8 tracks. -->
+    <div class="pf-pp__grid grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
 
-      <!-- Left Column: Patient Quick Info & Vitals (lg:col-span-4) -->
-      <div class="pf-pp__col pf-pp__col--left lg:col-span-4 flex flex-col gap-6 w-full">
+      <!-- Left Column: Patient Quick Info & Vitals (xl:col-span-4) -->
+      <div class="pf-pp__col pf-pp__col--left xl:col-span-4 flex flex-col gap-6 w-full">
 
         <!-- Demographics Card -->
         <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-5">
@@ -184,7 +186,7 @@
       </div>
 
       <!-- Right Column: Tabs Navigation and Dynamic Views (lg:col-span-8) -->
-      <div class="pf-pp__col pf-pp__col--right lg:col-span-8 flex flex-col gap-6 w-full">
+      <div class="pf-pp__col pf-pp__col--right xl:col-span-8 flex flex-col gap-6 w-full">
 
         <!-- Horizontal Tab Bar (Horizontally scrollable on mobile/tablet) -->
         <div class="pf-pp__tabbar flex items-center gap-1.5 p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-2xl overflow-x-auto scrollbar-none w-full select-none">
@@ -1285,8 +1287,8 @@
     }
   } @else if (loading()) {
     <!-- Skeleton Loaders -->
-    <div class="pf-pp__fill grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      <div class="lg:col-span-4 flex flex-col gap-6 w-full">
+    <div class="pf-pp__fill grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      <div class="xl:col-span-4 flex flex-col gap-6 w-full">
         <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
           <div class="flex items-center gap-4">
             <pf-skeleton variant="circle" width="64px" height="64px"></pf-skeleton>
@@ -1310,7 +1312,7 @@
           </div>
         </div>
       </div>
-      <div class="lg:col-span-8 flex flex-col gap-6 w-full">
+      <div class="xl:col-span-8 flex flex-col gap-6 w-full">
         <pf-skeleton variant="block" height="50px"></pf-skeleton>
         <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
           <pf-skeleton variant="line" width="30%"></pf-skeleton>

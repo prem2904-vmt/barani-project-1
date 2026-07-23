@@ -48,8 +48,10 @@
              past the right gutter on wide screens. -->
         <div class="pf-col space-y-4 min-w-0">
 
-          <!-- Controls row: Patient search/info, Referring Hospital, Referring Doctor -->
-          <div class="pf-controls-row">
+          <!-- Controls row: Patient search/info, Referring Hospital, Referring Doctor.
+               On tablet/phone the two referring fields collapse behind the
+               building-icon toggle (pf-controls-row--refopen reveals them). -->
+          <div class="pf-controls-row" [class.pf-controls-row--refopen]="refFieldsOpen()">
             <!-- Patient Search / Patient Info -->
             <div class="pf-controls-row__patient">
               @if (patient(); as p) {
@@ -89,6 +91,23 @@
                 ></pf-patient-search>
               }
             </div>
+
+            <!-- Referring toggle — tablet/phone only (hidden lg+ where all
+                 three fields fit). Flips the row into "referring" mode so the
+                 hospital/doctor inputs get full width to type into. -->
+            <button type="button" class="pf-ref-toggle lg:hidden"
+                    [class.pf-ref-toggle--on]="refFieldsOpen()"
+                    [attr.aria-pressed]="refFieldsOpen()"
+                    (click)="toggleRefFields()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/>
+              </svg>
+              <span>{{ refFieldsOpen() ? 'Back to patient' : 'Referring hospital / doctor' }}</span>
+              @if (!refFieldsOpen() && (refHospitalName() || refDoctorName())) {
+                <span class="pf-ref-toggle__dot" aria-hidden="true"></span>
+              }
+            </button>
 
             <!-- Referring Hospital -->
             <div class="pf-refrow__field pf-refrow__field--hospital">

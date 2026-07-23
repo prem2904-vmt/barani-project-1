@@ -29,9 +29,10 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Phone / iPad-portrait (single column, below Tailwind lg=1024): the whole
-   stacked column scrolls as ONE region — no double scrollbars. */
-@media (max-width: 1023.98px) {
+/* Phone + iPad (single column, below Tailwind xl=1280): the whole stacked
+   column scrolls as ONE region — no double scrollbars. Covers iPad-landscape
+   too now, which stays single-column for breathing room. */
+@media (max-width: 1279.98px) {
   .pf-pp__grid {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -40,10 +41,9 @@
   }
 }
 
-/* Desktop / iPad-landscape (2-col grid at lg+): the grid itself does not
-   scroll; each column scrolls independently inside its own min-height:0
-   track. */
-@media (min-width: 1024px) {
+/* Desktop only (2-col grid at xl+): the grid itself does not scroll; each
+   column scrolls independently inside its own min-height:0 track. */
+@media (min-width: 1280px) {
   .pf-pp__grid {
     overflow: hidden;
     /* Stretch both columns to the grid's full height so each can own its

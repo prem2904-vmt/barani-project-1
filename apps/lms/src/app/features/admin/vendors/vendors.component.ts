@@ -25,6 +25,11 @@ interface VendorRow {
   totalCredit: number;
   usedCredit: number;
   balance: number;
+  /** What the partner OWES (usedCredit − totalCredit). Headline in the
+   *  accruing-tab model. */
+  outstanding: number;
+  /** Optional outstanding alert threshold; crossing it fires a bell. */
+  notifyThreshold?: number | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -50,11 +55,12 @@ interface NewVendorDraft {
   gstin: string;
   address: string;
   openingCredit: string;
+  notifyThreshold: string;
 }
 
 const EMPTY_DRAFT: NewVendorDraft = {
   name: '', code: '', contactName: '', contactPhone: '', contactEmail: '',
-  gstin: '', address: '', openingCredit: ''
+  gstin: '', address: '', openingCredit: '', notifyThreshold: ''
 };
 
 @Component({
@@ -103,12 +109,20 @@ const EMPTY_DRAFT: NewVendorDraft = {
             <div class="sm:col-span-2"><label class="pf-label">Address</label>
               <input type="text" class="pf-input" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/></div>
             <div>
-              <label class="pf-label">Opening credit (₹)</label>
+              <label class="pf-label">Opening settlement (₹)</label>
               <input type="number" min="0" step="1" class="pf-input"
                      [ngModel]="draft().openingCredit"
                      (ngModelChange)="patchDraft({ openingCredit: $event })"
                      placeholder="0"/>
-              <p class="text-[11px] text-[var(--text-tertiary)] mt-1">Optional — top up later if you skip this.</p>
+              <p class="text-[11px] text-[var(--text-tertiary)] mt-1">Optional — a prepayment that offsets the tab.</p>
+            </div>
+            <div>
+              <label class="pf-label">Alert threshold (₹)</label>
+              <input type="number" min="0" step="1" class="pf-input"
+                     [ngModel]="draft().notifyThreshold"
+                     (ngModelChange)="patchDraft({ notifyThreshold: $event })"
+                     placeholder="No limit"/>
+              <p class="text-[11px] text-[var(--text-tertiary)] mt-1">Notify when the outstanding crosses this. Blank = unlimited.</p>
             </div>
           </div>
           <div class="mt-4 flex gap-2 justify-end">
@@ -155,16 +169,22 @@ const EMPTY_DRAFT: NewVendorDraft = {
                 </div>
 
                 <div class="pf-vendor__balance">
-                  <p class="pf-eyebrow">Balance</p>
-                  <p class="pf-vendor__bal-amt" [class.pf-vendor__bal-amt--low]="v.balance <= 0">
-                    {{ v.balance | inr }}
+                  <p class="pf-eyebrow">Outstanding</p>
+                  <p class="pf-vendor__bal-amt" [class.pf-vendor__bal-amt--low]="v.outstanding > 0"
+                     [class.pf-vendor__bal-amt--over]="overThreshold(v)">
+                    {{ v.outstanding | inr }}
                   </p>
                   <p class="pf-vendor__meta">
-                    {{ v.usedCredit | inr }} used of {{ v.totalCredit | inr }}
+                    {{ v.usedCredit | inr }} charged · {{ v.totalCredit | inr }} settled
                   </p>
-                  <div class="pf-vendor__bar">
-                    <span [style.width.%]="usagePct(v)"></span>
-                  </div>
+                  @if (v.notifyThreshold) {
+                    <p class="pf-vendor__meta" [class.pf-vendor__meta--over]="overThreshold(v)">
+                      Alert at {{ v.notifyThreshold | inr }}{{ overThreshold(v) ? ' · exceeded' : '' }}
+                    </p>
+                    <div class="pf-vendor__bar">
+                      <span [style.width.%]="thresholdPct(v)"></span>
+                    </div>
+                  }
                 </div>
               </div>
 
@@ -339,7 +359,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
       color: #6ee7b7;
       font-variant-numeric: tabular-nums;
     }
-    .pf-vendor__bal-amt--low { color: #fca5a5; }
+    /* Outstanding > 0 = they owe (amber); over the alert threshold = red;
+       fully settled / in credit stays green (default). */
+    .pf-vendor__bal-amt--low { color: #fcd34d; }
+    .pf-vendor__bal-amt--over { color: #fca5a5; }
+    .pf-vendor__meta--over { color: #fca5a5; }
     .pf-vendor__bar {
       margin-top: 6px; height: 4px;
       background: var(--glass-border); border-radius: 9999px; overflow: hidden;
@@ -556,6 +580,7 @@ export class VendorsComponent implements OnInit {
     this.clearFieldErrors();
     this.saving.set(true);
     const opening = parseInt(d.openingCredit || '0', 10);
+    const threshold = parseInt(d.notifyThreshold || '0', 10);
     this.api.post<VendorRow>('/api/vendors', {
       name: d.name.trim(),
       code: d.code.trim() || null,
@@ -564,7 +589,8 @@ export class VendorsComponent implements OnInit {
       contactEmail: d.contactEmail.trim() || null,
       gstin: d.gstin.trim() || null,
       address: d.address.trim() || null,
-      openingCredit: Number.isFinite(opening) && opening > 0 ? opening : null
+      openingCredit: Number.isFinite(opening) && opening > 0 ? opening : null,
+      notifyThreshold: Number.isFinite(threshold) && threshold > 0 ? threshold : null
     }).subscribe({
       next: () => {
         this.saving.set(false);
@@ -703,9 +729,14 @@ export class VendorsComponent implements OnInit {
     });
   }
 
-  protected usagePct(v: VendorRow): number {
-    if (v.totalCredit <= 0) return 0;
-    return Math.min(100, Math.round((v.usedCredit / v.totalCredit) * 100));
+  /** Is the outstanding at/over the alert threshold? */
+  protected overThreshold(v: VendorRow): boolean {
+    return !!v.notifyThreshold && v.outstanding >= v.notifyThreshold;
+  }
+  /** Outstanding as a % of the alert threshold (bar fill). 0 when no threshold. */
+  protected thresholdPct(v: VendorRow): number {
+    if (!v.notifyThreshold || v.notifyThreshold <= 0) return 0;
+    return Math.min(100, Math.round((v.outstanding / v.notifyThreshold) * 100));
   }
 
   protected absMoney(n: number): number { return Math.abs(n); }

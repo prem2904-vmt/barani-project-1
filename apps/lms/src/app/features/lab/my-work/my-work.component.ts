@@ -20,7 +20,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
-import { OrderTest } from '../../../shared/models/order.model';
+import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
@@ -627,7 +627,7 @@ const COUNTERS: CounterSpec[] = [
                           <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Re-enter</pf-touch-btn>
                         }
                         @default {
-                          @if (t.status === 'pending') {
+                          @if (t.status === 'pending' && !scanVerified(t)) {
                             <pf-touch-btn variant="secondary" size="sm" (pressed)="startPick(t)">Pick up · scan</pf-touch-btn>
                           } @else {
                             <pf-touch-btn variant="primary" size="sm" (pressed)="startPick(t)">Enter result</pf-touch-btn>
@@ -2346,7 +2346,23 @@ export class MyWorkComponent implements OnInit {
   readonly scanTarget = this._scanTarget.asReadonly();
   readonly scanExpected = computed(() => this._scanTarget()?.subOrder?.barcode ?? '');
 
+  /** One scan per tube per tech: true when THIS tech already scan-verified
+   *  the tube (at queue claim or a previous My-Work pick) — re-opening it
+   *  must not demand another scan. */
+  private isScanVerifiedByMe(s?: OrderSample | null): boolean {
+    return !!s?.scanVerifiedAt && !!s?.scanVerifiedBy
+        && s.scanVerifiedBy === this.auth.user()?.id;
+  }
+  /** Template hook: this row's tube was already scan-verified by me, so the
+   *  action reads "Enter result" instead of "Pick up · scan". */
+  scanVerified(t: OrderTest): boolean { return this.isScanVerifiedByMe(t.subOrder); }
+
   startPick(t: OrderTest) {
+    // Already scan-verified by this tech — straight to entry, no scan modal.
+    if (this.isScanVerifiedByMe(t.subOrder)) {
+      this.enterJustScanned(t);
+      return;
+    }
     if (!t.subOrder?.barcode) {
       this.toasts.warning('This sample has no barcode — ask supervisor to reprint.');
       return;
@@ -2513,9 +2529,12 @@ export class MyWorkComponent implements OnInit {
       next: () => {
         this._claiming.set(false);
         this._claimTarget.set(null);
-        this.toasts.success('Claimed into My Work — open it when you’re ready to enter results.');
-        this.setMobileTab('mywork');
         this.refreshAllCounts();
+        // The tech is literally holding the tube they just claimed — go
+        // straight into result entry instead of parking it in My Work and
+        // demanding a second scan to open it (the claim scan already
+        // verified the tube; the server remembers via scanVerifiedAt/By).
+        this.router.navigate(['/lab/sample', c.sampleId], { state: { justScanned: true } });
       },
       error: e => { this._claiming.set(false); this.toasts.error(ApiError.from(e).message); }
     });

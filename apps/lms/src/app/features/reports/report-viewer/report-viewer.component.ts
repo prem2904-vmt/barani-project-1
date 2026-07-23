@@ -1,5 +1,5 @@
-import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Injector, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -10,13 +10,11 @@ import { ChatService } from '../../../core/services/chat.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
-import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -105,10 +103,7 @@ function coerceCellText(raw: unknown): string {
   standalone: true,
   imports: [
     DatePipe,
-    NgTemplateOutlet,
-    BarcodeDisplayComponent,
     ChipComponent,
-    LogoMarkComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
     LoadingLogoComponent
@@ -206,283 +201,45 @@ function coerceCellText(raw: unknown): string {
           </p>
         </div>
 
-        <!-- The printable paper. The pf-printable class opts in to
-             the global print rules in styles.scss so the app shell
-             vanishes and only the paper hits the page. -->
-        <article class="pf-paper pf-printable" aria-label="Report body">
-          @if (data()?.isPartial) {
-            <!-- Preliminary banner — non-negotiable on a partial PDF
-                 so a clinician reading it understands they're not
-                 looking at the final canonical report. -->
-            <div class="pf-paper__prelim">
-              <span class="pf-paper__prelim-icon" aria-hidden="true">⚠</span>
-              <div>
-                <p class="pf-paper__prelim-title">PRELIMINARY REPORT</p>
-                <p class="pf-paper__prelim-sub">
-                  Departments shown are signed off and final.
-                  @if (data()?.pendingDepts?.length) {
-                    Other departments still pending: {{ data()?.pendingDepts?.join(', ') }}.
-                  } @else {
-                    Other departments still pending.
-                  }
-                </p>
-              </div>
-            </div>
-          }
-          <div class="pf-paper__masthead" [style.border-color]="tpl()?.primaryColor ?? '#1B3A6B'">
-            <div class="flex items-center gap-3">
-              @if (tpl()?.logoUrl && tpl()?.logoUrl !== '/logo.svg') {
-                <!-- Uploaded logos come back as server-relative paths (/uploads/...);
-                     prepend the API base so the <img> resolves correctly. -->
-                <img [src]="resolveAsset(tpl()?.logoUrl)" alt="" class="h-12 w-12 object-contain"
-                     onerror="this.style.display='none'" />
-              } @else {
-                <pf-logo-mark size="lg" variant="badge"></pf-logo-mark>
-              }
-              <div>
-                <p class="pf-paper__lab" [style.color]="tpl()?.primaryColor ?? '#1B3A6B'">
-                  {{ tpl()?.labName ?? 'Prefrontal Lab' }}
-                </p>
-                <p class="pf-paper__tagline">{{ tpl()?.tagline ?? '' }}</p>
-              </div>
-            </div>
-            @if (tpl()?.nablAccredited) {
-              <span class="pf-paper__nabl">NABL {{ tpl()?.nablNumber ?? '—' }}</span>
-            }
-          </div>
-
-          <dl class="pf-paper__meta">
-            @if (tpl()?.showPatientName !== false && data()?.patient?.name) {
-              <div><dt>Patient</dt><dd><strong>{{ data()?.patient?.name }}</strong></dd></div>
-            }
-            @if (tpl()?.showAge !== false) {
-              <div><dt>Age · Sex</dt><dd>{{ data()?.patient?.age ?? '—' }}y · {{ data()?.patient?.sex ?? '—' }}</dd></div>
-            }
-            @if (tpl()?.showOrderId !== false && data()?.order?.id) {
-              <div><dt>Order</dt><dd class="pf-mono">{{ data()?.order?.id?.slice(0, 8) }}</dd></div>
-            }
-            @if (tpl()?.showRefDoctor !== false && data()?.order?.refDoctorName) {
-              <div><dt>Ref doctor</dt><dd>{{ data()?.order?.refDoctorName }}</dd></div>
-            }
-            @if (tpl()?.showCollectionDate !== false && data()?.order?.createdAt) {
-              <div><dt>Collected</dt><dd>{{ formatStamp(data()?.order?.createdAt) }}</dd></div>
-            }
-            @if (tpl()?.showReportDate !== false) {
-              <div><dt>Reported</dt><dd>{{ formatStamp(r.createdAt) }}</dd></div>
-            }
-            @if (tpl()?.showRegistered !== false && data()?.order?.createdAt) {
-              <div><dt>Registered</dt><dd>{{ formatStamp(data()?.order?.createdAt) }}</dd></div>
-            }
-          </dl>
-
-          <div class="pf-paper__body">
-            <!-- ONE continuous results table — panel/profile headers only
-                 (no department bands), a single column band, abnormal values
-                 bold (+ optional colour) with an H/L letter. Mirrors the PDF
-                 download exactly. -->
-            @if (panels().inScope.length > 0) {
-              <table class="pf-paper__rtable">
-                <thead>
-                  <tr [style.background]="tpl()?.tableHeaderBg ?? '#ffffff'"
-                      [style.color]="tpl()?.tableHeaderText ?? '#0f172a'">
-                    <th class="pf-rt-invest">Investigation</th>
-                    <th>Result</th>
-                    <th>Reference Range</th>
-                    <th>Unit</th>
-                    <th>Specimen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (g of panels().inScope; track g.testId) {
-                    <ng-container *ngTemplateOutlet="panelBlock; context: { $implicit: g }"></ng-container>
-                  }
-                </tbody>
-              </table>
-            }
-
-            @if (panels().outScope.length > 0) {
-              <h3 class="pf-paper__scope">Tests not under NABL scope</h3>
-              <table class="pf-paper__rtable">
-                <thead>
-                  <tr [style.background]="tpl()?.tableHeaderBg ?? '#ffffff'"
-                      [style.color]="tpl()?.tableHeaderText ?? '#0f172a'">
-                    <th class="pf-rt-invest">Investigation</th>
-                    <th>Result</th>
-                    <th>Reference Range</th>
-                    <th>Unit</th>
-                    <th>Specimen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (g of panels().outScope; track g.testId) {
-                    <ng-container *ngTemplateOutlet="panelBlock; context: { $implicit: g }"></ng-container>
-                  }
-                </tbody>
-              </table>
-            }
-
-            <!-- Narrative / image / chart / microbiology tests keep their own
-                 block format, rendered after the columnar results. -->
-            @for (t of panels().special; track t.testId) {
-              <div class="pf-paper__test">
-                <div class="flex items-baseline justify-between flex-wrap gap-2">
-                  <p class="pf-paper__test-name">{{ t.name }}</p>
-                  @if (t.result?.flags?.critical) {
-                    <span class="pf-paper__crit-chip">CRITICAL</span>
-                  }
-                  @if (t.validatedAt) {
-                    <span class="pf-paper__test-meta">Validated {{ t.validatedAt | date:'shortDate' }}</span>
-                  }
-                </div>
-                @if (resolvedFor(t.testId); as pv) {
-                  @for (sec of pv.sections; track sec.id) {
-                    <div class="pf-paper__rs" [attr.data-type]="sec.type">
-                      @if (sec.label) { <h4 class="pf-paper__rs-label">{{ sec.label }}</h4> }
-                      @if (sec.type === 'grid' && sec.rows) {
-                        <table class="pf-paper__table">
-                          <thead>
-                            <tr>
-                              @for (c of visibleColumns(pv, sec); track c.id) {
-                                <th [style.width.%]="c.width"
-                                    [style.background]="tpl()?.tableHeaderBg ?? '#1B3A6B'"
-                                    [style.color]="tpl()?.tableHeaderText ?? '#ffffff'">{{ drlogyLabelFor(c) }}</th>
-                              }
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (row of sec.rows; track row.id) {
-                              @if (row.isMerged) {
-                                <tr class="pf-paper__row pf-paper__row--merged">
-                                  <td [attr.colspan]="visibleColumns(pv, sec).length">{{ row.mergeContent }}</td>
-                                </tr>
-                              } @else {
-                                <tr class="pf-paper__row"
-                                    [style.color]="row.color || null"
-                                    [style.font-weight]="row.isBold ? '700' : null">
-                                  @for (c of visibleColumns(pv, sec); track c.id) {
-                                    <td>{{ displayCell(row, c.name) }}</td>
-                                  }
-                                </tr>
-                              }
-                            }
-                          </tbody>
-                        </table>
-                      }
-                      @if (sec.type === 'paragraph') {
-                        <p class="pf-paper__note pf-paper__rs-para">{{ sec.content }}</p>
-                      }
-                      @if (sec.type === 'image') {
-                        @if (sec.imageUrls && sec.imageUrls.length > 0) {
-                          <div class="pf-paper__rs-images">
-                            @for (u of sec.imageUrls; track u) { <img [src]="u" alt="" /> }
-                          </div>
-                        }
-                      }
-                      @if (sec.type === 'chart' && sec.chart) {
-                        <div class="pf-paper__rs-chart">
-                          <div class="pf-paper__rs-chart-bar">
-                            @for (z of sec.chart.zones; track z.from) {
-                              <span class="pf-paper__rs-chart-zone"
-                                    [style.left.%]="zonePctLeft(sec.chart, z)"
-                                    [style.width.%]="zonePctWidth(sec.chart, z)"
-                                    [style.background]="zoneHex(z.color)"></span>
-                            }
-                            @if (sec.chart.value !== null && sec.chart.value !== undefined) {
-                              <span class="pf-paper__rs-chart-marker" [style.left.%]="markerPct(sec.chart)"></span>
-                            }
-                          </div>
-                          <div class="pf-paper__rs-chart-axis">
-                            <span>{{ sec.chart.min }}</span>
-                            <span>{{ sec.chart.value ?? '–' }}</span>
-                            <span>{{ sec.chart.max }}</span>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  }
-                } @else if (paramRows(t).length > 0) {
-                  <table class="pf-paper__table">
-                    <thead><tr><th>Parameter</th><th class="text-right">Value</th></tr></thead>
-                    <tbody>
-                      @for (p of paramRows(t); track p.name) {
-                        <tr><td>{{ p.name }}</td>
-                          <td class="text-right pf-mono"
-                              [class.pf-paper__val--crit]="t.result?.flags?.critical && tpl()?.showCriticalFlag !== false">{{ p.value }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+        <!-- The on-screen report IS the rendered PDF — the exact same file
+             the Download button produces (jsPDF + tenant template + per-test
+             layouts), painted page-by-page onto canvases so it renders
+             identically on desktop and inside the iOS/Android WebView (an
+             <iframe> PDF shows only page 1 in WKWebView). -->
+        @if (data()?.isPartial) {
+          <!-- Preliminary banner — non-negotiable on a partial report so a
+               clinician understands they're not looking at the final one.
+               (The PDF pages below carry the report's own chrome.) -->
+          <div class="pf-paper__prelim">
+            <span class="pf-paper__prelim-icon" aria-hidden="true">⚠</span>
+            <div>
+              <p class="pf-paper__prelim-title">PRELIMINARY REPORT</p>
+              <p class="pf-paper__prelim-sub">
+                Departments shown are signed off and final.
+                @if (data()?.pendingDepts?.length) {
+                  Other departments still pending: {{ data()?.pendingDepts?.join(', ') }}.
                 } @else {
-                  <p class="pf-paper__empty">No values recorded.</p>
+                  Other departments still pending.
                 }
-                @if (t.result?.note) { <p class="pf-paper__note">{{ t.result?.note }}</p> }
+              </p>
+            </div>
+          </div>
+        }
+        @if (pdfError()) {
+          <div class="pf-rv-pdf-error">
+            <p>{{ pdfError() }}</p>
+            <pf-touch-btn size="sm" variant="secondary" (pressed)="renderPdfView()">Try again</pf-touch-btn>
+          </div>
+        } @else {
+          <div class="pf-rv-pdfpages" #pdfPages aria-label="Report PDF">
+            @if (!pdfReady()) {
+              <div class="pf-rv-loading">
+                <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                                 [showText]="true" text="Rendering report…"></pf-loading-logo>
               </div>
-            }
-
-            @if (panels().inScope.length === 0 && panels().outScope.length === 0 && panels().special.length === 0) {
-              <p class="pf-paper__empty">No tests on this report.</p>
             }
           </div>
-
-          <!-- Reusable panel block (header row + method/referral sub-row + parameter rows). -->
-          <ng-template #panelBlock let-g>
-            <tr class="pf-rt-panel" [style.color]="tpl()?.primaryColor ?? '#1B3A6B'">
-              <td colspan="5">
-                {{ g.testName }}
-                @if (g.critical) { <span class="pf-rt-crit">CRITICAL</span> }
-              </td>
-            </tr>
-            @if (g.method || g.referralLab) {
-              <tr class="pf-rt-sub">
-                <td colspan="5">
-                  @if (g.method) { <span>Method: {{ g.method }}</span> }
-                  @if (g.method && g.referralLab) { <span class="pf-rt-dot">·</span> }
-                  @if (g.referralLab) { <span>Tested at: {{ g.referralLab }}</span> }
-                </td>
-              </tr>
-            }
-            @for (row of g.rows; track $index) {
-              @if (row.kind === 'note') {
-                <tr class="pf-rt-note"><td colspan="5">{{ row.note }}</td></tr>
-              } @else {
-                <tr>
-                  <td class="pf-rt-invest pf-rt-pname">{{ row.name }}</td>
-                  <td [style.color]="resultColor(row)" [style.font-weight]="row.abnormal ? '700' : null">
-                    {{ row.result }}@if (row.flag) { <span class="pf-rt-flag">{{ flagDisplay(row) }}</span> }
-                  </td>
-                  <td class="pf-rt-muted">{{ row.range }}</td>
-                  <td class="pf-rt-muted">{{ row.unit }}</td>
-                  <td class="pf-rt-muted">{{ row.specimen }}</td>
-                </tr>
-              }
-            }
-          </ng-template>
-
-          <footer class="pf-paper__footer">
-            @if (tpl()?.showSignature !== false) {
-              <div class="pf-paper__sig">
-                <p class="pf-paper__disclaimer">{{ tpl()?.disclaimer }}</p>
-                <div class="pf-paper__sig-line">
-                  <div class="pf-paper__sig-rule"></div>
-                  @if (tpl()?.showPathologistName !== false) {
-                    <p>Dr. Pathologist, MD</p>
-                  }
-                </div>
-              </div>
-            }
-
-            @if (tpl()?.showQrCode !== false && r.qrToken) {
-              <div class="pf-paper__qr">
-                <pf-barcode-display [code]="verifyCode(r.qrToken)" [showValue]="false"></pf-barcode-display>
-                <p class="pf-paper__qr-caption">Scan to verify online</p>
-              </div>
-            }
-          </footer>
-
-          @if (tpl()?.showPoweredBy !== false) {
-            <p class="pf-paper__powered">Powered by Prefrontal</p>
-          }
-        </article>
+        }
       } @else {
         <div class="pf-rv-loading">
           <pf-loading-logo size="xl" color="purple" [showDna]="true"
@@ -550,6 +307,40 @@ function coerceCellText(raw: unknown): string {
       border-radius: 14px;
       color: var(--text-tertiary);
       font-size: 13px;
+    }
+
+    /* The rendered PDF pages — stacked white sheets, exactly what the
+       downloaded file looks like. Canvas draws at device resolution;
+       CSS scales it to the column width. */
+    .pf-rv-pdfpages {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 900px;
+      margin: 0 auto;
+      padding-bottom: 32px;
+    }
+    .pf-rv-pdfpages ::ng-deep canvas.pf-rv-pdfpage,
+    .pf-rv-pdfpages canvas.pf-rv-pdfpage {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+    .pf-rv-pdf-error {
+      padding: 40px 24px;
+      text-align: center;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
     }
 
     /* Preliminary banner — only shown on partial reports. Drops into
@@ -1168,6 +959,26 @@ export class ReportViewerComponent implements OnInit {
   readonly report = this._report.asReadonly();
   readonly tpl = this._tpl.asReadonly();
 
+  // ── Inline PDF view ─────────────────────────────────────
+  // The on-screen report is the SAME jsPDF file the Download button
+  // produces, painted onto canvases via pdf.js. One render, cached blob —
+  // Print/Share reuse it instead of re-building.
+  private readonly pdfPagesEl = viewChild<ElementRef<HTMLDivElement>>('pdfPages');
+  private readonly _pdfReady = signal(false);
+  private readonly _pdfError = signal<string | null>(null);
+  readonly pdfReady = this._pdfReady.asReadonly();
+  readonly pdfError = this._pdfError.asReadonly();
+  private _pdfBlob: Blob | null = null;
+  private _pdfRendering = false;
+  // Kick the render only once BOTH the report data and the #pdfPages host
+  // exist (the host is inside the @if(report()) branch, so it appears a
+  // change-detection cycle after the report loads).
+  private readonly _pdfKickoff = effect(() => {
+    if (!this.pdfPagesEl() || !this._report()) return;
+    if (this._pdfReady() || this._pdfError()) return;   // done or awaiting manual retry
+    untracked(() => this.renderPdfView());
+  });
+
   // Share-with-colleague picker state.
   protected readonly chatPickerOpen = signal(false);
   protected readonly chatPickerSearch = signal('');
@@ -1540,6 +1351,50 @@ export class ReportViewerComponent implements OnInit {
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({ next: t => this._tpl.set(t) });
   }
 
+  /** Build the report PDF (identical to Download) and paint its pages onto
+   *  canvases inside the viewer. Cached: repeated calls reuse the blob. */
+  async renderPdfView() {
+    const r = this._report();
+    if (!r || this._pdfRendering) return;
+    this._pdfRendering = true;
+    this._pdfError.set(null);
+    this._pdfReady.set(false);
+    try {
+      this._pdfBlob ??= await this.buildPdfBlob(r);
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
+      const doc = await pdfjs.getDocument({ data: await this._pdfBlob.arrayBuffer() }).promise;
+
+      const host = this.pdfPagesEl()?.nativeElement;
+      if (!host) return;
+      host.querySelectorAll('canvas').forEach(c => c.remove());
+
+      // Render at the container width × devicePixelRatio (capped ×3) so text
+      // stays crisp on retina/mobile; CSS scales each canvas back to 100%.
+      const cssWidth = Math.max(host.clientWidth || 0, 320);
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const base = page.getViewport({ scale: 1 });
+        const scale = (cssWidth / base.width) * dpr;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.className = 'pf-rv-pdfpage';
+        canvas.setAttribute('aria-label', `Report page ${i} of ${doc.numPages}`);
+        await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+        host.appendChild(canvas);
+      }
+      this._pdfReady.set(true);
+    } catch (err) {
+      console.error('[report-viewer] PDF render failed', err);
+      this._pdfError.set('Could not render the report PDF.');
+    } finally {
+      this._pdfRendering = false;
+    }
+  }
+
   /** Walk every test on the report and ask the engine to resolve its
    *  layout against the actual entered values. Skips tests without a
    *  configured layout (empty sections) so the legacy table fallback
@@ -1569,7 +1424,32 @@ export class ReportViewerComponent implements OnInit {
 
   back() { this.router.navigateByUrl('/reports'); }
 
-  print() { window.print(); }
+  /** Print the SAME PDF the viewer shows / Download produces. Native shell:
+   *  hand the file to the share sheet (it has Print). Web: open the PDF in a
+   *  new tab — the browser's PDF viewer prints it verbatim, unlike
+   *  window.print() which would rasterize the app shell. */
+  async print() {
+    const r = this._report();
+    if (!r) return;
+    try {
+      this._pdfBlob ??= await this.buildPdfBlob(r);
+      const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+        .Capacitor?.isNativePlatform?.();
+      const file = new File([this._pdfBlob], `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
+        { type: 'application/pdf' });
+      if (isNative && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Print report' });
+      } else {
+        const url = URL.createObjectURL(this._pdfBlob);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
+      console.error('[report-viewer] print failed', err);
+      this.toasts.error('Could not prepare the report for printing');
+    }
+  }
 
   /** Deliver via WhatsApp using the click-to-chat deep link (wa.me). The
    *  Meta WhatsApp API isn't wired up yet, so we open WhatsApp Web / app
@@ -1603,42 +1483,49 @@ export class ReportViewerComponent implements OnInit {
     });
   }
 
+  /** Render the report to the SAME PDF the Download button in the queue
+   *  produces (jsPDF + tenant template + per-test resolved layouts + images).
+   *  Single source for the inline view, Print and the archive upload. */
+  private async buildPdfBlob(r: Report): Promise<Blob> {
+    const [{ buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+      import('../../../shared/utils/report-pdf'),
+      import('../../../core/services/report-layout.service'),
+      import('../../../core/services/platform.service'),
+    ]);
+    const svc = this.injector.get(ReportLayoutService);
+    const platform = this.injector.get(PlatformService);
+    const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
+
+    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let patient: { sex?: string | null; age?: number | null } | undefined;
+    try {
+      const snap = JSON.parse(r.data ?? '{}');
+      tests = snap?.tests ?? [];
+      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
+    } catch { /* malformed snapshot — render without layouts */ }
+
+    const [template] = await Promise.all([
+      this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
+      ...tests.map(async t => {
+        if (!t.testId) return;
+        try {
+          resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
+        } catch { /* fallback table */ }
+      }),
+    ]);
+
+    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
+    const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
+    return buildReportPdf({ ...baseInput, imageCache }).output('blob');
+  }
+
   /** Render + archive the report PDF to storage (best-effort, no download) so
    *  the public /reports/public/{qrToken} link resolves to a real file. */
   private async archiveReportPdf(r: Report) {
     try {
-      const [{ buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
-        import('../../../core/services/report-layout.service'),
-        import('../../../core/services/platform.service'),
-      ]);
-      const svc = this.injector.get(ReportLayoutService);
-      const platform = this.injector.get(PlatformService);
-      const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-
-      let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
-      let patient: { sex?: string | null; age?: number | null } | undefined;
-      try {
-        const snap = JSON.parse(r.data ?? '{}');
-        tests = snap?.tests ?? [];
-        patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-      } catch { /* malformed snapshot — render without layouts */ }
-
-      const [template] = await Promise.all([
-        this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-        ...tests.map(async t => {
-          if (!t.testId) return;
-          try {
-            resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
-          } catch { /* fallback table */ }
-        }),
-      ]);
-
-      const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
-      const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
+      this._pdfBlob ??= await this.buildPdfBlob(r);
       const fd = new FormData();
-      fd.append('file', blob, `${r.id}.pdf`);
+      fd.append('file', this._pdfBlob, `${r.id}.pdf`);
       this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
     } catch { /* best-effort */ }
   }

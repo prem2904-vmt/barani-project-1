@@ -143,6 +143,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly recentIds = signal<string[]>([]);
 
   // ── Ref-hospital + ref-doctor field state ─────────────────────────
+  // On tablet/phone the patient search + referring hospital + referring doctor
+  // don't fit one row, so referring is collapsed behind a toggle: tapping the
+  // building icon expands the two referring inputs (full width) and shrinks the
+  // patient field for the moment. Desktop (lg+) always shows all three.
+  readonly refFieldsOpen = signal(false);
+  toggleRefFields() { this.refFieldsOpen.update(v => !v); }
+
   readonly refHospitalName = signal<string>('');
   readonly refHospitalOpen = signal(false);
   readonly refHospitalSuggestions = signal<string[]>([]);
@@ -234,6 +241,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         // code finds the test even when the name doesn't contain the query.
         t.code ?? '',
         t.testCode ?? '',
+        // Short name too — the Biochemistry catalogue is searched by its
+        // abbreviations (FBS, LFT, CARD…) as often as by code or full name.
+        t.shortName ?? '',
         t.hsnSacCode ?? '',
         t.department?.name ?? ''
       ].join(' ').toLowerCase();
@@ -922,6 +932,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   closeCart() { this._cartOpen.set(false); }
 
   shortCode(t: Test): string {
+    // Prefer the real test ID / code (e.g. BIO00081) so reception can match it
+    // to the requisition; fall back to HSN, then name initials.
+    if (t.testCode) return t.testCode;
     if (t.hsnSacCode) return t.hsnSacCode.slice(0, 4);
     return t.name.replace(/\s+/g, '').slice(0, 4).toUpperCase();
   }

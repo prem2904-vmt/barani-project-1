@@ -654,6 +654,9 @@ export class AdminDashboardComponent implements OnInit {
         'Vendor wallets let referring hospitals / collection centres run on credit.'
       ],
       tiles: [
+        { title: 'Finance', href: '/finance', gradient: 'emerald',
+          iconPath: 'M3 3v18h18', iconExtra: 'M7 14l4-4 3 3 5-6',
+          subtitle: () => 'End-to-end money in vs out · Lab · export CSV' },
         { title: 'Billing Config',  href: '/admin/billing', gradient: 'amber',
           iconPath: 'M3 5h18v14H3z', iconExtra: 'M3 10h18M7 15h3',
           subtitle: () => 'GST, discounts, invoice numbering, UPI / online payment' },

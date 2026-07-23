@@ -581,11 +581,45 @@
     gap: 12px;
   }
 }
-@media (min-width: 640px) and (max-width: 1023px) {
-  .pf-controls-row {
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
+
+/* ── Referring toggle (tablet/phone) ──────────────────────────
+   Below lg the patient + two referring fields can't share a row without
+   truncating. Default: show the patient field + a toggle chip; the two
+   referring fields are hidden. Tapping the chip (pf-controls-row--refopen)
+   reveals the referring inputs full-width (stacked) and collapses the
+   patient field for the moment. The toggle itself is hidden at lg+. */
+.pf-ref-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: start;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--input-border, var(--glass-border));
+}
+.pf-ref-toggle svg { color: var(--text-muted); flex-shrink: 0; }
+.pf-ref-toggle--on { color: var(--brand, #a855f7); border-color: rgba(168, 85, 247, 0.4); }
+.pf-ref-toggle--on svg { color: var(--brand, #a855f7); }
+.pf-ref-toggle__dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--brand, #a855f7);
+}
+
+@media (max-width: 1023px) {
+  /* Referring fields hidden until the toggle opens them. */
+  .pf-controls-row .pf-refrow__field { display: none; }
+  .pf-controls-row--refopen .pf-refrow__field { display: block; }
+  /* When open, hand the row to the referring inputs; hide the patient block
+     + toggle-collapses to reclaim the vertical space for typing. */
+  .pf-controls-row--refopen .pf-controls-row__patient { display: none; }
+}
+@media (min-width: 1024px) {
+  .pf-ref-toggle { display: none; }
 }
 
 /* ── Inline Patient Picker & Card ── */

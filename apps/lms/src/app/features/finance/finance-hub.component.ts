@@ -1,0 +1,248 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ApiService } from '../../core/services/api.service';
+import { ToastService } from '../../core/services/toast.service';
+import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
+import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
+import { TileComponent } from '../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
+import { downloadCsv } from '../../shared/utils/export-csv';
+
+type Module = 'overall' | 'lab' | 'ipd' | 'opd' | 'pharmacy';
+
+interface ModeTotal { mode: string; count: number; total: number; }
+interface FinanceSummary {
+  from: string;
+  to: string;
+  moneyIn: {
+    totalCollected: number; totalRefunded: number; netCollected: number;
+    byMode: ModeTotal[]; refundsByMode: ModeTotal[];
+  };
+  billed: { grossBilled: number; totalDiscount: number; totalTax: number; count: number };
+  moneyOut: { inventorySpend: number; batchCount: number };
+  outstanding: number;
+  netPosition: number;
+}
+
+/**
+ * Finance hub — the "financial manager" module. Top-level tabs for each product
+ * line (Overall / Lab / IPD / OPD / Pharmacy). Only Lab is live today: an
+ * end-to-end view of money IN (collections, by mode) vs money OUT (inventory
+ * spend) over a date range, with net position, receivables, and CSV export.
+ * The other modules are stubbed until their billing lands.
+ */
+@Component({
+  selector: 'pf-finance-hub',
+  standalone: true,
+  imports: [FormsModule, CurrencyInrPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section class="pf-fin">
+      <pf-screen-header eyebrow="Finance" title="Finance"
+        subtitle="End-to-end money in vs money out, by product line.">
+        @if (module() === 'lab' && summary()) {
+          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="exportCsv()">
+            <span icon-left aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>
+              </svg>
+            </span>
+            Download CSV
+          </pf-touch-btn>
+        }
+      </pf-screen-header>
+
+      <!-- Module tabs -->
+      <div class="pf-fin__tabs" role="tablist">
+        @for (m of modules; track m.key) {
+          <button type="button" class="pf-fin__tab"
+                  [class.pf-fin__tab--on]="module() === m.key"
+                  (click)="module.set(m.key)">
+            {{ m.label }}
+            @if (m.key !== 'lab' && m.key !== 'overall') { <span class="pf-fin__soon">soon</span> }
+          </button>
+        }
+      </div>
+
+      @if (module() === 'lab' || module() === 'overall') {
+        @if (module() === 'overall') {
+          <p class="pf-fin__note">Showing the <strong>Lab</strong> line. IPD, OPD and Pharmacy roll into this view as their billing goes live.</p>
+        }
+
+        <!-- Date range -->
+        <div class="pf-fin__range">
+          <label>From <input type="date" [(ngModel)]="fromDate" (change)="load()"></label>
+          <label>To <input type="date" [(ngModel)]="toDate" (change)="load()"></label>
+          <div class="pf-fin__quick">
+            <button type="button" (click)="quick(7)">7d</button>
+            <button type="button" (click)="quick(30)">30d</button>
+            <button type="button" (click)="quick(90)">90d</button>
+          </div>
+        </div>
+
+        @if (loading()) {
+          <p class="pf-fin__loading">Loading…</p>
+        } @else if (summary(); as s) {
+          <!-- Headline: net position -->
+          <div class="pf-fin__grid">
+            <pf-tile tone="default" padding="md">
+              <p class="pf-eyebrow">Net position</p>
+              <p class="pf-fin__big" [class.pf-fin__big--neg]="s.netPosition < 0">{{ s.netPosition | inr }}</p>
+              <p class="pf-fin__sub">Collections − inventory spend</p>
+            </pf-tile>
+            <pf-tile tone="default" padding="md">
+              <p class="pf-eyebrow">Money in (net)</p>
+              <p class="pf-fin__big pf-fin__big--pos">{{ s.moneyIn.netCollected | inr }}</p>
+              <p class="pf-fin__sub">{{ s.moneyIn.totalCollected | inr }} collected · {{ s.moneyIn.totalRefunded | inr }} refunded</p>
+            </pf-tile>
+            <pf-tile tone="default" padding="md">
+              <p class="pf-eyebrow">Money out</p>
+              <p class="pf-fin__big pf-fin__big--neg">{{ s.moneyOut.inventorySpend | inr }}</p>
+              <p class="pf-fin__sub">{{ s.moneyOut.batchCount }} inventory receipt(s)</p>
+            </pf-tile>
+            <pf-tile tone="default" padding="md">
+              <p class="pf-eyebrow">Outstanding</p>
+              <p class="pf-fin__big">{{ s.outstanding | inr }}</p>
+              <p class="pf-fin__sub">Unpaid bill balances (receivable)</p>
+            </pf-tile>
+          </div>
+
+          <!-- Collections by mode -->
+          <pf-tile tone="default" padding="md" class="block mt-4">
+            <p class="pf-eyebrow mb-2">Collections by mode</p>
+            @if (s.moneyIn.byMode.length === 0) {
+              <p class="pf-fin__empty">No collections in this range.</p>
+            } @else {
+              <ul class="pf-fin__rows">
+                @for (r of s.moneyIn.byMode; track r.mode) {
+                  <li>
+                    <span class="pf-fin__mode">{{ r.mode }}</span>
+                    <span class="pf-fin__count">{{ r.count }}×</span>
+                    <span class="pf-fin__amt">{{ r.total | inr }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          </pf-tile>
+
+          <!-- Billed breakdown -->
+          <pf-tile tone="default" padding="md" class="block mt-4">
+            <p class="pf-eyebrow mb-2">Billed in range</p>
+            <ul class="pf-fin__rows">
+              <li><span class="pf-fin__mode">Gross billed</span><span class="pf-fin__count">{{ s.billed.count }} bills</span><span class="pf-fin__amt">{{ s.billed.grossBilled | inr }}</span></li>
+              <li><span class="pf-fin__mode">Discounts given</span><span class="pf-fin__count"></span><span class="pf-fin__amt">{{ s.billed.totalDiscount | inr }}</span></li>
+              <li><span class="pf-fin__mode">Tax (GST)</span><span class="pf-fin__count"></span><span class="pf-fin__amt">{{ s.billed.totalTax | inr }}</span></li>
+            </ul>
+          </pf-tile>
+        }
+      } @else {
+        <div class="pf-fin__stub">
+          <p class="pf-fin__stub-title">{{ moduleLabel() }} finance — coming soon</p>
+          <p class="pf-fin__stub-sub">This module's billing isn't live yet. Its financials will appear here once it's in use.</p>
+        </div>
+      }
+    </section>
+  `,
+  styles: [`
+    .pf-fin { padding: 24px 16px 40px; }
+    .pf-fin__tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 18px; }
+    .pf-fin__tab {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
+      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border);
+    }
+    .pf-fin__tab--on { color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7); border-color: transparent; }
+    .pf-fin__soon { font-size: 9px; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.04em; }
+    .pf-fin__note { font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }
+    .pf-fin__range { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+    .pf-fin__range label { font-size: 12px; color: var(--text-tertiary); display: inline-flex; gap: 6px; align-items: center; }
+    .pf-fin__range input { background: var(--input-bg, rgba(255,255,255,0.03)); border: 1px solid var(--glass-border); border-radius: 8px; padding: 6px 10px; color: var(--text-primary); font-size: 13px; }
+    .pf-fin__quick { display: flex; gap: 6px; }
+    .pf-fin__quick button { padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-fin__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .pf-fin__big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); margin-top: 4px; }
+    .pf-fin__big--pos { color: #6ee7b7; }
+    .pf-fin__big--neg { color: #fca5a5; }
+    .pf-fin__sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+    .pf-fin__rows { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .pf-fin__rows li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; font-size: 13px; }
+    .pf-fin__mode { color: var(--text-primary); text-transform: capitalize; }
+    .pf-fin__count { color: var(--text-tertiary); font-size: 12px; }
+    .pf-fin__amt { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .pf-fin__empty, .pf-fin__loading { color: var(--text-tertiary); font-size: 13px; }
+    .pf-fin__stub { text-align: center; padding: 64px 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; }
+    .pf-fin__stub-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-fin__stub-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
+  `]
+})
+export class FinanceHubComponent implements OnInit {
+  private readonly api = inject(ApiService);
+  private readonly toasts = inject(ToastService);
+
+  readonly modules: { key: Module; label: string }[] = [
+    { key: 'overall', label: 'Overall' },
+    { key: 'lab', label: 'Lab' },
+    { key: 'ipd', label: 'IPD' },
+    { key: 'opd', label: 'OPD' },
+    { key: 'pharmacy', label: 'Pharmacy' },
+  ];
+  readonly module = signal<Module>('lab');
+  readonly moduleLabel = computed(() => this.modules.find(m => m.key === this.module())?.label ?? '');
+
+  fromDate = this.isoDaysAgo(29);
+  toDate = this.isoDaysAgo(0);
+
+  readonly loading = signal(false);
+  readonly summary = signal<FinanceSummary | null>(null);
+
+  ngOnInit() { this.load(); }
+
+  private isoDaysAgo(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  quick(days: number) {
+    this.fromDate = this.isoDaysAgo(days - 1);
+    this.toDate = this.isoDaysAgo(0);
+    this.load();
+  }
+
+  load() {
+    this.loading.set(true);
+    this.api.get<FinanceSummary>(`/api/finance/summary?from=${this.fromDate}&to=${this.toDate}`).subscribe({
+      next: s => { this.summary.set(s); this.loading.set(false); },
+      error: () => { this.loading.set(false); this.toasts.error('Could not load finance summary'); },
+    });
+  }
+
+  exportCsv() {
+    const s = this.summary();
+    if (!s) return;
+    const rows: Array<Array<unknown>> = [
+      ['Prefrontal Lab — Finance summary'],
+      ['From', this.fromDate, 'To', this.toDate],
+      [],
+      ['Money in'],
+      ['Total collected', s.moneyIn.totalCollected],
+      ['Total refunded', s.moneyIn.totalRefunded],
+      ['Net collected', s.moneyIn.netCollected],
+      [],
+      ['Collections by mode', 'Count', 'Amount'],
+      ...s.moneyIn.byMode.map(r => [r.mode, r.count, r.total]),
+      [],
+      ['Billed', 'Count', 'Amount'],
+      ['Gross billed', s.billed.count, s.billed.grossBilled],
+      ['Discounts given', '', s.billed.totalDiscount],
+      ['Tax (GST)', '', s.billed.totalTax],
+      [],
+      ['Money out'],
+      ['Inventory spend', s.moneyOut.batchCount, s.moneyOut.inventorySpend],
+      [],
+      ['Outstanding (receivable)', '', s.outstanding],
+      ['Net position', '', s.netPosition],
+    ];
+    downloadCsv(`finance-lab-${this.fromDate}_to_${this.toDate}.csv`, rows);
+  }
+}

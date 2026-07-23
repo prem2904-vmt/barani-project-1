@@ -31,6 +31,7 @@ interface VendorWallet {
   name: string;
   code?: string;
   balance: number;
+  outstanding: number;
   isActive: boolean;
 }
 
@@ -196,8 +197,8 @@ interface ModeDef {
                         >
                           <span>{{ v.name }}</span
                           ><span class="pf-ipp__vbal">{{
-                            v.balance | inr
-                          }}</span>
+                            v.outstanding | inr
+                          }} due</span>
                         </button>
                       </li>
                     }

@@ -511,7 +511,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
 
-      // Finance — daily statement + day/shift account closure.
+      // Finance — hub (end-to-end money in/out by product line) + daily statement.
+      {
+        path: 'finance',
+        canActivate: [permissionGuard(['collect_payment', 'create_bill', 'manage_tenant'])],
+        loadComponent: () => import('./features/finance/finance-hub.component').then(m => m.FinanceHubComponent)
+      },
       {
         path: 'finance/daily',
         canActivate: [permissionGuard(['collect_payment', 'create_bill', 'manage_tenant'])],

@@ -39,6 +39,8 @@ interface VendorWallet {
   totalCredit: number;
   usedCredit: number;
   balance: number;
+  outstanding: number;
+  notifyThreshold?: number | null;
   isActive: boolean;
 }
 
@@ -384,13 +386,15 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                         </div>
                         @if (showWalletBalance()) {
                           <div class="text-right">
-                            <p class="pf-eyebrow">Balance</p>
-                            <p class="pf-wallet-selected__bal"
-                               [class.pf-wallet-selected__bal--low]="v.balance < effectivePayable()">
-                              {{ v.balance | inr }}
+                            <!-- Accruing tab: no cap, so we show what the partner
+                                 will OWE after this charge, not a "remaining
+                                 balance". Never blocks. -->
+                            <p class="pf-eyebrow">Outstanding after</p>
+                            <p class="pf-wallet-selected__bal">
+                              {{ (v.outstanding + effectivePayable()) | inr }}
                             </p>
-                            @if (v.balance < effectivePayable()) {
-                              <p class="pf-wallet-selected__warn">Insufficient — short by {{ (effectivePayable() - v.balance) | inr }}</p>
+                            @if (v.notifyThreshold && (v.outstanding + effectivePayable()) >= v.notifyThreshold) {
+                              <p class="pf-wallet-selected__warn">Over the {{ v.notifyThreshold | inr }} alert threshold</p>
                             }
                           </div>
                         }
@@ -423,8 +427,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                 </span>
                                 @if (showWalletBalance()) {
                                   <span class="pf-wallet-row__bal"
-                                        [class.pf-wallet-row__bal--low]="v.balance < effectivePayable()">
-                                    {{ v.balance | inr }}
+                                        [class.pf-wallet-row__bal--low]="v.outstanding > 0">
+                                    {{ v.outstanding | inr }} due
                                   </span>
                                 }
                               </button>

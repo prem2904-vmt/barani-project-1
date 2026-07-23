@@ -51,6 +51,11 @@ export interface OrderSample {
   receivedBy?: string;
   rejectedReason?: string;
   rejectionCount: number;
+  /** When a tech scan-verified this tube (queue claim-by-scan or My-Work
+   *  pick-scan; barcode matched server-side). While scanVerifiedBy is the
+   *  current tech, My Work opens the tube without demanding a re-scan. */
+  scanVerifiedAt?: string | null;
+  scanVerifiedBy?: string | null;
   createdAt: string;
   department?: Department;
   tests: OrderTest[];
