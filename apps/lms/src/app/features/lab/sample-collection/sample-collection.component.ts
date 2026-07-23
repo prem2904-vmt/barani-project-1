@@ -96,6 +96,9 @@ interface OrderGroup {
   samples: OrderSample[];
   totalVials: number;
   collected: number;
+  /** Server-computed on the embedded order: the require-bill gate is on and
+   *  the bill isn't settled — dispatch would be rejected, offer "Bill". */
+  paymentHold: boolean;
 }
 
 @Component({
@@ -535,8 +538,23 @@ interface OrderGroup {
               <span class="pf-drawer__remaining">{{ g.totalVials - g.collected }} remaining</span>
             }
             <!-- Dispatch right here once everything's drawn (FD/collector handoff
-                 to the lab) — only if the user can dispatch and it's not already. -->
-            @if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
+                 to the lab) — only if the user can dispatch and it's not already.
+                 Under a payment hold the gate would reject the dispatch, so the
+                 slot offers "Bill" (→ billing screen) instead — or a passive
+                 "Payment pending" note for collectors without billing access. -->
+            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold) {
+              @if (canBill()) {
+                <button type="button" class="pf-btn pf-btn-primary" (click)="goToBilling(g)"
+                        aria-label="Bill" data-label="Bill">
+                  <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 5h18v14H3z"/><path d="M3 10h18M7 15h3"/>
+                  </svg>
+                  <span class="pf-btn__text">Bill</span>
+                </button>
+              } @else {
+                <span class="pf-drawer__remaining">Payment pending — dispatch locked</span>
+              }
+            } @else if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
               <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()"
                       aria-label="Dispatch" data-label="Dispatch">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1728,6 +1746,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   /** Whether this user can dispatch (hand collected tubes to the lab). */
   readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
+  /** Whether this user can take a payment-held order to the billing screen
+   *  (route /frontdesk/order needs create_order; create_bill implies desk staff). */
+  readonly canBill = computed(() =>
+    this.auth.hasPermission('create_bill') || this.auth.hasPermission('create_order'));
+  /** Payment-held order: jump to the billing screen with the order loaded. */
+  goToBilling(g: OrderGroup) {
+    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: g.orderId } });
+  }
   private readonly _dispatching = signal(false);
   readonly dispatching = this._dispatching.asReadonly();
 
@@ -1854,13 +1880,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
           createdAt: s.createdAt,
           samples: [],
           totalVials: 0,
-          collected: 0
+          collected: 0,
+          paymentHold: false
         };
         byOrder.set(s.orderId, g);
       }
       g.samples.push(s);
       g.totalVials++;
       if (s.status !== 'pending') g.collected++;
+      if (s.order?.paymentHold) g.paymentHold = true;
     }
     // Meta line = the SAMPLE barcode(s), not the order number — the tube in
     // hand is what the collector matches against. Multi-tube orders show the

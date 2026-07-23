@@ -1826,10 +1826,25 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // it to mark all collected tubes 'dispatched' in one go.
   showDispatchOn(o: Order): boolean {
     if (!this.auth.hasPermission('dispatch_sample')) return false;
+    // Payment hold (server-computed): dispatch WOULD be rejected — the card
+    // shows "Bill" (showBillInsteadOfDispatch) in this slot instead.
+    if (o.paymentHold) return false;
     const samples = o.samples ?? [];
     if (samples.length === 0) return false;
     const allCollected = samples.every(s => s.status === 'collected');
     return allCollected;
+  }
+
+  /** Same all-collected moment as showDispatchOn, but the order is under a
+   *  payment hold — offer "Bill" (→ billing screen) in the Dispatch slot. */
+  showBillInsteadOfDispatch(o: Order): boolean {
+    if (!o.paymentHold) return false;
+    // The standing "Bill" button (status 'created') already covers it — don't
+    // render two Bill buttons on one card.
+    if (o.status === 'created' && this.showCreateBillOn(o)) return false;
+    if (!this.auth.hasPermission('create_bill') && !this.auth.hasPermission('create_order')) return false;
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
   }
 
   /** Per-tube status in 5 buckets — finer than order.status. Drives the
@@ -2293,7 +2308,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly dispatchableSelected = computed<string[]>(() => {
     const sel = this._selectedIds();
     return this.visibleOrders()
-      .filter(o => sel.has(o.id) && o.samples.some(s => s.status === 'collected'))
+      // paymentHold orders are excluded: the backend gate would reject them —
+      // they need billing/payment first (their card shows "Bill").
+      .filter(o => sel.has(o.id) && !o.paymentHold && o.samples.some(s => s.status === 'collected'))
       .map(o => o.id);
   });
 

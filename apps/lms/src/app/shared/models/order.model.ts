@@ -17,6 +17,12 @@ export interface Order {
   createdBy?: string;
   createdAt: string;
   totalAmount?: number;
+  /** Server-computed: 'unbilled' | 'unpaid' | 'paid'. */
+  billStatus?: 'unbilled' | 'unpaid' | 'paid' | null;
+  /** Server-computed: true when the branch's require-bill gate is on and the
+   *  bill isn't settled — a dispatch attempt WILL be rejected, so the UI
+   *  offers "Bill" instead of Dispatch. */
+  paymentHold?: boolean;
   patient?: Patient;
   samples: OrderSample[];
 }
