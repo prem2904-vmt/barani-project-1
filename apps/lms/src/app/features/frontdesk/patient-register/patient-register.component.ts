@@ -133,8 +133,14 @@ export class PatientRegisterComponent implements OnInit {
           this._config.set(cfg);
 
           if (pid) {
-            this.api.get<Patient>(`/api/patients/${pid}`).subscribe({
-              next: p => {
+            this.api.get<{ patient?: Patient } & Patient>(`/api/patients/${pid}`).subscribe({
+              next: res => {
+                // GET /api/patients/{id} returns the profile shape
+                // { patient, history }. Unwrap to the patient (fall back to the
+                // response itself if a bare patient is ever returned) — without
+                // this, every field maps to `undefined` and the edit form loads
+                // blank.
+                const p = (res && (res as { patient?: Patient }).patient) || (res as Patient);
                 const init = this.buildInitialValues(cfg, p);
                 this.initialValues.set(init);
                 this.values.set(init);

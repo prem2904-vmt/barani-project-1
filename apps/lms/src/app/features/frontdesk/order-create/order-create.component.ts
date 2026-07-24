@@ -1,5 +1,6 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -71,6 +72,70 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
   private readonly _priority = signal<Priority>('Normal');
+
+  // ── Trendogram: offer to embed serial-result trend charts in the report ──
+  /** Tests this patient has taken 2+ times (from /lab-trends) — eligibility. */
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal<string>('5');
+  /** Explicit per-chart picks from the popup; null = auto (one per test). */
+  readonly trendogramCharts = signal<Array<{ testId: string; parameter: string }> | null>(null);
+  readonly trendPopupOpen = signal(false);
+
+  /** The config merged into order metadata on submit (null when off). */
+  readonly trendogramConfig = computed(() => {
+    if (!this.trendogramOn() || this.trendEligible().length === 0) return null;
+    const explicit = this.trendogramCharts();
+    const charts = explicit ?? this.trendEligible()
+      .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+      .filter(c => !!c.parameter);
+    if (charts.length === 0) return null;
+    return { enabled: true, duration: this.trendogramDuration(), chartType: 'line', charts };
+  });
+  /** How many charts will be included (for the panel label). */
+  readonly trendogramCount = computed(() => this.trendogramConfig()?.charts.length ?? 0);
+
+  constructor() {
+    // Fetch trend eligibility whenever the attached patient changes.
+    effect(() => {
+      const p = this._patient();
+      if (p?.id) this.loadTrendEligible(p.id);
+      else { this.trendEligible.set([]); this.trendogramOn.set(false); this.trendogramCharts.set(null); }
+    });
+  }
+
+  private loadTrendEligible(patientId: string) {
+    this.api.get<{ tests: TrendTest[] }>(`/api/patients/${patientId}/lab-trends`).subscribe({
+      next: r => {
+        this.trendEligible.set(r?.tests ?? []);
+        this.trendogramCharts.set(null);
+        if ((r?.tests?.length ?? 0) === 0) this.trendogramOn.set(false);
+      },
+      error: () => this.trendEligible.set([]),
+    });
+  }
+
+  /** Popup: is a given (test, parameter) chart selected? (null charts = auto:
+   *  each test's first param.) */
+  isChartSelected(testId: string, parameter: string): boolean {
+    const list = this.trendogramCharts();
+    if (list) return list.some(c => c.testId === testId && c.parameter === parameter);
+    const t = this.trendEligible().find(x => x.testId === testId);
+    return t?.parameters[0]?.parameter === parameter;
+  }
+  toggleChart(testId: string, parameter: string) {
+    // Materialize the auto default into an explicit list on first edit.
+    let list = this.trendogramCharts();
+    if (!list) {
+      list = this.trendEligible()
+        .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+        .filter(c => !!c.parameter);
+    }
+    const idx = list.findIndex(c => c.testId === testId && c.parameter === parameter);
+    this.trendogramCharts.set(idx >= 0
+      ? list.filter((_, i) => i !== idx)
+      : [...list, { testId, parameter }]);
+  }
   private readonly _query = signal<string>('');
   private readonly _cartOpen = signal<boolean>(false);
 
@@ -964,6 +1029,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       error: () => this.toasts.error('Could not load patient details')
     });
   }
+  /** Order metadata JSON — appointment link + optional trendogram config. */
+  private buildOrderMetadata(appointmentId: string | null): string | null {
+    const meta: Record<string, unknown> = {};
+    if (appointmentId) meta['appointmentId'] = appointmentId;
+    const tg = this.trendogramConfig();
+    if (tg) meta['trendogram'] = tg;
+    return Object.keys(meta).length ? JSON.stringify(meta) : null;
+  }
+
   goHome() { this.router.navigateByUrl('/frontdesk'); }
 
   onSearchTab(event: Event) {
@@ -1349,7 +1423,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
       testIds: this._selected(),
-      metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
+      metadataJson: this.buildOrderMetadata(appointmentId)
     }).subscribe({
       next: order => {
         this._saving.set(false);

@@ -20,6 +20,7 @@ import { PatientDocumentsComponent } from './patient-documents.component';
 import { PatientIdCardComponent } from './patient-id-card.component';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
+import { LabTrendsComponent } from './lab-trends.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -156,7 +157,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -180,6 +181,15 @@ export class PatientProfileComponent implements OnInit {
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly showIdCard = signal(false);
+  // Trendogram (serial-result charts) shown on demand from the Lab Orders
+  // corner toggle — hidden by default so it isn't mandatory.
+  readonly showTrendogram = signal(false);
+  // Top-bar overflow menu (secondary actions) + on-demand QR popover — the QR
+  // is no longer always shown; it's behind "Show QR" in the menu.
+  readonly moreOpen = signal(false);
+  readonly qrOpen = signal(false);
+  toggleMore() { this.moreOpen.update(v => !v); }
+  closeMore() { this.moreOpen.set(false); }
   readonly qrValue = computed(() => {
     const p = this._patient();
     if (!p) return '';

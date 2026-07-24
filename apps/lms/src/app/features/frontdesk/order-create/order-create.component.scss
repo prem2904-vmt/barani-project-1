@@ -1837,3 +1837,46 @@
     color: #ef4444;
   }
 }
+
+/* ── Trendogram suggestion + customize popup ─────────────────────── */
+.pf-trend-suggest {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+}
+.pf-trend-suggest__toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.pf-trend-suggest__toggle input { width: 16px; height: 16px; accent-color: #7c3aed; flex-shrink: 0; }
+.pf-trend-suggest__icon { color: #a855f7; display: inline-flex; }
+.pf-trend-suggest__label { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pf-trend-suggest__hint { font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+.pf-trend-suggest__controls { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.pf-trend-suggest__select {
+  background: var(--input-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border);
+  border-radius: 8px; padding: 6px 10px; color: var(--text-primary); font-size: 12.5px;
+}
+.pf-trend-suggest__edit {
+  padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+  background: rgba(124,58,237,0.14); border: 1px solid rgba(168,85,247,0.3); color: var(--text-primary);
+}
+
+.pf-trend-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
+.pf-trend-modal__panel {
+  width: min(520px, calc(100vw - 32px)); max-height: 82vh; display: flex; flex-direction: column;
+  background: var(--bg-card-solid); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden;
+}
+.pf-trend-modal__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--glass-border); }
+.pf-trend-modal__head h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.pf-trend-modal__head p { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.pf-trend-modal__x { background: none; border: 0; color: var(--text-tertiary); font-size: 16px; cursor: pointer; }
+.pf-trend-modal__dur { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--glass-border); font-size: 12.5px; color: var(--text-secondary); }
+.pf-trend-modal__dur select { background: var(--input-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); border-radius: 8px; padding: 6px 10px; color: var(--text-primary); font-size: 12.5px; }
+.pf-trend-modal__list { flex: 1; overflow-y: auto; padding: 8px 18px; }
+.pf-trend-modal__test { padding: 8px 0; border-bottom: 1px solid var(--border-muted); }
+.pf-trend-modal__test-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.pf-trend-modal__test-name span { color: var(--text-tertiary); font-weight: 400; font-size: 11px; }
+.pf-trend-modal__param { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 8px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.pf-trend-modal__param input { width: 15px; height: 15px; accent-color: #7c3aed; }
+.pf-trend-modal__foot { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-top: 1px solid var(--glass-border); font-size: 12.5px; color: var(--text-tertiary); }
+.pf-trend-modal__done { padding: 8px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7); border: 0; }

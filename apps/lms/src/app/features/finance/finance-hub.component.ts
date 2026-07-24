@@ -2,13 +2,25 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { ToastService } from '../../core/services/toast.service';
+import { DatePipe } from '@angular/common';
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
+import { WalletOutstandingPipe } from '../../shared/pipes/wallet-outstanding.pipe';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { downloadCsv } from '../../shared/utils/export-csv';
 
-type Module = 'overall' | 'lab' | 'ipd' | 'opd' | 'pharmacy';
+type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
+
+interface Vendor {
+  id: string; name: string; code?: string;
+  outstanding: number; usedCredit: number; totalCredit: number;
+  notifyThreshold?: number | null; isActive: boolean;
+}
+interface VendorTxn {
+  id: string; vendorId: string; type: string; amount: number;
+  billId?: string | null; reason?: string | null; createdAt: string;
+}
 
 interface ModeTotal { mode: string; count: number; total: number; }
 interface FinanceSummary {
@@ -34,7 +46,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [FormsModule, CurrencyInrPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin">
@@ -57,9 +69,9 @@ interface FinanceSummary {
         @for (m of modules; track m.key) {
           <button type="button" class="pf-fin__tab"
                   [class.pf-fin__tab--on]="module() === m.key"
-                  (click)="module.set(m.key)">
+                  (click)="selectModule(m.key)">
             {{ m.label }}
-            @if (m.key !== 'lab' && m.key !== 'overall') { <span class="pf-fin__soon">soon</span> }
+            @if (m.key === 'ipd' || m.key === 'opd' || m.key === 'pharmacy') { <span class="pf-fin__soon">soon</span> }
           </button>
         }
       </div>
@@ -135,6 +147,70 @@ interface FinanceSummary {
             </ul>
           </pf-tile>
         }
+      } @else if (module() === 'credit') {
+        <!-- Credit Wallet ledger: every B2B partner's running tab, with a
+             per-vendor transaction trace (charges = money owed to us, top-ups /
+             payments = settled). This is the "for this partner, this was
+             charged/minused" audit the finance team asked for. -->
+        <div class="pf-fin__credit-hdr">
+          <div>
+            <p class="pf-fin__credit-title">Credit Wallet ledger</p>
+            <p class="pf-fin__sub">Partner running tabs — expand a partner to see every charge and settlement.</p>
+          </div>
+          @if (vendors().length > 0) {
+            <pf-touch-btn size="sm" variant="secondary" (pressed)="exportWallets()">Download CSV</pf-touch-btn>
+          }
+        </div>
+
+        @if (vendorsLoading()) {
+          <p class="pf-fin__loading">Loading partners…</p>
+        } @else if (vendors().length === 0) {
+          <p class="pf-fin__empty">No credit-wallet partners yet.</p>
+        } @else {
+          <div class="pf-fin__totals">
+            <span>{{ vendors().length }} partner(s)</span>
+            <span>Total owed to us: <strong>{{ totalOwed() | inr }}</strong></span>
+          </div>
+          <ul class="pf-fin__vlist">
+            @for (v of vendors(); track v.id) {
+              <li class="pf-fin__vitem">
+                <button type="button" class="pf-fin__vrow" (click)="toggleVendor(v.id)">
+                  <span class="pf-fin__vname">
+                    {{ v.name }}@if (v.code) { <span class="pf-fin__vcode">{{ v.code }}</span> }
+                  </span>
+                  <span class="pf-fin__vbal"
+                        [class.pf-fin__vbal--due]="v.outstanding > 0"
+                        [class.pf-fin__vbal--credit]="v.outstanding < 0">
+                    {{ v.outstanding | walletOutstanding }}
+                  </span>
+                  <span class="pf-fin__vchev" [class.pf-fin__vchev--open]="expandedVendor() === v.id">›</span>
+                </button>
+                @if (expandedVendor() === v.id) {
+                  <div class="pf-fin__vledger">
+                    @if (txnsLoading()) {
+                      <p class="pf-fin__loading">Loading…</p>
+                    } @else if ((vendorTxns()[v.id] ?? []).length === 0) {
+                      <p class="pf-fin__empty">No transactions.</p>
+                    } @else {
+                      <table class="pf-fin__ledger">
+                        <tbody>
+                          @for (t of vendorTxns()[v.id]; track t.id) {
+                            <tr>
+                              <td class="pf-fin__lt-date">{{ t.createdAt | date:'dd MMM yy, HH:mm' }}</td>
+                              <td class="pf-fin__lt-type" [attr.data-kind]="t.type">{{ t.type }}</td>
+                              <td class="pf-fin__lt-reason">{{ t.reason || '—' }}</td>
+                              <td class="pf-fin__lt-amt" [class.pf-fin__lt-amt--minus]="t.amount < 0">{{ t.amount | inr }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
       } @else {
         <div class="pf-fin__stub">
           <p class="pf-fin__stub-title">{{ moduleLabel() }} finance — coming soon</p>
@@ -164,6 +240,29 @@ interface FinanceSummary {
     .pf-fin__big--pos { color: #6ee7b7; }
     .pf-fin__big--neg { color: #fca5a5; }
     .pf-fin__sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+    /* Credit Wallet ledger */
+    .pf-fin__credit-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .pf-fin__credit-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-fin__totals { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px; }
+    .pf-fin__totals strong { color: var(--text-primary); }
+    .pf-fin__vlist { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .pf-fin__vitem { border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; background: var(--glass-bg); }
+    .pf-fin__vrow { width: 100%; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 12px 14px; background: none; border: 0; text-align: left; cursor: pointer; }
+    .pf-fin__vname { color: var(--text-primary); font-weight: 600; font-size: 14px; }
+    .pf-fin__vcode { margin-left: 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); }
+    .pf-fin__vbal { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--text-secondary); }
+    .pf-fin__vbal--due { color: #fcd34d; }
+    .pf-fin__vbal--credit { color: #6ee7b7; }
+    .pf-fin__vchev { color: var(--text-muted); transition: transform 0.15s; }
+    .pf-fin__vchev--open { transform: rotate(90deg); }
+    .pf-fin__vledger { padding: 4px 14px 12px; border-top: 1px solid var(--glass-border); }
+    .pf-fin__ledger { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .pf-fin__ledger td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    .pf-fin__lt-date { color: var(--text-tertiary); white-space: nowrap; }
+    .pf-fin__lt-type { text-transform: capitalize; color: var(--text-secondary); }
+    .pf-fin__lt-reason { color: var(--text-secondary); }
+    .pf-fin__lt-amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #6ee7b7; white-space: nowrap; }
+    .pf-fin__lt-amt--minus { color: #fca5a5; }
     .pf-fin__rows { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     .pf-fin__rows li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; font-size: 13px; }
     .pf-fin__mode { color: var(--text-primary); text-transform: capitalize; }
@@ -182,12 +281,28 @@ export class FinanceHubComponent implements OnInit {
   readonly modules: { key: Module; label: string }[] = [
     { key: 'overall', label: 'Overall' },
     { key: 'lab', label: 'Lab' },
+    { key: 'credit', label: 'Credit Wallet' },
     { key: 'ipd', label: 'IPD' },
     { key: 'opd', label: 'OPD' },
     { key: 'pharmacy', label: 'Pharmacy' },
   ];
   readonly module = signal<Module>('lab');
   readonly moduleLabel = computed(() => this.modules.find(m => m.key === this.module())?.label ?? '');
+
+  selectModule(key: Module) {
+    this.module.set(key);
+    if (key === 'credit') this.loadVendors();
+  }
+
+  // ── Credit Wallet ledger state ──────────────────────────
+  readonly vendors = signal<Vendor[]>([]);
+  readonly vendorsLoading = signal(false);
+  private vendorsLoaded = false;
+  readonly expandedVendor = signal<string | null>(null);
+  readonly vendorTxns = signal<Record<string, VendorTxn[]>>({});
+  readonly txnsLoading = signal(false);
+  readonly totalOwed = computed(() =>
+    this.vendors().reduce((s, v) => s + Math.max(0, v.outstanding), 0));
 
   fromDate = this.isoDaysAgo(29);
   toDate = this.isoDaysAgo(0);
@@ -244,5 +359,43 @@ export class FinanceHubComponent implements OnInit {
       ['Net position', '', s.netPosition],
     ];
     downloadCsv(`finance-lab-${this.fromDate}_to_${this.toDate}.csv`, rows);
+  }
+
+  // ── Credit Wallet ledger ────────────────────────────────
+  loadVendors() {
+    if (this.vendorsLoaded) return;
+    this.vendorsLoaded = true;
+    this.vendorsLoading.set(true);
+    this.api.get<Vendor[]>('/api/vendors?includeInactive=true').subscribe({
+      next: l => { this.vendors.set(l ?? []); this.vendorsLoading.set(false); },
+      error: () => { this.vendorsLoading.set(false); this.toasts.error('Could not load partners'); },
+    });
+  }
+
+  toggleVendor(id: string) {
+    if (this.expandedVendor() === id) { this.expandedVendor.set(null); return; }
+    this.expandedVendor.set(id);
+    if (this.vendorTxns()[id]) return;   // cached
+    this.txnsLoading.set(true);
+    this.api.get<VendorTxn[]>(`/api/vendors/${id}/transactions?limit=200`).subscribe({
+      next: l => {
+        this.vendorTxns.update(m => ({ ...m, [id]: l ?? [] }));
+        this.txnsLoading.set(false);
+      },
+      error: () => { this.txnsLoading.set(false); this.toasts.error('Could not load transactions'); },
+    });
+  }
+
+  exportWallets() {
+    const rows: Array<Array<unknown>> = [
+      ['Prefrontal — Credit Wallet ledger'],
+      [],
+      ['Partner', 'Code', 'Charged', 'Settled', 'Outstanding', 'Status'],
+      ...this.vendors().map(v => [
+        v.name, v.code ?? '', v.usedCredit, v.totalCredit, v.outstanding,
+        v.outstanding > 0 ? 'due' : v.outstanding < 0 ? 'in credit' : 'settled',
+      ]),
+    ];
+    downloadCsv('credit-wallet-ledger.csv', rows);
   }
 }

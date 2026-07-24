@@ -16,6 +16,7 @@ import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from 
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -69,7 +70,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
   imports: [
-    CurrencyInrPipe,
+    CurrencyInrPipe, WalletOutstandingPipe,
     NumPadComponent,
     ScreenHeaderComponent,
     TileComponent,
@@ -391,7 +392,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                  balance". Never blocks. -->
                             <p class="pf-eyebrow">Outstanding after</p>
                             <p class="pf-wallet-selected__bal">
-                              {{ (v.outstanding + effectivePayable()) | inr }}
+                              {{ (v.outstanding + effectivePayable()) | walletOutstanding }}
                             </p>
                             @if (v.notifyThreshold && (v.outstanding + effectivePayable()) >= v.notifyThreshold) {
                               <p class="pf-wallet-selected__warn">Over the {{ v.notifyThreshold | inr }} alert threshold</p>
@@ -428,7 +429,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                 @if (showWalletBalance()) {
                                   <span class="pf-wallet-row__bal"
                                         [class.pf-wallet-row__bal--low]="v.outstanding > 0">
-                                    {{ v.outstanding | inr }} due
+                                    {{ v.outstanding | walletOutstanding }}
                                   </span>
                                 }
                               </button>

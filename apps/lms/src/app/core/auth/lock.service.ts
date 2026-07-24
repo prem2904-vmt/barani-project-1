@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { StoredAccount } from './accounts.service';
 
@@ -12,7 +12,12 @@ export class LockService {
 
   private readonly auth = inject(AuthService);
   private readonly _locked = signal<boolean>(this.restoreLocked());
-  readonly locked = this._locked.asReadonly();
+  /** The lock only counts when a PIN-enabled account is signed in. A PIN-less
+   *  user (or a signed-out state) is NEVER locked, even if a stale pf.lockedAt
+   *  key lingers — that key belonged to a different session and must not strand
+   *  a user who has no PIN to unlock with. */
+  readonly locked = computed(() =>
+    this._locked() && this.auth.isAuthenticated() && !!this.auth.user()?.hasPin);
 
   /** Profile being switched INTO — drives the full-screen switch screen
    *  (Windows-style: leave the current account, meet the target's PIN gate). */
@@ -35,6 +40,9 @@ export class LockService {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.tick();
     });
+    // A fresh credential sign-in clears any stale idle-lock (raised by
+    // AuthService.signIn) — the person just proved who they are.
+    window.addEventListener('pf:fresh-signin', () => this.clearAfterSwitch());
     // Manual lock shortcuts. Browsers NEVER deliver bare ⌘L (address bar), so
     // the working combos are: Ctrl+L (free on every platform, incl. macOS) and
     // ⌘⇧L (delivered + overridable in Safari/Chrome, unlike bare ⌘L). Matching

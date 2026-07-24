@@ -175,6 +175,15 @@ interface ModeDef {
                     Change
                   </button>
                 </div>
+                <!-- Live balance: current outstanding, and where it lands after
+                     this order is charged to the tab. -->
+                @if (selectedVendor(vid); as sv) {
+                  <div class="pf-ipp__vbalance">
+                    <span class="pf-ipp__vbalance-now">Current: {{ outstandingLabel(sv.outstanding) }}</span>
+                    <span class="pf-ipp__vbalance-arrow" aria-hidden="true">→</span>
+                    <span class="pf-ipp__vbalance-after">After this order: {{ outstandingLabel(sv.outstanding + amount()) }}</span>
+                  </div>
+                }
               } @else {
                 <input
                   class="pf-ipp__input"
@@ -197,8 +206,8 @@ interface ModeDef {
                         >
                           <span>{{ v.name }}</span
                           ><span class="pf-ipp__vbal">{{
-                            v.outstanding | inr
-                          }} due</span>
+                            outstandingLabel(v.outstanding)
+                          }}</span>
                         </button>
                       </li>
                     }
@@ -515,6 +524,21 @@ interface ModeDef {
         background: var(--glass-bg, rgba(255, 255, 255, 0.04));
         border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
       }
+      .pf-ipp__vbalance {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: rgba(124, 58, 237, 0.08);
+        border: 1px solid rgba(168, 85, 247, 0.22);
+        font-size: 12px;
+      }
+      .pf-ipp__vbalance-now { color: var(--text-secondary, #cbd5e1); }
+      .pf-ipp__vbalance-arrow { color: var(--text-muted, #94a3b8); }
+      .pf-ipp__vbalance-after { color: var(--text-primary, #f1f5f9); font-weight: 600; }
       .pf-ipp__link {
         background: none;
         border: 0;
@@ -769,6 +793,16 @@ export class InlinePaymentPanelComponent implements OnInit {
   });
   vendorName(id: string): string {
     return this.vendors()?.find((v) => v.id === id)?.name ?? "Vendor";
+  }
+  /** The selected vendor's live wallet, for the in-cart balance line. */
+  selectedVendor(id: string): VendorWallet | undefined {
+    return this.vendors()?.find((v) => v.id === id);
+  }
+  /** Format an outstanding figure: "₹X due" / "₹Y in credit" / "Settled". */
+  outstandingLabel(n: number): string {
+    if (Math.abs(n) < 0.005) return 'Settled';
+    const f = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+    return n > 0 ? `${f.format(n)} due` : `${f.format(-n)} in credit`;
   }
   private loadVendors() {
     if (this.vendors() !== null) return;

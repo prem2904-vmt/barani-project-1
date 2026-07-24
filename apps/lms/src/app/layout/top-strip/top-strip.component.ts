@@ -86,7 +86,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
-  readonly primary = computed(() => this.gateModules(this.withCollection(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV)))));
+  readonly primary = computed(() => this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)))));
 
   /** Guarantee a reachable "Collect" work area for anyone who can draw samples.
    *  The Lab work area intentionally excludes collect_sample, and the

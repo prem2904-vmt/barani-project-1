@@ -7,6 +7,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -67,7 +68,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
   selector: 'pf-vendors',
   standalone: true,
   imports: [
-    FormsModule, CurrencyInrPipe,
+    FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent,
     LoadingLogoComponent
   ],
@@ -171,8 +172,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
                 <div class="pf-vendor__balance">
                   <p class="pf-eyebrow">Outstanding</p>
                   <p class="pf-vendor__bal-amt" [class.pf-vendor__bal-amt--low]="v.outstanding > 0"
-                     [class.pf-vendor__bal-amt--over]="overThreshold(v)">
-                    {{ v.outstanding | inr }}
+                     [class.pf-vendor__bal-amt--over]="overThreshold(v)"
+                     [class.pf-vendor__bal-amt--credit]="v.outstanding < 0">
+                    {{ v.outstanding | walletOutstanding }}
                   </p>
                   <p class="pf-vendor__meta">
                     {{ v.usedCredit | inr }} charged · {{ v.totalCredit | inr }} settled
@@ -363,6 +365,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
        fully settled / in credit stays green (default). */
     .pf-vendor__bal-amt--low { color: #fcd34d; }
     .pf-vendor__bal-amt--over { color: #fca5a5; }
+    .pf-vendor__bal-amt--credit { color: #6ee7b7; }
     .pf-vendor__meta--over { color: #fca5a5; }
     .pf-vendor__bar {
       margin-top: 6px; height: 4px;

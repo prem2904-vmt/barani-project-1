@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -124,6 +125,30 @@ function defaultResultParam(): TestParameter {
           </button>
         }
       </header>
+
+      <!-- Trendogram: offer to embed serial-result trend charts in the report.
+           Shown only when this patient has repeat tests. Persists on the order,
+           so it applies when the report generates on validation. -->
+      @if (trendEligible().length > 0) {
+        <div class="pf-sre__trend">
+          <label class="pf-sre__trend-toggle">
+            <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            <span>Include Trendogram in report
+              <em>{{ trendEligible().length }} repeat test{{ trendEligible().length === 1 ? '' : 's' }} · trend charts</em>
+            </span>
+          </label>
+          @if (trendogramOn()) {
+            <select class="pf-sre__trend-sel" [value]="trendogramDuration()" (change)="setTrendDuration($any($event.target).value)">
+              <option value="5">Last 5 tests</option>
+              <option value="10">Last 10 tests</option>
+              <option value="3m">Last 3 months</option>
+              <option value="6m">Last 6 months</option>
+              <option value="all">All time</option>
+            </select>
+          }
+        </div>
+      }
 
       @if (loading()) {
         <div class="pf-sre__msg flex justify-center py-10">
@@ -1141,6 +1166,22 @@ function defaultResultParam(): TestParameter {
         padding-bottom: 12px;
       }
     }
+
+    .pf-sre__trend {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin: 10px 0 4px; padding: 10px 14px; border-radius: 12px;
+      background: rgba(124,58,237,0.06); border: 1px solid rgba(168,85,247,0.22);
+    }
+    .pf-sre__trend-toggle { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+    .pf-sre__trend-toggle input { width: 16px; height: 16px; accent-color: #7c3aed; flex-shrink: 0; }
+    .pf-sre__trend-toggle svg { color: #a855f7; flex-shrink: 0; }
+    .pf-sre__trend-toggle span { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sre__trend-toggle em { font-style: normal; font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+    .pf-sre__trend-sel {
+      margin-left: auto; background: var(--input-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border); border-radius: 8px; padding: 6px 10px;
+      color: var(--text-primary); font-size: 12.5px;
+    }
   `]
 })
 export class SampleResultEntryComponent {
@@ -1163,6 +1204,42 @@ export class SampleResultEntryComponent {
   readonly sample = this._sample.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
+
+  // ── Trendogram: add serial-result trend charts to this order's report ──
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal('5');
+  private trendPatientId: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const pid = this.sample()?.order?.patient?.id ?? null;
+      if (pid && pid !== this.trendPatientId) {
+        this.trendPatientId = pid;
+        this.api.get<{ tests: TrendTest[] }>(`/api/patients/${pid}/lab-trends`).subscribe({
+          next: r => this.trendEligible.set(r?.tests ?? []),
+          error: () => this.trendEligible.set([]),
+        });
+      }
+    });
+  }
+
+  toggleTrendogram() { this.trendogramOn.set(!this.trendogramOn()); this.saveTrendogram(); }
+  setTrendDuration(d: string) { this.trendogramDuration.set(d); if (this.trendogramOn()) this.saveTrendogram(); }
+  private saveTrendogram() {
+    const oid = this.sample()?.orderId ?? this.sample()?.order?.id;
+    if (!oid) return;
+    const body = this.trendogramOn()
+      ? { enabled: true, duration: this.trendogramDuration(), chartType: 'line',
+          charts: this.trendEligible()
+            .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+            .filter(c => !!c.parameter) }
+      : {};
+    this.api.patch(`/api/orders/${oid}/trendogram`, body).subscribe({
+      next: () => this.toasts.success(this.trendogramOn() ? 'Trendogram will be added to the report' : 'Trendogram removed'),
+      error: () => this.toasts.error('Could not update trendogram'),
+    });
+  }
 
   /** A submitted (awaiting-validation) test exists → can be re-opened to edit. */
   readonly hasReopenable = computed(() =>

@@ -14,10 +14,34 @@
   overflow: hidden;
 }
 
-/* The patient-branch grid is the flex:1 content region. */
+/* ── Mobile tabs: active tab labeled, the rest icon-only ──────────────────
+   Hide everything after the leading icon (label, count badge, lock) for
+   NON-active tabs on phones; the active tab keeps its full label so you can
+   still see where you are. */
+@media (max-width: 767px) {
+  .pf-pp__tabbar > button:not(.pf-pp__tab-active) > span > *:not(:first-child) {
+    display: none;
+  }
+  /* Spread the tabs evenly so the icons line up across the bar instead of
+     packing to the left. */
+  .pf-pp__tabbar { justify-content: space-between; }
+  .pf-pp__tabbar > button { flex: 0 0 auto; }
+  /* Icon-only tabs: even square-ish footprint so icons align. */
+  .pf-pp__tabbar > button:not(.pf-pp__tab-active) {
+    padding-left: 0.55rem; padding-right: 0.55rem;
+    justify-content: center;
+  }
+  .pf-pp__tabbar > button > span { justify-content: center; }
+}
+
+/* Single-column layout now (top bar + full-width content). The grid scrolls as
+   ONE region at every width — no more independent 2-column scroll tracks. */
 .pf-pp__grid {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Loading-skeleton and empty-state branches: fill the remaining height and
@@ -29,47 +53,155 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Phone + iPad (single column, below Tailwind xl=1280): the whole stacked
-   column scrolls as ONE region — no double scrollbars. Covers iPad-landscape
-   too now, which stays single-column for breathing room. */
-@media (max-width: 1279.98px) {
-  .pf-pp__grid {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    /* breathing room above the home-indicator / soft nav on touch shells */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
+/* ── Patient top bar ─────────────────────────────────────── */
+/* Pinned to the top of the scroll region so the patient stays "locked" to the
+   screen while the tabs/content scroll underneath. */
+.pf-pp__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
-/* Desktop only (2-col grid at xl+): the grid itself does not scroll; each
-   column scrolls independently inside its own min-height:0 track. */
-@media (min-width: 1280px) {
-  .pf-pp__grid {
-    overflow: hidden;
-    /* Stretch both columns to the grid's full height so each can own its
-       own scroll track (overrides the template's `items-start`). */
-    align-items: stretch;
+/* ── Trendogram panel ────────────────────────────────────── */
+/* Fills the Lab Orders content area (patient bar + tab bar stay put); the
+   corner toggle swaps it with the orders list. Chart runs tall to use the
+   space. */
+.pf-pp__trendo-panel {
+  background: var(--bg-card-solid);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-radius: 16px;
+  padding: 20px;
+  animation: pf-pp-fade 0.16s ease-out;
+}
+.pf-pp__trendo-panel ::ng-deep .pf-lt__chart { height: min(58vh, 540px) !important; }
+.pf-pp__trendo-panel ::ng-deep .pf-lt__list { max-height: min(58vh, 540px) !important; }
+.pf-pp__idblock { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pf-pp__tb-back {
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--glass-border); color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+.pf-pp__tb-name { font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1.15; letter-spacing: -0.01em; }
+.pf-pp__tb-demo {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-top: 2px; font-size: 12px; color: var(--text-secondary); font-weight: 500;
+}
+.pf-pp__tb-sep { color: var(--text-tertiary); user-select: none; }
+.pf-pp__tb-id { color: var(--text-secondary); font-weight: 600; }
+.pf-pp__tb-rest { display: inline-flex; align-items: center; gap: 7px; }
+/* On phones, drop the age/sex · phone · blood group to a smaller secondary
+   line so name + ID lead. ID + copy stay together on line 1. */
+@media (max-width: 639.98px) {
+  .pf-pp__tb-rest {
+    flex-basis: 100%;      /* wrap onto its own line */
+    font-size: 11px;
+    opacity: 0.85;
+    margin-top: 2px;
   }
-  .pf-pp__col {
-    min-width: 0;       /* allow flex/grid children to truncate */
-    min-height: 0;
-    height: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  /* Right column keeps its tab bar pinned and scrolls only the tab body. */
-  .pf-pp__col--right {
-    overflow: hidden;   /* inner .pf-pp__tab-content owns the scroll */
-  }
-  .pf-pp__col--right .pf-pp__tabbar {
-    flex: 0 0 auto;
-  }
-  .pf-pp__col--right .pf-pp__tab-content {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  .pf-pp__tb-rest .pf-pp__tb-sep:first-child { display: none; }
+}
+.pf-pp__tb-copy {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px; border-radius: 4px; color: var(--text-tertiary);
+}
+.pf-pp__tb-copy:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+.pf-pp__tb-actions { display: flex; align-items: center; gap: 8px; }
+.pf-pp__tb-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--glass-border); color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);
+}
+.pf-pp__tb-btn:hover { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.4); }
+.pf-pp__tb-btn--on { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.5); }
+.pf-pp__tb-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 16px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #db2777);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+.pf-pp__tb-cta:hover { filter: brightness(1.08); }
+
+/* Edit lives in the bar on sm+, folds into the ⋯ menu on phones (so the bar
+   isn't cluttered with a lone icon-only button). !important beats the scoped
+   base-class display. */
+@media (max-width: 639.98px) { .pf-pp__edit-desktop { display: none !important; } }
+@media (min-width: 640px)    { .pf-pp__edit-mobile  { display: none !important; } }
+
+/* ── Mobile pass (≤640px): a tight, tidy patient bar — just name + ID, with a
+   compact "+" (new lab order) and a ⋯ that holds the demographics + the
+   secondary actions. Comfortable 44px touch targets. ── */
+@media (max-width: 640px) {
+  /* Name + ID on the left, the +/⋯ actions pinned top-right (so the row is
+     balanced and the ⋯ menu opens on-screen instead of clipping left). */
+  .pf-pp__topbar { padding: 12px 14px; gap: 10px; flex-wrap: nowrap; align-items: flex-start; }
+  .pf-pp__idblock { flex: 1 1 auto; min-width: 0; }
+  .pf-pp__tb-actions { flex-shrink: 0; }
+  .pf-pp__tb-name { font-size: 17px; }
+  /* Demographics leave the bar entirely — they live in the ⋯ menu now. */
+  .pf-pp__tb-rest { display: none !important; }
+  /* Actions: a compact "+" square + the ⋯ square, both 44px. */
+  .pf-pp__tb-cta { width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .pf-pp__cta-label { display: none; }        /* icon-only CTA */
+  .pf-pp__more > .pf-pp__tb-btn { height: 44px; width: 44px; padding: 0; }
+}
+/* Never let the ⋯ menu run off the screen edge. */
+.pf-pp__menu { max-width: calc(100vw - 28px); }
+
+/* Overflow menu */
+.pf-pp__more { position: relative; }
+.pf-pp__menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.pf-pp__menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 41;
+  min-width: 200px; padding: 6px; border-radius: 12px;
+  background: var(--bg-card-solid); border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pf-pp__menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); text-align: left; background: none; border: 0; cursor: pointer;
+}
+.pf-pp__menu-item:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); color: var(--text-primary); }
+.pf-pp__menu-item svg { color: var(--text-tertiary); flex-shrink: 0; }
+/* Demographics header inside the ⋯ menu — phones only (desktop shows them in
+   the bar). */
+.pf-pp__menu-demo {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+@media (max-width: 640px) { .pf-pp__menu-demo { display: flex; } }
+
+/* On-demand QR popover */
+.pf-pp__qr-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px);
+}
+.pf-pp__qr-card {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  padding: 24px; border-radius: 20px; background: #fff; color: #000;
+}
+.pf-pp__qr-close {
+  position: absolute; top: 8px; right: 10px; width: 28px; height: 28px;
+  border: 0; background: none; color: #64748b; font-size: 16px; cursor: pointer;
 }
 
 .scrollbar-none::-webkit-scrollbar {

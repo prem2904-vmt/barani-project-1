@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -412,6 +413,21 @@ interface ValueRow {
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   <span class="pf-btn-label">Edit values</span>
                 </button>
+              }
+              @if (trendEligible().length > 0) {
+                <label class="pf-trend-chk" title="Embed serial-result trend charts in the report">
+                  <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+                  <span>Trendogram</span>
+                  @if (trendogramOn()) {
+                    <select (click)="$event.stopPropagation()" [value]="trendogramDuration()" (change)="setTrendDuration($any($event.target).value)">
+                      <option value="5">Last 5</option>
+                      <option value="10">Last 10</option>
+                      <option value="3m">3 mo</option>
+                      <option value="6m">6 mo</option>
+                      <option value="all">All</option>
+                    </select>
+                  }
+                </label>
               }
               <button type="button"
                       class="pf-btn pf-btn--icony"
@@ -1404,11 +1420,58 @@ interface ValueRow {
       :host-context(html.cap-native) .pf-drawer { top: auto; }
       :host-context(html.cap-native) .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
     }
+
+    .pf-trend-chk {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      padding: 7px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary); background: rgba(124,58,237,0.08); border: 1px solid rgba(168,85,247,0.25);
+    }
+    .pf-trend-chk input { width: 15px; height: 15px; accent-color: #7c3aed; }
+    .pf-trend-chk select {
+      background: var(--input-bg, rgba(255,255,255,0.05)); border: 1px solid var(--glass-border);
+      border-radius: 6px; padding: 3px 6px; color: var(--text-primary); font-size: 11.5px;
+    }
   `]
 })
 export class ValidateResultComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+
+  // ── Trendogram: add serial-result trend charts to this order's report ──
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal('5');
+  private trendPatientId: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const pid = this.selected()?.subOrder?.order?.patient?.id ?? null;
+      if (pid && pid !== this.trendPatientId) {
+        this.trendPatientId = pid;
+        this.api.get<{ tests: TrendTest[] }>(`/api/patients/${pid}/lab-trends`).subscribe({
+          next: r => this.trendEligible.set(r?.tests ?? []),
+          error: () => this.trendEligible.set([]),
+        });
+      }
+    });
+  }
+
+  toggleTrendogram() { this.trendogramOn.set(!this.trendogramOn()); this.saveTrendogram(); }
+  setTrendDuration(d: string) { this.trendogramDuration.set(d); if (this.trendogramOn()) this.saveTrendogram(); }
+  private saveTrendogram() {
+    const oid = this.selected()?.subOrder?.order?.id;
+    if (!oid) return;
+    const body = this.trendogramOn()
+      ? { enabled: true, duration: this.trendogramDuration(), chartType: 'line',
+          charts: this.trendEligible()
+            .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+            .filter(c => !!c.parameter) }
+      : {};
+    this.api.patch(`/api/orders/${oid}/trendogram`, body).subscribe({
+      next: () => this.toasts.success(this.trendogramOn() ? 'Trendogram will be added to the report' : 'Trendogram removed'),
+      error: () => this.toasts.error('Could not update trendogram'),
+    });
+  }
   private readonly dialog = inject(DialogService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
