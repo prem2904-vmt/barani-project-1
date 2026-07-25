@@ -1232,6 +1232,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.auth.hasPermission('collect_sample') &&
     (!this.viewOrderId() || (this.order()?.samples ?? []).some(s => s.status === 'pending'))
   );
+  /** Switch this (unpaid) order into edit mode to change its tests. */
+  editThisOrder() {
+    const id = this.viewOrderId();
+    if (id) this.router.navigate(['/frontdesk/order'], { queryParams: { editOrderId: id } });
+  }
+
   collectPaidSample() {
     const oid = this.paidOrderId();
     if (!oid) return;

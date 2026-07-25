@@ -2063,29 +2063,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
   checkIn(a: Appointment) {
-    // Backend returns { appointment, order, next }:
-    //   • order != null  → tests were pre-booked, an order has been
-    //     spawned automatically. The patient is now in In-Progress on
-    //     this same screen — no navigation needed.
-    //   • order == null  → no tests on the appointment, reception must
-    //     pick tests now. We navigate to the order-create page with
-    //     ?patientId=&appointmentId= so the order links back.
-    this.api.patch<{ appointment: Appointment; order: Order | null; next: string }>(
-      `/api/appointments/${a.id}/checkin`
-    ).subscribe({
-      next: res => {
-        if (res?.order) {
-          this.toasts.success(`${a.patient?.displayName ?? 'Patient'} checked in — order in progress`);
-          this.refresh();
-        } else {
-          // No tests yet → reception needs to add them on the order
-          // page, then the order will appear in In-Progress on return.
-          this.toasts.info(`${a.patient?.displayName ?? 'Patient'} checked in — pick tests to start the order`);
-          this.refresh();
-          this.router.navigate(['/frontdesk/order'], {
-            queryParams: { patientId: a.patientId, appointmentId: a.id }
-          });
-        }
+    // Check-in flips the appointment to checked-in but does NOT auto-create an
+    // order. Reception always lands on a FRESH order at the desk with the
+    // pre-booked tests PRE-FILLED (?patientId=&appointmentId= preloads the
+    // appointment's TestIds) — they review/change the tests, then Create + bill
+    // + collect payment exactly like a manual walk-in.
+    this.api.patch(`/api/appointments/${a.id}/checkin`).subscribe({
+      next: () => {
+        const name = a.patient?.displayName ?? 'Patient';
+        this.toasts.success(`${name} checked in — review & create the order`);
+        this.refresh();
+        this.router.navigate(['/frontdesk/order'], {
+          queryParams: { patientId: a.patientId, appointmentId: a.id }
+        });
       },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
