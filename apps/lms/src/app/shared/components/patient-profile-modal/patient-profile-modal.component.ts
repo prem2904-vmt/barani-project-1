@@ -13,6 +13,7 @@ import { Patient, patientDisplayName, patientMrnLabel, formatPatientInfo } from 
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
+import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
 
 interface HistoryRow {
   id: string;
@@ -59,7 +60,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [CommonModule, AvatarComponent, SelectComponent, LoadingLogoComponent],
+  imports: [CommonModule, AvatarComponent, SelectComponent, LoadingLogoComponent, AbhaWizardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
@@ -224,16 +225,21 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                 </div>
                 <div class="pf-pp-abha-card__actions">
                   @if (patient()!.abhaId) {
+                    @if (!patient()!.abhaVerified) {
+                      <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--accent"
+                              (click)="openAbhaWizard()">Verify</button>
+                    }
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--rose"
                             (click)="unlinkAbha()" [disabled]="abhaBusy()">Unlink</button>
                   } @else {
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--accent"
-                            (click)="startAbhaLink()">Link existing</button>
-                    <button type="button" class="pf-pp-mini-btn"
-                            (click)="startAbhaCreate()">Create new</button>
+                            (click)="openAbhaWizard()">Link / Create ABHA</button>
                   }
                 </div>
               </div>
+              @if (abhaWizardOpen() && patient(); as p) {
+                <pf-abha-wizard [patientId]="p.id" (close)="closeAbhaWizard()" (done)="onAbhaWizardDone($event)"></pf-abha-wizard>
+              }
             </section>
 
             <!-- ── Visit history ──────────────────────────────── -->
@@ -993,6 +999,14 @@ export class PatientProfileModalComponent {
 
   readonly abhaLinkOpen = this._abhaLinkOpen.asReadonly();
   readonly abhaCreateOpen = this._abhaCreateOpen.asReadonly();
+  private readonly _abhaWizardOpen = signal(false);
+  readonly abhaWizardOpen = this._abhaWizardOpen.asReadonly();
+  openAbhaWizard() { this._abhaWizardOpen.set(true); }
+  closeAbhaWizard() { this._abhaWizardOpen.set(false); }
+  onAbhaWizardDone(updated: Patient) {
+    if (updated) this._patient.set({ ...(this._patient() ?? {} as Patient), ...updated });
+    this._abhaWizardOpen.set(false);
+  }
   readonly abhaBusy = this._abhaBusy.asReadonly();
   readonly abhaError = this._abhaError.asReadonly();
 

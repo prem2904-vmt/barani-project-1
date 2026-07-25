@@ -23,6 +23,7 @@ import { BarcodeDisplayComponent } from '../../../shared/components/barcode-disp
 import { LabTrendsComponent } from './lab-trends.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { LabOrdersComponent } from './lab-orders.component';
+import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -159,7 +160,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent, LabOrdersComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent, LabOrdersComponent, AbhaWizardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -188,6 +189,13 @@ export class PatientProfileComponent implements OnInit {
   readonly showTrendogram = signal(false);
   /** Full-screen Patient Timeline overlay (rendered at shell root). */
   readonly patientTimeline = inject(PatientTimelineService);
+  /** ABHA (ABDM) create/verify wizard. */
+  readonly abhaWizardOpen = signal(false);
+  onAbhaDone(updated: Patient) {
+    if (updated) this._patient.set({ ...(this._patient() ?? {} as Patient), ...updated });
+    this.abhaWizardOpen.set(false);
+    this.toasts.success('ABHA linked & verified');
+  }
   // Top-bar overflow menu (secondary actions) + on-demand QR popover — the QR
   // is no longer always shown; it's behind "Show QR" in the menu.
   readonly moreOpen = signal(false);
@@ -202,6 +210,37 @@ export class PatientProfileComponent implements OnInit {
   });
   readonly displayName = computed(() => patientDisplayName(this._patient()));
   protected readonly formatPatient = formatPatientInfo;
+
+  // ── ABHA health card (real ABDM card look) ──────────────────────────────
+  /** 14-digit ABHA as the official 2-4-4-4 grouping, e.g. 91-6723-6210-7704. */
+  readonly abhaFormatted = computed(() => {
+    const id = (this._patient()?.abhaId || '').replace(/\D/g, '');
+    return id.length === 14
+      ? `${id.slice(0, 2)}-${id.slice(2, 6)}-${id.slice(6, 10)}-${id.slice(10, 14)}`
+      : (this._patient()?.abhaId || '—');
+  });
+  /** Card QR — encodes the ABHA in the same shape our registration prefill reads
+   *  (hidn/hid/name/gender/dob/mobile) so scanning this card round-trips. */
+  readonly abhaQrValue = computed(() => {
+    const p = this._patient();
+    if (!p?.abhaId) return '';
+    return JSON.stringify({
+      hidn: (p.abhaId || '').replace(/\D/g, ''),
+      hid: p.abhaAddress || '',
+      name: patientDisplayName(p),
+      gender: p.sex || '',
+      dob: p.dateOfBirth ? String(p.dateOfBirth).slice(0, 10) : '',
+      mobile: p.phone || ''
+    });
+  });
+  /** Two-letter initials for the card photo placeholder. */
+  readonly initials = computed(() => {
+    const parts = this.displayName().trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  });
+  /** 12 rotations × a full-diameter line = the Ashoka Chakra's 24 spokes. */
+  protected readonly chakraSpokes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
   readonly copied = signal(false);
 

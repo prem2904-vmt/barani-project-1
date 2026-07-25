@@ -13,6 +13,8 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
+import { AbhaPrefillComponent, AbhaPrefillData } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues } from '../../../shared/models/workflow.model';
 
 @Component({
@@ -22,7 +24,9 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
     WorkflowRendererComponent,
     ScreenHeaderComponent,
     TileComponent,
-    LoadingLogoComponent
+    LoadingLogoComponent,
+    AbhaWizardComponent,
+    AbhaPrefillComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -33,6 +37,27 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
         [title]="patientId() ? 'Edit Patient Details' : 'Register Patient'"
         subtitle="Capture the patient's details — name, contact, ID, and any extras you collect.">
       </pf-screen-header>
+
+      @if (!patientId() && config()) {
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3 px-3.5 py-3 rounded-xl"
+             style="background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(168,85,247,0.08)); border: 1px solid rgba(168,85,247,0.28);">
+          <div class="min-w-0 flex items-center gap-2.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div class="min-w-0">
+              <span class="text-sm font-bold text-[var(--text-primary)]">Patient already has an ABHA?</span>
+              <p class="text-xs text-[var(--text-tertiary)]">Scan the ABHA QR or enter the number to auto-fill this form from their KYC.</p>
+            </div>
+          </div>
+          <button type="button" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer transition-colors"
+                  (click)="abhaPrefillOpen.set(true)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21v.01M17 21h.01M21 17h.01"/></svg>
+            Fetch from ABHA
+          </button>
+        </div>
+        @if (abhaPrefillOpen()) {
+          <pf-abha-prefill (close)="abhaPrefillOpen.set(false)" (fetched)="applyAbhaPrefill($event)"></pf-abha-prefill>
+        }
+      }
 
       <pf-tile tone="default" padding="lg" class="block">
         @if (config(); as cfg) {
@@ -54,6 +79,25 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
           </div>
         }
       </pf-tile>
+
+      @if (patientId(); as pid) {
+        <pf-tile tone="default" padding="md" class="block mt-4">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="min-w-0">
+              <span class="text-sm font-bold text-[var(--text-primary)]">ABHA (Health ID)</span>
+              <p class="text-xs text-[var(--text-tertiary)]">Create a new ABHA or verify an existing one via ABDM OTP.</p>
+            </div>
+            <button type="button" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer transition-colors"
+                    (click)="abhaWizardOpen.set(true)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Verify / Create ABHA
+            </button>
+          </div>
+        </pf-tile>
+        @if (abhaWizardOpen()) {
+          <pf-abha-wizard [patientId]="pid" (close)="abhaWizardOpen.set(false)" (done)="onAbhaDone($event)"></pf-abha-wizard>
+        }
+      }
 
       <!-- <p class="text-[11px] font-mono mt-3 px-1" style="color: var(--text-muted);">
         Config: patient_registration v{{ record()?.version ?? '—' }}
@@ -99,7 +143,75 @@ export class PatientRegisterComponent implements OnInit {
   readonly saving = this._saving.asReadonly();
 
   protected readonly patientId = signal<string | null>(null);
+  /** ABHA (ABDM) create/verify wizard — edit mode only (needs a patient id). */
+  protected readonly abhaWizardOpen = signal(false);
+  onAbhaDone(p: Patient) {
+    this.abhaWizardOpen.set(false);
+    this.toasts.success('ABHA verified — patient details updated from KYC');
+    // The KYC demographics were mapped onto the patient server-side; open the
+    // profile so the filled-in name/sex/DOB/phone are visible.
+    if (p?.id) this.router.navigate(['/frontdesk/patients', p.id]);
+  }
   protected readonly initialValues = signal<WorkflowFormValues>({});
+
+  /** ABHA prefill (NEW registration) — enter number/scan QR → fill the form. */
+  protected readonly abhaPrefillOpen = signal(false);
+
+  /**
+   * Map ABHA/KYC demographics onto the dynamic form. We shape the demographics
+   * into a partial Patient (camelCase, mirroring what the API returns) and reuse
+   * buildInitialValues() so the mapping honours whatever storageKeys the active
+   * workflow uses. Merge over what's already typed, then push through
+   * initialValues — the renderer's ngOnChanges re-applies it to the form.
+   */
+  applyAbhaPrefill(demo: AbhaPrefillData) {
+    this.abhaPrefillOpen.set(false);
+    const cfg = this._config();
+    if (!cfg || !demo) return;
+    const synthetic: Record<string, unknown> = {};
+    const name = demo.fullName?.trim() || [demo.firstName, demo.middleName, demo.lastName].filter(Boolean).join(' ').trim();
+    if (name) synthetic['firstName'] = name;
+    const sex = this.normalizeSex(demo.gender);
+    if (sex) synthetic['sex'] = sex;
+    const dob = this.toIsoDob(demo.dob, demo.yearOfBirth);
+    if (dob) synthetic['dateOfBirth'] = dob;
+    const phone = (demo.mobile || '').replace(/\D/g, '');
+    if (phone.length >= 10) synthetic['phone'] = phone.slice(-10);
+    const abha = (demo.abhaNumber || '').replace(/\D/g, '');
+    if (abha.length === 14) synthetic['abhaId'] = abha;
+    if (demo.abhaAddress) synthetic['abhaAddress'] = demo.abhaAddress;
+    if (demo.address) synthetic['address'] = demo.address;
+    if (demo.pincode) synthetic['pincode'] = demo.pincode;
+
+    const iv = this.buildInitialValues(cfg, synthetic as unknown as Patient);
+    if (!Object.keys(iv).length) { this.toasts.info('ABHA fetched, but no matching form fields to fill.'); return; }
+    this.initialValues.set({ ...this.values(), ...iv });
+    this.toasts.success('Form pre-filled from ABHA');
+  }
+
+  private normalizeSex(g?: string): string | undefined {
+    const s = (g || '').trim().toLowerCase();
+    if (!s) return undefined;
+    if (s === 'm' || s.startsWith('male')) return 'Male';
+    if (s === 'f' || s.startsWith('female')) return 'Female';
+    if (s === 'o' || s.startsWith('other') || s.startsWith('trans')) return 'Other';
+    return undefined;
+  }
+
+  /** ABHA DOB is usually "DD-MM-YYYY" (parts may be blank) — normalise to ISO. */
+  private toIsoDob(dob?: string, yob?: number): string | undefined {
+    const raw = (dob || '').trim();
+    if (raw) {
+      const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+      const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+      const y = raw.match(/(\d{4})/);
+      if (y) return `${y[1]}-01-01`;
+    }
+    if (yob && yob > 1900 && yob < 2200) return `${yob}-01-01`;
+    return undefined;
+  }
 
   readonly context = computed<WorkflowContext>(() => {
     const user = this.auth.user();
@@ -196,7 +308,8 @@ export class PatientRegisterComponent implements OnInit {
 
     const pid = this.patientId();
     if (pid) {
-      this.api.put<Patient>(`/api/patients/${pid}`, body).subscribe({
+      // Backend exposes patient update as PATCH /api/patients/{id}; PUT 405s.
+      this.api.patch<Patient>(`/api/patients/${pid}`, body).subscribe({
         next: patient => {
           this._saving.set(false);
           this.toasts.success(`Updated ${patient.displayName}`);
