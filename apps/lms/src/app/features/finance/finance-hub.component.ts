@@ -363,9 +363,10 @@ export class FinanceHubComponent implements OnInit {
 
   // ── Credit Wallet ledger ────────────────────────────────
   loadVendors() {
-    if (this.vendorsLoaded) return;
+    // Always refetch when the Credit Wallet tab is opened — charges are accrued
+    // in billing, so a once-only cache would show stale balances here.
     this.vendorsLoaded = true;
-    this.vendorsLoading.set(true);
+    if (!this.vendors().length) this.vendorsLoading.set(true);
     this.api.get<Vendor[]>('/api/vendors?includeInactive=true').subscribe({
       next: l => { this.vendors.set(l ?? []); this.vendorsLoading.set(false); },
       error: () => { this.vendorsLoading.set(false); this.toasts.error('Could not load partners'); },

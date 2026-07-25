@@ -78,13 +78,25 @@
    space. */
 .pf-pp__trendo-panel {
   background: var(--bg-card-solid);
-  border: 1px solid rgba(168, 85, 247, 0.25);
-  border-radius: 16px;
-  padding: 20px;
+  border: 1px solid rgba(168, 85, 247, 0.16);
+  border-radius: 18px;
+  padding: 18px;
+  /* Fit the viewport: the child <pf-lab-trends> measures the space left below
+     the page chrome and sets its own height, so the whole Trendogram is visible
+     at once and the page never scrolls. Internal regions (test list, sparkline
+     matrix) scroll on their own if needed. */
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 1px 40px rgba(124, 58, 237, 0.06);
   animation: pf-pp-fade 0.16s ease-out;
 }
-.pf-pp__trendo-panel ::ng-deep .pf-lt__chart { height: min(58vh, 540px) !important; }
-.pf-pp__trendo-panel ::ng-deep .pf-lt__list { max-height: min(58vh, 540px) !important; }
+.pf-pp__trendo-panel ::ng-deep .pf-lt { height: 100%; }
+/* Phone: tighter panel + icon-only toggle (matches the header's +/⋯ actions). */
+@media (max-width: 640px) {
+  .pf-pp__trendo-panel { padding: 12px; border-radius: 14px; }
+  .pf-pp__trendo-label { display: none; }
+  .pf-pp__trendo-toggle { padding: 8px; }
+}
 .pf-pp__idblock { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pf-pp__tb-back {
   width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%;
@@ -145,9 +157,13 @@
   /* Name + ID on the left, the +/⋯ actions pinned top-right (so the row is
      balanced and the ⋯ menu opens on-screen instead of clipping left). */
   .pf-pp__topbar { padding: 12px 14px; gap: 10px; flex-wrap: nowrap; align-items: flex-start; }
-  .pf-pp__idblock { flex: 1 1 auto; min-width: 0; }
+  /* Top-align back + avatar + name so they share one top edge with the +/⋯
+     actions (centering them against the tall wrapping name read as skewed). */
+  .pf-pp__idblock { flex: 1 1 auto; min-width: 0; align-items: flex-start; gap: 10px; }
+  .pf-pp__idblock > pf-avatar { margin-top: 1px; }
+  .pf-pp__tb-back { width: 40px; height: 40px; margin-top: 1px; }
   .pf-pp__tb-actions { flex-shrink: 0; }
-  .pf-pp__tb-name { font-size: 17px; }
+  .pf-pp__tb-name { font-size: 17px; line-height: 1.25; }
   /* Demographics leave the bar entirely — they live in the ⋯ menu now. */
   .pf-pp__tb-rest { display: none !important; }
   /* Actions: a compact "+" square + the ⋯ square, both 44px. */

@@ -599,13 +599,24 @@
           <!-- TAB 2: VISITS TIMELINE -->
           @if (activeTab() === 'timeline') {
             <div class="flex flex-col gap-4">
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-2">
                 <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
                   Patient Journey Timeline
                 </h3>
-                <span class="text-xs text-[var(--text-secondary)]">
-                  {{ unifiedTimeline().length }} events found
-                </span>
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-[var(--text-secondary)] pf-pp__tl-count">{{ unifiedTimeline().length }} events found</span>
+                  @if (patient(); as p) {
+                    <button type="button"
+                            class="pf-pp__trendo-toggle inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-[var(--glass-bg)] border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40"
+                            aria-label="Open timeline" title="Timeline view"
+                            (click)="patientTimeline.open(p.id, clinicalData()?.opdRecords ?? [], clinicalData()?.ipdAdmissions ?? [], clinicalData()?.prescriptions ?? [])">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/>
+                      </svg>
+                      <span class="pf-pp__trendo-label">Timeline view</span>
+                    </button>
+                  }
+                </div>
               </div>
 
               @if (unifiedTimeline().length === 0) {
@@ -786,14 +797,16 @@
                   Lab Investigations & Diagnostics
                 </h3>
                 <button type="button"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                        class="pf-pp__trendo-toggle inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
                         [ngClass]="showTrendogram() ? 'bg-violet-600/15 border-violet-500/40 text-[var(--text-primary)]' : 'bg-[var(--glass-bg)] border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40'"
+                        [attr.aria-label]="showTrendogram() ? 'Back to orders' : 'Trendogram'"
+                        [attr.title]="showTrendogram() ? 'Back to orders' : 'Trendogram'"
                         (click)="showTrendogram.set(!showTrendogram())">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     @if (showTrendogram()) { <path d="M18 6 6 18M6 6l12 12"/> }
                     @else { <path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/> }
                   </svg>
-                  {{ showTrendogram() ? 'Back to orders' : 'Trendogram' }}
+                  <span class="pf-pp__trendo-label">{{ showTrendogram() ? 'Back to orders' : 'Trendogram' }}</span>
                 </button>
               </div>
 
@@ -807,81 +820,8 @@
                 <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
                   No diagnostic orders yet for this patient.
                 </div>
-              } @else {
-                @for (o of history(); track o.id) {
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-5 shadow flex flex-col gap-4">
-                    
-                    <!-- Top Order Details Row -->
-                    <div class="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-[var(--border-muted)]">
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">{{ o.createdAt | date:'d MMM y HH:mm' }} · Ref: {{ o.refDoctorName || 'Self Referral' }}</span>
-                          <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-3">
-                        <div class="text-right">
-                          <span class="text-[10px] text-[var(--text-muted)] block font-mono">PRIORITY: {{ o.priority | uppercase }}</span>
-                          @if (o.totalAmount) {
-                            <span class="font-mono font-bold text-sm text-[var(--text-primary)] block mt-0.5">{{ o.totalAmount | inr }}</span>
-                          }
-                        </div>
-                        <button type="button" title="Repeat this order — re-bills the same tests"
-                                class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40 transition-colors cursor-pointer"
-                                (click)="repeatOrder(o)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 2v6h6"/><path d="M3 8a9 9 0 1 0 2.6-5.3L3 8"/>
-                          </svg>
-                          Repeat
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Tests Table/List -->
-                    @if (orderTests(o).length > 0) {
-                      <div class="flex flex-col gap-3">
-                        <h4 class="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Test Status & Results</h4>
-                        <div class="flex flex-col gap-2">
-                          @for (t of orderTests(o); track t.id) {
-                            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                              <div class="min-w-0">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                  @if (t.test?.code) {
-                                    <span class="font-mono font-bold text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{{ t.test!.code }}</span>
-                                  }
-                                  <span class="font-bold text-[var(--text-primary)]">{{ t?.name ?? 'Unknown test' }}</span>
-                                </div>
-                                <div class="text-[10px] text-[var(--text-tertiary)] mt-0.5">
-                                  Sample Tube Type: {{ t.subOrder?.department?.name ?? 'Lab Sample' }}
-                                </div>
-                              </div>
-
-                              <!-- Observed value & ref range (mock output for completed results) -->
-                              <div class="flex items-center gap-4 flex-wrap md:justify-end">
-                                @if (t.status === 'validated' || t.status === 'completed') {
-                                  <div class="text-right bg-[var(--bg-card-solid)] border border-[var(--glass-border)] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                    <div>
-                                      <span class="text-[10px] text-[var(--text-tertiary)] block font-medium uppercase tracking-wide">Observed</span>
-                                      <span class="font-mono text-sm font-bold text-emerald-400 leading-none">
-                                        {{ t.currentResult || (o.id.charCodeAt(0) % 5 + 4.2).toFixed(1) }}
-                                      </span>
-                                    </div>
-                                    <div class="border-l border-[var(--border-muted)] pl-2 text-left">
-                                      <span class="text-[9px] text-[var(--text-muted)] block">Reference</span>
-                                      <span class="text-[10px] font-mono text-[var(--text-secondary)] leading-none">3.5 - 5.5 g/dL</span>
-                                    </div>
-                                  </div>
-                                }
-                                <pf-chip [tone]="testStatusTone(t.status)" size="sm">{{ t.status }}</pf-chip>
-                              </div>
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    }
-
-                  </div>
-                }
+              } @else if (patient(); as p) {
+                <pf-lab-orders [orders]="history()" [patientId]="p.id"></pf-lab-orders>
               }
             </div>
           }

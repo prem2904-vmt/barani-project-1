@@ -2182,11 +2182,17 @@ export class BillingComponent implements OnInit, OnChanges {
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
       const amount = this.effectivePayable();
       const applyAndPay = (currentBill: Bill) => {
-        this.api.post<unknown>(`/api/vendors/${vendor.id}/charge`, {
+        this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
           amount, billId: currentBill.id,
           reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
         }).subscribe({
-          next: () => {
+          next: (updatedVendor) => {
+            // The /charge endpoint returns the vendor with its NEW balance —
+            // patch the cached list so every bound view (selected card, wallet
+            // rows) reflects the raised outstanding immediately, no refetch.
+            if (updatedVendor?.id) {
+              this._vendors.update(list => (list ?? []).map(v => v.id === updatedVendor.id ? { ...v, ...updatedVendor } : v));
+            }
             // Wallet charge succeeded → record the bill payment so the
             // bill is marked paid and the running totals on the FD
             // landing pick it up.

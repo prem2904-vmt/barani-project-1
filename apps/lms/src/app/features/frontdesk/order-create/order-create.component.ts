@@ -1182,6 +1182,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           for (const part of d.splitParts) {
             latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
+        } else if (d.mode === 'wallet') {
+          // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
+          // record the bill payment. Without the /charge the vendor balance
+          // never moves — the bug where a wallet-paid NEW order left the vendor
+          // "Settled" with no transaction (the existing-bill path charged; this
+          // one didn't).
+          if (!d.vendorId) throw new Error('No vendor selected');
+          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
+            amount: bill.totalPayable, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
+          }));
+          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount: bill.totalPayable, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
+          }));
         } else {
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo

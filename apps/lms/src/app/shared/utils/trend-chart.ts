@@ -50,7 +50,8 @@ export function buildTrendOption(ec: any, { param, points, chartType, theme, tit
   const abnormalColor = light ? '#dc2626' : '#fb7185';
   const series = chartType === 'line'
     ? {
-        type: 'line', data: values, smooth: true, symbolSize: light ? 6 : 8, showSymbol: true,
+        // Sharp/angular segments (ECharts line-simple style) — no curve smoothing.
+        type: 'line', data: values, smooth: false, symbolSize: light ? 6 : 8, showSymbol: true,
         lineStyle: { width: light ? 2.4 : 3, color: light ? '#7c3aed' : purple },
         itemStyle: { color: (p: { dataIndex: number }) => abnormal[p.dataIndex] ? abnormalColor : (light ? '#7c3aed' : purple) },
         areaStyle: { color: new ec.graphic.LinearGradient(0, 0, 0, 1, light
@@ -103,6 +104,42 @@ export function buildTrendOption(ec: any, { param, points, chartType, theme, tit
       axisLabel: { color: axisLabelColor, fontSize: 10 },
     },
     series: [series],
+  };
+}
+
+/**
+ * Minimal sparkline option — an axis-less mini line for the panel "overall"
+ * grid (ECharts matrix-sparkline style). Sharp segments, a single dot on the
+ * latest point, abnormal points in red, and a faint reference band if known.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildSparklineOption(ec: any, args: { points: TrendPoint[]; referenceRange?: string | null }): any {
+  const values = args.points.map(p => p.value);
+  const abnormal = args.points.map(p => !!(p.flag && p.flag.trim() && p.flag.toUpperCase() !== 'N'));
+  const last = values.length - 1;
+  const band = parseTrendRange(args.referenceRange);
+  const markArea = band ? {
+    silent: true,
+    itemStyle: { color: 'rgba(168,85,247,0.08)' },
+    data: [[{ yAxis: band.low }, { yAxis: band.high }]],
+  } : undefined;
+
+  return {
+    backgroundColor: 'transparent',
+    grid: { left: 3, right: 3, top: 6, bottom: 4 },
+    xAxis: { type: 'category', show: false, boundaryGap: false, data: values.map((_v, i) => i) },
+    yAxis: { type: 'value', show: false, scale: true },
+    series: [{
+      type: 'line', data: values, smooth: false, showSymbol: true,
+      symbolSize: (_v: number, p: { dataIndex: number }) => p.dataIndex === last ? 5 : 0,
+      lineStyle: { width: 2, color: '#a855f7' },
+      itemStyle: { color: (p: { dataIndex: number }) => abnormal[p.dataIndex] ? '#fb7185' : '#a855f7' },
+      areaStyle: { color: new ec.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: 'rgba(168,85,247,0.28)' }, { offset: 1, color: 'rgba(168,85,247,0.01)' },
+      ]) },
+      markArea,
+      animation: false,
+    }],
   };
 }
 

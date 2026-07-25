@@ -21,6 +21,8 @@ import { PatientIdCardComponent } from './patient-id-card.component';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { LabTrendsComponent } from './lab-trends.component';
+import { PatientTimelineService } from './patient-timeline.service';
+import { LabOrdersComponent } from './lab-orders.component';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -157,7 +159,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent, LabOrdersComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -184,6 +186,8 @@ export class PatientProfileComponent implements OnInit {
   // Trendogram (serial-result charts) shown on demand from the Lab Orders
   // corner toggle — hidden by default so it isn't mandatory.
   readonly showTrendogram = signal(false);
+  /** Full-screen Patient Timeline overlay (rendered at shell root). */
+  readonly patientTimeline = inject(PatientTimelineService);
   // Top-bar overflow menu (secondary actions) + on-demand QR popover — the QR
   // is no longer always shown; it's behind "Show QR" in the menu.
   readonly moreOpen = signal(false);
