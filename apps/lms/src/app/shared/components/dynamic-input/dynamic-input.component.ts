@@ -51,8 +51,21 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
 
       @switch (type) {
         @case ('text') {
-          <input type="text" class="pf-input" [placeholder]="field.placeholder ?? ''"
-                 [ngModel]="value" (ngModelChange)="emit($event)" />
+          @if (identityFormat(); as fmt) {
+            <!-- ABHA / Aadhaar: digits only, auto-grouped as you type (like a
+                 credit-card field); the model stores the raw digits. -->
+            <input #dinp type="text" inputmode="numeric" class="pf-input"
+                   [attr.maxlength]="fmt.max" [placeholder]="fmt.placeholder"
+                   [ngModel]="displayIdentity(value)" (ngModelChange)="emitIdentity(dinp, $event, fmt)" />
+          } @else if (digitLimit(); as lim) {
+            <!-- Other identity numbers (e.g. Aadhaar last-4): digits only, capped. -->
+            <input #dinp type="text" inputmode="numeric" pattern="[0-9]*" class="pf-input"
+                   [attr.maxlength]="lim" [placeholder]="field.placeholder ?? ''"
+                   [ngModel]="value" (ngModelChange)="emitDigits(dinp, $event, lim)" />
+          } @else {
+            <input type="text" class="pf-input" [placeholder]="field.placeholder ?? ''"
+                   [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
         }
         @case ('email') {
           <input type="email" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
@@ -592,6 +605,59 @@ export class DynamicInputComponent {
   emit(v: unknown) {
     this._value.set(v);
     this.valueChange.emit(v);
+  }
+
+  /** Identity-number text fields → digits only with a fixed max length
+   *  (ABHA = 14, Aadhaar = 12, Aadhaar last-4 = 4). null → a normal text field. */
+  readonly digitLimit = computed<number | null>(() => {
+    const n = (this._field()?.name ?? '').toLowerCase();
+    if (n === 'aadhaar_last4' || n === 'aadhar_last4') return 4;
+    if (n === 'aadhaar' || n === 'aadhar') return 12;
+    if (n === 'abha_id' || n === 'abha' || n.includes('abha')) return 14;
+    return null;
+  });
+
+  /** Strip non-digits, cap the length, and force the DOM value so a rejected
+   *  character can't linger when it doesn't change the cleaned value. */
+  emitDigits(el: HTMLInputElement, v: string, lim: number) {
+    const clean = String(v ?? '').replace(/\D/g, '').slice(0, lim);
+    if (el.value !== clean) el.value = clean;
+    this.emit(clean);
+  }
+
+  /** Credit-card-style grouping for identity numbers: ABHA `XX-XXXX-XXXX-XXXX`,
+   *  Aadhaar `XXXX XXXX XXXX`. Display is grouped; the model keeps raw digits. */
+  readonly identityFormat = computed<{ groups: number[]; sep: string; max: number; placeholder: string } | null>(() => {
+    const n = (this._field()?.name ?? '').toLowerCase();
+    if (n === 'abha_id' || n === 'abha' || n.includes('abha'))
+      return { groups: [2, 4, 4, 4], sep: '-', max: 17, placeholder: '14-1234-1234-1234' };
+    if (n === 'aadhaar' || n === 'aadhar')
+      return { groups: [4, 4, 4], sep: ' ', max: 14, placeholder: '1234 5678 9012' };
+    return null;
+  });
+
+  private groupDigits(digits: string, groups: number[], sep: string): string {
+    const parts: string[] = [];
+    let i = 0;
+    for (const g of groups) { if (i >= digits.length) break; parts.push(digits.slice(i, i + g)); i += g; }
+    if (i < digits.length) parts.push(digits.slice(i));
+    return parts.join(sep);
+  }
+
+  /** Raw stored digits → the grouped string shown in the field. */
+  displayIdentity(v: unknown): string {
+    const fmt = this.identityFormat();
+    const digits = String(v ?? '').replace(/\D/g, '');
+    return fmt ? this.groupDigits(digits, fmt.groups, fmt.sep) : digits;
+  }
+
+  /** Typed value → strip to digits, cap, re-group in the DOM, emit raw digits. */
+  emitIdentity(el: HTMLInputElement, v: string, fmt: { groups: number[]; sep: string }) {
+    const limit = fmt.groups.reduce((a, b) => a + b, 0);
+    const clean = String(v ?? '').replace(/\D/g, '').slice(0, limit);
+    const formatted = this.groupDigits(clean, fmt.groups, fmt.sep);
+    if (el.value !== formatted) el.value = formatted;
+    this.emit(clean);
   }
 
   // ── Hybrid DOB / Age ──────────────────────────────────────────────

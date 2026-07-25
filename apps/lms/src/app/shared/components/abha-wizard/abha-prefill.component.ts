@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
 import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
@@ -48,56 +48,69 @@ export interface AbhaPrefillData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
-      <pf-barcode-scanner-modal title="Scan the ABHA QR / card"
+      <!-- Camera scan replaces this dialog (one modal at a time); its Cancel/×
+           returns here. -->
+      <pf-barcode-scanner-modal [title]="mode() === 'create' ? 'Scan the Aadhaar QR' : 'Scan the ABHA QR / card'"
         (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
-    }
+    } @else {
     <div class="pf-abp__backdrop" (click)="close.emit()">
       <div class="pf-abp" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
         <div class="pf-abp__head">
-          @if (mode() !== 'choose') {
+          @if (step() === 'otp') {
             <button type="button" class="pf-abp__ic" (click)="back()" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
           }
-          <span class="pf-abp__title">Fetch details from ABHA</span>
+          <span class="pf-abp__title">{{ mode() === 'create' ? 'Create ABHA' : 'Fetch details from ABHA' }}</span>
           <button type="button" class="pf-abp__ic" (click)="close.emit()" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </div>
 
         <div class="pf-abp__body">
-          @if (mode() === 'choose') {
-            <p class="pf-abp__lead">The patient already has an ABHA? Pull their KYC details to fill the form.</p>
-            <button type="button" class="pf-abp__opt" (click)="openScanner()">
-              <span class="pf-abp__opt-t">Scan ABHA QR</span>
-              <span class="pf-abp__opt-s">Point the camera at the ABHA card — we read the number and send the OTP</span>
-            </button>
-            <button type="button" class="pf-abp__opt" (click)="mode.set('enter')">
-              <span class="pf-abp__opt-t">Enter ABHA number</span>
-              <span class="pf-abp__opt-s">14-digit number, verify by OTP</span>
-            </button>
-            <button type="button" class="pf-abp__link" (click)="mode.set('qr')">or paste the QR data</button>
-          } @else if (mode() === 'qr') {
-            <label class="pf-abp__label">Paste the ABHA card QR content</label>
-            <textarea class="pf-abp__input pf-abp__area" rows="4" placeholder="Paste the ABHA QR content…"
-                      [value]="qr()" (input)="qr.set($any($event.target).value)"></textarea>
-            @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
-            <button type="button" class="pf-abp__go" [disabled]="!qr().trim()" (click)="parseQr()">Use these details</button>
-          } @else {
-            @if (step() === 'input') {
+          @if (step() === 'input') {
+            @if (mode() === 'create') {
+              <p class="pf-abp__lead">Create a new ABHA via Aadhaar OTP (KYC). Enter or scan the Aadhaar, verify by OTP — it fills the form and registers.</p>
+              <label class="pf-abp__label">Aadhaar number</label>
+              <div class="pf-abp__field">
+                <input class="pf-abp__input" inputmode="numeric" maxlength="14" placeholder="12-digit Aadhaar"
+                       [value]="aadhaar()" (input)="aadhaar.set(digits($any($event.target).value, 12))" />
+                <button type="button" class="pf-abp__scan" (click)="openScanner()" aria-label="Scan Aadhaar QR">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/></svg>
+                </button>
+              </div>
+              @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
+              <button type="button" class="pf-abp__go" [disabled]="busy() || aadhaar().length !== 12" (click)="createRequestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
+            } @else {
+              <p class="pf-abp__lead">Enter or scan the patient's ABHA number, then verify by OTP to auto-fill the form.</p>
               <label class="pf-abp__label">ABHA number</label>
-              <input class="pf-abp__input" inputmode="numeric" maxlength="17" placeholder="14-digit ABHA"
-                     [value]="abha()" (input)="abha.set(digits($any($event.target).value, 14))" />
+              <div class="pf-abp__field">
+                <input class="pf-abp__input" inputmode="numeric" maxlength="17" placeholder="14-digit ABHA"
+                       [value]="abha()" (input)="abha.set(digits($any($event.target).value, 14))" />
+                <button type="button" class="pf-abp__scan" (click)="openScanner()" aria-label="Scan ABHA QR">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/></svg>
+                </button>
+              </div>
               @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
               <button type="button" class="pf-abp__go" [disabled]="busy() || abha().length !== 14" (click)="requestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
+            }
+          } @else {
+            @if (info()) { <p class="pf-abp__info">{{ info() }}</p> }
+            <label class="pf-abp__label">Enter OTP</label>
+            <input class="pf-abp__input pf-abp__otp" inputmode="numeric" maxlength="8" placeholder="6-digit OTP"
+                   [value]="otp()" (input)="otp.set(digits($any($event.target).value, 8))" />
+            @if (mode() === 'create') {
+              <label class="pf-abp__label">Mobile linked to this Aadhaar</label>
+              <input class="pf-abp__input" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"
+                     [value]="mobile()" (input)="mobile.set(digits($any($event.target).value, 10))" />
+            }
+            @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
+            @if (mode() === 'create') {
+              <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4 || mobile().length !== 10" (click)="createConfirm()">{{ busy() ? 'Creating…' : 'Create ABHA' }}</button>
             } @else {
-              @if (info()) { <p class="pf-abp__info">{{ info() }}</p> }
-              <label class="pf-abp__label">Enter OTP</label>
-              <input class="pf-abp__input pf-abp__otp" inputmode="numeric" maxlength="8" placeholder="6-digit OTP"
-                     [value]="otp()" (input)="otp.set(digits($any($event.target).value, 8))" />
-              @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
               <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4" (click)="confirm()">{{ busy() ? 'Fetching…' : 'Fetch details' }}</button>
             }
           }
         </div>
       </div>
     </div>
+    }
   `,
   styles: [`
     .pf-abp__backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(4,4,12,0.7); backdrop-filter: blur(4px); }
@@ -115,6 +128,11 @@ export interface AbhaPrefillData {
     .pf-abp__label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
     .pf-abp__input { width: 100%; padding: 11px 12px; border-radius: 10px; font-size: 16px; background: var(--input-bg, var(--glass-bg)); border: 1px solid var(--input-border, var(--glass-border)); color: var(--input-text, var(--text-primary)); outline: none; }
     .pf-abp__input:focus { border-color: rgba(139,92,246,0.6); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
+    /* Number field with an inline scan icon (type OR scan into the same box). */
+    .pf-abp__field { position: relative; }
+    .pf-abp__field .pf-abp__input { padding-right: 46px; }
+    .pf-abp__scan { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--text-tertiary); cursor: pointer; }
+    .pf-abp__scan:hover { color: var(--color-violet-500, #a855f7); background: var(--bg-hover); }
     .pf-abp__area { font-family: monospace; font-size: 12px; resize: vertical; }
     .pf-abp__otp { font-size: 20px; letter-spacing: 0.4em; text-align: center; font-family: monospace; }
     .pf-abp__info { font-size: 12.5px; color: var(--green-text); }
@@ -125,46 +143,79 @@ export interface AbhaPrefillData {
     .pf-abp__link:hover { color: var(--text-secondary); }
   `],
 })
-export class AbhaPrefillComponent {
+export class AbhaPrefillComponent implements OnInit {
   private readonly api = inject(ApiService);
 
+  /** Open straight into Fetch (existing ABHA) or Create (new ABHA via Aadhaar). */
+  readonly startMode = input<'fetch' | 'create'>('fetch');
   readonly close = output<void>();
   readonly fetched = output<AbhaPrefillData>();
 
-  readonly mode = signal<'choose' | 'enter' | 'qr'>('choose');
+  readonly mode = signal<'fetch' | 'create'>('fetch');
   readonly step = signal<'input' | 'otp'>('input');
   readonly abha = signal('');
+  readonly aadhaar = signal('');
+  readonly mobile = signal('');
   readonly otp = signal('');
-  readonly qr = signal('');
   readonly txnId = signal('');
   readonly info = signal('');
   readonly busy = signal(false);
   readonly error = signal('');
   readonly scanning = signal(false);
 
+  ngOnInit() { this.mode.set(this.startMode()); this.step.set('input'); }
+
   digits(v: string, max: number): string { return (v || '').replace(/\D/g, '').slice(0, max); }
 
   openScanner() { this.error.set(''); this.scanning.set(true); }
 
-  /** Camera/QR scan result → pull the ABHA number and auto-request the OTP. */
+  /** Create ABHA — request the Aadhaar OTP. */
+  createRequestOtp() {
+    if (this.busy() || this.aadhaar().length !== 12) return;
+    this.busy.set(true); this.error.set('');
+    this.api.post<{ txnId: string; message: string }>('/api/abdm/enrol/aadhaar/otp', { aadhaar: this.aadhaar() }).subscribe({
+      next: r => { this.txnId.set(r?.txnId ?? ''); this.info.set(r?.message ?? 'OTP sent to the Aadhaar-linked mobile.'); this.step.set('otp'); this.busy.set(false); },
+      error: e => { this.error.set(ApiError.from(e).message); this.busy.set(false); },
+    });
+  }
+
+  /** Create ABHA — verify OTP + mobile → enrol → return KYC demographics
+   *  (incl. the new ABHA number) to pre-fill the registration form. */
+  createConfirm() {
+    if (this.busy() || this.otp().length < 4 || this.mobile().length !== 10) return;
+    this.busy.set(true); this.error.set('');
+    this.api.post<AbhaPrefillData>('/api/abdm/enrol/aadhaar/create', { txnId: this.txnId(), otp: this.otp(), mobile: this.mobile() }).subscribe({
+      next: d => { this.busy.set(false); this.fetched.emit(d ?? {}); },
+      error: e => { this.error.set(ApiError.from(e).message); this.busy.set(false); },
+    });
+  }
+
+  /** Camera scan → fill the number field in place (ABHA for fetch, Aadhaar for
+   *  create). The user reviews it and taps Send OTP. */
   onScanned(text: string) {
     this.scanning.set(false);
-    const abha = extractAbhaNumber(text || '');
-    if (abha) {
-      this.abha.set(abha);
-      this.mode.set('enter');
-      this.requestOtp();
-      return;
+    if (this.mode() === 'create') {
+      const aadhaar = this.extractAadhaar(text || '');
+      if (aadhaar) { this.aadhaar.set(aadhaar); this.error.set(''); }
+      else this.error.set('Could not read a 12-digit Aadhaar from that QR — type it in.');
+    } else {
+      const abha = extractAbhaNumber(text || '');
+      if (abha) { this.abha.set(abha); this.error.set(''); }
+      else this.error.set('Could not read the ABHA number from that QR — type it in.');
     }
-    // No number in the scan — maybe it's a demographics-only QR; try that.
-    this.qr.set(text || '');
-    this.mode.set('qr');
-    this.parseQr();
   }
+
+  /** Best-effort 12-digit Aadhaar out of a scanned string. */
+  private extractAadhaar(text: string): string | null {
+    const m = (text || '').match(/(\d[\d\s-]{10,}\d)/);
+    if (m) { const d = m[0].replace(/\D/g, ''); if (d.length === 12) return d; }
+    const all = (text || '').replace(/\D/g, '');
+    return all.length === 12 ? all : null;
+  }
+
   back() {
     this.error.set('');
-    if (this.mode() === 'enter' && this.step() === 'otp') { this.step.set('input'); this.otp.set(''); }
-    else this.mode.set('choose');
+    if (this.step() === 'otp') { this.step.set('input'); this.otp.set(''); }
   }
 
   requestOtp() {
@@ -182,33 +233,5 @@ export class AbhaPrefillComponent {
       next: d => { this.busy.set(false); this.fetched.emit(d ?? {}); },
       error: e => { this.error.set(ApiError.from(e).message); this.busy.set(false); },
     });
-  }
-
-  /** Parse the ABHA card QR JSON (client-side) into normalised demographics. */
-  parseQr() {
-    this.error.set('');
-    let raw: Record<string, unknown>;
-    try { raw = JSON.parse(this.qr().trim()); } catch { this.error.set('That does not look like ABHA QR data (expected JSON).'); return; }
-    const g = (k: string): string | undefined => {
-      const hit = Object.keys(raw).find(x => x.toLowerCase().replace(/[^a-z]/g, '') === k);
-      const v = hit ? raw[hit] : undefined;
-      return v === undefined || v === null ? undefined : String(v);
-    };
-    const num = (g('hidn') || g('abhanumber') || '').replace(/\D/g, '');
-    const data: AbhaPrefillData = {
-      abhaNumber: num || undefined,
-      abhaAddress: g('hid') || g('phraddress') || g('abhaaddress'),
-      fullName: g('name') || g('fullname'),
-      gender: g('gender'),
-      dob: g('dob') || g('dateofbirth'),
-      yearOfBirth: g('yob') || g('yearofbirth') ? Number((g('yob') || g('yearofbirth'))!.replace(/\D/g, '')) || undefined : undefined,
-      mobile: g('mobile'),
-      address: g('address'),
-      pincode: g('pincode') || g('pin'),
-      state: g('statename') || g('state'),
-      district: g('distname') || g('districtname') || g('district'),
-    };
-    if (!data.abhaNumber && !data.fullName) { this.error.set('Could not read name/ABHA from that QR.'); return; }
-    this.fetched.emit(data);
   }
 }

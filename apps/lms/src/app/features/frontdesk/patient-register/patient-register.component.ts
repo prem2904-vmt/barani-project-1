@@ -44,18 +44,25 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
           <div class="min-w-0 flex items-center gap-2.5">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <div class="min-w-0">
-              <span class="text-sm font-bold text-[var(--text-primary)]">Patient already has an ABHA?</span>
-              <p class="text-xs text-[var(--text-tertiary)]">Scan the ABHA QR or enter the number to auto-fill this form from their KYC.</p>
+              <span class="text-sm font-bold text-[var(--text-primary)]">ABHA (Health ID)</span>
+              <p class="text-xs text-[var(--text-tertiary)]">Has an ABHA? Fetch their KYC to auto-fill. No ABHA? Create one — it fills the form and registers together.</p>
             </div>
           </div>
-          <button type="button" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer transition-colors"
-                  (click)="abhaPrefillOpen.set(true)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21v.01M17 21h.01M21 17h.01"/></svg>
-            Fetch from ABHA
-          </button>
+          <div class="shrink-0 flex items-center gap-2">
+            <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-violet-500/40 hover:bg-violet-600/10 text-[var(--text-primary)] text-xs font-bold cursor-pointer transition-colors"
+                    (click)="openAbhaPrefill('create')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Create ABHA
+            </button>
+            <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer transition-colors"
+                    (click)="openAbhaPrefill('fetch')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21v.01M17 21h.01M21 17h.01"/></svg>
+              Fetch from ABHA
+            </button>
+          </div>
         </div>
         @if (abhaPrefillOpen()) {
-          <pf-abha-prefill (close)="abhaPrefillOpen.set(false)" (fetched)="applyAbhaPrefill($event)"></pf-abha-prefill>
+          <pf-abha-prefill [startMode]="abhaPrefillMode()" (close)="abhaPrefillOpen.set(false)" (fetched)="applyAbhaPrefill($event)"></pf-abha-prefill>
         }
       }
 
@@ -154,8 +161,14 @@ export class PatientRegisterComponent implements OnInit {
   }
   protected readonly initialValues = signal<WorkflowFormValues>({});
 
-  /** ABHA prefill (NEW registration) — enter number/scan QR → fill the form. */
+  /** ABHA prefill (NEW registration) — enter number/scan QR → fill the form,
+   *  or Create a new ABHA (Aadhaar OTP) → fill + register together. */
   protected readonly abhaPrefillOpen = signal(false);
+  protected readonly abhaPrefillMode = signal<'fetch' | 'create'>('fetch');
+  openAbhaPrefill(mode: 'fetch' | 'create') {
+    this.abhaPrefillMode.set(mode);
+    this.abhaPrefillOpen.set(true);
+  }
   /**
    * Everything ABDM returned that the registration form has NO field for
    * (address, pincode, district, state, abhaAddress, middle name). Stashed on
