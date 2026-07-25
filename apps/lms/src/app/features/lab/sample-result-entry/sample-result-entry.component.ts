@@ -485,7 +485,7 @@ function defaultResultParam(): TestParameter {
     .pf-sre__view-btn:hover { color: var(--text-primary); }
     .pf-sre__view-btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     /* ── Grid view (mirrors report PDF) ───────────────────────── */
@@ -508,7 +508,7 @@ function defaultResultParam(): TestParameter {
       padding: 9px 10px;
       font-size: 10.5px; font-weight: 800;
       letter-spacing: 0.14em; text-transform: uppercase;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
       border-bottom: 1px solid rgba(168, 85, 247, 0.4);
     }
@@ -553,7 +553,7 @@ function defaultResultParam(): TestParameter {
     
     /* Light mode grid inputs */
     :host-context(.light) .pf-sre__ginput {
-      background: #ffffff;
+      background: var(--bg-input);
       border: 1.5px solid #cbd5e1;
       color: #1e293b;
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -708,7 +708,7 @@ function defaultResultParam(): TestParameter {
     .pf-sre__sub { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 
     .pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
-    .pf-sre__msg--err { color: #fca5a5; }
+    .pf-sre__msg--err { color: var(--red-text); }
 
     .pf-sre__test {
       padding: 16px 18px;
@@ -727,7 +727,7 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__test-pill--rejected {
       background: rgba(239, 68, 68, 0.18);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.34);
     }
     .pf-sre__test-reject-reason {
@@ -740,7 +740,7 @@ function defaultResultParam(): TestParameter {
       color: var(--text-secondary);
     }
     .pf-sre__test-reject-reason strong {
-      color: #fca5a5;
+      color: var(--red-text);
       margin-right: 4px;
     }
 
@@ -761,14 +761,14 @@ function defaultResultParam(): TestParameter {
       width: 24px; height: 24px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 13px; font-weight: 700;
       flex-shrink: 0;
     }
     .pf-sre__reject-title {
       font-size: 12px; font-weight: 700;
       letter-spacing: 0.08em; text-transform: uppercase;
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-sre__reject-list {
       list-style: none; margin: 0; padding: 0;
@@ -794,7 +794,7 @@ function defaultResultParam(): TestParameter {
       font-size: 10.5px; font-weight: 700;
       letter-spacing: 0.06em; text-transform: uppercase;
       padding: 3px 10px; border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.18); color: #6ee7b7;
+      background: rgba(16, 185, 129, 0.18); color: var(--green-text);
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .pf-sre__test-empty { font-size: 13px; color: var(--text-tertiary); margin: 0; }
@@ -809,7 +809,7 @@ function defaultResultParam(): TestParameter {
       letter-spacing: 0.04em;
       padding: 4px 10px; border-radius: 9999px;
       background: rgba(168, 85, 247, 0.10);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.30);
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
@@ -820,7 +820,7 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__note-btn--has {
       background: rgba(96, 165, 250, 0.12);
-      color: #93c5fd;
+      color: var(--blue-text);
       border-color: rgba(96, 165, 250, 0.35);
     }
     .pf-sre__note-btn--has:hover {
@@ -855,7 +855,7 @@ function defaultResultParam(): TestParameter {
     /* Light mode: Make input borders more visible */
     :host-context(.light) .pf-sre__input {
       border: 1.5px solid #cbd5e1;
-      background: #ffffff;
+      background: var(--bg-input);
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
       color: #1e293b;
     }
@@ -910,7 +910,7 @@ function defaultResultParam(): TestParameter {
       width: 16px; height: 16px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 10px; font-weight: 700;
       margin-left: 6px;
     }

@@ -243,7 +243,7 @@ interface AutoAssignConfig {
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
-    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: #fbbf24; font-style: italic; }
+    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
 
     .pf-ls__toggle { cursor: pointer; display: inline-flex; align-items: center; }
     .pf-ls__toggle input { position: absolute; opacity: 0; pointer-events: none; }
@@ -346,7 +346,7 @@ interface AutoAssignConfig {
     /* Touch devices: the inline text buttons use Tailwind hover: classes which
        otherwise stick after a tap. Gate the page's own hover affordances. */
     @media (hover: none) {
-      :host .text-violet-400.hover\\:text-violet-300:hover { color: #a78bfa; }
+      :host .text-violet-400.hover\\:text-violet-300:hover { color: var(--violet-text); }
     }
 
     /* Phone (<=640): keep iOS from auto-zooming form fields by ensuring

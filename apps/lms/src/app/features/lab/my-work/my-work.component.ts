@@ -491,11 +491,11 @@ const COUNTERS: CounterSpec[] = [
                               </span>
                               @if (tube.hasDraft && !tube.allDone) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
-                                      style="background: rgba(245, 158, 11, 0.16); color: #fbbf24;">Draft</span>
+                                      style="background: rgba(245, 158, 11, 0.16); color: var(--amber-text);">Draft</span>
                               }
                               @if (tab() === 'service_queue' && tube.assignedTo) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-medium rounded truncate" style="max-width: 110px;
-                                      background: rgba(139, 92, 246, 0.16); color: #c4b5fd;">{{ assigneeName(tube.assignedTo) }}</span>
+                                      background: rgba(139, 92, 246, 0.16); color: var(--violet-text);">{{ assigneeName(tube.assignedTo) }}</span>
                               }
                               <!-- Sample ID (tube barcode) — always rendered so the tech can
                                    match the physical tube; 'no label' for unprinted samples. -->
@@ -533,13 +533,13 @@ const COUNTERS: CounterSpec[] = [
                                   <span class="flex-1 truncate" style="color: var(--text-primary);">→ {{ t.test?.name ?? 'Test' }}</span>
                                   @if (t.status === 'validated') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓</span>
+                                          style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓</span>
                                   } @else if (t.status === 'entered') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳</span>
+                                          style="background: rgba(168, 85, 247, 0.15); color: var(--violet-text);">⏳</span>
                                   } @else if (t.status === 're_entry') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">↻</span>
+                                          style="background: rgba(239, 68, 68, 0.15); color: var(--red-text);">↻</span>
                                   }
                                 </li>
                               }
@@ -565,7 +565,7 @@ const COUNTERS: CounterSpec[] = [
                                     <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
                                   } @else if (tube.allDone) {
                                     <span class="px-2 py-0.5 text-[11px] font-medium rounded"
-                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ All entered</span>
+                                          style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓ All entered</span>
                                   } @else {
                                     <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
                                   }
@@ -856,7 +856,7 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-mw-scan__cam:hover {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-mw-scan__btn {
       padding: 6px 14px;
@@ -901,7 +901,7 @@ const COUNTERS: CounterSpec[] = [
       gap: 2px;
       padding: 3px;
       border-radius: 9999px;
-      background: rgba(0, 0, 0, 0.18);
+      background: var(--seg-track);
       border: 1px solid var(--glass-border);
     }
     .pf-mw-tab {
@@ -1021,7 +1021,7 @@ const COUNTERS: CounterSpec[] = [
       border-radius: 9999px;
       background: rgba(236, 72, 153, 0.08);
       border: 1px dashed rgba(236, 72, 153, 0.35);
-      color: #f472b6;
+      color: var(--pink-text);
       font-size: 11.5px;
       font-weight: 500;
     }
@@ -1116,7 +1116,7 @@ const COUNTERS: CounterSpec[] = [
       box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
     .pf-scan__icon {
-      color: #a78bfa;
+      color: var(--violet-text);
       flex: 0 0 auto;
       margin-right: 10px;
     }
@@ -1151,11 +1151,11 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-scan__manual:hover {
       background: var(--glass-bg-hover);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border-color: var(--glass-border);
     }
     .pf-scan__manual[aria-expanded='true'] {
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.32);
     }
@@ -1174,7 +1174,7 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-scan__camera:hover {
       background: var(--glass-bg-hover);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border-color: var(--glass-border);
     }
     .pf-scan__camera:active { transform: scale(0.95); }
@@ -1280,7 +1280,7 @@ const COUNTERS: CounterSpec[] = [
       letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
     }
@@ -1360,7 +1360,7 @@ const COUNTERS: CounterSpec[] = [
       height: 18px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 11px;
       font-weight: 700;
       flex-shrink: 0;
@@ -1370,7 +1370,7 @@ const COUNTERS: CounterSpec[] = [
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-tube-reject__list {
       list-style: none;
@@ -1615,7 +1615,7 @@ const COUNTERS: CounterSpec[] = [
       }
       .pf-kpi-statbtn.is-open {
         border-color: rgba(168, 85, 247, 0.55);
-        color: #c4b5fd;
+        color: var(--violet-text);
         background: rgba(124, 58, 247, 0.16);
       }
       /* Popover is teleported to <body>; positioned via inline top/right from
@@ -1661,7 +1661,7 @@ const COUNTERS: CounterSpec[] = [
         padding: 3px;
         margin-bottom: 12px;
         border-radius: 9999px;
-        background: rgba(0, 0, 0, 0.18);
+        background: var(--seg-track);
         border: 1px solid var(--glass-border);
       }
       .pf-mtab {
@@ -1773,7 +1773,7 @@ const COUNTERS: CounterSpec[] = [
       border: 1px solid var(--glass-border);
     }
     .pf-mw-claimed-toggle--on {
-      color: #c4b5fd; border-color: rgba(139, 92, 246, 0.45);
+      color: var(--violet-text); border-color: rgba(139, 92, 246, 0.45);
       background: rgba(139, 92, 246, 0.12);
     }
 

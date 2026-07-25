@@ -532,7 +532,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
       flex-basis: 100%;
       margin-top: 3px;
       font-size: 11px;
-      color: #ef4444;
+      color: var(--red-text);
     }
 
     .pf-mini-select {
@@ -603,7 +603,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
     .pf-lane-edit:focus-within { border-bottom-color: #7c3aed; }
     .pf-lane-name-input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 12.5px; font-weight: 650; color: var(--text-primary); padding: 3px 2px; }
     .pf-lane-edit-icon { color: var(--text-muted); flex-shrink: 0; }
-    .pf-lane-edit:focus-within .pf-lane-edit-icon { color: #c4b5fd; }
+    .pf-lane-edit:focus-within .pf-lane-edit-icon { color: var(--violet-text); }
     .pf-add-space-lane {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
       min-height: 90px; border: 1.5px dashed var(--glass-border, rgba(255,255,255,0.2)); border-radius: 12px;

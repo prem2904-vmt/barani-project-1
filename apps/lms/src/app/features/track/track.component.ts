@@ -97,7 +97,7 @@ interface TrackResult {
     .btn { display:inline-flex; align-items:center; justify-content:center; width:100%; margin-top:14px; padding:12px; border-radius:12px; border:none;
       background:linear-gradient(135deg,#7c3aed,#ec4899); color:#fff; font-weight:700; font-size:14px; cursor:pointer; text-decoration:none; box-sizing:border-box; }
     .btn:disabled { opacity:.5; cursor:default; }
-    .err { color:#fca5a5; font-size:13px; margin:6px 0 0; }
+    .err { color:var(--red-text); font-size:13px; margin:6px 0 0; }
     .timeline { list-style:none; padding:0; margin:10px 0 0; }
     .timeline li { display:flex; align-items:center; gap:12px; padding:9px 0; color:rgba(255,255,255,.5); }
     .timeline .lbl { min-width:0; overflow-wrap:anywhere; }

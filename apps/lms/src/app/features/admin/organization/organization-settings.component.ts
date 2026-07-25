@@ -123,7 +123,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
                 Wipes every patient, order, sample, bill, payment, report, and appointment from
                 the database. Tenant config, branches, departments, users, roles, the test catalog,
                 and workflows are kept. Use this to reset the system to a clean state during
-                dev testing. <span style="color: #fca5a5;">Cannot be undone.</span>
+                dev testing. <span style="color: var(--red-text);">Cannot be undone.</span>
               </p>
               @if (lastWiped(); as w) {
                 <p class="pf-ls__warn">Last wipe: cleared {{ w.patients }} patients · {{ w.orders }} orders · {{ w.bills }} bills · {{ w.reports }} reports.</p>
@@ -156,9 +156,9 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
       display: flex; gap: 16px; align-items: center;
       flex-wrap: wrap;
     }
-    .pf-ls__danger-title { color: #fca5a5 !important; }
+    .pf-ls__danger-title { color: var(--red-text) !important; }
     .pf-ls__danger > pf-touch-btn { flex-shrink: 0; }
-    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: #fbbf24; font-style: italic; }
+    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
 
     .pf-ls__toggle { cursor: pointer; display: inline-flex; align-items: center; }
     .pf-ls__toggle input { position: absolute; opacity: 0; pointer-events: none; }

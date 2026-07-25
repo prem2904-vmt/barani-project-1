@@ -68,7 +68,7 @@ interface LabTile {
     .pf-lsh__ic {
       display: inline-flex; align-items: center; justify-content: center;
       width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; flex-shrink: 0;
-      color: #c4b5fd; background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
+      color: var(--violet-text); background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
     }
     .pf-lsh__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .pf-lsh__t { font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }

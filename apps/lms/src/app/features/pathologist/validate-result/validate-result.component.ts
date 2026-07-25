@@ -635,7 +635,7 @@ interface ValueRow {
       width: 24px; height: 24px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 13px; font-weight: 700;
       flex-shrink: 0;
     }
@@ -644,7 +644,7 @@ interface ValueRow {
       font-size: 13px; line-height: 1.4;
       color: var(--text-secondary);
     }
-    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
+    .pf-reject-banner__text strong { color: var(--red-text); margin-right: 4px; }
 
     /* ── Patient context strip ─────────────────────────────── */
     .pf-ctx {
@@ -1267,7 +1267,7 @@ interface ValueRow {
     /* Per-row inline comment thread (table view). Sits between the
        tapped row and the next, indented + soft-bordered so the
        conversation visually belongs to that row. */
-    .pf-table__row--has-comments .pf-table__name { color: #fca5a5; font-weight: 600; }
+    .pf-table__row--has-comments .pf-table__name { color: var(--red-text); font-weight: 600; }
     .pf-table__comment-flag { margin-left: 6px; font-size: 12px; }
     .pf-table__row-comments {
       grid-column: 1 / -1;

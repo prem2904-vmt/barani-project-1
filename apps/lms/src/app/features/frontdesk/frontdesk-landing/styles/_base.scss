@@ -219,19 +219,19 @@
 }
 
 .pf-tp-item__count[data-tone='rose'] {
-  color: #fca5a5;
+  color: var(--red-text);
   background: rgba(239, 68, 68, 0.16);
   border-color: rgba(239, 68, 68, 0.3);
 }
 
 .pf-tp-item__count[data-tone='amber'] {
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.16);
   border-color: rgba(245, 158, 11, 0.3);
 }
 
 .pf-tp-item__count[data-tone='emerald'] {
-  color: #34d399;
+  color: var(--green-text);
   background: rgba(16, 185, 129, 0.16);
   border-color: rgba(16, 185, 129, 0.3);
 }
@@ -505,7 +505,7 @@
 
 :host-context([data-theme="light"]) {
   .pf-appt-split__pane {
-    background: #ffffff;
+    background: var(--glass-bg);
   }
   .pf-tp-item__count[data-tone='emerald'] {
     background: rgba(5, 150, 105, 0.1) !important;

@@ -139,7 +139,7 @@ const EMPTY: LabDraft = {
     .pf-input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18); }
     .pf-input--error { border-color: #f43f5e; }
     .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
-    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: #f43f5e; }
+    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: var(--red-text); }
     .pf-dept-chip { padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; }
     .pf-dept-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
     .pf-rl__name { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }

@@ -417,15 +417,15 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       /* Icon badge per level */
       .toast-icon[data-level="success"] {
         background: rgba(16, 185, 129, 0.18);
-        color: #34d399;
+        color: var(--green-text);
       }
       .toast-icon[data-level="error"] {
         background: rgba(239, 68, 68, 0.18);
-        color: #f87171;
+        color: var(--red-text);
       }
       .toast-icon[data-level="warning"] {
         background: rgba(245, 158, 11, 0.18);
-        color: #fbbf24;
+        color: var(--amber-text);
       }
       .toast-icon[data-level="info"] {
         background: rgba(99, 102, 241, 0.18);

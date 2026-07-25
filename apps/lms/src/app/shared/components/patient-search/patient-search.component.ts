@@ -358,7 +358,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: var(--text-tertiary);
     }
-    .row-arrow { color: #c4b5fd; flex-shrink: 0; }
+    .row-arrow { color: var(--violet-text); flex-shrink: 0; }
 
     .panel::-webkit-scrollbar { width: 6px; }
     .panel::-webkit-scrollbar-track { background: transparent; }

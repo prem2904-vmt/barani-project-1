@@ -346,7 +346,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
     .pf-field-error {
       margin: 4px 0 0;
       font-size: 12px;
-      color: #f87171;
+      color: var(--red-text);
     }
     .field-remove {
       width: 32px;
@@ -364,7 +364,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
     }
     .field-remove:hover {
       background: rgba(239, 68, 68, 0.15);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.3);
     }
 

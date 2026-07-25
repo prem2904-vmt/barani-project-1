@@ -478,7 +478,7 @@ const PAGE_SIZE = 20;
       border-radius: 10px;
       background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.25);
     }
     .pf-aps-title {
@@ -848,7 +848,7 @@ const PAGE_SIZE = 20;
     .pf-aps-err {
       flex: 1;
       font-size: 12.5px;
-      color: #fca5a5;
+      color: var(--red-text);
       font-weight: 500;
     }
 
@@ -1002,7 +1002,7 @@ const PAGE_SIZE = 20;
     :host ::ng-deep .pf-aps-name mark,
     :host ::ng-deep .pf-aps-mono mark {
       background: rgba(168, 85, 247, 0.18);
-      color: #ddd6fe;
+      color: var(--violet-text);
       padding: 1px 3px;
       border-radius: 4px;
       font-weight: 600;
@@ -1067,12 +1067,12 @@ const PAGE_SIZE = 20;
       border-color: var(--glass-border);
     }
     .pf-aps-row-btn--accent {
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-aps-row-btn--accent:hover {
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.32);
-      color: #ddd6fe;
+      color: var(--violet-text);
     }
 
     .pf-aps-table-foot {

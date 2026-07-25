@@ -513,7 +513,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
       border-radius: 6px;
       background: rgba(168, 85, 247, 0.12);
       border: 1px solid rgba(168, 85, 247, 0.24);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     .pf-pp-hdr__meta {
@@ -547,13 +547,13 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
     .pf-pp-link-sm {
       background: transparent;
       border: 0;
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       padding: 0 0 0 4px;
     }
-    .pf-pp-link-sm:hover { color: #ddd6fe; text-decoration: underline; }
+    .pf-pp-link-sm:hover { color: var(--violet-text); text-decoration: underline; }
 
     .pf-pp-hdr__actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
@@ -627,7 +627,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
     .pf-pp-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
     .pf-pp-icon-btn--danger:hover {
       background: rgba(239, 68, 68, 0.1);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.32);
     }
 
@@ -647,10 +647,10 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
     .pf-pp-mini-btn--accent {
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-pp-mini-btn--accent:hover { background: rgba(168, 85, 247, 0.2); }
-    .pf-pp-mini-btn--rose { color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
+    .pf-pp-mini-btn--rose { color: var(--red-text); border-color: rgba(239, 68, 68, 0.3); }
     .pf-pp-mini-btn--rose:hover:not([disabled]) { background: rgba(239, 68, 68, 0.1); }
 
     /* ── Overview row: stat tiles + ABHA card ─────────────── */
@@ -860,8 +860,8 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
       flex-shrink: 0;
       box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.0);
     }
-    .pf-pp-status[data-tone='violet'] { background: rgba(168,85,247,0.14); color: #c4b5fd; border: 1px solid rgba(168,85,247,0.32); }
-    .pf-pp-status[data-tone='amber']  { background: rgba(245,158,11,0.14); color: #fbbf24; border: 1px solid rgba(245,158,11,0.32); }
+    .pf-pp-status[data-tone='violet'] { background: rgba(168,85,247,0.14); color: var(--violet-text); border: 1px solid rgba(168,85,247,0.32); }
+    .pf-pp-status[data-tone='amber']  { background: rgba(245,158,11,0.14); color: var(--amber-text); border: 1px solid rgba(245,158,11,0.32); }
     .pf-pp-status[data-tone='sky']    { background: rgba(14,165,233,0.14); color: #38bdf8; border: 1px solid rgba(14,165,233,0.32); }
     .pf-pp-status[data-tone='emerald']{ background: rgba(34,197,94,0.14); color: #86efac; border: 1px solid rgba(34,197,94,0.32); }
     .pf-pp-status[data-tone='rose']   { background: rgba(244,63,94,0.14); color: #fb7185; border: 1px solid rgba(244,63,94,0.32); }
@@ -870,7 +870,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
     .pf-pp-link {
       background: transparent;
       border: 0;
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-weight: 600;
       cursor: pointer;
       font-size: 12.5px;
@@ -879,7 +879,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
       transition: background 0.12s ease, color 0.12s ease;
     }
     .pf-pp-link:hover {
-      color: #ddd6fe;
+      color: var(--violet-text);
       background: rgba(168, 85, 247, 0.1);
     }
 
@@ -937,7 +937,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
     .pf-pp-sub__card p { margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
     .pf-pp-sub__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
-    .pf-pp-error { color: #fca5a5; font-size: 12.5px; margin: 6px 0 0; }
+    .pf-pp-error { color: var(--red-text); font-size: 12.5px; margin: 6px 0 0; }
     .pf-pp-stub {
       padding: 12px;
       border: 1px dashed rgba(168,85,247,0.32);

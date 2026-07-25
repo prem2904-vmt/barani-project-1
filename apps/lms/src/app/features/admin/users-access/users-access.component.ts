@@ -186,7 +186,7 @@ type Tab = 'users' | 'roles';
     .pf-role-seeded {
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(168, 85, 247, 0.1));
       border-color: rgba(168, 85, 247, 0.35);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     /* The action wrapper is transparent to layout by default so desktop/iPad

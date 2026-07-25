@@ -242,7 +242,7 @@ const UNASSIGNED = 'Unassigned';
       justify-content: center;
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.08));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
       flex-shrink: 0;
     }
 
@@ -252,7 +252,7 @@ const UNASSIGNED = 'Unassigned';
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.02em;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: rgba(124, 58, 237, 0.14);
       border: 1px solid rgba(168, 85, 247, 0.28);
       border-radius: 6px;

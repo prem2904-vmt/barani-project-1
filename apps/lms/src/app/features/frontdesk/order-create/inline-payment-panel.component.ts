@@ -491,14 +491,14 @@ interface ModeDef {
       }
       .pf-cash__change[data-kind="change"] span,
       .pf-cash__change[data-kind="change"] strong {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-cash__change[data-kind="exact"] {
         background: rgba(52, 211, 153, 0.06);
         border-color: rgba(52, 211, 153, 0.25);
       }
       .pf-cash__change[data-kind="exact"] span {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-cash__change[data-kind="short"] {
         background: rgba(248, 113, 113, 0.1);
@@ -506,7 +506,7 @@ interface ModeDef {
       }
       .pf-cash__change[data-kind="short"] span,
       .pf-cash__change[data-kind="short"] strong {
-        color: #f87171;
+        color: var(--red-text);
       }
       .pf-ipp__wallet,
       .pf-ipp__split {
@@ -586,10 +586,10 @@ interface ModeDef {
         color: var(--text-tertiary);
       }
       .pf-ipp__muted[data-kind="ok"] {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-ipp__muted[data-kind="short"] {
-        color: #f87171;
+        color: var(--red-text);
       }
       /* ── Advance (pay-later) block ── */
       .pf-adv {

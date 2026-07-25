@@ -467,9 +467,9 @@
    via CSS variables instead. Light = physical white card; dark = navy card.
    The QR quiet-zone stays white in both so it always scans. */
 .abc {
-  --abc-bg: #ffffff; --abc-fg: #0f172a; --abc-sub: #334155; --abc-mut: #94a3b8;
-  --abc-brand: #0a3d91; --abc-border: rgba(0, 0, 0, 0.10);
-  --abc-chip-bg: #f1f5f9; --abc-chip-bd: #e2e8f0; --abc-badge: #ffffff;
+  --abc-bg: #f6f4fc; --abc-fg: #262536; --abc-sub: #3b3952; --abc-mut: #8b88a3;
+  --abc-brand: #123a86; --abc-border: rgba(76, 29, 149, 0.12);
+  --abc-chip-bg: #ece9f5; --abc-chip-bd: #ddd8ec; --abc-badge: #f6f4fc;
   background: var(--abc-bg);
   color: var(--abc-fg);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--abc-border);
@@ -483,7 +483,7 @@
 .abc__sub   { color: var(--abc-sub); }
 .abc__mut   { color: var(--abc-mut); }
 .abc__hr    { border-color: var(--abc-border); }
-.abc__ok    { color: #10b981; }
+.abc__ok    { color: var(--green-text); }
 .abc__chip  { background: var(--abc-chip-bg); box-shadow: 0 0 0 1px var(--abc-chip-bd); }
 .abc__badge { box-shadow: 0 0 0 2px var(--abc-badge); }        /* ring matches card bg */
 .abc__qr    { background: #ffffff; box-shadow: 0 0 0 1px var(--abc-chip-bd); }

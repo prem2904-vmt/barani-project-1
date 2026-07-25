@@ -183,7 +183,7 @@ interface ResultSnapshot {
       letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
     }

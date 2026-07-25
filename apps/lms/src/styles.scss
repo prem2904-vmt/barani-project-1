@@ -121,81 +121,124 @@
   --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.4);
   --glass-glow: 0 0 40px rgba(139, 92, 246, 0.15);
   --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+
+  /* Accent text/icon colours — bright shades read great on the dark surfaces. */
+  --amber-text: #fbbf24;
+  --red-text: #fca5a5;
+  --green-text: #34d399;
+  --violet-text: #c4b5fd;
+  --blue-text: #93c5fd;
+  --teal-text: #5eead4;
+  --cyan-text: #67e8f9;
+  --sky-text: #7dd3fc;
+  --pink-text: #f9a8d4;
+  --rose-text: #fda4af;
+  /* Segmented/pill TRACK background (the container behind tab pills). */
+  --seg-track: rgba(0, 0, 0, 0.18);
 }
 
 /* =============================================================
    LIGHT THEME
    ============================================================= */
 :root.light {
-  --bg-primary: rgba(237, 232, 246, 0.85);
-  --bg-secondary: rgba(231, 225, 242, 0.7);
-  --bg-tertiary: rgba(224, 217, 238, 0.55);
-  --bg-card: rgba(255, 255, 255, 0.5);
-  --bg-card-solid: rgba(255, 255, 255, 0.9);
-  --bg-input: #ffffff;
-  --bg-hover: rgba(139, 92, 246, 0.08);
-  --bg-active: rgba(139, 92, 246, 0.12);
+  /* Eye-comfortable light — NO pure white anywhere (pure #fff + near-black text
+     is maximal luminance/contrast and fatigues the eye on modern high-nit
+     screens; UX guidance = off-white surfaces, dark-not-black text, comfortable
+     not-maximal contrast). Every surface is a soft lavender-tinted off-white at
+     a moderate luminance, lifted off a slightly deeper lavender page; text is a
+     deep indigo-slate. Keeps the lavender identity + frosted-glass depth. */
+  --bg-primary: #e3dfed;
+  --bg-secondary: #e8e4f1;
+  --bg-tertiary: #ece8f4;
+  --bg-card: rgba(244, 242, 250, 0.62);
+  --bg-card-solid: #f4f2fa;
+  --bg-input: #f7f6fc;
+  --bg-hover: rgba(124, 58, 237, 0.07);
+  --bg-active: rgba(124, 58, 237, 0.12);
 
-  --surface-1: rgba(245, 242, 250, 0.95);
-  --surface-2: rgba(255, 255, 255, 0.35);
-  --surface-3: rgba(255, 255, 255, 0.25);
-  --surface-elevated: rgba(255, 255, 255, 0.7);
+  --surface-1: rgba(244, 242, 250, 0.55);
+  --surface-2: rgba(247, 245, 252, 0.68);
+  --surface-3: #e9e5f2;
+  --surface-elevated: rgba(248, 246, 253, 0.78);
 
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-tertiary: #64748b;
-  --text-muted: #94a3b8;
+  --text-primary: #262536;
+  --text-secondary: #4c4a63;
+  --text-tertiary: #6d6b84;
+  --text-muted: #9997b0;
   --text-inverse: #ffffff;
 
-  --border-primary: rgba(139, 92, 246, 0.3);
-  --border-secondary: rgba(139, 92, 246, 0.15);
-  --border-muted: #e2e8f0;
-  --border-input: #cbd5e1;
+  --border-primary: rgba(124, 58, 237, 0.2);
+  --border-secondary: rgba(124, 58, 237, 0.11);
+  --border-muted: #d8d3e8;
+  --border-input: #cec8e0;
 
-  --shadow-sm: 0 1px 3px rgba(124, 58, 237, 0.06);
-  --shadow-md: 0 4px 12px rgba(124, 58, 237, 0.08);
-  --shadow-lg: 0 12px 32px rgba(124, 58, 237, 0.12);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.2);
+  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
+  --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.08);
+  --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.11);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.14);
 
-  --input-bg: rgba(255, 255, 255, 0.6);
-  --input-border: rgba(139, 92, 246, 0.2);
+  --input-bg: #f7f6fc;
+  --input-border: #d4cee6;
   --input-border-focus: var(--color-violet-500);
-  --input-text: #1e293b;
-  --input-placeholder: #94a3b8;
+  --input-text: #262536;
+  --input-placeholder: #9997b0;
 
-  --card-bg: rgba(255, 255, 255, 0.55);
-  --card-border: rgba(139, 92, 246, 0.18);
-  --card-hover-border: var(--color-violet-400);
+  --card-bg: rgba(244, 242, 250, 0.64);
+  --card-border: rgba(124, 58, 237, 0.13);
+  --card-hover-border: rgba(124, 58, 237, 0.38);
 
-  --header-bg: rgba(240, 233, 253, 0.8);
-  --header-border: rgba(139, 92, 246, 0.12);
+  --header-bg: rgba(231, 227, 242, 0.82);
+  --header-border: rgba(124, 58, 237, 0.11);
 
-  --scrollbar-track: #e2e8f0;
-  --scrollbar-thumb: #94a3b8;
-  --scrollbar-thumb-hover: #64748b;
+  --scrollbar-track: #e0dbee;
+  --scrollbar-thumb: #bbb2d4;
+  --scrollbar-thumb-hover: #988dc0;
 
   --success-bg: rgba(16, 185, 129, 0.1);
   --success-text: #059669;
-  --success-border: rgba(16, 185, 129, 0.3);
+  --success-border: rgba(16, 185, 129, 0.28);
   --error-bg: rgba(239, 68, 68, 0.1);
   --error-text: #dc2626;
-  --error-border: rgba(239, 68, 68, 0.3);
+  --error-border: rgba(239, 68, 68, 0.28);
   --warning-bg: rgba(245, 158, 11, 0.1);
   --warning-text: #d97706;
-  --warning-border: rgba(245, 158, 11, 0.3);
+  --warning-border: rgba(245, 158, 11, 0.28);
   --info-bg: rgba(59, 130, 246, 0.1);
   --info-text: #2563eb;
-  --info-border: rgba(59, 130, 246, 0.3);
+  --info-border: rgba(59, 130, 246, 0.28);
 
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-bg-hover: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.45);
-  --glass-border-hover: rgba(255, 255, 255, 0.65);
+  /* Glass panels: near-white lavender-tinged lift with a soft lavender hairline
+     edge — not the glary near-opaque white of before. */
+  /* Glass base is a soft lavender off-white (not pure white) so frosted panels
+     read calm, not glary. */
+  --glass-bg: rgba(246, 244, 252, 0.55);
+  --glass-bg-hover: rgba(248, 246, 253, 0.62);
+  --glass-border: rgba(124, 58, 237, 0.15);
+  --glass-border-hover: rgba(124, 58, 237, 0.26);
   --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.12);
-  --glass-glow: 0 0 40px rgba(139, 92, 246, 0.1);
-  --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.15);
+  --glass-shadow: 0 8px 28px rgba(76, 29, 149, 0.08);
+  --glass-shadow-hover: 0 16px 44px rgba(76, 29, 149, 0.12);
+  --glass-glow: 0 0 40px rgba(124, 58, 237, 0.08);
+  --glass-glow-hover: 0 0 60px rgba(124, 58, 237, 0.12);
+  /* Top-edge sheen — softened so it doesn't add a hard white line. */
+  --glass-highlight: rgba(255, 255, 255, 0.5);
+
+  /* Accent text/icon colours — WCAG-AA darker shades (600-700) so amber/red/
+     green/violet foregrounds stay legible on the light surfaces (bright dark-mode
+     shades like #fbbf24 fail contrast on light, ~1.2:1). */
+  --amber-text: #b45309;
+  --red-text: #dc2626;
+  --green-text: #059669;
+  --violet-text: #6d28d9;
+  --blue-text: #2563eb;
+  --teal-text: #0d9488;
+  --cyan-text: #0891b2;
+  --sky-text: #0284c7;
+  --pink-text: #db2777;
+  --rose-text: #e11d48;
+  /* Segmented track — subtle lavender tint instead of a heavy grey/black blob. */
+  --seg-track: rgba(124, 58, 237, 0.08);
 }
 
 /* =============================================================
@@ -655,48 +698,50 @@ pf-shell main>router-outlet+* {
    ============================================================= */
 .glass {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
   border: 1px solid var(--border-primary);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card {
   background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid var(--card-border);
   border-radius: 20px;
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
   border-color: var(--card-hover-border);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card-elevated {
   background: var(--surface-elevated);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card-2025 {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card-2025:hover {
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+  box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover), inset 0 1px 0 var(--glass-highlight);
   transform: translateY(-4px);
 }
 
@@ -756,11 +801,11 @@ pf-shell main>router-outlet+* {
 
 .glass-modal {
   background: var(--glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow-hover);
+  box-shadow: var(--glass-shadow-hover), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-badge {

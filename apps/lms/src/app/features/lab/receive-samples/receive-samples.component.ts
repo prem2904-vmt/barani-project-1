@@ -156,7 +156,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </pf-touch-btn>
         </div>
         @if (pkgError()) {
-          <p class="text-[12px] mt-3" style="color: #fca5a5;">{{ pkgError() }}</p>
+          <p class="text-[12px] mt-3" style="color: var(--red-text);">{{ pkgError() }}</p>
         }
         @if (pkgPreview(); as pkg) {
           <div class="pkg-preview">
@@ -166,7 +166,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <p class="pkg-preview__sub">
                   {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }}
                   @if (pkg.receivedAt) {
-                    · <span style="color: #6ee7b7;">already received</span>
+                    · <span style="color: var(--green-text);">already received</span>
                   }
                 </p>
               </div>
@@ -309,7 +309,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                             <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
                           }
                           @if (g.notReadyCount > 0) {
-                            <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                            <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
                           }
                           @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                         </p>
@@ -330,7 +330,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                       }
                       @case ('awaiting') {
                         <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
-                              style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
+                              style="background: rgba(245, 158, 11, 0.15); color: var(--amber-text);"
                               title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
                           ⚠ Not dispatched yet
                         </span>
@@ -489,7 +489,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       letter-spacing: 0.04em;
       border-radius: 9999px;
       background: rgba(245, 158, 11, 0.15);
-      color: #fbbf24;
+      color: var(--amber-text);
       border: 1px solid rgba(245, 158, 11, 0.32);
     }
 

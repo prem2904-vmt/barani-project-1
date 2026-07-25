@@ -620,7 +620,7 @@ interface PrelimOrder {
       border: 1px solid var(--glass-border);
       border-radius: 10px;
       overflow: hidden;
-      background: rgba(0,0,0,0.18);
+      background: var(--seg-track);
     }
     .pf-rq-iconbtn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -657,17 +657,17 @@ interface PrelimOrder {
     }
     .pf-report-delivered {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
-      color: #6ee7b7;
+      color: var(--green-text);
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .pf-report-pending {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.08));
-      color: #fcd34d;
+      color: var(--amber-text);
       border: 1px solid rgba(245, 158, 11, 0.3);
     }
     .pf-report-failed {
       background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.08));
-      color: #fca5a5;
+      color: var(--red-text);
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
@@ -704,7 +704,7 @@ interface PrelimOrder {
       letter-spacing: 0.04em; text-transform: uppercase;
       padding: 4px 10px; border-radius: 9999px;
       background: rgba(34, 211, 238, 0.16);
-      color: #67e8f9;
+      color: var(--cyan-text);
       border: 1px solid rgba(34, 211, 238, 0.34);
     }
     .pf-prelim-card__chev {
@@ -736,7 +736,7 @@ interface PrelimOrder {
       font-size: 10.5px; font-weight: 700;
       letter-spacing: 0.08em;
       padding: 2px 6px; border-radius: 4px;
-      background: rgba(34, 211, 238, 0.16); color: #67e8f9;
+      background: rgba(34, 211, 238, 0.16); color: var(--cyan-text);
     }
     .pf-prelim-card__sample-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-prelim-card__test { margin-bottom: 8px; }
@@ -943,7 +943,7 @@ interface PrelimOrder {
       }
       .pf-rq-statbtn.is-open {
         border-color: rgba(168, 85, 247, 0.55);
-        color: #c4b5fd;
+        color: var(--violet-text);
         background: rgba(124, 58, 247, 0.16);
       }
       .pf-rq-statpop__backdrop {

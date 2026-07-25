@@ -238,7 +238,7 @@
   border-radius: 9999px;
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(217, 70, 239, 0.09));
   border: 1px solid rgba(139, 92, 246, 0.35);
-  color: #a78bfa;
+  color: var(--violet-text);
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -277,7 +277,7 @@
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(217, 70, 239, 0.07));
   border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #a78bfa;
+  color: var(--violet-text);
   cursor: pointer;
   transition: all 0.18s ease;
 }
@@ -299,7 +299,7 @@
 .pf-actbtn--danger {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(248, 113, 113, 0.08));
   border-color: rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 .pf-actbtn--danger:hover:not(:disabled) {
   background: linear-gradient(135deg, #ef4444, #f87171);
@@ -386,7 +386,7 @@
   height: 22px;
   border-radius: 9999px;
   background: rgba(34, 211, 238, 0.22);
-  color: #67e8f9;
+  color: var(--cyan-text);
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
@@ -396,7 +396,7 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  color: #67e8f9;
+  color: var(--cyan-text);
 }
 
 .pf-prelim__count {
@@ -436,7 +436,7 @@
   padding: 2px 6px;
   border-radius: 4px;
   background: rgba(34, 211, 238, 0.16);
-  color: #67e8f9;
+  color: var(--cyan-text);
 }
 
 .pf-prelim__sample-name {
@@ -526,17 +526,17 @@
   padding: 2px 6px;
   border-radius: 9999px;
   background: rgba(16, 185, 129, 0.16);
-  color: #6ee7b7;
+  color: var(--green-text);
 }
 
 .pf-prelim__row-flag[data-flag='abnormal'] {
   background: rgba(245, 158, 11, 0.20);
-  color: #fbbf24;
+  color: var(--amber-text);
 }
 
 .pf-prelim__row-flag[data-flag='critical'] {
   background: rgba(239, 68, 68, 0.20);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 @media (max-width: 639px) {
@@ -834,11 +834,11 @@
 }
 
 .pf-cash-summary__amt--in {
-  color: #34d399;
+  color: var(--green-text);
 }
 
 .pf-cash-summary__amt--out {
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 .pf-cash-modes {
@@ -866,13 +866,13 @@
   padding: 2px 8px;
   border-radius: 9999px;
   background: rgba(16, 185, 129, 0.16);
-  color: #6ee7b7;
+  color: var(--green-text);
   border: 1px solid rgba(16, 185, 129, 0.32);
 }
 
 .pf-cash-modes__chip[data-mode='cash'] {
   background: rgba(52, 211, 153, 0.18);
-  color: #6ee7b7;
+  color: var(--green-text);
 }
 
 .pf-cash-modes__chip[data-mode='upi'] {
@@ -883,7 +883,7 @@
 
 .pf-cash-modes__chip[data-mode='card'] {
   background: rgba(244, 114, 182, 0.18);
-  color: #f9a8d4;
+  color: var(--pink-text);
   border-color: rgba(244, 114, 182, 0.34);
 }
 
@@ -947,7 +947,7 @@
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #34d399;
+  color: var(--green-text);
 }
 
 /* Top-test popover */
@@ -999,7 +999,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(139, 92, 246, 0.18);
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 
 .pf-toptest-list__row:first-child .pf-toptest-list__rank {
@@ -1357,12 +1357,12 @@
 
 /* ── Modify / Cancel order actions ───────────────────────────── */
 .pf-drawer__reprint-btn--danger {
-  color: #fca5a5;
+  color: var(--red-text);
   border-color: rgba(239, 68, 68, 0.35);
 }
 .pf-drawer__reprint-btn--danger:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #fecaca;
+  color: var(--red-text);
 }
 
 /* Cancel-order confirmation card (uses the shared .pf-drawer-bd backdrop). */
@@ -1515,7 +1515,7 @@
   color: var(--text-secondary, rgba(255, 255, 255, 0.72));
   cursor: pointer;
 }
-.pf-inv-preview__close:hover { background: rgba(239, 68, 68, 0.14); color: #f87171; }
+.pf-inv-preview__close:hover { background: rgba(239, 68, 68, 0.14); color: var(--red-text); }
 /* Scroll/scale wrappers around the iframe. At ≥641px they collapse out of the
    layout (display:contents) so the iframe behaves exactly as before; the phone
    pass (_mobile.scss) turns them into a scaled, pinch-zoomable scroller. */

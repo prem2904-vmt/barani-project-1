@@ -87,8 +87,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         linear-gradient(135deg, #0a0612 0%, #0d0818 25%, #12091f 50%, #0d0818 75%, #0a0612 100%);
     }
     :root.light .wash {
+      /* Calm, slightly-deeper muted lavender wash (aligned with the eye-comfortable
+         --bg-primary #e3dfed) — no bright/glary stops, so the page rests the eye. */
       background:
-        linear-gradient(135deg, #f5f0fc 0%, #ece1f8 25%, #e2d4f2 50%, #ece1f8 75%, #f5f0fc 100%);
+        linear-gradient(135deg, #e8e3f2 0%, #e2dcee 25%, #dcd6ea 50%, #e2dcee 75%, #e8e3f2 100%);
     }
 
     /* ── Layer 2: DNA flow (blurred gradient column scrolling) ─ */
@@ -133,26 +135,32 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     }
     :root.light .dna-flow::before {
       background-image:
-        radial-gradient(ellipse 220px 14px at 15%  5%, rgba(124,  58, 237, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 40% 15%, rgba(168,  85, 247, 0.20) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 70% 25%, rgba(124,  58, 237, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 25% 40%, rgba(168,  85, 247, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 80% 55%, rgba(124,  58, 237, 0.20) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 50% 70%, rgba(168,  85, 247, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 80% 85%, rgba(124,  58, 237, 0.22) 0%, transparent 70%);
+        radial-gradient(ellipse 220px 14px at 15%  5%, rgba(124,  58, 237, 0.36) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 40% 15%, rgba(168,  85, 247, 0.33) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 70% 25%, rgba(124,  58, 237, 0.36) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 25% 40%, rgba(168,  85, 247, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 80% 55%, rgba(124,  58, 237, 0.33) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 50% 70%, rgba(168,  85, 247, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 80% 85%, rgba(124,  58, 237, 0.36) 0%, transparent 70%);
       filter: blur(30px);
     }
     :root.light .dna-flow::after {
       background-image:
-        radial-gradient(ellipse 200px 12px at 80% 10%, rgba(219,  39, 119, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 55% 20%, rgba(217,  70, 239, 0.20) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 15% 35%, rgba(219,  39, 119, 0.16) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 65% 50%, rgba(217,  70, 239, 0.20) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 30% 65%, rgba(219,  39, 119, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 220px 14px at 75% 80%, rgba(217,  70, 239, 0.20) 0%, transparent 70%),
-        radial-gradient(ellipse 200px 12px at 40% 95%, rgba(219,  39, 119, 0.16) 0%, transparent 70%);
+        radial-gradient(ellipse 200px 12px at 80% 10%, rgba(219,  39, 119, 0.28) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 55% 20%, rgba(217,  70, 239, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 15% 35%, rgba(219,  39, 119, 0.26) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 65% 50%, rgba(217,  70, 239, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 30% 65%, rgba(219,  39, 119, 0.28) 0%, transparent 70%),
+        radial-gradient(ellipse 220px 14px at 75% 80%, rgba(217,  70, 239, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 200px 12px at 40% 95%, rgba(219,  39, 119, 0.26) 0%, transparent 70%);
       filter: blur(35px);
     }
+    /* Light mode: the lavender DNA flow must stay VISIBLE behind the translucent
+       glass surfaces (they have nothing else to tint them) — so the blobs run at
+       a clear lavender/violet strength, near full opacity. Still colour (not a
+       bright white wash), so it reads as flow, not glare. Dark stays as-is. */
+    :root.light .dna-flow { opacity: 0.95; }
+
     @keyframes pf-dna-scroll {
       to { transform: translateY(-50%); }
     }

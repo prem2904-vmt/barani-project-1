@@ -44,9 +44,9 @@ import { OrderTest } from '../models/order.model';
     .rp__pt { font-size: 11.5px; color: var(--text-tertiary); }
     .rp__status { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
                   padding: 2px 7px; border-radius: 999px; color: var(--text-secondary); background: rgba(255,255,255,0.06); }
-    .rp__status[data-s='in_progress'] { color: #c4b5fd; background: rgba(124,58,237,0.18); }
-    .rp__status[data-s='entered'] { color: #6ee7b7; background: rgba(16,185,129,0.15); }
-    .rp__status[data-s='re_entry'] { color: #fca5a5; background: rgba(239,68,68,0.14); }
+    .rp__status[data-s='in_progress'] { color: var(--violet-text); background: rgba(124,58,237,0.18); }
+    .rp__status[data-s='entered'] { color: var(--green-text); background: rgba(16,185,129,0.15); }
+    .rp__status[data-s='re_entry'] { color: var(--red-text); background: rgba(239,68,68,0.14); }
   `]
 })
 export class ResultEntryPanelComponent implements OnInit {

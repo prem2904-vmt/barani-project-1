@@ -205,13 +205,13 @@ const TYPE_COLOR: Record<string, string> = {
     .pf-queue-hdr--muted { color: var(--text-tertiary); }
     .pf-queue-count { font-weight: 600; color: var(--text-tertiary); margin-left: 4px; }
     .pf-badge-late { font-size: 10px; font-weight: 700; text-transform: uppercase;
-      color: #ef4444; background: rgba(239,68,68,.15); padding: 1px 6px; border-radius: 999px; }
+      color: var(--red-text); background: rgba(239,68,68,.15); padding: 1px 6px; border-radius: 999px; }
     .pf-score {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-width: 52px; padding: 3px 8px; border-radius: 10px; flex-shrink: 0; cursor: help;
       background: rgba(124,58,237,0.14); border: 1px solid rgba(124,58,237,0.32);
     }
-    .pf-score__n { font-size: 15px; font-weight: 700; line-height: 1; color: #c4b5fd; }
+    .pf-score__n { font-size: 15px; font-weight: 700; line-height: 1; color: var(--violet-text); }
     .pf-score__l { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary); }
 
     /* ── Phone (<=640): keep the row legible & tappable.

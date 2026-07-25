@@ -139,9 +139,9 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo__dot { margin: 0 6px; color: var(--text-tertiary); }
     .pf-lo__amt { font-size: 13px; font-weight: 700; color: var(--text-primary); flex-shrink: 0; }
     .pf-lo__chip { flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: capitalize; padding: 2px 9px; border-radius: 999px; }
-    .pf-lo__chip--ok { background: rgba(16,185,129,0.14); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
-    .pf-lo__chip--bad { background: rgba(239,68,68,0.14); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
-    .pf-lo__chip--wait { background: rgba(245,158,11,0.14); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+    .pf-lo__chip--ok { background: rgba(16,185,129,0.14); color: var(--green-text); border: 1px solid rgba(16,185,129,0.3); }
+    .pf-lo__chip--bad { background: rgba(239,68,68,0.14); color: var(--red-text); border: 1px solid rgba(239,68,68,0.3); }
+    .pf-lo__chip--wait { background: rgba(245,158,11,0.14); color: var(--amber-text); border: 1px solid rgba(245,158,11,0.3); }
 
     .pf-lo__body { padding: 0 16px 14px; border-top: 1px solid var(--border-muted, var(--glass-border)); }
     .pf-lo__actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; }
@@ -151,7 +151,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo__test { padding: 10px 0; border-top: 1px dashed var(--glass-border); }
     .pf-lo__test:first-of-type { border-top: 0; }
     .pf-lo__test-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .pf-lo__code { font-family: monospace; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(168,85,247,0.14); color: #c4b5fd; }
+    .pf-lo__code { font-family: monospace; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(168,85,247,0.14); color: var(--violet-text); }
     .pf-lo__test-name { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; }
     .pf-lo__pending { font-size: 12px; color: var(--text-tertiary); padding: 4px 0; }
 
@@ -163,8 +163,8 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo__rval { font-family: monospace; font-weight: 700; color: var(--text-primary); }
     .pf-lo__runit { font-weight: 500; color: var(--text-tertiary); margin-left: 4px; font-size: 11px; }
     .pf-lo__rref { font-family: monospace; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-lo__rrow.abn .pf-lo__rval { color: #fbbf24; }
-    .pf-lo__rrow.crit .pf-lo__rval { color: #fb7185; }
+    .pf-lo__rrow.abn .pf-lo__rval { color: var(--amber-text); }
+    .pf-lo__rrow.crit .pf-lo__rval { color: var(--rose-text); }
     .pf-lo__rflag { margin-left: 5px; font-weight: 800; }
     .pf-lo__rrow.abn { background: rgba(245,158,11,0.06); }
     .pf-lo__rrow.crit { background: rgba(251,113,133,0.08); }

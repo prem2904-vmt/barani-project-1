@@ -56,7 +56,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
             } @else {
               <div class="text-5xl mb-2">📷</div>
               <p class="text-[13px] text-center mb-1" style="color: var(--text-secondary);">Take a clear, top-down photo of the plate with the whole dish in frame.</p>
-              @if (camError()) { <p class="text-[12px] text-center mb-2" style="color: #fca5a5;">{{ camError() }}</p> }
+              @if (camError()) { <p class="text-[12px] text-center mb-2" style="color: var(--red-text);">{{ camError() }}</p> }
               <div class="flex flex-col gap-2 w-full max-w-xs">
                 @if (isNative()) { <button type="button" class="pm-btn pm-btn--primary" (click)="capturePhoto()">Take photo</button> }
                 @else { <button type="button" class="pm-btn pm-btn--primary" (click)="startCamera()">Open camera</button> }
@@ -231,17 +231,17 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
     .pm-tool { width: 30px; height: 30px; border-radius: 7px; background: transparent; border: none; color: var(--text-secondary); font-size: 15px; cursor: pointer; }
     .pm-tool:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
     .pm-tool:disabled { opacity: 0.35; cursor: not-allowed; }
-    .pm-tool--on { background: rgba(124,58,237,0.3); color: #c4b5fd; }
+    .pm-tool--on { background: rgba(124,58,237,0.3); color: var(--violet-text); }
     .pm-tool-sep { width: 1px; background: var(--glass-border); margin: 4px 2px; }
     .pm-list { width: 220px; flex-shrink: 0; border-left: 1px solid var(--border-subtle); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 5px; }
     .pm-list-hd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 2px; line-height: 1.5; }
     .pm-search { width: 100%; padding: 6px 9px; border-radius: 8px; font-size: 12px; background: var(--glass-bg); border: 1px solid var(--border-subtle); color: var(--text-primary); margin-bottom: 4px; }
     .pm-list-item { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-subtle); color: var(--text-secondary); background: var(--glass-bg); cursor: grab; touch-action: none; user-select: none; }
-    .pm-list-item--assigned { border-color: #10b981; color: #10b981; }
+    .pm-list-item--assigned { border-color: #10b981; color: var(--green-text); }
     .pm-list-item--drag { opacity: 0.4; }
     .pm-grip { color: var(--text-tertiary); font-size: 13px; }
     .pm-list-mm { font-size: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(16,185,129,0.18); }
-    .pm-unassign { color: #fca5a5; background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+    .pm-unassign { color: var(--red-text); background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
     .pm-ghost { position: fixed; z-index: 1001; transform: translate(-50%, -50%); pointer-events: none; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; background: #7c3aed; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
     .pm-controls { padding: 12px 14px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
     .pm-btn { padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }

@@ -316,7 +316,7 @@ interface TimelineItem {
     }
     .pf-tl__left-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
     .pf-tl__left-date { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
-    .pf-tl__left-hint { font-size: 10.5px; color: #c4b5fd; }
+    .pf-tl__left-hint { font-size: 10.5px; color: var(--violet-text); }
     .pf-tl__left-none { font-size: 12px; color: var(--text-tertiary); padding: 8px 2px; }
     .pf-tl__filters { display: flex; gap: 5px; margin-bottom: 4px; }
     .pf-tl__filters button { flex: 1; padding: 5px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-tertiary); }
@@ -332,7 +332,7 @@ interface TimelineItem {
     .pf-tl__item.picked { border-color: rgba(168,85,247,0.6); background: rgba(124,58,237,0.12); }
     .pf-tl__item-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: rgba(255,255,255,0.04); }
     .pf-tl__item-ico { width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); background: rgba(255,255,255,0.04); }
-    .pf-tl__item-ico.report { color: #c4b5fd; background: rgba(124,58,237,0.14); }
+    .pf-tl__item-ico.report { color: var(--violet-text); background: rgba(124,58,237,0.14); }
     .pf-tl__item-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
     .pf-tl__item-name { font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-tl__item-kind { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -398,10 +398,10 @@ interface TimelineItem {
     .pf-tl__ev-card { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; background: var(--bg-card-solid); border: 1px solid var(--glass-border); font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.28); transition: transform .1s, border-color .12s; }
     .pf-tl__ev:hover .pf-tl__ev-card { transform: translateY(-1px); border-color: rgba(168,85,247,0.45); color: var(--text-primary); }
     .pf-tl__ev-ico { display: inline-flex; color: #a855f7; }
-    .pf-tl__ev-ico[data-type="opd"] { color: #34d399; }
-    .pf-tl__ev-ico[data-type="ipd"] { color: #fbbf24; }
-    .pf-tl__ev-ico[data-type="pharmacy"] { color: #f472b6; }
-    .pf-tl__ev-ico[data-type="doc"] { color: #38bdf8; }
+    .pf-tl__ev-ico[data-type="opd"] { color: var(--green-text); }
+    .pf-tl__ev-ico[data-type="ipd"] { color: var(--amber-text); }
+    .pf-tl__ev-ico[data-type="pharmacy"] { color: var(--pink-text); }
+    .pf-tl__ev-ico[data-type="doc"] { color: var(--sky-text); }
     .pf-tl__ev-stem { width: 1px; flex: 1 1 auto; min-height: 8px; background: var(--glass-border); }
     .pf-tl__ev-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; background: var(--bg-card-solid); border: 2.5px solid #a855f7; }
     .pf-tl__ev-dot[data-type="opd"] { border-color: #34d399; }
@@ -427,8 +427,8 @@ interface TimelineItem {
         radial-gradient(ellipse 820px 520px at 94% 6%, rgba(219, 39, 119, 0.07) 0%, transparent 60%),
         linear-gradient(135deg, #f5f0fc 0%, #ece1f8 25%, #e2d4f2 50%, #ece1f8 75%, #f5f0fc 100%);
     }
-    :host-context(html.light) .pf-tl__bar { background: rgba(255, 255, 255, 0.74); border-bottom-color: rgba(124, 58, 237, 0.16); }
-    :host-context(html.light) .pf-tl__foot { background: rgba(255, 255, 255, 0.5); border-top-color: rgba(124, 58, 237, 0.16); box-shadow: inset 0 1px 0 rgba(124, 58, 237, 0.05); }
+    :host-context(html.light) .pf-tl__bar { background: rgba(246, 244, 252, 0.74); border-bottom-color: rgba(124, 58, 237, 0.16); }
+    :host-context(html.light) .pf-tl__foot { background: rgba(246, 244, 252, 0.5); border-top-color: rgba(124, 58, 237, 0.16); box-shadow: inset 0 1px 0 rgba(124, 58, 237, 0.05); }
 
     @media (max-width: 760px) {
       /* Stack the two panels: left becomes a horizontal file strip. */

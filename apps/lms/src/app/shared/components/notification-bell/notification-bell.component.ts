@@ -169,7 +169,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-mark-all {
       font-size: 11px;
       font-weight: 600;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: none;
       border: none;
       padding: 4px 8px;
@@ -234,27 +234,27 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-type-icon[data-tone='rose'] {
       background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.08));
       border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-type-icon[data-tone='amber'] {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.08));
       border: 1px solid rgba(245, 158, 11, 0.3);
-      color: #fcd34d;
+      color: var(--amber-text);
     }
     .pf-type-icon[data-tone='emerald'] {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
       border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #6ee7b7;
+      color: var(--green-text);
     }
     .pf-type-icon[data-tone='violet'] {
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.08));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-type-icon[data-tone='sky'] {
       background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.08));
       border: 1px solid rgba(56, 189, 248, 0.3);
-      color: #7dd3fc;
+      color: var(--sky-text);
     }
 
     .pf-unread-dot {

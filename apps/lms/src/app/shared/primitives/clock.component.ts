@@ -54,7 +54,7 @@ export type ClockVariant = 'tile' | 'bare';
     :host([data-size='sm']) .tile { padding: 6px 10px; gap: 8px; border-radius: 12px; }
     :host([data-size='lg']) .tile { padding: 10px 16px; gap: 12px; border-radius: 16px; }
 
-    .tile-icon { width: 18px; height: 18px; color: #c4b5fd; flex-shrink: 0; }
+    .tile-icon { width: 18px; height: 18px; color: var(--violet-text); flex-shrink: 0; }
     :host([data-size='sm']) .tile-icon { width: 16px; height: 16px; }
     :host([data-size='lg']) .tile-icon { width: 22px; height: 22px; }
 

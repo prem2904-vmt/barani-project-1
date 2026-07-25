@@ -128,7 +128,7 @@
 /* Light theme tints — softer pastel surfaces so the tile stays gentle
  * on a white page instead of glowing. */
 :host-context([data-theme="light"]) .pf-empty-tile {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(180deg, rgba(246, 244, 252, 0.7), rgba(246, 244, 252, 0.9));
   border-color: rgba(15, 23, 42, 0.08);
 }
 :host-context([data-theme="light"]) .pf-empty-tile__icon { color: var(--empty-icon-color); }
@@ -314,12 +314,12 @@
 
 .pf-card__prio[data-prio='STAT'] {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 .pf-card__prio[data-prio='Urgent'] {
   background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
+  color: var(--amber-text);
 }
 
 .pf-card__meta {
@@ -334,7 +334,7 @@
 }
 
 .pf-card__flag--balance {
-  color: #fca5a5;
+  color: var(--red-text);
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 9999px;
@@ -418,7 +418,7 @@
 
 .pf-ghostbtn--accent {
   background: rgba(45, 212, 191, 0.12);
-  color: #5eead4;
+  color: var(--teal-text);
   border-color: rgba(45, 212, 191, 0.4);
 }
 
@@ -465,7 +465,7 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #c4b5fd;
+  color: var(--violet-text);
   flex-shrink: 0;
 }
 
@@ -488,19 +488,19 @@
 .pf-toptest-pill__count {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
-  color: #a78bfa;
+  color: var(--violet-text);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
 .pf-tag--ok {
-  color: #5eead4;
+  color: var(--teal-text);
   background: rgba(45, 212, 191, 0.12);
   border: 1px solid rgba(45, 212, 191, 0.35);
 }
 
 .pf-tag--warn {
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.35);
 }
@@ -547,7 +547,7 @@
   gap: 2px;
   padding: 3px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--seg-track);
   border: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
@@ -596,12 +596,12 @@
 .pf-tabs__count[data-tone='ok'] {
   background: rgba(16, 185, 129, 0.16);
   border-color: rgba(16, 185, 129, 0.4);
-  color: #34d399;
+  color: var(--green-text);
 }
 .pf-tabs__count[data-tone='warning'] {
   background: rgba(244, 63, 94, 0.22);
   border-color: rgba(244, 63, 94, 0.45);
-  color: #fda4af;
+  color: var(--rose-text);
   font-weight: 700;
 }
 .pf-tabs__btn--on .pf-tabs__count {
@@ -669,7 +669,7 @@
   color: var(--text-primary);
 }
 .pf-pane-hidden-chip svg { color: var(--text-muted); flex-shrink: 0; }
-.pf-pane-hidden-chip:hover svg { color: #c4b5fd; }
+.pf-pane-hidden-chip:hover svg { color: var(--violet-text); }
 
 /* Chevron next to the count — rotates when this pane is expanded.
  * Only visible at <1024px (accordion mode); the desktop grid hides it. */
@@ -892,7 +892,7 @@
 .pf-card__dept--done {
   background: rgba(16, 185, 129, 0.14);
   border-color: rgba(16, 185, 129, 0.32);
-  color: #6ee7b7;
+  color: var(--green-text);
 }
 
 .pf-card__dept--validated {
@@ -949,7 +949,7 @@
   border-radius: 9999px;
   background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(16, 185, 129, 0.18));
   border: 1px solid rgba(34, 211, 238, 0.45);
-  color: #67e8f9;
+  color: var(--cyan-text);
 }
 
 /* ── Exception alert chips ───────────────────────────────── */
@@ -1011,7 +1011,7 @@
 }
 
 .pf-alert--ready .pf-alert__count {
-  color: #34d399;
+  color: var(--green-text);
 }
 
 .pf-alert--payments {
@@ -1025,7 +1025,7 @@
 }
 
 .pf-alert--payments .pf-alert__count {
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 @keyframes pf-alert-in {
@@ -1143,7 +1143,7 @@
 
 .pf-completed-chip--done {
   background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
+  color: var(--green-text);
   border: 1px solid rgba(16, 185, 129, 0.45);
 }
 
@@ -1165,7 +1165,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 
 .pf-bulk-bar__btn {
@@ -1324,7 +1324,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.14);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }

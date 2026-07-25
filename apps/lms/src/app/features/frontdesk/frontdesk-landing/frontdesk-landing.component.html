@@ -895,7 +895,7 @@
               @if (paymentsDueOrders().length === 0) {
               <div class="pf-empty-tile pf-empty-tile--done">
                 <span class="pf-empty-tile__icon" aria-hidden="true"
-                  style="background: rgba(245, 158, 11, 0.1); color: #fbbf24;">
+                  style="background: rgba(245, 158, 11, 0.1); color: var(--amber-text);">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
                     stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="1" x2="12" y2="23"></line>
@@ -922,7 +922,7 @@
                     <div class="pf-card__actions" (click)="$event.stopPropagation()">
                       <button type="button" class="pf-completed-chip pf-completed-chip--done press"
                         (click)="openPaymentDrawer(o)"
-                        style="background: rgba(124, 58, 237, 0.16); color: #c4b5fd; border-color: rgba(124, 58, 237, 0.32);">
+                        style="background: rgba(124, 58, 237, 0.16); color: var(--violet-text); border-color: rgba(124, 58, 237, 0.32);">
                         Pay now
                       </button>
                     </div>
@@ -1523,7 +1523,7 @@
       </div>
       @if (sb.totalDiscount > 0) {
       <div class="pf-cart-line pf-cart-disc"
-        style="display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; color: #f43f5e;">
+        style="display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; color: var(--red-text);">
         <span>Discount</span>
         <span>-{{ sb.totalDiscount | inr }}</span>
       </div>

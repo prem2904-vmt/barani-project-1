@@ -174,7 +174,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     .pf-lt__pill {
       display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
       font-size: 10px; font-weight: 600; vertical-align: middle;
-      background: rgba(168,85,247,0.16); color: #c4b5fd; border: 1px solid rgba(168,85,247,0.3);
+      background: rgba(168,85,247,0.16); color: var(--violet-text); border: 1px solid rgba(168,85,247,0.3);
     }
     .pf-lt__test-count { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; margin-top: 1px; }
     .pf-lt__noresult { font-size: 12px; color: var(--text-tertiary); padding: 10px 4px; }
@@ -212,10 +212,10 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     .pf-lt__cell-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
     .pf-lt__cell-name { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); overflow-wrap: anywhere; line-height: 1.2; }
     .pf-lt__cell-delta { font-size: 10.5px; font-weight: 700; color: var(--text-tertiary); flex-shrink: 0; }
-    .pf-lt__cell-delta.up { color: #fb7185; }
-    .pf-lt__cell-delta.down { color: #34d399; }
+    .pf-lt__cell-delta.up { color: var(--rose-text); }
+    .pf-lt__cell-delta.down { color: var(--green-text); }
     .pf-lt__cell-val { font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
-    .pf-lt__cell-val.abn { color: #fb7185; }
+    .pf-lt__cell-val.abn { color: var(--rose-text); }
     .pf-lt__cell-unit { font-size: 10.5px; font-weight: 500; color: var(--text-tertiary); margin-left: 3px; }
     .pf-lt__spark { width: 100%; height: 40px; }
     .pf-lt__cell-foot { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--text-tertiary); }

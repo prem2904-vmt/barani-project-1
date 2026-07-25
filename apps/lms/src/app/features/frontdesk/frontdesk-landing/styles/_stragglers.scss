@@ -102,17 +102,17 @@
 
 .pf-stragglers__item[data-kind='missed'] .pf-stragglers__kind {
   background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 .pf-stragglers__item[data-kind='uncollected'] .pf-stragglers__kind {
   background: rgba(245, 158, 11, 0.18);
-  color: #fbbf24;
+  color: var(--amber-text);
 }
 
 .pf-stragglers__item[data-kind='unpaid'] .pf-stragglers__kind {
   background: rgba(139, 92, 246, 0.18);
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 
 .pf-stragglers__title {

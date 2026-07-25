@@ -237,8 +237,8 @@ interface FinanceSummary {
     .pf-fin__quick button { padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-fin__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
     .pf-fin__big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); margin-top: 4px; }
-    .pf-fin__big--pos { color: #6ee7b7; }
-    .pf-fin__big--neg { color: #fca5a5; }
+    .pf-fin__big--pos { color: var(--green-text); }
+    .pf-fin__big--neg { color: var(--red-text); }
     .pf-fin__sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
     /* Credit Wallet ledger */
     .pf-fin__credit-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -251,8 +251,8 @@ interface FinanceSummary {
     .pf-fin__vname { color: var(--text-primary); font-weight: 600; font-size: 14px; }
     .pf-fin__vcode { margin-left: 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); }
     .pf-fin__vbal { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--text-secondary); }
-    .pf-fin__vbal--due { color: #fcd34d; }
-    .pf-fin__vbal--credit { color: #6ee7b7; }
+    .pf-fin__vbal--due { color: var(--amber-text); }
+    .pf-fin__vbal--credit { color: var(--green-text); }
     .pf-fin__vchev { color: var(--text-muted); transition: transform 0.15s; }
     .pf-fin__vchev--open { transform: rotate(90deg); }
     .pf-fin__vledger { padding: 4px 14px 12px; border-top: 1px solid var(--glass-border); }
@@ -261,8 +261,8 @@ interface FinanceSummary {
     .pf-fin__lt-date { color: var(--text-tertiary); white-space: nowrap; }
     .pf-fin__lt-type { text-transform: capitalize; color: var(--text-secondary); }
     .pf-fin__lt-reason { color: var(--text-secondary); }
-    .pf-fin__lt-amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #6ee7b7; white-space: nowrap; }
-    .pf-fin__lt-amt--minus { color: #fca5a5; }
+    .pf-fin__lt-amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--green-text); white-space: nowrap; }
+    .pf-fin__lt-amt--minus { color: var(--red-text); }
     .pf-fin__rows { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     .pf-fin__rows li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; font-size: 13px; }
     .pf-fin__mode { color: var(--text-primary); text-transform: capitalize; }

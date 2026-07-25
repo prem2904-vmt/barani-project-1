@@ -694,7 +694,7 @@ interface OrderGroup {
       width: 54px; height: 54px; border-radius: 14px;
       display: inline-flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(124,58,237,0.08));
-      color: #a78bfa;
+      color: var(--violet-text);
       flex-shrink: 0; align-self: center;
       transition: background 0.15s ease, transform 0.1s ease;
     }
@@ -798,7 +798,7 @@ interface OrderGroup {
       display: inline-flex; align-items: center; gap: 3px;
       padding: 5px 7px;
       border-radius: 10px;
-      background: rgba(0,0,0,0.22);
+      background: var(--seg-track);
       border: 1px solid var(--glass-border);
       max-width: 120px;
       overflow: hidden;
@@ -823,13 +823,13 @@ interface OrderGroup {
       font-size: 10.5px; font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       padding: 4px 9px; border-radius: 999px;
-      background: rgba(168, 85, 247, 0.14); color: #c4b5fd;
+      background: rgba(168, 85, 247, 0.14); color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.28);
       letter-spacing: 0.04em;
       white-space: nowrap;
     }
     .pf-sc__count--progress {
-      background: rgba(245, 158, 11, 0.14); color: #fcd34d;
+      background: rgba(245, 158, 11, 0.14); color: var(--amber-text);
       border-color: rgba(245, 158, 11, 0.35);
     }
     .pf-sc__chev {
@@ -1081,7 +1081,7 @@ interface OrderGroup {
       font-size: 11px; font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.05em;
-      color: #fca5a5;
+      color: var(--red-text);
       background: rgba(220, 38, 38, 0.12);
       border: 1px solid rgba(220, 38, 38, 0.3);
     }
@@ -1097,7 +1097,7 @@ interface OrderGroup {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 5px 11px; border-radius: 999px;
       font-size: 10.5px; font-weight: 600;
-      color: #6ee7b7;
+      color: var(--green-text);
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -1135,7 +1135,7 @@ interface OrderGroup {
     .pf-drawer__done-stamp {
       display: inline-flex; align-items: center; gap: 8px;
       font-size: 13px; font-weight: 600;
-      color: #6ee7b7;
+      color: var(--green-text);
       padding: 8px 14px; border-radius: 999px;
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.4);
@@ -1191,7 +1191,7 @@ interface OrderGroup {
     .pf-rej__chip--on {
       background: rgba(244, 63, 94, 0.18);
       border-color: rgba(244, 63, 94, 0.55);
-      color: #fda4af;
+      color: var(--rose-text);
     }
     .pf-rej__label {
       display: block; margin: 8px 0 4px;
@@ -1205,7 +1205,7 @@ interface OrderGroup {
       background: rgba(15, 23, 42, 0.55);
     }
     :host-context([data-theme="light"]) .pf-rej__panel {
-      background: #ffffff;
+      background: var(--bg-card-solid);
     }
     :host-context([data-theme="light"]) .pf-rej__chip--on {
       background: rgba(244, 63, 94, 0.1);
@@ -1316,7 +1316,7 @@ interface OrderGroup {
       .pf-tube__stamp--pending {
         background: rgba(45, 212, 191, 0.14);
         border-color: rgba(45, 212, 191, 0.45);
-        color: #5eead4;
+        color: var(--teal-text);
       }
     }
     /* Tablet (iPad Mini / Air landscape, iPad portrait) and any shorter
@@ -1393,11 +1393,11 @@ interface OrderGroup {
      * inverted reflections, softer shadows, and a brighter
      * backdrop so the vials don't float on a muddy wash. */
     :host-context([data-theme="light"]) .pf-sc__card {
-      background: #ffffff;
+      background: var(--bg-card-solid);
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
     :host-context([data-theme="light"]) .pf-sc__card:hover {
-      background: #fdf5ff;
+      background: var(--surface-elevated);
       box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
     }
     :host-context([data-theme="light"]) .pf-sc__rack {
@@ -1426,7 +1426,7 @@ interface OrderGroup {
       background:
         radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.12) 0%, transparent 55%),
         radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.1) 0%, transparent 55%),
-        #f5f7fb;
+        var(--bg-card-solid);
     }
     :host-context([data-theme="light"]) .pf-drawer__close {
       background: rgba(15, 23, 42, 0.03);
@@ -1452,7 +1452,7 @@ interface OrderGroup {
     }
 
     :host-context([data-theme="light"]) .pf-tube {
-      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55));
+      background: linear-gradient(180deg, rgba(246,244,252,0.85), rgba(246,244,252,0.55));
     }
     :host-context([data-theme="light"]) .pf-tube::before { opacity: 0.1; }
     :host-context([data-theme="light"]) .pf-tube:hover:not([disabled]) {
@@ -1460,7 +1460,7 @@ interface OrderGroup {
     }
     :host-context([data-theme="light"]) .pf-tube:hover:not([disabled])::before { opacity: 0.16; }
     :host-context([data-theme="light"]) .pf-tube--done {
-      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255,255,255,0.7));
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(246,244,252,0.7));
       border-color: rgba(16, 185, 129, 0.45);
       box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14);
     }
@@ -1513,7 +1513,7 @@ interface OrderGroup {
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     }
     :host-context([data-theme="light"]) .pf-sc__scan-input {
-      background: #fff;
+      background: var(--bg-input);
       box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
     }
     :host-context([data-theme="light"]) .pf-sc__scan-input:focus {
@@ -1665,7 +1665,7 @@ interface OrderGroup {
       }
 
       :host-context([data-theme="light"]) .pf-drawer__foot .pf-btn[data-label]:active::after {
-        background: rgba(255, 255, 255, 0.98);
+        background: var(--bg-card-solid);
         color: #0f172a;
         box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
       }

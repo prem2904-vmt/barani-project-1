@@ -100,8 +100,8 @@ import { Patient } from '../../models/patient.model';
     .pf-abw__input:focus { border-color: rgba(139,92,246,0.6); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
     .pf-abw__otp { font-size: 20px; letter-spacing: 0.4em; text-align: center; font-family: monospace; }
     .pf-abw__hint { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-abw__info { font-size: 12.5px; color: #6ee7b7; }
-    .pf-abw__err { font-size: 12.5px; color: #fca5a5; }
+    .pf-abw__info { font-size: 12.5px; color: var(--green-text); }
+    .pf-abw__err { font-size: 12.5px; color: var(--red-text); }
     .pf-abw__go { margin-top: 6px; padding: 12px; border-radius: 11px; border: 0; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(135deg, #7c3aed, #a855f7); }
     .pf-abw__go:disabled { opacity: 0.5; cursor: not-allowed; }
   `],

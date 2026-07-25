@@ -98,7 +98,7 @@ import { PinDotsComponent } from './pin-dots.component';
     .pf-lk-tile-avatar {
       width: 84px; height: 84px; border-radius: 22px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 28px; font-weight: 700; color: #c4b5fd;
+      font-size: 28px; font-weight: 700; color: var(--violet-text);
       background: linear-gradient(135deg, rgba(168,85,247,.24), rgba(236,72,153,.12));
       border: 1.5px solid rgba(168,85,247,.32);
       transition: border-color .15s ease;
@@ -131,14 +131,14 @@ import { PinDotsComponent } from './pin-dots.component';
     .pf-lk-avatar {
       width: 56px; height: 56px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 700; color: #c4b5fd;
+      font-size: 20px; font-weight: 700; color: var(--violet-text);
       background: linear-gradient(135deg, rgba(168,85,247,.22), rgba(236,72,153,.12));
       border: 1px solid rgba(168,85,247,.3);
     }
     .pf-lk-name { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
     .pf-lk-org { margin: -4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
     .pf-lk-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
-    .pf-lk-error { margin: 2px 0 0; font-size: 12px; color: #f87171; }
+    .pf-lk-error { margin: 2px 0 0; font-size: 12px; color: var(--red-text); }
     .pf-lk-alt {
       margin-top: 6px; border: none; background: transparent; cursor: pointer;
       font-size: 12px; color: var(--text-muted); text-decoration: underline;

@@ -419,7 +419,7 @@
 }
 .pf-mtab__count[data-tone="warning"] {
   background: rgba(244, 63, 94, 0.15); /* rose-500 tint */
-  color: #fb7185; /* rose-400 */
+  color: var(--rose-text);
 }
 .pf-mtab--on .pf-mtab__count[data-tone="warning"] {
   background: #f43f5e; /* rose-500 solid when active */

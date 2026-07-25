@@ -165,7 +165,7 @@ import { CommentThread, OrderTestComment, groupIntoThreads } from '../../models/
       border-radius: 6px;
       font-size: 11px; font-weight: 700;
       letter-spacing: 0.06em; text-transform: uppercase;
-      color: #fbbf24;
+      color: var(--amber-text);
     }
     .pf-ct__pulse {
       width: 8px; height: 8px;
@@ -196,20 +196,20 @@ import { CommentThread, OrderTestComment, groupIntoThreads } from '../../models/
       color: var(--text-secondary);
     }
     .pf-ct__role-pill[data-role='validator'] {
-      background: rgba(239, 68, 68, 0.16); color: #fca5a5; border-color: rgba(239, 68, 68, 0.34);
+      background: rgba(239, 68, 68, 0.16); color: var(--red-text); border-color: rgba(239, 68, 68, 0.34);
     }
     .pf-ct__role-pill[data-role='tech'] {
-      background: rgba(96, 165, 250, 0.16); color: #93c5fd; border-color: rgba(96, 165, 250, 0.34);
+      background: rgba(96, 165, 250, 0.16); color: var(--blue-text); border-color: rgba(96, 165, 250, 0.34);
     }
     .pf-ct__type-pill {
       font-size: 9.5px; font-weight: 600;
       padding: 1px 6px; border-radius: 9999px;
     }
-    .pf-ct__type-pill--obs { background: rgba(96, 165, 250, 0.12); color: #93c5fd; }
-    .pf-ct__type-pill--cor { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
+    .pf-ct__type-pill--obs { background: rgba(96, 165, 250, 0.12); color: var(--blue-text); }
+    .pf-ct__type-pill--cor { background: rgba(239, 68, 68, 0.12); color: var(--red-text); }
     .pf-ct__resolved {
       font-size: 9.5px; font-weight: 600;
-      color: #6ee7b7;
+      color: var(--green-text);
       padding: 1px 6px; border-radius: 9999px;
       background: rgba(16, 185, 129, 0.12);
     }
@@ -236,7 +236,7 @@ import { CommentThread, OrderTestComment, groupIntoThreads } from '../../models/
       padding: 6px 14px;
       background: rgba(96, 165, 250, 0.12);
       border: 1px solid rgba(96, 165, 250, 0.34);
-      color: #93c5fd;
+      color: var(--blue-text);
       border-radius: 9999px;
       font-size: 12.5px; font-weight: 600;
       cursor: pointer;
