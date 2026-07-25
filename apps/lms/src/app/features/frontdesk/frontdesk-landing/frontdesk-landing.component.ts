@@ -18,6 +18,7 @@ import { ToastService } from '../../../core/services/toast.service';
 
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/appointment.model';
@@ -1447,11 +1448,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (order) { this.router.navigate(['/o', order[1]]); return; }
     const track = text.match(/\/track\/([^/?#\s]+)/);
     if (track) { this.router.navigate(['/track', track[1]]); return; }
-    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(text)}&limit=10`).subscribe({
+    // ABHA card QR / number → pull the 14-digit ABHA and open the patient it's
+    // linked to (backend patient search matches abhaId).
+    const abha = extractAbhaNumber(text);
+    const term = abha || text;
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}&limit=10`).subscribe({
       next: list => {
-        const p = (list ?? [])[0];
+        const arr = list ?? [];
+        const p = (abha ? arr.find(x => (x.abhaId || '').replace(/\D/g, '') === abha) : undefined) ?? arr[0];
         if (p) this.openProfile(p);
-        else this.toasts.warning('No match for that code');
+        else this.toasts.warning('No patient matches that ABHA / code');
       },
       error: () => this.toasts.warning('No match for that code'),
     });

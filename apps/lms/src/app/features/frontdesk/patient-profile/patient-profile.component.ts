@@ -226,7 +226,7 @@ export class PatientProfileComponent implements OnInit {
     if (!p?.abhaId) return '';
     return JSON.stringify({
       hidn: (p.abhaId || '').replace(/\D/g, ''),
-      hid: p.abhaAddress || '',
+      hid: p.abhaAddress || this.kyc()?.abhaAddress || '',
       name: patientDisplayName(p),
       gender: p.sex || '',
       dob: p.dateOfBirth ? String(p.dateOfBirth).slice(0, 10) : '',
@@ -241,6 +241,36 @@ export class PatientProfileComponent implements OnInit {
   });
   /** 12 rotations × a full-diameter line = the Ashoka Chakra's 24 spokes. */
   protected readonly chakraSpokes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+  /** Address / KYC details captured from ABHA into the patient's attributes JSON
+   *  (the registration form has no columns for these). null when none present. */
+  readonly kyc = computed(() => {
+    const raw = this._patient()?.attributes;
+    if (!raw) return null;
+    let a: Record<string, unknown>;
+    try { a = JSON.parse(raw); } catch { return null; }
+    const pick = (k: string) => (typeof a[k] === 'string' && (a[k] as string).trim()) ? (a[k] as string).trim() : undefined;
+    const d = {
+      address: pick('address'),
+      pincode: pick('pincode'),
+      district: pick('district'),
+      state: pick('state'),
+      abhaAddress: pick('abhaAddress')
+    };
+    return (d.address || d.pincode || d.district || d.state || d.abhaAddress) ? d : null;
+  });
+  /** ABHA address for the card — the column, falling back to the KYC attribute. */
+  readonly cardAbhaAddress = computed(() => this._patient()?.abhaAddress || this.kyc()?.abhaAddress || '');
+  /** ABHA KYC photo (data URL) if captured into attributes; else null → silhouette. */
+  readonly abhaPhoto = computed(() => {
+    const raw = this._patient()?.attributes;
+    if (!raw) return null;
+    let a: Record<string, unknown>;
+    try { a = JSON.parse(raw); } catch { return null; }
+    const p = a['abhaPhoto'] ?? a['photo'];
+    if (typeof p !== 'string' || !p.trim()) return null;
+    return p.startsWith('data:') ? p : `data:image/jpeg;base64,${p}`;
+  });
 
   readonly copied = signal(false);
 

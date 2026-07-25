@@ -386,9 +386,11 @@
 
                   @if (p.abhaId) {
                     <!-- Real ABHA card — Ayushman Bharat Health Account (ABDM / NHA).
-                         Light = physical-card look; dark = navy surface, ABHA blue
-                         lightened for contrast. QR box stays white in both (scannable). -->
-                    <div class="relative overflow-hidden rounded-xl bg-white text-slate-900 shadow-lg ring-1 ring-black/10 dark:bg-[#0f1526] dark:text-slate-100 dark:ring-white/10">
+                         Colours are themed via scoped .abc* classes (see .scss),
+                         keyed on the app's .dark class — Tailwind's dark: variant
+                         is OS-media-based in this build so it can't be used here.
+                         Light = physical-card look; dark = navy surface. -->
+                    <div class="abc relative overflow-hidden rounded-xl">
                       <!-- Tricolour top accent -->
                       <div class="flex h-1.5 w-full">
                         <span class="flex-1" style="background:#FF9933"></span>
@@ -398,9 +400,9 @@
 
                       <div class="p-4 flex flex-col gap-3">
                         <!-- Header: national emblem (Ashoka Chakra) + ABHA wordmark + authority -->
-                        <div class="flex items-center justify-between gap-2 border-b border-slate-200 dark:border-white/10 pb-2.5">
+                        <div class="abc__hr flex items-center justify-between gap-2 border-b pb-2.5">
                           <div class="flex items-center gap-2.5">
-                            <svg class="w-9 h-9 shrink-0 text-[#0a3d91] dark:text-[#7ea6ff]" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+                            <svg class="abc__brand w-9 h-9 shrink-0" viewBox="0 0 100 100" fill="none" aria-hidden="true">
                               <circle cx="50" cy="50" r="46" stroke="currentColor" stroke-width="4"/>
                               <circle cx="50" cy="50" r="5.5" fill="currentColor"/>
                               @for (s of chakraSpokes; track s) {
@@ -408,23 +410,34 @@
                               }
                             </svg>
                             <div class="leading-tight">
-                              <span class="block text-lg font-black tracking-tight text-[#0a3d91] dark:text-[#7ea6ff]">ABHA</span>
-                              <span class="block text-[9px] font-semibold text-slate-500 dark:text-slate-400 -mt-0.5">Ayushman Bharat Health Account</span>
+                              <span class="abc__brand block text-lg font-black tracking-tight">ABHA</span>
+                              <span class="abc__mut block text-[9px] font-semibold -mt-0.5">Ayushman Bharat Health Account</span>
                             </div>
                           </div>
                           <div class="text-right leading-tight shrink-0">
-                            <span class="block text-[9px] font-bold text-slate-700 dark:text-slate-200">National Health Authority</span>
-                            <span class="block text-[8px] text-slate-400 dark:text-slate-500">Government of India</span>
+                            <span class="abc__sub block text-[9px] font-bold">National Health Authority</span>
+                            <span class="abc__mut block text-[8px]">Government of India</span>
                           </div>
                         </div>
 
                         <!-- Body: photo · details · QR -->
                         <div class="flex gap-3 items-start">
                           <div class="shrink-0">
-                            <div class="w-16 h-16 rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10 flex items-center justify-center relative overflow-hidden">
-                              <span class="text-xl font-black text-slate-400 dark:text-slate-500">{{ initials() }}</span>
+                            <!-- ID-photo frame: real ABHA photo if captured, else a person
+                                 silhouette. Size/shape forced inline so no utility or stale
+                                 chunk can stretch it into a wide box or a full circle. -->
+                            <div class="abc__chip relative overflow-hidden flex items-center justify-center"
+                                 style="width:60px;height:74px;border-radius:12px;flex:0 0 auto">
+                              @if (abhaPhoto(); as ph) {
+                                <img [src]="ph" alt="Patient photo" style="width:100%;height:100%;object-fit:cover" />
+                              } @else {
+                                <svg class="abc__mut" width="38" height="38" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                              }
                               @if (p.abhaVerified) {
-                                <span class="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0f1526] flex items-center justify-center">
+                                <span class="abc__badge absolute bg-emerald-500 flex items-center justify-center"
+                                      style="bottom:4px;right:4px;width:18px;height:18px;border-radius:9999px">
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </span>
                               }
@@ -432,29 +445,29 @@
                           </div>
 
                           <div class="flex-1 min-w-0">
-                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ABHA Number</span>
-                            <span class="block font-mono font-black text-base tracking-wider tabular-nums text-[#0a3d91] dark:text-[#7ea6ff]">{{ abhaFormatted() }}</span>
+                            <span class="abc__mut block text-[9px] font-bold uppercase tracking-wider">ABHA Number</span>
+                            <span class="abc__brand block font-mono font-black text-base tracking-wider tabular-nums">{{ abhaFormatted() }}</span>
                             <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
                               <div class="min-w-0">
-                                <span class="block text-[8px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Name</span>
+                                <span class="abc__mut block text-[8px] uppercase tracking-wide">Name</span>
                                 <span class="block text-[12px] font-bold truncate">{{ displayName() }}</span>
                               </div>
                               <div class="min-w-0">
-                                <span class="block text-[8px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Date of Birth</span>
+                                <span class="abc__mut block text-[8px] uppercase tracking-wide">Date of Birth</span>
                                 <span class="block text-[12px] font-bold">{{ (p.dateOfBirth | date:'dd-MM-yyyy') || '—' }}</span>
                               </div>
                               <div class="min-w-0">
-                                <span class="block text-[8px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Gender</span>
+                                <span class="abc__mut block text-[8px] uppercase tracking-wide">Gender</span>
                                 <span class="block text-[12px] font-bold">{{ p.sex || '—' }}</span>
                               </div>
                               <div class="min-w-0">
-                                <span class="block text-[8px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Mobile</span>
+                                <span class="abc__mut block text-[8px] uppercase tracking-wide">Mobile</span>
                                 <span class="block text-[12px] font-bold tabular-nums">{{ p.phone || '—' }}</span>
                               </div>
                             </div>
                           </div>
 
-                          <div class="shrink-0 self-start p-1 bg-white rounded ring-1 ring-slate-200 dark:ring-white/10">
+                          <div class="abc__qr shrink-0 self-start p-1 rounded">
                             @if (abhaQrValue()) {
                               <pf-barcode-display mode="qr" [code]="abhaQrValue()" [bare]="true" [showValue]="false" [size]="82"></pf-barcode-display>
                             }
@@ -464,11 +477,11 @@
                         <!-- ABHA Address + KYC status strip -->
                         <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style="background:linear-gradient(90deg, rgba(255,153,51,0.12), rgba(19,136,8,0.12))">
                           <div class="min-w-0">
-                            <span class="block text-[8px] uppercase tracking-wide text-slate-400 dark:text-slate-500">ABHA Address</span>
-                            <span class="block text-[12px] font-bold font-mono truncate text-[#0a3d91] dark:text-[#7ea6ff]">{{ p.abhaAddress || '—' }}</span>
+                            <span class="abc__mut block text-[8px] uppercase tracking-wide">ABHA Address</span>
+                            <span class="abc__brand block text-[12px] font-bold font-mono truncate">{{ cardAbhaAddress() || '—' }}</span>
                           </div>
                           @if (p.abhaVerified) {
-                            <span class="shrink-0 inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <span class="abc__ok shrink-0 inline-flex items-center gap-1 text-[9px] font-bold">
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                               KYC VERIFIED
                             </span>
@@ -485,6 +498,38 @@
                     </div>
                   }
 
+                  <!-- Address & KYC details captured from ABHA (stored in attributes;
+                       the registration form has no columns for these). -->
+                  @if (kyc(); as k) {
+                    <div class="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4 flex flex-col gap-3">
+                      <div class="flex items-center gap-2">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <span class="text-xs font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Address &amp; KYC details</span>
+                      </div>
+                      @if (k.address) {
+                        <div>
+                          <span class="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Address</span>
+                          <span class="block text-sm text-[var(--text-primary)]">{{ k.address }}</span>
+                        </div>
+                      }
+                      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        @if (k.district) {
+                          <div><span class="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">District</span><span class="block text-sm font-semibold text-[var(--text-primary)]">{{ k.district }}</span></div>
+                        }
+                        @if (k.state) {
+                          <div><span class="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">State</span><span class="block text-sm font-semibold text-[var(--text-primary)]">{{ k.state }}</span></div>
+                        }
+                        @if (k.pincode) {
+                          <div><span class="block text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Pincode</span><span class="block text-sm font-semibold text-[var(--text-primary)] font-mono">{{ k.pincode }}</span></div>
+                        }
+                      </div>
+                      <span class="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        Captured from ABHA KYC
+                      </span>
+                    </div>
+                  }
+
                   <!-- Action button → real ABDM ABHA wizard (create / verify) -->
                   <div class="flex justify-end">
                     @if (!p.abhaId) {
@@ -498,10 +543,17 @@
                         (click)="abhaWizardOpen.set(true)">
                         Verify ABHA via OTP
                       </button>
+                    } @else {
+                      <!-- Re-pull the latest KYC (name/DOB/photo) from ABDM via OTP. -->
+                      <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[var(--glass-border)] hover:bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold transition-colors cursor-pointer"
+                        (click)="abhaWizardOpen.set(true)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                        Refresh from ABHA
+                      </button>
                     }
                   </div>
                   @if (abhaWizardOpen()) {
-                    <pf-abha-wizard [patientId]="p.id" (close)="abhaWizardOpen.set(false)" (done)="onAbhaDone($event)"></pf-abha-wizard>
+                    <pf-abha-wizard [patientId]="p.id" [presetAbha]="p.abhaId || ''" (close)="abhaWizardOpen.set(false)" (done)="onAbhaDone($event)"></pf-abha-wizard>
                   }
                 </div>
 

@@ -156,6 +156,13 @@ export class PatientRegisterComponent implements OnInit {
 
   /** ABHA prefill (NEW registration) — enter number/scan QR → fill the form. */
   protected readonly abhaPrefillOpen = signal(false);
+  /**
+   * Everything ABDM returned that the registration form has NO field for
+   * (address, pincode, district, state, abhaAddress, middle name). Stashed on
+   * fetch and merged into the patient's `attributes` on save — so we capture
+   * the full KYC record, not just the visible fields.
+   */
+  private readonly _abhaExtras = signal<Record<string, string>>({});
 
   /**
    * Map ABHA/KYC demographics onto the dynamic form. We shape the demographics
@@ -163,14 +170,29 @@ export class PatientRegisterComponent implements OnInit {
    * buildInitialValues() so the mapping honours whatever storageKeys the active
    * workflow uses. Merge over what's already typed, then push through
    * initialValues — the renderer's ngOnChanges re-applies it to the form.
+   * Anything the form can't show is preserved via _abhaExtras → attributes.
    */
   applyAbhaPrefill(demo: AbhaPrefillData) {
     this.abhaPrefillOpen.set(false);
     const cfg = this._config();
     if (!cfg || !demo) return;
     const synthetic: Record<string, unknown> = {};
-    const name = demo.fullName?.trim() || [demo.firstName, demo.middleName, demo.lastName].filter(Boolean).join(' ').trim();
-    if (name) synthetic['firstName'] = name;
+
+    // Name: first_name = given name; fathers_name = surname (in most Indian
+    // records the surname is the father's name). Fold any middle name into the
+    // given name since the form has no middle-name field.
+    let first = (demo.firstName || '').trim();
+    let fathers = (demo.lastName || '').trim();
+    const mid = (demo.middleName || '').trim();
+    if (!first && demo.fullName) {
+      const parts = demo.fullName.trim().split(/\s+/);
+      first = parts.shift() || '';
+      if (!fathers) fathers = parts.join(' ');
+    }
+    if (mid) first = [first, mid].filter(Boolean).join(' ');
+    if (first) synthetic['firstName'] = first;
+    if (fathers) synthetic['fathersName'] = fathers;
+
     const sex = this.normalizeSex(demo.gender);
     if (sex) synthetic['sex'] = sex;
     const dob = this.toIsoDob(demo.dob, demo.yearOfBirth);
@@ -179,14 +201,35 @@ export class PatientRegisterComponent implements OnInit {
     if (phone.length >= 10) synthetic['phone'] = phone.slice(-10);
     const abha = (demo.abhaNumber || '').replace(/\D/g, '');
     if (abha.length === 14) synthetic['abhaId'] = abha;
-    if (demo.abhaAddress) synthetic['abhaAddress'] = demo.abhaAddress;
-    if (demo.address) synthetic['address'] = demo.address;
-    if (demo.pincode) synthetic['pincode'] = demo.pincode;
 
     const iv = this.buildInitialValues(cfg, synthetic as unknown as Patient);
-    if (!Object.keys(iv).length) { this.toasts.info('ABHA fetched, but no matching form fields to fill.'); return; }
+
+    // Preserve every remaining ABDM detail even without a matching form field.
+    const extras: Record<string, string> = {};
+    const put = (k: string, v?: string) => { const t = (v || '').trim(); if (t) extras[k] = t; };
+    put('abhaAddress', demo.abhaAddress);
+    put('address', demo.address);
+    put('pincode', demo.pincode);
+    put('district', this.titleCase(demo.district));
+    put('state', this.titleCase(demo.state));
+    put('middleName', demo.middleName);
+    put('abhaPhoto', demo.photo);
+    this._abhaExtras.set(extras);
+
+    if (!Object.keys(iv).length && !Object.keys(extras).length) {
+      this.toasts.info('ABHA fetched, but no matching form fields to fill.');
+      return;
+    }
     this.initialValues.set({ ...this.values(), ...iv });
-    this.toasts.success('Form pre-filled from ABHA');
+    this.toasts.success('Details captured from ABHA');
+  }
+
+  /** "TAMIL NADU" → "Tamil Nadu" (leaves already-mixed-case text alone). */
+  private titleCase(s?: string): string | undefined {
+    if (!s) return s;
+    return s === s.toUpperCase()
+      ? s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase())
+      : s;
   }
 
   private normalizeSex(g?: string): string | undefined {
@@ -299,8 +342,11 @@ export class PatientRegisterComponent implements OnInit {
       if (v === null || v === undefined || v === '') continue;
       body[this.toCamelCase(k)] = v;
     }
-    if (Object.keys(metadata).length > 0) {
-      body['attributes'] = JSON.stringify(metadata);
+    // Fold in the ABHA demographics the form had no field for, so the full KYC
+    // record is persisted alongside any form metadata (form values win on clash).
+    const meta: Record<string, unknown> = { ...this._abhaExtras(), ...metadata };
+    if (Object.keys(meta).length > 0) {
+      body['attributes'] = JSON.stringify(meta);
     }
 
     this.applyHybridDob(body);

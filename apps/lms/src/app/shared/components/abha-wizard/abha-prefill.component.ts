@@ -1,6 +1,29 @@
 import { ChangeDetectionStrategy, Component, inject, output, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
+import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
+
+/**
+ * Pull a 14-digit ABHA number out of a scanned/pasted string — the ABHA card QR
+ * (JSON with `hidn`), a plain number, or a hyphenated one. null if not found.
+ */
+export function extractAbhaNumber(text: string): string | null {
+  if (!text) return null;
+  try {
+    const o = JSON.parse(text.trim()) as Record<string, unknown>;
+    for (const k of Object.keys(o)) {
+      const norm = k.toLowerCase().replace(/[^a-z]/g, '');
+      if (['hidn', 'abhanumber', 'abha', 'healthid', 'healthidnumber'].includes(norm)) {
+        const d = String(o[k]).replace(/\D/g, '');
+        if (d.length === 14) return d;
+      }
+    }
+  } catch { /* not JSON */ }
+  const m = text.match(/\d[\d-]{12,}\d/);
+  if (m) { const d = m[0].replace(/\D/g, ''); if (d.length === 14) return d; }
+  const digits = text.replace(/\D/g, '');
+  return digits.length === 14 ? digits : null;
+}
 
 /** Normalised demographics returned by lookup / QR — mapped into the form. */
 export interface AbhaPrefillData {
@@ -8,6 +31,7 @@ export interface AbhaPrefillData {
   firstName?: string; middleName?: string; lastName?: string; fullName?: string;
   gender?: string; dob?: string; yearOfBirth?: number; mobile?: string;
   address?: string; pincode?: string; state?: string; district?: string;
+  photo?: string;
 }
 
 /**
@@ -20,8 +44,13 @@ export interface AbhaPrefillData {
 @Component({
   selector: 'pf-abha-prefill',
   standalone: true,
+  imports: [BarcodeScannerModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (scanning()) {
+      <pf-barcode-scanner-modal title="Scan the ABHA QR / card"
+        (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
+    }
     <div class="pf-abp__backdrop" (click)="close.emit()">
       <div class="pf-abp" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
         <div class="pf-abp__head">
@@ -35,17 +64,18 @@ export interface AbhaPrefillData {
         <div class="pf-abp__body">
           @if (mode() === 'choose') {
             <p class="pf-abp__lead">The patient already has an ABHA? Pull their KYC details to fill the form.</p>
-            <button type="button" class="pf-abp__opt" (click)="mode.set('qr')">
+            <button type="button" class="pf-abp__opt" (click)="openScanner()">
               <span class="pf-abp__opt-t">Scan ABHA QR</span>
-              <span class="pf-abp__opt-s">Instant — reads the card, no OTP</span>
+              <span class="pf-abp__opt-s">Point the camera at the ABHA card — we read the number and send the OTP</span>
             </button>
             <button type="button" class="pf-abp__opt" (click)="mode.set('enter')">
               <span class="pf-abp__opt-t">Enter ABHA number</span>
               <span class="pf-abp__opt-s">14-digit number, verify by OTP</span>
             </button>
+            <button type="button" class="pf-abp__link" (click)="mode.set('qr')">or paste the QR data</button>
           } @else if (mode() === 'qr') {
-            <label class="pf-abp__label">Scan or paste the ABHA card QR</label>
-            <textarea class="pf-abp__input pf-abp__area" rows="4" placeholder="Focus here and scan the ABHA QR, or paste its content…"
+            <label class="pf-abp__label">Paste the ABHA card QR content</label>
+            <textarea class="pf-abp__input pf-abp__area" rows="4" placeholder="Paste the ABHA QR content…"
                       [value]="qr()" (input)="qr.set($any($event.target).value)"></textarea>
             @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
             <button type="button" class="pf-abp__go" [disabled]="!qr().trim()" (click)="parseQr()">Use these details</button>
@@ -91,6 +121,8 @@ export interface AbhaPrefillData {
     .pf-abp__err { font-size: 12.5px; color: #fca5a5; }
     .pf-abp__go { margin-top: 6px; padding: 12px; border-radius: 11px; border: 0; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(135deg, #7c3aed, #a855f7); }
     .pf-abp__go:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pf-abp__link { align-self: center; margin-top: 2px; padding: 4px; background: none; border: 0; color: var(--text-tertiary); font-size: 12px; text-decoration: underline; cursor: pointer; }
+    .pf-abp__link:hover { color: var(--text-secondary); }
   `],
 })
 export class AbhaPrefillComponent {
@@ -108,8 +140,27 @@ export class AbhaPrefillComponent {
   readonly info = signal('');
   readonly busy = signal(false);
   readonly error = signal('');
+  readonly scanning = signal(false);
 
   digits(v: string, max: number): string { return (v || '').replace(/\D/g, '').slice(0, max); }
+
+  openScanner() { this.error.set(''); this.scanning.set(true); }
+
+  /** Camera/QR scan result → pull the ABHA number and auto-request the OTP. */
+  onScanned(text: string) {
+    this.scanning.set(false);
+    const abha = extractAbhaNumber(text || '');
+    if (abha) {
+      this.abha.set(abha);
+      this.mode.set('enter');
+      this.requestOtp();
+      return;
+    }
+    // No number in the scan — maybe it's a demographics-only QR; try that.
+    this.qr.set(text || '');
+    this.mode.set('qr');
+    this.parseQr();
+  }
   back() {
     this.error.set('');
     if (this.mode() === 'enter' && this.step() === 'otp') { this.step.set('input'); this.otp.set(''); }

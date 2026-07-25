@@ -459,3 +459,31 @@
 .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
 .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
 @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
+
+/* ── ABHA health card theming ─────────────────────────────────────────────
+   Tailwind's dark: variant is OS-media-based in this build (the Sass
+   @import url('tailwindcss') swallows @custom-variant), so it can't follow the
+   app's theme toggle. We theme the card off the reliably-toggled .dark class
+   via CSS variables instead. Light = physical white card; dark = navy card.
+   The QR quiet-zone stays white in both so it always scans. */
+.abc {
+  --abc-bg: #ffffff; --abc-fg: #0f172a; --abc-sub: #334155; --abc-mut: #94a3b8;
+  --abc-brand: #0a3d91; --abc-border: rgba(0, 0, 0, 0.10);
+  --abc-chip-bg: #f1f5f9; --abc-chip-bd: #e2e8f0; --abc-badge: #ffffff;
+  background: var(--abc-bg);
+  color: var(--abc-fg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--abc-border);
+}
+:host-context(.dark) .abc {
+  --abc-bg: #0f1526; --abc-fg: #e2e8f0; --abc-sub: #cbd5e1; --abc-mut: #64748b;
+  --abc-brand: #7ea6ff; --abc-border: rgba(255, 255, 255, 0.10);
+  --abc-chip-bg: rgba(255, 255, 255, 0.05); --abc-chip-bd: rgba(255, 255, 255, 0.10); --abc-badge: #0f1526;
+}
+.abc__brand { color: var(--abc-brand); }
+.abc__sub   { color: var(--abc-sub); }
+.abc__mut   { color: var(--abc-mut); }
+.abc__hr    { border-color: var(--abc-border); }
+.abc__ok    { color: #10b981; }
+.abc__chip  { background: var(--abc-chip-bg); box-shadow: 0 0 0 1px var(--abc-chip-bd); }
+.abc__badge { box-shadow: 0 0 0 2px var(--abc-badge); }        /* ring matches card bg */
+.abc__qr    { background: #ffffff; box-shadow: 0 0 0 1px var(--abc-chip-bd); }

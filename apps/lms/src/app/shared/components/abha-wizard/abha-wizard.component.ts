@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
 import { Patient } from '../../models/patient.model';
@@ -26,7 +26,7 @@ import { Patient } from '../../models/patient.model';
             </button>
           }
           <span class="pf-abw__title">
-            {{ mode() === 'create' ? 'Create ABHA' : mode() === 'link' ? 'Verify existing ABHA' : 'ABHA (Health ID)' }}
+            {{ mode() === 'create' ? 'Create ABHA' : mode() === 'link' ? (refresh() ? 'Refresh ABHA' : 'Verify existing ABHA') : 'ABHA (Health ID)' }}
           </span>
           <button type="button" class="pf-abw__x" (click)="close.emit()" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -106,14 +106,28 @@ import { Patient } from '../../models/patient.model';
     .pf-abw__go:disabled { opacity: 0.5; cursor: not-allowed; }
   `],
 })
-export class AbhaWizardComponent {
+export class AbhaWizardComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   readonly patientId = input.required<string>();
+  /** When set, open straight into "verify existing" with this ABHA prefilled —
+   *  used by the profile's "Refresh ABHA" action to re-pull KYC (incl. photo). */
+  readonly presetAbha = input<string>('');
   readonly close = output<void>();
   readonly done = output<Patient>();
 
+  readonly refresh = signal(false);
   readonly mode = signal<'choose' | 'create' | 'link'>('choose');
+
+  ngOnInit() {
+    const a = (this.presetAbha() || '').replace(/\D/g, '').slice(0, 14);
+    if (a.length === 14) {
+      this.refresh.set(true);
+      this.mode.set('link');
+      this.abha.set(a);
+      this.step.set('input');
+    }
+  }
   readonly step = signal<'input' | 'otp'>('input');
   readonly txnId = signal('');
   readonly info = signal('');
