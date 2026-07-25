@@ -1540,11 +1540,34 @@
       </div>
     </div>
 
-    <!-- Payment Input Panel -->
-    <div>
-      <pf-inline-payment-panel [amount]="sb.balance" [patientPhone]="bo.patient?.phone" [busy]="confirmingPayment()"
-        (confirm)="confirmOutstandingPayment(bo, sb, $event)"></pf-inline-payment-panel>
-    </div>
+    <!-- Payment Input Panel — or, once the due is cleared and the samples are
+         all collected, a Dispatch action so the FD releases them right here. -->
+    @if (paidReadyToDispatch()) {
+      <div style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; padding:8px 0 4px;">
+        <span style="width:52px; height:52px; border-radius:50%; background:rgba(16,185,129,0.15); display:inline-flex; align-items:center; justify-content:center;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--green-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <div>
+          <p style="font-size:15px; font-weight:700; color:var(--text-primary); margin:0;">Payment received</p>
+          <p style="font-size:12.5px; color:var(--text-tertiary); margin:4px 0 0; max-width:260px;">Balance cleared. The samples are ready — dispatch them to the lab.</p>
+        </div>
+        <button type="button" class="press"
+          style="width:100%; padding:13px; border-radius:12px; border:0; font-size:14px; font-weight:700; color:#fff; cursor:pointer; background:linear-gradient(135deg,#7c3aed,#db2777); box-shadow:0 6px 16px rgba(124,58,237,0.28);"
+          [disabled]="confirmingPayment()" (click)="dispatchFromDrawer(bo)">
+          <span style="display:inline-flex; align-items:center; gap:8px; justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>
+            {{ confirmingPayment() ? 'Dispatching…' : 'Dispatch samples' }}
+          </span>
+        </button>
+        <button type="button" class="press" style="background:none; border:0; color:var(--text-tertiary); font-size:12.5px; cursor:pointer;" (click)="closePaymentDrawer()">Done — dispatch later</button>
+      </div>
+    } @else {
+      <div>
+        <pf-inline-payment-panel [amount]="sb.balance" [patientPhone]="bo.patient?.phone" [busy]="confirmingPayment()"
+          [allowLater]="false"
+          (confirm)="confirmOutstandingPayment(bo, sb, $event)"></pf-inline-payment-panel>
+      </div>
+    }
   </div>
 </aside>
 }

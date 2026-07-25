@@ -56,7 +56,7 @@ interface ModeDef {
     <div class="pf-ipp">
       <p class="pf-ipp__eyebrow">Payment mode</p>
       <div class="pf-ipp__modes">
-        @for (m of modes; track m.id) {
+        @for (m of visibleModes(); track m.id) {
           <button
             type="button"
             class="pf-mode pf-mode--compact"
@@ -709,6 +709,9 @@ export class InlinePaymentPanelComponent implements OnInit {
   readonly busy = input<boolean>(false);
   /** Host blocks Confirm (e.g. discount over the user's cap). */
   readonly blocked = input<boolean>(false);
+  /** When false, the "Pay later" tile is hidden — used when SETTLING an
+   *  existing due (a due is one-time; it must be cleared, not re-deferred). */
+  readonly allowLater = input<boolean>(true);
   readonly confirm = output<InlinePaymentResult>();
 
   readonly modes: ModeDef[] = [
@@ -736,8 +739,13 @@ export class InlinePaymentPanelComponent implements OnInit {
       iconPath: "M12 6v6l4 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
     },
   ];
+  /** Tiles actually shown — drops "Pay later" when settling a due (allowLater=false). */
+  readonly visibleModes = computed(() =>
+    this.allowLater() ? this.modes : this.modes.filter((m) => m.id !== "later"),
+  );
   readonly mode = signal<PayMode>("cash");
   setMode(m: PayMode) {
+    if (m === "later" && !this.allowLater()) return;
     this.mode.set(m);
     if (m === "wallet") this.loadVendors();
   }

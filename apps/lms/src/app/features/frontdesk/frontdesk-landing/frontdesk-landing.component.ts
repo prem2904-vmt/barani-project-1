@@ -704,8 +704,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly selectedBillingOrder = signal<Order | null>(null);
   readonly selectedBill = signal<Bill | null>(null);
   readonly confirmingPayment = signal(false);
+  /** After a due is cleared in the drawer, if the samples are all collected we
+   *  keep the drawer open and offer "Dispatch" so the FD doesn't have to go back
+   *  to the landing to release the samples. */
+  readonly paidReadyToDispatch = signal(false);
 
   openPaymentDrawer(o: Order) {
+    this.paidReadyToDispatch.set(false);
     this.selectedBillingOrder.set(o);
     this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
       next: fullOrder => {
@@ -728,6 +733,32 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   closePaymentDrawer() {
     this.selectedBillingOrder.set(null);
     this.selectedBill.set(null);
+    this.paidReadyToDispatch.set(false);
+  }
+
+  /** Can we offer Dispatch straight after clearing the due? (all tubes collected
+   *  + user can dispatch). Payment hold is moot here — we just cleared it. */
+  private dispatchEligibleAfterPay(o: Order): boolean {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
+  }
+
+  /** Dispatch from the settle drawer, then close + refresh the landing. */
+  dispatchFromDrawer(o: Order) {
+    this.confirmingPayment.set(true);
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+      next: () => {
+        this.confirmingPayment.set(false);
+        this.toasts.success('Samples dispatched');
+        this.closePaymentDrawer();
+        this.refresh();
+      },
+      error: err => {
+        this.confirmingPayment.set(false);
+        this.toasts.error(err.message || 'Failed to dispatch');
+      }
+    });
   }
 
   orderTests(o: Order): any[] {
@@ -741,6 +772,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   confirmOutstandingPayment(o: Order, b: Bill, ev: InlinePaymentResult) {
+    // A due is one-time: it must be cleared, never re-deferred. The "Pay later"
+    // tile is hidden in settle mode, but guard the emit too.
+    if (ev.mode === 'later') {
+      this.toasts.error('This balance must be cleared — pay by Cash or UPI.');
+      return;
+    }
     this.confirmingPayment.set(true);
     const amount = b.balance;
     this.api.post<Bill>(`/api/billing/${b.id}/payment`, {
@@ -750,9 +787,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: () => {
         this.confirmingPayment.set(false);
-        this.toasts.success('Payment recorded successfully');
-        this.closePaymentDrawer();
+        this.toasts.success('Payment recorded — balance cleared');
         this.refresh();
+        // Samples already collected? Keep the drawer open and offer Dispatch so
+        // the FD can release them without hopping back to the landing.
+        if (this.dispatchEligibleAfterPay(o)) {
+          this.paidReadyToDispatch.set(true);
+        } else {
+          this.closePaymentDrawer();
+        }
       },
       error: err => {
         this.confirmingPayment.set(false);
@@ -1765,6 +1808,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.invoicePreviewUrl.set(null);
   }
   goToBilling(o: Order) {
+    // Already billed with a due → settle it in the in-place drawer (tests +
+    // Cash/UPI for the balance). Only a genuinely unbilled order needs the full
+    // order-create page (discount + first payment).
+    if (this.getBillBalance(o.id) > 0) { this.openPaymentDrawer(o); return; }
     this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: o.id } });
   }
   /** Friendly label for the status chip. snake_case statuses → Title Case. */
@@ -2009,7 +2056,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (o.patientId) this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId } });
   }
   collectPayment(b: Bill) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: b.orderId } });
+    // Settle the due in the same in-place drawer the payments-due card uses
+    // (loads the tests + Cash/UPI for the balance) rather than bouncing to the
+    // full order-create page. openPaymentDrawer fetches the full order + bill.
+    const o = this.paymentsDueOrders().find(x => x.id === b.orderId);
+    this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
   checkIn(a: Appointment) {
     // Backend returns { appointment, order, next }:

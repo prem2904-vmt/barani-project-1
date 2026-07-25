@@ -1240,6 +1240,33 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: oid, from: '/frontdesk' } });
   }
 
+  /** After clearing the due here (pay-later billing), if every tube is already
+   *  collected the FD can dispatch right on this screen instead of hopping back
+   *  to the landing. (Dispatch is payment-gated, so this only lights up once the
+   *  balance is 0.) */
+  readonly dispatching = signal(false);
+  readonly canDispatchHere = computed(() => {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    const samples = (this.order()?.samples ?? []) as Array<{ status?: string }>;
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
+  });
+  dispatchOrder() {
+    const oid = this.viewOrderId() ?? this.paidOrderId();
+    if (!oid || this.dispatching()) return;
+    this.dispatching.set(true);
+    this.api.patch(`/api/orders/${oid}/dispatch`, {}).subscribe({
+      next: () => {
+        this.dispatching.set(false);
+        this.toasts.success('Samples dispatched');
+        this.router.navigate(['/frontdesk']);
+      },
+      error: () => {
+        this.dispatching.set(false);
+        this.toasts.error('Failed to dispatch samples');
+      }
+    });
+  }
+
   /** Reset the screen for the next patient after a completed order. */
   startNewOrder() {
     this.paidOrderId.set(null);
