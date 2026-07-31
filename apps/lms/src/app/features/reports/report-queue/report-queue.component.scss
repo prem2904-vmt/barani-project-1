@@ -1,0 +1,818 @@
+/* ───────────────────────────────────────────────────────────────
+ NON-SCROLL WORK LAYOUT (all sizes — approved desktop change).
+ The page fills the shell's main area exactly and never scrolls
+ as a whole; the header chrome (kpi strip, screen header, stat
+ bar, search, filter) is fixed and only the results body scrolls
+ internally. dvh, not vh, for any height. No double scrollbars.
+ ─────────────────────────────────────────────────────────────── */
+:host {
+  display: block;
+  height: 100%;
+}
+.pf-rq-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.pf-rq-chrome {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.pf-rq-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Bottom breathing room (was pb-10 on the page) + safe-area for
+   devices with a home indicator / phone tab nav. */
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  /* Smooth momentum scroll inside the panel on touch. */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Segmented stat bar — full width, each stat owns an equal slice
+* with a hairline divider between. Reads as one structural row,
+* not 5 floating items spread thin on a wide page. */
+.pf-rq-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  width: 100%;
+  margin-bottom: 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pf-rq-stat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 14px;
+  line-height: 1.2;
+  flex: 1 1 0;
+  min-width: 0;
+  border-right: 1px solid var(--glass-border);
+}
+.pf-rq-stat:last-child {
+  border-right: none;
+}
+.pf-rq-stat__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  align-self: center;
+  background: var(--rq-dot);
+  box-shadow: 0 0 6px var(--rq-glow);
+  flex: 0 0 6px;
+}
+.pf-rq-stat__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+.pf-rq-stat__value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: -0.01em;
+}
+.pf-rq-stat:hover .pf-rq-stat__value {
+  color: var(--rq-dot);
+  transition: color 0.18s ease;
+}
+.pf-rq-stat[data-color="violet"] {
+  --rq-dot: #a78bfa;
+  --rq-glow: rgba(168, 85, 247, 0.45);
+}
+.pf-rq-stat[data-color="emerald"] {
+  --rq-dot: #34d399;
+  --rq-glow: rgba(16, 185, 129, 0.45);
+}
+.pf-rq-stat[data-color="amber"] {
+  --rq-dot: #fbbf24;
+  --rq-glow: rgba(245, 158, 11, 0.45);
+}
+.pf-rq-stat[data-color="rose"] {
+  --rq-dot: #fb7185;
+  --rq-glow: rgba(244, 63, 94, 0.45);
+}
+.pf-rq-stat[data-color="sky"] {
+  --rq-dot: #38bdf8;
+  --rq-glow: rgba(14, 165, 233, 0.45);
+}
+@media (max-width: 720px) {
+  /* Phones / iPad portrait: drop the bar chrome, items wrap as pills. */
+  .pf-rq-stats {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    gap: 4px 8px;
+  }
+  .pf-rq-stat {
+    border-right: none;
+    padding: 4px 10px;
+    flex: 0 1 auto;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+  }
+  .pf-rq-stat__label {
+    font-size: 10.5px;
+  }
+  .pf-rq-stat__value {
+    font-size: 12px;
+  }
+}
+
+/* Search bar at top of Results — same visual rhythm as the FD
+* landing's main search so reception's muscle memory carries over. */
+.pf-results-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 0 12px 0 36px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.pf-results-search:focus-within {
+  border-color: rgba(168, 85, 247, 0.55);
+  box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
+}
+.pf-results-search__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+}
+.pf-results-search__input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 11px 0;
+  color: var(--text-primary);
+  font-size: 13.5px;
+}
+.pf-results-search__input::placeholder {
+  color: var(--text-muted);
+}
+.pf-results-search__clear {
+  background: transparent;
+  border: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.pf-results-search__clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Row card — neutral glass background with a left-edge accent strip
+ that carries the status colour. Replaces the previous full-tile
+ amber/emerald/rose wash which made every row feel tinted. */
+.pf-rq-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.1s;
+}
+.pf-rq-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+.pf-rq-row__accent {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--text-muted);
+}
+.pf-rq-row--pending .pf-rq-row__accent {
+  background: #f59e0b;
+}
+.pf-rq-row--delivered .pf-rq-row__accent {
+  background: #10b981;
+}
+.pf-rq-row--failed .pf-rq-row__accent {
+  background: #ef4444;
+}
+
+/* Action cluster — icon + label buttons in a unified group with
+ subtle dividers, replacing the previous loose row of ghost +
+ secondary buttons which competed visually. */
+.pf-rq-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-left: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.18);
+}
+.pf-rq-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.pf-rq-iconbtn:last-child {
+  border-right: 0;
+}
+.pf-rq-iconbtn:hover {
+  background: rgba(168, 85, 247, 0.12);
+  color: var(--text-primary);
+}
+.pf-rq-iconbtn--wa:hover {
+  background: rgba(37, 211, 102, 0.14);
+  color: #4ade80;
+}
+@media (max-width: 720px) {
+  .pf-rq-iconbtn span {
+    display: none;
+  }
+  .pf-rq-iconbtn {
+    padding: 9px 11px;
+  }
+}
+
+.pf-report-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pf-report-delivered {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.22),
+    rgba(16, 185, 129, 0.08)
+  );
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.pf-report-pending {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.22),
+    rgba(245, 158, 11, 0.08)
+  );
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.pf-report-failed {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.22),
+    rgba(239, 68, 68, 0.08)
+  );
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Cards list — the Partial tab renders this directly under the
+ segmented filter, same vertical rhythm as the PDF list. No
+ highlighted wrapper any more; the cards stand on their own. */
+.pf-prelim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pf-prelim-card {
+  border-radius: 12px;
+  background: var(--bg-card-solid, rgba(20, 22, 30, 0.6));
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  transition: border-color 0.18s;
+}
+.pf-prelim-card--open {
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+.pf-prelim-card__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.pf-prelim-card__head:hover {
+  background: var(--glass-bg);
+}
+.pf-prelim-card__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-prelim-card__meta {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-prelim-card__count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(34, 211, 238, 0.16);
+  color: #67e8f9;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+}
+.pf-prelim-card__chev {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.18s;
+}
+.pf-prelim-card--open .pf-prelim-card__chev {
+  transform: rotate(180deg);
+}
+
+.pf-prelim-card__body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--glass-border);
+}
+.pf-prelim-card__sample {
+  padding: 10px 12px;
+  margin-top: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+}
+.pf-prelim-card__sample-hdr {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.pf-prelim-card__sample-dept {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(34, 211, 238, 0.16);
+  color: #67e8f9;
+}
+.pf-prelim-card__sample-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pf-prelim-card__test {
+  margin-bottom: 8px;
+}
+.pf-prelim-card__test:last-child {
+  margin-bottom: 0;
+}
+.pf-prelim-card__test-name {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pf-prelim-card__no-values {
+  margin: 0;
+  padding: 6px 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.pf-prelim-card__values {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pf-prelim-card__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(
+      0,
+      1.2fr
+    ) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.pf-prelim-card__row[data-flag="abnormal"] {
+  background: rgba(245, 158, 11, 0.08);
+}
+.pf-prelim-card__row[data-flag="critical"] {
+  background: rgba(239, 68, 68, 0.1);
+}
+.pf-prelim-card__row-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.pf-prelim-card__row-value {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.pf-prelim-card__row-unit {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.pf-prelim-card__row-range {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.pf-prelim-card__row-flag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+}
+.pf-prelim-card__row-flag[data-flag="abnormal"] {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+.pf-prelim-card__row-flag[data-flag="critical"] {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.pf-prelim-card__pending {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid #f59e0b;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.pf-prelim-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+}
+@media (max-width: 639px) {
+  .pf-prelim-card__actions {
+    justify-content: stretch;
+  }
+  .pf-prelim-card__actions > * {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .pf-prelim-card__row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name flag" "value flag" "range flag";
+    gap: 2px 12px;
+  }
+  .pf-prelim-card__row-name {
+    grid-area: name;
+  }
+  .pf-prelim-card__row-value {
+    grid-area: value;
+  }
+  .pf-prelim-card__row-range {
+    grid-area: range;
+  }
+  .pf-prelim-card__row-flag {
+    grid-area: flag;
+    align-self: center;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+ CROSS-PLATFORM ADDITIVE OVERRIDES — phone / iPad / touch only.
+ Desktop-web (>=1280px) is intentionally untouched: every rule
+ below is gated behind a max-width / pointer / hover query so the
+ base layout above never changes on desktop. No new logic.
+ ─────────────────────────────────────────────────────────────── */
+
+/* PHONE (<=640px): the report row is icon + info + a 4-button action
+ cluster. On a narrow phone the cluster + content can't fit on one
+ line, so let the row wrap and push the actions onto their own full
+ line. The action cluster then stretches edge-to-edge with each
+ button taking an equal slice — easy to thumb. */
+@media (max-width: 640px) {
+  .pf-rq-row {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .pf-rq-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .pf-rq-iconbtn {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 44px; /* >=44px tap target */
+    padding: 11px 8px;
+  }
+  /* Keep the search clear button thumb-friendly. */
+  .pf-results-search__clear {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+  }
+  /* iOS WKWebView auto-zooms any focused field whose font-size is
+   < 16px. Bump the search input to 16px on phones only (desktop
+   keeps its 13.5px density) and give it a comfortable >=44px
+   tap height. */
+  .pf-results-search__input {
+    font-size: 16px;
+    padding: 12px 0;
+  }
+}
+
+/* TOUCH SIZING (coarse pointer, any width): the dense desktop icon
+ buttons are too small to tap reliably. Bump min height without
+ affecting mouse/desktop. */
+@media (pointer: coarse) {
+  .pf-rq-iconbtn {
+    min-height: 44px;
+  }
+  .pf-prelim-card__head {
+    min-height: 52px;
+  }
+  .pf-results-search__clear {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* HOVER GATING: the row / button / stat hover affordances were
+ written unconditionally and "stick" after a tap on touch devices.
+ Re-assert them only where a real hover pointer exists. The base
+ rules above stay intact for desktop; these just stop the sticky
+ hover state on touch by not re-applying — but since the base
+ rules already apply, we instead neutralise them on coarse-only
+ pointers below. */
+@media (hover: none) {
+  .pf-rq-row:hover {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+  }
+  .pf-rq-iconbtn:hover {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .pf-rq-iconbtn--wa:hover {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .pf-prelim-card__head:hover {
+    background: transparent;
+  }
+  .pf-results-search__clear:hover {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+}
+
+/* iPad / mid-width (641–1279px): the page already uses the full
+ width well (stat bar segments, single-column rows that span the
+ width). Nothing needs to collapse here — the row layout that
+ works on desktop reads fine at tablet widths. Content already
+ clears the 64px left rail via the shell. No overrides required;
+ this comment documents the deliberate no-op so a future editor
+ doesn't "fix" a band that isn't broken. */
+
+/* ───────────────────────────────────────────────────────────────
+ PHONE-ONLY SLEEK PASS (<=640px). Every phone-only control is
+ display:none by default so tablet/desktop (>=641px) is byte-for-
+ byte unchanged. The phone variants only ever toggle on inside the
+ max-width:640 query. No business logic — the select & dropdown
+ drive the same filter / view-state signals as the desktop UI.
+ ─────────────────────────────────────────────────────────────── */
+.pf-rq-statbtn-m {
+  display: none;
+}
+.pf-rq-filter-m {
+  display: none;
+}
+/* Sex · age subline is phone-only — desktop shows the full meta line. */
+.pf-rq-row__sexage {
+  display: none;
+}
+/* Active-category label is phone-only — the desktop pills already label
+ themselves. */
+.pf-rq-filter-active {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Refresh → icon-only: hide the label visually but keep it in the
+   a11y tree (sr-only) so the button still has an accessible name. */
+  .pf-rq-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Drop the full stat bar — its data now lives behind the header
+   status icon's popover. */
+  .pf-rq-stats {
+    display: none;
+  }
+
+  /* Header status icon + popover. The button sits in the action row
+   between Refresh and Generate; the popover floats below it. */
+  .pf-rq-statbtn-m {
+    display: inline-flex;
+    position: relative;
+  }
+  .pf-rq-statbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .pf-rq-statbtn.is-open {
+    border-color: rgba(168, 85, 247, 0.55);
+    color: #c4b5fd;
+    background: rgba(124, 58, 247, 0.16);
+  }
+  .pf-rq-statpop__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: transparent;
+  }
+  .pf-rq-statpop {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 168px;
+    padding: 8px;
+    background: var(--bg-card-solid, rgba(20, 22, 30, 0.96));
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+  .pf-rq-statpop .pf-rq-stat {
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    border-right: none;
+    flex: 0 0 auto;
+    border-radius: 8px;
+  }
+  .pf-rq-statpop .pf-rq-stat__label {
+    flex: 1 1 auto;
+    font-size: 12px;
+  }
+  .pf-rq-statpop .pf-rq-stat__value {
+    font-size: 13px;
+  }
+
+  /* Swap the pill filter row for an icon-only filter row (same
+   filter signal — setFilter). */
+  pf-segmented {
+    display: none;
+  }
+  /* The active category name, so icon-only filters read clearly. */
+  .pf-rq-filter-active {
+    display: block;
+    margin: 10px 2px 2px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
+  }
+  .pf-rq-filter-m {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pf-rq-filticon {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 44px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition:
+      color 0.12s,
+      border-color 0.12s,
+      background 0.12s;
+  }
+  .pf-rq-filticon.is-active {
+    color: #fff;
+    border-color: rgba(168, 85, 247, 0.55);
+    background: linear-gradient(
+      135deg,
+      rgba(124, 58, 247, 0.85),
+      rgba(168, 85, 247, 0.7)
+    );
+    box-shadow: 0 4px 14px rgba(124, 58, 247, 0.35);
+  }
+
+  /* Sleeker card: the colored status badge is redundant on phone —
+   the left accent strip + icon already carry status. */
+  .pf-rq-row__badge {
+    display: none;
+  }
+
+  /* Phone card shows only patient name + the 4 action icons — drop
+   the order/type/generated meta line entirely. */
+  .pf-rq-row__meta {
+    display: none;
+  }
+
+  /* …but show a compact sex · age line directly under the name. */
+  .pf-rq-row__sexage {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    line-height: 1.2;
+    color: var(--text-tertiary);
+  }
+}
