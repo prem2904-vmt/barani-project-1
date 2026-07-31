@@ -1260,40 +1260,73 @@
     }
   } @else if (loading()) {
     <!-- Skeleton Loaders -->
-    <div class="pf-pp__fill grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div class="xl:col-span-4 flex flex-col gap-6 w-full">
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <div class="flex items-center gap-4">
-            <pf-skeleton variant="circle" width="64px" height="64px"></pf-skeleton>
-            <div class="flex-1 flex flex-col gap-2">
-              <pf-skeleton variant="line" width="60%"></pf-skeleton>
-              <pf-skeleton variant="line" width="30%" height="8px"></pf-skeleton>
+    <div class="pf-pp__fill flex flex-col gap-6 w-full animate-pulse">
+      
+      <!-- ── Patient top bar skeleton ── -->
+      <div class="pf-pp__topbar flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4 min-w-0">
+          <pf-skeleton variant="circle" width="44px" height="44px"></pf-skeleton>
+          <div class="flex-1 flex flex-col gap-2 min-w-[200px]">
+            <pf-skeleton variant="line" width="160px" height="16px"></pf-skeleton>
+            <pf-skeleton variant="line" width="280px" height="10px"></pf-skeleton>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <pf-skeleton variant="block" width="120px" height="38px"></pf-skeleton>
+          <pf-skeleton variant="block" width="38px" height="38px"></pf-skeleton>
+        </div>
+      </div>
+
+      <!-- ── Horizontal Tab Bar skeleton ── -->
+      <div class="pf-pp__tabbar flex items-center gap-1.5 p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-2xl w-full">
+        <pf-skeleton variant="block" width="90px" height="36px"></pf-skeleton>
+        <pf-skeleton variant="block" width="90px" height="36px"></pf-skeleton>
+        <pf-skeleton variant="block" width="70px" height="36px"></pf-skeleton>
+        <pf-skeleton variant="block" width="70px" height="36px"></pf-skeleton>
+      </div>
+
+      <!-- ── Main content area skeleton (matches Overview tab layout) ── -->
+      <div class="flex flex-col gap-6 w-full">
+        <!-- 4 KPI cards grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          @for (i of [1, 2, 3, 4]; track i) {
+            <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4 flex flex-col gap-2">
+              <pf-skeleton variant="line" width="40%" height="20px"></pf-skeleton>
+              <pf-skeleton variant="line" width="60%" height="8px"></pf-skeleton>
             </div>
-          </div>
-          <div class="h-px bg-[var(--border-muted)]"></div>
-          <pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
+          }
         </div>
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <pf-skeleton variant="line" width="40%"></pf-skeleton>
-          <div class="grid grid-cols-2 gap-3">
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
+
+        <!-- Vitals row skeleton -->
+        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex items-center gap-4">
+          <pf-skeleton variant="circle" width="32px" height="32px"></pf-skeleton>
+          <div class="flex-1 flex flex-col gap-2">
+            <pf-skeleton variant="line" width="15%" height="12px"></pf-skeleton>
+            <pf-skeleton variant="line" width="50%" height="10px"></pf-skeleton>
+          </div>
+        </div>
+
+        <!-- 2-Column Row for Allergies & ABHA -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Allergies skeleton -->
+          <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
+            <pf-skeleton variant="line" width="30%" height="12px"></pf-skeleton>
+            <div class="h-px bg-[var(--border-muted)]"></div>
+            <pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton>
+            <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
+            <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
+          </div>
+          <!-- ABHA / precautions skeleton -->
+          <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
+            <pf-skeleton variant="line" width="30%" height="12px"></pf-skeleton>
+            <div class="h-px bg-[var(--border-muted)]"></div>
+            <pf-skeleton variant="line" width="95%" height="10px"></pf-skeleton>
+            <pf-skeleton variant="line" width="85%" height="10px"></pf-skeleton>
+            <pf-skeleton variant="line" width="75%" height="10px"></pf-skeleton>
           </div>
         </div>
       </div>
-      <div class="xl:col-span-8 flex flex-col gap-6 w-full">
-        <pf-skeleton variant="block" height="50px"></pf-skeleton>
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <pf-skeleton variant="line" width="30%"></pf-skeleton>
-          <pf-skeleton variant="line" width="100%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="95%" height="10px"></pf-skeleton>
-        </div>
-      </div>
+
     </div>
   } @else {
     <div class="pf-pp__fill text-center py-16 text-[var(--text-secondary)] bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow">
