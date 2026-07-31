@@ -1656,7 +1656,7 @@ html[data-theme="light"] .pf-vial__outline {
     max-width: 100% !important;
     margin: 0 !important;
     border-radius: 18px 18px 0 0 !important;
-    max-height: 92dvh !important;
+    // max-height: 92dvh !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
   }

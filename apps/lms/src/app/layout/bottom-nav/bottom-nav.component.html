@@ -5,7 +5,8 @@
 <nav class="pf-bottom-nav xl:hidden fixed z-30"
      [class.pf-bottom-nav--rail]="railMode()"
      [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
-     [class.pf-bottom-nav--min]="minimized() && !railMode()">
+     [class.pf-bottom-nav--min]="minimized() && !railMode()"
+     [class.pf-bottom-nav--hidden]="lock.locked()">
 
   <div #pill
        class="pf-pill shadow-2xl backdrop-blur-2xl"
