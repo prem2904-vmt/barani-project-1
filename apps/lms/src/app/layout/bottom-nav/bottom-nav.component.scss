@@ -31,6 +31,13 @@
 :host-context(html.pf-chat-immersive) .pf-bottom-nav,
 :host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
 
+/* Hidden state for Lock Screen: hide the bottom nav entirely. */
+.pf-bottom-nav--hidden,
+:host-context(html) .pf-bottom-nav.pf-bottom-nav--hidden,
+:host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--hidden {
+  display: none !important;
+}
+
 /* Native (Capacitor) tablet keeps the rail visible even ≥1280px (a 12.9"
    iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows
    instead of the desktop top-strip. Web/Electron desktop is unaffected. */
