@@ -402,7 +402,7 @@ interface ReconcileSummary {
     .pf-pane__badge {
       margin-left: auto;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px; font-weight: 700; color: #fbbf24;
+      font-size: 10.5px; font-weight: 700; color: var(--amber-text);
       padding: 3px 9px; border-radius: 999px;
       background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.28);
     }
@@ -510,7 +510,7 @@ interface ReconcileSummary {
     }
     .pf-row__id {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11.5px; font-weight: 700; color: #c4b5fd;
+      font-size: 11.5px; font-weight: 700; color: var(--violet-text);
       padding: 6px 10px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
@@ -565,7 +565,7 @@ interface ReconcileSummary {
     }
     .pf-recon-table td { padding: 8px; border-bottom: 1px solid var(--border-muted); }
     .pf-recon-table .num { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; }
-    .pf-recon-refund td { color: #f87171; }
+    .pf-recon-refund td { color: var(--red-text); }
     .pf-recon-empty { color: var(--text-tertiary); }
     .pf-recon-table tfoot td { border-bottom: none; color: var(--text-secondary); padding: 6px 8px; }
     .pf-recon-net td { color: var(--text-primary); font-weight: 700; border-top: 1px solid var(--glass-border) !important; }

@@ -21,7 +21,9 @@ export interface Patient {
   guardianPhone?: string;
   guardianRelationship?: string;
   abhaId?: string;
+  abhaAddress?: string;
   abhaVerified: boolean;
+  abhaVerifiedAt?: string;
   aadhaarLast4?: string;
   aadhaarVerified: boolean;
   source: string;

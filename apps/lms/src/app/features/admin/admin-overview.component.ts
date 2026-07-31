@@ -265,7 +265,7 @@ interface KpiCard {
     .pf-ov__card-ic[data-g="catalog"] { background: rgba(16,185,129,.14); color: #6ee7b7; }
     .pf-ov__card-ic[data-g="org"] { background: rgba(59,130,246,.14); color: #93c5fd; }
     .pf-ov__card-ic[data-g="finance"] { background: rgba(245,158,11,.14); color: #fcd34d; }
-    .pf-ov__card-ic[data-g="automation"] { background: rgba(236,72,153,.14); color: #f9a8d4; }
+    .pf-ov__card-ic[data-g="automation"] { background: rgba(236,72,153,.14); color: var(--pink-text); }
     .pf-ov__card-t { font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .pf-ov__card-s { font-size: 12.5px; color: var(--text-tertiary); }
 

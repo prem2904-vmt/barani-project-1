@@ -380,7 +380,7 @@ interface Doctor {
     }
     .pf-rn-row__name { margin: 0; font-size: 13.5px; font-weight: 600; }
     .pf-rn-row__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-rn-row__inactive { color: #f59e0b; font-weight: 600; }
+    .pf-rn-row__inactive { color: var(--amber-text); font-weight: 600; }
 
     .pf-rn-empty { padding: 24px 8px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
     .pf-rn-placeholder { padding: 50px 16px; text-align: center; }
@@ -447,7 +447,7 @@ interface Doctor {
       font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
       color: var(--text-tertiary);
     }
-    .pf-rn-fld__req { color: #f43f5e; }
+    .pf-rn-fld__req { color: var(--red-text); }
     .pf-rn-fld input, .pf-rn-fld textarea {
       height: 36px; padding: 0 10px;
       border-radius: 8px;
@@ -458,7 +458,7 @@ interface Doctor {
     .pf-rn-fld textarea { height: auto; padding: 8px 10px; resize: vertical; min-height: 60px; }
     .pf-rn-fld input:focus, .pf-rn-fld textarea:focus { border-color: rgba(168, 85, 247, 0.55); }
     .pf-rn-fld input.pf-rn-err, .pf-rn-fld textarea.pf-rn-err { border-color: #f43f5e; }
-    .pf-rn-fld__err { margin: 2px 0 0; font-size: 11.5px; color: #f43f5e; text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .pf-rn-fld__err { margin: 2px 0 0; font-size: 11.5px; color: var(--red-text); text-transform: none; letter-spacing: 0; font-weight: 500; }
     .pf-rn-modal__ftr {
       display: flex; align-items: center; gap: 8px;
       padding: 12px 16px;

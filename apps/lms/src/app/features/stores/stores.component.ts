@@ -243,7 +243,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     .kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--gradient-primary); opacity: .55; }
     .kpi--green::after { background: #34d399; } .kpi--amber::after { background: #fbbf24; } .kpi--red::after { background: #f87171; } .kpi--violet::after { background: #a78bfa; }
     .kpi__v { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .kpi--green .kpi__v { color: #6ee7b7; } .kpi--amber .kpi__v { color: #fbbf24; } .kpi--red .kpi__v { color: #f87171; } .kpi--violet .kpi__v { color: #c4b5fd; }
+    .kpi--green .kpi__v { color: var(--green-text); } .kpi--amber .kpi__v { color: var(--amber-text); } .kpi--red .kpi__v { color: var(--red-text); } .kpi--violet .kpi__v { color: var(--violet-text); }
     .kpi__l { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-top: 3px; }
 
     /* Toolbar + filters */
@@ -289,7 +289,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     .stat { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--bg-card-solid); }
     .stat__v { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .stat__l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-top: 3px; }
-    .stat--amber .stat__v { color: #fbbf24; } .stat--red .stat__v { color: #f87171; }
+    .stat--amber .stat__v { color: var(--amber-text); } .stat--red .stat__v { color: var(--red-text); }
 
     .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .action { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 18px;
@@ -303,7 +303,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     .alerts { display: grid; gap: 12px; } @media (min-width: 768px) { .alerts { grid-template-columns: 1fr 1fr; } }
     .card { padding: 16px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
     .card__h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-    .card__h--amber { color: #fbbf24; } .card__h--red { color: #f87171; }
+    .card__h--amber { color: var(--amber-text); } .card__h--red { color: var(--red-text); }
     .badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-secondary); }
     .line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 4px 0; color: var(--text-secondary); }
     .line__name { min-width: 0; } .line__v { font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); white-space: nowrap; }
@@ -338,7 +338,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     .result__meta { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); margin-top: 2px; }
     .onhand { text-align: right; flex-shrink: 0; }
     .onhand__v { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; display: block; }
-    .onhand--low .onhand__v { color: #fbbf24; }
+    .onhand--low .onhand__v { color: var(--amber-text); }
     .onhand__u { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
     .form4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; } @media (min-width: 768px) { .form4 { grid-template-columns: repeat(4, 1fr); } }
     .form-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 16px; flex-wrap: wrap; }

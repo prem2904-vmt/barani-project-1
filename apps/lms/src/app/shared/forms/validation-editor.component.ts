@@ -126,7 +126,7 @@ export interface ValidationPatch {
       border-radius: 9999px;
       background: rgba(124, 58, 237, 0.08);
       border: 1px dashed rgba(124, 58, 237, 0.35);
-      color: #a78bfa;
+      color: var(--violet-text);
       cursor: pointer;
       font-weight: 500;
       transition: background 0.15s ease, border-color 0.15s ease;
@@ -144,7 +144,7 @@ export interface ValidationPatch {
       height: 16px;
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.2);
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 10px;
       font-weight: 600;
     }
@@ -208,7 +208,7 @@ export interface ValidationPatch {
     .pf-val-clear {
       background: none;
       border: none;
-      color: #f87171;
+      color: var(--red-text);
       font-size: 12px;
       cursor: pointer;
       align-self: flex-start;

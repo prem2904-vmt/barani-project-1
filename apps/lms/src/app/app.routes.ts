@@ -5,6 +5,7 @@ import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
+import { FRONTDESK_PERMS } from './layout/nav-items';
 import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
 
@@ -299,7 +300,10 @@ export const appRoutes: Route[] = [
       // gated; child routes inherit auth + add per-action perms.
       {
         path: 'frontdesk',
-        canActivate: [permissionGuard(['register_patient', 'create_order', 'view_patient'])],
+        // Canonical front-desk gate (register/create) — same set the nav item
+        // uses, so "sees Front Desk" == "can open it". Deliberately NOT
+        // view_patient (a read cap lab techs hold, which used to leak them in).
+        canActivate: [permissionGuard(FRONTDESK_PERMS)],
         loadComponent: () => import('./features/frontdesk/frontdesk-shell.component').then(m => m.FrontdeskShellComponent),
         children: [
           // Default = insights landing.

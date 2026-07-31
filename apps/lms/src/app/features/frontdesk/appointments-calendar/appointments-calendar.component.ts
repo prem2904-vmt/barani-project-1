@@ -365,7 +365,7 @@ const STATUS_CLASS: Record<string, string> = {
     }
     .pf-cal-back:active { transform: translateY(1px); }
     .pf-cal-back svg { color: var(--text-muted); }
-    .pf-cal-back:hover svg { color: #c4b5fd; }
+    .pf-cal-back:hover svg { color: var(--violet-text); }
 
     /* Standard back chevron (sits before the title). Shown at ALL widths as
      * the single, consistent back affordance. */
@@ -565,11 +565,11 @@ const STATUS_CLASS: Record<string, string> = {
     /* Status palettes — dark mode (default). Light mode overrides below. */
     .pf-cal-event--booked,
     .pf-cal-month__event.pf-cal-event--booked {
-      background: rgba(139, 92, 246, 0.22); border-color: #8b5cf6; color: #ddd6fe;
+      background: rgba(139, 92, 246, 0.22); border-color: #8b5cf6; color: var(--violet-text);
     }
     .pf-cal-event--checked-in,
     .pf-cal-month__event.pf-cal-event--checked-in {
-      background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #a7f3d0;
+      background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: var(--green-text);
     }
     .pf-cal-event--completed,
     .pf-cal-month__event.pf-cal-event--completed {
@@ -708,7 +708,7 @@ const STATUS_CLASS: Record<string, string> = {
       border-radius: 9999px;
       background: rgba(139, 92, 246, 0.12);
       border: 1px solid rgba(139, 92, 246, 0.25);
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 11px;
       font-weight: 600;
       transition: background 0.15s, border-color 0.15s;
@@ -759,7 +759,7 @@ const STATUS_CLASS: Record<string, string> = {
     }
     .pf-appt-btn:hover { filter: brightness(1.15); }
     .pf-appt-btn--primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-    .pf-appt-btn--danger { color: #f43f5e; border-color: rgba(244,63,94,0.4); }
+    .pf-appt-btn--danger { color: var(--red-text); border-color: rgba(244,63,94,0.4); }
 
     /* ═══════════════════════════════════════════════════════════
      * CROSS-PLATFORM OVERRIDES (additive only)

@@ -896,7 +896,7 @@ interface DirectoryUser {
       border-radius: 12px;
       background: rgba(244, 63, 94, 0.12);
       border: 1px solid rgba(244, 63, 94, 0.3);
-      color: #fda4af;
+      color: var(--rose-text);
       font-size: 12.5px; font-weight: 500;
       flex-shrink: 0;
     }

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -124,6 +125,30 @@ function defaultResultParam(): TestParameter {
           </button>
         }
       </header>
+
+      <!-- Trendogram: offer to embed serial-result trend charts in the report.
+           Shown only when this patient has repeat tests. Persists on the order,
+           so it applies when the report generates on validation. -->
+      @if (trendEligible().length > 0) {
+        <div class="pf-sre__trend">
+          <label class="pf-sre__trend-toggle">
+            <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            <span>Include Trendogram in report
+              <em>{{ trendEligible().length }} repeat test{{ trendEligible().length === 1 ? '' : 's' }} · trend charts</em>
+            </span>
+          </label>
+          @if (trendogramOn()) {
+            <select class="pf-sre__trend-sel" [value]="trendogramDuration()" (change)="setTrendDuration($any($event.target).value)">
+              <option value="5">Last 5 tests</option>
+              <option value="10">Last 10 tests</option>
+              <option value="3m">Last 3 months</option>
+              <option value="6m">Last 6 months</option>
+              <option value="all">All time</option>
+            </select>
+          }
+        </div>
+      }
 
       @if (loading()) {
         <div class="pf-sre__msg flex justify-center py-10">
@@ -460,7 +485,7 @@ function defaultResultParam(): TestParameter {
     .pf-sre__view-btn:hover { color: var(--text-primary); }
     .pf-sre__view-btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     /* ── Grid view (mirrors report PDF) ───────────────────────── */
@@ -483,7 +508,7 @@ function defaultResultParam(): TestParameter {
       padding: 9px 10px;
       font-size: 10.5px; font-weight: 800;
       letter-spacing: 0.14em; text-transform: uppercase;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
       border-bottom: 1px solid rgba(168, 85, 247, 0.4);
     }
@@ -528,7 +553,7 @@ function defaultResultParam(): TestParameter {
     
     /* Light mode grid inputs */
     :host-context(.light) .pf-sre__ginput {
-      background: #ffffff;
+      background: var(--bg-input);
       border: 1.5px solid #cbd5e1;
       color: #1e293b;
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -683,7 +708,7 @@ function defaultResultParam(): TestParameter {
     .pf-sre__sub { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 
     .pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
-    .pf-sre__msg--err { color: #fca5a5; }
+    .pf-sre__msg--err { color: var(--red-text); }
 
     .pf-sre__test {
       padding: 16px 18px;
@@ -702,7 +727,7 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__test-pill--rejected {
       background: rgba(239, 68, 68, 0.18);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.34);
     }
     .pf-sre__test-reject-reason {
@@ -715,7 +740,7 @@ function defaultResultParam(): TestParameter {
       color: var(--text-secondary);
     }
     .pf-sre__test-reject-reason strong {
-      color: #fca5a5;
+      color: var(--red-text);
       margin-right: 4px;
     }
 
@@ -736,14 +761,14 @@ function defaultResultParam(): TestParameter {
       width: 24px; height: 24px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 13px; font-weight: 700;
       flex-shrink: 0;
     }
     .pf-sre__reject-title {
       font-size: 12px; font-weight: 700;
       letter-spacing: 0.08em; text-transform: uppercase;
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-sre__reject-list {
       list-style: none; margin: 0; padding: 0;
@@ -769,7 +794,7 @@ function defaultResultParam(): TestParameter {
       font-size: 10.5px; font-weight: 700;
       letter-spacing: 0.06em; text-transform: uppercase;
       padding: 3px 10px; border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.18); color: #6ee7b7;
+      background: rgba(16, 185, 129, 0.18); color: var(--green-text);
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .pf-sre__test-empty { font-size: 13px; color: var(--text-tertiary); margin: 0; }
@@ -784,7 +809,7 @@ function defaultResultParam(): TestParameter {
       letter-spacing: 0.04em;
       padding: 4px 10px; border-radius: 9999px;
       background: rgba(168, 85, 247, 0.10);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.30);
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
@@ -795,7 +820,7 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__note-btn--has {
       background: rgba(96, 165, 250, 0.12);
-      color: #93c5fd;
+      color: var(--blue-text);
       border-color: rgba(96, 165, 250, 0.35);
     }
     .pf-sre__note-btn--has:hover {
@@ -830,7 +855,7 @@ function defaultResultParam(): TestParameter {
     /* Light mode: Make input borders more visible */
     :host-context(.light) .pf-sre__input {
       border: 1.5px solid #cbd5e1;
-      background: #ffffff;
+      background: var(--bg-input);
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
       color: #1e293b;
     }
@@ -885,7 +910,7 @@ function defaultResultParam(): TestParameter {
       width: 16px; height: 16px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 10px; font-weight: 700;
       margin-left: 6px;
     }
@@ -1141,6 +1166,22 @@ function defaultResultParam(): TestParameter {
         padding-bottom: 12px;
       }
     }
+
+    .pf-sre__trend {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin: 10px 0 4px; padding: 10px 14px; border-radius: 12px;
+      background: rgba(124,58,237,0.06); border: 1px solid rgba(168,85,247,0.22);
+    }
+    .pf-sre__trend-toggle { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+    .pf-sre__trend-toggle input { width: 16px; height: 16px; accent-color: #7c3aed; flex-shrink: 0; }
+    .pf-sre__trend-toggle svg { color: #a855f7; flex-shrink: 0; }
+    .pf-sre__trend-toggle span { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sre__trend-toggle em { font-style: normal; font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+    .pf-sre__trend-sel {
+      margin-left: auto; background: var(--input-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border); border-radius: 8px; padding: 6px 10px;
+      color: var(--text-primary); font-size: 12.5px;
+    }
   `]
 })
 export class SampleResultEntryComponent {
@@ -1163,6 +1204,42 @@ export class SampleResultEntryComponent {
   readonly sample = this._sample.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
+
+  // ── Trendogram: add serial-result trend charts to this order's report ──
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal('5');
+  private trendPatientId: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const pid = this.sample()?.order?.patient?.id ?? null;
+      if (pid && pid !== this.trendPatientId) {
+        this.trendPatientId = pid;
+        this.api.get<{ tests: TrendTest[] }>(`/api/patients/${pid}/lab-trends`).subscribe({
+          next: r => this.trendEligible.set(r?.tests ?? []),
+          error: () => this.trendEligible.set([]),
+        });
+      }
+    });
+  }
+
+  toggleTrendogram() { this.trendogramOn.set(!this.trendogramOn()); this.saveTrendogram(); }
+  setTrendDuration(d: string) { this.trendogramDuration.set(d); if (this.trendogramOn()) this.saveTrendogram(); }
+  private saveTrendogram() {
+    const oid = this.sample()?.orderId ?? this.sample()?.order?.id;
+    if (!oid) return;
+    const body = this.trendogramOn()
+      ? { enabled: true, duration: this.trendogramDuration(), chartType: 'line',
+          charts: this.trendEligible()
+            .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+            .filter(c => !!c.parameter) }
+      : {};
+    this.api.patch(`/api/orders/${oid}/trendogram`, body).subscribe({
+      next: () => this.toasts.success(this.trendogramOn() ? 'Trendogram will be added to the report' : 'Trendogram removed'),
+      error: () => this.toasts.error('Could not update trendogram'),
+    });
+  }
 
   /** A submitted (awaiting-validation) test exists → can be re-opened to edit. */
   readonly hasReopenable = computed(() =>

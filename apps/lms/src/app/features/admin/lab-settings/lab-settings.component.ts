@@ -120,23 +120,24 @@ interface AutoAssignConfig {
       </pf-tile>
       }
 
-      <!-- Strong payment gate: dispatch + report -->
+      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Require full payment to progress (strong)</h3>
-            <p class="pf-ls__hint">
-              When ON, an order must be <strong>paid in full</strong> before it can move forward:
-              samples <strong>can't be dispatched</strong> to the lab, and (where there's no dispatch step) the
-              <strong>report can't be shared</strong> — only after payment. Sample <em>collection</em> is never
-              blocked, so you can bill pay-later / part-advance and still draw the tube. Leave OFF to let billing,
-              dispatch and reporting run independently (default).
-            </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireBill()">
-            <input type="checkbox" [checked]="requireBill()" (change)="setRequireBill($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
+        <h3 class="pf-ls__title">Require full payment to progress</h3>
+        <p class="pf-ls__hint">
+          Choose where an unpaid balance blocks the workflow. Sample <em>collection</em> is never blocked —
+          you can bill pay-later / part-advance and still draw the tube; the difference is settled at the gate.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of gateOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="paymentGateStage() === opt.value"
+                    (click)="setPaymentGateStage(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
         </div>
       </pf-tile>
 
@@ -243,7 +244,19 @@ interface AutoAssignConfig {
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
-    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: #fbbf24; font-style: italic; }
+    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
+
+    /* Payment-gate radio options */
+    .pf-ls__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .pf-ls__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 12px; background: var(--glass-bg); border: 1px solid var(--glass-border); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+    .pf-ls__gate-opt:hover { border-color: rgba(124,58,237,0.4); }
+    .pf-ls__gate-opt--on { border-color: rgba(124,58,237,0.6); background: rgba(124,58,237,0.06); }
+    .pf-ls__gate-radio { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--border-input, #cbd5e1); position: relative; transition: border-color .15s ease; }
+    .pf-ls__gate-opt--on .pf-ls__gate-radio { border-color: var(--color-violet-500, #7c3aed); }
+    .pf-ls__gate-opt--on .pf-ls__gate-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-violet-500, #7c3aed); }
+    .pf-ls__gate-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-ls__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-ls__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
 
     .pf-ls__toggle { cursor: pointer; display: inline-flex; align-items: center; }
     .pf-ls__toggle input { position: absolute; opacity: 0; pointer-events: none; }
@@ -346,7 +359,7 @@ interface AutoAssignConfig {
     /* Touch devices: the inline text buttons use Tailwind hover: classes which
        otherwise stick after a tap. Gate the page's own hover affordances. */
     @media (hover: none) {
-      :host .text-violet-400.hover\\:text-violet-300:hover { color: #a78bfa; }
+      :host .text-violet-400.hover\\:text-violet-300:hover { color: var(--violet-text); }
     }
 
     /* Phone (<=640): keep iOS from auto-zooming form fields by ensuring
@@ -405,7 +418,13 @@ export class LabSettingsComponent implements OnInit {
 
   // Branch lab-config toggles.
   protected readonly inventoryEnabled = signal(false);
-  protected readonly requireBill = signal(false);
+  /** Where the "require full payment" gate applies: none | dispatch | report. */
+  protected readonly paymentGateStage = signal<'none' | 'dispatch' | 'report'>('none');
+  protected readonly gateOptions: Array<{ value: 'none' | 'dispatch' | 'report'; label: string; desc: string }> = [
+    { value: 'none', label: 'Off', desc: 'Billing, dispatch and reporting run independently (default).' },
+    { value: 'dispatch', label: 'Block at dispatch', desc: "Samples can't be dispatched to the lab until the bill is fully paid (strongest)." },
+    { value: 'report', label: 'Block at report', desc: "Dispatch is allowed, but the report can't be shared until the bill is fully paid." },
+  ];
   protected readonly requireValidation = signal(false);
   protected readonly showPaymentsDue = signal(true);
   setInventoryEnabled(v: boolean) {
@@ -420,11 +439,16 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.inventoryEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
-  setRequireBill(v: boolean) {
-    this.requireBill.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { requireBillBeforeCollection: v }).subscribe({
-      next: () => this.toasts.success(v ? 'Full payment now required before dispatch / report' : 'Payment gate removed'),
-      error: e => { this.requireBill.set(!v); this.toasts.error(ApiError.from(e).message); }
+  setPaymentGateStage(v: 'none' | 'dispatch' | 'report') {
+    const prev = this.paymentGateStage();
+    if (prev === v) return;
+    this.paymentGateStage.set(v);
+    const msg = v === 'none' ? 'Payment gate removed'
+      : v === 'dispatch' ? 'Full payment now required before dispatch'
+      : 'Full payment now required before sharing the report';
+    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).subscribe({
+      next: () => this.toasts.success(msg),
+      error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
@@ -449,7 +473,7 @@ export class LabSettingsComponent implements OnInit {
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
       next: c => {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);
-        this.requireBill.set(c?.requireBillBeforeCollection === true);
+        this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);

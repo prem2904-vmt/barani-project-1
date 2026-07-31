@@ -276,13 +276,13 @@ interface HistoryRow {
                         <div class="flex-1 min-w-0">
                           <p class="text-[13px] font-medium truncate" style="color: var(--text-primary);">
                             {{ f.title }}
-                            @if (f.isRequired) { <span style="color: #f87171;">*</span> }
+                            @if (f.isRequired) { <span style="color: var(--red-text);">*</span> }
                             <span class="ml-1 text-[11px] font-mono" style="color: var(--text-muted);">({{ f.type }})</span>
                           </p>
                           <p class="text-[11px] font-mono" style="color: var(--text-tertiary);">
                             {{ f.storageKey }}
                             @if (f.showWhen && f.showWhen.length > 0) {
-                              <span class="ml-2" style="color: #fcd34d;">· conditional</span>
+                              <span class="ml-2" style="color: var(--amber-text);">· conditional</span>
                             }
                           </p>
                         </div>
@@ -494,7 +494,7 @@ interface HistoryRow {
       justify-content: center;
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.08));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
       flex-shrink: 0;
     }
     .pf-panel-header {
@@ -507,7 +507,7 @@ interface HistoryRow {
     .pf-inline-link {
       font-size: 12px;
       font-weight: 600;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: none;
       border: none;
       cursor: pointer;
@@ -576,11 +576,11 @@ interface HistoryRow {
     }
     .pf-step-delete:hover, .pf-field-delete:hover {
       background: rgba(239, 68, 68, 0.15);
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-field-action:hover {
       background: rgba(124, 58, 237, 0.15);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     .pf-toggle-row {
@@ -778,7 +778,7 @@ interface HistoryRow {
         border: 1px solid var(--glass-border);
         border-radius: 10px;
         overflow: hidden;
-        background: rgba(0, 0, 0, 0.18);
+        background: var(--seg-track);
       }
       /* Each action = an equal divided cell. */
       :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn {

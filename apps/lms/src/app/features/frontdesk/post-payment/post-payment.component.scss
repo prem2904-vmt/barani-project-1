@@ -213,7 +213,7 @@
   font-weight: 600;
 }
 
-.pf-sb-amt-row--disc span { color: #f59e0b; }
+.pf-sb-amt-row--disc span { color: var(--amber-text); }
 
 .pf-sb-amt-row--total {
   border-top: 1px solid var(--border-primary);
@@ -223,9 +223,9 @@
   color: var(--text-primary);
 }
 
-.pf-sb-amt-row--paid span:last-child { color: #10b981; }
+.pf-sb-amt-row--paid span:last-child { color: var(--green-text); }
 
-.pf-sb-amt-row--due span { color: #ef4444; }
+.pf-sb-amt-row--due span { color: var(--red-text); }
 
 .pf-sb-divider {
   height: 1px;
@@ -490,7 +490,7 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #10b981;
+  color: var(--green-text);
   margin-bottom: 3px;
 }
 
@@ -651,7 +651,7 @@
   box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
 }
 
-.pf-pp-toolbar__online-lbl { font-size: 11.5px; font-weight: 600; color: #10b981; }
+.pf-pp-toolbar__online-lbl { font-size: 11.5px; font-weight: 600; color: var(--green-text); }
 
 .pf-pp-toolbar__right { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 

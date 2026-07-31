@@ -1515,8 +1515,11 @@ export class ReportViewerComponent implements OnInit {
     ]);
 
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-    const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
-    return buildReportPdf({ ...baseInput, imageCache }).output('blob');
+    const [imageCache, trendograms] = await Promise.all([
+      preloadReportImages(baseInput, platform.getApiUrl()),
+      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
+    ]);
+    return buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
   }
 
   /** Render + archive the report PDF to storage (best-effort, no download) so

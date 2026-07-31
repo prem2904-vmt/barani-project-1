@@ -7,6 +7,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -67,7 +68,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
   selector: 'pf-vendors',
   standalone: true,
   imports: [
-    FormsModule, CurrencyInrPipe,
+    FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent,
     LoadingLogoComponent
   ],
@@ -171,8 +172,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
                 <div class="pf-vendor__balance">
                   <p class="pf-eyebrow">Outstanding</p>
                   <p class="pf-vendor__bal-amt" [class.pf-vendor__bal-amt--low]="v.outstanding > 0"
-                     [class.pf-vendor__bal-amt--over]="overThreshold(v)">
-                    {{ v.outstanding | inr }}
+                     [class.pf-vendor__bal-amt--over]="overThreshold(v)"
+                     [class.pf-vendor__bal-amt--credit]="v.outstanding < 0">
+                    {{ v.outstanding | walletOutstanding }}
                   </p>
                   <p class="pf-vendor__meta">
                     {{ v.usedCredit | inr }} charged · {{ v.totalCredit | inr }} settled
@@ -325,7 +327,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     }
     .pf-input--error { border-color: #f43f5e; }
     .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
-    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: #f43f5e; }
+    .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: var(--red-text); }
 
     /* Vendor row */
     .pf-vendor__name {
@@ -335,7 +337,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vendor__code {
       padding: 2px 8px;
       background: rgba(168, 85, 247, 0.18);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border-radius: 9999px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
@@ -356,14 +358,15 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vendor__bal-amt {
       margin: 4px 0;
       font-size: 22px; font-weight: 700;
-      color: #6ee7b7;
+      color: var(--green-text);
       font-variant-numeric: tabular-nums;
     }
     /* Outstanding > 0 = they owe (amber); over the alert threshold = red;
        fully settled / in credit stays green (default). */
-    .pf-vendor__bal-amt--low { color: #fcd34d; }
-    .pf-vendor__bal-amt--over { color: #fca5a5; }
-    .pf-vendor__meta--over { color: #fca5a5; }
+    .pf-vendor__bal-amt--low { color: var(--amber-text); }
+    .pf-vendor__bal-amt--over { color: var(--red-text); }
+    .pf-vendor__bal-amt--credit { color: var(--green-text); }
+    .pf-vendor__meta--over { color: var(--red-text); }
     .pf-vendor__bar {
       margin-top: 6px; height: 4px;
       background: var(--glass-border); border-radius: 9999px; overflow: hidden;
@@ -403,11 +406,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-file-btn:hover { background: rgba(168, 85, 247, 0.22); }
     .pf-file-clear {
       background: none; border: none; cursor: pointer;
-      font-size: 11.5px; color: #fca5a5; text-decoration: underline;
+      font-size: 11.5px; color: var(--red-text); text-decoration: underline;
     }
     .pf-txn__proof {
       margin-left: 6px; font-size: 11px; font-weight: 700;
-      color: #93c5fd; text-decoration: underline;
+      color: var(--blue-text); text-decoration: underline;
     }
 
     /* Transactions list */
@@ -435,16 +438,16 @@ const EMPTY_DRAFT: NewVendorDraft = {
       text-transform: uppercase; text-align: center;
     }
     .pf-txn__type[data-kind="topup"]    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
-    .pf-txn__type[data-kind="charge"]   { background: rgba(244, 63, 94, 0.18); color: #fda4af; }
+    .pf-txn__type[data-kind="charge"]   { background: rgba(244, 63, 94, 0.18); color: var(--rose-text); }
     .pf-txn__type[data-kind="refund"]   { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
-    .pf-txn__type[data-kind="payment"]  { background: rgba(20, 184, 166, 0.18); color: #5eead4; }
+    .pf-txn__type[data-kind="payment"]  { background: rgba(20, 184, 166, 0.18); color: var(--teal-text); }
     .pf-txn__type[data-kind="adjustment"] { background: rgba(156, 163, 175, 0.18); color: #d1d5db; }
     .pf-txn__reason { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pf-txn__amt {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700; text-align: right; color: #6ee7b7;
+      font-weight: 700; text-align: right; color: var(--green-text);
     }
-    .pf-txn__amt--neg { color: #fca5a5; }
+    .pf-txn__amt--neg { color: var(--red-text); }
     .pf-txn__when {
       font-size: 11px; color: var(--text-tertiary); text-align: right;
       font-family: 'JetBrains Mono', ui-monospace, monospace;

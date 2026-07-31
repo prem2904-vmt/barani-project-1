@@ -204,8 +204,8 @@
   flex-shrink: 0;
   margin-left: 12px;
 }
-.pf-rail-card__star:hover { background: var(--glass-bg-hover); color: #fbbf24; }
-.pf-rail-card__star--on { color: #fbbf24; opacity: 1; visibility: visible; }
+.pf-rail-card__star:hover { background: var(--glass-bg-hover); color: var(--amber-text); }
+.pf-rail-card__star--on { color: var(--amber-text); opacity: 1; visibility: visible; }
 
 .pf-rail-card--on { background: color-mix(in srgb, #10b981 14%, transparent); border-color: rgba(16, 185, 129, 0.45); }
 .pf-rail-card--on:hover { background: color-mix(in srgb, #10b981 20%, transparent); border-color: rgba(16, 185, 129, 0.6); }
@@ -291,7 +291,7 @@
 }
 .pf-rail-card__on-tag {
   font-size: 10.5px; font-weight: 700;
-  color: #10b981;
+  color: var(--green-text);
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.18);
@@ -551,7 +551,7 @@
   border-radius: 9999px;
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.22);
-  color: #fca5a5;
+  color: var(--red-text);
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
@@ -1066,7 +1066,7 @@
   align-items: center;
   justify-content: center;
 }
-.pf-cart-remove:hover { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+.pf-cart-remove:hover { background: rgba(239, 68, 68, 0.18); color: var(--red-text); }
 
 /* ── Package suggestion banner ─────────────────────────── */
 .pf-pkg-suggest {
@@ -1125,7 +1125,7 @@
   flex: 0 0 auto;
   padding: 2px 8px;
   background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
+  color: var(--green-text);
   border: 1px solid rgba(16, 185, 129, 0.45);
   border-radius: 9999px;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
@@ -1173,7 +1173,7 @@
 
 /* Post-payment actions (Print / Show invoice / New order). */
 .pf-paid { display: flex; flex-direction: column; gap: 10px; }
-.pf-paid__msg { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #34d399; }
+.pf-paid__msg { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--green-text); }
 /* Post-payment Total / Paid / Balance-due breakdown (advance + full). */
 .pf-paid__summary {
   display: flex; flex-direction: column; gap: 6px;
@@ -1198,7 +1198,7 @@
   padding: 10px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 13px;
   border: 1px solid rgba(139, 92, 246, 0.4);
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(217, 70, 239, 0.08));
-  color: #a78bfa;
+  color: var(--violet-text);
 }
 .pf-paid__btn svg { flex-shrink: 0; }
 .pf-paid__btn:hover { background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); color: #fff; border-color: transparent; }
@@ -1266,7 +1266,7 @@
 .pf-cart-disc__input:focus { outline: none; border-color: rgba(139, 92, 246, 0.6); }
 .pf-cart-disc__input--err { border-color: #f87171 !important; }
 .pf-cart-disc__cap { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-.pf-cart-disc__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: #f87171; }
+.pf-cart-disc__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: var(--red-text); }
 
 .pf-proceed {
   margin-top: 16px;
@@ -1328,7 +1328,7 @@
   background: rgba(59, 130, 246, 0.10);
   border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: 9999px;
-  color: #93c5fd;
+  color: var(--blue-text);
   font-size: 11.5px; font-weight: 600;
 }
 
@@ -1688,7 +1688,7 @@
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 700;
-  color: #fcd34d;
+  color: var(--amber-text);
 }
 .pf-refund__modes {
   display: flex;
@@ -1825,7 +1825,7 @@
   border-radius: 9999px;
   background: transparent;
   border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  color: var(--red-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1834,6 +1834,49 @@
   &:hover {
     background: rgba(239, 68, 68, 0.08);
     border-color: rgba(239, 68, 68, 0.45);
-    color: #ef4444;
+    color: var(--red-text);
   }
 }
+
+/* ── Trendogram suggestion + customize popup ─────────────────────── */
+.pf-trend-suggest {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+}
+.pf-trend-suggest__toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.pf-trend-suggest__toggle input { width: 16px; height: 16px; accent-color: #7c3aed; flex-shrink: 0; }
+.pf-trend-suggest__icon { color: #a855f7; display: inline-flex; }
+.pf-trend-suggest__label { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pf-trend-suggest__hint { font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+.pf-trend-suggest__controls { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.pf-trend-suggest__select {
+  background: var(--input-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border);
+  border-radius: 8px; padding: 6px 10px; color: var(--text-primary); font-size: 12.5px;
+}
+.pf-trend-suggest__edit {
+  padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+  background: rgba(124,58,237,0.14); border: 1px solid rgba(168,85,247,0.3); color: var(--text-primary);
+}
+
+.pf-trend-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
+.pf-trend-modal__panel {
+  width: min(520px, calc(100vw - 32px)); max-height: 82vh; display: flex; flex-direction: column;
+  background: var(--bg-card-solid); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden;
+}
+.pf-trend-modal__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--glass-border); }
+.pf-trend-modal__head h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.pf-trend-modal__head p { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.pf-trend-modal__x { background: none; border: 0; color: var(--text-tertiary); font-size: 16px; cursor: pointer; }
+.pf-trend-modal__dur { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--glass-border); font-size: 12.5px; color: var(--text-secondary); }
+.pf-trend-modal__dur select { background: var(--input-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); border-radius: 8px; padding: 6px 10px; color: var(--text-primary); font-size: 12.5px; }
+.pf-trend-modal__list { flex: 1; overflow-y: auto; padding: 8px 18px; }
+.pf-trend-modal__test { padding: 8px 0; border-bottom: 1px solid var(--border-muted); }
+.pf-trend-modal__test-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.pf-trend-modal__test-name span { color: var(--text-tertiary); font-weight: 400; font-size: 11px; }
+.pf-trend-modal__param { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 8px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.pf-trend-modal__param input { width: 15px; height: 15px; accent-color: #7c3aed; }
+.pf-trend-modal__foot { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-top: 1px solid var(--glass-border); font-size: 12.5px; color: var(--text-tertiary); }
+.pf-trend-modal__done { padding: 8px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7); border: 0; }

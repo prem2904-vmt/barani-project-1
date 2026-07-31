@@ -33,6 +33,8 @@ import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { CapacitorService } from "../../core/services/capacitor.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
+import { PatientTimelineComponent } from "../../features/frontdesk/patient-profile/patient-timeline.component";
+import { PatientTimelineService } from "../../features/frontdesk/patient-profile/patient-timeline.service";
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
 @Component({
@@ -48,6 +50,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     CallOverlayComponent,
     PeopleDrawerComponent,
     BarcodeScannerModalComponent,
+    PatientTimelineComponent,
     SwipeBackDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -112,6 +115,13 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
       <pf-patient-profile-modal></pf-patient-profile-modal>
+
+      <!-- Full-screen Patient Timeline — rendered at shell root so it covers the
+           nav. A fixed element nested inside .shell-main is trapped below the
+           chrome's stacking context and can't overlay it. -->
+      @if (patientTimeline.isOpen() && patientTimeline.patientId(); as pid) {
+        <pf-patient-timeline [patientId]="pid" (close)="patientTimeline.close()"></pf-patient-timeline>
+      }
 
       <!-- Global order-QR scanner. Rendered HERE (shell root), not in the
            top-strip: the top-strip sits inside .pf-chrome whose backdrop-filter
@@ -407,15 +417,15 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       /* Icon badge per level */
       .toast-icon[data-level="success"] {
         background: rgba(16, 185, 129, 0.18);
-        color: #34d399;
+        color: var(--green-text);
       }
       .toast-icon[data-level="error"] {
         background: rgba(239, 68, 68, 0.18);
-        color: #f87171;
+        color: var(--red-text);
       }
       .toast-icon[data-level="warning"] {
         background: rgba(245, 158, 11, 0.18);
-        color: #fbbf24;
+        color: var(--amber-text);
       }
       .toast-icon[data-level="info"] {
         background: rgba(99, 102, 241, 0.18);
@@ -453,6 +463,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 export class ShellComponent {
   readonly toasts = inject(ToastService);
   readonly scan = inject(ScanService);
+  readonly patientTimeline = inject(PatientTimelineService);
   /** Drives the offline banner (Network plugin on native, window events on web). */
   protected readonly capacitor = inject(CapacitorService);
   /** When the soft keyboard is up the bottom-nav hides, so shell-main drops its

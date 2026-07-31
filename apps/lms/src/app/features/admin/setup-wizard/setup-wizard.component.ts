@@ -195,7 +195,7 @@ interface BrandingDraft {
     .brand-upload__link {
       background: none;
       border: none;
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-weight: 600;
       cursor: pointer;
       padding: 0 2px;
@@ -216,7 +216,7 @@ interface BrandingDraft {
     }
     .brand-upload__btn:hover { background: var(--glass-bg-hover); }
     .brand-upload__btn--danger {
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.4);
       background: rgba(239, 68, 68, 0.08);
     }
@@ -224,7 +224,7 @@ interface BrandingDraft {
 
     .brand-error {
       font-size: 12px;
-      color: #f87171;
+      color: var(--red-text);
       margin: 6px 0 0;
     }
 
@@ -286,7 +286,7 @@ interface BrandingDraft {
 
     /* Only show hover affordances on devices that actually hover. */
     @media (hover: none) {
-      .brand-upload__link:hover { color: #c4b5fd; }
+      .brand-upload__link:hover { color: var(--violet-text); }
       .brand-upload__btn:hover { background: var(--glass-bg); }
       .brand-upload__btn--danger:hover { background: rgba(239, 68, 68, 0.08); }
     }

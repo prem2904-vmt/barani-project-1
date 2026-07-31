@@ -16,6 +16,7 @@ import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from 
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -69,7 +70,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
   imports: [
-    CurrencyInrPipe,
+    CurrencyInrPipe, WalletOutstandingPipe,
     NumPadComponent,
     ScreenHeaderComponent,
     TileComponent,
@@ -391,7 +392,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                  balance". Never blocks. -->
                             <p class="pf-eyebrow">Outstanding after</p>
                             <p class="pf-wallet-selected__bal">
-                              {{ (v.outstanding + effectivePayable()) | inr }}
+                              {{ (v.outstanding + effectivePayable()) | walletOutstanding }}
                             </p>
                             @if (v.notifyThreshold && (v.outstanding + effectivePayable()) >= v.notifyThreshold) {
                               <p class="pf-wallet-selected__warn">Over the {{ v.notifyThreshold | inr }} alert threshold</p>
@@ -428,7 +429,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                 @if (showWalletBalance()) {
                                   <span class="pf-wallet-row__bal"
                                         [class.pf-wallet-row__bal--low]="v.outstanding > 0">
-                                    {{ v.outstanding | inr }} due
+                                    {{ v.outstanding | walletOutstanding }}
                                   </span>
                                 }
                               </button>
@@ -765,7 +766,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-discount__input--err, .pf-discount__input--err:focus { border-color: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18); }
     .pf-discount__cap { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-    .pf-discount__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: #f87171; }
+    .pf-discount__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: var(--red-text); }
     .pf-discount__rupee {
       position: absolute;
       right: 10px;
@@ -946,11 +947,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-cash2__change span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
     .pf-cash2__change strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .pf-cash2__change[data-kind="change"] { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.4); }
-    .pf-cash2__change[data-kind="change"] span, .pf-cash2__change[data-kind="change"] strong { color: #34d399; }
+    .pf-cash2__change[data-kind="change"] span, .pf-cash2__change[data-kind="change"] strong { color: var(--green-text); }
     .pf-cash2__change[data-kind="exact"] { background: rgba(52,211,153,0.06); border-color: rgba(52,211,153,0.25); }
-    .pf-cash2__change[data-kind="exact"] span { color: #34d399; }
+    .pf-cash2__change[data-kind="exact"] span { color: var(--green-text); }
     .pf-cash2__change[data-kind="short"] { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.4); }
-    .pf-cash2__change[data-kind="short"] span, .pf-cash2__change[data-kind="short"] strong { color: #f87171; }
+    .pf-cash2__change[data-kind="short"] span, .pf-cash2__change[data-kind="short"] strong { color: var(--red-text); }
     .pf-cash-chip__label {
       margin: 0;
       font-size: 10.5px;
@@ -970,12 +971,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       background: rgba(16, 185, 129, 0.14);
       border-color: rgba(16, 185, 129, 0.3);
     }
-    .pf-cash-chip[data-kind='ok'] .pf-cash-chip__value { color: #34d399; }
+    .pf-cash-chip[data-kind='ok'] .pf-cash-chip__value { color: var(--green-text); }
     .pf-cash-chip[data-kind='short'] {
       background: rgba(239, 68, 68, 0.14);
       border-color: rgba(239, 68, 68, 0.3);
     }
-    .pf-cash-chip[data-kind='short'] .pf-cash-chip__value { color: #f87171; }
+    .pf-cash-chip[data-kind='short'] .pf-cash-chip__value { color: var(--red-text); }
 
     .pf-cash-btn {
       height: 48px;
@@ -1031,7 +1032,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       border-radius: 9999px;
       background: rgba(16, 185, 129, 0.08);
       border: 1px solid rgba(16, 185, 129, 0.2);
-      color: #10b981;
+      color: var(--green-text);
       font-size: 11px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-weight: 600;
@@ -1422,9 +1423,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-wallet-row__bal {
       flex: 0 0 auto;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700; color: #6ee7b7;
+      font-weight: 700; color: var(--green-text);
     }
-    .pf-wallet-row__bal--low { color: #fca5a5; }
+    .pf-wallet-row__bal--low { color: var(--red-text); }
     .pf-wallet-empty {
       padding: 14px;
       text-align: center;
@@ -1453,12 +1454,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-wallet-selected__bal {
       margin: 2px 0 0;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700; font-size: 16px; color: #6ee7b7;
+      font-weight: 700; font-size: 16px; color: var(--green-text);
     }
-    .pf-wallet-selected__bal--low { color: #fca5a5; }
+    .pf-wallet-selected__bal--low { color: var(--red-text); }
     .pf-wallet-selected__warn {
       margin: 4px 0 0;
-      font-size: 11px; color: #fca5a5;
+      font-size: 11px; color: var(--red-text);
     }
     .pf-wallet-change {
       flex: 0 0 auto;
@@ -1475,7 +1476,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* ── Refund panel (overpaid after a modify) ─────────────── */
     .pf-refund { margin-top: 14px; padding: 14px; border-radius: 12px;
       border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08); }
-    .pf-refund__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #fcd34d; }
+    .pf-refund__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--amber-text); }
     .pf-refund__modes { display: flex; gap: 8px; margin-bottom: 10px; }
     .pf-refund__chip { flex: 1; padding: 8px 0; border-radius: 9px; font-weight: 700; font-size: 12.5px;
       border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: var(--glass-bg, rgba(255,255,255,0.03)); color: var(--text-secondary, rgba(255,255,255,0.72)); cursor: pointer; }
@@ -2181,11 +2182,17 @@ export class BillingComponent implements OnInit, OnChanges {
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
       const amount = this.effectivePayable();
       const applyAndPay = (currentBill: Bill) => {
-        this.api.post<unknown>(`/api/vendors/${vendor.id}/charge`, {
+        this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
           amount, billId: currentBill.id,
           reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
         }).subscribe({
-          next: () => {
+          next: (updatedVendor) => {
+            // The /charge endpoint returns the vendor with its NEW balance —
+            // patch the cached list so every bound view (selected card, wallet
+            // rows) reflects the raised outstanding immediately, no refetch.
+            if (updatedVendor?.id) {
+              this._vendors.update(list => (list ?? []).map(v => v.id === updatedVendor.id ? { ...v, ...updatedVendor } : v));
+            }
             // Wallet charge succeeded → record the bill payment so the
             // bill is marked paid and the running totals on the FD
             // landing pick it up.

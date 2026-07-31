@@ -823,7 +823,7 @@ const OPERATORS = [
     .pf-pill--ok {
       background: rgba(16, 185, 129, 0.14);
       border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
+      color: var(--green-text);
     }
 
     /* ───── Empty / shell ───── */
@@ -881,7 +881,7 @@ const OPERATORS = [
     .pf-le-stab--active {
       background: rgba(168, 85, 247, 0.16);
       border-color: rgba(168, 85, 247, 0.45);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-le-stab__type {
       padding: 1px 7px;
@@ -890,10 +890,10 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
       border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-le-stab__type[data-type='paragraph'] { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; }
-    .pf-le-stab__type[data-type='chart']     { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d; }
+    .pf-le-stab__type[data-type='chart']     { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.4); color: var(--amber-text); }
     .pf-le-stab__type[data-type='image']     { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
     .pf-le-stab__label {
       font-weight: 600;
@@ -936,9 +936,9 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s;
     }
     .pf-le-addmenu button:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .pf-le-addmenu button[data-type='grid']:hover      { color: #c4b5fd; background: rgba(168, 85, 247, 0.1); }
+    .pf-le-addmenu button[data-type='grid']:hover      { color: var(--violet-text); background: rgba(168, 85, 247, 0.1); }
     .pf-le-addmenu button[data-type='paragraph']:hover { color: #93c5fd; background: rgba(59, 130, 246, 0.1); }
-    .pf-le-addmenu button[data-type='chart']:hover     { color: #fcd34d; background: rgba(245, 158, 11, 0.1); }
+    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--amber-text); background: rgba(245, 158, 11, 0.1); }
     .pf-le-addmenu button[data-type='image']:hover     { color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
 
     /* ───── Section meta row ───── */
@@ -1004,7 +1004,7 @@ const OPERATORS = [
     .pf-le-sheet__hdr-meta {
       display: block;
       font-size: 9.5px;
-      color: #c4b5fd;
+      color: var(--violet-text);
       margin-top: 3px;
       letter-spacing: 0.16em;
       font-weight: 800;
@@ -1042,7 +1042,7 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(245, 158, 11, 0.16);
       border: 1px solid rgba(245, 158, 11, 0.4);
-      color: #fcd34d;
+      color: var(--amber-text);
       flex-shrink: 0;
     }
 
@@ -1055,7 +1055,7 @@ const OPERATORS = [
       background: rgba(245, 158, 11, 0.06) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: #fcd34d;
+      color: var(--amber-text);
       font-weight: 600;
     }
     .pf-le-sheet__c-inner {
@@ -1115,7 +1115,7 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s, transform 0.18s;
     }
     .pf-le-sheet__caret:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .pf-le-sheet__caret--open { transform: rotate(180deg); color: #c4b5fd; }
+    .pf-le-sheet__caret--open { transform: rotate(180deg); color: var(--violet-text); }
 
     /* 🔒 Lock toggle. Hidden by default; appears on row hover OR when the
        cell is locked. Locked state is unmistakable: solid amber colour on
@@ -1140,7 +1140,7 @@ const OPERATORS = [
     .pf-le-sheet__row:hover .pf-le-sheet__lock:disabled { opacity: 0; }
     .pf-le-sheet__lock--on {
       opacity: 1 !important;
-      color: #fcd34d !important;
+      color: var(--amber-text) !important;
       background: rgba(245, 158, 11, 0.18);
     }
     .pf-le-sheet__lock--on:hover {
@@ -1154,7 +1154,7 @@ const OPERATORS = [
       background: rgba(245, 158, 11, 0.08) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: #fcd34d;
+      color: var(--amber-text);
       font-weight: 600;
       border-color: rgba(245, 158, 11, 0.25);
     }
@@ -1186,7 +1186,7 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s;
     }
     .pf-le-sheet__menu button:hover {
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: rgba(168, 85, 247, 0.12);
     }
     .pf-le-sheet__menu-lbl { font-weight: 600; color: var(--text-primary); flex: 1; }
@@ -1248,7 +1248,7 @@ const OPERATORS = [
     }
     .pf-le-sheet__row:hover .pf-merged-rule__add {
       opacity: 1;
-      color: #fcd34d !important;
+      color: var(--amber-text) !important;
       border-color: rgba(245, 158, 11, 0.6) !important;
     }
 
@@ -1264,7 +1264,7 @@ const OPERATORS = [
     }
     .pf-icon-btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd !important;
+      color: var(--violet-text) !important;
       border-color: rgba(168, 85, 247, 0.45);
     }
 
@@ -1379,7 +1379,7 @@ const OPERATORS = [
       margin: 0;
     }
     .pf-le-tip--inline { display: inline; margin: 0 4px; }
-    .pf-le-tip a { color: #c4b5fd; }
+    .pf-le-tip a { color: var(--violet-text); }
 
     .pf-le-grid3 {
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
@@ -1392,9 +1392,9 @@ const OPERATORS = [
       padding: 3px 8px;
       border-radius: 6px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
-    .pf-row__badge--merged { background: rgba(245, 158, 11, 0.14); color: #fcd34d; }
+    .pf-row__badge--merged { background: rgba(245, 158, 11, 0.14); color: var(--amber-text); }
 
     /* ───── Conditions ───── */
     .pf-cond {
@@ -1425,7 +1425,7 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
       border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c4b5fd;
+      color: var(--violet-text);
       cursor: pointer;
       transition: background 0.12s, border-color 0.12s;
       min-width: 56px;
@@ -1439,7 +1439,7 @@ const OPERATORS = [
     .pf-cond--else .pf-cond__mode {
       background: rgba(245, 158, 11, 0.16);
       border-color: rgba(245, 158, 11, 0.4);
-      color: #fcd34d;
+      color: var(--amber-text);
     }
     .pf-cond--else .pf-cond__mode:hover {
       background: rgba(245, 158, 11, 0.28);
@@ -1461,7 +1461,7 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(244, 63, 94, 0.14);
       border: 1px solid rgba(244, 63, 94, 0.4);
-      color: #fda4af;
+      color: var(--rose-text);
     }
 
     /* Cell-override list inside a condition. */
@@ -1526,7 +1526,7 @@ const OPERATORS = [
     }
     .pf-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .pf-icon-btn--danger:hover:not(:disabled) {
-      color: #f87171;
+      color: var(--red-text);
       border-color: rgba(244, 63, 94, 0.5);
     }
 
@@ -1534,12 +1534,12 @@ const OPERATORS = [
       background: transparent; border: 0;
       padding: 5px 10px;
       font-size: 12px; font-weight: 600;
-      color: #c4b5fd;
+      color: var(--violet-text);
       cursor: pointer;
       border-radius: 6px;
     }
     .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); }
-    .pf-link-btn--danger { color: #f87171; }
+    .pf-link-btn--danger { color: var(--red-text); }
     .pf-link-btn--danger:hover { background: rgba(244, 63, 94, 0.12); }
     .pf-link-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 

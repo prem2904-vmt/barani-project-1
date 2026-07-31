@@ -468,10 +468,9 @@ export class ReportQueueComponent implements OnInit {
    *  rows, paragraphs, charts). */
   async downloadPdf(r: Report) {
     try {
-      const { generateReportPdf, buildReportPdf } =
-        await import("../../../shared/utils/report-pdf");
-      const { baseInput, imageCache } = await this.buildReportRender(r);
-      const blob = buildReportPdf({ ...baseInput, imageCache }).output("blob");
+      const { generateReportPdf, buildReportPdf } = await import('../../../shared/utils/report-pdf');
+      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+      const blob = buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: web blob downloads are no-ops. Hand the PDF to
         // the native iOS share sheet (Save to Files, AirDrop, etc.) via the
@@ -479,7 +478,7 @@ export class ReportQueueComponent implements OnInit {
         await this.sharePdfNative(r, blob, "Download report");
       } else {
         // Web/desktop: jsPDF's own download path still works.
-        generateReportPdf({ ...baseInput, imageCache });
+        generateReportPdf({ ...baseInput, imageCache, trendograms });
       }
       // Archive the rendered PDF to object storage (Spaces) so finished results
       // are stored and the patient's public report / QR-tracking page can serve
@@ -515,10 +514,9 @@ export class ReportQueueComponent implements OnInit {
         await navigator.share({ files: [file], title, text });
       } else {
         // No file-share support — fall back to the web download path.
-        const { generateReportPdf } =
-          await import("../../../shared/utils/report-pdf");
-        const { baseInput, imageCache } = await this.buildReportRender(r);
-        generateReportPdf({ ...baseInput, imageCache });
+        const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+        const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+        generateReportPdf({ ...baseInput, imageCache, trendograms });
       }
     } catch (err) {
       // User cancelled the share sheet — not an error.
@@ -586,16 +584,12 @@ export class ReportQueueComponent implements OnInit {
       }),
     ]);
 
-    const baseInput = {
-      report: r,
-      resolvedLayouts,
-      template: template ?? null,
-    };
-    const imageCache = await preloadReportImages(
-      baseInput,
-      platform.getApiUrl(),
-    );
-    return { baseInput, imageCache };
+    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
+    const [imageCache, trendograms] = await Promise.all([
+      preloadReportImages(baseInput, platform.getApiUrl()),
+      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
+    ]);
+    return { baseInput, imageCache, trendograms };
   }
 
   /** Upload a rendered report PDF blob to storage (best-effort). */
@@ -615,16 +609,10 @@ export class ReportQueueComponent implements OnInit {
    *  /reports/public/{qrToken} link resolves to a real file when shared. */
   private async archiveReportPdf(r: Report) {
     try {
-      const { buildReportPdf } =
-        await import("../../../shared/utils/report-pdf");
-      const { baseInput, imageCache } = await this.buildReportRender(r);
-      this.uploadReportPdf(
-        r,
-        buildReportPdf({ ...baseInput, imageCache }).output("blob"),
-      );
-    } catch {
-      /* best-effort */
-    }
+      const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'));
+    } catch { /* best-effort */ }
   }
 
   deliver(r: Report, via: string) {
@@ -662,14 +650,9 @@ export class ReportQueueComponent implements OnInit {
       // still fires regardless.
       (async () => {
         try {
-          const { buildReportPdf } =
-            await import("../../../shared/utils/report-pdf");
-          const { baseInput, imageCache } = await this.buildReportRender(r);
-          await this.sharePdfNative(
-            r,
-            buildReportPdf({ ...baseInput, imageCache }).output("blob"),
-            "Print report",
-          );
+          const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+          const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+          await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
         } catch (err) {
           console.error("[reports] native print share failed", err);
           this.toasts.error("Could not open report");

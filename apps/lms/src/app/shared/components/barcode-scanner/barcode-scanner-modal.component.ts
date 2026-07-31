@@ -245,7 +245,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 8px; padding: 20px;
       text-align: center;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(236, 72, 153, 0.08));
       font-size: 13px;
     }
@@ -258,7 +258,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       border-radius: 10px;
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.35);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 12px;
     }
     .pf-sc__mismatch b { color: #fff; font-weight: 600; }
