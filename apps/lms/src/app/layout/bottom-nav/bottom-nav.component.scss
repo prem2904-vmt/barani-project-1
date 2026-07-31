@@ -123,9 +123,6 @@
   flex-direction: row;
   align-items: center;
   flex-shrink: 0;
-  /* Subtle left separator — elevates the dock as a distinct surface
-     so the user understands it doesn’t scroll with the tabs. */
-  border-left: 1px solid var(--glass-border, rgba(255,255,255,0.10));
 }
 /* Vertical hairline inside the fixed dock (between scroll area edge
    and the admin button). */
