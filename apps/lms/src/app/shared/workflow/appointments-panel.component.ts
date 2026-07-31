@@ -47,8 +47,8 @@ import { Appointment } from '../models/appointment.model';
     .ap__meta { font-size: 11px; color: var(--text-tertiary); }
     .ap__status { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
                   padding: 2px 7px; border-radius: 999px; color: var(--text-secondary); background: rgba(255,255,255,0.06); }
-    .ap__status[data-s='checked_in'] { color: #6ee7b7; background: rgba(16,185,129,0.15); }
-    .ap__status[data-s='in_progress'] { color: #c4b5fd; background: rgba(124,58,237,0.18); }
+    .ap__status[data-s='checked_in'] { color: var(--green-text); background: rgba(16,185,129,0.15); }
+    .ap__status[data-s='in_progress'] { color: var(--violet-text); background: rgba(124,58,237,0.18); }
   `]
 })
 export class AppointmentsPanelComponent implements OnInit {

@@ -963,7 +963,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       width: 24px; height: 24px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 13px; font-weight: 700;
       flex-shrink: 0;
     }
@@ -972,7 +972,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       font-size: 13px; line-height: 1.4;
       color: var(--text-secondary);
     }
-    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
+    .pf-reject-banner__text strong { color: var(--red-text); margin-right: 4px; }
 
     /* ── Patient bar (compact one-row banner) ─────────────────── */
     .pf-patient-tile { padding: 10px 14px !important; }
@@ -1254,7 +1254,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       color: #ffffff;
       box-shadow: 0 3px 10px rgba(124, 58, 237, 0.5);
     }
-    .pf-param__req { color: #f87171; font-weight: 700; margin-left: 2px; }
+    .pf-param__req { color: var(--red-text); font-weight: 700; margin-left: 2px; }
     .pf-param__ref {
       margin: 0 0 0 28px;
       font-size: 11px;
@@ -1619,7 +1619,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.12);
       border: 1px solid rgba(239, 68, 68, 0.35);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 11.5px;
       font-weight: 500;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -1682,7 +1682,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     .pf-view-toggle__btn:hover { color: var(--text-primary); }
     .pf-view-toggle__btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     .pf-result-grid-wrap {
@@ -1702,7 +1702,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       padding: 9px 10px;
       font-size: 10.5px; font-weight: 800;
       letter-spacing: 0.14em; text-transform: uppercase;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
       border-bottom: 1px solid rgba(168, 85, 247, 0.4);
       position: sticky; top: 0; z-index: 1;
@@ -1782,10 +1782,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       letter-spacing: 0.12em; text-transform: uppercase;
       border-radius: 9999px;
     }
-    .pf-rg__flag[data-tone='low']      { background: rgba(59, 130, 246, 0.16); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
-    .pf-rg__flag[data-tone='high']     { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); }
-    .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .pf-rg__flag[data-tone='low']      { background: rgba(59, 130, 246, 0.16); color: var(--blue-text); border: 1px solid rgba(59, 130, 246, 0.4); }
+    .pf-rg__flag[data-tone='high']     { background: rgba(245, 158, 11, 0.16); color: var(--amber-text); border: 1px solid rgba(245, 158, 11, 0.4); }
+    .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: var(--red-text); border: 1px solid rgba(239, 68, 68, 0.45); }
+    .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: var(--green-text); border: 1px solid rgba(16, 185, 129, 0.4); }
 
     /* ── Live flag pill ─────────────────────────────────────── */
     .pf-flag {
@@ -1811,12 +1811,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       animation: none;
     }
     .pf-flag__dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
-    .pf-flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.14);  color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-    .pf-flag[data-tone='low']      { background: rgba(245, 158, 11, 0.14);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
-    .pf-flag[data-tone='high']     { background: rgba(245, 158, 11, 0.14);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+    .pf-flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.14);  color: var(--green-text); border-color: rgba(16, 185, 129, 0.3); }
+    .pf-flag[data-tone='low']      { background: rgba(245, 158, 11, 0.14);  color: var(--amber-text); border-color: rgba(245, 158, 11, 0.3); }
+    .pf-flag[data-tone='high']     { background: rgba(245, 158, 11, 0.14);  color: var(--amber-text); border-color: rgba(245, 158, 11, 0.3); }
     .pf-flag[data-tone='critical'] {
       background: rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.4);
       animation: pf-flag-crit 1.6s ease-in-out infinite, pf-flag-in 0.25s ease both;
       box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
@@ -2442,12 +2442,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
     .pf-head__btn--ghost {
       background: transparent;
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: transparent;
     }
     .pf-head__btn--ghost:hover:not(:disabled) {
       background: rgba(239, 68, 68, 0.12);
-      color: #fca5a5;
+      color: var(--red-text);
     }
     :root.light .pf-head__btn--ghost { color: #b91c1c; }
 
@@ -2488,7 +2488,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       background: rgba(16, 185, 129, 0.14);
       border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #34d399;
+      color: var(--green-text);
       font-size: 10px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       text-transform: none;

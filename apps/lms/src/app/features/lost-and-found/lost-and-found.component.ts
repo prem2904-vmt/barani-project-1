@@ -130,7 +130,7 @@ interface StrandedStage {
     }
     .pf-lf__badge {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px; font-weight: 700; color: #fbbf24;
+      font-size: 10.5px; font-weight: 700; color: var(--amber-text);
       padding: 5px 10px; border-radius: 999px;
       background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.28);
       white-space: nowrap;

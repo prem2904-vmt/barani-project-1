@@ -14,8 +14,12 @@ export type TilePadding = 'none' | 'sm' | 'md' | 'lg' | 'xl';
       border-radius: 24px;
       border: 1px solid var(--card-border);
       background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      /* saturate + top-edge sheen complete the frosted-glass read (the translucent
+         --card-bg lets the ambient frost through the blur); highlight token is
+         bright in light, faint in dark, so dark mode is unchanged. */
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      box-shadow: inset 0 1px 0 var(--glass-highlight);
       position: relative;
       overflow: hidden;
       transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;

@@ -56,7 +56,7 @@ interface ModeDef {
     <div class="pf-ipp">
       <p class="pf-ipp__eyebrow">Payment mode</p>
       <div class="pf-ipp__modes">
-        @for (m of modes; track m.id) {
+        @for (m of visibleModes(); track m.id) {
           <button
             type="button"
             class="pf-mode pf-mode--compact"
@@ -175,6 +175,15 @@ interface ModeDef {
                     Change
                   </button>
                 </div>
+                <!-- Live balance: current outstanding, and where it lands after
+                     this order is charged to the tab. -->
+                @if (selectedVendor(vid); as sv) {
+                  <div class="pf-ipp__vbalance">
+                    <span class="pf-ipp__vbalance-now">Current: {{ outstandingLabel(sv.outstanding) }}</span>
+                    <span class="pf-ipp__vbalance-arrow" aria-hidden="true">→</span>
+                    <span class="pf-ipp__vbalance-after">After this order: {{ outstandingLabel(sv.outstanding + amount()) }}</span>
+                  </div>
+                }
               } @else {
                 <input
                   class="pf-ipp__input"
@@ -197,8 +206,8 @@ interface ModeDef {
                         >
                           <span>{{ v.name }}</span
                           ><span class="pf-ipp__vbal">{{
-                            v.outstanding | inr
-                          }} due</span>
+                            outstandingLabel(v.outstanding)
+                          }}</span>
                         </button>
                       </li>
                     }
@@ -482,14 +491,14 @@ interface ModeDef {
       }
       .pf-cash__change[data-kind="change"] span,
       .pf-cash__change[data-kind="change"] strong {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-cash__change[data-kind="exact"] {
         background: rgba(52, 211, 153, 0.06);
         border-color: rgba(52, 211, 153, 0.25);
       }
       .pf-cash__change[data-kind="exact"] span {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-cash__change[data-kind="short"] {
         background: rgba(248, 113, 113, 0.1);
@@ -497,7 +506,7 @@ interface ModeDef {
       }
       .pf-cash__change[data-kind="short"] span,
       .pf-cash__change[data-kind="short"] strong {
-        color: #f87171;
+        color: var(--red-text);
       }
       .pf-ipp__wallet,
       .pf-ipp__split {
@@ -515,6 +524,21 @@ interface ModeDef {
         background: var(--glass-bg, rgba(255, 255, 255, 0.04));
         border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
       }
+      .pf-ipp__vbalance {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: rgba(124, 58, 237, 0.08);
+        border: 1px solid rgba(168, 85, 247, 0.22);
+        font-size: 12px;
+      }
+      .pf-ipp__vbalance-now { color: var(--text-secondary, #cbd5e1); }
+      .pf-ipp__vbalance-arrow { color: var(--text-muted, #94a3b8); }
+      .pf-ipp__vbalance-after { color: var(--text-primary, #f1f5f9); font-weight: 600; }
       .pf-ipp__link {
         background: none;
         border: 0;
@@ -562,10 +586,10 @@ interface ModeDef {
         color: var(--text-tertiary);
       }
       .pf-ipp__muted[data-kind="ok"] {
-        color: #34d399;
+        color: var(--green-text);
       }
       .pf-ipp__muted[data-kind="short"] {
-        color: #f87171;
+        color: var(--red-text);
       }
       /* ── Advance (pay-later) block ── */
       .pf-adv {
@@ -685,6 +709,9 @@ export class InlinePaymentPanelComponent implements OnInit {
   readonly busy = input<boolean>(false);
   /** Host blocks Confirm (e.g. discount over the user's cap). */
   readonly blocked = input<boolean>(false);
+  /** When false, the "Pay later" tile is hidden — used when SETTLING an
+   *  existing due (a due is one-time; it must be cleared, not re-deferred). */
+  readonly allowLater = input<boolean>(true);
   readonly confirm = output<InlinePaymentResult>();
 
   readonly modes: ModeDef[] = [
@@ -712,8 +739,13 @@ export class InlinePaymentPanelComponent implements OnInit {
       iconPath: "M12 6v6l4 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
     },
   ];
+  /** Tiles actually shown — drops "Pay later" when settling a due (allowLater=false). */
+  readonly visibleModes = computed(() =>
+    this.allowLater() ? this.modes : this.modes.filter((m) => m.id !== "later"),
+  );
   readonly mode = signal<PayMode>("cash");
   setMode(m: PayMode) {
+    if (m === "later" && !this.allowLater()) return;
     this.mode.set(m);
     if (m === "wallet") this.loadVendors();
   }
@@ -769,6 +801,16 @@ export class InlinePaymentPanelComponent implements OnInit {
   });
   vendorName(id: string): string {
     return this.vendors()?.find((v) => v.id === id)?.name ?? "Vendor";
+  }
+  /** The selected vendor's live wallet, for the in-cart balance line. */
+  selectedVendor(id: string): VendorWallet | undefined {
+    return this.vendors()?.find((v) => v.id === id);
+  }
+  /** Format an outstanding figure: "₹X due" / "₹Y in credit" / "Settled". */
+  outstandingLabel(n: number): string {
+    if (Math.abs(n) < 0.005) return 'Settled';
+    const f = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+    return n > 0 ? `${f.format(n)} due` : `${f.format(-n)} in credit`;
   }
   private loadVendors() {
     if (this.vendors() !== null) return;

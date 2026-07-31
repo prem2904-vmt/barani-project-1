@@ -122,7 +122,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                     </td>
                     <td>
                       <pf-touch-btn size="sm" variant="ghost" (pressed)="removeAb(oi, abi)" title="Remove">
-                        <span style="color: #ef4444;">×</span>
+                        <span style="color: var(--red-text);">×</span>
                       </pf-touch-btn>
                     </td>
                   </tr>

@@ -357,6 +357,13 @@ export class AuthService {
     this.persistSession(session);   // survive cold start regardless of the SDK
     this._mustChangePassword.set(!!data.mustChangePassword);
     this.rememberOrg(data.tenant?.name ?? org);
+    // A fresh credential sign-in supersedes any leftover idle-lock from a prior
+    // session on this device — otherwise the user is greeted by a PIN gate the
+    // instant they log in (and a PIN-less user could be stranded). Clear the
+    // persisted key AND tell the LockService to drop its in-memory lock (its
+    // _locked signal was seeded at construction, before this login).
+    try { localStorage.removeItem('pf.lockedAt'); } catch { /* ignore */ }
+    try { window.dispatchEvent(new Event('pf:fresh-signin')); } catch { /* ignore */ }
     await this.loadProfile();
   }
 

@@ -188,7 +188,7 @@ interface PatientTemplate {
       justify-content: center;
       background: linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(236, 72, 153, 0.08));
       border: 1px solid rgba(236, 72, 153, 0.3);
-      color: #f9a8d4;
+      color: var(--pink-text);
       flex-shrink: 0;
     }
     .pf-channel-cell {

@@ -61,6 +61,23 @@ export const ADMIN_NAV: NavItem = {
   permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
 };
 
+/** Canonical permissions that grant the /frontdesk work area (landing +
+ *  patient/order creation). ONE source of truth — shared by the route guard,
+ *  the static nav item, and the workflow work-area gate — so "can see Front Desk
+ *  in the nav" always equals "can open the Front Desk route". Deliberately does
+ *  NOT include `view_patient` (a read capability lab techs hold) or
+ *  `collect_sample` (which gets its own "Collect" nav entry). */
+export const FRONTDESK_PERMS = ['register_patient', 'create_order'];
+
+/** Landing routes whose real guard is NARROWER than the union of the actions an
+ *  admin may drop into their work area — e.g. a lab tech's `collect_sample`
+ *  action nested in the front-desk area must NOT surface the front-desk landing
+ *  they can't open. menusFromWorkflow stamps the work-area nav item with these
+ *  so the permission filter matches the destination route's guard. */
+export const ROUTE_NAV_PERMS: Record<string, string[]> = {
+  '/frontdesk': FRONTDESK_PERMS,
+};
+
 export const PRIMARY_NAV: NavItem[] = [
   // ── Core workflow pipeline — always the first 5 visible tabs ──────────
   // Order mirrors the actual lab flow: register → collect → analyse →
@@ -76,7 +93,7 @@ export const PRIMARY_NAV: NavItem[] = [
     'M7 22H17',
     'M8 14C9.83846 11.4046 14.1188 11.263 16 14M14 8C14 9.10457 13.1046 10 12 10C10.8954 10 10 9.10457 10 8C10 6.89543 10.8954 6 12 6C13.1046 6 14 6.89543 14 8Z'
   ],
-    permissions: ['register_patient']
+    permissions: FRONTDESK_PERMS
   },
   {
     id: 'sample-collection',
@@ -209,11 +226,20 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // SAME resolver the builder uses — so the top-strip / sidebar match the
     // builder exactly. Unknown/empty falls back to the folder default.
     const route = workAreaRoute(area, cfg);
+    // Stamp the item with the permissions that gate its DESTINATION route, so
+    // the downstream visible() filter hides it from anyone who can't actually
+    // open it. For system routes with a narrower guard (e.g. /frontdesk) use the
+    // canonical set; otherwise the union of the area's action permissions (which
+    // equals the `accessible` gate — a no-op for users who already passed it,
+    // but present so the filter is applied uniformly).
+    const areaPerms = ROUTE_NAV_PERMS[route]
+      ?? [...new Set(accessible.flatMap(a => catalogFor(a.type)?.permissions ?? []))];
     items.push({
       id: area.id,
       label: area.name,
       href: route,
       iconPath: workAreaIconPath(area.icon),
+      permissions: areaPerms.length ? areaPerms : undefined,
     });
     // Sample collection is a repeatable action that's often dropped INTO a
     // system area (e.g. Lab), whose bespoke screen (/lab/my-work) opens directly
@@ -223,7 +249,7 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // actually draw samples).
     if (!collectAdded && canCollect && collectAreas.has(area.id)
         && route !== '/sample-collection' && route !== '/frontdesk/queue') {
-      items.push({ id: 'sample-collection', label: 'Collect', href: '/sample-collection', iconPath: COLLECT_ICON });
+      items.push({ id: 'sample-collection', label: 'Collect', href: '/sample-collection', iconPath: COLLECT_ICON, permissions: ['collect_sample'] });
       collectAdded = true;
     }
   }

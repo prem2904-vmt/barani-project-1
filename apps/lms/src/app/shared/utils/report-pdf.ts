@@ -67,6 +67,11 @@ export interface ReportPdfInput {
    *  Built by `preloadReportImages()` — the renderer is sync, so any
    *  caller that wants uploaded images embedded MUST preload first. */
   imageCache?: Record<string, string>;
+  /** Optional Trendogram charts (serial-result trends) to append after the
+   *  results. Each is a pre-rendered PNG data URL + a title, laid out 2-per-row
+   *  (half-page each), up to 6 per page. Prepared by the caller via
+   *  renderTrendogramPng() before the sync build. */
+  trendograms?: Array<{ title: string; dataUrl: string }>;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -578,6 +583,12 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     doc.text(`Other departments still pending: ${snap.pendingDepts!.join(', ')}`,
       MARGIN_X, cursorY + 10);
     cursorY += 22;
+  }
+
+  // ── Trendogram charts (serial-result trends), 2-per-row, up to 6/page ──
+  if (input.trendograms?.length) {
+    if (cursorY > A4.h - MARGIN_BOTTOM - 200) { cursorY = newPage(doc, practice); }
+    cursorY = renderTrendogramSection(doc, input.trendograms, cursorY, practice);
   }
 
   // ── "Thanks for Reference  ...  ****End of Report****" line ────
@@ -2162,6 +2173,50 @@ function renderCultureSection(
 // ──────────────────────────────────────────────────────────────
 // "Thanks for Reference  ...  ****End of Report****"
 // ──────────────────────────────────────────────────────────────
+
+/**
+ * Trendogram section: serial-result trend charts laid out 2-per-row (each a
+ * half-page-wide cell), up to 6 per page (3 rows). Charts arrive as pre-rendered
+ * PNG data URLs (grid lines baked in by the light-theme ECharts option).
+ */
+function renderTrendogramSection(
+  doc: jsPDF,
+  charts: Array<{ title: string; dataUrl: string }>,
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>,
+): number {
+  const gap = 14;
+  const cellW = (A4.w - 2 * MARGIN_X - gap) / 2;   // half-page cell
+  const cellH = cellW * 0.66;
+
+  // Section heading (centered uppercase + hairline, matching the report style).
+  let y = startY + 12;
+  doc.setFont(PDF_FONT, 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor('#334155');
+  doc.text('TRENDOGRAM — SERIAL RESULT TRENDS', A4.w / 2, y, { align: 'center' });
+  y += 8;
+  doc.setDrawColor('#cbd5e1'); doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, y, A4.w - MARGIN_X, y);
+  y += 14;
+
+  charts.forEach((c, i) => {
+    const col = i % 2;
+    if (col === 0 && i > 0) {
+      // New row. Cap at 6 charts (3 rows) per page; otherwise advance and
+      // page-break if the next row won't fit.
+      if (i % 6 === 0) { y = newPage(doc, practice); }
+      else { y += cellH + gap; if (y > A4.h - MARGIN_BOTTOM - cellH) y = newPage(doc, practice); }
+    }
+    const x = MARGIN_X + col * (cellW + gap);
+    doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.5);
+    doc.roundedRect(x, y, cellW, cellH, 6, 6);
+    try { doc.addImage(c.dataUrl, 'PNG', x + 4, y + 4, cellW - 8, cellH - 8, undefined, 'FAST'); }
+    catch { /* skip an un-embeddable chart */ }
+  });
+
+  return y + cellH + 14;   // advance past the last row
+}
 
 function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number) {
   const y = startY + 12;

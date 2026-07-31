@@ -739,7 +739,7 @@ function newFieldId(): string {
       font-size: 10.5px; font-weight: 700;
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-pkg-pick {
       display: flex; align-items: center; gap: 8px;
@@ -807,7 +807,7 @@ function newFieldId(): string {
       transition: transform 0.18s ease, color 0.18s ease;
       flex-shrink: 0;
     }
-    .param-row__chev--open { transform: rotate(90deg); color: #c4b5fd; }
+    .param-row__chev--open { transform: rotate(90deg); color: var(--violet-text); }
 
     .param-row__name {
       font-size: 13.5px; font-weight: 600;
@@ -822,7 +822,7 @@ function newFieldId(): string {
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
       border: 1px solid rgba(168, 85, 247, 0.36);
-      color: #c4b5fd;
+      color: var(--violet-text);
       flex-shrink: 0;
     }
     .param-row__meta {
@@ -841,12 +841,12 @@ function newFieldId(): string {
     .param-row__pill--req {
       background: rgba(244, 63, 94, 0.14);
       border: 1px solid rgba(244, 63, 94, 0.3);
-      color: #fda4af;
+      color: var(--rose-text);
     }
     .param-row__pill--cond {
       background: rgba(245, 158, 11, 0.14);
       border: 1px solid rgba(245, 158, 11, 0.3);
-      color: #fcd34d;
+      color: var(--amber-text);
     }
 
     .param-row__body {
@@ -874,7 +874,7 @@ function newFieldId(): string {
     .param-row:hover .param-remove { opacity: 0.85; }
     .param-remove:hover {
       background: rgba(239, 68, 68, 0.16);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.36);
       opacity: 1;
     }
@@ -886,7 +886,7 @@ function newFieldId(): string {
     .pf-field-err {
       margin-top: 4px;
       font-size: 11.5px;
-      color: #fda4af;
+      color: var(--rose-text);
     }
 
     .pf-mini-lbl {
@@ -918,7 +918,7 @@ function newFieldId(): string {
       margin-left: 6px;
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.18);
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 10px;
       font-weight: 600;
     }

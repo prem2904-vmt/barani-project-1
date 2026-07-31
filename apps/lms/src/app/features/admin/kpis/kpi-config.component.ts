@@ -515,7 +515,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       justify-content: center;
       border-radius: 8px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 11.5px;
       font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -573,7 +573,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     }
     .pf-kpi-tile__x:hover {
       background: rgba(239, 68, 68, 0.1);
-      color: #fca5a5;
+      color: var(--red-text);
     }
 
     .pf-kpi-empty {

@@ -208,7 +208,7 @@
 }
 .pf-date-custom__clear:hover {
   background: rgba(239, 68, 68, 0.14);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 /* Calendar popover */
@@ -341,7 +341,7 @@
 
 .pf-cal__cell--today {
   border-color: rgba(168, 85, 247, 0.5);
-  color: #c4b5fd;
+  color: var(--violet-text);
 }
 
 .pf-cal__cell--in {
@@ -419,7 +419,7 @@
   display: none;
   align-items: center;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--seg-track);
   padding: 2px;
   border-radius: 9999px;
   border: 1px solid var(--border-secondary);
@@ -562,7 +562,7 @@
   border-radius: 50%;
   border: 1px solid rgba(239, 68, 68, 0.25);
   background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
+  color: var(--red-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;

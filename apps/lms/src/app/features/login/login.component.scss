@@ -251,7 +251,7 @@
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.36);
   border-radius: 12px;
-  color: #fca5a5;
+  color: var(--red-text);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -326,7 +326,7 @@
 }
 :host-context([data-theme="light"]) .pf-auth__blob { opacity: 0.32; filter: blur(110px); }
 :host-context([data-theme="light"]) .pf-auth__form {
-  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.8));
+  background: linear-gradient(180deg, rgba(246,244,252,0.95), rgba(246,244,252,0.8));
   border-color: rgba(15, 23, 42, 0.12);
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
 }
@@ -337,13 +337,13 @@
 :host-context([data-theme="light"]) .pf-auth__hint,
 :host-context([data-theme="light"]) .pf-auth__env { color: #64748b; }
 :host-context([data-theme="light"]) .pf-auth__field-input {
-  background: rgba(255,255,255,0.95);
+  background: rgba(246,244,252,0.95);
   border-color: rgba(15, 23, 42, 0.12);
   color: #0f172a;
 }
 :host-context([data-theme="light"]) .pf-auth__field-input::placeholder { color: rgba(15, 23, 42, 0.36); }
 :host-context([data-theme="light"]) .pf-auth__field-row {
-  background: rgba(255,255,255,0.95);
+  background: rgba(246,244,252,0.95);
   border-color: rgba(15, 23, 42, 0.12);
 }
 :host-context([data-theme="light"]) .pf-auth__error {

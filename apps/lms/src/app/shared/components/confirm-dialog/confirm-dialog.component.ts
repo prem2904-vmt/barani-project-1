@@ -124,7 +124,7 @@ export type ConfirmTone = 'primary' | 'danger';
       border-radius: 12px;
       background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
       box-shadow:
         0 6px 18px rgba(124, 58, 237, 0.25),
         0 0 0 4px rgba(124, 58, 237, 0.06);
@@ -132,7 +132,7 @@ export type ConfirmTone = 'primary' | 'danger';
     .pf-cd-card[data-tone='danger'] .pf-cd-icon {
       background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.08));
       border-color: rgba(239, 68, 68, 0.35);
-      color: #fca5a5;
+      color: var(--red-text);
       box-shadow:
         0 6px 18px rgba(239, 68, 68, 0.25),
         0 0 0 4px rgba(239, 68, 68, 0.06);

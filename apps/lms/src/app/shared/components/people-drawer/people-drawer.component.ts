@@ -257,7 +257,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
     .pf-pd__chat-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-pd__chat-status { margin: 1px 0 0; font-size: 11px; color: var(--text-tertiary); }
     .pf-pd__call-btn { width: 34px; height: 34px; border-radius: 50%;
-      background: rgba(16, 185, 129, 0.18); color: #10b981;
+      background: rgba(16, 185, 129, 0.18); color: var(--green-text);
       border: 1px solid rgba(16, 185, 129, 0.35);
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer; transition: background 0.15s, transform 0.08s; }

@@ -1,5 +1,6 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -71,6 +72,70 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
   private readonly _priority = signal<Priority>('Normal');
+
+  // ── Trendogram: offer to embed serial-result trend charts in the report ──
+  /** Tests this patient has taken 2+ times (from /lab-trends) — eligibility. */
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal<string>('5');
+  /** Explicit per-chart picks from the popup; null = auto (one per test). */
+  readonly trendogramCharts = signal<Array<{ testId: string; parameter: string }> | null>(null);
+  readonly trendPopupOpen = signal(false);
+
+  /** The config merged into order metadata on submit (null when off). */
+  readonly trendogramConfig = computed(() => {
+    if (!this.trendogramOn() || this.trendEligible().length === 0) return null;
+    const explicit = this.trendogramCharts();
+    const charts = explicit ?? this.trendEligible()
+      .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+      .filter(c => !!c.parameter);
+    if (charts.length === 0) return null;
+    return { enabled: true, duration: this.trendogramDuration(), chartType: 'line', charts };
+  });
+  /** How many charts will be included (for the panel label). */
+  readonly trendogramCount = computed(() => this.trendogramConfig()?.charts.length ?? 0);
+
+  constructor() {
+    // Fetch trend eligibility whenever the attached patient changes.
+    effect(() => {
+      const p = this._patient();
+      if (p?.id) this.loadTrendEligible(p.id);
+      else { this.trendEligible.set([]); this.trendogramOn.set(false); this.trendogramCharts.set(null); }
+    });
+  }
+
+  private loadTrendEligible(patientId: string) {
+    this.api.get<{ tests: TrendTest[] }>(`/api/patients/${patientId}/lab-trends`).subscribe({
+      next: r => {
+        this.trendEligible.set(r?.tests ?? []);
+        this.trendogramCharts.set(null);
+        if ((r?.tests?.length ?? 0) === 0) this.trendogramOn.set(false);
+      },
+      error: () => this.trendEligible.set([]),
+    });
+  }
+
+  /** Popup: is a given (test, parameter) chart selected? (null charts = auto:
+   *  each test's first param.) */
+  isChartSelected(testId: string, parameter: string): boolean {
+    const list = this.trendogramCharts();
+    if (list) return list.some(c => c.testId === testId && c.parameter === parameter);
+    const t = this.trendEligible().find(x => x.testId === testId);
+    return t?.parameters[0]?.parameter === parameter;
+  }
+  toggleChart(testId: string, parameter: string) {
+    // Materialize the auto default into an explicit list on first edit.
+    let list = this.trendogramCharts();
+    if (!list) {
+      list = this.trendEligible()
+        .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+        .filter(c => !!c.parameter);
+    }
+    const idx = list.findIndex(c => c.testId === testId && c.parameter === parameter);
+    this.trendogramCharts.set(idx >= 0
+      ? list.filter((_, i) => i !== idx)
+      : [...list, { testId, parameter }]);
+  }
   private readonly _query = signal<string>('');
   private readonly _cartOpen = signal<boolean>(false);
 
@@ -964,6 +1029,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       error: () => this.toasts.error('Could not load patient details')
     });
   }
+  /** Order metadata JSON — appointment link + optional trendogram config. */
+  private buildOrderMetadata(appointmentId: string | null): string | null {
+    const meta: Record<string, unknown> = {};
+    if (appointmentId) meta['appointmentId'] = appointmentId;
+    const tg = this.trendogramConfig();
+    if (tg) meta['trendogram'] = tg;
+    return Object.keys(meta).length ? JSON.stringify(meta) : null;
+  }
+
   goHome() { this.router.navigateByUrl('/frontdesk'); }
 
   onSearchTab(event: Event) {
@@ -1108,6 +1182,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           for (const part of d.splitParts) {
             latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
+        } else if (d.mode === 'wallet') {
+          // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
+          // record the bill payment. Without the /charge the vendor balance
+          // never moves — the bug where a wallet-paid NEW order left the vendor
+          // "Settled" with no transaction (the existing-bill path charged; this
+          // one didn't).
+          if (!d.vendorId) throw new Error('No vendor selected');
+          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
+            amount: bill.totalPayable, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
+          }));
+          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+            amount: bill.totalPayable, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
+          }));
         } else {
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
@@ -1145,12 +1232,45 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.auth.hasPermission('collect_sample') &&
     (!this.viewOrderId() || (this.order()?.samples ?? []).some(s => s.status === 'pending'))
   );
+  /** Switch this (unpaid) order into edit mode to change its tests. */
+  editThisOrder() {
+    const id = this.viewOrderId();
+    if (id) this.router.navigate(['/frontdesk/order'], { queryParams: { editOrderId: id } });
+  }
+
   collectPaidSample() {
     const oid = this.paidOrderId();
     if (!oid) return;
     // After collection, return to the frontdesk landing (not back to the
     // build-order screen).
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: oid, from: '/frontdesk' } });
+  }
+
+  /** After clearing the due here (pay-later billing), if every tube is already
+   *  collected the FD can dispatch right on this screen instead of hopping back
+   *  to the landing. (Dispatch is payment-gated, so this only lights up once the
+   *  balance is 0.) */
+  readonly dispatching = signal(false);
+  readonly canDispatchHere = computed(() => {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    const samples = (this.order()?.samples ?? []) as Array<{ status?: string }>;
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
+  });
+  dispatchOrder() {
+    const oid = this.viewOrderId() ?? this.paidOrderId();
+    if (!oid || this.dispatching()) return;
+    this.dispatching.set(true);
+    this.api.patch(`/api/orders/${oid}/dispatch`, {}).subscribe({
+      next: () => {
+        this.dispatching.set(false);
+        this.toasts.success('Samples dispatched');
+        this.router.navigate(['/frontdesk']);
+      },
+      error: () => {
+        this.dispatching.set(false);
+        this.toasts.error('Failed to dispatch samples');
+      }
+    });
   }
 
   /** Reset the screen for the next patient after a completed order. */
@@ -1349,7 +1469,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
       testIds: this._selected(),
-      metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
+      metadataJson: this.buildOrderMetadata(appointmentId)
     }).subscribe({
       next: order => {
         this._saving.set(false);

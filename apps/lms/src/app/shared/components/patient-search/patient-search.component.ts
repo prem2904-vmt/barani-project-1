@@ -3,15 +3,21 @@ import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
+import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
+import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [AvatarComponent, LoadingLogoComponent],
+  imports: [AvatarComponent, LoadingLogoComponent, BarcodeScannerModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (scanning()) {
+      <pf-barcode-scanner-modal title="Scan patient ABHA / QR"
+        (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
+    }
     <div class="wrap">
       <!-- Pulsing halo behind the field — draws the eye on the Frontdesk
            landing so the patient search is the unambiguous next action.
@@ -46,6 +52,15 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
           <span class="field-spinner">
             <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
           </span>
+        }
+        @if (enableScan) {
+          <button type="button" class="field-scan" aria-label="Scan patient ABHA / QR"
+                  (mousedown)="openScanner(); $event.preventDefault()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+              <rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/>
+            </svg>
+          </button>
         }
         <!-- Trailing-action slot. Projected actions sit at the right edge of
              the field, after the clear/spinner. Frontdesk uses this for the
@@ -210,6 +225,21 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--bg-hover);
       color: var(--text-primary);
     }
+    .field-scan {
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 0;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .field-scan:hover { background: var(--bg-hover); color: var(--color-violet-500, #a855f7); }
     .field-spinner, .panel-spinner {
       width: 18px;
       height: 18px;
@@ -328,7 +358,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: var(--text-tertiary);
     }
-    .row-arrow { color: #c4b5fd; flex-shrink: 0; }
+    .row-arrow { color: var(--violet-text); flex-shrink: 0; }
 
     .panel::-webkit-scrollbar { width: 6px; }
     .panel::-webkit-scrollbar-track { background: transparent; }
@@ -349,6 +379,9 @@ export class PatientSearchComponent {
   protected readonly name = patientDisplayName;
 
   @Input() placeholder = 'Search patient by name, MRN, phone, or ABHA';
+  /** Show a camera/QR scan button in the field — scan an ABHA (QR or number)
+   *  to look the patient up and open them directly. */
+  @Input() enableScan = false;
   @Output() picked = new EventEmitter<Patient>();
   /** Fires once the field has lost focus (after the click-grace delay).
    *  Consumers that reveal the field on demand use it to collapse. */
@@ -362,6 +395,37 @@ export class PatientSearchComponent {
   protected readonly query = signal('');
   protected readonly _focused = signal(false);
   protected readonly _highlight = signal<number>(-1);
+  protected readonly scanning = signal(false);
+
+  openScanner() { this.scanning.set(true); }
+
+  /**
+   * Scan result (ABHA QR or a plain ABHA/ID number) → look the patient up and,
+   * on a confident match, OPEN them straight away (emit picked). Falls back to
+   * showing the results panel when the scan is ambiguous.
+   */
+  onScanned(text: string) {
+    this.scanning.set(false);
+    const abha = extractAbhaNumber(text || '');
+    const term = abha || (text || '').trim();
+    if (!term) return;
+    this.query.set(term);
+    this._focused.set(true);
+    this._loading.set(true);
+    this._results.set([]);
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}&limit=10`).subscribe({
+      next: list => {
+        this._loading.set(false);
+        const arr = list ?? [];
+        const exact = abha ? arr.find(p => (p.abhaId || '').replace(/\D/g, '') === abha) : undefined;
+        if (exact) { this.pick(exact); return; }      // ABHA match → open patient
+        if (arr.length === 1) { this.pick(arr[0]); return; }
+        this._results.set(arr);
+        this._highlight.set(arr.length ? 0 : -1);
+      },
+      error: () => { this._loading.set(false); this._results.set([]); }
+    });
+  }
 
   private readonly _results = signal<Patient[]>([]);
   private readonly _loading = signal(false);

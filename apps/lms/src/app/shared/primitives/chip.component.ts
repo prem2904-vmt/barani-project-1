@@ -37,14 +37,14 @@ export type ChipSize = 'sm' | 'md';
 
     /* Unselected tones --------------------------------------- */
     .t-default { background: var(--glass-bg);            color: var(--text-secondary); border-color: var(--glass-border); }
-    .t-violet  { background: rgba(124, 58, 237, 0.15); color: #c4b5fd; border-color: rgba(124, 58, 237, 0.3); }
-    .t-pink    { background: rgba(236, 72, 153, 0.15); color: #f9a8d4; border-color: rgba(236, 72, 153, 0.3); }
-    .t-emerald { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3); }
-    .t-amber   { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border-color: rgba(245, 158, 11, 0.3); }
-    .t-rose    { background: rgba(239, 68, 68, 0.15);  color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
-    .t-sky     { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
-    .t-mint    { background: rgba(52, 211, 153, 0.15); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.3); }
-    .t-teal    { background: rgba(20, 184, 166, 0.15); color: #5eead4; border-color: rgba(20, 184, 166, 0.3); }
+    .t-violet  { background: rgba(124, 58, 237, 0.15); color: var(--violet-text); border-color: rgba(124, 58, 237, 0.3); }
+    .t-pink    { background: rgba(236, 72, 153, 0.15); color: var(--pink-text); border-color: rgba(236, 72, 153, 0.3); }
+    .t-emerald { background: rgba(16, 185, 129, 0.15); color: var(--green-text); border-color: rgba(16, 185, 129, 0.3); }
+    .t-amber   { background: rgba(245, 158, 11, 0.15); color: var(--amber-text); border-color: rgba(245, 158, 11, 0.3); }
+    .t-rose    { background: rgba(239, 68, 68, 0.15);  color: var(--red-text); border-color: rgba(239, 68, 68, 0.3); }
+    .t-sky     { background: rgba(56, 189, 248, 0.15); color: var(--sky-text); border-color: rgba(56, 189, 248, 0.3); }
+    .t-mint    { background: rgba(52, 211, 153, 0.15); color: var(--green-text); border-color: rgba(52, 211, 153, 0.3); }
+    .t-teal    { background: rgba(20, 184, 166, 0.15); color: var(--teal-text); border-color: rgba(20, 184, 166, 0.3); }
 
     button:hover:not(:disabled) { filter: brightness(1.1); }
 

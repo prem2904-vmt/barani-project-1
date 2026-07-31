@@ -7,7 +7,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { patientDisplayName } from '../../../shared/models/patient.model';
+import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
@@ -156,7 +156,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </pf-touch-btn>
         </div>
         @if (pkgError()) {
-          <p class="text-[12px] mt-3" style="color: #fca5a5;">{{ pkgError() }}</p>
+          <p class="text-[12px] mt-3" style="color: var(--red-text);">{{ pkgError() }}</p>
         }
         @if (pkgPreview(); as pkg) {
           <div class="pkg-preview">
@@ -166,7 +166,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <p class="pkg-preview__sub">
                   {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }}
                   @if (pkg.receivedAt) {
-                    · <span style="color: #6ee7b7;">already received</span>
+                    · <span style="color: var(--green-text);">already received</span>
                   }
                 </p>
               </div>
@@ -281,7 +281,15 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
               <!-- Compact row: avatar + name + Intake button only. -->
               <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'">
                 <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
-                <span class="pf-rs-row__name">{{ g.patientName }}</span>
+                <!-- Desktop view (single line) -->
+                <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo">{{ g.patientInfo }}</span>
+                <!-- Mobile view (split into 2 lines) -->
+                <div class="pf-rs-row__name-group--mobile">
+                  <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex">{{ g.patientNameAndAgeSex }}</span>
+                  @if (g.patientMrn) {
+                    <span class="pf-rs-row__name-sub">{{ g.patientMrn }}</span>
+                  }
+                </div>
                 @if (g.state === 'awaiting') {
                   <span class="pf-rs-row__chip" title="Tubes still at FD counter — ask reception to dispatch.">
                     Awaiting
@@ -299,7 +307,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     <div class="flex items-center gap-3 flex-1 min-w-0">
                       <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                       <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);" [title]="g.patientInfo">{{ g.patientInfo }}</p>
                         <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
                           #{{ g.orderId.slice(0,8) }}
                           @if (g.tubeCount > 0) {
@@ -309,7 +317,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                             <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
                           }
                           @if (g.notReadyCount > 0) {
-                            <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                            <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
                           }
                           @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                         </p>
@@ -330,7 +338,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                       }
                       @case ('awaiting') {
                         <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
-                              style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
+                              style="background: rgba(245, 158, 11, 0.15); color: var(--amber-text);"
                               title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
                           ⚠ Not dispatched yet
                         </span>
@@ -467,6 +475,30 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .pf-rs-row__name-group--mobile { display: none; }
+    
+    @media (max-width: 640px) {
+      .pf-rs-row__name--desktop { display: none; }
+      .pf-rs-row__name-group--mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pf-rs-row__name-main {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pf-rs-row__name-sub {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-tertiary);
+      }
+    }
     .pf-rs-row__btn {
       padding: 5px 14px;
       font-size: 12px;
@@ -489,7 +521,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       letter-spacing: 0.04em;
       border-radius: 9999px;
       background: rgba(245, 158, 11, 0.15);
-      color: #fbbf24;
+      color: var(--amber-text);
       border: 1px solid rgba(245, 158, 11, 0.32);
     }
 
@@ -784,6 +816,9 @@ export class ReceiveSamplesComponent implements OnInit {
     return {
       orderId: o.id,
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+      patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
+      patientMrn: o.patient?.mrn?.trim() || '',
+      patientNameAndAgeSex: o.patient ? formatPatientNameAgeSex(o.patient) : 'Patient',
       tubeCount: dispatched,
       receivedCount: received,
       notReadyCount: notReady,
@@ -1129,4 +1164,22 @@ export class ReceiveSamplesComponent implements OnInit {
       }
     });
   }
+}
+
+function formatPatientNameAgeSex(
+  p: { firstName?: string; fathersName?: string; displayName?: string; age?: number; sex?: string } | null | undefined
+): string {
+  if (!p) return '—';
+  const name = patientDisplayName(p as any);
+  const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
+  const age = p.age != null ? p.age : '—';
+  let sexCode = '—';
+  if (p.sex) {
+    const s = p.sex.trim().toLowerCase();
+    if (s.startsWith('m')) sexCode = 'M';
+    else if (s.startsWith('f')) sexCode = 'F';
+    else if (s.startsWith('o')) sexCode = 'O';
+    else sexCode = p.sex.charAt(0).toUpperCase();
+  }
+  return `${truncatedName} | ${age}/${sexCode}`;
 }
