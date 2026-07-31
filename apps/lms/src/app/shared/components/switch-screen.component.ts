@@ -37,14 +37,34 @@ import { PinDotsComponent } from './pin-dots.component';
   `,
   styles: [`
     .pf-sw-root {
-      position: fixed; inset: 0; z-index: 190;
+      position: fixed;
+      top: calc(-1 * env(safe-area-inset-top, 0px));
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+      left: calc(-1 * env(safe-area-inset-left, 0px));
+      right: calc(-1 * env(safe-area-inset-right, 0px));
+      z-index: 190;
       display: flex; align-items: center; justify-content: center; padding: 20px;
+      --text-primary: #f3f4f6;
+      --text-secondary: #d1d5db;
+      --text-muted: #9ca3af;
+      --bg-card-solid: #13151a;
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --violet-text: #c084fc;
+      --red-text: #fca5a5;
+    }
+    :host-context(html.cap-native) .pf-sw-root {
+      top: calc(-1 * max(env(safe-area-inset-top, 0px), 50px));
+    }
+    @media (min-width: 641px) {
+      :host-context(html.cap-native) .pf-sw-root {
+        top: calc(-1 * max(env(safe-area-inset-top, 0px), 24px));
+      }
     }
     .pf-sw-backdrop {
       position: absolute; inset: 0;
       background:
         radial-gradient(1200px 800px at 50% 100%, rgba(124, 58, 237, 0.15), transparent 60%),
-        rgba(5, 5, 15, 0.82);
+        rgba(5, 5, 15, 0.96);
       backdrop-filter: blur(18px) saturate(1.2);
       -webkit-backdrop-filter: blur(18px) saturate(1.2);
     }

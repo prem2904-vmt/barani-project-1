@@ -192,7 +192,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   // ─── Multi-account switching + PIN (mobile/iPad — mirrors the top strip) ──
-  private readonly lock = inject(LockService);
+  protected readonly lock = inject(LockService);
   protected readonly otherAccounts = computed(() =>
     this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
   protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
