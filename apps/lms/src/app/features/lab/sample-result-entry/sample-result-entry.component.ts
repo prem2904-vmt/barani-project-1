@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
@@ -69,10 +70,33 @@ function defaultResultParam(): TestParameter {
         </button>
         @if (sample(); as s) {
           <div class="pf-sre__hdr-title">
-            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.barcode || '—' }}</p>
-            <h1 class="pf-sre__title">{{ formatPatient(s.order?.patient) }}</h1>
-            <p class="pf-sre__sub">{{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
+            <!-- Sample-focused header: the Sample ID (tube barcode) is the primary
+                 identity; the patient is demoted to a small secondary line. -->
+            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
+            <h1 class="pf-sre__title">{{ s.barcode || '—' }}</h1>
+            <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
+            <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
+            @if (s.tests.length) {
+              <div class="pf-sre__chips">
+                @for (t of s.tests; track t.id) {
+                  <span class="pf-sre__chip">{{ t.test?.shortName || t.test?.name || 'Test' }}</span>
+                }
+              </div>
+            }
           </div>
+        }
+        <!-- Signed-in technician (right of header). -->
+        <span class="pf-sre__tech" title="Signed-in technician">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span class="pf-sre__tech-name">{{ techName() }}</span>
+        </span>
+        <!-- Background autosave indicator (manual Save draft still available). -->
+        @if (autosaving()) {
+          <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot"></span>Saving…</span>
+        } @else if (lastSavedLabel(); as l) {
+          <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span>{{ l }}</span>
         }
         <span class="pf-sre__view" role="group" aria-label="Result view">
           <button type="button" class="pf-sre__view-btn"
@@ -648,6 +672,10 @@ function defaultResultParam(): TestParameter {
       .pf-sre__title  { order: 1; font-size: 16px; margin: 0; line-height: 1.2;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
       .pf-sre__eyebrow { order: 2; font-size: 9.5px; letter-spacing: 0.1em; }
+      .pf-sre__pid { order: 3; font-size: 11px; }
+      /* Keep the phone header compact — chip glimpse + tech pill are desktop-only. */
+      .pf-sre__chips { display: none; }
+      .pf-sre__tech { display: none; }
       .pf-sre__sub { display: none; }
       /* Submit (or undo) lives top-right as an icon; the bottom bar is gone.
          margin-left:auto pins it to the far right even if the title is short,
@@ -704,8 +732,45 @@ function defaultResultParam(): TestParameter {
       color: var(--text-tertiary);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
-    .pf-sre__title { margin: 4px 0 2px; font-size: 22px; font-weight: 700; color: var(--text-primary); }
+    /* Sample ID is the primary identity — big + monospace like an accession no. */
+    .pf-sre__title { margin: 4px 0 2px; font-size: 22px; font-weight: 700; color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.01em; }
     .pf-sre__sub { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+    /* Demoted patient line — small + secondary, always visible. */
+    .pf-sre__pid { margin: 1px 0 0; font-size: 12px; color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Test-kind glimpse chips (tube-as-probe). */
+    .pf-sre__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .pf-sre__chip {
+      display: inline-flex; align-items: center; padding: 2px 9px;
+      border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.5;
+      color: var(--text-secondary);
+      background: color-mix(in srgb, var(--accent, #a855f7) 14%, transparent);
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    }
+
+    /* Signed-in technician (right of header). */
+    .pf-sre__tech {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      align-self: center; padding: 5px 11px; border-radius: 999px;
+      font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+      background: var(--glass-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    }
+    .pf-sre__tech svg { flex: 0 0 auto; opacity: 0.75; }
+    .pf-sre__tech-name { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 640px) { .pf-sre__tech-name { display: none; } }
+
+    /* Background autosave pill. */
+    .pf-sre__autosave {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      align-self: center; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary);
+    }
+    .pf-sre__autosave-dot { width: 7px; height: 7px; border-radius: 50%;
+      background: var(--amber-text, #f59e0b); animation: pf-sre-pulse 1s ease-in-out infinite; }
+    .pf-sre__autosave-dot--ok { background: #10b981; animation: none; }
+    @keyframes pf-sre-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
     .pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
     .pf-sre__msg--err { color: var(--red-text); }
@@ -1190,7 +1255,23 @@ export class SampleResultEntryComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
+  private readonly auth = inject(AuthService);
   protected readonly formatPatient = formatPatientInfo;
+
+  /** Signed-in technician shown on the right of the header. Uses displayName
+   *  (the /me response has no separate login username field today). */
+  readonly techName = computed(() => this.auth.user()?.displayName?.trim() || 'Technician');
+
+  // ── Background autosave (manual Save draft is still available) ──────
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly _autosaving = signal(false);
+  readonly autosaving = this._autosaving.asReadonly();
+  private readonly _lastSavedAt = signal<Date | null>(null);
+  readonly lastSavedLabel = computed(() => {
+    const t = this._lastSavedAt();
+    if (!t) return '';
+    return `Saved ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  });
 
   private readonly _sample = signal<OrderSample | null>(null);
   private readonly _loading = signal<boolean>(true);
@@ -1360,6 +1441,43 @@ export class SampleResultEntryComponent {
   setCulture(testId: string, v: CultureResult) {
     this._values.update(all => ({ ...all, [testId]: v as unknown as Record<string, unknown> }));
     this.scheduleDraftSave();
+    this.scheduleServerAutosave();
+  }
+
+  // ── Background server autosave ────────────────────────────────────
+  // A silent, debounced draft POST so typed-but-unsubmitted results reach
+  // the server without the tech pressing Save draft. Unlike the manual
+  // saveDraft() it does NOT navigate away, does NOT toast, and does NOT
+  // reset the sample (which would disrupt in-progress typing). The manual
+  // Save draft button stays exactly as-is.
+  private scheduleServerAutosave() {
+    if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => { this.autosaveTimer = null; void this.autoSaveDraft(); }, 2500);
+  }
+
+  private async autoSaveDraft() {
+    const s = this._sample();
+    if (!s || this._submitting() || this._savingDraft() || this._autosaving()) return;
+    const all = this._values();
+    const writable = (s.tests ?? []).filter(t => t.status !== 'validated' && t.status !== 'entered');
+    const payload = {
+      results: writable
+        .filter(t => all[t.id] && Object.keys(all[t.id]).length > 0)
+        .map(t => ({ orderTestId: t.id, values: all[t.id], note: undefined }))
+    };
+    if (payload.results.length === 0) return;
+    this._autosaving.set(true);
+    try {
+      await firstValueFrom(
+        this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
+      );
+      this._lastSavedAt.set(new Date());
+      // Keep the local crash-recovery copy until a manual save/submit clears it.
+    } catch {
+      /* silent — the localStorage draft remains the fallback */
+    } finally {
+      this._autosaving.set(false);
+    }
   }
 
   inputKindFor(p: TestParameter): 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text' {
@@ -1430,6 +1548,7 @@ export class SampleResultEntryComponent {
       [testId]: { ...(all[testId] ?? {}), [paramName]: v }
     }));
     this.scheduleDraftSave();
+    this.scheduleServerAutosave();
   }
 
   // ── Local draft persistence ───────────────────────────────────────
@@ -1468,6 +1587,7 @@ export class SampleResultEntryComponent {
 
   private clearDraft() {
     if (this.draftTimer !== null) { clearTimeout(this.draftTimer); this.draftTimer = null; }
+    if (this.autosaveTimer !== null) { clearTimeout(this.autosaveTimer); this.autosaveTimer = null; }
     if (!this.draftKey) return;
     try { localStorage.removeItem(this.draftKey); } catch { /* private mode */ }
   }

@@ -14,7 +14,7 @@ export interface Test {
   /** Profile group tag (e.g. 'LFT', 'Lipid Profile') from the test catalogue. */
   profile?: string | null;
   description?: string;
-  type: 'individual' | 'package';
+  type: 'individual' | 'profile' | 'package';
   flow: 'direct' | 'approval';
   hsnSacCode?: string;
   taxSlab: number;

@@ -45,6 +45,12 @@ export class BranchLabConfigService {
    *  nav entry only renders when this is true (and the user holds an inventory
    *  permission). Defaults to false until the config loads / if absent. */
   readonly inventoryEnabled = computed<boolean>(() => this._config()?.inventoryEnabled ?? false);
+  /** Server-resolved queue focus for this branch. Queue screens (My Work,
+   *  Receive, result-entry list) read this to group by patient vs sample.
+   *  Defaults to 'patient' until the config loads. */
+  readonly queueFocus = computed<'patient' | 'sample'>(() => this._config()?.effectiveQueueFocus ?? 'patient');
+  /** True when this branch's queues are sample-focused (rows keyed by Sample ID). */
+  readonly sampleFocused = computed<boolean>(() => this.queueFocus() === 'sample');
 
   ensureLoaded(): void {
     if (this._loaded() || this._loading) return;

@@ -8,11 +8,13 @@ import {
   OnChanges,
   Output,
   ViewChild,
+  inject,
 } from '@angular/core';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 
 export interface TubeSpec {
   label: string;
@@ -74,32 +76,25 @@ export function tubeSpec(s: OrderSample): TubeSpec {
         </span>
       </div>
 
-      <!-- White label preview area -->
+      <!-- White label preview area. Fields: Name · Age/Sex, MRN, Sample ID.
+           Codes (barcode / QR / both per admin) with the dept code beneath. -->
       <div class="pf-lc__preview" [attr.data-color]="spec.color">
         <div class="pf-lc__stripe"></div>
-        <div class="pf-lc__preview-grid">
-          <!-- Left: patient info + barcode -->
-          <div class="pf-lc__preview-left">
-            <p class="pf-lc__pname">
-              {{ patientName }}
-              @if (agesex) { <span class="pf-lc__agesex"> {{ agesex }}</span> }
-            </p>
-            <p class="pf-lc__demo">
-              MRN {{ mrnStr }}
-              @if (dobStr) { · DOB {{ dobStr }} }
-            </p>
-            <div class="pf-lc__bar-wrap">
-              <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
-            </div>
+        <p class="pf-lc__pname">
+          {{ patientName }}
+          @if (agesex) { <span class="pf-lc__agesex"> {{ agesex }}</span> }
+        </p>
+        <p class="pf-lc__demo">MRN {{ mrnStr }}</p>
+        <p class="pf-lc__sid">{{ barcode }}</p>
+        <div class="pf-lc__codes">
+          <div class="pf-lc__bar-wrap" [class.pf-lc__hidden]="!showBarcode">
+            <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
           </div>
-          <!-- Right: QR + dept code + volume -->
-          <div class="pf-lc__preview-right">
-            <canvas #qrCanvas class="pf-lc__qr" [attr.aria-label]="'QR ' + barcode"></canvas>
-            <span class="pf-lc__deptcode">{{ deptCode }}</span>
-            <span class="pf-lc__vol">{{ spec.volume }}</span>
+          <div class="pf-lc__qr-wrap" [class.pf-lc__hidden]="!showQr">
+            <canvas #qrCanvas class="pf-lc__qr" [attr.aria-label]="'QR ' + qrValue"></canvas>
           </div>
         </div>
-        <p class="pf-lc__bartext">{{ barcode }}</p>
+        <span class="pf-lc__deptcode">{{ deptCode }}</span>
       </div>
 
       <!-- Tests in this tube -->
@@ -258,18 +253,6 @@ export function tubeSpec(s: OrderSample): TubeSpec {
     .pf-lc__preview[data-color='green']    .pf-lc__stripe { background: #6ee7b7; }
     .pf-lc__preview[data-color='container'] .pf-lc__stripe { background: #e5e7eb; }
 
-    .pf-lc__preview-grid {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: start;
-    }
-    .pf-lc__preview-left {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
     .pf-lc__pname {
       margin: 0;
       font-size: 13.5px;
@@ -283,56 +266,55 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       color: #374151;
     }
     .pf-lc__demo {
-      margin: 0;
+      margin: 2px 0 0;
       font-size: 10.5px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: #475569;
       letter-spacing: 0.02em;
     }
-    .pf-lc__bar-wrap {
-      margin-top: 6px;
-      overflow: hidden;
+    /* Sample ID — the label's primary identifier, bold above the codes. */
+    .pf-lc__sid {
+      margin: 1px 0 0;
+      font-size: 12px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: #0f172a;
+      letter-spacing: 0.04em;
     }
+    /* Codes row: barcode and/or QR, centered. Hidden ones collapse. */
+    .pf-lc__codes {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 8px;
+    }
+    .pf-lc__hidden { display: none !important; }
+    .pf-lc__bar-wrap { overflow: hidden; }
     .pf-lc__bar {
       display: block;
-      height: 36px;
+      height: 40px;
       width: auto;
       max-width: 100%;
     }
-
-    .pf-lc__preview-right {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      flex-shrink: 0;
-    }
+    .pf-lc__qr-wrap { flex-shrink: 0; line-height: 0; }
     .pf-lc__qr {
       display: block;
       width: 76px;
       height: 76px;
       image-rendering: pixelated;
     }
+    /* Dept code — centered directly under the code(s). */
     .pf-lc__deptcode {
-      font-size: 10px;
+      display: block;
+      text-align: center;
+      margin-top: 5px;
+      font-size: 11px;
       font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: #374151;
-    }
-    .pf-lc__vol {
-      font-size: 9.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #6b7280;
-    }
-
-    .pf-lc__bartext {
-      margin: 6px 0 0;
-      font-size: 9px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #64748b;
-      letter-spacing: 0.04em;
     }
     .pf-lc__out {
       margin-left: 6px;
@@ -511,11 +493,25 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   @ViewChild('barSvg', { static: true }) barSvg!: ElementRef<SVGElement>;
   @ViewChild('qrCanvas', { static: true }) qrCanvas!: ElementRef<HTMLCanvasElement>;
 
+  private readonly labelCfg = inject(BranchLabConfigService);
+  constructor() { this.labelCfg.ensureLoaded(); }
+
   get spec(): TubeSpec { return tubeSpec(this.sample); }
   get num(): string { return String(this.index + 1).padStart(2, '0'); }
   get deptName(): string { return (this.sample.department?.name ?? 'Sample').toUpperCase(); }
   get deptCode(): string { return (this.sample.department?.code ?? '').toUpperCase(); }
+  /** The Sample ID (e.g. MIC-2607-00001) — what the 1D barcode encodes. */
   get barcode(): string { return this.sample.barcode ?? this.sample.id; }
+  /** QR payload = MRN + Sample ID (the 2D code carries both; the 1D barcode
+   *  stays short with just the Sample ID). Drops the MRN when absent. */
+  get qrValue(): string {
+    const mrn = this.patient?.mrn?.trim();
+    return mrn ? `${mrn}|${this.barcode}` : this.barcode;
+  }
+  /** Admin choice: 'barcode' | 'qr' | 'both' (default both). */
+  get codeMode(): 'barcode' | 'qr' | 'both' { return this.labelCfg.config()?.labelCodeMode ?? 'both'; }
+  get showBarcode(): boolean { return this.codeMode !== 'qr'; }
+  get showQr(): boolean { return this.codeMode !== 'barcode'; }
   get isOutsourced(): boolean { return !!this.sample.outsourcedVendorId; }
   get patientName(): string { return this.patient?.displayName ?? 'Patient'; }
 
@@ -543,18 +539,20 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   private render(): void {
     const code = this.barcode;
     if (!code) return;
+    // 1D barcode encodes ONLY the Sample ID (short → keeps the bars narrow).
     try {
       JsBarcode(this.barSvg.nativeElement, code, {
         format: 'CODE128',
         displayValue: false,
         margin: 0,
-        height: 36,
-        width: 1.3,
+        height: 40,
+        width: 1.4,
         background: '#ffffff',
         lineColor: '#0f172a',
       });
     } catch { /* ignore un-encodable strings */ }
-    QRCode.toCanvas(this.qrCanvas.nativeElement, code, {
+    // QR encodes MRN + Sample ID.
+    QRCode.toCanvas(this.qrCanvas.nativeElement, this.qrValue, {
       margin: 1,
       width: 76,
       color: { dark: '#0f172a', light: '#ffffff' },

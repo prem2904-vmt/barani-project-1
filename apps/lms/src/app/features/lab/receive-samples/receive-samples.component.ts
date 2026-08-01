@@ -2,8 +2,10 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -135,6 +137,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                    (keydown.enter)="previewPackage()"
                    autocomplete="off"/>
           </div>
+          @if (!scan.manualEntry()) {
           <pf-touch-btn size="md" variant="secondary"
                         (pressed)="openPackageScanner()"
                         title="Open camera to scan the package QR">
@@ -149,6 +152,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </span>
             Scan QR
           </pf-touch-btn>
+          }
           <pf-touch-btn size="md" variant="primary"
                         [disabled]="!pkgCode() || pkgBusy()"
                         (pressed)="previewPackage()">
@@ -278,18 +282,26 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
           @for (g of dispatchedOrders(); track g.orderId) {
             @if (embedded) {
-              <!-- Compact row: avatar + name + Intake button only. -->
+              <!-- Compact row: avatar + name + Intake button. Sample-focused →
+                   Sample ID is the headline, patient demoted below. -->
               <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'">
                 <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
-                <!-- Desktop view (single line) -->
-                <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo">{{ g.patientInfo }}</span>
-                <!-- Mobile view (split into 2 lines) -->
-                <div class="pf-rs-row__name-group--mobile">
-                  <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex">{{ g.patientNameAndAgeSex }}</span>
-                  @if (g.patientMrn) {
-                    <span class="pf-rs-row__name-sub">{{ g.patientMrn }}</span>
-                  }
-                </div>
+                @if (!labCfg.sampleFocused()) {
+                  <!-- Desktop view (single line) -->
+                  <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo">{{ g.patientInfo }}</span>
+                  <!-- Mobile view (split into 2 lines) -->
+                  <div class="pf-rs-row__name-group--mobile">
+                    <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex">{{ g.patientNameAndAgeSex }}</span>
+                    @if (g.patientMrn) {
+                      <span class="pf-rs-row__name-sub">{{ g.patientMrn }}</span>
+                    }
+                  </div>
+                } @else {
+                  <span class="pf-rs-row__id">
+                    <span class="pf-rs-row__sample">{{ g.sampleId || ('#' + g.orderId.slice(0,8)) }}@if (g.totalTubes > 1) { · {{ g.totalTubes }} tubes}</span>
+                    <span class="pf-rs-row__patient">{{ g.patientName }}</span>
+                  </span>
+                }
                 @if (g.state === 'awaiting') {
                   <span class="pf-rs-row__chip" title="Tubes still at FD counter — ask reception to dispatch.">
                     Awaiting
@@ -307,6 +319,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     <div class="flex items-center gap-3 flex-1 min-w-0">
                       <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                       <div class="flex-1 min-w-0">
+                        @if (!labCfg.sampleFocused()) {
                         <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);" [title]="g.patientInfo">{{ g.patientInfo }}</p>
                         <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
                           #{{ g.orderId.slice(0,8) }}
@@ -321,6 +334,27 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                           }
                           @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                         </p>
+                        } @else {
+                        <!-- Sample-focused: this order groups several tubes with no
+                             single sample id, so the tube summary (order # · N tubes)
+                             is the headline and the patient name is demoted below. -->
+                        <p class="font-semibold text-[15px] font-mono" style="color: var(--text-primary);">
+                          #{{ g.orderId.slice(0,8) }} · {{ g.totalTubes }} tube{{ g.totalTubes === 1 ? '' : 's' }}
+                        </p>
+                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                          {{ g.patientName }}
+                          @if (g.tubeCount > 0) {
+                            <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
+                          }
+                          @if (g.receivedCount > 0) {
+                            <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
+                          }
+                          @if (g.notReadyCount > 0) {
+                            <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
+                          }
+                          @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                        </p>
+                        }
                       </div>
                     </div>
                     @switch (g.state) {
@@ -402,6 +436,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <pf-avatar [name]="s.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
 
                 <div class="flex-1 min-w-0">
+                  @if (!labCfg.sampleFocused()) {
                   <p class="font-semibold text-[14.5px] truncate"
                      style="color: var(--text-primary);">{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
@@ -409,6 +444,18 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     {{ s.department?.name }} · {{ s.barcode }}
                     · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
                   </p>
+                  } @else {
+                  <!-- Sample-focused: the tube barcode is the bold headline and the
+                       patient name is demoted below. Falls back to the patient name
+                       as headline only when this tube carries no barcode. -->
+                  <p class="font-semibold text-[14.5px] font-mono truncate"
+                     style="color: var(--text-primary);">{{ s.barcode || (s.order?.patient?.displayName ?? 'Patient') }}</p>
+                  <p class="text-[11.5px] font-mono mt-0.5 truncate"
+                     style="color: var(--text-tertiary);">
+                    {{ s.order?.patient?.displayName ?? 'Patient' }} · {{ s.department?.name }}
+                    · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
+                  </p>
+                  }
                 </div>
 
                 <pf-touch-btn size="sm" variant="primary" (pressed)="receiveOne(s.id)">
@@ -476,7 +523,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       text-overflow: ellipsis;
     }
     .pf-rs-row__name-group--mobile { display: none; }
-    
+
     @media (max-width: 640px) {
       .pf-rs-row__name--desktop { display: none; }
       .pf-rs-row__name-group--mobile {
@@ -498,6 +545,18 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         font-weight: 500;
         color: var(--text-tertiary);
       }
+    }
+
+    /* Sample-focused compact row: Sample ID headline + demoted patient. */
+    .pf-rs-row__id { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+    .pf-rs-row__sample {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px; font-weight: 700; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-rs-row__patient {
+      font-size: 11px; color: var(--text-tertiary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .pf-rs-row__btn {
       padding: 5px 14px;
@@ -789,6 +848,8 @@ export class ReceiveSamplesComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
+  protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly scan = inject(ScanService);
 
   private readonly _inTransit = signal<OrderSample[]>([]);
   private readonly _dispatched = signal<Order[]>([]);
@@ -803,6 +864,8 @@ export class ReceiveSamplesComponent implements OnInit {
     const received = samples.filter(s => s.status === 'received' || s.status === 'processing').length;
     const notReady = samples.filter(s => s.status === 'pending' || s.status === 'collected').length;
     const total = samples.length;
+    // Representative sample id for sample-focused rows — prefer a dispatched tube.
+    const primarySample = samples.find(s => s.status === 'dispatched') ?? samples[0];
     // State drives the action button + the row badge:
     //  • 'ready'         — at least one dispatched tube → enable Receive
     //  • 'partial'       — some dispatched, some already received → enable Receive (intake the rest)
@@ -823,6 +886,7 @@ export class ReceiveSamplesComponent implements OnInit {
       receivedCount: received,
       notReadyCount: notReady,
       totalTubes: total,
+      sampleId: primarySample?.barcode ?? null,
       state,
       testLabels: this.uniqueTestNames(o)
     };
@@ -909,6 +973,8 @@ export class ReceiveSamplesComponent implements OnInit {
   ngOnInit() {
     this.refresh();
     this.tenantState.ensureLoaded();
+    // Per-branch queue focus (patient vs sample). Additive presentation only.
+    this.labCfg.ensureLoaded();
   }
 
   refresh() {

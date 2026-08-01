@@ -577,14 +577,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   // Filtered lists -------------------------------------------
   // Show only appointments that are still actionable on the desk.
-  // Checked-in patients have moved to In-progress (the order takes over);
-  // cancelled appointments shouldn't clutter the queue. Both stay
-  // visible on the calendar route, just not on the operational landing.
+  // Show the actionable appointments on the operational landing: booked (needs
+  // check-in), confirmed, and checked-in. Checked-in ones STAY here (as a
+  // "Resume order" card) because check-in no longer auto-creates an order — if
+  // the FD backs out of the order page the patient must still be reachable.
+  // Terminal states (completed / cancelled / no-show) drop off (they remain on
+  // the calendar route), as do home collections.
   readonly visibleAppointments = computed(() =>
     this._appointments().filter(a =>
       this.inApptRange(a.appointmentDate)
-      && a.status !== 'checked_in'
       && a.status !== 'cancelled'
+      && a.status !== 'completed'
+      && a.status !== 'no_show'
       && a.collectionType !== 'home_collection'
     )
   );
@@ -2078,6 +2082,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         });
       },
       error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Already checked-in but the order wasn't created yet → jump back to the
+   *  order page with the pre-booked tests pre-filled to finish it. */
+  resumeAppointmentOrder(a: Appointment) {
+    this.router.navigate(['/frontdesk/order'], {
+      queryParams: { patientId: a.patientId, appointmentId: a.id }
     });
   }
 

@@ -446,6 +446,8 @@
                       }
                       @if (a.status === 'booked') {
                       <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Check-in</button>
+                      } @else if (a.status === 'checked_in') {
+                      <button type="button" class="pf-ghostbtn press" (click)="resumeAppointmentOrder(a)">Resume order</button>
                       }
                     </div>
                   </div>

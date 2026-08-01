@@ -57,6 +57,58 @@ interface AutoAssignConfig {
         </div>
       </pf-tile>
 
+      <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Sample identification</h3>
+        <p class="pf-ls__hint">
+          How techs identify a sample on the lab screens. <strong>Scan</strong> shows the camera
+          QR/barcode scanner (a hardware scanner also types into the field). <strong>Manual</strong>
+          hides the scanner and shows the <strong>sample number</strong> to read and type by hand.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of scanModeOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="scanMode() === opt.value"
+                    (click)="setScanMode(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      </pf-tile>
+
+      <!-- Queue focus (per-branch) — how the lab worklists group work. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Queue focus</h3>
+        <p class="pf-ls__hint">
+          How the technician worklist, lab intake and result-entry queues group work.
+          <strong>Patient</strong> lists patients with their tests nested; <strong>Sample</strong>
+          keys each row by Sample ID (patient shown small). <strong>Auto</strong> decides from this
+          branch's lab spaces — one space is patient-focused, multiple spaces is sample-focused.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of queueFocusOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="queueFocusMode() === opt.value"
+                    (click)="setQueueFocusMode(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+        @if (queueFocusMode() === 'auto') {
+          <p class="pf-ls__hint" style="margin-top: 10px;">
+            Auto currently resolves to
+            <strong style="color: var(--text-primary);">{{ effectiveQueueFocus() === 'sample' ? 'Sample-focused' : 'Patient-focused' }}</strong>
+            for this branch.
+          </p>
+        }
+      </pf-tile>
+
       <!-- Sample ID — short sample barcode number width (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Sample ID</h3>
@@ -131,6 +183,27 @@ interface AutoAssignConfig {
           @for (opt of gateOptions; track opt.value) {
             <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="paymentGateStage() === opt.value"
                     (click)="setPaymentGateStage(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      </pf-tile>
+
+      <!-- Specimen label codes: barcode / QR / both. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Specimen label codes</h3>
+        <p class="pf-ls__hint">
+          Which machine-readable code prints on each tube label. The barcode encodes the
+          <strong>Sample ID</strong>; the QR encodes the <strong>MRN + Sample ID</strong>.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of labelCodeOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labelCodeMode() === opt.value"
+                    (click)="setLabelCodeMode(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
                 <span class="pf-ls__gate-t">{{ opt.label }}</span>
@@ -399,6 +472,25 @@ export class LabSettingsComponent implements OnInit {
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
 
+  // ── Sample identification mode (tenant-wide): scan (QR) vs manual entry ──
+  /** Current mode; anything other than 'manual' (incl. absent/empty) = 'scan'. */
+  readonly scanMode = computed<'scan' | 'manual'>(() =>
+    this.tenantState.tenant()?.scanMode === 'manual' ? 'manual' : 'scan');
+  protected readonly scanModeOptions: Array<{ value: 'scan' | 'manual'; label: string; desc: string }> = [
+    { value: 'scan', label: 'Scan (QR / barcode)', desc: 'Camera scanner on the lab screens; hardware scanners also type into the field (default).' },
+    { value: 'manual', label: 'Manual entry', desc: 'No QR — the sample number is shown and typed by hand.' },
+  ];
+
+  // ── Queue focus (per-branch): patient vs sample vs auto ──
+  protected readonly queueFocusMode = signal<'auto' | 'patient' | 'sample'>('auto');
+  /** Server-resolved focus when mode is 'auto' (from this branch's space count). */
+  protected readonly effectiveQueueFocus = signal<'patient' | 'sample'>('patient');
+  protected readonly queueFocusOptions: Array<{ value: 'auto' | 'patient' | 'sample'; label: string; desc: string }> = [
+    { value: 'auto', label: 'Auto', desc: "Decide from this branch's lab spaces (1 → patient, 2+ → sample)." },
+    { value: 'patient', label: 'Patient-focused', desc: 'Rows are patients; their tests nested underneath.' },
+    { value: 'sample', label: 'Sample-focused', desc: 'Rows keyed by Sample ID; patient shown as secondary.' },
+  ];
+
   // ── Sample ID — running-number width of the short sample barcode ──
   /** Editable number width (1–9). Seeded from the tenant once it loads. */
   protected readonly sampleNumberWidth = signal(5);
@@ -427,6 +519,13 @@ export class LabSettingsComponent implements OnInit {
   ];
   protected readonly requireValidation = signal(false);
   protected readonly showPaymentsDue = signal(true);
+  /** Which code(s) print on a specimen label: barcode | qr | both. */
+  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'both'>('both');
+  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'both'; label: string; desc: string }> = [
+    { value: 'both', label: 'Barcode + QR', desc: 'Print both a 1D barcode and a QR on every label (default).' },
+    { value: 'barcode', label: 'Barcode only', desc: 'Print only the 1D barcode (encodes the Sample ID).' },
+    { value: 'qr', label: 'QR only', desc: 'Print only the QR (encodes the MRN + Sample ID).' },
+  ];
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
@@ -449,6 +548,27 @@ export class LabSettingsComponent implements OnInit {
     this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).subscribe({
       next: () => this.toasts.success(msg),
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setLabelCodeMode(v: 'barcode' | 'qr' | 'both') {
+    const prev = this.labelCodeMode();
+    if (prev === v) return;
+    this.labelCodeMode.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).subscribe({
+      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label code format updated'); },
+      error: e => { this.labelCodeMode.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setQueueFocusMode(v: 'auto' | 'patient' | 'sample') {
+    const prev = this.queueFocusMode();
+    if (prev === v) return;
+    this.queueFocusMode.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).subscribe({
+      next: cfg => {
+        if (cfg) { this.labCfg.update(cfg); this.effectiveQueueFocus.set(cfg.effectiveQueueFocus ?? 'patient'); }
+        this.toasts.success('Queue focus updated');
+      },
+      error: e => { this.queueFocusMode.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
@@ -474,9 +594,12 @@ export class LabSettingsComponent implements OnInit {
       next: c => {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);
         this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
+        this.labelCodeMode.set(c?.labelCodeMode ?? 'both');
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
+        this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
+        this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
       }
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
@@ -569,6 +692,16 @@ export class LabSettingsComponent implements OnInit {
   setAllowNoScan(v: boolean) {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
       next: t => this.tenantState.update(t),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Tenant-wide scan vs manual sample-identification mode. Broadcasts via
+   *  tenantState so the lab screens flip immediately (no reload). */
+  setScanMode(v: 'scan' | 'manual') {
+    if (this.scanMode() === v) return;
+    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success(v === 'manual' ? 'Manual entry — scanner hidden on lab screens' : 'Scan mode — QR/barcode scanner shown'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }

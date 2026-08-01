@@ -1,6 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -939,7 +940,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       </button>
     </section>
 
-    @if (!verified() && orderTest()) {
+    @if (!resultEntryUnlocked() && orderTest()) {
       <pf-barcode-scanner-modal
         title="Scan vial to open result entry"
         [expectedBarcode]="expectedScanBarcode()"
@@ -2624,6 +2625,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly scan = inject(ScanService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;
@@ -2980,6 +2982,10 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // ── Re-scan gate ──────────────────────────────────────
   private readonly _verified = signal(false);
   readonly verified = this._verified.asReadonly();
+  // In manual mode there is no vial QR to scan, so the re-scan gate must not
+  // block: manual tenants count as always-verified. In scan mode this is
+  // exactly `_verified()`, so that path is unchanged.
+  readonly resultEntryUnlocked = computed(() => this._verified() || this.scan.manualEntry());
   readonly expectedScanBarcode = computed(() => this._ot()?.subOrder?.barcode ?? '');
 
   onResumeScanMatched(code: string) {

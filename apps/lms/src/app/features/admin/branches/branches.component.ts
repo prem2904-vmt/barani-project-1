@@ -12,7 +12,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 /** A physical lab space within a branch; departments are assigned to one. */
-interface LabSpace { id: string; branchId: string; name: string; order: number; }
+interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
 
 /** A standard department from the catalog (draggable into a space to create it). */
 interface CatalogDept { name: string; code: string; }
@@ -337,6 +337,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
                             <input class="pf-lane-name-input" [value]="sp.name" (change)="renameSpace(sp, $any($event.target).value)" placeholder="Space name" aria-label="Space name" />
                             <svg class="pf-lane-edit-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4Zm11-13 4 4"/></svg>
                           </span>
+                          <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!sp.code" [value]="sp.code || ''" (change)="setSpaceCode(sp, $any($event.target).value)" maxlength="16" placeholder="CODE" aria-label="Space code — prefixes sample IDs" title="Sample-ID prefix (e.g. MIC → MIC-2607-00001)" />
                           <button type="button" class="pf-lane-del press" (click)="deleteSpace(sp)" aria-label="Delete space">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
                           </button>
@@ -604,6 +605,11 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
     .pf-lane-name-input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 12.5px; font-weight: 650; color: var(--text-primary); padding: 3px 2px; }
     .pf-lane-edit-icon { color: var(--text-muted); flex-shrink: 0; }
     .pf-lane-edit:focus-within .pf-lane-edit-icon { color: var(--violet-text); }
+    .pf-lane-code-input { flex-shrink: 0; width: 64px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 7px; outline: none; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-primary); padding: 3px 6px; text-align: center; }
+    .pf-lane-code-input::placeholder { color: var(--text-muted); font-weight: 600; letter-spacing: 0.1em; }
+    .pf-lane-code-input:focus { border-color: var(--violet-text); }
+    /* No code yet → tint the field so admins notice it prefixes the sample ID. */
+    .pf-lane-code-input--missing { border-color: rgba(245, 158, 11, 0.55); }
     .pf-add-space-lane {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
       min-height: 90px; border: 1.5px dashed var(--glass-border, rgba(255,255,255,0.2)); border-radius: 12px;
@@ -902,6 +908,12 @@ export class BranchesComponent implements OnInit {
     this.renameSpaceTimers[sp.id] = setTimeout(() => {
       this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { name }).subscribe({ error: () => {} });
     }, 500);
+  }
+  /** The space code prefixes every sample ID drawn in this space (MIC → MIC-2607-00001). */
+  setSpaceCode(sp: LabSpace, raw: string) {
+    const code = (raw || '').trim().toUpperCase();
+    this._spaces.update(l => l.map(s => s.id === sp.id ? { ...s, code } : s));
+    this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { code }).subscribe({ error: () => {} });
   }
   deleteSpace(sp: LabSpace) {
     this._spaces.update(l => l.filter(s => s.id !== sp.id));

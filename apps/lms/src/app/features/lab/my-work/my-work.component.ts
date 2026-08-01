@@ -3,9 +3,11 @@ import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, effec
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
@@ -149,7 +151,7 @@ const COUNTERS: CounterSpec[] = [
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
-                 [placeholder]="'Scan a barcode or type a sample ID (e.g. ' + sampleIdExample() + ')…'"
+                 [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
                  class="pf-scan__input"/>
           <button type="button"
                   class="pf-scan__manual press"
@@ -158,6 +160,7 @@ const COUNTERS: CounterSpec[] = [
                   aria-label="Toggle manual entry">
             @if (manualMode()) { Close manual } @else { Manual entry }
           </button>
+          @if (!scanSvc.manualEntry()) {
           <button type="button"
                   class="pf-scan__camera press"
                   (click)="openBarSearchScanner()"
@@ -168,6 +171,7 @@ const COUNTERS: CounterSpec[] = [
               <circle cx="12" cy="13" r="3.5"/>
             </svg>
           </button>
+          }
         </div>
         <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
           Open
@@ -342,10 +346,11 @@ const COUNTERS: CounterSpec[] = [
                 <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
               </svg>
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
-                     [placeholder]="'Scan or type ' + sampleIdExample()"
+                     [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
                      (keydown.enter)="intakeReceive()" />
+              @if (!scanSvc.manualEntry()) {
               <button type="button" class="pf-mw-scan__cam press" (click)="openIntakeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -355,6 +360,7 @@ const COUNTERS: CounterSpec[] = [
                   <circle cx="12" cy="13" r="3.5"/>
                 </svg>
               </button>
+              }
               <button type="button" class="pf-mw-scan__btn press"
                       [disabled]="!intakeScanInput().trim()"
                       (click)="intakeReceive()">Receive</button>
@@ -448,6 +454,7 @@ const COUNTERS: CounterSpec[] = [
 
             <!-- Group by patient/order so a single patient with 3 tests is one
                  expandable card, not 3 floating cards across columns. -->
+            @if (!labCfg.sampleFocused()) {
             <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
@@ -580,6 +587,108 @@ const COUNTERS: CounterSpec[] = [
                 </li>
               }
             </ul>
+            } @else {
+            <!-- Sample-focused: one row PER TUBE across ALL patients, keyed by
+                 Sample ID. The tube (sample) is the bold headline; the patient
+                 is demoted to a small secondary line. Same tests + same actions
+                 and CSS as the patient-first tube tile. -->
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              @for (tube of sampleRows(bucket.items); track tube.sampleId) {
+                <li>
+                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                    <div class="rounded-lg p-2.5 pf-tube-tile"
+                         [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
+                         [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                         style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
+                      <!-- Primary bold line: the Sample ID (the tube) — the same
+                           code shown on the patient-first tube tile. -->
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[15px] font-semibold font-mono flex-1 truncate" style="color: var(--text-primary);">
+                          {{ tube.barcode || tube.sampleId }}
+                        </span>
+                        @if (tube.hasDraft && !tube.allDone) {
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
+                                style="background: rgba(245, 158, 11, 0.16); color: var(--amber-text);">Draft</span>
+                        }
+                        @if (tab() === 'service_queue' && tube.assignedTo) {
+                          <span class="px-1.5 py-0.5 text-[10px] font-medium rounded truncate" style="max-width: 110px;
+                                background: rgba(139, 92, 246, 0.16); color: var(--violet-text);">{{ assigneeName(tube.assignedTo) }}</span>
+                        }
+                      </div>
+                      <!-- Secondary small line: patient demoted (Name | age/sex |
+                           P-ID) alongside dept + test count. -->
+                      <p class="text-[12px] font-mono mb-1.5" style="color: var(--text-tertiary);">
+                        {{ tube.patientInfo }} · {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                      </p>
+
+                      @if (tube.rejections.length > 0) {
+                        <div class="pf-tube-reject mb-2">
+                          <div class="pf-tube-reject__head">
+                            <span class="pf-tube-reject__icon" aria-hidden="true">↻</span>
+                            <span class="pf-tube-reject__title">
+                              Sent back for re-entry
+                              @if (tube.rejections.length > 1) { · {{ tube.rejections.length }} tests }
+                            </span>
+                          </div>
+                          <ul class="pf-tube-reject__list">
+                            @for (r of tube.rejections; track r.testName) {
+                              <li class="pf-tube-reject__item">
+                                <span class="pf-tube-reject__test">{{ r.testName }}</span>
+                                <span class="pf-tube-reject__reason">{{ r.reason }}</span>
+                              </li>
+                            }
+                          </ul>
+                        </div>
+                      }
+
+                      <ul class="space-y-0.5 mb-2 pl-1">
+                        @for (t of tube.tests; track t.id) {
+                          <li class="flex items-center gap-2 text-[12.5px]">
+                            <span class="flex-1 truncate" style="color: var(--text-primary);">→ {{ t.test?.name ?? 'Test' }}</span>
+                            @if (t.status === 'validated') {
+                              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                    style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓</span>
+                            } @else if (t.status === 'entered') {
+                              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                    style="background: rgba(168, 85, 247, 0.15); color: var(--violet-text);">⏳</span>
+                            } @else if (t.status === 're_entry') {
+                              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
+                                    style="background: rgba(239, 68, 68, 0.15); color: var(--red-text);">↻</span>
+                            }
+                          </li>
+                        }
+                      </ul>
+                      <div class="flex justify-end gap-2">
+                        @switch (tab()) {
+                          @case ('service_queue') {
+                            @if (!tube.assignedTo || tube.assignedTo === myUserId()) {
+                              <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, tube.patientName)">Pick · view tests</button>
+                            }
+                            @if (canReassign()) {
+                              <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                            }
+                          }
+                          @default {
+                            @if (!tube.allDone) {
+                              <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                            }
+                            @if (tube.rejections.length > 0) {
+                              <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
+                            } @else if (tube.allDone) {
+                              <span class="px-2 py-0.5 text-[11px] font-medium rounded"
+                                    style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓ All entered</span>
+                            } @else {
+                              <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
+                            }
+                          }
+                        }
+                      </div>
+                    </div>
+                  </pf-tile>
+                </li>
+              }
+            </ul>
+            }
             <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
@@ -680,8 +789,8 @@ const COUNTERS: CounterSpec[] = [
       </pf-delegate-modal>
     }
 
-    <!-- Pick → see the tube's tests → claim it into My Work. Centered modal on
-         web/iPad; full-width bottom-sheet on phones. -->
+    <!-- Pick → confirm the patient/tube → scan to claim it into My Work.
+         Centered modal on web/iPad; full-width bottom-sheet on phones. -->
     @if (claimTarget(); as c) {
       <div class="pf-claim" role="dialog" aria-modal="true" aria-labelledby="pf-claim-title">
         <div class="pf-claim__backdrop" (click)="cancelClaim()"></div>
@@ -693,17 +802,6 @@ const COUNTERS: CounterSpec[] = [
             </div>
             <button type="button" class="pf-claim__close press" (click)="cancelClaim()" aria-label="Close">✕</button>
           </header>
-          <p class="pf-claim__lead">{{ c.tests.length }} test{{ c.tests.length === 1 ? '' : 's' }} to be taken on this tube:</p>
-          <ul class="pf-claim__tests">
-            @for (t of c.tests; track t.id) {
-              <li class="pf-claim__test">
-                <span class="pf-claim__test-name">{{ t.test?.name ?? 'Test' }}</span>
-                @if (t.test?.department?.name || t.subOrder?.department?.name; as d) {
-                  <span class="pf-claim__test-dept">{{ d }}</span>
-                }
-              </li>
-            }
-          </ul>
           <div class="pf-claim__actions">
             @if (allowNoScanClaim()) {
               <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="confirmClaim()">
@@ -733,6 +831,7 @@ const COUNTERS: CounterSpec[] = [
         (cancelled)="cancelClaimScan()">
       </pf-barcode-scanner-modal>
     }
+
   `,
   styles: [`
     /* No page-level scroll — :host fills the routed area, the inner
@@ -1819,6 +1918,8 @@ export class MyWorkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly process = inject(ProcessWorkflowService);
+  protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly scanSvc = inject(ScanService);
 
   /** Collect-in-lab: sample collection is placed in the lab work-area, so the
    *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
@@ -2209,6 +2310,8 @@ export class MyWorkComponent implements OnInit {
     // Re-fetch the active workflow so a `lab_intake` toggle in /admin/process
     // reflects here (hides/shows the Lab Intake pane) on each visit.
     this.process.refreshActive();
+    // Per-branch queue focus (patient vs sample). Additive presentation only.
+    this.labCfg.ensureLoaded();
     this.refresh();
     this.refreshAllCounts();
     this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
@@ -2448,6 +2551,36 @@ export class MyWorkComponent implements OnInit {
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
       return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
+    });
+  }
+
+  /**
+   * Sample-focused rows for the whole bucket. Reuses tubesIn's grouping (one
+   * row per tube/sampleId across ALL patients in the bucket, since a sample
+   * belongs to exactly one order/patient) and augments each tube with the
+   * patient it belongs to — derived the same way patientGroups does, from the
+   * tube's tests' order/patient. Consumed only when labCfg.sampleFocused().
+   */
+  sampleRows(items: Enriched[]): Array<{
+    sampleId: string;
+    deptName: string;
+    barcode: string;
+    tests: Enriched[];
+    allDone: boolean;
+    hasDraft: boolean;
+    assignedTo: string | null;
+    rejections: Array<{ testName: string; reason: string }>;
+    patientName: string;
+    patientInfo: string;
+  }> {
+    return this.tubesIn(items).map(tube => {
+      const patient = tube.tests[0]?.subOrder?.order?.patient;
+      return {
+        ...tube,
+        patientName: patient?.displayName ?? 'Patient',
+        // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
+        patientInfo: patient ? formatPatientInfo(patient) : 'Patient'
+      };
     });
   }
 

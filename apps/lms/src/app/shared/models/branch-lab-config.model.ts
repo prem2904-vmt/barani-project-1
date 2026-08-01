@@ -16,6 +16,17 @@ export interface BranchLabConfig {
   /** Whether the front-desk "Payments due" tab is shown (In Progress + Completed
    *  are always shown). Default true when absent. */
   showPaymentsDueTab?: boolean;
+  /** Which machine-readable code(s) print on a specimen label:
+   *  'barcode' (1D only) | 'qr' (2D only) | 'both'. Default 'both'. */
+  labelCodeMode?: 'barcode' | 'qr' | 'both';
+  /** How the lab queues group work. Stored per-branch:
+   *  'patient' (rows = patients, tests nested) | 'sample' (rows = sample IDs) |
+   *  'auto' (default) → resolved from the branch's lab-space count. */
+  queueFocusMode?: 'auto' | 'patient' | 'sample';
+  /** Server-resolved focus ('patient'|'sample'). Forced modes pass through;
+   *  'auto' resolves to 'sample' when the branch has 2+ lab spaces, else
+   *  'patient'. Read this on the queue screens (not queueFocusMode). */
+  effectiveQueueFocus?: 'patient' | 'sample';
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

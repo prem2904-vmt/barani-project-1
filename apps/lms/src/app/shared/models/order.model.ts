@@ -4,6 +4,11 @@ import { Test } from './test.model';
 
 export interface Order {
   id: string;
+  /** Human-readable, module-prefixed order number, e.g. `LAB-2607-000042`.
+   *  Generated at creation; null on legacy orders. */
+  orderNumber?: string | null;
+  /** Module that owns the order (lab/opd/ipd/…) — drives the OrderNumber prefix. */
+  module?: string | null;
   patientId: string;
   branchId: string;
   refDoctorId?: string;

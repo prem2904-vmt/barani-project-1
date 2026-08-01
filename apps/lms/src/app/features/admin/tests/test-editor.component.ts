@@ -35,7 +35,7 @@ type TestEditorTab = 'parameters' | 'layout' | 'consumables';
 interface DraftTest {
   id?: string;
   name: string;
-  type: 'individual' | 'package';
+  type: 'individual' | 'profile' | 'package';
   flow: 'direct' | 'approval';
   price: number;
   taxSlab: number;

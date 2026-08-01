@@ -247,6 +247,11 @@
           <div>
             @if (isReadOnly()) {
               <div class="pf-payment-due-tests">
+                @if (order()?.orderNumber; as onum) {
+                  <p class="text-xs text-muted mb-2">Order ID:
+                    <span class="font-mono font-bold" style="color: var(--text-primary);">{{ onum }}</span>
+                  </p>
+                }
                 <h3 class="text-sm font-bold uppercase tracking-wider text-muted mb-4 flex items-center gap-2">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>

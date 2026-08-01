@@ -21,6 +21,10 @@ export interface Tenant {
   /** Tenant-wide: number of digits in the running part of the short sample
    * barcode (DD + YY + this many digits). Valid 1–9. Default 5 → 00001. */
   sampleNumberWidth?: number;
+  /** Tenant-wide sample-identification mode driving the lab screens:
+   * 'scan' (default) → QR/barcode camera scanning; 'manual' → no QR, the
+   * sample number is shown and typed by hand. Absent/empty = 'scan'. */
+  scanMode?: 'scan' | 'manual';
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;

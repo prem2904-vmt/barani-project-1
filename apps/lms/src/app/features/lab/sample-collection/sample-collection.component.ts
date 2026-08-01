@@ -4,9 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
@@ -138,6 +140,7 @@ interface OrderGroup {
 
       @if (!deepLinkMode()) {
       <div class="pf-scan">
+        @if (!scan.manualEntry()) {
         <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
                 title="Scan with camera" aria-label="Open camera scanner">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -145,10 +148,11 @@ interface OrderGroup {
             <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
           </svg>
         </button>
+        }
         <div class="pf-scan__body">
-          <label class="pf-scan__label">Find patient or scan</label>
+          <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
           <input type="text" class="pf-scan__input"
-                 placeholder="Name · MRN · phone · order # · barcode"
+                 [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
@@ -542,7 +546,7 @@ interface OrderGroup {
                  Under a payment hold the gate would reject the dispatch, so the
                  slot offers "Bill" (→ billing screen) instead — or a passive
                  "Payment pending" note for collectors without billing access. -->
-            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold) {
+            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold && dispatchStep()) {
               @if (canBill()) {
                 <button type="button" class="pf-btn pf-btn-primary" (click)="goToBilling(g)"
                         aria-label="Bill" data-label="Bill">
@@ -844,7 +848,12 @@ interface OrderGroup {
      * opaque so the pending queue behind never peeks through. */
     .pf-drawer {
       position: fixed;
-      top: var(--navbar-height, 4rem);
+      /* Full-bleed from the very top: the shell chrome + the page's own
+         "Sample collection" header are hidden while a drawer is open
+         (html.pf-collect-immersive), so the drawer owns the whole viewport.
+         Pad for the notch on native so the ✕ clears the status bar. */
+      top: 0;
+      padding-top: env(safe-area-inset-top, 0px);
       right: 0;
       bottom: 0;
       left: 0;
@@ -869,9 +878,7 @@ interface OrderGroup {
     .pf-drawer__head {
       display: flex; align-items: center; gap: 16px;
       padding: 28px 48px 20px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
     }
     .pf-drawer__close {
       all: unset; cursor: pointer;
@@ -906,7 +913,6 @@ interface OrderGroup {
 
     .pf-drawer__progressbar {
       margin: 0 auto;
-      max-width: calc(1280px - 96px);
       width: calc(100% - 96px);
       height: 4px; border-radius: 999px;
       background: rgba(255,255,255,0.06); overflow: hidden;
@@ -920,7 +926,6 @@ interface OrderGroup {
 
     .pf-drawer__hint {
       margin: 16px auto 0;
-      max-width: calc(1280px - 96px);
       padding: 0 48px;
       font-size: 13px; color: var(--text-muted);
       text-align: center;
@@ -930,15 +935,25 @@ interface OrderGroup {
      * genuinely centre across the screen instead of hugging the left column
      * of an auto-fill grid. 5+ wraps naturally. */
     .pf-drawer__tubes {
-      flex: 1 1 auto; overflow-y: auto;
+      /* Shrink-wrap to the tube grid's own height (NOT the full drawer) and
+         center it vertically with auto margins — so 1 card sits balanced and
+         many cards form a centered block; on overflow the auto margins collapse
+         and it scrolls from the top (no clipping). Mobile resets this below. */
+      flex: 0 1 auto;
+      margin-block: auto;
+      min-height: 0;
+      overflow-y: auto;
       padding: 28px 48px 32px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      align-content: flex-start;
+      /* stretch → every card matches the TALLEST card's height, so a row of
+         tubes lines up cleanly instead of sitting at ragged heights. Because the
+         container is content-height (flex:0), stretch grows cards to the tallest
+         sibling, never to the whole drawer. */
+      align-items: stretch;
+      align-content: center;
       gap: 18px;
     }
     .pf-tube { width: min(320px, 100%); }
@@ -991,13 +1006,19 @@ interface OrderGroup {
 
     /* ─── Vial illustration ────────────────────────────────── */
     .pf-vial {
-      width: 88px; height: 280px;
+      /* Scale with viewport height so the tube GROWS to fill a tall desktop
+         drawer instead of stranding at a fixed 280px. width:auto + aspect-ratio
+         keeps the illustration proportional as the height clamps. Tablet/short
+         and mobile breakpoints below override with their own sizes. */
+      height: clamp(260px, 40dvh, 500px);
+      width: auto;
+      aspect-ratio: 88 / 280;
       flex-shrink: 0;
       filter: drop-shadow(0 22px 28px rgba(0,0,0,0.55));
     }
     /* Urine cup is short and wide — swap the vial's portrait box for a more
      * squat one so it doesn't get squeezed into a tall-narrow slot. */
-    .pf-vial--cup { width: 150px; height: 236px; }
+    .pf-vial--cup { height: clamp(220px, 34dvh, 420px); width: auto; aspect-ratio: 150 / 236; }
     .pf-vial__outline {
       fill: rgba(255,255,255,0.03);
       stroke: rgba(255,255,255,0.22);
@@ -1112,9 +1133,7 @@ interface OrderGroup {
     .pf-drawer__foot {
       display: flex; align-items: center; gap: 12px;
       padding: 18px 48px 28px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
       border-top: 1px solid var(--glass-border);
       background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
     }
@@ -1681,6 +1700,10 @@ interface OrderGroup {
        >=641px is untouched (gated to <=640). ───────────────────────────── */
     @media (max-width: 640px) {
       .pf-drawer__tubes {
+        /* Phone: a top-packed, fill-height scroll list — NOT the desktop
+           content-height + auto-centered grid (undo the base's flex:0/margin). */
+        flex: 1 1 auto !important;
+        margin-block: 0 !important;
         flex-direction: column !important;
         flex-wrap: nowrap !important;
         align-items: stretch !important;
@@ -1738,14 +1761,24 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly process = inject(ProcessWorkflowService);
+  protected readonly scan = inject(ScanService);
 
   /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
    *  host supplies its own pane header, so we suppress our KPI strip + screen
    *  header + outer page padding while keeping the queue + scan + drawer. */
   @Input() embedded = false;
 
-  /** Whether this user can dispatch (hand collected tubes to the lab). */
-  readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
+  /** Whether this user can dispatch (hand collected tubes to the lab) — needs
+   *  the permission AND the workflow to actually include a dispatch step (else
+   *  the backend rejects it, so the button must not show at all). */
+  readonly canDispatch = computed(() =>
+    this.auth.hasPermission('dispatch_sample') && this.process.dispatchStepEnabled());
+
+  /** True when the workflow actually has a dispatch step (independent of the
+   *  user's permission) — hides ALL dispatch chrome (button + payment-hold note)
+   *  in auto-receive workflows where there's nothing to dispatch. */
+  readonly dispatchStep = computed(() => this.process.dispatchStepEnabled());
   /** Whether this user can take a payment-held order to the billing screen
    *  (route /frontdesk/order needs create_order; create_bill implies desk staff). */
   readonly canBill = computed(() =>
@@ -1775,6 +1808,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
       this.toasts.success('Dispatched to lab');
+      // Reached from the front desk (?from=…) → go back there automatically.
+      // In the standalone lab queue (_returnTo null) stay put.
+      if (this._returnTo) {
+        const target = this._returnTo;
+        this._returnTo = null;
+        this.router.navigateByUrl(target);
+      }
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
@@ -1817,6 +1857,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
+      // Immersive full-screen: while a patient's collection drawer is OPEN the
+      // tube-tapping view owns the whole viewport, so tag <html> to hide the
+      // shell's top chrome + bottom nav (they otherwise paint over/around the
+      // teleported overlay). The queue list (drawer closed) keeps normal chrome.
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('pf-collect-immersive', hasDrawer);
+      }
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -1832,7 +1879,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy() { this.detachTeleport(); }
+  ngOnDestroy() {
+    this.detachTeleport();
+    // Leaving the screen with a drawer still open must not strand the immersive
+    // flag on <html> — that would hide the chrome on the next screen too.
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('pf-collect-immersive');
+    }
+  }
 
   private detachTeleport() {
     if (this.teleportedEl && this.teleportedEl.parentNode === document.body) {
@@ -2125,9 +2179,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    * and would make the one just tapped vanish mid-animation.
    */
   toggleCollected(s: OrderSample) {
-    if (s.status === 'pending') this.markCollected(s);
-    else if (s.status === 'collected') this.markPending(s);
-    // any other downstream status is locked — user can't undo from here.
+    if (s.status === 'pending') { this.markCollected(s); return; }
+    if (s.status === 'collected') { this.markPending(s); return; }
+    // Auto-receive workflows have NO dispatch step: collection immediately marks
+    // the tube 'received' at the lab. The front desk must still be able to undo a
+    // mis-tap, so treat an auto-received tube as un-collectable here — the backend
+    // reverses the auto-receipt. Genuine dispatch-workflow receipts stay locked.
+    if (s.status === 'received' && !this.dispatchStep()) { this.markPending(s); return; }
+    // dispatched / picked_up / processing / rejected / validated → locked.
   }
 
   private markCollected(s: OrderSample) {

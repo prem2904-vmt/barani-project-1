@@ -336,6 +336,14 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
          the home-indicator inset above the screen edge when idle. */
       :host-context(html.pf-chat-immersive) .shell-main { padding-bottom: 0 !important; }
 
+      /* Immersive sample-collection: while a patient's collection drawer is OPEN
+         (tube-tapping view) the screen owns the whole viewport — hide the desktop
+         top chrome and drop the main's bottom-nav clearance. The queue list (drawer
+         closed) keeps the normal chrome. Toggled by SampleCollectionComponent via
+         html.pf-collect-immersive; bottom-nav hides itself in its own stylesheet. */
+      :host-context(html.pf-collect-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
+
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
          • padding-left clears the ~60px rail + its 8px margin.
