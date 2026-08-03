@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
+import bwipjs from 'bwip-js/browser';
 
 /**
  * Renders a scannable Code128 barcode AND a QR code for the same value.
@@ -23,13 +24,17 @@ import QRCode from 'qrcode';
   template: `
     <div class="pf-code-card" [class.pf-code-card--bare]="bare">
       <div class="pf-code-card__row">
-        <div class="pf-code-card__block" [style.display]="mode === 'qr' ? 'none' : 'flex'">
+        <div class="pf-code-card__block" [style.display]="(mode === 'barcode' || mode === 'both') ? 'flex' : 'none'">
           <svg #barcode class="pf-code-card__bar" role="img" [attr.aria-label]="'Barcode ' + code"></svg>
           @if (!bare) { <p class="pf-code-card__caption">Barcode · Code128</p> }
         </div>
-        <div class="pf-code-card__block" [style.display]="mode === 'barcode' ? 'none' : 'flex'">
+        <div class="pf-code-card__block" [style.display]="(mode === 'qr' || mode === 'both') ? 'flex' : 'none'">
           <canvas #qr class="pf-code-card__qr" [attr.aria-label]="'QR code ' + code"></canvas>
           @if (!bare) { <p class="pf-code-card__caption">QR</p> }
+        </div>
+        <div class="pf-code-card__block" [style.display]="mode === 'datamatrix' ? 'flex' : 'none'">
+          <canvas #dmx class="pf-code-card__dmx" [attr.aria-label]="'Data Matrix ' + code"></canvas>
+          @if (!bare) { <p class="pf-code-card__caption">Data Matrix</p> }
         </div>
       </div>
       @if (showValue) {
@@ -73,6 +78,12 @@ import QRCode from 'qrcode';
       height: 96px;
       image-rendering: pixelated;
     }
+    .pf-code-card__dmx {
+      display: block;
+      width: 96px;
+      height: 96px;
+      image-rendering: pixelated;
+    }
     .pf-code-card__caption {
       margin: 0;
       font-size: 10px;
@@ -104,14 +115,15 @@ import QRCode from 'qrcode';
 export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
   @Input() code = '';
   /** Show the raw code/URL underneath the codes. Useful for sample
-   *  tube barcodes (PF-AP-2024-...-HAEM) where the human-readable
+   *  tube barcodes (e.g. HAEM260800001) where the human-readable
    *  value matters; turn OFF for report verification QRs where the
    *  code is just an opaque token URL nobody needs to read. */
   @Input() showValue = true;
-  /** Which symbology to display: a 1D Code128 barcode, a 2D QR, or both
-   *  side-by-side (default). Both always encode the identical value, so the
-   *  choice is purely which label the operator wants to print/scan. */
-  @Input() mode: 'both' | 'barcode' | 'qr' = 'both';
+  /** Which symbology to display: a 1D Code128 barcode, a 2D QR, both
+   *  side-by-side (default), or a Data Matrix (2D, fits a tiny tube area and
+   *  scans well). All encode the identical value, so the choice is purely which
+   *  label the operator wants to print/scan. */
+  @Input() mode: 'both' | 'barcode' | 'qr' | 'datamatrix' = 'both';
   /** Render without the white card chrome / captions — for inline use (e.g. a
    *  small tracking QR inside an invoice) rather than a printable label. */
   @Input() bare = false;
@@ -121,6 +133,7 @@ export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
 
   @ViewChild('barcode', { static: true }) barcodeEl!: ElementRef<SVGSVGElement>;
   @ViewChild('qr', { static: true }) qrEl!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('dmx', { static: true }) dmxEl!: ElementRef<HTMLCanvasElement>;
 
   ngAfterViewInit(): void { this.render(); }
   ngOnChanges(_: SimpleChanges): void { if (this.barcodeEl && this.qrEl) this.render(); }
@@ -129,33 +142,45 @@ export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
     const value = (this.code || '').trim();
     if (!value) return;
 
-    const qrPx = this.size ?? 96;
+    const px = this.size ?? 96;
     const barH = this.size ? Math.max(28, Math.round(this.size * 0.7)) : 64;
 
-    try {
-      JsBarcode(this.barcodeEl.nativeElement, value, {
-        format: 'CODE128',
-        displayValue: false,
-        margin: 0,
-        height: barH,
-        width: 1.6,
-        background: '#ffffff',
-        lineColor: '#0f172a'
-      });
-    } catch {
-      /* ignore — JsBarcode rejects strings it can't encode */
+    // Only render the active symbology (the others are display:none). Always
+    // dark-on-white so codes stay high-contrast and scannable.
+    if (this.mode === 'barcode' || this.mode === 'both') {
+      try {
+        JsBarcode(this.barcodeEl.nativeElement, value, {
+          format: 'CODE128', displayValue: false, margin: 0,
+          height: barH, width: 1.6, background: '#ffffff', lineColor: '#0f172a'
+        });
+      } catch {
+        /* ignore — JsBarcode rejects strings it can't encode */
+      }
     }
 
-    // Always dark-on-white so the code stays high-contrast and scannable; in
-    // `bare` mode the white sits on a small rounded tile (see styles) rather
-    // than the full label card.
-    const canvas = this.qrEl.nativeElement;
-    canvas.style.width = qrPx + 'px';
-    canvas.style.height = qrPx + 'px';
-    QRCode.toCanvas(canvas, value, {
-      margin: 1,
-      width: qrPx,
-      color: { dark: '#0f172a', light: '#ffffff' }
-    }).catch(() => { /* ignore */ });
+    if (this.mode === 'qr' || this.mode === 'both') {
+      const canvas = this.qrEl.nativeElement;
+      canvas.style.width = px + 'px';
+      canvas.style.height = px + 'px';
+      QRCode.toCanvas(canvas, value, {
+        margin: 1, width: px, color: { dark: '#0f172a', light: '#ffffff' }
+      }).catch(() => { /* ignore */ });
+    }
+
+    if (this.mode === 'datamatrix') {
+      // Data Matrix packs the same value into a square that stays scannable at
+      // a fraction of a QR's area — ideal for narrow tube labels.
+      const canvas = this.dmxEl.nativeElement;
+      try {
+        bwipjs.toCanvas(canvas, {
+          bcid: 'datamatrix', text: value, scale: 4, paddingwidth: 1, paddingheight: 1,
+          barcolor: '000000', backgroundcolor: 'ffffff'
+        });
+        canvas.style.width = px + 'px';
+        canvas.style.height = px + 'px';
+      } catch {
+        /* ignore — bwip-js rejects strings it can't encode */
+      }
+    }
   }
 }

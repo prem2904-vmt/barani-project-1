@@ -520,11 +520,12 @@ export class LabSettingsComponent implements OnInit {
   protected readonly requireValidation = signal(false);
   protected readonly showPaymentsDue = signal(true);
   /** Which code(s) print on a specimen label: barcode | qr | both. */
-  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'both'>('both');
-  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'both'; label: string; desc: string }> = [
+  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'both' | 'datamatrix'>('both');
+  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'both' | 'datamatrix'; label: string; desc: string }> = [
     { value: 'both', label: 'Barcode + QR', desc: 'Print both a 1D barcode and a QR on every label (default).' },
     { value: 'barcode', label: 'Barcode only', desc: 'Print only the 1D barcode (encodes the Sample ID).' },
     { value: 'qr', label: 'QR only', desc: 'Print only the QR (encodes the MRN + Sample ID).' },
+    { value: 'datamatrix', label: 'Data Matrix', desc: 'Print a compact 2D Data Matrix (Sample ID) — fits a tiny tube area and still scans.' },
   ];
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
@@ -550,7 +551,7 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
-  setLabelCodeMode(v: 'barcode' | 'qr' | 'both') {
+  setLabelCodeMode(v: 'barcode' | 'qr' | 'both' | 'datamatrix') {
     const prev = this.labelCodeMode();
     if (prev === v) return;
     this.labelCodeMode.set(v);

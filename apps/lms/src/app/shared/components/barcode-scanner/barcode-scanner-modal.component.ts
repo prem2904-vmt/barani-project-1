@@ -4,8 +4,7 @@ import {
   ViewChild, computed, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
-import { Exception, Result } from '@zxing/library';
+import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { NumPadComponent } from '../../primitives/num-pad.component';
 
 // Reusable barcode scanner modal. Two input channels:
@@ -52,6 +51,14 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
         <div class="pf-sc__viewport" [hidden]="manualMode()">
           <video #video autoplay muted playsinline class="pf-sc__video"></video>
           <div class="pf-sc__frame" aria-hidden="true"></div>
+          @if (torchAvailable()) {
+            <button type="button" class="pf-sc__torch" [class.pf-sc__torch--on]="torchOn()"
+                    (click)="toggleTorch()" [attr.aria-pressed]="torchOn()" aria-label="Toggle torch" title="Torch">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.3V16h6v-1.2c0-.9.4-1.7 1-2.3A6 6 0 0 0 12 2z"/>
+              </svg>
+            </button>
+          }
           @if (!cameraReady()) {
             <div class="pf-sc__viewport-fallback">
               @if (cameraError()) {
@@ -233,6 +240,16 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       overflow: hidden;
     }
     .pf-sc__video { width: 100%; height: 100%; object-fit: cover; }
+    .pf-sc__torch {
+      position: absolute; bottom: 12px; right: 12px; z-index: 2;
+      width: 42px; height: 42px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(10, 12, 20, 0.55); color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.25); cursor: pointer;
+      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .pf-sc__torch--on { background: #fbbf24; color: #1f2937; border-color: #fbbf24; }
     .pf-sc__frame {
       position: absolute; inset: 12%;
       border: 2px dashed rgba(236, 72, 153, 0.55);
@@ -371,12 +388,24 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @ViewChild('manualInput') manualInputEl?: ElementRef<HTMLInputElement>;
   @ViewChild('confirmBtn') confirmBtnEl?: ElementRef<HTMLButtonElement>;
 
-  private reader: BrowserMultiFormatReader | null = null;
-  private controls: IScannerControls | null = null;
+  // Camera stream owned directly (not by a decoding library) so we can request
+  // a high-resolution feed + continuous autofocus + torch — the levers that let
+  // a code be read at arm's length instead of pressed against the lens.
+  private stream: MediaStream | null = null;
+  private track: MediaStreamTrack | null = null;
+  // Native BarcodeDetector when the browser has it (hardware-accelerated),
+  // otherwise a ZXing-C++ WebAssembly fallback — both far stronger than the old
+  // pure-JS decoder.
+  private detector: BarcodeDetector | null = null;
+  private rafId: number | null = null;
+  private active = false;
+  private lastDetectAt = 0;
 
   protected readonly cameraReady = signal(false);
   protected readonly cameraError = signal<string | null>(null);
   protected readonly lastMismatch = signal<string | null>(null);
+  protected readonly torchAvailable = signal(false);
+  protected readonly torchOn = signal(false);
 
   // HID barcode guns emit keystrokes and terminate with Enter. We buffer
   // recent keys while the modal is open and treat the buffer as a scanned
@@ -410,31 +439,91 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // positioning can't cover the root-level nav — hide it instead). Removed
     // again in ngOnDestroy. The component only exists while open (@if).
     try { document.body.classList.add('pf-scanner-open'); } catch { /* SSR */ }
+    this.detector = new BarcodeDetector({
+      // Every symbology a tube/label or requisition could carry, incl. the new
+      // Data Matrix option and the existing QR + Code128.
+      formats: ['qr_code', 'data_matrix', 'code_128', 'code_39', 'ean_13', 'ean_8',
+        'itf', 'codabar', 'upc_a', 'upc_e', 'pdf417', 'aztec'],
+    });
+    await this.startCamera();
+  }
+
+  ngOnDestroy() {
+    this.stopCamera();
+    try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
+  }
+
+  /** Open a high-res back-camera stream, enable continuous autofocus + detect
+   *  torch support, then start the detection loop. */
+  private async startCamera() {
     try {
-      this.reader = new BrowserMultiFormatReader();
-      // decodeFromVideoDevice(null, …) picks the default / back camera.
-      this.controls = await this.reader.decodeFromVideoDevice(
-        undefined,
-        this.videoEl.nativeElement,
-        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
-          if (!result) return;
-          this.cameraReady.set(true);
-          const text = result.getText();
-          this.handleScan(text, controls);
-        }
-      );
-      // If decodeFromVideoDevice starts the stream successfully, the video
-      // metadata fires loadedmetadata pretty quickly; mark ready optimistically.
-      this.videoEl.nativeElement.onloadedmetadata = () => this.cameraReady.set(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+      this.stream = stream;
+      this.track = stream.getVideoTracks()[0] ?? null;
+      const video = this.videoEl.nativeElement;
+      video.srcObject = stream;
+      video.onloadedmetadata = () => { this.cameraReady.set(true); video.play().catch(() => { /* ignore */ }); };
+      await video.play().catch(() => { /* autoplay may need the metadata event */ });
+      // Continuous autofocus keeps codes sharp across distances (best-effort;
+      // silently ignored where the platform doesn't expose focusMode).
+      try { await this.track?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }); } catch { /* unsupported */ }
+      try {
+        const caps = this.track?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined;
+        this.torchAvailable.set(!!caps && 'torch' in caps);
+      } catch { /* unsupported */ }
+      this.active = true;
+      this.lastDetectAt = 0;
+      this.rafId = requestAnimationFrame(this.scanTick);
     } catch (err) {
-      // getUserMedia denied / no camera / running on http without permission.
       this.cameraError.set(this.friendlyError(err));
     }
   }
 
-  ngOnDestroy() {
-    try { this.controls?.stop(); } catch { /* ignore */ }
-    try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
+  /** rAF detection loop, throttled to ~8 detections/sec (a full-rate detect is
+   *  wasteful and can starve the decoder). */
+  private scanTick = () => {
+    if (!this.active) return;
+    const video = this.videoEl?.nativeElement;
+    if (this.detector && video && video.readyState >= 2) {
+      const now = performance.now();
+      if (now - this.lastDetectAt >= 120) {
+        this.lastDetectAt = now;
+        this.detector.detect(video).then(codes => {
+          if (this.active && codes && codes.length && codes[0].rawValue) {
+            this.handleScan(codes[0].rawValue);
+          }
+        }).catch(() => { /* transient decode error — keep scanning */ });
+      }
+    }
+    if (this.active) this.rafId = requestAnimationFrame(this.scanTick);
+  };
+
+  /** Stop the detection loop and release the camera. */
+  private stopCamera() {
+    this.active = false;
+    if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+    try { this.stream?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
+    this.stream = null;
+    this.track = null;
+    this.torchOn.set(false);
+    this.cameraReady.set(false);
+  }
+
+  /** Toggle the camera torch (labs are dim and tubes are glossy). */
+  async toggleTorch() {
+    if (!this.track) return;
+    const next = !this.torchOn();
+    try {
+      await this.track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      this.torchOn.set(next);
+    } catch { /* torch not supported on this device */ }
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -472,7 +561,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private handleScan(code: string, controls?: IScannerControls) {
+  private handleScan(code: string) {
     const trimmed = (code || '').trim();
     if (!trimmed) return;
 
@@ -485,28 +574,26 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    try { (controls ?? this.controls)?.stop(); } catch { /* ignore */ }
+    this.stopCamera();
     this.matched.emit(trimmed);
   }
 
   cancel() {
-    try { this.controls?.stop(); } catch { /* ignore */ }
+    this.stopCamera();
     this.cancelled.emit();
   }
 
   toggleManual() {
     const next = !this.manualMode();
     this.manualMode.set(next);
-    // Pause the camera while the manual panel is in front, resume on close.
+    // Release the camera while the manual panel is in front; reopen on close.
     if (next) {
-      try { this.controls?.stop(); } catch { /* ignore */ }
-      this.cameraReady.set(false);
+      this.stopCamera();
       setTimeout(() => {
         this.manualInputEl?.nativeElement.focus();
       }, 50);
     } else {
-      // Reattach the camera if the user goes back to scanning.
-      this.restartCamera();
+      void this.startCamera();
     }
   }
 
@@ -527,24 +614,6 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // the typed seq doesn't match the expected one, so we never claim the
     // wrong vial by typo.
     this.handleScan(assembled);
-  }
-
-  private async restartCamera() {
-    if (!this.reader || !this.videoEl?.nativeElement) return;
-    try {
-      this.controls = await this.reader.decodeFromVideoDevice(
-        undefined,
-        this.videoEl.nativeElement,
-        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
-          if (!result) return;
-          this.cameraReady.set(true);
-          this.handleScan(result.getText(), controls);
-        }
-      );
-      this.videoEl.nativeElement.onloadedmetadata = () => this.cameraReady.set(true);
-    } catch (err) {
-      this.cameraError.set(this.friendlyError(err));
-    }
   }
 
   private friendlyError(err: unknown): string {

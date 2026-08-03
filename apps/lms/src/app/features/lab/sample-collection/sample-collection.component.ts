@@ -37,10 +37,10 @@ interface Container {
 
 // Tube colour conventions for blood vacutainers, keyed by department code.
 const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
-  HAEM:  { color: '#a78bfa', label: 'EDTA · Lavender' },
-  BIO:   { color: '#f59e0b', label: 'SST · Gold' },
+  HAEM:  { color: '#a855f7', label: 'EDTA · Lavender' },
+  BIO:   { color: '#eab308', label: 'SST · Gold' },
   SERO:  { color: '#ef4444', label: 'Plain · Red' },
-  MICRO: { color: '#10b981', label: 'Sterile tube' },
+  MICRO: { color: '#e5e7eb', label: 'Sterile container' },
   HISTO: { color: '#64748b', label: 'Formalin tube' }
 };
 const BLOOD_FILL = '#b91c1c';
@@ -53,32 +53,78 @@ const URINE_FILL = '#f59e0b';
  */
 // The four vacutainer tube colours a vial can be grouped by (space, colour).
 const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
+  // NABL / standard vacutainer cap colours.
+  sst:      { color: '#eab308', label: 'SST · Gold' },
+  plain:    { color: '#ef4444', label: 'Plain · Red' },
+  edta:     { color: '#a855f7', label: 'EDTA · Lavender' },
+  fluoride: { color: '#9ca3af', label: 'Fluoride · Grey' },
+  heparin:  { color: '#22c55e', label: 'Lithium Heparin · Green' },
+  citrate:  { color: '#38bdf8', label: 'Sodium Citrate · Blue' },
+  esr:      { color: '#1f2937', label: 'ESR · Black' },
+  trace:    { color: '#1d4ed8', label: 'Trace metal · Royal blue' },
+  sterile:  { color: '#e5e7eb', label: 'Sterile Container' },
+  urine:    { color: '#facc15', label: 'Urine Bottle' },
+  multiple: { color: '#6366f1', label: 'Multiple' },
+  // Legacy keys (pre-NABL) so older tests still render a colour.
   red:      { color: '#ef4444', label: 'Plain · Red' },
-  lavender: { color: '#a78bfa', label: 'EDTA · Lavender' },
+  lavender: { color: '#a855f7', label: 'EDTA · Lavender' },
   grey:     { color: '#9ca3af', label: 'Fluoride · Grey' },
-  blue:     { color: '#3b82f6', label: 'Citrate · Blue' },
+  blue:     { color: '#38bdf8', label: 'Sodium Citrate · Blue' },
 };
+
+/** Map ONE specimen/sampleType token to its NABL vacutainer container, or null
+ *  when it doesn't match a known specimen (the caller then tries the next A/B
+ *  option, and finally the department default). Ordered specific → general so
+ *  "EDTA Plasma" resolves to EDTA, not the generic plasma branch. */
+function specimenContainer(sampleType: string): Container | null {
+  if (!sampleType) return null;
+  if (sampleType.includes('urine')) return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine bottle' };
+  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')
+      || sampleType.includes('csf') || sampleType.includes('fluid') || sampleType.includes('sterile'))
+    return { kind: 'jar', color: '#e5e7eb', fill: '#9ca3af', label: 'Sterile container' };
+  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
+  if (sampleType.includes('fluoride') || sampleType.includes('glucose') || sampleType.includes('oxalate') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#9ca3af', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
+  if (sampleType.includes('citrate') || sampleType.includes('coag')) return { kind: 'vacutainer', color: '#38bdf8', fill: BLOOD_FILL, label: 'Sodium Citrate · Blue' };
+  if (sampleType.includes('esr')) return { kind: 'vacutainer', color: '#1f2937', fill: BLOOD_FILL, label: 'ESR · Black' };
+  if (sampleType.includes('heparin') || sampleType.includes('arterial') || sampleType.includes('abg')) return { kind: 'vacutainer', color: '#22c55e', fill: BLOOD_FILL, label: 'Lithium Heparin · Green' };
+  if (sampleType.includes('sst') || sampleType.includes('gold') || sampleType.includes('serum')) return { kind: 'vacutainer', color: '#eab308', fill: BLOOD_FILL, label: 'SST · Gold' };
+  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  if (sampleType.includes('plasma')) return { kind: 'vacutainer', color: '#22c55e', fill: BLOOD_FILL, label: 'Lithium Heparin · Green' };
+  if (sampleType.includes('blood')) return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
+  return null;
+}
 
 function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
   // The vial's own colour (set on the test → grouped into this vial) is
   // authoritative: it's what defined this tube's (space, colour) group.
   const tc = s.tubeColor && TUBE_COLOR_MAP[s.tubeColor];
   if (tc) return { kind: 'vacutainer', color: tc.color, fill: BLOOD_FILL, label: tc.label };
-  const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
-  if (sampleType.includes('urine')) {
-    return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
+  // Analyte-driven tubes (NABL): a few analytes dictate the tube regardless of a
+  // generic serum/plasma specimen. Blood sugar / glucose-tolerance → sodium
+  // fluoride (grey, stops glycolysis); HbA1c → EDTA (lavender). An explicit
+  // per-test tube colour above still wins.
+  const testName = (s.tests[0]?.test?.name ?? '').toLowerCase();
+  if (/hba1c|glycated h|glycosylated h/.test(testName)) {
+    return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
   }
-  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')) {
-    return { kind: 'jar', color: '#10b981', fill: '#6b7280', label: 'Sterile container' };
+  if (/\bsugar\b|glucose tolerance|\bogtt\b|\bgtt\b/.test(testName)) {
+    return { kind: 'vacutainer', color: '#9ca3af', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
   }
-  // Blood: vacutainer. Prefer the tube colour spelt out in the sampleType
-  // ("Blood - EDTA"), otherwise use the department's conventional colour.
-  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a78bfa', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
-  if (sampleType.includes('sst') || sampleType.includes('gold')) return { kind: 'vacutainer', color: '#f59e0b', fill: BLOOD_FILL, label: 'SST · Gold' };
-  if (sampleType.includes('fluoride') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#6b7280', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
-  if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
-  if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
-  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  // Map the test's specimen/sampleType to the NABL vacutainer cap colour.
+  // Ordered specific → general so e.g. "EDTA Plasma" resolves to EDTA, not
+  // the generic plasma branch below.
+  const raw = (s.tests[0]?.test?.sampleType ?? '').toLowerCase().trim();
+  // "A + B" ("Serum + 24h Urine") means BOTH containers are drawn; a literal
+  // "Multiple" specimen likewise → the Multiple tube.
+  if (raw === 'multiple' || raw.includes('+')) {
+    return { kind: 'vacutainer', color: '#6366f1', fill: BLOOD_FILL, label: 'Multiple' };
+  }
+  // "A / B" ("Serum/Plasma") means EITHER is acceptable — resolve to the first
+  // option that maps, falling through to the next ("use A, else B").
+  for (const part of raw.split('/')) {
+    const hit = specimenContainer(part.trim());
+    if (hit) return hit;
+  }
   // Department container: the admin-configured colour/label wins (set per
   // department in Branches → Departments), then the sample's own department
   // record, then the built-in convention, then a neutral grey tube.

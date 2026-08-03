@@ -17,8 +17,9 @@ export interface BranchLabConfig {
    *  are always shown). Default true when absent. */
   showPaymentsDueTab?: boolean;
   /** Which machine-readable code(s) print on a specimen label:
-   *  'barcode' (1D only) | 'qr' (2D only) | 'both'. Default 'both'. */
-  labelCodeMode?: 'barcode' | 'qr' | 'both';
+   *  'barcode' (1D only) | 'qr' (2D only) | 'both' | 'datamatrix' (2D, fits a
+   *  tiny tube area). Default 'both'. */
+  labelCodeMode?: 'barcode' | 'qr' | 'both' | 'datamatrix';
   /** How the lab queues group work. Stored per-branch:
    *  'patient' (rows = patients, tests nested) | 'sample' (rows = sample IDs) |
    *  'auto' (default) → resolved from the branch's lab-space count. */

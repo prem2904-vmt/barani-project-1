@@ -200,8 +200,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
-  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('recent');
-  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'all' = 'recent';
+  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'profiles' | 'all'>('recent');
+  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all' = 'recent';
   /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
   readonly favouriteIds = signal<Set<string>>(new Set());
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
@@ -264,11 +264,51 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly query = this._query.asReadonly();
   readonly cartOpen = this._cartOpen.asReadonly();
 
-  readonly individualTests = computed(() => this._tests().filter(t => t.type !== 'package'));
+  readonly individualTests = computed(() => this._tests().filter(t => t.type === 'individual'));
   readonly packages = computed(() => {
     const list = this._tests().filter(t => t.type === 'package');
     return this.filterTestList(list, this._query());
   });
+  /** Profiles — orderable coded bundles, their own filter tab (kept out of
+   *  "All tests", which is individuals only). */
+  readonly profiles = computed(() => {
+    const list = this._tests().filter(t => t.type === 'profile');
+    return this.filterByDept(this.filterTestList(list, this._query()));
+  });
+  /** Profiles grouped by department (dept header on top, like the tests view). */
+  readonly profilesByDept = computed<Array<{ department: string; tests: Test[] }>>(() => {
+    const groups = new Map<string, Test[]>();
+    for (const p of this.profiles()) {
+      const key = p.department?.name?.trim() || '(No department)';
+      const arr = groups.get(key);
+      if (arr) arr.push(p); else groups.set(key, [p]);
+    }
+    return [...groups.entries()]
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort(this.byCode) }))
+      .sort((a, b) => a.department.localeCompare(b.department));
+  });
+
+  // ── Department quick-filter (pill row below the tabs) ──────────────
+  /** '' = all departments. */
+  private readonly _deptFilter = signal<string>('');
+  readonly deptFilter = this._deptFilter.asReadonly();
+  setDeptFilter(name: string) { this._deptFilter.set(this._deptFilter() === name ? '' : name); }
+
+  /** Distinct departments across the loaded (active) tests, with their code —
+   *  drives the pill filters. */
+  readonly deptChips = computed<Array<{ name: string; code: string }>>(() => {
+    const map = new Map<string, string>();
+    for (const t of this._tests()) {
+      const name = t.department?.name?.trim();
+      if (name && !map.has(name)) map.set(name, (t.department?.code ?? '').trim());
+    }
+    return [...map.entries()].map(([name, code]) => ({ name, code })).sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  private filterByDept(list: Test[]): Test[] {
+    const d = this._deptFilter();
+    return d ? list.filter(t => (t.department?.name?.trim() || '') === d) : list;
+  }
 
   // ── Category-aware test lists ────────────────────────────────────
 
@@ -293,7 +333,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
-  readonly filteredTests = computed(() => this.filterTestList(this.individualTests(), this._query()));
+  readonly filteredTests = computed(() => {
+    const q = this._query().trim();
+    // A search spans the WHOLE catalogue (individual + profile + package) and
+    // overrides the department pill — searching a package while on Tests still
+    // surfaces it. With no query, show dept-filtered individual tests only.
+    return q
+      ? this.filterTestList(this._tests(), q)
+      : this.filterByDept(this.individualTests());
+  });
+
+  /** Sort key: test code, natural/numeric-aware (BIO0002 before BIO0010). */
+  private byCode = (a: Test, b: Test) =>
+    ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
   private filterTestList(list: Test[], q: string): Test[] {
     const query = q.trim().toLowerCase();
@@ -348,7 +400,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Array.from(groups.entries())
       .map(([department, tests]) => ({
         department,
-        tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name))
+        tests: tests.slice().sort(this.byCode)
       }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
@@ -639,7 +691,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnInit() {
     this.labCfg.ensureLoaded();
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    // Only active tests are orderable — a disabled department's tests (cascaded
+    // to inactive) must not appear in the picker.
+    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
     });
@@ -1542,7 +1596,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'all'): void {
+  setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all'): void {
     this.categoryTab.set(tab);
     this.preSearchTab = tab;
   }

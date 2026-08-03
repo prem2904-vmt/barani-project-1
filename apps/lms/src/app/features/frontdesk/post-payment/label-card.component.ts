@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
+import bwipjs from 'bwip-js/browser';
 import { OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
@@ -92,6 +93,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
           </div>
           <div class="pf-lc__qr-wrap" [class.pf-lc__hidden]="!showQr">
             <canvas #qrCanvas class="pf-lc__qr" [attr.aria-label]="'QR ' + qrValue"></canvas>
+          </div>
+          <div class="pf-lc__qr-wrap" [class.pf-lc__hidden]="!showDataMatrix">
+            <canvas #dmxCanvas class="pf-lc__qr" [attr.aria-label]="'Data Matrix ' + barcode"></canvas>
           </div>
         </div>
         <span class="pf-lc__deptcode">{{ deptCode }}</span>
@@ -492,6 +496,7 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
 
   @ViewChild('barSvg', { static: true }) barSvg!: ElementRef<SVGElement>;
   @ViewChild('qrCanvas', { static: true }) qrCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('dmxCanvas', { static: true }) dmxCanvas!: ElementRef<HTMLCanvasElement>;
 
   private readonly labelCfg = inject(BranchLabConfigService);
   constructor() { this.labelCfg.ensureLoaded(); }
@@ -508,10 +513,11 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
     const mrn = this.patient?.mrn?.trim();
     return mrn ? `${mrn}|${this.barcode}` : this.barcode;
   }
-  /** Admin choice: 'barcode' | 'qr' | 'both' (default both). */
-  get codeMode(): 'barcode' | 'qr' | 'both' { return this.labelCfg.config()?.labelCodeMode ?? 'both'; }
-  get showBarcode(): boolean { return this.codeMode !== 'qr'; }
-  get showQr(): boolean { return this.codeMode !== 'barcode'; }
+  /** Admin choice: 'barcode' | 'qr' | 'both' | 'datamatrix' (default both). */
+  get codeMode(): 'barcode' | 'qr' | 'both' | 'datamatrix' { return this.labelCfg.config()?.labelCodeMode ?? 'both'; }
+  get showBarcode(): boolean { return this.codeMode === 'barcode' || this.codeMode === 'both'; }
+  get showQr(): boolean { return this.codeMode === 'qr' || this.codeMode === 'both'; }
+  get showDataMatrix(): boolean { return this.codeMode === 'datamatrix'; }
   get isOutsourced(): boolean { return !!this.sample.outsourcedVendorId; }
   get patientName(): string { return this.patient?.displayName ?? 'Patient'; }
 
@@ -557,6 +563,17 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
       width: 76,
       color: { dark: '#0f172a', light: '#ffffff' },
     }).catch(() => {});
+    // Data Matrix (2D) encodes ONLY the Sample ID (like the 1D barcode) but
+    // fits a much smaller square — for narrow tube labels. Only rendered when
+    // it's the chosen mode.
+    if (this.showDataMatrix) {
+      try {
+        bwipjs.toCanvas(this.dmxCanvas.nativeElement, {
+          bcid: 'datamatrix', text: code, scale: 4, paddingwidth: 1, paddingheight: 1,
+          barcolor: '000000', backgroundcolor: 'ffffff',
+        });
+      } catch { /* ignore un-encodable strings */ }
+    }
   }
 
   private calcAge(dob: string): number {

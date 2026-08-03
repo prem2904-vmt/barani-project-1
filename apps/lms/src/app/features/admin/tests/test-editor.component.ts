@@ -147,7 +147,7 @@ function newFieldId(): string {
 
       <pf-screen-header
         eyebrow="Admin · Tests"
-        [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : 'test')"
+        [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : draft().type === 'profile' ? 'profile' : 'test')"
         [subtitle]="subtitle()">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
@@ -168,9 +168,12 @@ function newFieldId(): string {
            form uses horizontal space instead of stacking two short cards. -->
       <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-4">
 
-        <!-- General -->
+        <!-- Identity — the core "what is this" fields: name, type, flow, the
+             department it sits under, and (for individual tests + profiles) its
+             unique code. Sample-collection descriptors live below for individual
+             tests only. -->
         <pf-tile tone="default" padding="lg" class="block">
-          <h3 class="section-title">General</h3>
+          <h3 class="section-title">Identity</h3>
           <div class="space-y-3 mt-4">
             <div><label class="pf-label">Name</label>
               <input type="text" class="pf-input"
@@ -192,11 +195,31 @@ function newFieldId(): string {
                            placeholder="— Select department —"
                            (valueChange)="onDeptPicked($event)"></pf-select>
               </div>
-              <div><label class="pf-label">Sample type</label>
-                <input type="text" class="pf-input" [ngModel]="d.sampleType"
-                       (ngModelChange)="patch({ sampleType: $event })" /></div>
+              <!-- Code shows for individual tests AND profiles (a profile REQUIRES
+                   its own unique code). Packages carry no code. -->
+              @if (d.type === 'individual' || d.type === 'profile') {
+                <div><label class="pf-label">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
+                  <input type="text" class="pf-input"
+                         [class.pf-input--error]="fieldError('testCode')"
+                         [ngModel]="d.testCode"
+                         (ngModelChange)="patch({ testCode: $event })"
+                         [placeholder]="d.type === 'profile' ? 'e.g. LIPID01' : 'e.g. CBC001'" />
+                  @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
+                </div>
+              }
             </div>
-            <!-- Tube colour: drives vial grouping (one vial per space + colour). -->
+            <!-- Sample type is an individual-test concern; bundles (profiles /
+                 packages) inherit collection from their member tests. -->
+            @if (d.type === 'individual') {
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><label class="pf-label">Sample type</label>
+                  <input type="text" class="pf-input" [ngModel]="d.sampleType"
+                         (ngModelChange)="patch({ sampleType: $event })" /></div>
+              </div>
+            }
+            <!-- Tube colour: drives vial grouping (one vial per space + colour).
+                 Individual tests only — bundles don't draw their own sample. -->
+            @if (d.type === 'individual') {
             <div class="mt-1">
               <label class="pf-label">Tube colour</label>
               <div class="pf-tube-swatches">
@@ -211,6 +234,7 @@ function newFieldId(): string {
               </div>
               <p class="pf-hint mt-1">The vial colour this test is drawn into. Leave unset to use the department's container colour.</p>
             </div>
+            }
           </div>
         </pf-tile>
 
@@ -235,8 +259,9 @@ function newFieldId(): string {
         </pf-tile>
 
         <!-- Outsourcing — subcontract this test to a referral lab. Outsourced
-             tests form their own vials per (lab + department) at collection. -->
-        @if (d.type !== 'package') {
+             tests form their own vials per (lab + department) at collection.
+             Individual tests only — bundles outsource via their members. -->
+        @if (d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <h3 class="section-title">Outsourcing</h3>
             <div class="space-y-3 mt-4">
@@ -259,33 +284,27 @@ function newFieldId(): string {
           </pf-tile>
         }
 
-        <!-- Test details — master-data descriptors (code, section, specimen
-             handling). Individual tests only. -->
-        @if (d.type !== 'package') {
+        <!-- Test details — master-data descriptors. Individual tests only; a
+             profile's only descriptor is its code, which lives in Identity. -->
+        @if (d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <h3 class="section-title">Details</h3>
             <div class="space-y-3 mt-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div><label class="pf-label">Test code</label>
-                  <input type="text" class="pf-input" [ngModel]="d.testCode"
-                         (ngModelChange)="patch({ testCode: $event })"
-                         placeholder="e.g. CBC001" /></div>
                 <div><label class="pf-label">Short name</label>
                   <input type="text" class="pf-input" [ngModel]="d.shortName"
                          (ngModelChange)="patch({ shortName: $event })"
                          placeholder="e.g. CBC" /></div>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Section</label>
                   <input type="text" class="pf-input" [ngModel]="d.section"
                          (ngModelChange)="patch({ section: $event })"
                          placeholder="Sub-group under the department" /></div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Profile</label>
                   <input type="text" class="pf-input" [ngModel]="d.profile"
                          (ngModelChange)="patch({ profile: $event })"
                          placeholder="e.g. LFT, Lipid Profile" /></div>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Methodology</label>
                   <input type="text" class="pf-input" [ngModel]="d.methodology"
                          (ngModelChange)="patch({ methodology: $event })"
@@ -303,9 +322,11 @@ function newFieldId(): string {
               </div>
             </div>
           </pf-tile>
+        }
 
-          <!-- Result & report — how the result is captured and rendered, plus
-               test-level reference/critical limits. -->
+        <!-- Result & report — how the result is captured and rendered, plus
+             test-level reference/critical limits. Individual tests only. -->
+        @if (d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <h3 class="section-title">Result &amp; report</h3>
             <div class="space-y-3 mt-4">
@@ -342,11 +363,11 @@ function newFieldId(): string {
         }
       </div>
 
-      <!-- Packages have a totally different body — a member-test picker
-           instead of parameters/report-layout — so we branch here on type.
-           Individual tests get the tab strip + parameter/layout editors;
-           packages get the member picker with its own summary chips. -->
-      @if (d.type !== 'package') {
+      <!-- Bundles (packages AND profiles) have a totally different body — a
+           member-test picker instead of parameters/report-layout — so we branch
+           here on type. Individual tests get the tab strip + parameter/layout
+           editors; bundles get the shared member picker with its summary chips. -->
+      @if (d.type === 'individual') {
       <!-- Tab strip — sits between Pricing & TAT and the Parameters / Report
            Layout content so admins don't have to scroll to find the layout
            editor, but General + Pricing stay always visible up top. -->
@@ -628,57 +649,79 @@ function newFieldId(): string {
         }
       }
       } @else {
-        <!-- Package member picker. List of all individual tests grouped by
-             department; checkboxes write the selected ids into the package's
-             member list. Price + member count surface at the top so admins
-             can sanity-check the bundle as they tick tests. -->
+        <!-- Bundle member picker (packages + profiles). A profile bundles
+             individual tests; a package bundles tests AND profiles (exploded
+             recursively backend-side). Checkboxes write the selected ids into
+             the bundle's member list. The pill filter + search + live summary
+             sit in one toolbar so admins can sanity-check as they tick. -->
         <pf-tile tone="default" padding="lg" class="block">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="section-title">Package members</h3>
-              <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                Pick the individual tests included in this package.
+          <div class="pf-picker-head">
+            <div class="min-w-0">
+              <h3 class="section-title">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h3>
+              <p class="pf-picker-sub">
+                @if (d.type === 'profile') {
+                  Pick the individual tests included in this profile.
+                } @else {
+                  Pick the tests and profiles included in this package.
+                }
               </p>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="pf-pkg-chip">
-                <strong>{{ packageItems().length }}</strong> tests
-              </span>
-              <span class="pf-pkg-chip">
-                Member total: <strong>{{ packageMembersTotal() | inr }}</strong>
-              </span>
-            </div>
+            <span class="pf-picker-summary" [class.pf-picker-summary--on]="packageItems().length > 0">
+              <strong>{{ packageItems().length }}</strong>
+              {{ packageItems().length === 1 ? 'member' : 'members' }}
+              <span class="pf-picker-summary__sep">·</span>
+              <strong>{{ packageMembersTotal() | inr }}</strong>
+            </span>
           </div>
 
-          <input type="text" class="pf-input mb-4" placeholder="Search tests by name or department…"
-                 [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+          <div class="pf-picker-toolbar">
+            @if (d.type === 'package') {
+              <pf-segmented [options]="pickFilterOptions" [value]="pickFilter()" size="sm"
+                            (valueChange)="pickFilter.set($event)"></pf-segmented>
+            }
+            <input type="text" class="pf-input pf-picker-search"
+                   placeholder="Search by name or department…"
+                   [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+          </div>
 
           @if (filteredPackageCatalogByDept().length === 0) {
-            <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">
-              @if (allIndividualTests().length === 0) {
-                No individual tests configured yet — create a few tests first, then build the package.
+            <p class="pf-picker-empty">
+              @if (pickerSource().length === 0) {
+                @if (d.type === 'profile') {
+                  No individual tests configured yet — create a few tests first, then build the profile.
+                } @else {
+                  No tests or profiles configured yet — create a few first, then build the package.
+                }
               } @else {
-                No tests match "{{ packageQuery() }}".
+                Nothing matches your filter{{ packageQuery() ? ' "' + packageQuery() + '"' : '' }}.
               }
             </p>
           } @else {
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-5">
               @for (group of filteredPackageCatalogByDept(); track group.department) {
                 <div>
                   <div class="pf-pkg-dept-hdr">
                     <span class="pf-pkg-dept-hdr__name">{{ group.department }}</span>
                     <span class="pf-pkg-dept-hdr__count">{{ group.tests.length }}</span>
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <div class="pf-pick-grid">
                     @for (t of group.tests; track t.id) {
                       <label class="pf-pkg-pick"
                              [class.pf-pkg-pick--on]="isInPackage(t.id)">
                         <input type="checkbox"
                                [checked]="isInPackage(t.id)"
                                (change)="togglePackageMember(t.id)" />
-                        <span class="flex-1 min-w-0">
-                          <span class="pf-pkg-pick__name">{{ t.name }}</span>
-                          <span class="pf-pkg-pick__meta">TAT {{ t.tatHours }}h</span>
+                        <span class="pf-pkg-pick__body">
+                          <span class="pf-pkg-pick__title">
+                            <span class="pf-pkg-pick__name">{{ t.name }}</span>
+                            @if (t.type === 'profile') {
+                              <span class="pf-pkg-badge">Profile</span>
+                            }
+                          </span>
+                          <span class="pf-pkg-pick__meta">
+                            @if (t.testCode) { <span>{{ t.testCode }}</span><span class="pf-pkg-pick__dot">·</span> }
+                            <span>TAT {{ t.tatHours }}h</span>
+                          </span>
                         </span>
                         <span class="pf-pkg-pick__price">{{ t.price | inr }}</span>
                       </label>
@@ -713,7 +756,7 @@ function newFieldId(): string {
     .pf-tube__dot { width: 15px; height: 15px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset; flex-shrink: 0; }
     .pf-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
 
-    /* ── Package picker ── */
+    /* ── Package / profile member picker ── */
     .pf-pkg-chip {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 4px 10px;
@@ -723,11 +766,54 @@ function newFieldId(): string {
       border: 1px solid rgba(168, 85, 247, 0.32);
       color: var(--text-primary);
     }
+
+    /* Picker header: title + subtitle on the left, live summary chip right. */
+    .pf-picker-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .pf-picker-sub {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .pf-picker-summary {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      white-space: nowrap;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .pf-picker-summary strong { color: var(--text-primary); font-weight: 700; }
+    .pf-picker-summary__sep { color: var(--text-muted); }
+    .pf-picker-summary--on {
+      background: rgba(168, 85, 247, 0.12);
+      border-color: rgba(168, 85, 247, 0.4);
+      color: var(--text-primary);
+    }
+
+    /* Toolbar: pill filter + search on one row (wraps on narrow widths). */
+    .pf-picker-toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .pf-picker-search { flex: 1 1 220px; min-width: 0; margin-bottom: 0; }
+    .pf-picker-empty {
+      text-align: center;
+      padding: 28px 8px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
     .pf-pkg-dept-hdr {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 4px 8px;
       border-bottom: 1px dashed var(--glass-border);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .pf-pkg-dept-hdr__name {
       font-size: 11px; font-weight: 800;
@@ -741,35 +827,58 @@ function newFieldId(): string {
       background: rgba(168, 85, 247, 0.16);
       color: var(--violet-text);
     }
+
+    /* Equal-height pick cards in an auto-fill grid so rows align cleanly. */
+    .pf-pick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px;
+    }
     .pf-pkg-pick {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 10px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid var(--glass-border);
       background: var(--glass-bg);
       cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
+      height: 100%;
+      transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
     }
     .pf-pkg-pick:hover { border-color: rgba(168, 85, 247, 0.45); }
     .pf-pkg-pick--on {
       background: rgba(168, 85, 247, 0.10);
       border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.25);
     }
-    .pf-pkg-pick input[type="checkbox"] { width: 16px; height: 16px; accent-color: #a855f7; }
+    .pf-pkg-pick input[type="checkbox"] { width: 16px; height: 16px; accent-color: #a855f7; flex-shrink: 0; }
+    .pf-pkg-pick__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-pkg-pick__title { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .pf-pkg-pick__name {
-      display: block;
       font-weight: 600; font-size: 13px;
       color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .pf-pkg-pick__meta {
-      display: block;
+      display: flex; align-items: center; gap: 5px;
       font-size: 11px;
       color: var(--text-tertiary);
     }
+    .pf-pkg-pick__dot { color: var(--text-muted); }
     .pf-pkg-pick__price {
       font-size: 12.5px; font-weight: 600;
       color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    /* PROFILE tag on profile member rows — distinct from the violet package UI. */
+    .pf-pkg-badge {
+      flex-shrink: 0;
+      padding: 1px 7px;
+      font-size: 8.5px; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.38);
+      color: #7dd3fc;
     }
 
     /* ── Parameter row ── */
@@ -1045,8 +1154,9 @@ export class TestEditorComponent implements OnInit {
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
 
-  readonly typeOptions: PfSelectOption<'individual' | 'package'>[] = [
+  readonly typeOptions: PfSelectOption<'individual' | 'profile' | 'package'>[] = [
     { value: 'individual', label: 'Individual' },
+    { value: 'profile',    label: 'Profile' },
     { value: 'package',    label: 'Package' }
   ];
   readonly flowOptions: PfSelectOption<'direct' | 'approval'>[] = [
@@ -1150,11 +1260,21 @@ export class TestEditorComponent implements OnInit {
   readonly draft = this._draft.asReadonly();
 
   /** The four vacutainer tube colours used for vial grouping. */
+  // NABL / standard vacutainer cap colours (order-of-draw). The key is stored
+  // on the test as `tubeColor`; the legacy keys red/lavender/grey/blue still
+  // resolve in sample-collection's colour map for older tests.
   readonly tubeColors = [
-    { key: 'red',      label: 'Red',      hex: '#ef4444' },
-    { key: 'lavender', label: 'Lavender', hex: '#a78bfa' },
-    { key: 'grey',     label: 'Grey',     hex: '#9ca3af' },
-    { key: 'blue',     label: 'Blue',     hex: '#3b82f6' },
+    { key: 'sst',      label: 'SST · Gold',              hex: '#eab308' },
+    { key: 'plain',    label: 'Plain · Red',             hex: '#ef4444' },
+    { key: 'edta',     label: 'EDTA · Lavender',         hex: '#a855f7' },
+    { key: 'fluoride', label: 'Fluoride · Grey',         hex: '#9ca3af' },
+    { key: 'heparin',  label: 'Lithium Heparin · Green', hex: '#22c55e' },
+    { key: 'citrate',  label: 'Sodium Citrate · Blue',   hex: '#38bdf8' },
+    { key: 'esr',      label: 'ESR · Black',             hex: '#1f2937' },
+    { key: 'trace',    label: 'Trace metal · Royal blue',hex: '#1d4ed8' },
+    { key: 'sterile',  label: 'Sterile Container',       hex: '#e5e7eb' },
+    { key: 'urine',    label: 'Urine Bottle · Yellow',   hex: '#facc15' },
+    { key: 'multiple', label: 'Multiple',                hex: '#6366f1' },
   ];
 
   // Parameter rows collapse to a one-line summary by default — admins
@@ -1225,28 +1345,75 @@ export class TestEditorComponent implements OnInit {
   private readonly _allIndividualTests = signal<Test[]>([]);
   readonly allIndividualTests = this._allIndividualTests.asReadonly();
 
-  /** Sum of the prices of the tests currently ticked. Helps admins set
-   *  a sensible package price below the member total. */
-  readonly packageMembersTotal = computed(() => {
-    const picked = new Set(this._packageItems());
-    return this._allIndividualTests()
-      .filter(t => picked.has(t.id))
-      .reduce((s, t) => s + (t.price ?? 0), 0);
+  /** All profiles in the catalog. A PACKAGE may bundle profiles too (the
+   *  backend explodes them recursively); a PROFILE bundles individual tests
+   *  only, so this feeds the package picker exclusively. */
+  private readonly _allProfiles = signal<Test[]>([]);
+  readonly allProfiles = this._allProfiles.asReadonly();
+
+  /** Package-only pill filter narrowing the picker to tests / profiles / all.
+   *  (Profiles being edited pick individual tests only, so no filter shows.) */
+  readonly pickFilter = signal<'all' | 'tests' | 'profiles'>('all');
+  readonly pickFilterOptions: SegmentedOption<'all' | 'tests' | 'profiles'>[] = [
+    { value: 'all',      label: 'All' },
+    { value: 'tests',    label: 'Tests' },
+    { value: 'profiles', label: 'Profiles' }
+  ];
+
+  /** The member candidates for the current bundle, minus the bundle itself:
+   *   • profile  → individual tests only
+   *   • package  → individual tests + profiles (exploded recursively backend-side)
+   *  Excluding `d.id` stops a package/profile from listing (and picking) itself. */
+  readonly pickerSource = computed<Test[]>(() => {
+    const d = this._draft();
+    const selfId = d.id ?? '';
+    const tests = this._allIndividualTests().filter(t => t.id !== selfId);
+    if (d.type !== 'package') return tests;
+    const profiles = this._allProfiles().filter(t => t.id !== selfId);
+    return [...tests, ...profiles];
   });
 
-  /** Group the picker's tests by dept and apply the search query. */
+  /** Every pickable member (tests + profiles) keyed by id — used to price the
+   *  current selection regardless of the active filter. */
+  private readonly _memberById = computed<Map<string, Test>>(() => {
+    const m = new Map<string, Test>();
+    for (const t of this._allIndividualTests()) m.set(t.id, t);
+    for (const t of this._allProfiles()) m.set(t.id, t);
+    return m;
+  });
+
+  /** Sum of the prices of ALL picked members (tests AND profiles). Helps
+   *  admins set a sensible bundle price below the member total. */
+  readonly packageMembersTotal = computed(() => {
+    const by = this._memberById();
+    return this._packageItems().reduce((s, id) => s + (by.get(id)?.price ?? 0), 0);
+  });
+
+  /** Group the picker's candidates by dept (profiles cluster under a synthetic
+   *  "Profiles" group), applying the package pill filter then the search. */
   readonly filteredPackageCatalogByDept = computed(() => {
+    const d = this._draft();
     const q = this.packageQuery().trim().toLowerCase();
+    const filter = this.pickFilter();
+    let source = this.pickerSource();
+    if (d.type === 'package' && filter !== 'all') {
+      source = source.filter(t => filter === 'profiles' ? t.type === 'profile' : t.type !== 'profile');
+    }
     const groups = new Map<string, Test[]>();
-    for (const t of this._allIndividualTests()) {
+    for (const t of source) {
       if (q && !t.name.toLowerCase().includes(q) && !(t.department?.name ?? '').toLowerCase().includes(q)) continue;
-      const key = t.department?.name?.trim() || '(No department)';
+      const key = t.type === 'profile' ? 'Profiles' : (t.department?.name?.trim() || '(No department)');
       const arr = groups.get(key);
       if (arr) arr.push(t); else groups.set(key, [t]);
     }
     return Array.from(groups.entries())
+      // Keep the Profiles cluster last so individual-test departments read first.
       .map(([department, tests]) => ({ department, tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name)) }))
-      .sort((a, b) => a.department.localeCompare(b.department));
+      .sort((a, b) => {
+        if (a.department === 'Profiles') return 1;
+        if (b.department === 'Profiles') return -1;
+        return a.department.localeCompare(b.department);
+      });
   });
 
   isInPackage(id: string): boolean { return this._packageItems().includes(id); }
@@ -1272,6 +1439,11 @@ export class TestEditorComponent implements OnInit {
     this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
       next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
     });
+    // Profiles are also pickable members of a PACKAGE (backend explodes them
+    // recursively), so load them too — the picker source switches on bundle type.
+    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
+      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
+    });
 
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
@@ -1284,7 +1456,7 @@ export class TestEditorComponent implements OnInit {
       // package" button lands on this editor with the package type pre-
       // selected instead of defaulting to individual.
       const t = this.route.snapshot.queryParamMap.get('type');
-      if (t === 'package' || t === 'individual') {
+      if (t === 'package' || t === 'individual' || t === 'profile') {
         this.patch({ type: t });
       }
     }
@@ -1309,8 +1481,9 @@ export class TestEditorComponent implements OnInit {
       outsourcedDepartmentId: t.outsourcedDepartmentId ?? ''
     });
     this._fields.set(this.loadParameters(t.parameters ?? ''));
-    // Packages store member-test ids under `items` in the same JSON blob.
-    if (t.type === 'package') {
+    // Bundles (packages AND profiles) store member-test ids under `items` in
+    // the same JSON blob — load them into the shared member picker.
+    if (t.type === 'package' || t.type === 'profile') {
       try {
         const blob = JSON.parse(t.parameters ?? '{}');
         // Accept BOTH member shapes: canonical [{ testId }] (what the backend
@@ -1542,7 +1715,26 @@ export class TestEditorComponent implements OnInit {
   saveTest() {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
+
+    // Profiles are bundles (member picker + a required unique code). Guard the
+    // two profile-specific invariants before we build the body; the backend
+    // also 409s on a duplicate code, which handleSaveError routes to the input.
+    if (d.type === 'profile') {
+      if (!d.testCode.trim()) {
+        this._fieldErrors.update(m => ({ ...m, testCode: 'Profile code is required' }));
+        this.toasts.warning('Profile code is required');
+        return;
+      }
+      if (this._packageItems().length === 0) {
+        this.toasts.warning('Add at least one member test to the profile');
+        return;
+      }
+    }
+
     const pkg = d.type === 'package';
+    // Bundles (packages + profiles) serialise their member-test ids, not the
+    // individual-test parameter/field schema.
+    const bundle = d.type !== 'individual';
 
     // Packages: serialise member-test ids into the same JSON blob as
     // `{items: [...]}` so the order-create picker + admin list both
@@ -1553,7 +1745,7 @@ export class TestEditorComponent implements OnInit {
     // backend exploder (ParsePackageChildIds) and order-create's
     // parsePackageMembers read. The previous plain-string array parsed as zero
     // members, so editor-saved packages silently never exploded at order time.
-    const parametersJson = d.type === 'package'
+    const parametersJson = bundle
       ? JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) })
       : (d.parametersJson || undefined);
 
@@ -1612,7 +1804,7 @@ export class TestEditorComponent implements OnInit {
     this._saving.set(false);
     const err = ApiError.from(e);
     const field = err.field ?? '';
-    if (field === 'name' || field === 'price') {
+    if (field === 'name' || field === 'price' || field === 'testCode') {
       this._fieldErrors.update(m => ({ ...m, [field]: err.message }));
     } else {
       this.toasts.error(err.message);

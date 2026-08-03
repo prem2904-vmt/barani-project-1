@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import {
   AllCommunityModule,
   ColDef,
@@ -49,13 +50,35 @@ type TestRow = Test & {
 
 const UNASSIGNED = 'Unassigned';
 
-/** A department bucket derived from the loaded catalogue (deduped by name). */
+/** Tube/vial colour → swatch hex, keyed by the row's `tubeColor` value. */
+const TUBE_HEX: Record<string, string> = {
+  sst: '#eab308', plain: '#ef4444', edta: '#a855f7', fluoride: '#9ca3af',
+  heparin: '#22c55e', citrate: '#38bdf8', esr: '#1f2937', trace: '#1d4ed8',
+  sterile: '#e5e7eb', urine: '#facc15', multiple: '#6366f1',
+  red: '#ef4444', lavender: '#a855f7', grey: '#9ca3af', blue: '#38bdf8',
+};
+
+/** Tube colour key → human container label shown in the Container column. */
+const TUBE_LABEL: Record<string, string> = {
+  sst: 'SST', plain: 'Plain', edta: 'EDTA', fluoride: 'Fluoride',
+  heparin: 'Lithium Heparin', citrate: 'Citrate', esr: 'ESR', trace: 'Trace metal',
+  sterile: 'Sterile', urine: 'Urine', multiple: 'Multiple',
+  red: 'Plain', lavender: 'EDTA', grey: 'Fluoride', blue: 'Citrate',
+};
+
+/** A department bucket for the left panel. `id`/`isActive` come from the real
+ *  departments API (null id = a synthesised bucket, e.g. Unassigned). */
 interface DeptBucket {
   key: string;   // department name, or UNASSIGNED
+  id: string | null;
   name: string;
   code: string;
   count: number;
+  isActive: boolean;
 }
+
+/** Raw department record from `/api/tenants/departments`. */
+interface DeptRecord { id: string; name: string; code: string; isActive?: boolean; }
 
 // ── Theme variants (Theming API, no legacy CSS files) ──────────────────
 const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
@@ -113,6 +136,10 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
         title="Test Master"
         subtitle="Master catalogue of tests, profiles and packages — filter, and edit prices inline.">
         <div actions class="flex items-center gap-2">
+          @if (dirtyCount() > 0) {
+            <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
+            <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
+          }
           <pf-touch-btn size="sm" variant="secondary" (pressed)="openProfileDialog()">Create profile</pf-touch-btn>
           <pf-touch-btn size="sm" variant="secondary" (pressed)="openPackageDialog()">Create package</pf-touch-btn>
           <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
@@ -159,7 +186,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
               </button>
             </li>
             @for (d of departments(); track d.key) {
-              <li>
+              <li class="pf-tm-dept-row" [class.pf-tm-dept-row--off]="!!d.id && !d.isActive">
                 <button type="button" class="pf-tm-dept" [class.pf-tm-dept--active]="selectedDept() === d.key"
                         (click)="selectDept(d.key)">
                   <span class="pf-tm-dept-name">
@@ -168,6 +195,14 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
                   </span>
                   <span class="pf-tm-dept-count">{{ d.count }}</span>
                 </button>
+                @if (d.id) {
+                  <button type="button" class="pf-tm-dept-switch" [class.pf-tm-dept-switch--on]="d.isActive"
+                          (click)="toggleDept(d)" [attr.aria-pressed]="d.isActive"
+                          [title]="d.isActive ? 'Disable department' : 'Enable department'"
+                          [attr.aria-label]="(d.isActive ? 'Disable ' : 'Enable ') + d.name">
+                    <span class="pf-tm-dept-switch-knob"></span>
+                  </button>
+                }
               </li>
             }
             @if (departments().length === 0) {
@@ -189,7 +224,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
               </button>
             }
             <span>{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
-            <span class="pf-tm-hint">Double-click a cell to edit · Price saves on change</span>
+            <span class="pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
           </div>
           <ag-grid-angular
             class="pf-tm-grid"
@@ -326,6 +361,27 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
       min-width: 26px; text-align: center; padding: 1px 7px; flex-shrink: 0; }
     .pf-tm-dept-empty { padding: 10px; font-size: 12.5px; color: var(--text-tertiary); }
 
+    /* Department row + enable/disable switch */
+    .pf-tm-dept-row { display: flex; align-items: center; gap: 6px; }
+    .pf-tm-dept-row .pf-tm-dept { flex: 1; min-width: 0; }
+    .pf-tm-dept-row--off .pf-tm-dept { opacity: 0.5; }
+    .pf-tm-dept-switch { flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; padding: 0;
+      border: 1px solid var(--glass-border); background: var(--glass-bg); position: relative; cursor: pointer;
+      transition: background .15s, border-color .15s; }
+    .pf-tm-dept-switch:hover { border-color: rgba(168,85,247,0.5); }
+    .pf-tm-dept-switch--on { background: rgba(168,85,247,0.35); border-color: rgba(168,85,247,0.5); }
+    .pf-tm-dept-switch-knob { position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: transform .15s; }
+    .pf-tm-dept-switch--on .pf-tm-dept-switch-knob { transform: translateX(14px); }
+
+    /* Individual Name cell: tube-colour swatch + name */
+    .pf-tm-name-cell { display: flex; align-items: center; gap: 8px; height: 100%; min-width: 0; }
+    .pf-tm-tube-dot { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; }
+    .pf-tm-tube-dot--empty { border: 1px solid var(--glass-border); }
+    .pf-tm-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Duplicate test code — flag the cell red the instant it collides. */
+    .pf-tm-cell-dup { background: rgba(239, 68, 68, 0.24) !important; color: #fecaca !important; font-weight: 600; }
+
     /* Grid */
     .pf-tm-main { min-width: 0; }
     .pf-tm-grid-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -378,8 +434,35 @@ export class TestsComponent implements OnInit {
 
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
+  private readonly _depts = signal<DeptRecord[]>([]);
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
+
+  /** Pending edits keyed by the row's REAL test id (`data.id`), each a map of
+   *  `{ field: newValue }` merged across cells. Flushed by `saveAll()`. */
+  private readonly _dirty = signal<Map<string, Record<string, unknown>>>(new Map());
+  readonly dirtyCount = computed(() => this._dirty().size);
+
+  /** Effective (pending-edit-aware) trimmed test code for a row. */
+  private effectiveCode(t: Test): string {
+    const pending = this._dirty().get(t.id)?.['testCode'];
+    return (pending !== undefined ? String(pending) : (t.testCode ?? '')).trim();
+  }
+  /** Codes used by more than one loaded test (case-insensitive), after pending
+   *  edits — drives the red "duplicate code" cell highlight. */
+  readonly dupCodes = computed<Set<string>>(() => {
+    const counts = new Map<string, number>();
+    for (const t of this._tests()) {
+      const c = this.effectiveCode(t).toLowerCase();
+      if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([c]) => c));
+  });
+  private isDupCode(t?: Test): boolean {
+    if (!t) return false;
+    const c = this.effectiveCode(t).toLowerCase();
+    return !!c && this.dupCodes().has(c);
+  }
   /** Collapse the left department panel to give the grid full width. */
   readonly sideCollapsed = signal(false);
   toggleSide() { this.sideCollapsed.update(v => !v); }
@@ -406,25 +489,46 @@ export class TestsComponent implements OnInit {
   readonly getRowId = (p: GetRowIdParams<TestRow>) => p.data._key ?? p.data.id;
 
   private gridApi?: GridApi<TestRow>;
-  /** Guards the revert-on-error path from re-triggering a save loop. */
-  private reverting = false;
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
   /** All tests of the currently-selected type. */
   readonly typeTests = computed(() => this._tests().filter(t => t.type === this._type()));
 
-  /** Departments derived from the current type's tests, deduped by name. */
+  /**
+   * Left-panel buckets. Built from the REAL departments API (so id + active
+   * state are available for the enable/disable toggle), with per-department
+   * counts computed from the loaded tests (matched by department name, as
+   * before). Test-department names not present in the API list, plus tests
+   * with no department, still surface as id-less buckets so nothing is hidden.
+   */
   readonly departments = computed<DeptBucket[]>(() => {
-    const map = new Map<string, DeptBucket>();
+    const countByName = new Map<string, number>();
+    let unassigned = 0;
     for (const t of this.typeTests()) {
-      const name = t.department?.name?.trim() || UNASSIGNED;
-      const code = t.department?.code?.trim() || '';
-      const g = map.get(name);
-      if (g) { g.count++; if (!g.code && code) g.code = code; }
-      else map.set(name, { key: name, name, code, count: 1 });
+      const name = t.department?.name?.trim();
+      if (name) countByName.set(name, (countByName.get(name) ?? 0) + 1);
+      else unassigned++;
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    const buckets: DeptBucket[] = this._depts().map(d => ({
+      key: d.name,
+      id: d.id,
+      name: d.name,
+      code: d.code?.trim() || '',
+      count: countByName.get(d.name) ?? 0,
+      isActive: d.isActive ?? true,
+    }));
+
+    // Test-department names not covered by the API list → id-less buckets.
+    const covered = new Set(this._depts().map(d => d.name));
+    for (const [name, count] of countByName) {
+      if (!covered.has(name)) buckets.push({ key: name, id: null, name, code: '', count, isActive: true });
+    }
+    if (unassigned > 0) {
+      buckets.push({ key: UNASSIGNED, id: null, name: UNASSIGNED, code: '', count: unassigned, isActive: true });
+    }
+    return buckets.sort((a, b) => a.name.localeCompare(b.name));
   });
 
   /**
@@ -535,25 +639,42 @@ export class TestsComponent implements OnInit {
   readonly colDefs = computed<ColDef<TestRow>[]>(() => {
     const view = this._type();
 
-    // Individual view — unchanged flat catalogue.
+    // Individual view — flat catalogue, all core columns editable into a dirty
+    // buffer (see onCellValueChanged / saveAll). Ref-range + Status stay read-only.
     if (view === 'individual') {
       return [
-        { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sort: 'asc' },
+        {
+          headerName: 'Code', field: 'testCode', editable: true, minWidth: 120, maxWidth: 160, sort: 'asc',
+          // Red highlight the moment a code collides with another row's code.
+          // Inline cellStyle (not a CSS class) so it applies to AG Grid's own
+          // cell DOM regardless of Angular view encapsulation.
+          cellStyle: (p) => this.isDupCode(p.data)
+            ? { backgroundColor: 'rgba(239,68,68,0.28)', color: '#fecaca', fontWeight: '600' }
+            : { backgroundColor: '', color: '', fontWeight: '' },
+        },
         { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2 },
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
-        { headerName: 'Specimen', field: 'sampleType', minWidth: 120 },
+        {
+          headerName: 'Container', colId: 'container', minWidth: 150, editable: false,
+          cellRenderer: this.containerRenderer,
+          valueGetter: p => TUBE_LABEL[p.data?.tubeColor ?? ''] ?? '',
+        },
         { headerName: 'Unit', field: 'unit', editable: true, minWidth: 100 },
         {
           headerName: 'Reference range', colId: 'referenceRange', minWidth: 150,
           valueGetter: p => this.referenceRange(p.data), editable: false,
         },
-        { headerName: 'TAT (h)', field: 'tatHours', minWidth: 100, maxWidth: 120 },
+        {
+          headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
+          cellEditor: 'agNumberCellEditor',
+        },
         this.priceColDef(true),
         {
           headerName: 'Status', colId: 'status', minWidth: 100, maxWidth: 120, editable: false,
           valueGetter: p => (p.data?.isActive ? 'Active' : 'Inactive'),
         },
+        this.actionsColDef(),
       ];
     }
 
@@ -583,6 +704,7 @@ export class TestsComponent implements OnInit {
       // Price stays editable — the PATCH targets the row's real test id, so
       // editing a bundle's price updates that bundle, not a synthetic key.
       { ...this.priceColDef(true), sortable: false, filter: false },
+      this.actionsColDef(),
     ];
   });
 
@@ -603,6 +725,74 @@ export class TestsComponent implements OnInit {
     if (t.type === 'profile') return 'Profile';
     if (t.type === 'package') return 'Package';
     return 'Test';
+  }
+
+  /**
+   * Individual Name cell: a small round tube-colour swatch (from `tubeColor`)
+   * to the LEFT of the name. Display-only — AG Grid swaps in the text editor on
+   * edit, so the name stays double-click editable.
+   */
+  /**
+   * Container cell: the tube-colour swatch (from `tubeColor`, sourced from the
+   * catalogue's Container) + its human label. Styles are INLINE because AG Grid
+   * renders this cell DOM outside Angular's template, so view-encapsulated
+   * classes never match here.
+   */
+  private containerRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const key = params.data?.tubeColor ?? '';
+    const hex = key ? TUBE_HEX[key] : undefined;
+    const label = key ? (TUBE_LABEL[key] ?? key) : '—';
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
+
+    const dot = document.createElement('span');
+    dot.style.cssText = 'flex:0 0 auto;width:11px;height:11px;border-radius:50%;box-sizing:border-box;background:'
+      + (hex ?? 'transparent')
+      + (hex ? ';' : ';border:1px solid rgba(148,163,184,0.5);');
+    wrap.appendChild(dot);
+
+    const text = document.createElement('span');
+    text.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    text.textContent = label;
+    wrap.appendChild(text);
+    return wrap;
+  };
+
+  /**
+   * Row actions cell: an Edit (pencil) button that opens the full test editor.
+   * Inline styles + a manual click listener, since AG Grid renders this DOM
+   * outside Angular's template.
+   */
+  private actionsRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const data = params.data;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = 'Edit test';
+    btn.setAttribute('aria-label', 'Edit test');
+    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;'
+      + 'border-radius:8px;border:1px solid rgba(148,163,184,0.28);background:transparent;'
+      + 'color:var(--text-secondary,#94a3b8);cursor:pointer;';
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+      + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (data?.id) this.editTest(data.id);
+    });
+    wrap.appendChild(btn);
+    return wrap;
+  };
+
+  /** Shared pinned-right Edit column for every view. */
+  private actionsColDef(): ColDef<TestRow> {
+    return {
+      headerName: '', colId: 'actions', cellRenderer: this.actionsRenderer,
+      editable: false, sortable: false, filter: false, resizable: false,
+      minWidth: 60, maxWidth: 64, pinned: 'right',
+    };
   }
 
   /**
@@ -662,6 +852,7 @@ export class TestsComponent implements OnInit {
 
   ngOnInit() {
     this.loadTests();
+    this.loadDepartments();
   }
 
   onGridReady(e: GridReadyEvent<TestRow>) {
@@ -684,6 +875,34 @@ export class TestsComponent implements OnInit {
     });
   }
 
+  private loadDepartments() {
+    this.api.get<DeptRecord[]>('/api/tenants/departments').subscribe({
+      next: l => this._depts.set(l ?? []),
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
+  }
+
+  /** Enable/disable a real department (id-less buckets have no toggle). */
+  toggleDept(d: DeptBucket) {
+    if (!d.id) return;
+    const id = d.id;
+    const next = !d.isActive;
+    // Optimistic flip; revert on error.
+    this._depts.update(list => list.map(x => (x.id === id ? { ...x, isActive: next } : x)));
+    this.api.patch(`/api/tenants/departments/${id}`, { isActive: next }).subscribe({
+      next: () => {
+        this.toasts.success(next ? 'Department enabled' : 'Department disabled');
+        // Disabling a department takes all its tests out of service — reload so
+        // the grid's Status column reflects the cascade.
+        this.loadTests();
+      },
+      error: e => {
+        this._depts.update(list => list.map(x => (x.id === id ? { ...x, isActive: !next } : x)));
+        this.toasts.error(ApiError.from(e).message);
+      },
+    });
+  }
+
   /** Derive a readable reference range from the parameters JSON blob. */
   private referenceRange(t?: Test): string {
     if (!t?.parameters) return '';
@@ -701,34 +920,83 @@ export class TestsComponent implements OnInit {
     } catch { return ''; }
   }
 
-  /** Inline-edit committed → persist the single field; revert the cell on error. */
+  /** Inline-edit committed → record it in the dirty buffer (no API call yet). */
   onCellValueChanged(e: CellValueChangedEvent<TestRow>) {
-    if (this.reverting) return;
     const field = e.colDef.field;
     if (!field) return;
     if (e.newValue === e.oldValue) return;
 
-    // Use the row's REAL test id (never the synthetic `_key`) so a bundle row's
-    // price edit PATCHes that bundle test, not a path key.
+    // Buffer against the row's REAL test id (never the synthetic `_key`) so a
+    // bundle row's edit targets that bundle test, not a path key.
     const id = e.data.id;
-    const value = field === 'price' ? Number(e.newValue) : e.newValue;
+    const value = field === 'price' || field === 'tatHours' ? Number(e.newValue) : e.newValue;
 
-    this.api.patch<Test>(`/api/tests/${id}`, { [field]: value }).subscribe({
+    this._dirty.update(prev => {
+      const next = new Map(prev);
+      next.set(id, { ...(next.get(id) ?? {}), [field]: value });
+      return next;
+    });
+
+    // A code edit can create/clear a duplicate on this row AND its twin, so
+    // re-evaluate the red-highlight class across the whole Code column.
+    if (field === 'testCode') {
+      this.gridApi?.refreshCells({ columns: ['testCode'], force: true });
+    }
+  }
+
+  /** Flush every buffered edit as a PATCH per test id; reload on success. */
+  saveAll() {
+    if (this.saving()) return;
+    const dirty = this._dirty();
+    if (dirty.size === 0) return;
+
+    // Early duplicate-code guard: compute each loaded test's EFFECTIVE code
+    // (applying any pending testCode edit) and reject a case-insensitive clash
+    // before touching the API. The backend also 409s on this.
+    const seen = new Map<string, string>();
+    for (const t of this._tests()) {
+      const pending = dirty.get(t.id);
+      const raw = pending && 'testCode' in pending ? pending['testCode'] : t.testCode;
+      const code = String(raw ?? '').trim();
+      if (!code) continue;
+      const lc = code.toLowerCase();
+      if (seen.has(lc)) {
+        this.toasts.error(`Duplicate test code '${code}' — codes must be unique`);
+        return;
+      }
+      seen.set(lc, code);
+    }
+
+    const entries = [...dirty.entries()];
+    const count = entries.length;
+    this.saving.set(true);
+    forkJoin(entries.map(([id, fields]) => this.api.patch<Test>(`/api/tests/${id}`, fields))).subscribe({
       next: () => {
-        // Keep the local cache in sync so department counts / pickers stay right.
-        this._tests.update(list => list.map(t => (t.id === id ? { ...t, [field]: value } as Test : t)));
-        this.toasts.success('Saved');
+        this.saving.set(false);
+        this.toasts.success(`Saved ${count} change${count === 1 ? '' : 's'}`);
+        this._dirty.set(new Map());
+        this.loadTests();
       },
-      error: err => {
-        this.reverting = true;
-        e.node.setDataValue(field, e.oldValue);
-        this.reverting = false;
-        this.toasts.error(ApiError.from(err).message);
+      error: e => {
+        // Keep the dirty buffer so the user can fix and retry.
+        this.saving.set(false);
+        this.toasts.error(ApiError.from(e).message);
       },
     });
   }
 
+  /** Drop all buffered edits and revert the grid to server state. */
+  discardChanges() {
+    this._dirty.set(new Map());
+    this.loadTests();
+  }
+
   // ── Create test (routes to the full editor) ──────────────────
+  /** Open the full test editor (same screen used to create a test). */
+  editTest(id: string) {
+    this.router.navigate(['/admin/tests', id, 'edit']);
+  }
+
   openCreate() {
     this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._type() } });
   }

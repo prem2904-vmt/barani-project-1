@@ -83,7 +83,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
               <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
             </svg>
             <input type="text"
-                   placeholder="PF-AP-2026-00001-HAEM"
+                   placeholder="HAEM260800001"
                    [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
                    (keydown.enter)="receiveByBarcode()"
                    autofocus />
