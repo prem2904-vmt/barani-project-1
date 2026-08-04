@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Permission, Role } from '../../../shared/models/user.model';
@@ -27,14 +28,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
         eyebrow="Admin · Roles"
         [title]="heading()"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
@@ -189,6 +182,8 @@ export class RoleEditorComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly _editing = signal<Role | null>(null);
   private readonly _permissions = signal<Permission[]>([]);
@@ -226,6 +221,15 @@ export class RoleEditorComponent implements OnInit {
   readonly grantedCount = computed(() => this._grantedIds().size);
 
   ngOnInit() {
+    const backHandler = () => {
+      this.back();
+      return true;
+    };
+    this.navBack.registerBackInterceptor(backHandler);
+    this.destroyRef.onDestroy(() => {
+      this.navBack.clearBackInterceptor(backHandler);
+    });
+
     this.api.get<Permission[]>('/api/permissions').subscribe({
       next: l => this._permissions.set(l ?? [])
     });
@@ -256,7 +260,7 @@ export class RoleEditorComponent implements OnInit {
     this._grantedIds.set(next);
   }
 
-  back() { this.router.navigateByUrl('/admin/users'); }
+  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'roles' } }); }
 
   save() {
     const editing = this._editing();
