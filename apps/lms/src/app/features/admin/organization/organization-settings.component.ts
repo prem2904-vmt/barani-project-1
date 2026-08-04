@@ -61,7 +61,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="pidPad.set(+$event)" />
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Prefix (optional)</span>
@@ -134,7 +134,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="f.pad.set(+$event)" />
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
           <label class="pf-ls__inline-toggle mt-4">
@@ -188,7 +188,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="f.pad.set(+$event)" />
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
           <label class="pf-ls__inline-toggle mt-4">
@@ -360,6 +360,27 @@ export class OrganizationSettingsComponent implements OnInit {
   /** Fixed letter-block width for alpha mode (1–4 → A/AA/AAA/AAAA). */
   protected readonly pidLetters = signal(2);
   protected readonly pidSaving = signal(false);
+  protected preventMinus(e: KeyboardEvent) {
+    if (e.key === '-' || e.key === '+' || e.key === 'e') {
+      e.preventDefault();
+    }
+  }
+
+  private sanitizePadValue(val: any, isAlpha: boolean): number {
+    const maxPad = isAlpha ? 6 : 10;
+    const num = Math.abs(parseInt(val, 10));
+    if (isNaN(num) || num < 1) return 1;
+    return Math.min(num, maxPad);
+  }
+
+  protected onPidPadChange(val: any) {
+    this.pidPad.set(this.sanitizePadValue(val, this.pidSerial() === 'alpha'));
+  }
+
+  protected onFormatPadChange(f: { serial: () => string; pad: { set: (v: number) => void } }, val: any) {
+    f.pad.set(this.sanitizePadValue(val, f.serial() === 'alpha'));
+  }
+
   /** Live sample of what a new id looks like with today's date + seq 1. */
   protected readonly pidPreview = computed(() => {
     const n = new Date();
@@ -375,9 +396,10 @@ export class OrganizationSettingsComponent implements OnInit {
       : this.pidDate() === 'dd' ? dd : '';
     // First id (seq 1): the fixed-width UPPERCASE letters + the number, padded
     // to the configured min width (capped at 6 for alpha). e.g. AA001.
+    const cleanPad = this.sanitizePadValue(this.pidPad(), this.pidSerial() === 'alpha');
     const serial = this.pidSerial() === 'alpha'
-      ? 'A'.repeat(Math.min(Math.max(this.pidLetters(), 1), 4)) + '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 6), '0')
-      : '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
+      ? 'A'.repeat(Math.min(Math.max(this.pidLetters(), 1), 4)) + '1'.padStart(cleanPad, '0')
+      : '1'.padStart(cleanPad, '0');
     const head = (this.pidPrefix() ?? '') + date;
     // Blank separator → no separator (e.g. mmdd000).
     const sep = this.pidSep() ?? '';
@@ -410,9 +432,10 @@ export class OrganizationSettingsComponent implements OnInit {
         : date() === 'mmyy' ? mm + yy
         : date() === 'yy' ? yy
         : date() === 'dd' ? dd : '';
+      const cleanPad = this.sanitizePadValue(pad(), serial() === 'alpha');
       const ser = serial() === 'alpha'
-        ? 'A'.repeat(Math.min(Math.max(letters(), 1), 4)) + '1'.padStart(Math.min(Math.max(pad(), 1), 6), '0')
-        : '1'.padStart(Math.min(Math.max(pad(), 1), 10), '0');
+        ? 'A'.repeat(Math.min(Math.max(letters(), 1), 4)) + '1'.padStart(cleanPad, '0')
+        : '1'.padStart(cleanPad, '0');
       // Separator between EVERY non-empty part — mirrors backend GenerateScoped.
       return [samplePrefix, d, ser].filter(p => p.length).join(sep() ?? '');
     });
@@ -429,7 +452,7 @@ export class OrganizationSettingsComponent implements OnInit {
         this.pidEnabled.set(!!c.enabled);
         this.pidDate.set(c.datePrefix ?? 'ddmmyy');
         this.pidSep.set(c.separator ?? '-');
-        this.pidPad.set(c.padding ?? 4);
+        this.pidPad.set(this.sanitizePadValue(c.padding ?? 4, c.serialMode === 'alpha'));
         this.pidPrefix.set(c.prefix ?? '');
         this.pidSerial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
         this.pidLetters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
@@ -441,7 +464,7 @@ export class OrganizationSettingsComponent implements OnInit {
           if (!c) return;
           f.date.set(c.datePrefix ?? f.date());
           f.sep.set(c.separator ?? '-');
-          f.pad.set(c.padding ?? f.pad());
+          f.pad.set(this.sanitizePadValue(c.padding ?? f.pad(), c.serialMode === 'alpha'));
           f.serial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
           f.letters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
         }
@@ -450,12 +473,14 @@ export class OrganizationSettingsComponent implements OnInit {
   }
 
   saveIdFormat(f: { scope: 'sample' | 'order'; date: any; sep: any; pad: any; serial: any; letters: any; saving: any }) {
+    const cleanPad = this.sanitizePadValue(f.pad(), f.serial() === 'alpha');
+    f.pad.set(cleanPad);
     f.saving.set(true);
     this.api.post(`/api/config/${f.scope}-id`, {
       enabled: true,
       datePrefix: f.date(),
       separator: f.sep() ?? '',
-      padding: f.pad(),
+      padding: cleanPad,
       serialMode: f.serial(),
       letterCount: f.letters(),
     }).subscribe({
@@ -465,12 +490,14 @@ export class OrganizationSettingsComponent implements OnInit {
   }
 
   savePatientId() {
+    const cleanPad = this.sanitizePadValue(this.pidPad(), this.pidSerial() === 'alpha');
+    this.pidPad.set(cleanPad);
     this.pidSaving.set(true);
     this.api.post('/api/config/patient-id', {
       enabled: this.pidEnabled(),
       datePrefix: this.pidDate(),
       separator: this.pidSep() ?? '',
-      padding: this.pidPad(),
+      padding: cleanPad,
       prefix: this.pidPrefix()?.trim() || null,
       serialMode: this.pidSerial(),
       letterCount: this.pidLetters(),
