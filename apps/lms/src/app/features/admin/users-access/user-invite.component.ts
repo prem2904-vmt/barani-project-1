@@ -157,8 +157,19 @@ export class UserInviteComponent implements OnInit {
   );
 
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {
-    const out: PfSelectOption<string>[] = [{ value: '', label: 'All branches' }];
-    for (const b of this._branches()) {
+    const branches = this._branches();
+    let totalCount = 0;
+    for (const b of branches) {
+      totalCount++;
+      totalCount += (b.subBranches?.length ?? 0);
+    }
+
+    const out: PfSelectOption<string>[] = [];
+    if (totalCount > 1) {
+      out.push({ value: '', label: 'All branches' });
+    }
+
+    for (const b of branches) {
       out.push({ value: `b:${b.id}`, label: b.name });
       for (const sb of b.subBranches ?? []) out.push({ value: `sb:${sb.id}`, label: `  → ${sb.name}` });
     }
@@ -190,7 +201,31 @@ export class UserInviteComponent implements OnInit {
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
-    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({ next: l => this._branches.set(l ?? []) });
+    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
+      next: l => {
+        const branches = l ?? [];
+        this._branches.set(branches);
+
+        let totalCount = 0;
+        let singleVal = '';
+        for (const b of branches) {
+          totalCount++;
+          singleVal = `b:${b.id}`;
+          for (const sb of b.subBranches ?? []) {
+            totalCount++;
+            singleVal = `sb:${sb.id}`;
+          }
+        }
+
+        if (totalCount === 1) {
+          if (singleVal.startsWith('sb:')) {
+            this.patch({ branchId: '', subBranchId: singleVal.substring(3) });
+          } else if (singleVal.startsWith('b:')) {
+            this.patch({ branchId: singleVal.substring(2), subBranchId: '' });
+          }
+        }
+      }
+    });
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }

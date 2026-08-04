@@ -126,8 +126,19 @@ export class UserEditComponent implements OnInit {
   readonly roleOptions = computed<PfSelectOption<string>[]>(() => this._roles().map(r => ({ value: r.id, label: r.name })));
 
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {
-    const out: PfSelectOption<string>[] = [{ value: '', label: 'All branches' }];
-    for (const b of this._branches()) {
+    const branches = this._branches();
+    let totalCount = 0;
+    for (const b of branches) {
+      totalCount++;
+      totalCount += (b.subBranches?.length ?? 0);
+    }
+
+    const out: PfSelectOption<string>[] = [];
+    if (totalCount > 1) {
+      out.push({ value: '', label: 'All branches' });
+    }
+
+    for (const b of branches) {
       out.push({ value: `b:${b.id}`, label: b.name });
       for (const sb of b.subBranches ?? []) out.push({ value: `sb:${sb.id}`, label: `  → ${sb.name}` });
     }
@@ -144,7 +155,31 @@ export class UserEditComponent implements OnInit {
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
-    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({ next: l => this._branches.set(l ?? []) });
+    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
+      next: l => {
+        const branches = l ?? [];
+        this._branches.set(branches);
+
+        let totalCount = 0;
+        let singleVal = '';
+        for (const b of branches) {
+          totalCount++;
+          singleVal = `b:${b.id}`;
+          for (const sb of b.subBranches ?? []) {
+            totalCount++;
+            singleVal = `sb:${sb.id}`;
+          }
+        }
+
+        if (totalCount === 1 && !this._form().branchId && !this._form().subBranchId) {
+          if (singleVal.startsWith('sb:')) {
+            this.patch({ branchId: '', subBranchId: singleVal.substring(3) });
+          } else if (singleVal.startsWith('b:')) {
+            this.patch({ branchId: singleVal.substring(2), subBranchId: '' });
+          }
+        }
+      }
+    });
     // No single-user GET endpoint — read the list + this user's role assignments.
     forkJoin({
       users: this.api.get<User[]>('/api/users/'),
@@ -159,11 +194,34 @@ export class UserEditComponent implements OnInit {
         }
         const rs = roles ?? [];
         const first = rs[0];
+        let branchId = first?.subBranchId ? '' : (first?.branchId ?? '');
+        let subBranchId = first?.subBranchId ?? '';
+
+        // If user has no branch set and tenant has only 1 branch, auto-set it
+        const branches = this._branches();
+        let totalCount = 0;
+        let singleVal = '';
+        for (const b of branches) {
+          totalCount++;
+          singleVal = `b:${b.id}`;
+          for (const sb of b.subBranches ?? []) {
+            totalCount++;
+            singleVal = `sb:${sb.id}`;
+          }
+        }
+        if (totalCount === 1 && !branchId && !subBranchId) {
+          if (singleVal.startsWith('sb:')) {
+            subBranchId = singleVal.substring(3);
+          } else if (singleVal.startsWith('b:')) {
+            branchId = singleVal.substring(2);
+          }
+        }
+
         this._form.update(v => ({
           ...v,
           roleIds: rs.map(r => r.roleId),
-          branchId: first?.subBranchId ? '' : (first?.branchId ?? ''),
-          subBranchId: first?.subBranchId ?? '',
+          branchId,
+          subBranchId,
         }));
       },
     });
