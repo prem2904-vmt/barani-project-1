@@ -575,7 +575,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
     }
 
     /* ── Lab spaces board (drag-drop, workflow-style) ── */
-    .pf-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+    .pf-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .pf-lane--catalog { background: rgba(124,58,237,0.05); border-color: rgba(124,58,237,0.25); }
     .pf-catalog-search { display: flex; align-items: center; gap: 6px; margin: 8px 8px 4px; padding: 6px 9px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); color: var(--text-muted); }
     .pf-catalog-search__input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text-primary); font-size: 12.5px; }
@@ -584,7 +584,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
       background: var(--bg-card-solid, #14141f); border: 1px solid rgba(124,58,237,0.28);
     }
     .pf-catalog-chip:active { cursor: grabbing; }
-    .pf-catalog-chip__name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); flex: 1; }
+    .pf-catalog-chip__name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; word-break: break-word; }
     /* Catalog list scrolls when long. */
     .pf-lane--catalog .pf-lane-body { max-height: 300px; overflow-y: auto; }
     .pf-lane--catalog .pf-lane-body::-webkit-scrollbar { width: 8px; }
@@ -629,18 +629,18 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
     .pf-lane-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px 4px; margin: 0; }
 
     .pf-dcard {
-      display: flex; align-items: center; gap: 8px;
-      border-radius: 10px; padding: 9px 10px;
+      display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; min-width: 0;
+      border-radius: 10px; padding: 8px 10px;
       background: var(--bg-card-solid, #14141f); border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
     }
     .pf-dcard--inactive { opacity: .55; }
     .pf-dcard-grip { display: inline-flex; color: var(--text-muted); cursor: grab; flex-shrink: 0; }
     .pf-dcard-grip:active { cursor: grabbing; }
-    .pf-dcard-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .pf-dcard-code { font-size: 10.5px; font-family: ui-monospace, monospace; color: var(--text-muted); }
+    .pf-dcard-name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; line-height: 1.2; word-break: break-word; }
+    .pf-dcard-code { font-size: 10.5px; font-family: ui-monospace, monospace; color: var(--text-muted); flex-shrink: 0; }
     .pf-dcard-toggle {
-      margin-left: auto; font-size: 11px; color: var(--text-secondary); background: transparent;
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.14)); border-radius: 8px; padding: 4px 9px; cursor: pointer; flex-shrink: 0;
+      margin-left: auto; font-size: 10.5px; color: var(--text-secondary); background: transparent;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.14)); border-radius: 6px; padding: 3px 7px; cursor: pointer; flex-shrink: 0; white-space: nowrap;
     }
     .pf-dcard-toggle:hover { color: var(--text-primary); border-color: rgba(168,85,247,.4); }
     .cdk-drag-preview { border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.5); }
@@ -783,9 +783,9 @@ export class BranchesComponent implements OnInit {
   readonly departments = this._departments.asReadonly();
 
   readonly subBranchTypeOpts: PfSelectOption[] = [
-    { value: 'lab',               label: 'Lab (in-house)' },
+    { value: 'lab', label: 'Lab (in-house)' },
     { value: 'collection-center', label: 'Collection center' },
-    { value: 'satellite',         label: 'Satellite' }
+    { value: 'satellite', label: 'Satellite' }
   ];
 
   deptsAsOpts(depts: Department[]): PfSelectOption[] {
@@ -888,7 +888,7 @@ export class BranchesComponent implements OnInit {
       next: saved => {
         const dept = spaceId ? { ...saved, spaceId } : saved;
         this._departments.update(list => [...list, dept]);
-        if (spaceId) this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId }).subscribe({ error: () => {} });
+        if (spaceId) this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId }).subscribe({ error: () => { } });
         this.toasts.success(`${cat.name} added`);
       },
       error: e => this.toasts.error(ApiError.from(e).message),
@@ -906,14 +906,14 @@ export class BranchesComponent implements OnInit {
     this._spaces.update(l => l.map(s => s.id === sp.id ? { ...s, name } : s));
     clearTimeout(this.renameSpaceTimers[sp.id]);
     this.renameSpaceTimers[sp.id] = setTimeout(() => {
-      this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { name }).subscribe({ error: () => {} });
+      this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { name }).subscribe({ error: () => { } });
     }, 500);
   }
   /** The space code prefixes every sample ID drawn in this space (MIC → MIC-2607-00001). */
   setSpaceCode(sp: LabSpace, raw: string) {
     const code = (raw || '').trim().toUpperCase();
     this._spaces.update(l => l.map(s => s.id === sp.id ? { ...s, code } : s));
-    this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { code }).subscribe({ error: () => {} });
+    this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { code }).subscribe({ error: () => { } });
   }
   deleteSpace(sp: LabSpace) {
     this._spaces.update(l => l.filter(s => s.id !== sp.id));
@@ -1026,7 +1026,7 @@ export class BranchesComponent implements OnInit {
     const existing = new Set(this.allDeptsFor(branchId).map(d => (d.code || '').toUpperCase()));
     return STANDARD_DEPARTMENTS
       .filter(c => !existing.has(c.code.toUpperCase()) &&
-                   (c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)))
+        (c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)))
       .slice(0, 6);
   }
   /** Pick an autocomplete suggestion → create that standard department here. */
@@ -1061,7 +1061,7 @@ export class BranchesComponent implements OnInit {
         const dept = targetSpace ? { ...saved, spaceId: targetSpace } : saved;
         this._departments.update(list => [...list, dept]);
         if (targetSpace) {
-          this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId: targetSpace }).subscribe({ error: () => {} });
+          this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId: targetSpace }).subscribe({ error: () => { } });
         }
         this.toasts.success('Department added');
         this.cancelAddDept();

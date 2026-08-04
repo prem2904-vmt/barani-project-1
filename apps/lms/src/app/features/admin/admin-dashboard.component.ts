@@ -64,7 +64,7 @@ interface Category {
   template: `
     <section class="pf-admin-page">
       <header class="pf-admin-hdr">
-        <div>
+        <div class="pf-admin-hdr__left">
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <div class="flex items-center gap-1.5">
             <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Back to overview">
@@ -72,12 +72,14 @@ interface Category {
             </button>
             <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
           </div>
+          <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
         </div>
-        <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
-        <input class="pf-admin-search" type="search" [value]="q()"
-               (input)="setQ($any($event.target).value)"
-               placeholder="Search settings — inventory, invoice, patient ID…"
-               aria-label="Search admin settings" />
+        <div class="pf-admin-hdr__right">
+          <input class="pf-admin-search" type="search" [value]="q()"
+                 (input)="setQ($any($event.target).value)"
+                 placeholder="Search settings — inventory, invoice, patient ID…"
+                 aria-label="Search admin settings" />
+        </div>
       </header>
 
       <div class="pf-admin-layout">
@@ -208,9 +210,13 @@ interface Category {
 
     /* Compact header — was a tall greeting card. */
     .pf-admin-hdr {
-      display: flex; flex-wrap: wrap; align-items: baseline;
-      justify-content: space-between; gap: 12px;
-      margin: 10px 0 14px;
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 16px;
+      margin: 8px 0 16px;
+    }
+    .pf-admin-hdr__left {
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .pf-admin-hdr__eyebrow {
       font-size: 11px; font-weight: 600;
@@ -227,7 +233,13 @@ interface Category {
     .pf-admin-hdr__sub {
       font-size: 12.5px;
       color: var(--text-tertiary);
-      margin: 0;
+      margin: 4px 0 0;
+    }
+    .pf-admin-hdr__right {
+      flex: 0 1 auto;
+      min-width: 280px;
+      max-width: 420px;
+      width: 100%;
     }
 
     /* Mobile-only back chevron before the title (phone-only via md:hidden in
@@ -236,10 +248,8 @@ interface Category {
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
     .pf-admin-search {
-      margin-top: 12px;
       width: 100%;
-      max-width: 460px;
-      padding: 10px 14px;
+      padding: 9px 14px;
       border-radius: 12px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
