@@ -11,6 +11,9 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { AlphaDirective } from '../../../shared/directives/alpha.directive';
+import { NumericDirective } from '../../../shared/directives/numeric.directive';
+import { COUNTRY_CODES, getCountryDigitLength, parsePhoneNumber } from '../../../shared/utils/country-codes';
 
 interface EditForm {
   firstName: string;
@@ -24,7 +27,15 @@ interface EditForm {
 @Component({
   selector: 'pf-user-edit',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [
+    FormsModule,
+    ScreenHeaderComponent,
+    SelectComponent,
+    TileComponent,
+    TouchButtonComponent,
+    AlphaDirective,
+    NumericDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
@@ -43,12 +54,18 @@ interface EditForm {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">First name</label>
-              <input type="text" class="pf-input" [class.pf-input-error]="!!fieldError()['firstName']" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+              <input type="text" pfAlpha class="pf-input"
+                     [class.pf-input-error]="!!fieldError()['firstName']"
+                     placeholder="e.g. Prem"
+                     [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
               @if (fieldError()['firstName']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
             </div>
             <div>
               <label class="pf-label">Last name</label>
-              <input type="text" class="pf-input" [class.pf-input-error]="!!fieldError()['fathersName']" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+              <input type="text" pfAlpha class="pf-input"
+                     [class.pf-input-error]="!!fieldError()['fathersName']"
+                     placeholder="e.g. Kumar"
+                     [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
               @if (fieldError()['fathersName']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
             </div>
           </div>
@@ -61,13 +78,35 @@ interface EditForm {
               </div>
               <div>
                 <label class="pf-label">Phone</label>
-                <input type="tel" class="pf-input" [class.pf-input-error]="!!fieldError()['phone']" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                <div class="flex gap-2 items-center">
+                  <select class="pf-input max-w-[105px] shrink-0 text-[13px]"
+                          [ngModel]="countryCode()" (ngModelChange)="onCountryCodeChange($event)">
+                    @for (c of countryCodes; track c.code) {
+                      <option [value]="c.code">{{ c.code }} {{ c.flag }}</option>
+                    }
+                  </select>
+                  <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()" class="pf-input flex-1"
+                         [class.pf-input-error]="!!fieldError()['phone']"
+                         [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                         [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                </div>
                 @if (fieldError()['phone']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
               </div>
             } @else {
               <div class="col-span-full">
                 <label class="pf-label">Phone</label>
-                <input type="tel" class="pf-input" [class.pf-input-error]="!!fieldError()['phone']" [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+                <div class="flex gap-2 items-center">
+                  <select class="pf-input max-w-[105px] shrink-0 text-[13px]"
+                          [ngModel]="countryCode()" (ngModelChange)="onCountryCodeChange($event)">
+                    @for (c of countryCodes; track c.code) {
+                      <option [value]="c.code">{{ c.code }} {{ c.flag }}</option>
+                    }
+                  </select>
+                  <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()" class="pf-input flex-1"
+                         [class.pf-input-error]="!!fieldError()['phone']"
+                         [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                         [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                </div>
                 @if (fieldError()['phone']; as msg) { <p class="pf-field-error">{{ msg }}</p> }
               </div>
             }
@@ -116,6 +155,11 @@ export class UserEditComponent implements OnInit {
   private readonly _username = signal('');
   private readonly _loadedName = signal('');
   private readonly _fieldError = signal<Record<string, string>>({});
+
+  readonly countryCodes = COUNTRY_CODES;
+  readonly countryCode = signal<string>('+91');
+  readonly phoneDigits = signal<string>('');
+  readonly phoneMaxDigits = computed(() => getCountryDigitLength(this.countryCode()));
 
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
@@ -191,6 +235,12 @@ export class UserEditComponent implements OnInit {
           this._loadedName.set(u.displayName || u.firstName || u.username || '');
           this._username.set(u.username || '');
           this._form.update(v => ({ ...v, firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
+
+          if (u.phone) {
+            const parsed = parsePhoneNumber(u.phone);
+            this.countryCode.set(parsed.code);
+            this.phoneDigits.set(parsed.digits);
+          }
         }
         const rs = roles ?? [];
         const first = rs[0];
@@ -225,6 +275,31 @@ export class UserEditComponent implements OnInit {
         }));
       },
     });
+  }
+
+  onCountryCodeChange(code: string) {
+    this.countryCode.set(code);
+    const maxLen = getCountryDigitLength(code);
+    if (this.phoneDigits().length > maxLen) {
+      this.phoneDigits.set(this.phoneDigits().substring(0, maxLen));
+    }
+    this.updateFullPhone();
+  }
+
+  onPhoneChange(v: string) {
+    const maxLen = getCountryDigitLength(this.countryCode());
+    const clean = (v || '').replace(/\D/g, '').substring(0, maxLen);
+    this.phoneDigits.set(clean);
+    this.updateFullPhone();
+  }
+
+  private updateFullPhone() {
+    const digits = this.phoneDigits().trim();
+    if (!digits) {
+      this.patch({ phone: '' });
+    } else {
+      this.patch({ phone: `${this.countryCode()} ${digits}` });
+    }
   }
 
   patch(p: Partial<EditForm>) {

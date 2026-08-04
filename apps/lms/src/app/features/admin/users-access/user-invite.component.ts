@@ -10,6 +10,9 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { AlphaDirective } from '../../../shared/directives/alpha.directive';
+import { NumericDirective } from '../../../shared/directives/numeric.directive';
+import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/country-codes';
 
 interface CreateResult { id: string; username: string; displayName: string; }
 
@@ -27,7 +30,15 @@ interface CreateForm {
 @Component({
   selector: 'pf-user-invite',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [
+    FormsModule,
+    ScreenHeaderComponent,
+    SelectComponent,
+    TileComponent,
+    TouchButtonComponent,
+    AlphaDirective,
+    NumericDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10">
@@ -47,12 +58,14 @@ interface CreateForm {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">First name</label>
-              <input type="text" class="pf-input"
+              <input type="text" pfAlpha class="pf-input"
+                     placeholder="e.g. Prem"
                      [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
             </div>
             <div>
               <label class="pf-label">Last name</label>
-              <input type="text" class="pf-input"
+              <input type="text" pfAlpha class="pf-input"
+                     placeholder="e.g. Kumar"
                      [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
             </div>
           </div>
@@ -60,19 +73,28 @@ interface CreateForm {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="pf-label">Username <span class="pf-req">*</span></label>
-              <input type="text" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
+              <input type="text" pfAlpha [allowNumbers]="true" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
                      [class.pf-input-error]="!!usernameError()"
                      placeholder="e.g. drpriya"
-                     [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" />
+                     [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" (blur)="onUsernameBlur()" />
               @if (usernameError()) { <p class="pf-field-error">{{ usernameError() }}</p> }
               <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-                3–32 characters: lowercase letters, digits, dot, underscore or hyphen. This is what they type to sign in.
+                3–32 characters: alphanumeric (letters and digits only). This is what they type to sign in.
               </p>
             </div>
             <div>
               <label class="pf-label">Phone</label>
-              <input type="tel" class="pf-input"
-                     [ngModel]="form().phone" (ngModelChange)="patch({ phone: $event })" />
+              <div class="flex gap-2 items-center">
+                <select class="pf-input max-w-[105px] shrink-0 text-[13px]"
+                        [ngModel]="countryCode()" (ngModelChange)="onCountryCodeChange($event)">
+                  @for (c of countryCodes; track c.code) {
+                    <option [value]="c.code">{{ c.code }} {{ c.flag }}</option>
+                  }
+                </select>
+                <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()" class="pf-input flex-1"
+                       [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                       [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+              </div>
             </div>
           </div>
 
@@ -147,6 +169,11 @@ export class UserInviteComponent implements OnInit {
   private readonly _usernameError = signal<string | null>(null);
   private readonly _passwordError = signal<string | null>(null);
 
+  readonly countryCodes = COUNTRY_CODES;
+  readonly countryCode = signal<string>('+91');
+  readonly phoneDigits = signal<string>('');
+  readonly phoneMaxDigits = computed(() => getCountryDigitLength(this.countryCode()));
+
   readonly form = this._form.asReadonly();
   readonly saving = this._saving.asReadonly();
   readonly usernameError = this._usernameError.asReadonly();
@@ -185,7 +212,7 @@ export class UserInviteComponent implements OnInit {
   // Required: a valid username, an 8+ char password, at least one role.
   readonly canCreate = computed(() => {
     const i = this._form();
-    if (!/^[a-z0-9._-]{3,32}$/.test(i.username.trim().toLowerCase())) return false;
+    if (!/^[a-z0-9]{3,32}$/i.test(i.username.trim())) return false;
     if (i.password.length < 8) return false;
     if (i.roleIds.length === 0) return false;
     return true;
@@ -231,15 +258,47 @@ export class UserInviteComponent implements OnInit {
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
   back() { this.router.navigateByUrl('/admin/users'); }
 
-  // Force lowercase (usernames are case-insensitive) + clear a stale error.
   onUsernameChange(v: string) {
     if (this._usernameError()) this._usernameError.set(null);
-    this.patch({ username: (v || '').toLowerCase() });
+    // Don't force lowercase on every keypress to avoid cursor jumping to end when editing in the middle
+    this.patch({ username: v || '' });
+  }
+
+  onUsernameBlur() {
+    const u = this._form().username;
+    if (u) {
+      this.patch({ username: u.trim().toLowerCase() });
+    }
   }
 
   onPasswordChange(v: string) {
     if (this._passwordError()) this._passwordError.set(null);
     this.patch({ password: v });
+  }
+
+  onCountryCodeChange(code: string) {
+    this.countryCode.set(code);
+    const maxLen = getCountryDigitLength(code);
+    if (this.phoneDigits().length > maxLen) {
+      this.phoneDigits.set(this.phoneDigits().substring(0, maxLen));
+    }
+    this.updateFullPhone();
+  }
+
+  onPhoneChange(v: string) {
+    const maxLen = getCountryDigitLength(this.countryCode());
+    const clean = (v || '').replace(/\D/g, '').substring(0, maxLen);
+    this.phoneDigits.set(clean);
+    this.updateFullPhone();
+  }
+
+  private updateFullPhone() {
+    const digits = this.phoneDigits().trim();
+    if (!digits) {
+      this.patch({ phone: '' });
+    } else {
+      this.patch({ phone: `${this.countryCode()} ${digits}` });
+    }
   }
 
   onScopeChange(v: string) {
