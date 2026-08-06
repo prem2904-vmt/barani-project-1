@@ -397,6 +397,7 @@
               } @else {
               <ul class="pf-cards">
                 @for (a of visibleAppointments(); track a.id) {
+                @let patient = a.patient;
                 <li>
                   <div class="pf-card" [attr.data-priority]="apptPriority(a)"
                     [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openAppointment(a)">
@@ -413,30 +414,30 @@
                       <p class="pf-card__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</p>
                       <p class="pf-card__date">{{ a.appointmentDate | date:'MMM d' }}</p>
                     </div>
-                    <pf-avatar [name]="a.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                    <pf-avatar [name]="patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                     <div class="pf-card__body">
-                      <p class="pf-card__name">{{ formatPatient(a.patient) }}</p>
-                      @if (a.patient?.phone) {
+                      <p class="pf-card__name">{{ formatPatient(patient) }}</p>
+                      @if (patient?.phone; as phone) {
                       <p class="pf-card__meta">
-                        {{ a.patient?.phone }}
+                        {{ phone }}
                       </p>
                       }
-                      @if (hasOutstanding(a.patient?.id)) {
+                      @if (hasOutstanding(patient?.id)) {
                       <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
                         ● ₹ owed
                       </span>
                       }
                     </div>
                     <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                      @if (a.patient?.phone) {
-                      <a [href]="'tel:' + a.patient!.phone" class="pf-iconbtn press" title="Call">
+                      @if (patient?.phone; as phone) {
+                      <a [href]="'tel:' + phone" class="pf-iconbtn press" title="Call">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                           <path
                             d="M22 16.9v3a2 2 0 0 1-2.2 2A20 20 0 0 1 2.1 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.5 2.5a2 2 0 0 1-.5 2.1L7.9 9.5a16 16 0 0 0 6.6 6.6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.2 1.6.4 2.5.5A2 2 0 0 1 22 16.9z" />
                         </svg>
                       </a>
-                      <a [href]="'https://wa.me/' + cleanPhone(a.patient!.phone!)" target="_blank"
+                      <a [href]="'https://wa.me/' + cleanPhone(phone)" target="_blank"
                         class="pf-iconbtn press" title="WhatsApp">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

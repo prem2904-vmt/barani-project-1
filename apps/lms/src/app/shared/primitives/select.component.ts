@@ -385,9 +385,11 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     ) as HTMLElement | undefined;
     if (panelEl) SelectComponent.getOverlayHost().appendChild(panelEl);
     this.isOpen.set(true);
+    this.addScrollListeners();
   }
 
   private closePanel(): void {
+    this.removeScrollListeners();
     if (this.panelRef) {
       const panelEl = this.panelRef.rootNodes.find(
         (n: Node) => n.nodeType === Node.ELEMENT_NODE
@@ -413,6 +415,59 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       width: r.width,
       above
     });
+  }
+
+  private isTriggerVisible(trigger: HTMLElement): boolean {
+    const r = trigger.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) {
+      return false;
+    }
+    let parent = trigger.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      const isScrollable = (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden') ||
+                           (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden');
+      if (isScrollable) {
+        const pr = parent.getBoundingClientRect();
+        if (r.bottom < pr.top || r.top > pr.bottom || r.right < pr.left || r.left > pr.right) {
+          return false;
+        }
+      }
+      parent = parent.parentElement;
+    }
+    return true;
+  }
+
+  private readonly onCaptureScroll = (ev: Event): void => {
+    if (!this.isOpen()) return;
+
+    // Ignore scroll events originating from inside the panel itself (e.g. scrolling the options list)
+    const panelEl = this.panelRef?.rootNodes.find(
+      (n: Node) => n.nodeType === Node.ELEMENT_NODE
+    ) as HTMLElement | undefined;
+    if (panelEl && ev.target && panelEl.contains(ev.target as Node)) {
+      return;
+    }
+
+    const trigger = this.el.nativeElement.querySelector('.pf-dd__trigger') as HTMLElement | null;
+    if (!trigger || !this.isTriggerVisible(trigger)) {
+      this.closePanel();
+      return;
+    }
+
+    this.updatePanelPos();
+  };
+
+  private addScrollListeners(): void {
+    window.addEventListener('scroll', this.onCaptureScroll, { capture: true, passive: true });
+    window.addEventListener('resize', this.onCaptureScroll, { capture: true, passive: true });
+  }
+
+  private removeScrollListeners(): void {
+    window.removeEventListener('scroll', this.onCaptureScroll, true);
+    window.removeEventListener('resize', this.onCaptureScroll, true);
   }
 
   ngOnDestroy(): void { this.closePanel(); }
@@ -448,10 +503,4 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       if (!this.disabled) this.openPanel();
     }
   }
-
-  @HostListener('window:scroll')
-  onScroll(): void { if (this.isOpen()) this.closePanel(); }
-
-  @HostListener('window:resize')
-  onResize(): void { if (this.isOpen()) this.closePanel(); }
 }
