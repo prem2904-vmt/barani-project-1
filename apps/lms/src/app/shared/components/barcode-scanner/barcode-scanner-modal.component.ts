@@ -411,6 +411,15 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   private rafId: number | null = null;
   private active = false;
   private lastDetectAt = 0;
+  // Auto-refocus: continuous AF (Chrome/Android) gets stuck when the scene
+  // changes (an object comes near then leaves), so we re-trigger focus when the
+  // decoder has seen nothing for a beat — that's the "out of focus" signal.
+  private focusSupported = false;
+  private lastCodeSeenAt = 0;
+  private lastFocusKickAt = 0;
+  private focusKicking = false;
+  private static readonly FOCUS_STALE_MS = 1200;   // no code seen → likely blurry
+  private static readonly FOCUS_KICK_GAP_MS = 1600; // min gap between kicks
 
   protected readonly cameraReady = signal(false);
   protected readonly cameraError = signal<string | null>(null);
@@ -489,9 +498,14 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       // silently ignored where the platform doesn't expose focusMode).
       try { await this.track?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }); } catch { /* unsupported */ }
       try {
-        const caps = this.track?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined;
+        const caps = this.track?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] }) | undefined;
         this.torchAvailable.set(!!caps && 'torch' in caps);
+        // Only run the auto-refocus loop where the platform actually exposes
+        // focus control (Chrome/Android); elsewhere it's a harmless no-op.
+        this.focusSupported = !!caps?.focusMode && (caps.focusMode.includes('single-shot') || caps.focusMode.includes('continuous'));
       } catch { /* unsupported */ }
+      this.lastCodeSeenAt = performance.now();
+      this.lastFocusKickAt = performance.now();
       // Show the camera-switch button only if a second camera exists (labels
       // are populated once permission is granted, which it now is).
       try {
@@ -516,10 +530,19 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       if (now - this.lastDetectAt >= 120) {
         this.lastDetectAt = now;
         this.detector.detect(video).then(codes => {
-          if (this.active && codes && codes.length && codes[0].rawValue) {
-            this.handleScan(codes[0].rawValue);
+          if (this.active && codes && codes.length) {
+            this.lastCodeSeenAt = performance.now(); // a code is visible → in focus
+            if (codes[0].rawValue) this.handleScan(codes[0].rawValue);
           }
         }).catch(() => { /* transient decode error — keep scanning */ });
+      }
+      // Nothing decoded for a beat ⇒ likely out of focus (continuous AF stuck
+      // after the scene changed). Re-trigger focus, rate-limited.
+      if (this.focusSupported && !this.focusKicking
+          && now - this.lastCodeSeenAt > BarcodeScannerModalComponent.FOCUS_STALE_MS
+          && now - this.lastFocusKickAt > BarcodeScannerModalComponent.FOCUS_KICK_GAP_MS) {
+        this.lastFocusKickAt = now;
+        void this.kickFocus();
       }
     }
     if (this.active) this.rafId = requestAnimationFrame(this.scanTick);
@@ -553,19 +576,42 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     await this.startCamera();
   }
 
-  /** Tap-to-focus: re-trigger autofocus. Fires a one-shot focus then returns to
-   *  continuous where supported; otherwise just re-nudges continuous AF. Helps
-   *  when the auto-focus hasn't locked on a glossy tube. */
+  /** Tap-to-focus: manual re-trigger. */
   async refocus() {
-    if (!this.track) return;
+    this.lastCodeSeenAt = performance.now(); // avoid an immediate auto-kick on top
+    await this.kickFocus();
+  }
+
+  /** Re-trigger the camera's autofocus. The reliable "kick" across Android
+   *  devices is single-shot → back to continuous (a plain re-apply of
+   *  'continuous' often doesn't force a re-hunt once it's stuck). Falls back to
+   *  a focusDistance sweep, then to re-applying continuous. */
+  private async kickFocus() {
+    const track = this.track;
+    if (!track || this.focusKicking) return;
+    this.focusKicking = true;
     try {
-      await this.track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] });
-      setTimeout(() => {
-        this.track?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
-      }, 700);
-    } catch {
-      try { await this.track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }); } catch { /* unsupported */ }
-    }
+      const caps = track.getCapabilities?.() as (MediaTrackCapabilities & { focusMode?: string[]; focusDistance?: { min: number; max: number } }) | undefined;
+      const modes = caps?.focusMode ?? [];
+      if (modes.includes('single-shot')) {
+        await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 500));
+        if (modes.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+        }
+      } else if (caps?.focusDistance && modes.includes('manual')) {
+        // Sweep the focus distance to force a re-hunt, then return to continuous.
+        const { min, max } = caps.focusDistance;
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: min } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 250));
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: max } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 250));
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+      } else {
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+      }
+    } catch { /* unsupported on this platform */ }
+    finally { this.focusKicking = false; }
   }
 
   @HostListener('document:keydown', ['$event'])
