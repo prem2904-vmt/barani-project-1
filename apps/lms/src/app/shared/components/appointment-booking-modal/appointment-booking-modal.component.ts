@@ -27,6 +27,7 @@ import { ToastService } from "../../../core/services/toast.service";
 import { Patient, patientDisplayName, formatPatientInfo } from "../../models/patient.model";
 import { Appointment } from "../../models/appointment.model";
 import { Test } from "../../models/test.model";
+import { filterTestList, matchTestSearch } from "../../utils/test-search";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
 import { LoadingLogoComponent } from "../loading-logo/loading-logo.component";
@@ -367,7 +368,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 <input
                   type="text"
                   class="w-full pl-10 pr-4 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all duration-200"
-                  placeholder="Search tests by name or code..."
+                  placeholder="Search tests by code, name, short name, profile..."
                   [value]="testQuery()"
                   (input)="setTestQuery($any($event.target).value)"
                   (focus)="testSearchFocused.set(true)"
@@ -589,16 +590,8 @@ export class AppointmentBookingModalComponent {
    *  active tests by name. Limited to 25 hits so the list stays a
    *  scannable strip rather than a wall. */
   readonly filteredTests = computed<Test[]>(() => {
-    const q = this.testQuery().trim().toLowerCase();
-    const all = this._tests().filter((t) => t.isActive);
-    const matches = q
-      ? all.filter(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            (t.code ?? "").toLowerCase().includes(q),
-        )
-      : all;
-    return matches.slice(0, 25);
+    const active = this._tests().filter((t) => t.isActive);
+    return filterTestList(active, this.testQuery()).slice(0, 25);
   });
   /** Resolved Test objects for the chips above the picker. */
   readonly selectedTests = computed<Test[]>(() => {

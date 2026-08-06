@@ -11,6 +11,7 @@ import { Appointment } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
+import { filterTestList, matchTestSearch } from '../../../shared/utils/test-search';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -283,7 +284,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                 #testSearchInput
                 type="text"
                 class="w-full pl-10 pr-4 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all duration-200"
-                placeholder="Search tests by name or code..."
+                placeholder="Search tests by code, name, short name, profile..."
                 [value]="testQuery()"
                 (input)="setTestQuery($any($event.target).value)"
                 (focus)="onSearchFocus()"
@@ -837,16 +838,8 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   });
 
   readonly filteredTests = computed<Test[]>(() => {
-    const q = this.testQuery().trim().toLowerCase();
-    const all = this._tests().filter((t) => t.isActive);
-    const matches = q
-      ? all.filter(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            (t.code ?? '').toLowerCase().includes(q),
-        )
-      : all;
-    return matches.slice(0, 25);
+    const active = this._tests().filter((t) => t.isActive);
+    return filterTestList(active, this.testQuery()).slice(0, 25);
   });
 
   readonly selectedTests = computed<Test[]>(() => {

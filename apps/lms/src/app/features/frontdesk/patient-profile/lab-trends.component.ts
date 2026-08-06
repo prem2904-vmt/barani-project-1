@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { filterTestList } from '../../../shared/utils/test-search';
 import {
   TrendPoint, TrendParam, TrendTest, buildTrendOption, buildSparklineOption, filterTrendPoints,
 } from '../../../shared/utils/trend-chart';
@@ -286,11 +287,9 @@ export class LabTrendsComponent implements OnDestroy {
   readonly loading = signal(true);
   readonly tests = signal<TrendTest[]>([]);
   readonly testQuery = signal('');
-  /** Left-list tests filtered by the search box (name match, case-insensitive). */
+  /** Left-list tests filtered by the search box using common search logic. */
   readonly filteredTests = computed(() => {
-    const q = this.testQuery().trim().toLowerCase();
-    if (!q) return this.tests();
-    return this.tests().filter(t => t.testName.toLowerCase().includes(q));
+    return filterTestList(this.tests(), this.testQuery());
   });
   readonly selectedTestId = signal<string | null>(null);
   readonly selectedParam = signal<string>('');
