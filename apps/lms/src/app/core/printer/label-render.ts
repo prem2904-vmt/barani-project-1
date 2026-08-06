@@ -39,8 +39,9 @@ const HEAD_MAX = 384; // 48 mm printable
 
 export function renderLabelBitmap(
   data: LabelData,
-  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number }
+  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number; codeScalePct?: number }
 ): PackedBitmap {
+  const codeScale = (opts.codeScalePct ?? 100) / 100;
   const wDots = Math.min(HEAD_MAX, Math.round(opts.widthMm * DPMM));
   // Print ~1 mm short of the label so nothing bleeds into the die-cut gap.
   const hDots = Math.max(48, Math.round((opts.heightMm - 1) * DPMM));
@@ -76,7 +77,7 @@ export function renderLabelBitmap(
 
   if (opts.codeMode === 'barcode') {
     // 1D barcode is a full-width band at the bottom; text stacks above it.
-    const bcH = Math.round(hDots * 0.42);
+    const bcH = Math.round(hDots * 0.42 * codeScale);
     const bcY = hDots - bcH - MY;
     const bcW = wDots - 2 * MX;
     try {
@@ -90,7 +91,8 @@ export function renderLabelBitmap(
     mono(data.code, MX, hDots - Math.round(2 * s), Math.round(16 * s), false, wDots - 2 * MX);
   } else {
     // 2D code (QR / Data Matrix) sits on the right; text block on the left.
-    const codeSize = Math.min(hDots - 2 * MY, Math.round(wDots * 0.42));
+    const codeBase = Math.min(hDots - 2 * MY, Math.round(wDots * 0.42));
+    const codeSize = Math.max(24, Math.min(hDots - 2 * MY, Math.round(codeBase * codeScale)));
     const codeX = wDots - codeSize - MX;
     const codeY = Math.round((hDots - codeSize) / 2);
     if (opts.codeMode === 'qr') drawQr(ctx, data.qrValue ?? data.code, codeX, codeY, codeSize);

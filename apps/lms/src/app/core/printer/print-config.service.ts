@@ -24,6 +24,9 @@ export interface PrintConfig {
    *  the label without having to match the exact size. */
   offsetXmm: number;
   offsetYmm: number;
+  /** Code size as a % of the default (50–130). Smaller for narrow tube labels;
+   *  don't go so small the scanner can't read it. */
+  codeScalePct: number;
   /** OS printer name to route A4/invoice documents to (Electron). Empty = use
    *  the system print dialog. */
   documentPrinter: string;
@@ -37,6 +40,7 @@ const DEFAULTS: PrintConfig = {
   speed: 2,
   offsetXmm: 0,
   offsetYmm: 0,
+  codeScalePct: 100,
   documentPrinter: '',
 };
 
@@ -81,6 +85,7 @@ export class PrintConfigService {
     const c = this._config();
     this.update({ offsetXmm: this.clampOff(c.offsetXmm + dx), offsetYmm: this.clampOff(c.offsetYmm + dy) });
   }
+  setCodeScale(v: number): void { this.update({ codeScalePct: Math.min(130, Math.max(50, Math.round(v))) }); }
 
   /** Printer "driver" params for the job (converted to the DP27's 0-based scale). */
   driverOpts(): { density: number; speed: number } {
@@ -94,9 +99,9 @@ export class PrintConfigService {
     return (m === ('both' as string) ? 'barcode' : m) as LabelCodeMode;
   }
 
-  /** Label render options: per-station size + alignment + the admin-set code. */
-  labelOpts(): { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm: number; offsetYmm: number } {
+  /** Label render options: per-station size + alignment + code + code scale. */
+  labelOpts(): { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm: number; offsetYmm: number; codeScalePct: number } {
     const c = this._config();
-    return { widthMm: c.labelWidthMm, heightMm: c.labelHeightMm, codeMode: this.codeMode(), offsetXmm: c.offsetXmm, offsetYmm: c.offsetYmm };
+    return { widthMm: c.labelWidthMm, heightMm: c.labelHeightMm, codeMode: this.codeMode(), offsetXmm: c.offsetXmm, offsetYmm: c.offsetYmm, codeScalePct: c.codeScalePct };
   }
 }

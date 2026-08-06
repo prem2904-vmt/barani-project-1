@@ -176,8 +176,14 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
             <input type="range" min="1" max="5" class="pf-range" [value]="cfg().speed"
                    (input)="printConfig.setSpeed($any($event.target).valueAsNumber)">
           </label>
+          <label class="block grow">
+            <span class="pf-eyebrow">Code size — {{ cfg().codeScalePct }}%</span>
+            <input type="range" min="50" max="130" class="pf-range" [value]="cfg().codeScalePct"
+                   (input)="printConfig.setCodeScale($any($event.target).valueAsNumber)">
+          </label>
         </div>
-        <p class="pf-hint">Higher darkness = bolder/thicker strokes; slower speed = crisper. Applies to the label printer.</p>
+        <p class="pf-hint">Higher darkness = bolder/thicker; slower speed = crisper. Shrink <strong>Code size</strong>
+          for narrow tube labels — but not so small the scanner can't read it.</p>
       </div>
 
       <!-- ── DOCUMENT PRINTER (invoices) ───────────────────────── -->
