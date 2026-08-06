@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
+import { COUNTRY_PHONE_RULES, CountryPhoneRule, getCountryPhoneRule, validatePhoneNumber } from '../../forms/validate';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -71,8 +72,28 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
           <input type="email" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
         }
         @case ('phone') {
-          <input type="tel" class="pf-input" placeholder="+91…"
-                 [ngModel]="value" (ngModelChange)="emit($event)" />
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <pf-select
+                [options]="countrySelectOptions"
+                [value]="selectedCountryCode()"
+                (valueChange)="onCountryCodeChange($any($event))"
+                class="w-[110px] flex-shrink-0"
+              ></pf-select>
+
+              <input
+                type="tel"
+                class="pf-input flex-1 min-w-0"
+                [class.border-red-500]="phoneError() != null"
+                [placeholder]="activePhoneRule().placeholder"
+                [ngModel]="phoneDigits()"
+                (ngModelChange)="onPhoneDigitsChange($event)"
+              />
+            </div>
+            @if (phoneError(); as err) {
+              <p class="text-xs text-red-500 font-medium">{{ err }}</p>
+            }
+          </div>
         }
         @case ('number') { <ng-container *ngTemplateOutlet="numericTpl"></ng-container> }
         @case ('numeric') { <ng-container *ngTemplateOutlet="numericTpl"></ng-container> }
@@ -595,7 +616,15 @@ export class DynamicInputComponent {
   @Input({ required: true }) set field(v: DynamicFieldConfig) { this._field.set(v); }
   get field(): DynamicFieldConfig { return this._field()!; }
 
-  @Input() set value(v: unknown) { this._value.set(v); }
+  @Input() set value(v: unknown) {
+    this._value.set(v);
+    if (this._field()?.type === 'phone' && typeof v === 'string' && v.trim()) {
+      const matched = COUNTRY_PHONE_RULES.find(r => v.startsWith(r.code));
+      if (matched && matched.code !== this._selectedCountryCode()) {
+        this._selectedCountryCode.set(matched.code);
+      }
+    }
+  }
   get value(): unknown { return this._value(); }
 
   @Input() context: WorkflowContext | null = null;
@@ -605,6 +634,55 @@ export class DynamicInputComponent {
   emit(v: unknown) {
     this._value.set(v);
     this.valueChange.emit(v);
+  }
+
+  // ── Phone Input & Country Code Validation ─────────────────────────
+  readonly countrySelectOptions: PfSelectOption<string>[] = COUNTRY_PHONE_RULES.map(r => ({
+    value: r.code,
+    label: `${r.flag} ${r.code}`
+  }));
+
+  private readonly _selectedCountryCode = signal<string>('+91');
+  readonly selectedCountryCode = this._selectedCountryCode.asReadonly();
+
+  readonly activePhoneRule = computed(() => getCountryPhoneRule(this._selectedCountryCode()));
+
+  readonly phoneDigits = computed<string>(() => {
+    const val = String(this._value() ?? '').trim();
+    if (!val) return '';
+    const currentCode = this._selectedCountryCode();
+    if (val.startsWith(currentCode)) {
+      return val.slice(currentCode.length).replace(/\D/g, '').slice(0, this.activePhoneRule().maxDigits);
+    }
+    const found = COUNTRY_PHONE_RULES.find(r => val.startsWith(r.code));
+    if (found) {
+      return val.slice(found.code.length).replace(/\D/g, '').slice(0, found.maxDigits);
+    }
+    return val.replace(/\D/g, '').slice(0, this.activePhoneRule().maxDigits);
+  });
+
+  readonly phoneError = computed<string | null>(() => {
+    if (this._field()?.type !== 'phone') return null;
+    const val = this._value();
+    if (val == null || val === '') return null;
+    return validatePhoneNumber(val, this._selectedCountryCode());
+  });
+
+  onCountryCodeChange(newCode: string) {
+    this._selectedCountryCode.set(newCode);
+    const digits = this.phoneDigits();
+    if (digits) {
+      this.emit(`${newCode}${digits}`);
+    } else {
+      this.emit('');
+    }
+  }
+
+  onPhoneDigitsChange(typed: string) {
+    const rule = this.activePhoneRule();
+    const cleanDigits = String(typed ?? '').replace(/\D/g, '').slice(0, rule.maxDigits);
+    const fullValue = cleanDigits ? `${rule.code}${cleanDigits}` : '';
+    this.emit(fullValue);
   }
 
   /** Identity-number text fields → digits only with a fixed max length

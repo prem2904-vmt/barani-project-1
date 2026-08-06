@@ -14,6 +14,7 @@ import {
 } from '../../models/workflow.model';
 import { TestParameter } from '../../models/test.model';
 import { DynamicInputComponent } from '../dynamic-input/dynamic-input.component';
+import { validateFieldValue } from '../../forms/validate';
 
 export interface WorkflowRendererResources {
   /** When a field has type 'test_parameters', these drive the per-parameter inputs. */
@@ -231,21 +232,17 @@ export class WorkflowRendererComponent implements OnChanges {
    *  Auto-expands "Add more" if a missing required field is in a later step. */
   private validateAll(): boolean {
     const steps = this.visibleSteps();
-    const missing: string[] = [];
-    let missingInMore = false;
     for (let i = 0; i < steps.length; i++) {
       for (const f of this.visibleFields(steps[i])) {
-        if (!f.isRequired || f.type === 'test_parameters') continue;
-        if (this.isEmpty(this.valueFor(steps[i], f.name))) {
-          missing.push(f.title);
-          if (i > 0) missingInMore = true;
+        if (f.type === 'test_parameters') continue;
+        const v = this.valueFor(steps[i], f.name);
+        const err = validateFieldValue(f, v);
+        if (err) {
+          if (i > 0) this._showMore.set(true);
+          this._validationError.set(`${f.title}: ${err}`);
+          return false;
         }
       }
-    }
-    if (missing.length > 0) {
-      if (missingInMore) this._showMore.set(true);
-      this._validationError.set(`Please fill: ${missing.join(', ')}`);
-      return false;
     }
     this._validationError.set(null);
     return true;
@@ -413,16 +410,14 @@ export class WorkflowRendererComponent implements OnChanges {
   // ── validation ─────────────────────────────────────────────────
 
   private validateStep(step: WorkflowStep): boolean {
-    const missing: string[] = [];
     for (const f of this.visibleFields(step)) {
-      if (!f.isRequired) continue;
-      if (f.type === 'test_parameters') continue; // parameters optionality is test-side
+      if (f.type === 'test_parameters') continue;
       const v = this.valueFor(step, f.name);
-      if (this.isEmpty(v)) missing.push(f.title);
-    }
-    if (missing.length > 0) {
-      this._validationError.set(`Please fill: ${missing.join(', ')}`);
-      return false;
+      const err = validateFieldValue(f, v);
+      if (err) {
+        this._validationError.set(`${f.title}: ${err}`);
+        return false;
+      }
     }
     this._validationError.set(null);
     return true;

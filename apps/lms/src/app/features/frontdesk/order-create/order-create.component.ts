@@ -14,6 +14,7 @@ import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Patient, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
+import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -348,43 +349,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
   private filterTestList(list: Test[], q: string): Test[] {
-    const query = q.trim().toLowerCase();
-    if (!query) return list;
-    const variants = this.spellingVariants(query);
-    return list.filter(t => {
-      const hay = [
-        t.name,
-        // Match by the test's unique code / human SKU too (#135), so typing a
-        // code finds the test even when the name doesn't contain the query.
-        t.code ?? '',
-        t.testCode ?? '',
-        // Short name too — the Biochemistry catalogue is searched by its
-        // abbreviations (FBS, LFT, CARD…) as often as by code or full name.
-        t.shortName ?? '',
-        t.hsnSacCode ?? '',
-        t.department?.name ?? ''
-      ].join(' ').toLowerCase();
-      return variants.some(v => hay.includes(v));
-    });
-  }
-
-  /** Generate US/UK spelling variants of a search string so the catalogue
-   *  matches regardless of which spelling the lab catalogue or the user
-   *  typed. Cheap substring substitution; not a full medical thesaurus. */
-  private spellingVariants(q: string): string[] {
-    const swaps: Array<[string, string]> = [
-      ['hema',   'haema'],   // hematology ↔ haematology
-      ['pedia',  'paedia'],  // pediatric ↔ paediatric
-      ['anesth', 'anaesth'], // anesthesia ↔ anaesthesia
-      ['fetal',  'foetal'],  // fetal ↔ foetal
-      ['leuk',   'leuc'],    // leukocyte ↔ leucocyte
-    ];
-    const out = new Set<string>([q]);
-    for (const [us, uk] of swaps) {
-      if (q.includes(us)) out.add(q.replace(us, uk));
-      if (q.includes(uk)) out.add(q.replace(uk, us));
-    }
-    return Array.from(out);
+    return sharedFilterTestList(list, q);
   }
 
   /** Tests grouped by department, sorted by dept name. "(No department)"

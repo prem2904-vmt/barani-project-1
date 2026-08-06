@@ -11,7 +11,6 @@ import { Patient } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { AbhaPrefillComponent, AbhaPrefillData } from '../../../shared/components/abha-wizard/abha-prefill.component';

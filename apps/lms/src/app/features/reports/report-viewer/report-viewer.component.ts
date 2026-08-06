@@ -1441,8 +1441,22 @@ export class ReportViewerComponent implements OnInit {
         await navigator.share({ files: [file], title: 'Print report' });
       } else {
         const url = URL.createObjectURL(this._pdfBlob);
-        window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        const frame = document.createElement('iframe');
+        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+        frame.src = url;
+        frame.onload = () => {
+          try {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+          } catch {
+            window.open(url, '_blank');
+          }
+          setTimeout(() => {
+            frame.remove();
+            URL.revokeObjectURL(url);
+          }, 60_000);
+        };
+        document.body.appendChild(frame);
       }
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
