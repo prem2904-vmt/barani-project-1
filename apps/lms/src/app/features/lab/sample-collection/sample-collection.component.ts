@@ -20,6 +20,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { LabelCardComponent, tubeSpec } from '../../frontdesk/post-payment/label-card.component';
 import { PrinterService } from '../../../core/printer/printer.service';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 
@@ -1809,6 +1810,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly printer = inject(PrinterService);
+  private readonly printConfig = inject(PrintConfigService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly process = inject(ProcessWorkflowService);
@@ -2154,12 +2156,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   /** Render each tube label at the branch's configured size + single code and
    *  stream it straight to the label printer (Electron USB / iPad BLE). */
   private async directPrint(g: OrderGroup) {
-    const cfg = this.labCfg.config();
-    const opts = {
-      widthMm: cfg?.labelWidthMm ?? 50,
-      heightMm: cfg?.labelHeightMm ?? 20,
-      codeMode: (cfg?.labelCodeMode ?? 'barcode') as 'barcode' | 'qr' | 'datamatrix',
-    };
+    const opts = this.printConfig.labelOpts();
+    this.toasts.info(`Printing ${g.samples.length} label${g.samples.length > 1 ? 's' : ''}…`);
     let ok = 0, fail = 0;
     for (const s of g.samples) {
       const p = s.order?.patient;

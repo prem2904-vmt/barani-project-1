@@ -107,6 +107,54 @@ ipcMain.on('ble:cancel', () => {
   if (bluetoothCallback) { bluetoothCallback(''); bluetoothCallback = null; }
 });
 
+// Document/invoice printers = the OS-installed printers. List them, and print
+// the current page silently to a chosen one (the renderer applies its own
+// print CSS to isolate the invoice before calling this).
+ipcMain.handle('doc:listPrinters', async () => {
+  try { return await mainWindow.webContents.getPrintersAsync(); }
+  catch { return []; }
+});
+ipcMain.handle('doc:print', async (_e, opts = {}) => {
+  return new Promise((resolve) => {
+    mainWindow.webContents.print(
+      { silent: true, deviceName: opts.deviceName || undefined, printBackground: true },
+      (success, failureReason) => resolve({ ok: success, error: success ? undefined : failureReason })
+    );
+  });
+});
+
+// Silently print a PDF (e.g. an invoice) to a chosen OS printer: write it to a
+// temp file, render it in a hidden window (Chromium's PDF viewer), print, clean
+// up. Used when a document printer is selected in Printing settings.
+ipcMain.handle('doc:printPdf', async (_e, opts = {}) => {
+  const os = require('os');
+  const fs = require('fs');
+  const tmp = path.join(os.tmpdir(), `pf-doc-${Date.now()}.pdf`);
+  return new Promise((resolve) => {
+    let win;
+    const done = (result) => {
+      try { if (win && !win.isDestroyed()) win.close(); } catch (e) { /* noop */ }
+      try { fs.unlinkSync(tmp); } catch (e) { /* noop */ }
+      resolve(result);
+    };
+    try {
+      fs.writeFileSync(tmp, Buffer.from(opts.base64 || '', 'base64'));
+      win = new BrowserWindow({ show: false, webPreferences: { plugins: true } });
+      win.webContents.once('did-finish-load', () => {
+        setTimeout(() => {
+          win.webContents.print(
+            { silent: true, deviceName: opts.deviceName || undefined, printBackground: true },
+            (success, failureReason) => done({ ok: success, error: success ? undefined : failureReason })
+          );
+        }, 600);
+      });
+      win.loadFile(tmp).catch((e) => done({ ok: false, error: e.message }));
+    } catch (e) {
+      done({ ok: false, error: e.message });
+    }
+  });
+});
+
 app.whenReady().then(() => {
   createWindow();
 

@@ -161,6 +161,17 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected closeMore(): void { this.moreOpen.set(false); this.statusListOpen.set(false); }
 
+  /** Per-station Print settings — same gating as the desktop profile menu, so
+   *  the mobile/iPad "More" menu has parity. */
+  protected canPrint(): boolean {
+    return this.auth.hasAnyPermission([
+      'create_order', 'register_patient', 'collect_sample',
+      'enter_result', 'deliver_report', 'view_report', 'manage_lab_settings',
+    ]);
+  }
+  protected goPrinting(): void { this.closeMore(); this.router.navigate(['/printing']); }
+  protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
+
   protected onMoreNotifications(): void {
     this.closeMore();
     // Notifications live at /notifications when that route exists;

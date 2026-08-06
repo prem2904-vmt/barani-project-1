@@ -5,6 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { PrinterService } from '../../../core/printer/printer.service';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Bill } from '../../../shared/models/bill.model';
@@ -42,6 +43,7 @@ export class PostPaymentComponent implements OnInit {
   private readonly process = inject(ProcessWorkflowService);
   private readonly auth    = inject(AuthService);
   private readonly printer = inject(PrinterService);
+  private readonly printConfig = inject(PrintConfigService);
 
   private readonly _order       = signal<Order | null>(null);
   private readonly _bill        = signal<Bill | null>(null);
@@ -173,16 +175,12 @@ export class PostPaymentComponent implements OnInit {
   }
 
   private async runDirectPrint() {
-    const cfg = this.labCfg.config();
-    const opts = {
-      widthMm: cfg?.labelWidthMm ?? 50,
-      heightMm: cfg?.labelHeightMm ?? 20,
-      codeMode: (cfg?.labelCodeMode ?? 'barcode') as 'barcode' | 'qr' | 'datamatrix',
-    };
+    const opts = this.printConfig.labelOpts();
     const order = this._order();
     const patient = order?.patient ?? null;
     const ids = this._printingIds();
     const samples = (order?.samples ?? []).filter(s => ids.has(s.id));
+    if (samples.length) this.toasts.info(`Printing ${samples.length} label${samples.length > 1 ? 's' : ''}…`);
     let ok = 0, fail = 0;
     for (const s of samples) {
       const code = s.barcode ?? s.id;

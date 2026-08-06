@@ -21,10 +21,6 @@ export interface BranchLabConfig {
    *  'datamatrix' (2D, tiny). Default 'barcode'. (Legacy 'both' maps to
    *  'barcode' server-side.) */
   labelCodeMode?: 'barcode' | 'qr' | 'datamatrix';
-  /** Physical die-cut label size in mm, per branch. Drives both the printer
-   *  job and the adaptive on-screen preview. Defaults 50 × 20. */
-  labelWidthMm?: number;
-  labelHeightMm?: number;
   /** How the lab queues group work. Stored per-branch:
    *  'patient' (rows = patients, tests nested) | 'sample' (rows = sample IDs) |
    *  'auto' (default) → resolved from the branch's lab-space count. */

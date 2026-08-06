@@ -39,7 +39,7 @@ const HEAD_MAX = 384; // 48 mm printable
 
 export function renderLabelBitmap(
   data: LabelData,
-  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode }
+  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number }
 ): PackedBitmap {
   const wDots = Math.min(HEAD_MAX, Math.round(opts.widthMm * DPMM));
   // Print ~1 mm short of the label so nothing bleeds into the die-cut gap.
@@ -54,6 +54,12 @@ export function renderLabelBitmap(
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, wDots, hDots);
   ctx.fillStyle = '#000';
   ctx.textAlign = 'left';
+
+  // Alignment nudge: shift everything drawn after this by the configured mm so
+  // the operator can position the content on the label without exact sizing.
+  const ox = Math.round((opts.offsetXmm ?? 0) * DPMM);
+  const oy = Math.round((opts.offsetYmm ?? 0) * DPMM);
+  if (ox || oy) ctx.translate(ox, oy);
 
   // Faux-bold: heavy lines redraw at 1px offsets so anti-aliased strokes carry
   // enough ink through thermal thresholding; small lines stay plain.
@@ -79,7 +85,7 @@ export function renderLabelBitmap(
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(tmp, MX, bcY, bcW, bcH);
     } catch { /* un-encodable */ }
-    layoutText(true, MX, MY, wDots - 2 * MX, bcY - 4);
+    layoutText(MX, MY, wDots - 2 * MX, bcY - 4);
     // code text just under the bars
     mono(data.code, MX, hDots - Math.round(2 * s), Math.round(16 * s), false, wDots - 2 * MX);
   } else {
@@ -89,21 +95,27 @@ export function renderLabelBitmap(
     const codeY = Math.round((hDots - codeSize) / 2);
     if (opts.codeMode === 'qr') drawQr(ctx, data.qrValue ?? data.code, codeX, codeY, codeSize);
     else drawDataMatrix(ctx, data.code, codeX, codeY, codeSize);
-    layoutText(false, MX, MY, codeX - MX - Math.round(8 * s), hDots - MY);
+    layoutText(MX, MY, codeX - MX - Math.round(8 * s), hDots - MY);
   }
 
-  // ── shared text layout ──
-  function layoutText(wide: boolean, left: number, top: number, maxW: number, bottom: number) {
-    const line = (baseline: number) => Math.round(baseline * s);
-    if (data.patientName)
-      drawText(`${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, left, line(28), Math.round(20 * s), true, maxW);
-    if (data.mrn && bottom > line(50))
-      mono(`MRN ${data.mrn}`, left, line(50), Math.round(14 * s), false, maxW);
-    mono(data.code, left, line(82), Math.round(22 * s), true, maxW);
-    if (data.deptCode && bottom > line(110))
-      drawText(data.deptCode, left, line(110), Math.round(15 * s), false, maxW);
-    if (data.tube && bottom > line(132))
-      drawText(data.tube, left, line(132), Math.round(13 * s), false, maxW);
+  // ── shared text layout: stack the present lines and centre the block
+  //    vertically within [top, bottom] so the label isn't top-heavy. ──
+  function layoutText(left: number, top: number, maxW: number, bottom: number) {
+    const lines: { text: string; px: number; heavy: boolean; mono: boolean }[] = [];
+    if (data.patientName) lines.push({ text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, px: Math.round(20 * s), heavy: true, mono: false });
+    if (data.mrn) lines.push({ text: `MRN ${data.mrn}`, px: Math.round(14 * s), heavy: false, mono: true });
+    lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
+    if (data.deptCode) lines.push({ text: data.deptCode, px: Math.round(15 * s), heavy: false, mono: false });
+    if (data.tube) lines.push({ text: data.tube, px: Math.round(13 * s), heavy: false, mono: false });
+
+    const gap = Math.round(6 * s);
+    const totalH = lines.reduce((sum, l) => sum + l.px, 0) + gap * (lines.length - 1);
+    let cursor = Math.max(top, top + Math.round((bottom - top - totalH) / 2));
+    for (const l of lines) {
+      cursor += l.px; // advance to this line's baseline
+      (l.mono ? mono : drawText)(l.text, left, cursor, l.px, l.heavy, maxW);
+      cursor += gap;
+    }
   }
 
   return pack(ctx, wDots, hDots);

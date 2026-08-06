@@ -31,5 +31,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     choose: (deviceId) => ipcRenderer.send('ble:choose', deviceId),
     cancel: () => ipcRenderer.send('ble:cancel')
+  },
+  // Document/invoice printers = the OS-installed printers (for A4 output).
+  doc: {
+    listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),
+    print: (opts) => ipcRenderer.invoke('doc:print', opts),
+    printPdf: (opts) => ipcRenderer.invoke('doc:printPdf', opts)
   }
 });

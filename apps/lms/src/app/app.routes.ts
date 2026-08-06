@@ -194,8 +194,9 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
-        path: 'admin/label-printer',
-        canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
+        // Per-station printing setup — available to any signed-in user (not
+        // admin-only): the printer + label roll are physical to the station.
+        path: 'printing',
         loadComponent: () => import('./features/admin/label-printer/label-printer.component').then(m => m.LabelPrinterComponent)
       },
       {

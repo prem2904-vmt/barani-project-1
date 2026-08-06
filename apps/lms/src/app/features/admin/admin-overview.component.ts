@@ -1208,10 +1208,10 @@ export class AdminOverviewComponent implements OnInit {
       kw: "lab settings collection mode dedicated counter front desk billing mode require validation require payment before report inventory auto-assign auto assign sample number width no-scan no scan claim payments due tab",
     },
     {
-      label: "Label printer",
-      href: "/admin/label-printer",
+      label: "Printing",
+      href: "/printing",
       g: "catalog",
-      hint: "Pair a Bluetooth or USB sample-label printer",
+      hint: "Printer setup, label size & code, invoice printer",
       icon: "M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z",
       kw: "label printer bluetooth ble usb thermal tsc tspl sticker tube sample print weprint pair scan detonger seznik",
     },

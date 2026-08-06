@@ -30,6 +30,8 @@ export class BleWebPrinter {
 
   get deviceName(): string | null { return this.device?.name ?? null; }
   isConnected(): boolean { return !!this.device?.gatt?.connected && !!this.characteristic; }
+  /** A device has been paired this session (may be disconnected — reconnectable). */
+  hasDevice(): boolean { return !!this.device; }
 
   /** Trigger the (in-app) chooser, connect GATT, and grab the write char.
    *  Must be called from a user gesture. */
