@@ -148,8 +148,11 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
       <div class="pf-card">
         <div class="min-w-0">
           <p class="pf-eyebrow">Nudge the print position on the label</p>
-          <p class="pf-mono">X {{ cfg().offsetXmm }} mm · Y {{ cfg().offsetYmm }} mm</p>
-          <button type="button" class="pf-btn mt-2" (click)="resetAlign()">Reset to center</button>
+          <p class="pf-mono">X {{ cfg().offsetXmm }} mm · Y {{ cfg().offsetYmm }} mm · {{ cfg().rotation }}°</p>
+          <div class="flex gap-2 mt-2">
+            <button type="button" class="pf-btn" (click)="resetAlign()">Reset</button>
+            <button type="button" class="pf-btn" (click)="printConfig.rotate()">Rotate ({{ cfg().rotation }}°)</button>
+          </div>
         </div>
         <div class="pf-nudge">
           <button type="button" (click)="printConfig.nudge(0, -0.5)" aria-label="Up">↑</button>

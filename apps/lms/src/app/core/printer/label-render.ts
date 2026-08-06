@@ -39,7 +39,7 @@ const HEAD_MAX = 384; // 48 mm printable
 
 export function renderLabelBitmap(
   data: LabelData,
-  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number; codeScalePct?: number }
+  opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number; codeScalePct?: number; rotation?: number }
 ): PackedBitmap {
   const codeScale = (opts.codeScalePct ?? 100) / 100;
   const wDots = Math.min(HEAD_MAX, Math.round(opts.widthMm * DPMM));
@@ -120,7 +120,22 @@ export function renderLabelBitmap(
     }
   }
 
-  return pack(ctx, wDots, hDots);
+  // Rotation: 0/180 keep the dimensions; 90/270 swap them. Draw the content
+  // canvas rotated about its centre onto the output, then pack that.
+  const rot = (((opts.rotation ?? 0) % 360) + 360) % 360;
+  if (rot === 0) return pack(ctx, wDots, hDots);
+  const swap = rot === 90 || rot === 270;
+  const outW = swap ? hDots : wDots;
+  const outH = swap ? wDots : hDots;
+  const out = document.createElement('canvas');
+  out.width = outW; out.height = outH;
+  const octx = out.getContext('2d')!;
+  octx.fillStyle = '#fff'; octx.fillRect(0, 0, outW, outH);
+  octx.translate(outW / 2, outH / 2);
+  octx.rotate((rot * Math.PI) / 180);
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(canvas, -wDots / 2, -hDots / 2);
+  return pack(octx, outW, outH);
 }
 
 function drawQr(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number): void {
