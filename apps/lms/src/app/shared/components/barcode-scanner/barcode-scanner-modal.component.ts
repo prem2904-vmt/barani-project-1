@@ -49,13 +49,22 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
         </header>
 
         <div class="pf-sc__viewport" [hidden]="manualMode()">
-          <video #video autoplay muted playsinline class="pf-sc__video"></video>
+          <video #video autoplay muted playsinline class="pf-sc__video" (click)="refocus()" title="Tap to focus"></video>
           <div class="pf-sc__frame" aria-hidden="true"></div>
           @if (torchAvailable()) {
             <button type="button" class="pf-sc__torch" [class.pf-sc__torch--on]="torchOn()"
                     (click)="toggleTorch()" [attr.aria-pressed]="torchOn()" aria-label="Toggle torch" title="Torch">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.3V16h6v-1.2c0-.9.4-1.7 1-2.3A6 6 0 0 0 12 2z"/>
+              </svg>
+            </button>
+          }
+          @if (canSwitchCamera()) {
+            <button type="button" class="pf-sc__torch pf-sc__switch" (click)="switchCamera()"
+                    aria-label="Switch camera" title="Switch camera">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
               </svg>
             </button>
           }
@@ -250,6 +259,8 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       transition: background 0.15s ease, color 0.15s ease;
     }
     .pf-sc__torch--on { background: #fbbf24; color: #1f2937; border-color: #fbbf24; }
+    .pf-sc__switch { right: auto; left: 12px; }
+    .pf-sc__video { cursor: pointer; }
     .pf-sc__frame {
       position: absolute; inset: 12%;
       border: 2px dashed rgba(236, 72, 153, 0.55);
@@ -406,6 +417,9 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   protected readonly lastMismatch = signal<string | null>(null);
   protected readonly torchAvailable = signal(false);
   protected readonly torchOn = signal(false);
+  /** Which camera to open, and whether a second one exists to switch to. */
+  private readonly facing = signal<'environment' | 'user'>('environment');
+  protected readonly canSwitchCamera = signal(false);
 
   // HID barcode guns emit keystrokes and terminate with Enter. We buffer
   // recent keys while the modal is open and treat the buffer as a scanned
@@ -459,7 +473,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { ideal: 'environment' },
+          facingMode: { ideal: this.facing() },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
@@ -477,6 +491,12 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       try {
         const caps = this.track?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined;
         this.torchAvailable.set(!!caps && 'torch' in caps);
+      } catch { /* unsupported */ }
+      // Show the camera-switch button only if a second camera exists (labels
+      // are populated once permission is granted, which it now is).
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        this.canSwitchCamera.set(cams.length > 1);
       } catch { /* unsupported */ }
       this.active = true;
       this.lastDetectAt = 0;
@@ -524,6 +544,28 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       await this.track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
       this.torchOn.set(next);
     } catch { /* torch not supported on this device */ }
+  }
+
+  /** Switch between the front/back cameras (mobile devices). */
+  async switchCamera() {
+    this.facing.update(f => (f === 'environment' ? 'user' : 'environment'));
+    this.stopCamera();
+    await this.startCamera();
+  }
+
+  /** Tap-to-focus: re-trigger autofocus. Fires a one-shot focus then returns to
+   *  continuous where supported; otherwise just re-nudges continuous AF. Helps
+   *  when the auto-focus hasn't locked on a glossy tube. */
+  async refocus() {
+    if (!this.track) return;
+    try {
+      await this.track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] });
+      setTimeout(() => {
+        this.track?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+      }, 700);
+    } catch {
+      try { await this.track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }); } catch { /* unsupported */ }
+    }
   }
 
   @HostListener('document:keydown', ['$event'])
