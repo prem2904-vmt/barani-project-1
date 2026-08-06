@@ -1,21 +1,39 @@
-import { Location, DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, ElementRef, computed, inject, signal, effect, viewChild } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import flatpickr from 'flatpickr';
-import { ActivatedRoute, Router } from '@angular/router';
-import { AuthService } from '../../../core/auth/auth.service';
-import { ApiService } from '../../../core/services/api.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
-import { Appointment } from '../../../shared/models/appointment.model';
-import { ApiError } from '../../../shared/models/api-response.model';
-import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
-import { Test } from '../../../shared/models/test.model';
-import { filterTestList, matchTestSearch } from '../../../shared/utils/test-search';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
-import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { Location, DatePipe } from "@angular/common";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  OnDestroy,
+  ElementRef,
+  computed,
+  inject,
+  signal,
+  effect,
+  viewChild,
+} from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import flatpickr from "flatpickr";
+import { ActivatedRoute, Router } from "@angular/router";
+import { AuthService } from "../../../core/auth/auth.service";
+import { ApiService } from "../../../core/services/api.service";
+import { ToastService } from "../../../core/services/toast.service";
+import { AppointmentBookingService } from "../../../core/services/appointment-booking.service";
+import { Appointment } from "../../../shared/models/appointment.model";
+import { ApiError } from "../../../shared/models/api-response.model";
+import {
+  Patient,
+  patientDisplayName,
+  formatPatientInfo,
+} from "../../../shared/models/patient.model";
+import { Test } from "../../../shared/models/test.model";
+import {
+  filterTestList,
+  matchTestSearch,
+} from "../../../shared/utils/test-search";
+import { AvatarComponent } from "../../../shared/primitives/avatar.component";
+import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
+import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
+import { PatientSearchComponent } from "../../../shared/components/patient-search/patient-search.component";
 import {
   addDays,
   addMonths,
@@ -28,7 +46,7 @@ import {
   startOfMonth,
   startOfWeek,
   subMonths,
-} from 'date-fns';
+} from "date-fns";
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -44,10 +62,10 @@ interface SlotInfo {
   bookedCount: number;
 }
 
-const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 @Component({
-  selector: 'pf-book-appointment',
+  selector: "pf-book-appointment",
   standalone: true,
   imports: [
     FormsModule,
@@ -55,37 +73,61 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
     AvatarComponent,
     ScreenHeaderComponent,
     LoadingLogoComponent,
-    PatientSearchComponent
+    PatientSearchComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="book-appt-page px-4 md:px-8 pt-4 pb-10 flex flex-col gap-3">
-
       <pf-screen-header
         eyebrow="Frontdesk · Appointments"
         title="Book appointment"
-        subtitle="Pick a date and slot. WhatsApp confirmation queues automatically.">
+        subtitle="Pick a date and slot. WhatsApp confirmation queues automatically."
+      >
       </pf-screen-header>
 
       <!-- Grid Layout Container for Desktop (3 columns) -->
-      <div class="book-appt-grid grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full">
-        
+      <div
+        class="book-appt-grid grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full"
+      >
         <!-- CARD 1: Patient Selection & Date Picker (Spans 1 column on desktop) -->
-        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4 h-full overflow-hidden">
+        <div
+          class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4 h-full overflow-hidden"
+        >
           <!-- Step 1: Patient Picker -->
           <section class="flex flex-col min-h-0 shrink-0">
             <div class="flex items-center gap-2 mb-2">
-              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">1</span>
-              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Patient</span>
+              <span
+                class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold"
+                >1</span
+              >
+              <span
+                class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                >Patient</span
+              >
             </div>
             @if (patient()) {
-              <div class="flex items-center gap-4 p-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl hover:border-purple-500/30 transition-all duration-200">
-                <pf-avatar [name]="patientName()" [size]="40" class="shrink-0"></pf-avatar>
+              <div
+                class="flex items-center gap-4 p-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl hover:border-purple-500/30 transition-all duration-200"
+              >
+                <pf-avatar
+                  [name]="patientName()"
+                  [size]="40"
+                  class="shrink-0"
+                ></pf-avatar>
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-semibold text-[var(--text-primary)] truncate">{{ formatPatient(patient()) }}</p>
+                  <p
+                    class="text-sm font-semibold text-[var(--text-primary)] truncate"
+                  >
+                    {{ formatPatient(patient()) }}
+                  </p>
                   @if (patient()!.phone) {
-                    <p class="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-                      <span class="font-mono tracking-wider text-[var(--text-muted)]">{{ patient()!.phone }}</span>
+                    <p
+                      class="text-xs text-[var(--text-secondary)] mt-0.5 truncate"
+                    >
+                      <span
+                        class="font-mono tracking-wider text-[var(--text-muted)]"
+                        >{{ patient()!.phone }}</span
+                      >
                     </p>
                   }
                 </div>
@@ -109,74 +151,128 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           <!-- Step 2: Date Picker (Flatpickr inline) -->
           <section class="flex flex-col min-h-0 flex-1 justify-start">
             <div class="flex items-center gap-2 mb-2">
-              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">2</span>
-              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Date</span>
+              <span
+                class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold"
+                >2</span
+              >
+              <span
+                class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                >Date</span
+              >
             </div>
-            
-            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-1 flex justify-center min-h-0 w-full">
+
+            <div
+              class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-1 flex justify-center min-h-0 w-full"
+            >
               <div #flatpickrEl class="w-full"></div>
             </div>
           </section>
         </div>
 
         <!-- CARD 2: Time Slots, Tests Selection & Notes (Spans 1 column on desktop) -->
-        <div class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-5 h-full overflow-visible relative">
+        <div
+          class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-5 h-full overflow-visible relative"
+        >
           <!-- Step 3: Time slot -->
           <section class="flex flex-col min-h-0 shrink-0">
             <div class="flex items-center gap-2 mb-2 shrink-0">
-              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">3</span>
-              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Time slot</span>
+              <span
+                class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold"
+                >3</span
+              >
+              <span
+                class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                >Time slot</span
+              >
             </div>
 
             @if (loadingSlots()) {
-              <div class="flex flex-col items-center justify-center py-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl">
-                <pf-loading-logo size="sm" color="purple" [showDna]="false" [showText]="true" text="Loading slots…"></pf-loading-logo>
+              <div
+                class="flex flex-col items-center justify-center py-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl"
+              >
+                <pf-loading-logo
+                  size="sm"
+                  color="purple"
+                  [showDna]="false"
+                  [showText]="true"
+                  text="Loading slots…"
+                ></pf-loading-logo>
               </div>
             } @else if (slots().length === 0) {
-              <div class="flex items-center justify-center p-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-xs text-[var(--text-muted)]">
+              <div
+                class="flex items-center justify-center p-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-xs text-[var(--text-muted)]"
+              >
                 Branch is closed on this day (or all slots have passed).
               </div>
             } @else {
               <!-- Segmented glass control -->
-              <div class="flex p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-xl gap-1 mb-2 shrink-0">
+              <div
+                class="flex p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-xl gap-1 mb-2 shrink-0"
+              >
                 <button
                   type="button"
                   class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'morning'"
-                  [class.text-[var(--text-primary)]]="timePeriod() === 'morning'"
+                  [class.text-[var(--text-primary)]]="
+                    timePeriod() === 'morning'
+                  "
                   [class.shadow-sm]="timePeriod() === 'morning'"
-                  [class.text-[var(--text-secondary)]]="timePeriod() !== 'morning'"
-                  [class.hover:text-[var(--text-primary)]]="timePeriod() !== 'morning'"
+                  [class.text-[var(--text-secondary)]]="
+                    timePeriod() !== 'morning'
+                  "
+                  [class.hover:text-[var(--text-primary)]]="
+                    timePeriod() !== 'morning'
+                  "
                   (click)="timePeriod.set('morning')"
                 >
                   <span>Morning</span>
-                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().morning }})</span>
+                  <span class="text-[9px] opacity-60 font-mono"
+                    >({{ periodsWithSlots().morning }})</span
+                  >
                 </button>
                 <button
                   type="button"
                   class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
-                  [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'afternoon'"
-                  [class.text-[var(--text-primary)]]="timePeriod() === 'afternoon'"
+                  [class.bg-[var(--bg-card-solid)]]="
+                    timePeriod() === 'afternoon'
+                  "
+                  [class.text-[var(--text-primary)]]="
+                    timePeriod() === 'afternoon'
+                  "
                   [class.shadow-sm]="timePeriod() === 'afternoon'"
-                  [class.text-[var(--text-secondary)]]="timePeriod() !== 'afternoon'"
-                  [class.hover:text-[var(--text-primary)]]="timePeriod() !== 'afternoon'"
+                  [class.text-[var(--text-secondary)]]="
+                    timePeriod() !== 'afternoon'
+                  "
+                  [class.hover:text-[var(--text-primary)]]="
+                    timePeriod() !== 'afternoon'
+                  "
                   (click)="timePeriod.set('afternoon')"
                 >
                   <span>Afternoon</span>
-                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().afternoon }})</span>
+                  <span class="text-[9px] opacity-60 font-mono"
+                    >({{ periodsWithSlots().afternoon }})</span
+                  >
                 </button>
                 <button
                   type="button"
                   class="flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer border-0 bg-transparent text-[var(--text-secondary)]"
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'evening'"
-                  [class.text-[var(--text-primary)]]="timePeriod() === 'evening'"
+                  [class.text-[var(--text-primary)]]="
+                    timePeriod() === 'evening'
+                  "
                   [class.shadow-sm]="timePeriod() === 'evening'"
-                  [class.text-[var(--text-secondary)]]="timePeriod() !== 'evening'"
-                  [class.hover:text-[var(--text-primary)]]="timePeriod() !== 'evening'"
+                  [class.text-[var(--text-secondary)]]="
+                    timePeriod() !== 'evening'
+                  "
+                  [class.hover:text-[var(--text-primary)]]="
+                    timePeriod() !== 'evening'
+                  "
                   (click)="timePeriod.set('evening')"
                 >
                   <span>Evening</span>
-                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().evening }})</span>
+                  <span class="text-[9px] opacity-60 font-mono"
+                    >({{ periodsWithSlots().evening }})</span
+                  >
                 </button>
                 <button
                   type="button"
@@ -184,19 +280,29 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                   [class.bg-[var(--bg-card-solid)]]="timePeriod() === 'night'"
                   [class.text-[var(--text-primary)]]="timePeriod() === 'night'"
                   [class.shadow-sm]="timePeriod() === 'night'"
-                  [class.text-[var(--text-secondary)]]="timePeriod() !== 'night'"
-                  [class.hover:text-[var(--text-primary)]]="timePeriod() !== 'night'"
+                  [class.text-[var(--text-secondary)]]="
+                    timePeriod() !== 'night'
+                  "
+                  [class.hover:text-[var(--text-primary)]]="
+                    timePeriod() !== 'night'
+                  "
                   (click)="timePeriod.set('night')"
                 >
                   <span>Night</span>
-                  <span class="text-[9px] opacity-60 font-mono">({{ periodsWithSlots().night }})</span>
+                  <span class="text-[9px] opacity-60 font-mono"
+                    >({{ periodsWithSlots().night }})</span
+                  >
                 </button>
               </div>
 
               <!-- Slots grid container -->
-              <div class="border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] p-3 overflow-y-auto max-h-[125px] shrink-0">
+              <div
+                class="border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] p-3 overflow-y-auto max-h-[125px] shrink-0"
+              >
                 @if (visibleSlots().length === 0) {
-                  <div class="text-center py-4 text-xs text-[var(--text-muted)] h-full flex items-center justify-center">
+                  <div
+                    class="text-center py-4 text-xs text-[var(--text-muted)] h-full flex items-center justify-center"
+                  >
                     No slots available in this period.
                   </div>
                 } @else {
@@ -211,11 +317,21 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                         [class.border-transparent]="s.time === selectedTime()"
                         [class.text-white]="s.time === selectedTime()"
                         [class.shadow-sm]="s.time === selectedTime()"
-                        [class.bg-[var(--bg-card-solid)]]="s.time !== selectedTime() && s.available"
-                        [class.border-[var(--glass-border)]]="s.time !== selectedTime() && s.available"
-                        [class.text-[var(--text-primary)]]="s.time !== selectedTime() && s.available"
-                        [class.hover:border-purple-500/40]="s.time !== selectedTime() && s.available"
-                        [class.hover:bg-[var(--bg-hover)]]="s.time !== selectedTime() && s.available"
+                        [class.bg-[var(--bg-card-solid)]]="
+                          s.time !== selectedTime() && s.available
+                        "
+                        [class.border-[var(--glass-border)]]="
+                          s.time !== selectedTime() && s.available
+                        "
+                        [class.text-[var(--text-primary)]]="
+                          s.time !== selectedTime() && s.available
+                        "
+                        [class.hover:border-purple-500/40]="
+                          s.time !== selectedTime() && s.available
+                        "
+                        [class.hover:bg-[var(--bg-hover)]]="
+                          s.time !== selectedTime() && s.available
+                        "
                         [disabled]="!s.available"
                         [class.opacity-30]="!s.available"
                         [class.cursor-not-allowed]="!s.available"
@@ -225,7 +341,10 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                       >
                         <span>{{ s.time }}</span>
                         @if (!s.available) {
-                          <span class="text-[8px] text-red-400 font-bold uppercase tracking-wider mt-0.5 scale-90">full</span>
+                          <span
+                            class="text-[8px] text-red-400 font-bold uppercase tracking-wider mt-0.5 scale-90"
+                            >full</span
+                          >
                         }
                       </button>
                     }
@@ -236,14 +355,28 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           </section>
 
           <!-- Step 4: Tests selection (Search + chips + absolute popup suggestions) -->
-          <section class="flex flex-col relative overflow-visible flex-1 min-h-0">
+          <section
+            class="flex flex-col relative overflow-visible flex-1 min-h-0"
+          >
             <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
               <div class="flex items-center gap-2">
-                <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">4</span>
-                <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Tests <span class="text-[10px] text-[var(--text-muted)] lowercase font-normal">(optional)</span></span>
+                <span
+                  class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold"
+                  >4</span
+                >
+                <span
+                  class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                  >Tests
+                  <span
+                    class="text-[10px] text-[var(--text-muted)] lowercase font-normal"
+                    >(optional)</span
+                  ></span
+                >
               </div>
               @if (selectedTestIds().length > 0) {
-                <span class="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20 shrink-0">
+                <span
+                  class="text-[10px] font-bold px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20 shrink-0"
+                >
                   {{ selectedTestIds().length }} picked
                 </span>
               }
@@ -252,20 +385,34 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             <!-- Selected test chips -->
             @if (selectedTests().length > 0) {
               <!-- Selected test chips: vertical list, dynamic height with scrolling -->
-              <div class="flex flex-col gap-1.5 mb-3 overflow-y-auto max-h-[120px] shrink-0 pr-1">
+              <div
+                class="flex flex-col gap-1.5 mb-3 overflow-y-auto max-h-[120px] shrink-0 pr-1"
+              >
                 @for (t of selectedTests(); track t.id) {
                   <span
                     class="inline-flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg text-xs text-[var(--text-primary)] font-medium w-full min-w-0"
                   >
-                    <span class="truncate flex-1 min-w-0 text-[11px]">{{ t.name }}</span>
+                    <span class="truncate flex-1 min-w-0 text-[11px]">{{
+                      t.name
+                    }}</span>
                     <button
                       type="button"
                       class="text-[var(--text-muted)] hover:text-red-400 transition-colors p-0.5 bg-transparent border-0 cursor-pointer"
                       (click)="toggleTest(t.id)"
                       title="Remove"
                     >
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      <svg
+                        class="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
                       </svg>
                     </button>
                   </span>
@@ -275,9 +422,21 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
             <!-- Search input container -->
             <div class="relative shrink-0">
-              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--text-muted)]">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <div
+                class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--text-muted)]"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
               </div>
               <input
@@ -292,7 +451,11 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
               />
 
               <!-- Floating Suggestions Dropdown (overlaying on top of notes, etc.) -->
-              @if (testSearchFocused() && testQuery().trim() !== '' && filteredTests().length > 0) {
+              @if (
+                testSearchFocused() &&
+                testQuery().trim() !== "" &&
+                filteredTests().length > 0
+              ) {
                 <div
                   class="absolute left-0 right-0 z-50 mt-1 max-h-[220px] overflow-y-auto bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-xl shadow-2xl backdrop-blur-lg pr-1"
                 >
@@ -304,20 +467,42 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
                           class="w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors bg-transparent border-0 cursor-pointer"
                           [class.bg-purple-500/10]="isTestSelected(t.id)"
                           [class.text-purple-400]="isTestSelected(t.id)"
-                          [class.hover:bg-[var(--bg-hover)]]="!isTestSelected(t.id)"
-                          [class.text-[var(--text-primary)]]="!isTestSelected(t.id)"
-                          (mousedown)="$event.preventDefault(); selectTest(t.id)"
+                          [class.hover:bg-[var(--bg-hover)]]="
+                            !isTestSelected(t.id)
+                          "
+                          [class.text-[var(--text-primary)]]="
+                            !isTestSelected(t.id)
+                          "
+                          (mousedown)="
+                            $event.preventDefault(); selectTest(t.id)
+                          "
                         >
                           <div class="flex items-center gap-2 min-w-0 flex-1">
                             @if (isTestSelected(t.id)) {
-                              <svg class="w-3.5 h-3.5 text-purple-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                              <svg
+                                class="w-3.5 h-3.5 text-purple-500 shrink-0"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                stroke-width="3"
+                              >
+                                <path
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M5 13l4 4L19 7"
+                                />
                               </svg>
                             }
-                            <span class="truncate font-medium text-[11px]">{{ t.name }}</span>
+                            <span class="truncate font-medium text-[11px]"
+                              >{{ t.testCode }} {{ t.name }} ({{
+                                t.shortName
+                              }})</span
+                            >
                           </div>
                           @if (t.code) {
-                            <span class="font-mono text-[9px] text-[var(--text-tertiary)] shrink-0 ml-2 bg-[var(--glass-bg)] px-1.5 py-0.5 rounded border border-[var(--glass-border)]">
+                            <span
+                              class="font-mono text-[9px] text-[var(--text-tertiary)] shrink-0 ml-2 bg-[var(--glass-bg)] px-1.5 py-0.5 rounded border border-[var(--glass-border)]"
+                            >
                               {{ t.code }}
                             </span>
                           }
@@ -339,48 +524,119 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           <!-- Collection type -->
           <section class="flex flex-col shrink-0">
             <div class="flex items-center gap-2 mb-2">
-              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+              <span
+                class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400"
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12l9-9 9 9M5 10v10h14V10" />
+                </svg>
               </span>
-              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Collection</span>
+              <span
+                class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                >Collection</span
+              >
             </div>
             <div class="flex gap-2 mb-2">
-              <button type="button"
+              <button
+                type="button"
                 class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition"
-                [style.borderColor]="collectionType() === 'walkin' ? '#a855f7' : 'var(--input-border)'"
-                [style.color]="collectionType() === 'walkin' ? '#d8b4fe' : 'var(--text-secondary)'"
-                (click)="collectionType.set('walkin')">Walk-in (lab visit)</button>
-              <button type="button"
+                [style.borderColor]="
+                  collectionType() === 'walkin'
+                    ? '#a855f7'
+                    : 'var(--input-border)'
+                "
+                [style.color]="
+                  collectionType() === 'walkin'
+                    ? '#d8b4fe'
+                    : 'var(--text-secondary)'
+                "
+                (click)="collectionType.set('walkin')"
+              >
+                Walk-in (lab visit)
+              </button>
+              <button
+                type="button"
                 class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition"
-                [style.borderColor]="collectionType() === 'home_collection' ? '#a855f7' : 'var(--input-border)'"
-                [style.color]="collectionType() === 'home_collection' ? '#d8b4fe' : 'var(--text-secondary)'"
-                (click)="collectionType.set('home_collection')">Home collection</button>
+                [style.borderColor]="
+                  collectionType() === 'home_collection'
+                    ? '#a855f7'
+                    : 'var(--input-border)'
+                "
+                [style.color]="
+                  collectionType() === 'home_collection'
+                    ? '#d8b4fe'
+                    : 'var(--text-secondary)'
+                "
+                (click)="collectionType.set('home_collection')"
+              >
+                Home collection
+              </button>
             </div>
-            @if (collectionType() === 'home_collection') {
-              <input type="text"
+            @if (collectionType() === "home_collection") {
+              <input
+                type="text"
                 class="w-full p-3 mb-2 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
                 placeholder="Patient address (required)"
-                [value]="hcAddress()" (input)="hcAddress.set($any($event.target).value)" />
+                [value]="hcAddress()"
+                (input)="hcAddress.set($any($event.target).value)"
+              />
               <div class="grid grid-cols-3 gap-2">
-                <input type="text" inputmode="numeric"
+                <input
+                  type="text"
+                  inputmode="numeric"
                   class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
-                  placeholder="Pincode" [value]="hcPincode()" (input)="hcPincode.set($any($event.target).value)" />
-                <input type="number" step="0.0001"
+                  placeholder="Pincode"
+                  [value]="hcPincode()"
+                  (input)="hcPincode.set($any($event.target).value)"
+                />
+                <input
+                  type="number"
+                  step="0.0001"
                   class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
-                  placeholder="Lat (opt)" [value]="hcLat()" (input)="hcLat.set($any($event.target).valueAsNumber || null)" />
-                <input type="number" step="0.0001"
+                  placeholder="Lat (opt)"
+                  [value]="hcLat()"
+                  (input)="hcLat.set($any($event.target).valueAsNumber || null)"
+                />
+                <input
+                  type="number"
+                  step="0.0001"
                   class="p-3 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] outline-none focus:border-purple-500"
-                  placeholder="Lng (opt)" [value]="hcLng()" (input)="hcLng.set($any($event.target).valueAsNumber || null)" />
+                  placeholder="Lng (opt)"
+                  [value]="hcLng()"
+                  (input)="hcLng.set($any($event.target).valueAsNumber || null)"
+                />
               </div>
-              <p class="text-[10px] mt-1 text-[var(--text-muted)]">Pincode (or coordinates) auto-assigns the nearest agent. Coordinates are optional.</p>
+              <p class="text-[10px] mt-1 text-[var(--text-muted)]">
+                Pincode (or coordinates) auto-assigns the nearest agent.
+                Coordinates are optional.
+              </p>
             }
           </section>
 
           <!-- Step 5: Notes -->
           <section class="flex flex-col shrink-0">
             <div class="flex items-center gap-2 mb-2">
-              <span class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold">5</span>
-              <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Notes <span class="text-[10px] text-[var(--text-muted)] lowercase font-normal">(optional)</span></span>
+              <span
+                class="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500/10 text-purple-400 font-mono text-xs font-bold"
+                >5</span
+              >
+              <span
+                class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]"
+                >Notes
+                <span
+                  class="text-[10px] text-[var(--text-muted)] lowercase font-normal"
+                  >(optional)</span
+                ></span
+              >
             </div>
             <textarea
               rows="4"
@@ -393,57 +649,107 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
         </div>
 
         <!-- CARD 3: Appointment Summary & Actions (Spans 1 column on desktop) -->
-        <section class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col h-full">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5 pb-2 border-b border-[var(--glass-border)]">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        <section
+          class="lg:col-span-1 bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col h-full"
+        >
+          <h3
+            class="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5 pb-2 border-b border-[var(--glass-border)]"
+          >
+            <svg
+              class="w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
             </svg>
             Appointment Summary
           </h3>
-          
-          <div class="flex flex-col gap-4 text-xs flex-1 pt-4 min-h-0 overflow-hidden">
+
+          <div
+            class="flex flex-col gap-4 text-xs flex-1 pt-4 min-h-0 overflow-hidden"
+          >
             <!-- Patient info summary -->
-            <div class="flex justify-between items-start border-b border-[var(--glass-border)] pb-3">
-              <span class="text-[var(--text-secondary)] font-medium">Patient</span>
+            <div
+              class="flex justify-between items-start border-b border-[var(--glass-border)] pb-3"
+            >
+              <span class="text-[var(--text-secondary)] font-medium"
+                >Patient</span
+              >
               <div class="text-right">
                 @if (patient()) {
-                  <span class="font-semibold text-[var(--text-primary)]">{{ formatPatient(patient()) }}</span>
+                  <span class="font-semibold text-[var(--text-primary)]">{{
+                    formatPatient(patient())
+                  }}</span>
                 } @else {
-                  <span class="text-[var(--text-muted)] italic">No patient selected</span>
+                  <span class="text-[var(--text-muted)] italic"
+                    >No patient selected</span
+                  >
                 }
               </div>
             </div>
 
             <!-- Date & Slot summary -->
-            <div class="flex justify-between items-center border-b border-[var(--glass-border)] pb-3">
-              <span class="text-[var(--text-secondary)] font-medium">Schedule</span>
+            <div
+              class="flex justify-between items-center border-b border-[var(--glass-border)] pb-3"
+            >
+              <span class="text-[var(--text-secondary)] font-medium"
+                >Schedule</span
+              >
               <div class="text-right">
-                <span class="font-semibold text-[var(--text-primary)]">{{ selectedDate() | date: 'EEE, dd MMM yyyy' }}</span>
+                <span class="font-semibold text-[var(--text-primary)]">{{
+                  selectedDate() | date: "EEE, dd MMM yyyy"
+                }}</span>
                 @if (selectedTime()) {
-                  <span class="ml-1.5 px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded text-[10px] font-mono font-bold">{{ selectedTime() }}</span>
+                  <span
+                    class="ml-1.5 px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded text-[10px] font-mono font-bold"
+                    >{{ selectedTime() }}</span
+                  >
                 } @else {
-                  <p class="text-[10px] text-[var(--text-muted)] mt-0.5 italic">Pick a time slot</p>
+                  <p class="text-[10px] text-[var(--text-muted)] mt-0.5 italic">
+                    Pick a time slot
+                  </p>
                 }
               </div>
             </div>
 
             <!-- Tests attached summary: fills remaining space, scrolls only when overflowing -->
-            <div class="flex justify-between items-start flex-1 min-h-0 overflow-hidden">
-              <span class="text-[var(--text-secondary)] font-medium">Draft Tests</span>
+            <div
+              class="flex justify-between items-start flex-1 min-h-0 overflow-hidden"
+            >
+              <span class="text-[var(--text-secondary)] font-medium"
+                >Draft Tests</span
+              >
               <div class="text-right flex flex-col items-end">
                 @if (selectedTests().length > 0) {
-                  <span class="font-semibold text-[var(--text-primary)]">{{ selectedTests().length }} test(s) attached</span>
+                  <span class="font-semibold text-[var(--text-primary)]"
+                    >{{ selectedTests().length }} test(s) attached</span
+                  >
                   <!-- Show all tests; scrolls only when overflowing available space -->
-                  <div class="flex flex-col gap-1 mt-1 text-[10px] text-[var(--text-muted)] font-mono w-full text-right font-semibold overflow-y-auto flex-1 min-h-0">
+                  <div
+                    class="flex flex-col gap-1 mt-1 text-[10px] text-[var(--text-muted)] font-mono w-full text-right font-semibold overflow-y-auto flex-1 min-h-0"
+                  >
                     @for (t of selectedTests(); track t.id) {
                       <div>{{ t.name }} (₹{{ t.price }})</div>
                     }
                   </div>
-                  <div class="mt-3 text-sm font-bold text-[var(--text-primary)]">
-                    Total Price: <span class="text-gradient">₹{{ selectedTestsTotal() }}</span>
+                  <div
+                    class="mt-3 text-sm font-bold text-[var(--text-primary)]"
+                  >
+                    Total Price:
+                    <span class="text-gradient"
+                      >₹{{ selectedTestsTotal() }}</span
+                    >
                   </div>
                 } @else {
-                  <span class="text-[var(--text-muted)] italic">No tests attached</span>
+                  <span class="text-[var(--text-muted)] italic"
+                    >No tests attached</span
+                  >
                 }
               </div>
             </div>
@@ -451,16 +757,30 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
           <!-- Error Message if any -->
           @if (errorMsg()) {
-            <div class="flex items-center gap-1.5 text-xs text-red-400 font-semibold pt-2 border-t border-[var(--glass-border)]">
-              <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <div
+              class="flex items-center gap-1.5 text-xs text-red-400 font-semibold pt-2 border-t border-[var(--glass-border)]"
+            >
+              <svg
+                class="w-4 h-4 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
               <span>{{ errorMsg() }}</span>
             </div>
           }
 
           <!-- Action buttons pinned to bottom of card -->
-          <div class="flex flex-col sm:flex-row gap-2.5 pt-4 mt-auto border-t border-[var(--glass-border)]">
+          <div
+            class="flex flex-col sm:flex-row gap-2.5 pt-4 mt-auto border-t border-[var(--glass-border)]"
+          >
             <button
               type="button"
               class="flex-1 py-2.5 text-xs font-semibold rounded-xl border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] bg-transparent cursor-pointer transition-colors"
@@ -478,7 +798,6 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             </button>
           </div>
         </section>
-
       </div>
     </section>
   `,
@@ -508,12 +827,12 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       }
 
       :host ::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, rgba(139,92,246,0.3));
+        background: var(--scrollbar-thumb, rgba(139, 92, 246, 0.3));
         border-radius: 4px;
       }
 
       :host ::-webkit-scrollbar-thumb:hover {
-        background: var(--scrollbar-thumb-hover, rgba(139,92,246,0.6));
+        background: var(--scrollbar-thumb-hover, rgba(139, 92, 246, 0.6));
       }
 
       /* Flatpickr layout and theme styling overrides to center and stretch it to 100% width */
@@ -526,7 +845,7 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           background: transparent !important;
           border: none !important;
           display: block !important;
-          font-family: 'Outfit', sans-serif !important;
+          font-family: "Outfit", sans-serif !important;
         }
         .flatpickr-innerContainer {
           width: 100% !important;
@@ -696,8 +1015,8 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
          selectors are scoped under :host so they cannot leak to shared
          primitives or other pages. */
       @media (max-width: 640px) {
-        :host input[type='text'],
-        :host input[type='number'],
+        :host input[type="text"],
+        :host input[type="number"],
         :host textarea {
           font-size: 16px !important;
         }
@@ -758,12 +1077,13 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
           max-height: 220px !important;
         }
       }
-    `
-  ]
+    `,
+  ],
 })
 export class BookAppointmentComponent implements OnInit, OnDestroy {
-  readonly flatpickrEl = viewChild<ElementRef<HTMLDivElement>>('flatpickrEl');
-  readonly testSearchInput = viewChild<ElementRef<HTMLInputElement>>('testSearchInput');
+  readonly flatpickrEl = viewChild<ElementRef<HTMLDivElement>>("flatpickrEl");
+  readonly testSearchInput =
+    viewChild<ElementRef<HTMLInputElement>>("testSearchInput");
   private fpInstance: any = null;
 
   private readonly api = inject(ApiService);
@@ -774,25 +1094,31 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   private readonly locationSvc = inject(Location);
   private readonly bookingSvc = inject(AppointmentBookingService);
 
-  protected readonly dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  protected readonly dows = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   // Booking state.
   protected readonly patient = signal<Patient | null>(null);
-  protected readonly selectedDate = signal<string>(format(new Date(), 'yyyy-MM-dd'));
-  protected readonly selectedTime = signal<string>('');
-  protected readonly notes = signal<string>('');
+  protected readonly selectedDate = signal<string>(
+    format(new Date(), "yyyy-MM-dd"),
+  );
+  protected readonly selectedTime = signal<string>("");
+  protected readonly notes = signal<string>("");
   // Collection type + home-collection details.
-  protected readonly collectionType = signal<'walkin' | 'home_collection'>('walkin');
-  protected readonly hcAddress = signal<string>('');
-  protected readonly hcPincode = signal<string>('');
+  protected readonly collectionType = signal<"walkin" | "home_collection">(
+    "walkin",
+  );
+  protected readonly hcAddress = signal<string>("");
+  protected readonly hcPincode = signal<string>("");
   protected readonly hcLat = signal<number | null>(null);
   protected readonly hcLng = signal<number | null>(null);
   protected readonly calendarMonth = signal<Date>(startOfMonth(new Date()));
   protected readonly selectedTestIds = signal<string[]>([]);
-  protected readonly testQuery = signal<string>('');
+  protected readonly testQuery = signal<string>("");
 
   // UI state
-  protected readonly timePeriod = signal<'morning' | 'afternoon' | 'evening' | 'night'>('morning');
+  protected readonly timePeriod = signal<
+    "morning" | "afternoon" | "evening" | "night"
+  >("morning");
   protected readonly testSearchFocused = signal<boolean>(false);
 
   // Data state
@@ -821,7 +1147,9 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     return all.filter((s) => getTimePeriod(s.time) === period);
   });
 
-  readonly loadingSlots = computed(() => this._config() === null || this._loadingAppointments());
+  readonly loadingSlots = computed(
+    () => this._config() === null || this._loadingAppointments(),
+  );
   readonly saving = this._saving.asReadonly();
   readonly errorMsg = this._errorMsg.asReadonly();
 
@@ -833,7 +1161,9 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     }
     const sel = normalizeTimeStr(this.selectedTime()) ?? this.selectedTime();
     const list = this._slots();
-    const match = list.find((s) => (normalizeTimeStr(s.time) ?? s.time) === sel);
+    const match = list.find(
+      (s) => (normalizeTimeStr(s.time) ?? s.time) === sel,
+    );
     return !match || match.available;
   });
 
@@ -848,15 +1178,15 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   });
 
   readonly selectedTestsTotal = computed<number>(() =>
-    this.selectedTests().reduce((sum, t) => sum + (Number(t.price) || 0), 0)
+    this.selectedTests().reduce((sum, t) => sum + (Number(t.price) || 0), 0),
   );
 
   readonly headerSubtitle = computed(() => {
     const d = this.selectedDate();
     const t = this.selectedTime();
-    if (!d) return 'Pick a patient, day, and time slot.';
-    const day = parse(d, 'yyyy-MM-dd', new Date());
-    const stamp = format(day, 'EEE, dd MMM yyyy');
+    if (!d) return "Pick a patient, day, and time slot.";
+    const day = parse(d, "yyyy-MM-dd", new Date());
+    const stamp = format(day, "EEE, dd MMM yyyy");
     return t ? `${stamp} · ${t}` : stamp;
   });
 
@@ -876,9 +1206,9 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const cell = new Date(d);
       days.push({
-        iso: format(cell, 'yyyy-MM-dd'),
+        iso: format(cell, "yyyy-MM-dd"),
         day: cell.getDate(),
-        dayName: format(cell, 'EEE'),
+        dayName: format(cell, "EEE"),
         today: isSameDay(cell, new Date()),
         past: cell.getTime() < today.getTime(),
       });
@@ -902,7 +1232,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     for (let d = new Date(ws); d <= we; d.setDate(d.getDate() + 1)) {
       const cell = new Date(d);
       cells.push({
-        iso: format(cell, 'yyyy-MM-dd'),
+        iso: format(cell, "yyyy-MM-dd"),
         day: cell.getDate(),
         outside: !isSameMonth(cell, month),
         today: isSameDay(cell, new Date()),
@@ -924,7 +1254,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       const date = this.selectedDate();
       if (this.fpInstance && date) {
         try {
-          const fpDate = format(this.fpInstance.selectedDates[0], 'yyyy-MM-dd');
+          const fpDate = format(this.fpInstance.selectedDates[0], "yyyy-MM-dd");
           if (fpDate !== date) {
             this.fpInstance.setDate(date, false);
           }
@@ -949,14 +1279,14 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     this.fpInstance = flatpickr(el, {
       inline: true,
       defaultDate: this.selectedDate(),
-      minDate: 'today',
-      dateFormat: 'Y-m-d',
+      minDate: "today",
+      dateFormat: "Y-m-d",
       onChange: (selectedDates) => {
         if (selectedDates.length > 0) {
-          const iso = format(selectedDates[0], 'yyyy-MM-dd');
+          const iso = format(selectedDates[0], "yyyy-MM-dd");
           this.selectDate(iso);
         }
-      }
+      },
     });
   }
 
@@ -971,14 +1301,14 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     this.loadConfig();
 
     // Prefill patient, date, and time from query params.
-    const pid = this.route.snapshot.queryParamMap.get('patientId');
-    const dateParam = this.route.snapshot.queryParamMap.get('date');
-    const timeParam = this.route.snapshot.queryParamMap.get('time');
+    const pid = this.route.snapshot.queryParamMap.get("patientId");
+    const dateParam = this.route.snapshot.queryParamMap.get("date");
+    const timeParam = this.route.snapshot.queryParamMap.get("time");
 
     if (dateParam) {
       this.selectedDate.set(dateParam);
       this.calendarMonth.set(
-        startOfMonth(parse(dateParam, 'yyyy-MM-dd', new Date())),
+        startOfMonth(parse(dateParam, "yyyy-MM-dd", new Date())),
       );
     }
     if (timeParam) {
@@ -989,14 +1319,16 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     if (pid) {
       this.api.get<{ patient: Patient }>(`/api/patients/${pid}`).subscribe({
         next: (r) => this.patient.set(r.patient),
-        error: () => { /* leave empty */ },
+        error: () => {
+          /* leave empty */
+        },
       });
     }
   }
 
   back() {
     if (window.history.length > 1) this.locationSvc.back();
-    else this.router.navigateByUrl('/frontdesk');
+    else this.router.navigateByUrl("/frontdesk");
   }
 
   // ── Patient ─────────────────────────────────────────────────
@@ -1015,7 +1347,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   selectDate(iso: string) {
     if (iso === this.selectedDate()) return;
     this.selectedDate.set(iso);
-    this.selectedTime.set('');
+    this.selectedTime.set("");
   }
 
   // ── Slots ───────────────────────────────────────────────────
@@ -1037,7 +1369,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       this.blurTimeout = null;
     }
     this.toggleTest(id);
-    this.testQuery.set('');
+    this.testQuery.set("");
     this.focusSearchInput();
   }
   focusSearchInput() {
@@ -1067,14 +1399,16 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
   private loadTestsIfNeeded() {
     if (this._tests().length > 0) return;
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>("/api/tests/").subscribe({
       next: (l) => this._tests.set(l ?? []),
-      error: () => { /* silent */ },
+      error: () => {
+        /* silent */
+      },
     });
   }
 
   private loadConfig() {
-    this.api.get<AppointmentConfigDto>('/api/appointments/config').subscribe({
+    this.api.get<AppointmentConfigDto>("/api/appointments/config").subscribe({
       next: (cfg) => {
         const safe = { ...this.defaultConfig(), ...(cfg ?? {}) };
         if (!safe.slotMinutes || safe.slotMinutes <= 0) safe.slotMinutes = 30;
@@ -1093,15 +1427,15 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     this._dayAppointments.set([]);
     this._loadingAppointments.set(true);
 
-    const baseDate = parse(iso, 'yyyy-MM-dd', new Date());
+    const baseDate = parse(iso, "yyyy-MM-dd", new Date());
     baseDate.setHours(0, 0, 0, 0);
     const start = addDays(baseDate, -1);
     const end = addDays(baseDate, 2);
 
     this.api
-      .get<Appointment[]>(
-        `/api/appointments?from=${start.toISOString()}&to=${end.toISOString()}`
-      )
+      .get<
+        Appointment[]
+      >(`/api/appointments?from=${start.toISOString()}&to=${end.toISOString()}`)
       .subscribe({
         next: (list) => {
           this._dayAppointments.set(list ?? []);
@@ -1120,15 +1454,15 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     try {
       this.recomputeSlots();
     } catch (err) {
-      console.error('[book-appointment] recomputeSlots failed', err);
+      console.error("[book-appointment] recomputeSlots failed", err);
       this._slots.set([]);
-      this._errorMsg.set('Could not load slots — try a different day.');
+      this._errorMsg.set("Could not load slots — try a different day.");
     }
   }
 
   private defaultConfig(): AppointmentConfigDto {
     return {
-      branchId: '',
+      branchId: "",
       slotMinutes: 30,
       open24h: true,
       weeklyScheduleJson: null,
@@ -1144,7 +1478,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const date = parse(dateIso, 'yyyy-MM-dd', new Date());
+    const date = parse(dateIso, "yyyy-MM-dd", new Date());
     const dow = DOW_KEYS[date.getDay()];
     const windows = this.openWindowsForDay(cfg, dow);
     if (windows.length === 0) {
@@ -1152,7 +1486,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const todayIso = format(new Date(), 'yyyy-MM-dd');
+    const todayIso = format(new Date(), "yyyy-MM-dd");
     const isToday = dateIso === todayIso;
     const now = new Date();
     const currentMin = now.getHours() * 60 + now.getMinutes();
@@ -1160,7 +1494,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     const appointments = this._dayAppointments();
     const bookedCounts: Record<string, number> = {};
     for (const a of appointments) {
-      if (a.status === 'cancelled' || a.status === 'no_show') {
+      if (a.status === "cancelled" || a.status === "no_show") {
         continue;
       }
       const apptStart = parseAppointmentStart(a);
@@ -1176,17 +1510,21 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     }
 
     const maxConcurrent = Math.max(1, cfg.maxConcurrentSlots ?? 1);
-    const step = Number.isFinite(cfg.slotMinutes) && cfg.slotMinutes > 0 ? cfg.slotMinutes : 30;
+    const step =
+      Number.isFinite(cfg.slotMinutes) && cfg.slotMinutes > 0
+        ? cfg.slotMinutes
+        : 30;
     const slots: SlotInfo[] = [];
     for (const w of windows) {
       const start = parseHHmm(w.from);
       const end = parseHHmm(w.to);
-      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
+        continue;
       let iter = 0;
       for (let m = start; m < end && iter < 500; m += step, iter++) {
         if (isToday && m < currentMin) continue;
-        const hh = String(Math.floor(m / 60)).padStart(2, '0');
-        const mm = String(m % 60).padStart(2, '0');
+        const hh = String(Math.floor(m / 60)).padStart(2, "0");
+        const mm = String(m % 60).padStart(2, "0");
         const timeStr = `${hh}:${mm}`;
         const bookedCount = bookedCounts[timeStr] || 0;
         const available = bookedCount < maxConcurrent;
@@ -1211,8 +1549,8 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
           resolvedTime = nearest.time;
           this.selectedTime.set(resolvedTime);
         } else {
-          resolvedTime = '';
-          this.selectedTime.set('');
+          resolvedTime = "";
+          this.selectedTime.set("");
         }
       }
     }
@@ -1225,12 +1563,15 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
           if (s.available) acc[getTimePeriod(s.time)]++;
           return acc;
         },
-        { morning: 0, afternoon: 0, evening: 0, night: 0 } as Record<'morning' | 'afternoon' | 'evening' | 'night', number>
+        { morning: 0, afternoon: 0, evening: 0, night: 0 } as Record<
+          "morning" | "afternoon" | "evening" | "night",
+          number
+        >,
       );
-      if (counts.morning > 0) this.timePeriod.set('morning');
-      else if (counts.afternoon > 0) this.timePeriod.set('afternoon');
-      else if (counts.evening > 0) this.timePeriod.set('evening');
-      else if (counts.night > 0) this.timePeriod.set('night');
+      if (counts.morning > 0) this.timePeriod.set("morning");
+      else if (counts.afternoon > 0) this.timePeriod.set("afternoon");
+      else if (counts.evening > 0) this.timePeriod.set("evening");
+      else if (counts.night > 0) this.timePeriod.set("night");
     }
   }
 
@@ -1241,12 +1582,15 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
   private openWindowsForDay(
     cfg: AppointmentConfigDto,
-    dow: (typeof DOW_KEYS)[number]
+    dow: (typeof DOW_KEYS)[number],
   ): Array<{ from: string; to: string }> {
-    if (cfg.open24h) return [{ from: '00:00', to: '24:00' }];
+    if (cfg.open24h) return [{ from: "00:00", to: "24:00" }];
     if (!cfg.weeklyScheduleJson) return [];
     try {
-      const parsed = JSON.parse(cfg.weeklyScheduleJson) as Record<string, Array<{ from: string; to: string }>>;
+      const parsed = JSON.parse(cfg.weeklyScheduleJson) as Record<
+        string,
+        Array<{ from: string; to: string }>
+      >;
       return parsed?.[dow] ?? [];
     } catch {
       return [];
@@ -1261,30 +1605,38 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
     this._saving.set(true);
     this._errorMsg.set(null);
-    const apptDate = parse(`${date} ${time}`, 'yyyy-MM-dd HH:mm', new Date());
+    const apptDate = parse(`${date} ${time}`, "yyyy-MM-dd HH:mm", new Date());
     const testIds = this.selectedTestIds();
     this.api
-      .post<unknown>('/api/appointments', {
+      .post<unknown>("/api/appointments", {
         patientId: p.id,
-        type: 'appointment',
+        type: "appointment",
         collectionType: this.collectionType(),
         appointmentDate: apptDate.toISOString(),
         slotTime: time,
         consultationFee: 0,
         notes: this.notes() || null,
-        testIds: testIds.length ? testIds.join(',') : null,
+        testIds: testIds.length ? testIds.join(",") : null,
         // Home-collection details (ignored server-side for walk-in).
-        address: this.collectionType() === 'home_collection' ? (this.hcAddress() || null) : null,
-        pincode: this.collectionType() === 'home_collection' ? (this.hcPincode() || null) : null,
-        latitude: this.collectionType() === 'home_collection' ? this.hcLat() : null,
-        longitude: this.collectionType() === 'home_collection' ? this.hcLng() : null,
+        address:
+          this.collectionType() === "home_collection"
+            ? this.hcAddress() || null
+            : null,
+        pincode:
+          this.collectionType() === "home_collection"
+            ? this.hcPincode() || null
+            : null,
+        latitude:
+          this.collectionType() === "home_collection" ? this.hcLat() : null,
+        longitude:
+          this.collectionType() === "home_collection" ? this.hcLng() : null,
       })
       .subscribe({
         next: () => {
           this._saving.set(false);
           this.bookingSvc.notifyBooked();
-          this.toasts.success('Appointment booked');
-          this.router.navigateByUrl('/frontdesk');
+          this.toasts.success("Appointment booked");
+          this.router.navigateByUrl("/frontdesk");
         },
         error: (err) => {
           this._saving.set(false);
@@ -1298,18 +1650,20 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 }
 
 function parseHHmm(s: string): number {
-  const [h, m] = s.split(':').map((n) => parseInt(n, 10));
+  const [h, m] = s.split(":").map((n) => parseInt(n, 10));
   if (h === 24 && m === 0) return 24 * 60;
   return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
 }
 
-function getTimePeriod(time: string): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const [hStr] = time.split(':');
+function getTimePeriod(
+  time: string,
+): "morning" | "afternoon" | "evening" | "night" {
+  const [hStr] = time.split(":");
   const h = parseInt(hStr, 10);
-  if (h >= 6 && h < 12) return 'morning';
-  if (h >= 12 && h < 17) return 'afternoon';
-  if (h >= 17 && h < 21) return 'evening';
-  return 'night';
+  if (h >= 6 && h < 12) return "morning";
+  if (h >= 12 && h < 17) return "afternoon";
+  if (h >= 17 && h < 21) return "evening";
+  return "night";
 }
 
 function parseAppointmentStart(a: Appointment): Date | null {
@@ -1317,21 +1671,21 @@ function parseAppointmentStart(a: Appointment): Date | null {
   const d = new Date(a.appointmentDate);
   if (isNaN(d.getTime())) return null;
   if (a.slotTime && /^\d{1,2}:\d{2}/.test(a.slotTime)) {
-    const [hh, mm] = a.slotTime.split(':').map((n) => parseInt(n, 10));
+    const [hh, mm] = a.slotTime.split(":").map((n) => parseInt(n, 10));
     if (Number.isFinite(hh) && Number.isFinite(mm)) d.setHours(hh, mm, 0, 0);
   }
   return d;
 }
 
 function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function normalizeTimeStr(time: string | undefined | null): string | null {
   if (!time) return null;
   const match = time.match(/^(\d{1,2}):(\d{2})/);
   if (!match) return null;
-  const hh = match[1].padStart(2, '0');
+  const hh = match[1].padStart(2, "0");
   const mm = match[2];
   return `${hh}:${mm}`;
 }
