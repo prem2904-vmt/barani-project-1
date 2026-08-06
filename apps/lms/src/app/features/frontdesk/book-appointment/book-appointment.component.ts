@@ -13,7 +13,6 @@ import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import {
@@ -54,7 +53,6 @@ const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
     DatePipe,
     AvatarComponent,
     ScreenHeaderComponent,
-    TouchButtonComponent,
     LoadingLogoComponent,
     PatientSearchComponent
   ],

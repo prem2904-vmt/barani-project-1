@@ -314,7 +314,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   }
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
-                    <pf-toggle [checked]="tpl().groupByDepartment ?? false"
+                    <pf-toggle [checked]="tpl().groupByDepartment"
                                (checkedChange)="patch({ groupByDepartment: $event })">
                     </pf-toggle>
                   </div>
@@ -329,7 +329,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Show method line</span>
-                    <pf-toggle [checked]="tpl().showMethod ?? false"
+                    <pf-toggle [checked]="tpl().showMethod"
                                (checkedChange)="patch({ showMethod: $event })">
                     </pf-toggle>
                   </div>

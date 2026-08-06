@@ -299,7 +299,7 @@ export class FinanceHubComponent implements OnInit {
   readonly vendorsLoading = signal(false);
   private vendorsLoaded = false;
   readonly expandedVendor = signal<string | null>(null);
-  readonly vendorTxns = signal<Record<string, VendorTxn[]>>({});
+  readonly vendorTxns = signal<Record<string, VendorTxn[] | undefined>>({});
   readonly txnsLoading = signal(false);
   readonly totalOwed = computed(() =>
     this.vendors().reduce((s, v) => s + Math.max(0, v.outstanding), 0));

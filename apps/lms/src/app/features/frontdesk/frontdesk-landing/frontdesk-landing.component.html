@@ -655,7 +655,7 @@
                 @for (d of draftOrders(); track d.patientId) {
                 <li>
                   <div class="pf-card pf-card--ip pf-card--draft" (click)="resumeDraft(d)">
-                    <pf-avatar [name]="d.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
+                    <pf-avatar [name]="d.patient.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                     <div class="min-w-0 flex-1">
                       <p class="pf-card__name">
                         {{ formatPatient(d.patient) }}
@@ -1274,7 +1274,7 @@
 
       <section style="margin-bottom: 18px;">
         <p class="text-[11px] uppercase font-bold tracking-wider" style="color: var(--text-tertiary);">When</p>
-        <p class="text-[14px] mt-1" style="color: var(--text-primary);">{{ hc.appointmentDate?.slice(0, 10) }}{{
+        <p class="text-[14px] mt-1" style="color: var(--text-primary);">{{ hc.appointmentDate.slice(0, 10) }}{{
           hc.slotTime ? ' · ' + hc.slotTime : '' }}</p>
         @if (hc.patient?.phone) { <p class="text-[12px] mt-0.5" style="color: var(--text-secondary);">{{
           hc.patient?.phone }}</p> }
