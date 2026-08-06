@@ -16,10 +16,15 @@ export interface BranchLabConfig {
   /** Whether the front-desk "Payments due" tab is shown (In Progress + Completed
    *  are always shown). Default true when absent. */
   showPaymentsDueTab?: boolean;
-  /** Which machine-readable code(s) print on a specimen label:
-   *  'barcode' (1D only) | 'qr' (2D only) | 'both' | 'datamatrix' (2D, fits a
-   *  tiny tube area). Default 'both'. */
-  labelCodeMode?: 'barcode' | 'qr' | 'both' | 'datamatrix';
+  /** The SINGLE machine-readable code that prints on a specimen label — a small
+   *  tube label can't fit more than one. 'barcode' (1D) | 'qr' (2D) |
+   *  'datamatrix' (2D, tiny). Default 'barcode'. (Legacy 'both' maps to
+   *  'barcode' server-side.) */
+  labelCodeMode?: 'barcode' | 'qr' | 'datamatrix';
+  /** Physical die-cut label size in mm, per branch. Drives both the printer
+   *  job and the adaptive on-screen preview. Defaults 50 × 20. */
+  labelWidthMm?: number;
+  labelHeightMm?: number;
   /** How the lab queues group work. Stored per-branch:
    *  'patient' (rows = patients, tests nested) | 'sample' (rows = sample IDs) |
    *  'auto' (default) → resolved from the branch's lab-space count. */

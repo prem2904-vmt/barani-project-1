@@ -11,14 +11,16 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
-import { LabelCardComponent } from '../../frontdesk/post-payment/label-card.component';
+import { LabelCardComponent, tubeSpec } from '../../frontdesk/post-payment/label-card.component';
+import { PrinterService } from '../../../core/printer/printer.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 
 /**
@@ -1806,6 +1808,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
+  private readonly printer = inject(PrinterService);
+  private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly scan = inject(ScanService);
@@ -2026,6 +2030,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   });
 
   async ngOnInit() {
+    // Per-branch label config (size + code) for direct-to-printer label print.
+    this.labCfg.ensureLoaded();
     // Load the lab's configured container colours (best-effort — falls back to
     // the built-in conventions if it fails or a department has none set).
     this.api.get<{ code: string; containerColor?: string | null; containerLabel?: string | null }[]>('/api/tenants/departments')
@@ -2141,7 +2147,53 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  labels reach paper — nothing else on the screen prints. */
   printLabels(g: OrderGroup) {
     if (!g.samples.length) { this.toasts.warning('No tubes to label'); return; }
+    if (this.printer.directPrintAvailable()) { void this.directPrint(g); return; }
     printLabelOnly();
+  }
+
+  /** Render each tube label at the branch's configured size + single code and
+   *  stream it straight to the label printer (Electron USB / iPad BLE). */
+  private async directPrint(g: OrderGroup) {
+    const cfg = this.labCfg.config();
+    const opts = {
+      widthMm: cfg?.labelWidthMm ?? 50,
+      heightMm: cfg?.labelHeightMm ?? 20,
+      codeMode: (cfg?.labelCodeMode ?? 'barcode') as 'barcode' | 'qr' | 'datamatrix',
+    };
+    let ok = 0, fail = 0;
+    for (const s of g.samples) {
+      const p = s.order?.patient;
+      const code = s.barcode ?? s.id;
+      const mrn = p?.mrn ?? undefined;
+      const spec = tubeSpec(s);
+      const res = await this.printer.printLabelData({
+        code,
+        qrValue: mrn ? `${mrn}|${code}` : code,
+        // Just the name — age/sex + MRN print as their own lines below, so the
+        // combined "name | age/sex | id" string would duplicate them.
+        patientName: (p && patientDisplayName(p)) || g.patientName,
+        ageSex: this.labelAgeSex(p),
+        mrn,
+        deptCode: (s.department?.code ?? '').toUpperCase(),
+        tube: `${spec.label} · ${spec.volume}`,
+      }, opts).catch((e: unknown) => ({ ok: false, direct: true, error: (e as Error)?.message }));
+      if (res.ok) ok++; else { fail++; if (res.error) this.toasts.error(res.error); }
+    }
+    if (ok) this.toasts.success(`Printed ${ok} label${ok > 1 ? 's' : ''}`);
+    else if (fail) this.toasts.error('Label print failed');
+  }
+
+  private labelAgeSex(p: { age?: number | null; dateOfBirth?: string | null; sex?: string | null } | null | undefined): string {
+    if (!p) return '';
+    let age = p.age ?? null;
+    if (age == null && p.dateOfBirth) {
+      const d = new Date(p.dateOfBirth), now = new Date();
+      age = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+    }
+    const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
+    return [age != null ? `${age}Y` : null, s].filter(Boolean).join(' ');
   }
 
   openScanner() { this.scannerOpen.set(true); }

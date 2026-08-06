@@ -194,6 +194,11 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
+        path: 'admin/label-printer',
+        canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
+        loadComponent: () => import('./features/admin/label-printer/label-printer.component').then(m => m.LabelPrinterComponent)
+      },
+      {
         path: 'admin/organization',
         canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)

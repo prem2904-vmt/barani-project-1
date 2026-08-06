@@ -193,13 +193,15 @@ interface AutoAssignConfig {
         </div>
       </pf-tile>
 
-      <!-- Specimen label codes: barcode / QR / both. -->
+      <!-- Specimen label: single code + physical size, with an adaptive preview. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Specimen label codes</h3>
+        <h3 class="pf-ls__title">Specimen label</h3>
         <p class="pf-ls__hint">
-          Which machine-readable code prints on each tube label. The barcode encodes the
-          <strong>Sample ID</strong>; the QR encodes the <strong>MRN + Sample ID</strong>.
+          Pick the <strong>one</strong> machine-readable code and the label's physical size.
+          A tube label can't fit more than one code. The printer head prints up to 48&nbsp;mm wide.
         </p>
+
+        <p class="pf-ls__eyebrow">Code</p>
         <div class="pf-ls__gate">
           @for (opt of labelCodeOptions; track opt.value) {
             <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labelCodeMode() === opt.value"
@@ -211,6 +213,35 @@ interface AutoAssignConfig {
               </span>
             </button>
           }
+        </div>
+
+        <div class="flex flex-wrap items-end gap-5 mt-5">
+          <label class="block">
+            <span class="pf-ls__eyebrow">Width (mm)</span>
+            <input type="number" min="10" max="120" class="pf-ls__num" [value]="labelWidthMm()"
+                   (change)="setLabelSize('w', $any($event.target).valueAsNumber)">
+          </label>
+          <label class="block">
+            <span class="pf-ls__eyebrow">Height (mm)</span>
+            <input type="number" min="10" max="120" class="pf-ls__num" [value]="labelHeightMm()"
+                   (change)="setLabelSize('h', $any($event.target).valueAsNumber)">
+          </label>
+
+          <!-- Adaptive preview: scales to the configured aspect ratio. -->
+          <div class="pf-ls__lblprev-wrap">
+            <span class="pf-ls__eyebrow">Preview</span>
+            <div class="pf-ls__lblprev" [style.width.px]="labelWidthMm() * 3.4" [style.height.px]="labelHeightMm() * 3.4">
+              <div class="pf-ls__lblprev-text">
+                <b>Rahul Sharma</b>
+                <span>MIC-2607-00001</span>
+                <span class="pf-ls__lblprev-dept">MICROBIOLOGY</span>
+              </div>
+              <div class="pf-ls__lblprev-code" [attr.data-mode]="labelCodeMode()">
+                {{ labelCodeMode() === 'barcode' ? 'BARCODE' : (labelCodeMode() === 'qr' ? 'QR' : 'DMX') }}
+              </div>
+            </div>
+            <span class="pf-ls__lblprev-dim">{{ labelWidthMm() }} × {{ labelHeightMm() }} mm</span>
+          </div>
         </div>
       </pf-tile>
 
@@ -318,6 +349,20 @@ interface AutoAssignConfig {
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
     .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
+
+    /* Label size inputs + adaptive preview */
+    .pf-ls__eyebrow { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin: 14px 0 6px; }
+    .pf-ls__num { width: 92px; padding: 8px 10px; border-radius: 10px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 14px; }
+    .pf-ls__lblprev-wrap { display: flex; flex-direction: column; align-items: flex-start; }
+    .pf-ls__lblprev { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow-sm); }
+    .pf-ls__lblprev-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; color: #0f172a; line-height: 1.15; }
+    .pf-ls__lblprev-text b { font-size: 9px; font-weight: 800; }
+    .pf-ls__lblprev-text span { font-size: 8px; font-family: ui-monospace, monospace; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-ls__lblprev-dept { font-weight: 700; letter-spacing: 0.08em; }
+    .pf-ls__lblprev-code { flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; color: #0f172a; border: 1.5px solid #0f172a; border-radius: 3px; }
+    .pf-ls__lblprev-code[data-mode='barcode'] { width: 34%; min-width: 30px; height: 60%; background: repeating-linear-gradient(90deg, #0f172a 0 1.5px, #fff 1.5px 3px); border: none; color: transparent; }
+    .pf-ls__lblprev-code[data-mode='qr'], .pf-ls__lblprev-code[data-mode='datamatrix'] { aspect-ratio: 1; height: 74%; }
+    .pf-ls__lblprev-dim { margin-top: 5px; font-size: 10.5px; font-family: ui-monospace, monospace; color: var(--text-muted); }
 
     /* Payment-gate radio options */
     .pf-ls__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
@@ -519,14 +564,17 @@ export class LabSettingsComponent implements OnInit {
   ];
   protected readonly requireValidation = signal(false);
   protected readonly showPaymentsDue = signal(true);
-  /** Which code(s) print on a specimen label: barcode | qr | both. */
-  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'both' | 'datamatrix'>('both');
-  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'both' | 'datamatrix'; label: string; desc: string }> = [
-    { value: 'both', label: 'Barcode + QR', desc: 'Print both a 1D barcode and a QR on every label (default).' },
-    { value: 'barcode', label: 'Barcode only', desc: 'Print only the 1D barcode (encodes the Sample ID).' },
-    { value: 'qr', label: 'QR only', desc: 'Print only the QR (encodes the MRN + Sample ID).' },
-    { value: 'datamatrix', label: 'Data Matrix', desc: 'Print a compact 2D Data Matrix (Sample ID) — fits a tiny tube area and still scans.' },
+  /** The SINGLE code that prints on a specimen label. A tube label can't fit
+   *  more than one, so this is a mutually-exclusive choice. */
+  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'datamatrix'>('barcode');
+  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'datamatrix'; label: string; desc: string }> = [
+    { value: 'barcode', label: 'Barcode (1D)', desc: 'A 1D Code-128 barcode encoding the Sample ID (default).' },
+    { value: 'qr', label: 'QR (2D)', desc: 'A QR encoding the MRN + Sample ID.' },
+    { value: 'datamatrix', label: 'Data Matrix (2D)', desc: 'A compact Data Matrix (Sample ID) — fits a tiny tube area and still scans.' },
   ];
+  /** Per-branch physical label size (mm). Drives the printer + the preview. */
+  protected readonly labelWidthMm = signal(50);
+  protected readonly labelHeightMm = signal(20);
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
@@ -551,13 +599,27 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
-  setLabelCodeMode(v: 'barcode' | 'qr' | 'both' | 'datamatrix') {
+  setLabelCodeMode(v: 'barcode' | 'qr' | 'datamatrix') {
     const prev = this.labelCodeMode();
     if (prev === v) return;
     this.labelCodeMode.set(v);
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label code format updated'); },
       error: e => { this.labelCodeMode.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  /** Persist a label dimension (mm). Clamped 10–120; the printer head caps
+   *  the printable width at 48 mm regardless. */
+  setLabelSize(which: 'w' | 'h', value: number) {
+    const v = Math.min(120, Math.max(10, Math.round(value || 0)));
+    const sig = which === 'w' ? this.labelWidthMm : this.labelHeightMm;
+    const prev = sig();
+    if (prev === v) return;
+    sig.set(v);
+    const body = which === 'w' ? { labelWidthMm: v } : { labelHeightMm: v };
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', body).subscribe({
+      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label size updated'); },
+      error: e => { sig.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setQueueFocusMode(v: 'auto' | 'patient' | 'sample') {
@@ -595,7 +657,9 @@ export class LabSettingsComponent implements OnInit {
       next: c => {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);
         this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
-        this.labelCodeMode.set(c?.labelCodeMode ?? 'both');
+        this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
+        this.labelWidthMm.set(c?.labelWidthMm ?? 50);
+        this.labelHeightMm.set(c?.labelHeightMm ?? 20);
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);

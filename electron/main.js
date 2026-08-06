@@ -1,5 +1,6 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
+const labelPrinter = require('./printer');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -20,6 +21,8 @@ app.setAboutPanelOptions({
 });
 
 let mainWindow;
+// Latest pending Web-Bluetooth chooser callback (see select-bluetooth-device).
+let bluetoothCallback = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -49,6 +52,19 @@ function createWindow() {
     mainWindow.setTitle('Prefrontal');
   });
 
+  // ── Web Bluetooth: in-app device picker ──────────────────────────────
+  // Electron ships no BLE chooser UI, so we intercept the pick event, forward
+  // the discovered devices to the renderer (our own list), and resolve with the
+  // deviceId the user taps. The event re-fires as devices appear; we keep the
+  // latest callback. Grant device permission so the connection isn't blocked.
+  mainWindow.webContents.session.setDevicePermissionHandler(() => true);
+  mainWindow.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+    event.preventDefault();
+    bluetoothCallback = callback;
+    mainWindow.webContents.send('ble:devices',
+      deviceList.map((d) => ({ deviceId: d.deviceId, deviceName: d.deviceName || 'Unknown device' })));
+  });
+
   // In dev: load the Nx serve URL (live reload).
   // In prod: load the built bundle off disk via file://. The
   // HashLocationStrategy on the Angular side handles deep links
@@ -76,6 +92,20 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
+//    plugin. The renderer sends a packed 1-bpp bitmap; main streams it to the
+//    Detonger/Dothantech printer over USB. ────────────────────────────────
+ipcMain.handle('printer:status', async () => labelPrinter.status());
+ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
+
+// Renderer's in-app BLE picker resolves the pending chooser callback.
+ipcMain.on('ble:choose', (_e, deviceId) => {
+  if (bluetoothCallback) { bluetoothCallback(deviceId); bluetoothCallback = null; }
+});
+ipcMain.on('ble:cancel', () => {
+  if (bluetoothCallback) { bluetoothCallback(''); bluetoothCallback = null; }
+});
 
 app.whenReady().then(() => {
   createWindow();

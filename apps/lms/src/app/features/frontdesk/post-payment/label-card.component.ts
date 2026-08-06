@@ -513,10 +513,14 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
     const mrn = this.patient?.mrn?.trim();
     return mrn ? `${mrn}|${this.barcode}` : this.barcode;
   }
-  /** Admin choice: 'barcode' | 'qr' | 'both' | 'datamatrix' (default both). */
-  get codeMode(): 'barcode' | 'qr' | 'both' | 'datamatrix' { return this.labelCfg.config()?.labelCodeMode ?? 'both'; }
-  get showBarcode(): boolean { return this.codeMode === 'barcode' || this.codeMode === 'both'; }
-  get showQr(): boolean { return this.codeMode === 'qr' || this.codeMode === 'both'; }
+  /** Admin choice — a SINGLE code: 'barcode' | 'qr' | 'datamatrix' (default
+   *  barcode). A tube label can't fit more than one. */
+  get codeMode(): 'barcode' | 'qr' | 'datamatrix' {
+    const m = this.labelCfg.config()?.labelCodeMode ?? 'barcode';
+    return m === ('both' as string) ? 'barcode' : m; // legacy 'both' → barcode
+  }
+  get showBarcode(): boolean { return this.codeMode === 'barcode'; }
+  get showQr(): boolean { return this.codeMode === 'qr'; }
   get showDataMatrix(): boolean { return this.codeMode === 'datamatrix'; }
   get isOutsourced(): boolean { return !!this.sample.outsourcedVendorId; }
   get patientName(): string { return this.patient?.displayName ?? 'Patient'; }
