@@ -27,8 +27,9 @@ export interface PrintConfig {
   /** Code size as a % of the default (50–130). Smaller for narrow tube labels;
    *  don't go so small the scanner can't read it. */
   codeScalePct: number;
-  /** Content rotation in degrees: 0 | 90 | 180 | 270 (90/270 swap the bitmap
-   *  dimensions). Orients the print for the tube/feed direction. */
+  /** CODE rotation in degrees: 0 | 90 | 180 | 270. Rotates only the
+   *  barcode/QR/Data Matrix (the text stays upright) so the code can be
+   *  oriented for the tube. */
   rotation: number;
   /** OS printer name to route A4/invoice documents to (Electron). Empty = use
    *  the system print dialog. */

@@ -42,6 +42,7 @@ export function renderLabelBitmap(
   opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number; codeScalePct?: number; rotation?: number }
 ): PackedBitmap {
   const codeScale = (opts.codeScalePct ?? 100) / 100;
+  const rot = (((opts.rotation ?? 0) % 360) + 360) % 360; // rotates the CODE only
   const wDots = Math.min(HEAD_MAX, Math.round(opts.widthMm * DPMM));
   // Print ~1 mm short of the label so nothing bleeds into the die-cut gap.
   const hDots = Math.max(48, Math.round((opts.heightMm - 1) * DPMM));
@@ -83,8 +84,7 @@ export function renderLabelBitmap(
     try {
       const tmp = document.createElement('canvas');
       JsBarcode(tmp, data.code, { format: 'CODE128', displayValue: false, margin: 0, height: 100, width: 2, background: '#ffffff', lineColor: '#000000' });
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(tmp, MX, bcY, bcW, bcH);
+      blitRotated(ctx, tmp, MX, bcY, bcW, bcH, rot);
     } catch { /* un-encodable */ }
     layoutText(MX, MY, wDots - 2 * MX, bcY - 4);
     // code text just under the bars
@@ -95,8 +95,10 @@ export function renderLabelBitmap(
     const codeSize = Math.max(24, Math.min(hDots - 2 * MY, Math.round(codeBase * codeScale)));
     const codeX = wDots - codeSize - MX;
     const codeY = Math.round((hDots - codeSize) / 2);
-    if (opts.codeMode === 'qr') drawQr(ctx, data.qrValue ?? data.code, codeX, codeY, codeSize);
-    else drawDataMatrix(ctx, data.code, codeX, codeY, codeSize);
+    const codeImg = opts.codeMode === 'qr'
+      ? renderQr(data.qrValue ?? data.code, codeSize)
+      : renderDataMatrix(data.code, codeSize);
+    if (codeImg) blitRotated(ctx, codeImg, codeX, codeY, codeSize, codeSize, rot);
     layoutText(MX, MY, codeX - MX - Math.round(8 * s), hDots - MY);
   }
 
@@ -120,42 +122,48 @@ export function renderLabelBitmap(
     }
   }
 
-  // Rotation: 0/180 keep the dimensions; 90/270 swap them. Draw the content
-  // canvas rotated about its centre onto the output, then pack that.
-  const rot = (((opts.rotation ?? 0) % 360) + 360) % 360;
-  if (rot === 0) return pack(ctx, wDots, hDots);
-  const swap = rot === 90 || rot === 270;
-  const outW = swap ? hDots : wDots;
-  const outH = swap ? wDots : hDots;
-  const out = document.createElement('canvas');
-  out.width = outW; out.height = outH;
-  const octx = out.getContext('2d')!;
-  octx.fillStyle = '#fff'; octx.fillRect(0, 0, outW, outH);
-  octx.translate(outW / 2, outH / 2);
-  octx.rotate((rot * Math.PI) / 180);
-  octx.imageSmoothingEnabled = false;
-  octx.drawImage(canvas, -wDots / 2, -hDots / 2);
-  return pack(octx, outW, outH);
+  return pack(ctx, wDots, hDots);
 }
 
-function drawQr(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number): void {
+/** Draw a pre-rendered code image onto ctx at (x,y,w,h), rotated about its
+ *  centre — used so the CODE can rotate while the text stays upright. */
+function blitRotated(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, x: number, y: number, w: number, h: number, rot: number): void {
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  if (rot) ctx.rotate((rot * Math.PI) / 180);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+/** Render a QR to its own square canvas (crisp modules). */
+function renderQr(value: string, size: number): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = size; c.height = size;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
   const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
   const n = qr.modules.size, bits = qr.modules.data;
   const mod = Math.max(2, Math.floor(size / n));
-  const px = mod * n, ox = x + Math.round((size - px) / 2), oy = y + Math.round((size - px) / 2);
-  ctx.fillStyle = '#000';
+  const px = mod * n, o = Math.round((size - px) / 2);
+  g.fillStyle = '#000';
   for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++)
-      if (bits[r * n + c]) ctx.fillRect(ox + c * mod, oy + r * mod, mod, mod);
+    for (let col = 0; col < n; col++)
+      if (bits[r * n + col]) g.fillRect(o + col * mod, o + r * mod, mod, mod);
+  return c;
 }
 
-function drawDataMatrix(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number): void {
+/** Render a Data Matrix to its own square canvas. */
+function renderDataMatrix(value: string, size: number): HTMLCanvasElement | null {
   try {
+    const c = document.createElement('canvas'); c.width = size; c.height = size;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
     const tmp = document.createElement('canvas');
     bwipjs.toCanvas(tmp, { bcid: 'datamatrix', text: value, scale: 4, paddingwidth: 0, paddingheight: 0, barcolor: '000000', backgroundcolor: 'ffffff' });
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(tmp, x, y, size, size);
-  } catch { /* un-encodable */ }
+    g.imageSmoothingEnabled = false;
+    g.drawImage(tmp, 0, 0, size, size);
+    return c;
+  } catch { return null; }
 }
 
 function pack(ctx: CanvasRenderingContext2D, w: number, h: number): PackedBitmap {
