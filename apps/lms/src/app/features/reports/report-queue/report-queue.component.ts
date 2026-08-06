@@ -643,21 +643,51 @@ export class ReportQueueComponent implements OnInit {
         "noopener",
       );
     }
-    if (via === "print" && this.isNativePlatform()) {
-      // There's no reliable print() inside the Capacitor WKWebView, so render
-      // the PDF and hand it to the native share sheet — the user can pick Print
-      // (or Save to Files) from there. Best-effort; the deliver record below
-      // still fires regardless.
-      (async () => {
-        try {
-          const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-          const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-          await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
-        } catch (err) {
-          console.error("[reports] native print share failed", err);
-          this.toasts.error("Could not open report");
-        }
-      })();
+    if (via === "print") {
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: render PDF and hand it to native share sheet
+        (async () => {
+          try {
+            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+            await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
+          } catch (err) {
+            console.error("[reports] native print share failed", err);
+            this.toasts.error("Could not open report");
+          }
+        })();
+      } else {
+        // Web: render PDF and open browser print window
+        (async () => {
+          try {
+            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+            const doc = buildReportPdf({ ...baseInput, imageCache, trendograms });
+            doc.autoPrint();
+            const blob = doc.output('blob');
+            const blobUrl = URL.createObjectURL(blob);
+            const frame = document.createElement('iframe');
+            frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+            frame.src = blobUrl;
+            frame.onload = () => {
+              try {
+                frame.contentWindow?.focus();
+                frame.contentWindow?.print();
+              } catch {
+                window.open(blobUrl, '_blank');
+              }
+              setTimeout(() => {
+                frame.remove();
+                URL.revokeObjectURL(blobUrl);
+              }, 60_000);
+            };
+            document.body.appendChild(frame);
+          } catch (err) {
+            console.error("[reports] print failed", err);
+            this.toasts.error("Could not open print window");
+          }
+        })();
+      }
     }
     this.api
       .post(`/api/reports/${r.id}/deliver`, {
