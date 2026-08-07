@@ -514,19 +514,28 @@ interface OrderGroup {
                   <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
 
                   @if (s.tests.length > 0) {
-                    <!-- Every test going into this tube, each with its draw
-                         volume when the test declares one, plus a per-tube
-                         total so the phlebotomist knows how much to pull. -->
-                    <ul class="pf-tube__testlist">
-                      @for (t of s.tests; track t.id) {
-                        <li class="pf-tube__test">
-                          <span class="pf-tube__test-name">{{ t.test?.name ?? t.name }}</span>
-                          @if (t.test?.sampleVolumeMl != null) {
-                            <span class="pf-tube__test-vol">{{ t.test?.sampleVolumeMl }} mL</span>
-                          }
-                        </li>
-                      }
-                    </ul>
+                    <!-- Test list collapsed behind a peek so a many-test tube
+                         (e.g. a 25-analyte SST) doesn't blow the column height.
+                         Draw volume stays visible — the phlebotomist needs it. -->
+                    <button type="button" class="pf-tube__peek" (click)="toggleTests(s.id, $event)"
+                            [attr.aria-expanded]="testsOpen(s.id)">
+                      Tests ({{ s.tests.length }})
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                           stroke-linecap="round" stroke-linejoin="round"
+                           [style.transform]="testsOpen(s.id) ? 'rotate(90deg)' : 'none'"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                    @if (testsOpen(s.id)) {
+                      <ul class="pf-tube__testlist">
+                        @for (t of s.tests; track t.id) {
+                          <li class="pf-tube__test">
+                            <span class="pf-tube__test-name">{{ t.test?.name ?? t.name }}</span>
+                            @if (t.test?.sampleVolumeMl != null) {
+                              <span class="pf-tube__test-vol">{{ t.test?.sampleVolumeMl }} mL</span>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    }
                     @if (drawVolume(s); as vol) {
                       <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
                     }
@@ -1118,6 +1127,20 @@ interface OrderGroup {
       text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
       opacity: 0.85;
     }
+    /* Tap-to-peek toggle — reveals the tube's test list on demand. */
+    .pf-tube__peek {
+      margin-top: 10px;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 11px; border-radius: 8px;
+      font-size: 11px; font-weight: 700;
+      color: var(--text-secondary);
+      background: var(--glass-bg, rgba(255,255,255,0.05));
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.22));
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .pf-tube__peek:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.09)); }
+    .pf-tube__peek svg { transition: transform .15s ease; }
     /* Per-tube test list: one row per test, name on the left, its draw
        volume right-aligned in mono so the numbers line up down the tube. */
     .pf-tube__testlist {
@@ -2081,6 +2104,18 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+
+  /** Per-tube "peek" toggle: which tubes have their test list expanded. Keeps a
+   *  many-test tube (e.g. a 25-analyte SST) from making the whole column huge. */
+  private readonly _testsOpen = signal<Set<string>>(new Set());
+  testsOpen(sampleId: string): boolean { return this._testsOpen().has(sampleId); }
+  toggleTests(sampleId: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this._testsOpen());
+    next.has(sampleId) ? next.delete(sampleId) : next.add(sampleId);
+    this._testsOpen.set(next);
+  }
+
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a
    *  volume, so the "Draw ~N mL" pill is omitted rather than lying with 0. */
