@@ -302,15 +302,10 @@ interface OrderGroup {
 
           <div class="pf-drawer__tubes">
             @for (s of g.samples; track s.id) {
-              <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
-                   list (a floating popover). A div, not <button>, so the hold /
-                   pointer handling is clean. -->
+              <!-- Tap collects the vial. -->
               <div class="pf-tube" role="button" tabindex="0"
                    [class.pf-tube--done]="s.status !== 'pending'"
-                   [class.pf-tube--holding]="holdingId() === s.id"
-                   (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
-                   (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
-                   (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
+                   (click)="toggleCollected(s)" (keydown.enter)="toggleCollected(s)">
                 @if (container(s).kind === 'urine_cup') {
                   <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
                        screw-cap lid, amber fill. -->
@@ -519,14 +514,8 @@ interface OrderGroup {
                   <p class="pf-tube__label">{{ tube(s).label }}</p>
                   <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
 
-                  @if (s.tests.length > 0) {
-                    <!-- Test list is hidden so a many-test tube (e.g. a 25-analyte
-                         SST) doesn't blow the column height; hold the vial ~2s to
-                         peek it. This is just a hint (pointer-events: none). -->
-                    <p class="pf-tube__hint">Hold to see {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}</p>
-                    @if (drawVolume(s); as vol) {
-                      <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
-                    }
+                  @if (s.tests.length > 0 && drawVolume(s); as vol) {
+                    <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
                   }
 
                   <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
@@ -640,19 +629,6 @@ interface OrderGroup {
             }
           </div>
         </div>
-
-        <!-- Hold-to-peek popover — a child of .pf-drawer (which is a z-index
-             stacking context) so it always paints above the collect content.
-             Shown while a vial is held; hidden on release. -->
-        @if (peekId()) {
-          <div class="pf-tube__peekpop" (click)="$event.stopPropagation()"
-               [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
-            <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
-            <ul>
-              @for (n of peekTests(); track n) { <li>{{ n }}</li> }
-            </ul>
-          </div>
-        }
       </div>
     }
 
@@ -2131,63 +2107,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
-
-  /** Long-press (hold ~2s) a vial to peek its test list; a normal tap collects.
-   *  The list floats as a popover that stays open until the backdrop is tapped.
-   *  A move (scroll) or early release cancels the peek; once the peek fires, the
-   *  release's click is suppressed so it never also collects. */
-  readonly peekId = signal<string | null>(null);
-  readonly peekPos = signal<{ x: number; y: number } | null>(null);
-  readonly peekTests = signal<string[]>([]);
-  /** Which vial is mid-hold — drives the progress-fill animation. */
-  readonly holdingId = signal<string | null>(null);
-  private static readonly HOLD_MS = 2000;
-  private _pressTimer: ReturnType<typeof setTimeout> | null = null;
-  private _longPressFired = false;
-  private _downX = 0;
-  private _downY = 0;
-
-  onVialDown(s: OrderSample, ev: PointerEvent): void {
-    if (ev.button != null && ev.button !== 0) return; // primary / touch only
-    this._longPressFired = false;
-    this._downX = ev.clientX; this._downY = ev.clientY;
-    // Float the popover beside the vial (right, or left if no room) so the
-    // holding finger never covers it.
-    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 260;
-    let x = r.right + 10;
-    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
-    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
-    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
-    const tests = (s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n);
-    this.clearPress();
-    this.holdingId.set(s.id); // start the hold-progress fill
-    this._pressTimer = setTimeout(() => {
-      this._longPressFired = true;
-      this.holdingId.set(null);
-      this.peekPos.set({ x, y });
-      this.peekTests.set(tests);
-      this.peekId.set(s.id);   // popover shows while held
-    }, SampleCollectionComponent.HOLD_MS);
-  }
-  onVialMove(ev: PointerEvent): void {
-    if (this._pressTimer && (Math.abs(ev.clientX - this._downX) > 10 || Math.abs(ev.clientY - this._downY) > 10)) {
-      this.clearPress();
-    }
-  }
-  onVialUp(): void { this.clearPress(); }
-  private clearPress(): void {
-    if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
-    this.holdingId.set(null);
-    this.peekId.set(null); // release hides the peek
-  }
-
-  /** The vial's click: suppress it when a long-press just peeked, otherwise
-   *  it's a normal tap → collect. */
-  onVialClick(s: OrderSample, ev: Event): void {
-    if (this._longPressFired) { this._longPressFired = false; ev.preventDefault(); ev.stopPropagation(); return; }
-    this.toggleCollected(s);
-  }
 
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a

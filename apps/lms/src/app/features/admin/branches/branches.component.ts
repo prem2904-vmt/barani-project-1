@@ -865,11 +865,16 @@ export class BranchesComponent implements OnInit {
   subBranchesFor(branchId: string): SubBranch[] {
     return this._subBranches().filter(sb => sb.branchId === branchId);
   }
+  // Departments come from the Test Master, which are tenant-global (no branchId).
+  // The board must surface those alongside any branch-specific ones so every
+  // Test-Master department appears here; a department with no space then lands
+  // in the default "Lab" lane. (A department pinned to another branch stays on
+  // that branch.)
   allDeptsFor(branchId: string): Department[] {
-    return this._departments().filter(d => d.branchId === branchId);
+    return this._departments().filter(d => d.branchId === branchId || !d.branchId);
   }
   unassignedDeptsFor(branchId: string): Department[] {
-    return this._departments().filter(d => d.branchId === branchId && !d.subBranchId);
+    return this._departments().filter(d => (d.branchId === branchId || !d.branchId) && !d.subBranchId);
   }
   deptsForSubBranch(subBranchId: string): Department[] {
     return this._departments().filter(d => d.subBranchId === subBranchId);

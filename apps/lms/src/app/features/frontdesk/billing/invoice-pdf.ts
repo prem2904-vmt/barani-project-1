@@ -492,7 +492,10 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, textColor: CB_INK, lineWidth: 0 },
     headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
     bodyStyles: { fillColor: '#ffffff' },
-    columnStyles: { 0: { cellWidth: 48, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 96, halign: 'right' } },
+    // Amount column: zero right-padding so the values sit flush to the table's
+    // right edge (rightX) — the exact edge the Total / Net Payable / Amount Paid
+    // stack aligns to below, so the whole money column lines up top to bottom.
+    columnStyles: { 0: { cellWidth: 48, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 96, halign: 'right', cellPadding: { top: 5, right: 0, bottom: 5, left: 6 } } },
     // Right-align the "Amount" header too so it sits directly above the values
     // (autoTable leaves head cells left-aligned even when the column is right).
     didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
@@ -651,7 +654,9 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
     theme: 'plain',
     styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 3, right: 3, bottom: 3, left: 3 }, textColor: CB_INK, lineWidth: 0 },
     headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 8, lineColor: CB_RULE, lineWidth: { top: 0.6, right: 0, bottom: 0.6, left: 0 } as unknown as number },
-    columnStyles: { 0: { cellWidth: 20, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 58, halign: 'right' } },
+    // Amount column flush-right (zero right-padding) so it lines up with the
+    // totals stack below, which right-aligns to rightX.
+    columnStyles: { 0: { cellWidth: 20, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 58, halign: 'right', cellPadding: { top: 3, right: 0, bottom: 3, left: 3 } } },
     didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;

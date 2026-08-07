@@ -216,7 +216,7 @@ interface ReportSnapshot {
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN_X = 30;
 let MARGIN_TOP = 28;
-let MARGIN_BOTTOM = 110; // reserves room for the 3-column sig block
+let MARGIN_BOTTOM = 150; // reserves room for the 3-column sig block + disclaimer band
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
@@ -234,6 +234,14 @@ const TEXT_DIM = '#666666';  // Muted footer / secondary labels
 let HAIR = '#cccccc';        // Hairlines, dividers, table border
 const FLAG_RED = '#dc2626';  // High / critical inline tag
 const FLAG_BLUE = '#2563eb'; // Low inline tag
+
+// Standard digital-signature disclaimer shown in the report footer unless the
+// lab has configured its own. (Cortex OPS-39.)
+export const DEFAULT_DISCLAIMER =
+  'This report has been digitally signed by an authorized laboratory professional and is valid ' +
+  'without a handwritten signature. Test results should be interpreted in conjunction with the ' +
+  'patient’s clinical history and other diagnostic findings. Please consult your treating ' +
+  'physician for appropriate medical advice.';
 let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
 /** Canonical grid columns for the WHOLE report. Each test is laid out against
  *  these same columns + widths so the table lines up down the entire report,
@@ -269,7 +277,7 @@ function defaultTheme(): ResolvedTheme {
     patientColumns: [],
     patientLayout: 'three-col',
     showAbhaId: false,
-    disclaimer: '',
+    disclaimer: DEFAULT_DISCLAIMER,
     showQrCode: true,
   };
 }
@@ -338,7 +346,10 @@ function resolveTheme(
   t.patientColumns  = parsePatientColumns(tpl.patientColumnsJson);
   t.patientLayout   = (tpl.patientLayout as ResolvedTheme['patientLayout']) ?? 'three-col';
   t.showAbhaId      = tpl.showAbhaId ?? false;
-  t.disclaimer      = tpl.disclaimer ?? '';
+  // A template may omit the disclaimer (null/undefined) → fall back to the
+  // standard note. An explicit empty string means the lab intentionally cleared
+  // it, so honour that and show nothing.
+  t.disclaimer      = tpl.disclaimer ?? DEFAULT_DISCLAIMER;
   t.showQrCode      = tpl.showQrCode ?? true;
   return t;
 }
@@ -484,7 +495,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     HEADER_RESERVE = 0;
   } else {
     MARGIN_TOP = 28;
-    MARGIN_BOTTOM = 110;
+    MARGIN_BOTTOM = 150;
     HEADER_RESERVE = 70;
   }
 
@@ -2272,7 +2283,7 @@ function drawSigFooterPage(
   pageNo: number,
   pageTotal: number
 ) {
-  const sigY = A4.h - 86;
+  const sigY = A4.h - 118;
   const sigsW = A4.w - 2 * MARGIN_X;
   const colW = sigsW / 3;
 
@@ -2330,20 +2341,23 @@ function drawSigFooterPage(
     }
   });
 
-  // Disclaimer + footer text — left-aligned just above the date strip.
-  // Only on the last page so it doesn't repeat ad nauseam on multi-page
-  // reports.
+  // Disclaimer + footer text — full-width in the band between the signatures
+  // and the date strip. Only on the last page so it doesn't repeat ad nauseam
+  // on multi-page reports.
   if (pageNo === pageTotal) {
-    let extraY = A4.h - 46;
+    // Baseline of the lowest disclaimer line sits just above the date strip
+    // (drawn at A4.h - 30); lines stack upward from there.
+    let extraY = A4.h - 40;
     if (theme.disclaimer) {
       doc.setFont(PDF_FONT, 'italic');
       doc.setFontSize(7);
       doc.setTextColor(TEXT_DIM);
-      const lines = doc.splitTextToSize(theme.disclaimer, A4.w - 2 * MARGIN_X);
-      for (let i = Math.min(lines.length, 2) - 1; i >= 0; i--) {
+      const lines: string[] = doc.splitTextToSize(theme.disclaimer, A4.w - 2 * MARGIN_X);
+      for (let i = lines.length - 1; i >= 0; i--) {
         doc.text(lines[i], MARGIN_X, extraY);
-        extraY -= 9;
+        extraY -= 8.5;
       }
+      extraY -= 2; // small gap above the disclaimer for the footer line
     }
     if (theme.footerText) {
       doc.setFont(PDF_FONT, 'normal');
