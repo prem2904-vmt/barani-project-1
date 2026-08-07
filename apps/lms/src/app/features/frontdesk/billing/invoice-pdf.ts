@@ -441,10 +441,14 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' });
   y += 24;
 
-  // ── Patient result-tracking QR — top-right of the CASH BILL body, beside
-  //    the meta block (easiest thing to scan; staff-order QR stays bottom). ──
+  // ── Patient result-tracking QR — right side of the CASH BILL body, beside
+  //    the meta block (easiest thing to scan; staff-order QR stays bottom).
+  //    Vertically centred in the band between the header rule (y-46) and the
+  //    items-table rule (y+56) so it doesn't sink to the bottom. ──
   if (qrDataUrl) {
-    const qs = 52, qxr = rightX - qs, qyr = y - 6;
+    const qs = 52, qxr = rightX - qs;
+    const bandTop = y - 46, bandBottom = y + 56;
+    const qyr = bandTop + (bandBottom - bandTop - qs) / 2;
     try { doc.addImage(qrDataUrl, 'PNG', qxr, qyr, qs, qs); } catch { /* ignore */ }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
     doc.text('SCAN TO TRACK', qxr + qs / 2, qyr + qs + 7, { align: 'center' });
