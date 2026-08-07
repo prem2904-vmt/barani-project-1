@@ -786,9 +786,13 @@ export class BranchesComponent implements OnInit {
   spacesFor(branchId: string): LabSpace[] {
     return this._spaces().filter(s => s.branchId === branchId).sort((a, b) => a.order - b.order);
   }
-  /** Branch-level departments (not routed to a sub-branch) with no space yet. */
+  /** Branch-level departments that live in the default "Lab" lane: no space, OR
+   *  a space that doesn't belong to THIS branch (orphaned / cross-branch data).
+   *  The latter guard stops a department from vanishing when its SpaceId points
+   *  at another branch's space — it falls back here so it's always visible. */
   branchDeptsNoSpace(branchId: string): Department[] {
-    return this.unassignedDeptsFor(branchId).filter(d => !d.spaceId);
+    const ids = new Set(this.spacesFor(branchId).map(s => s.id));
+    return this.unassignedDeptsFor(branchId).filter(d => !d.spaceId || !ids.has(d.spaceId));
   }
   /** Branch-level departments assigned to a given space. */
   branchDeptsInSpace(spaceId: string): Department[] {
