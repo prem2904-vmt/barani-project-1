@@ -775,37 +775,8 @@ const COUNTERS: CounterSpec[] = [
       </pf-delegate-modal>
     }
 
-    <!-- Pick → confirm the patient/tube → scan to claim it into My Work.
-         Centered modal on web/iPad; full-width bottom-sheet on phones. -->
-    @if (claimTarget(); as c) {
-      <div class="pf-claim" role="dialog" aria-modal="true" aria-labelledby="pf-claim-title">
-        <div class="pf-claim__backdrop" (click)="cancelClaim()"></div>
-        <div class="pf-claim__sheet">
-          <header class="pf-claim__hdr">
-            <div class="pf-claim__hdr-main">
-              <p class="pf-claim__eyebrow">{{ c.deptName || 'Tube' }}{{ c.barcode ? ' · ' + c.barcode : '' }}</p>
-              <h2 id="pf-claim-title" class="pf-claim__title">{{ c.patientName }}</h2>
-            </div>
-            <button type="button" class="pf-claim__close press" (click)="cancelClaim()" aria-label="Close">✕</button>
-          </header>
-          <div class="pf-claim__actions">
-            @if (allowNoScanClaim()) {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="confirmClaim()">
-                {{ claiming() ? 'Claiming…' : 'Claim into my work' }}
-              </button>
-            } @else {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
-                {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
-              </button>
-            }
-          </div>
-          <p class="pf-claim__foot">
-            @if (allowNoScanClaim()) { The tube moves into My Work — you can scan or type it later to enter results. }
-            @else { Scan this tube's barcode to confirm you have the right sample — it then moves into My Work. }
-          </p>
-        </div>
-      </div>
-    }
+    <!-- (The intermediate "Scan tube to claim" card was removed — "Pick" claims
+         directly, or opens the scanner below when a scan is required.) -->
 
     <!-- Scan gate for claiming: the modal only emits matched when the scanned
          code equals THIS tube's barcode, so a tech can't claim the wrong tube. -->
@@ -2620,6 +2591,12 @@ export class MyWorkComponent implements OnInit {
 
   openClaim(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[] }, patientName: string) {
     this._claimTarget.set({ ...tube, patientName });
+    // Skip the intermediate "Scan tube to claim" card — go straight to the
+    // action: a direct claim when no scan is required (or the tube has no
+    // barcode), otherwise straight to the scanner (the scan itself is the
+    // verification; the card just added a click).
+    if (this.allowNoScanClaim() || !tube.barcode) this.confirmClaim();
+    else this.startClaimScan();
   }
   cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
 
@@ -2632,7 +2609,7 @@ export class MyWorkComponent implements OnInit {
     if (!c.barcode) { this.confirmClaim(); return; }
     this._claimScanning.set(true);
   }
-  cancelClaimScan() { this._claimScanning.set(false); }
+  cancelClaimScan() { this._claimScanning.set(false); this._claimTarget.set(null); }
   /** Correct tube scanned — commit the claim. */
   onClaimScanned() { this._claimScanning.set(false); this.confirmClaim(); }
 
