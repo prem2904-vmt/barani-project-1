@@ -41,8 +41,12 @@ export interface Branch {
   code: string;
   type: string;
   /** How departments are physically organised: 'integrated' (all depts share
-   *  one lab) or 'individual' (each dept is its own lab). Drives tube counting. */
-  labStructure?: 'integrated' | 'individual';
+   *  one lab), 'standalone' (each dept is its own lab), or 'auto'. Drives tube
+   *  counting. ('individual' is a legacy alias for 'standalone'.) */
+  labStructure?: 'integrated' | 'standalone' | 'auto' | 'individual';
+  /** Sample-ID prefix for departments in this branch's default "Lab" space
+   *  (no dedicated space). Blank → "LAB". */
+  defaultLabCode?: string | null;
   address?: string;
   city?: string;
   state?: string;

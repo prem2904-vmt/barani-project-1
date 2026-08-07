@@ -257,6 +257,10 @@ interface LabSpace { id: string; branchId: string; name: string; code?: string |
                     <div class="pf-lane">
                       <div class="pf-lane-hdr">
                         <span class="pf-lane-name">Lab (default)</span>
+                        <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!b.defaultLabCode"
+                               [value]="b.defaultLabCode || ''" (change)="setDefaultLabCode(b, $any($event.target).value)"
+                               maxlength="16" placeholder="LAB" aria-label="Default Lab code — prefixes sample IDs"
+                               title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001)" />
                         <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
                       </div>
                       <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"
@@ -826,6 +830,15 @@ export class BranchesComponent implements OnInit {
     this.renameSpaceTimers[sp.id] = setTimeout(() => {
       this.api.patch(`/api/tenants/lab-spaces/${sp.id}`, { name }).subscribe({ error: () => { } });
     }, 500);
+  }
+  /** The default "Lab" code prefixes sample IDs for departments that sit in the
+   *  default Lab space (no dedicated space). Stored on the branch. */
+  setDefaultLabCode(b: Branch, raw: string) {
+    const code = (raw || '').trim().toUpperCase();
+    this._branches.update(list => list.map(x => x.id === b.id ? { ...x, defaultLabCode: code || null } : x));
+    this.api.patch(`/api/tenants/branches/${b.id}`, { defaultLabCode: code }).subscribe({
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
   }
   /** The space code prefixes every sample ID drawn in this space (MIC → MIC-2607-00001). */
   setSpaceCode(sp: LabSpace, raw: string) {
