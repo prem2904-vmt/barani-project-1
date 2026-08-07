@@ -2343,6 +2343,7 @@ export class BillingComponent implements OnInit, OnChanges {
         tatLabel: this.tatLabel(),
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
         docTitle,
         ...invoiceTemplateFieldsFrom(tpl),
         practice: {

@@ -1367,6 +1367,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       tatLabel: '',
       docTitle, qrDataUrl, orderQrDataUrl, logoDataUrl,
       cashierName: this.auth.user()?.displayName || undefined,
+      cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
       ...invoiceTemplateFieldsFrom(tpl),
       practice: {
         name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,

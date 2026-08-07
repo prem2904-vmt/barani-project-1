@@ -200,6 +200,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/label-printer/label-printer.component').then(m => m.LabelPrinterComponent)
       },
       {
+        // Per-user digital signature — available to any signed-in user; the
+        // signature is saved to their account and drawn wherever they sign.
+        path: 'signature',
+        loadComponent: () => import('./features/user-signature/my-signature.component').then(m => m.MySignatureComponent)
+      },
+      {
         path: 'admin/organization',
         canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)

@@ -44,6 +44,9 @@ export interface InvoicePdfInput {
   declaration?: string;
   /** Cashier / counter staff name — printed in the Cash Bill footer. */
   cashierName?: string;
+  /** The printing user's saved digital signature (PNG data URL). Drawn above the
+   *  cashier line on the Cash Bill when present. */
+  cashierSignatureDataUrl?: string;
   /** Paper size for the Cash Bill template: full-page A4 (default) or a 4-inch
    *  (≈104 mm) thermal receipt roll. Ignored by the other letterhead styles. */
   paperSize?: 'a4' | 'thermal';
@@ -410,7 +413,7 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
 }
 
 function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
-  const { practice = {}, logoDataUrl, tagline, cashierName, qrDataUrl, orderQrDataUrl } = input;
+  const { practice = {}, logoDataUrl, tagline, cashierName, cashierSignatureDataUrl, qrDataUrl, orderQrDataUrl } = input;
   const m = buildCashBillModel(input);
   const cx = A4.w / 2;
   const rightX = A4.w - MARGIN;
@@ -549,9 +552,13 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     } catch { /* ignore */ }
   }
 
-  // ── Cashier signature — moved to the bottom of the page (bottom-right),
-  //    above the closing note. Chq/DD-favour + timestamp lines removed. ──
+  // ── Cashier signature — bottom-right, above the closing note. The printing
+  //    user's saved signature image sits above the line; name below. ──
   const sigY = A4.h - 44;
+  if (cashierSignatureDataUrl) {
+    const sw = 120, sh = 34;
+    try { doc.addImage(cashierSignatureDataUrl, 'PNG', rightX - sw, sigY - sh - 2, sw, sh); } catch { /* ignore */ }
+  }
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.5);
   doc.line(rightX - 150, sigY, rightX, sigY);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(CB_INK);
@@ -590,7 +597,7 @@ function estimateThermalHeight(input: InvoicePdfInput): number {
 }
 
 function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean, W: number, H: number): void {
-  const { practice = {}, logoDataUrl, tagline, cashierName, qrDataUrl, orderQrDataUrl } = input;
+  const { practice = {}, logoDataUrl, tagline, cashierName, cashierSignatureDataUrl, qrDataUrl, orderQrDataUrl } = input;
   const m = buildCashBillModel(input);
   const MG = 14;                    // tight margins for a narrow roll
   const cx = W / 2, rightX = W - MG;
@@ -680,7 +687,10 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   for (const l of doc.splitTextToSize(`(In words: ${m.amountWords} Only)`, W - 2 * MG)) { doc.text(l, MG, y); y += 11; }
   y += 4;
 
-  // ── Cashier signature (bottom) ──
+  // ── Cashier signature (bottom) — saved signature image above the name. ──
+  if (cashierSignatureDataUrl) {
+    try { doc.addImage(cashierSignatureDataUrl, 'PNG', MG, y, 96, 26); y += 28; } catch { /* ignore */ }
+  }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(CB_INK);
   doc.text(cashierName ? `Cashier: ${cashierName}` : 'Cashier', MG, y); y += 6;
 

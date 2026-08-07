@@ -1758,6 +1758,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         docTitle,
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
         ...invoiceTemplateFieldsFrom(tpl),
         // Always carry a name so the invoice never reads "Prefrontal Lab":
         // configured letterhead first, else the tenant's own name.

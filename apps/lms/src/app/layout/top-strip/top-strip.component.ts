@@ -254,6 +254,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     ]);
   }
   goPrinting() { this.closeProfile(); this.router.navigate(['/printing']); }
+  goSignature() { this.closeProfile(); this.router.navigate(['/signature']); }
 
   // ── Presence status picker (Teams-style presets) ───────────────────
   protected readonly statusOptions = PRESENCE_OPTIONS;

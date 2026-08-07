@@ -170,6 +170,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     ]);
   }
   protected goPrinting(): void { this.closeMore(); this.router.navigate(['/printing']); }
+  protected goSignature(): void { this.closeMore(); this.router.navigate(['/signature']); }
   protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
 
   protected onMoreNotifications(): void {
