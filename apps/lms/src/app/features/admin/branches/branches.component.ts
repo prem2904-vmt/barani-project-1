@@ -13,6 +13,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 
 /** A physical lab space within a branch; departments are assigned to one. */
 interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
+/** Per-branch placement of a tenant-global department into one of that
+ *  branch's spaces. No row = the department sits in the branch's default Lab. */
+interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: string; }
 
 
 @Component({
@@ -724,6 +727,11 @@ export class BranchesComponent implements OnInit {
   private readonly _subBranches = signal<SubBranch[]>([]);
   private readonly _departments = signal<Department[]>([]);
   private readonly _spaces = signal<LabSpace[]>([]);
+  /** Per-branch department→space placements. Departments are tenant-global —
+   *  each branch arranges the SAME departments into its own spaces, so the
+   *  placement is a (branchId, departmentId) → spaceId link, never a field on
+   *  the department itself. No link = the branch's default "Lab" space. */
+  private readonly _links = signal<DeptSpaceLink[]>([]);
   private readonly _openIds = signal<Set<string>>(new Set());
 
   readonly branches = this._branches.asReadonly();
@@ -784,23 +792,30 @@ export class BranchesComponent implements OnInit {
     });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []) });
     this.api.get<LabSpace[]>('/api/tenants/lab-spaces').subscribe({ next: l => this._spaces.set(l ?? []) });
+    this.api.get<DeptSpaceLink[]>('/api/tenants/department-space-links').subscribe({ next: l => this._links.set(l ?? []) });
   }
 
   // ── Lab spaces (group departments; drives tube counting) ──────────
   spacesFor(branchId: string): LabSpace[] {
     return this._spaces().filter(s => s.branchId === branchId).sort((a, b) => a.order - b.order);
   }
-  /** Branch-level departments that live in the default "Lab" lane: no space, OR
-   *  a space that doesn't belong to THIS branch (orphaned / cross-branch data).
-   *  The latter guard stops a department from vanishing when its SpaceId points
-   *  at another branch's space — it falls back here so it's always visible. */
-  branchDeptsNoSpace(branchId: string): Department[] {
-    const ids = new Set(this.spacesFor(branchId).map(s => s.id));
-    return this.unassignedDeptsFor(branchId).filter(d => !d.spaceId || !ids.has(d.spaceId));
+  /** This branch's placement for a department (spaceId), or null = default Lab. */
+  private linkFor(branchId: string, deptId: string): string | null {
+    const l = this._links().find(x => x.branchId === branchId && x.departmentId === deptId);
+    if (!l) return null;
+    // Guard: ignore a link whose space no longer exists in this branch.
+    return this.spacesFor(branchId).some(s => s.id === l.spaceId) ? l.spaceId : null;
   }
-  /** Branch-level departments assigned to a given space. */
+  /** Departments in this branch's default "Lab" lane = every department this
+   *  branch hasn't placed into one of its own spaces. */
+  branchDeptsNoSpace(branchId: string): Department[] {
+    return this.unassignedDeptsFor(branchId).filter(d => !this.linkFor(branchId, d.id));
+  }
+  /** Departments this branch has placed into the given space (space ids are
+   *  branch-unique, so no extra branch filter is needed). */
   branchDeptsInSpace(spaceId: string): Department[] {
-    return this._departments().filter(d => d.spaceId === spaceId);
+    const ids = new Set(this._links().filter(l => l.spaceId === spaceId).map(l => l.departmentId));
+    return this._departments().filter(d => ids.has(d.id));
   }
   /** CDK connected-list ids for a branch's board (Unassigned + each space). */
   laneIdsFor(branchId: string): string[] {
@@ -808,12 +823,12 @@ export class BranchesComponent implements OnInit {
   }
 
 
-  /** A department card was moved between lanes → reassign its space.
-   *  targetSpaceId null = the default "Lab" space. */
-  dropDept(event: CdkDragDrop<any[]>, _branchId: string, targetSpaceId: string | null): void {
+  /** A department card was moved between lanes → re-place it FOR THIS BRANCH.
+   *  targetSpaceId null = back to the branch's default "Lab" space. */
+  dropDept(event: CdkDragDrop<any[]>, branchId: string, targetSpaceId: string | null): void {
     if (event.previousContainer === event.container) return;
     const dept = event.previousContainer.data[event.previousIndex] as Department;
-    if (dept) this.setDeptSpace(dept, targetSpaceId);
+    if (dept) this.setDeptSpace(dept, branchId, targetSpaceId);
   }
 
   addSpace(branchId: string) {
@@ -848,23 +863,25 @@ export class BranchesComponent implements OnInit {
   }
   deleteSpace(sp: LabSpace) {
     this._spaces.update(l => l.filter(s => s.id !== sp.id));
-    // Its departments fall back to No space.
-    this._departments.update(l => l.map(d => d.spaceId === sp.id ? { ...d, spaceId: null } : d));
+    // Its placements go too — those departments fall back to Lab (default).
+    this._links.update(l => l.filter(x => x.spaceId !== sp.id));
     this.api.delete(`/api/tenants/lab-spaces/${sp.id}`).subscribe({
       error: e => this.toasts.error(ApiError.from(e).message),
     });
   }
-  /** Assign a department to a space (null/'' = none). Persists; reverts on failure. */
-  setDeptSpace(dept: Department, spaceId: string | null) {
-    const prev = dept.spaceId ?? null;
+  /** Place a department into a space FOR ONE BRANCH (null = default Lab).
+   *  Only this branch's link row changes — other branches are untouched. */
+  setDeptSpace(dept: Department, branchId: string, spaceId: string | null) {
+    const prev = this.linkFor(branchId, dept.id);
     const next = spaceId || null;
     if (prev === next) return;
-    this._departments.update(l => l.map(d => d.id === dept.id ? { ...d, spaceId: next } : d));
-    this.api.patch(`/api/tenants/departments/${dept.id}/space`, { spaceId: next }).subscribe({
-      error: e => {
-        this._departments.update(l => l.map(d => d.id === dept.id ? { ...d, spaceId: prev } : d));
-        this.toasts.error(ApiError.from(e).message);
-      },
+    const apply = (sid: string | null) => this._links.update(links => {
+      const rest = links.filter(x => !(x.branchId === branchId && x.departmentId === dept.id));
+      return sid ? [...rest, { branchId, departmentId: dept.id, spaceId: sid }] : rest;
+    });
+    apply(next);
+    this.api.patch(`/api/tenants/departments/${dept.id}/space`, { spaceId: next, branchId }).subscribe({
+      error: e => { apply(prev); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
@@ -882,16 +899,15 @@ export class BranchesComponent implements OnInit {
   subBranchesFor(branchId: string): SubBranch[] {
     return this._subBranches().filter(sb => sb.branchId === branchId);
   }
-  // Departments come from the Test Master, which are tenant-global (no branchId).
-  // The board must surface those alongside any branch-specific ones so every
-  // Test-Master department appears here; a department with no space then lands
-  // in the default "Lab" lane. (A department pinned to another branch stays on
-  // that branch.)
-  allDeptsFor(branchId: string): Department[] {
-    return this._departments().filter(d => d.branchId === branchId || !d.branchId);
+  // Departments come from the Test Master and are TENANT-GLOBAL — they are not
+  // mapped to any branch. Every branch board shows the same full set; what
+  // differs per branch is only the placement into that branch's spaces (the
+  // link rows). A department's legacy branchId is ignored here.
+  allDeptsFor(_branchId: string): Department[] {
+    return this._departments();
   }
-  unassignedDeptsFor(branchId: string): Department[] {
-    return this._departments().filter(d => (d.branchId === branchId || !d.branchId) && !d.subBranchId);
+  unassignedDeptsFor(_branchId: string): Department[] {
+    return this._departments().filter(d => !d.subBranchId);
   }
   deptsForSubBranch(subBranchId: string): Department[] {
     return this._departments().filter(d => d.subBranchId === subBranchId);
@@ -972,13 +988,13 @@ export class BranchesComponent implements OnInit {
     if (!name) { this.toasts.warning('Department name required'); return; }
     const code = this.deriveCode(branchId, name);
     const targetSpace = this.addingDeptSpace();
-    this.api.post<Department>('/api/tenants/departments', { name, code, branchId }).subscribe({
+    // Departments are tenant-global (no branchId) — the new department appears
+    // on every branch board. Creating it inside a space lane only places it in
+    // THAT branch's space (a link row); other branches get it in Lab (default).
+    this.api.post<Department>('/api/tenants/departments', { name, code }).subscribe({
       next: saved => {
-        const dept = targetSpace ? { ...saved, spaceId: targetSpace } : saved;
-        this._departments.update(list => [...list, dept]);
-        if (targetSpace) {
-          this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId: targetSpace }).subscribe({ error: () => { } });
-        }
+        this._departments.update(list => [...list, saved]);
+        if (targetSpace) this.setDeptSpace(saved, branchId, targetSpace);
         this.toasts.success('Department added');
         this.cancelAddDept();
       },
