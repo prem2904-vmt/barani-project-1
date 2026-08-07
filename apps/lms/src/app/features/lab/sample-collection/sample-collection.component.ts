@@ -302,9 +302,12 @@ interface OrderGroup {
 
           <div class="pf-drawer__tubes">
             @for (s of g.samples; track s.id) {
-              <button type="button" class="pf-tube"
-                      [class.pf-tube--done]="s.status !== 'pending'"
-                      (click)="toggleCollected(s)">
+              <!-- A div (not <button>) so the "See tests" peek chip can nest as a
+                   real clickable without an invalid button-in-button (which made
+                   a peek tap collect the vial). -->
+              <div class="pf-tube" role="button" tabindex="0"
+                   [class.pf-tube--done]="s.status !== 'pending'"
+                   (click)="toggleCollected(s)" (keydown.enter)="toggleCollected(s)">
                 @if (container(s).kind === 'urine_cup') {
                   <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
                        screw-cap lid, amber fill. -->
@@ -518,14 +521,14 @@ interface OrderGroup {
                          SST) doesn't blow the column height. The vial is a tap-to-
                          collect target, so tests are peeked by press-and-hold (a
                          floating popover) — a tap here never collects. -->
-                    <span class="pf-tube__peek" (click)="peekToggle(s, $event)"
-                          (pointerdown)="swallow($event)" [class.pf-tube__peek--on]="peekId() === s.id">
+                    <button type="button" class="pf-tube__peek" (click)="peekToggle(s, $event)"
+                            [class.pf-tube__peek--on]="peekId() === s.id">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                            stroke-linecap="round" stroke-linejoin="round">
                         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
                       </svg>
                       See {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}
-                    </span>
+                    </button>
                     @if (drawVolume(s); as vol) {
                       <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
                     }
@@ -545,7 +548,7 @@ interface OrderGroup {
                     <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
                   }
                 </div>
-              </button>
+              </div>
             }
           </div>
 
@@ -1133,6 +1136,7 @@ interface OrderGroup {
     /* Tap-to-peek chip — opens the floating test list; the tap never collects
        the vial (its click is swallowed). */
     .pf-tube__peek {
+      appearance: none; -webkit-appearance: none; font-family: inherit;
       margin-top: 10px;
       display: inline-flex; align-items: center; gap: 5px;
       padding: 4px 11px; border-radius: 8px;
