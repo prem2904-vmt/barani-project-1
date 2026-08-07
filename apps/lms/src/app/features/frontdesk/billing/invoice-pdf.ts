@@ -384,9 +384,12 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   const discountNum = Math.max(0, grossTotalNum - effectivePayable);
 
   const payments = (bill.payments ?? []).map(p => ({
-    label: (p.mode || 'PAID').toUpperCase(),
+    // A wallet payment is drawn from the patient's prepaid credit — label it "Credit".
+    label: ((p.mode || 'PAID').toLowerCase() === 'wallet' ? 'CREDIT' : (p.mode || 'PAID')).toUpperCase(),
     amount: plain(p.amount),  // same comma-grouped format as the totals column
-    ref: p.referenceNo ? `(${p.referenceNo})` : '',
+    // Keep a short, traceable reference — a full txn UUID used to overrun the
+    // amount and overlap the totals column. Long ids collapse to "#<last 8>".
+    ref: shortPayRef(p.referenceNo),
   }));
   if (payments.length === 0 && bill.totalPaid > 0) payments.push({ label: 'PAID', amount: plain(bill.totalPaid), ref: '' });
 
@@ -719,6 +722,16 @@ function plain(n: number): string {
   const v = n ?? 0;
   const whole = Math.round(v) === v;
   return v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+}
+
+/** Short, traceable payment reference. A full transaction UUID (e.g. a wallet
+ *  txn id) would overrun the amount and overlap the totals column, so long ids
+ *  collapse to "#<last 8>"; short human refs (cheque no. etc.) pass through. */
+function shortPayRef(ref: string | null | undefined): string {
+  const r = (ref ?? '').trim();
+  if (!r) return '';
+  const short = r.length > 14 ? `#${r.replace(/-/g, '').slice(-8)}` : r;
+  return `(${short})`;
 }
 
 function shortId(id: string | undefined | null): string {
