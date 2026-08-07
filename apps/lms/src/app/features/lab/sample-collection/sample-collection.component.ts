@@ -307,6 +307,7 @@ interface OrderGroup {
                    pointer handling is clean. -->
               <div class="pf-tube" role="button" tabindex="0"
                    [class.pf-tube--done]="s.status !== 'pending'"
+                   [class.pf-tube--holding]="holdingId() === s.id"
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
                    (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
                    (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
@@ -1031,6 +1032,19 @@ interface OrderGroup {
       -webkit-tap-highlight-color: transparent;
       -webkit-touch-callout: none; /* no iOS callout during the 2s hold-to-peek */
     }
+    /* Hold-to-peek progress: a bar fills across the bottom of the vial over the
+       2s hold; when full, the test list pops. Also a subtle press-in. */
+    .pf-tube::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube--holding {
+      border-color: rgba(139, 92, 246, 0.55);
+      background: linear-gradient(180deg, rgba(139,92,246,0.10), rgba(139,92,246,0.03));
+    }
+    .pf-tube--holding::after { opacity: 1; animation: pf-hold-fill 2s linear forwards; }
+    @keyframes pf-hold-fill { from { width: 0; } to { width: 100%; } }
     /* Send every click through to the button itself. Without this, a tap on
      * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
      * child element and the parent button only registers the SECOND tap.
@@ -2124,6 +2138,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly peekId = signal<string | null>(null);
   readonly peekPos = signal<{ x: number; y: number } | null>(null);
   readonly peekTests = signal<string[]>([]);
+  /** Which vial is mid-hold — drives the progress-fill animation. */
+  readonly holdingId = signal<string | null>(null);
   private static readonly HOLD_MS = 2000;
   private _pressTimer: ReturnType<typeof setTimeout> | null = null;
   private _longPressFired = false;
@@ -2139,8 +2155,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const y = Math.min(r.top + 44, window.innerHeight - 260);
     const tests = (s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n);
     this.clearPress();
+    this.holdingId.set(s.id); // start the hold-progress fill
     this._pressTimer = setTimeout(() => {
       this._longPressFired = true;
+      this.holdingId.set(null);
       this.peekPos.set({ x, y });
       this.peekTests.set(tests);
       this.peekId.set(s.id);
@@ -2152,7 +2170,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
   }
   onVialUp(): void { this.clearPress(); }
-  private clearPress(): void { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } }
+  private clearPress(): void {
+    if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+    this.holdingId.set(null);
+  }
 
   /** The vial's click: suppress it when a long-press just peeked, otherwise
    *  it's a normal tap → collect. */
