@@ -518,11 +518,13 @@ interface OrderGroup {
                          SST) doesn't blow the column height. The vial is a tap-to-
                          collect target, so tests are peeked by press-and-hold (a
                          floating popover) — a tap here never collects. -->
-                    <span class="pf-tube__peek"
-                          (pointerdown)="peekOn(s, $event)" (pointerup)="peekOff($event)"
-                          (pointerleave)="peekOff($event)" (pointercancel)="peekOff($event)"
-                          (click)="swallow($event)">
-                      Hold to see {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}
+                    <span class="pf-tube__peek" (click)="peekToggle(s, $event)"
+                          (pointerdown)="swallow($event)" [class.pf-tube__peek--on]="peekId() === s.id">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      See {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}
                     </span>
                     @if (drawVolume(s); as vol) {
                       <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
@@ -685,11 +687,13 @@ interface OrderGroup {
       </div>
     }
 
-    <!-- Hold-to-peek popover — rendered at the template root (outside the
-         drawer's backdrop-filter containing block) so fixed positioning is
-         viewport-relative and never clipped. Shown while a peek is held. -->
-    @if (peekId(); as pid) {
+    <!-- Tap-to-peek popover — rendered at the template root (outside the
+         drawer's containing block) so fixed positioning is viewport-relative
+         and never clipped. The backdrop closes it and blocks the collect tap. -->
+    @if (peekId()) {
+      <div class="pf-peek-backdrop" (click)="peekClose($event)" (pointerdown)="swallow($event)"></div>
       <div class="pf-tube__peekpop" [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
+        <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
         <ul>
           @for (n of peekTests(); track n) { <li>{{ n }}</li> }
         </ul>
@@ -1126,8 +1130,8 @@ interface OrderGroup {
       text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
       opacity: 0.85;
     }
-    /* Hold-to-peek affordance — press and hold to float the test list; a tap
-       never collects the vial (the click is swallowed). */
+    /* Tap-to-peek chip — opens the floating test list; the tap never collects
+       the vial (its click is swallowed). */
     .pf-tube__peek {
       margin-top: 10px;
       display: inline-flex; align-items: center; gap: 5px;
@@ -1137,22 +1141,30 @@ interface OrderGroup {
       background: var(--glass-bg, rgba(255,255,255,0.05));
       border: 1px solid var(--glass-border, rgba(148,163,184,0.22));
       cursor: pointer; user-select: none; -webkit-user-select: none;
-      touch-action: none;
-      transition: background .12s ease;
+      transition: background .12s ease, border-color .12s ease;
     }
     .pf-tube__peek:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.09)); }
-    .pf-tube__peek:active { background: var(--glass-bg-hover, rgba(255,255,255,0.12)); }
-    /* Floating peek popover (fixed, viewport-relative). */
+    .pf-tube__peek--on {
+      background: rgba(139, 92, 246, 0.16);
+      border-color: rgba(139, 92, 246, 0.5);
+      color: var(--text-primary);
+    }
+    /* Full-screen backdrop that closes the popover and blocks the collect tap. */
+    .pf-peek-backdrop { position: fixed; inset: 0; z-index: 1190; background: transparent; }
+    /* Floating peek popover (fixed, viewport-relative, above the drawer). */
     .pf-tube__peekpop {
       position: fixed; z-index: 1200;
       width: 260px; max-height: 52vh; overflow-y: auto;
-      padding: 10px 12px; border-radius: 12px;
+      padding: 12px 14px; border-radius: 12px;
       background: var(--bg-elevated, #0f172a);
       border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
       box-shadow: 0 18px 44px rgba(0,0,0,0.5);
-      pointer-events: none;  /* peek only — never intercepts the hold */
     }
-    .pf-tube__peekpop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-tube__peekpop-h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-tube__peekpop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
     .pf-tube__peekpop li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
     /* Per-tube test list: one row per test, name on the left, its draw
        volume right-aligned in mono so the numbers line up down the tube. */
@@ -2118,25 +2130,27 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
 
-  /** Press-and-hold "peek" of a tube's test list. The vial itself is a tap-to-
-   *  collect button, so the peek must NOT collect — it opens a floating popover
-   *  while held (pointerdown → show, pointerup/leave → hide) and swallows the
-   *  click so the outer collect never fires. */
+  /** Tap-to-peek a tube's test list. The vial itself is a tap-to-collect button,
+   *  so the peek must NOT collect — the chip swallows its click and toggles a
+   *  floating popover; a full-screen backdrop closes it (and blocks the collect
+   *  underneath). Reliable on both mouse and touch (a press-and-hold was flaky). */
   readonly peekId = signal<string | null>(null);
   readonly peekPos = signal<{ x: number; y: number } | null>(null);
   readonly peekTests = signal<string[]>([]);
 
-  peekOn(s: OrderSample, ev: PointerEvent): void {
+  peekToggle(s: OrderSample, ev: Event): void {
     ev.stopPropagation();
     ev.preventDefault();
+    if (this.peekId() === s.id) { this.peekId.set(null); return; }
     const el = ev.currentTarget as HTMLElement;
     const r = el.getBoundingClientRect();
     const x = Math.max(8, Math.min(r.left, window.innerWidth - 268));
-    this.peekPos.set({ x, y: r.bottom + 6 });
+    const y = Math.min(r.bottom + 6, window.innerHeight - 260);
+    this.peekPos.set({ x, y });
     this.peekTests.set((s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n));
     this.peekId.set(s.id);
   }
-  peekOff(ev?: Event): void { ev?.stopPropagation(); this.peekId.set(null); }
+  peekClose(ev?: Event): void { ev?.stopPropagation(); this.peekId.set(null); }
   swallow(ev: Event): void { ev.stopPropagation(); ev.preventDefault(); }
 
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
