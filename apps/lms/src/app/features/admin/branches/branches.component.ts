@@ -14,35 +14,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 /** A physical lab space within a branch; departments are assigned to one. */
 interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
 
-/** A standard department from the catalog (draggable into a space to create it). */
-interface CatalogDept { name: string; code: string; }
-
-/** Standard diagnostic-lab departments (India). Dragged from the catalog into a
- *  space creates that department for the branch — no typing needed. */
-const STANDARD_DEPARTMENTS: CatalogDept[] = [
-  { name: 'Biochemistry', code: 'BIO' },
-  { name: 'Haematology', code: 'HAE' },
-  { name: 'Clinical Pathology', code: 'CPY' },
-  { name: 'Microbiology', code: 'MIC' },
-  { name: 'Serology', code: 'SER' },
-  { name: 'Immunology', code: 'IMM' },
-  { name: 'Histopathology', code: 'HIS' },
-  { name: 'Cytology', code: 'CYT' },
-  { name: 'Molecular Biology', code: 'MOL' },
-  { name: 'Coagulation', code: 'COA' },
-  { name: 'Endocrinology', code: 'END' },
-  { name: 'Blood Bank', code: 'BBK' },
-  { name: 'Genetics', code: 'GEN' },
-  { name: 'Toxicology', code: 'TOX' },
-  { name: 'Urine Analysis', code: 'URN' },
-  { name: 'Cardiology', code: 'CAR' },
-  { name: 'Radiology', code: 'RAD' },
-  { name: 'Pathology', code: 'PAT' },
-  { name: 'Cardiac Markers', code: 'CDM' },
-  { name: 'Hormones', code: 'HOR' },
-  { name: 'Infectious Disease', code: 'INF' },
-  { name: 'Nephrology', code: 'NEP' },
-];
 
 @Component({
   selector: 'pf-branches',
@@ -276,29 +247,9 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
                   </p>
 
                   <div class="pf-board">
-                    <!-- Department catalog — standard depts, search + drag into a space -->
-                    <div class="pf-lane pf-lane--catalog">
-                      <div class="pf-lane-hdr">
-                        <span class="pf-lane-name">Departments</span>
-                        <span class="pf-lane-count">{{ catalogFor(b.id).length }}</span>
-                      </div>
-                      <div class="pf-catalog-search">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-                        <input type="text" class="pf-catalog-search__input" placeholder="Search departments…"
-                               [value]="deptSearch()" (input)="setDeptSearch($any($event.target).value)" />
-                      </div>
-                      <div class="pf-lane-body" cdkDropList [cdkDropListData]="catalogFor(b.id)"
-                           [cdkDropListConnectedTo]="laneIdsFor(b.id)" [id]="'catalog-' + b.id"
-                           [cdkDropListSortingDisabled]="true">
-                        @for (c of catalogFor(b.id); track c.code) {
-                          <div class="pf-catalog-chip" cdkDrag>
-                            <span class="pf-dcard-grip" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
-                            <span class="pf-catalog-chip__name">{{ c.name }}</span>
-                            <span class="pf-dcard-code">{{ c.code }}</span>
-                          </div>
-                        } @empty { <p class="pf-lane-empty">{{ deptSearch() ? 'No match' : 'All added' }}</p> }
-                      </div>
-                    </div>
+                    <!-- Departments come from the Test Master — this board only
+                         links the real departments into spaces (no hard-coded
+                         create-catalog). -->
 
                     <!-- Default "Lab" lane — departments not moved into a specific
                          space live here (they share the "LAB" sample prefix and a
@@ -359,15 +310,6 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
                         @if (isAddingInLane(b.id, sp.id)) {
                           <div class="pf-lane-add">
                             <input type="text" class="pf-input" placeholder="Type a department…" [ngModel]="deptDraft().name" (ngModelChange)="patchDeptDraft({ name: $event })" />
-                            @if (addSuggestions(b.id).length) {
-                              <div class="pf-add-sugg">
-                                @for (s of addSuggestions(b.id); track s.code) {
-                                  <button type="button" class="pf-add-sugg__item press" (click)="pickAddSuggestion(b.id, s)">
-                                    <span>{{ s.name }}</span><span class="pf-dcard-code">{{ s.code }}</span>
-                                  </button>
-                                }
-                              </div>
-                            }
                             <div class="flex gap-2"><pf-touch-btn size="sm" variant="primary" (pressed)="createDepartment(b.id)">Add</pf-touch-btn><pf-touch-btn size="sm" variant="ghost" (pressed)="cancelAddDept()">Cancel</pf-touch-btn></div>
                           </div>
                         } @else {
@@ -857,45 +799,15 @@ export class BranchesComponent implements OnInit {
     return ['unassigned-' + branchId, ...this.spacesFor(branchId).map(s => 'sp-' + s.id)];
   }
 
-  // ── Department catalog (standard depts, searchable, drag to add) ──
-  readonly deptSearch = signal('');
-  setDeptSearch(v: string) { this.deptSearch.set(v ?? ''); }
-  /** Standard departments not yet added to this branch, filtered by search. */
-  catalogFor(branchId: string): CatalogDept[] {
-    const existing = new Set(this.allDeptsFor(branchId).map(d => (d.code || '').toUpperCase()));
-    const q = this.deptSearch().trim().toLowerCase();
-    return STANDARD_DEPARTMENTS.filter(c =>
-      !existing.has(c.code.toUpperCase()) &&
-      (!q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)));
-  }
 
-  /** A card was dropped into a lane. From the CATALOG → create the department in
-   *  that space; from another lane → just reassign its space. targetSpaceId null
-   *  = Unassigned. */
-  dropDept(event: CdkDragDrop<any[]>, branchId: string, targetSpaceId: string | null): void {
-    const fromCatalog = event.previousContainer.id === 'catalog-' + branchId;
-    if (fromCatalog) {
-      const cat = event.previousContainer.data[event.previousIndex] as CatalogDept;
-      if (cat) this.createDeptFromCatalog(branchId, cat, targetSpaceId);
-      return;
-    }
+  /** A department card was moved between lanes → reassign its space.
+   *  targetSpaceId null = the default "Lab" space. */
+  dropDept(event: CdkDragDrop<any[]>, _branchId: string, targetSpaceId: string | null): void {
     if (event.previousContainer === event.container) return;
     const dept = event.previousContainer.data[event.previousIndex] as Department;
     if (dept) this.setDeptSpace(dept, targetSpaceId);
   }
 
-  /** Create a standard department for the branch, landed in the given space. */
-  private createDeptFromCatalog(branchId: string, cat: CatalogDept, spaceId: string | null): void {
-    this.api.post<Department>('/api/tenants/departments', { name: cat.name, code: cat.code, branchId }).subscribe({
-      next: saved => {
-        const dept = spaceId ? { ...saved, spaceId } : saved;
-        this._departments.update(list => [...list, dept]);
-        if (spaceId) this.api.patch(`/api/tenants/departments/${saved.id}/space`, { spaceId }).subscribe({ error: () => { } });
-        this.toasts.success(`${cat.name} added`);
-      },
-      error: e => this.toasts.error(ApiError.from(e).message),
-    });
-  }
   addSpace(branchId: string) {
     const order = this.spacesFor(branchId).length;
     this.api.post<LabSpace>('/api/tenants/lab-spaces', { branchId, name: `Space ${order + 1}`, order }).subscribe({
@@ -1020,23 +932,6 @@ export class BranchesComponent implements OnInit {
   patchDeptDraft(p: Partial<{ name: string; code: string }>) { this._deptDraft.update(v => ({ ...v, ...p })); }
   cancelAddDept() { this.addingDeptFor.set(null); this.addingDeptSpace.set(null); }
 
-  /** Autocomplete suggestions for the add-dept box — standard departments not
-   *  yet added, matching what's typed. */
-  addSuggestions(branchId: string): CatalogDept[] {
-    const q = this._deptDraft().name.trim().toLowerCase();
-    if (!q) return [];
-    const existing = new Set(this.allDeptsFor(branchId).map(d => (d.code || '').toUpperCase()));
-    return STANDARD_DEPARTMENTS
-      .filter(c => !existing.has(c.code.toUpperCase()) &&
-        (c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)))
-      .slice(0, 6);
-  }
-  /** Pick an autocomplete suggestion → create that standard department here. */
-  pickAddSuggestion(branchId: string, cat: CatalogDept) {
-    const space = this.addingDeptSpace();
-    this.cancelAddDept();
-    this.createDeptFromCatalog(branchId, cat, space);
-  }
   /** A unique 3-letter code derived from the department name (no manual entry). */
   private deriveCode(branchId: string, name: string): string {
     const letters = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
@@ -1053,9 +948,6 @@ export class BranchesComponent implements OnInit {
   createDepartment(branchId: string) {
     const name = this._deptDraft().name.trim();
     if (!name) { this.toasts.warning('Department name required'); return; }
-    // Typed an exact standard department? Use its code; else derive one.
-    const match = STANDARD_DEPARTMENTS.find(c => c.name.toLowerCase() === name.toLowerCase());
-    if (match) { this.pickAddSuggestion(branchId, match); return; }
     const code = this.deriveCode(branchId, name);
     const targetSpace = this.addingDeptSpace();
     this.api.post<Department>('/api/tenants/departments', { name, code, branchId }).subscribe({
