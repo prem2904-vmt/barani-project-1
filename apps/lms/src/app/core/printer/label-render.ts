@@ -108,8 +108,10 @@ export function renderLabelBitmap(
     const lines: { text: string; px: number; heavy: boolean; mono: boolean }[] = [];
     if (data.patientName) lines.push({ text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, px: Math.round(20 * s), heavy: true, mono: false });
     if (data.mrn) lines.push({ text: `MRN ${data.mrn}`, px: Math.round(14 * s), heavy: false, mono: true });
-    lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
+    // Dept then Sample ID (OPS-36): department reads immediately above the
+    // sample id so the label groups by dept → sample id.
     if (data.deptCode) lines.push({ text: data.deptCode, px: Math.round(15 * s), heavy: false, mono: false });
+    lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
     if (data.tube) lines.push({ text: data.tube, px: Math.round(13 * s), heavy: false, mono: false });
 
     const gap = Math.round(6 * s);

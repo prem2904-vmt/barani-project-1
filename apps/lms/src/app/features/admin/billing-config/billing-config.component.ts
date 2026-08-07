@@ -341,6 +341,16 @@ interface GstRow {
             }
           </div>
 
+          @if ((tpl().template ?? 'classic') === 'cashbill') {
+            <label class="pf-label">Print size</label>
+            <div class="flex flex-wrap gap-2 mb-4">
+              @for (p of paperSizes; track p.value) {
+                <button type="button" class="pf-tpl-chip" [class.pf-tpl-chip--on]="(tpl().paperSize ?? 'a4') === p.value"
+                        (click)="patchTpl({ paperSize: p.value })">{{ p.label }}</button>
+              }
+            </div>
+          }
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label class="pf-label">Lab name</label><input class="pf-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
             <div><label class="pf-label">GSTIN</label><input class="pf-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
@@ -596,6 +606,10 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead' },
     { value: 'cashbill', label: 'Cash Bill' },
   ];
+  readonly paperSizes: Array<{ value: 'a4' | 'thermal'; label: string }> = [
+    { value: 'a4', label: 'A4' },
+    { value: 'thermal', label: '4-inch thermal' },
+  ];
   patchTpl(p: Record<string, unknown>) { this._tpl.set({ ...this._tpl(), ...p }); }
   saveTpl() {
     this.savingTpl.set(true);
@@ -664,6 +678,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         docTitle: taxMode ? 'TAX INVOICE' : 'BILL OF SUPPLY',
         practice: { name: t.labName || 'Prefrontal Lab', address: t.address, phone: t.phone, email: t.email, gstin: t.gstin },
         template: (t.template ?? 'classic') as InvoiceTemplateStyle,
+        paperSize: (t.paperSize ?? 'a4') as 'a4' | 'thermal',
         accentColor: t.accentColor, logoDataUrl,
         qrDataUrl: qrs.qr, orderQrDataUrl: qrs.orderQr,
         tagline: t.tagline, footerText: t.footerText, bankDetails: t.bankDetails,
