@@ -1092,8 +1092,10 @@ export class ReportViewerComponent implements OnInit {
       const isCulture = t.result?.microFormat === 'culture_sensitivity';
       const hasNonGrid = !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid');
       if (isCulture || hasNonGrid) { special.push(t); continue; }
-      const g = this.buildViewGroup(t, layout);
-      if (g.rows.length > 0) tabular.push(g); else special.push(t);
+      // Keep zero-row groups in the tabular table so a pending/empty test still
+      // shows its bold panel header in its department position, rather than being
+      // sunk to the un-bold block at the bottom.
+      tabular.push(this.buildViewGroup(t, layout));
     }
 
     const claimsNabl = !!this.tpl()?.nablAccredited;

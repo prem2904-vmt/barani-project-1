@@ -541,9 +541,11 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   }
 
   // Build panel groups (panel header + its parameter rows) for the table.
+  // Keep zero-row groups: a test with a pending/empty result still renders its
+  // bold panel header in its department position, rather than being dropped
+  // (or, in the viewer, sunk to the un-bold block at the bottom).
   const groups = tabular
-    .map(t => buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined))
-    .filter(g => g.rows.length > 0);
+    .map(t => buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined));
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
   // Computed up-front so BOTH the continuous table and the grid sections lay
