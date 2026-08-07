@@ -200,6 +200,11 @@ interface ReportSnapshot {
      *  under the panel header when the template's `showMethod` is on. */
     method?: string | null;
   }>;
+  /** Per-report signatories (validating pathologist + resulting technician),
+   *  injected server-side from the users who signed off. When present, the PDF
+   *  prefers these over the admin template signature slots. Each `signatureUrl`
+   *  is a base64 data URL (already embedded — no prefetch needed). */
+  signatures?: ReportSignature[];
 }
 
 // ── Page geometry ─────────────────────────────────────────────────
@@ -463,6 +468,10 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   } : rawPractice;
 
   applyTheme(resolveTheme(template, practice));
+  // Per-report signatories (who validated / entered results) take precedence
+  // over the admin template signature slots. Their signatureUrls are embedded
+  // data URLs, so no prefetch is required.
+  if (snap.signatures && snap.signatures.length > 0) theme.signatures = snap.signatures;
 
   // Pre-printed letterpad mode: skip the rendered header + footer and reserve
   // blank top/bottom space on every page (the lab's stationery occupies it),
@@ -2274,14 +2283,17 @@ function drawSigFooterPage(
     const cx = MARGIN_X + i * colW;
     const px = cx + colW / 2;
     const baseY = sigY;
-    // Signature image upload (pre-fetched into IMG_CACHE) wins; without one
-    // we draw the faint scribble placeholder so the column still reads as
-    // a sign-off zone.
-    const cachedSig = s.signatureUrl ? IMG_CACHE[s.signatureUrl] : null;
-    if (cachedSig) {
+    // Signature image wins; without one we draw the faint scribble placeholder
+    // so the column still reads as a sign-off zone. A per-validator signature
+    // (data URL) is already embedded and used directly; template-configured
+    // upload URLs come pre-fetched from IMG_CACHE.
+    const sigSrc = s.signatureUrl
+      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
+      : null;
+    if (sigSrc) {
       try {
         const sigW = 70, sigH = 24;
-        doc.addImage(cachedSig, 'PNG', px - sigW / 2, baseY - sigH + 4, sigW, sigH, undefined, 'FAST');
+        doc.addImage(sigSrc, 'PNG', px - sigW / 2, baseY - sigH + 4, sigW, sigH, undefined, 'FAST');
       } catch {
         drawSigScribble(doc, px, baseY);
       }

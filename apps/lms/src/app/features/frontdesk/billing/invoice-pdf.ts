@@ -385,10 +385,10 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
 
   const payments = (bill.payments ?? []).map(p => ({
     label: (p.mode || 'PAID').toUpperCase(),
-    amount: p.amount.toFixed(2),
+    amount: plain(p.amount),  // same comma-grouped format as the totals column
     ref: p.referenceNo ? `(${p.referenceNo})` : '',
   }));
-  if (payments.length === 0 && bill.totalPaid > 0) payments.push({ label: 'PAID', amount: bill.totalPaid.toFixed(2), ref: '' });
+  if (payments.length === 0 && bill.totalPaid > 0) payments.push({ label: 'PAID', amount: plain(bill.totalPaid), ref: '' });
 
   const isPaid = bill.balance <= 0;
   return {
@@ -504,10 +504,13 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   doc.text('Mode of Payment', MARGIN, y);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(CB_INK);
   let py = y + 15;
-  const payAmtX = MARGIN + 150; // right edge the payment amounts align to
+  const payColonX = MARGIN + 66;    // aligned colon, mirroring the totals column
+  const payAmtX = MARGIN + 150;     // right edge the payment amounts align to
   if (m.payments.length > 0) {
     for (const p of m.payments) {
+      // "CASH : 10,240" — label, aligned colon, right-aligned amount (matches Total).
       doc.text(p.label, MARGIN, py);
+      doc.text(':', payColonX, py);
       doc.text(p.amount, payAmtX, py, { align: 'right' });
       if (p.ref) { doc.setTextColor(CB_GREY); doc.text(p.ref, payAmtX + 6, py); doc.setTextColor(CB_INK); }
       py += 14;
@@ -657,7 +660,7 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   doc.setFont('helvetica', 'normal');
   if (m.payments.length > 0) {
     for (const p of m.payments) {
-      doc.text(`${p.label}${p.ref ? ' ' + p.ref : ''}`, MG, y);
+      doc.text(`${p.label} :${p.ref ? ' ' + p.ref : ''}`, MG, y);
       doc.text(p.amount, rightX, y, { align: 'right' });
       y += 13;
     }

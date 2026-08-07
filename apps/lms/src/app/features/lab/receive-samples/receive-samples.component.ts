@@ -332,7 +332,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                           @if (g.notReadyCount > 0) {
                             <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
                           }
-                          @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                          @if (g.testLabels.length > 0) {
+                            <button type="button" (click)="toggleTests(g.orderId, $event)" [attr.aria-expanded]="testsOpen(g.orderId)"
+                                    class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md align-middle"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.22)); color: var(--text-secondary); font-size: 10.5px; font-weight: 600;">
+                              Tests ({{ g.testLabels.length }})
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                                   stroke-linecap="round" stroke-linejoin="round" style="transition: transform .15s ease;"
+                                   [style.transform]="testsOpen(g.orderId) ? 'rotate(90deg)' : 'none'"><path d="M9 6l6 6-6 6"/></svg>
+                            </button>
+                          }
                         </p>
                         } @else {
                         <!-- Sample-focused: this order groups several tubes with no
@@ -352,8 +361,25 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                           @if (g.notReadyCount > 0) {
                             <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
                           }
-                          @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                          @if (g.testLabels.length > 0) {
+                            <button type="button" (click)="toggleTests(g.orderId, $event)" [attr.aria-expanded]="testsOpen(g.orderId)"
+                                    class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md align-middle"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.22)); color: var(--text-secondary); font-size: 10.5px; font-weight: 600;">
+                              Tests ({{ g.testLabels.length }})
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                                   stroke-linecap="round" stroke-linejoin="round" style="transition: transform .15s ease;"
+                                   [style.transform]="testsOpen(g.orderId) ? 'rotate(90deg)' : 'none'"><path d="M9 6l6 6-6 6"/></svg>
+                            </button>
+                          }
                         </p>
+                        }
+                        @if (testsOpen(g.orderId) && g.testLabels.length > 0) {
+                          <div class="mt-1.5 flex flex-wrap gap-1.5">
+                            @for (lbl of g.testLabels; track lbl) {
+                              <span class="px-2 py-0.5 rounded-md text-[11px]"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.18)); color: var(--text-secondary);">{{ lbl }}</span>
+                            }
+                          </div>
                         }
                       </div>
                     </div>
@@ -1125,7 +1151,9 @@ export class ReceiveSamplesComponent implements OnInit {
     });
   }
 
-  /** Dedup test names across all the order's samples for the meta line. */
+  /** Dedup test names across all the order's samples. The full list is revealed
+   *  behind the per-row "Tests (N)" peek, so we no longer cap it — a long order
+   *  no longer bloats the collapsed row. */
   private uniqueTestNames(o: Order): string[] {
     const names = new Set<string>();
     for (const s of o.samples ?? []) {
@@ -1134,7 +1162,17 @@ export class ReceiveSamplesComponent implements OnInit {
         if (n) names.add(n);
       }
     }
-    return Array.from(names).slice(0, 4);
+    return Array.from(names);
+  }
+
+  /** Per-order "peek" toggle: which rows have their test list expanded. */
+  private readonly _testsOpen = signal<Set<string>>(new Set());
+  testsOpen(orderId: string): boolean { return this._testsOpen().has(orderId); }
+  toggleTests(orderId: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this._testsOpen());
+    next.has(orderId) ? next.delete(orderId) : next.add(orderId);
+    this._testsOpen.set(next);
   }
 
   isSelected(id: string): boolean { return this._selectedIds().has(id); }
