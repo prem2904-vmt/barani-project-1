@@ -474,6 +474,9 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
     bodyStyles: { fillColor: '#ffffff' },
     columnStyles: { 0: { cellWidth: 48, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 96, halign: 'right' } },
+    // Right-align the "Amount" header too so it sits directly above the values
+    // (autoTable leaves head cells left-aligned even when the column is right).
+    didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7); doc.line(MARGIN, y, rightX, y);
@@ -631,6 +634,7 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
     styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 3, right: 3, bottom: 3, left: 3 }, textColor: CB_INK, lineWidth: 0 },
     headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 8, lineColor: CB_RULE, lineWidth: { top: 0.6, right: 0, bottom: 0.6, left: 0 } as unknown as number },
     columnStyles: { 0: { cellWidth: 20, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 58, halign: 'right' } },
+    didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
