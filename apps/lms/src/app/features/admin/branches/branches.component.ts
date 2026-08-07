@@ -300,10 +300,12 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
                       </div>
                     </div>
 
-                    <!-- Unassigned lane -->
+                    <!-- Default "Lab" lane — departments not moved into a specific
+                         space live here (they share the "LAB" sample prefix and a
+                         single Lab space). -->
                     <div class="pf-lane">
                       <div class="pf-lane-hdr">
-                        <span class="pf-lane-name">Unassigned</span>
+                        <span class="pf-lane-name">Lab (default)</span>
                         <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
                       </div>
                       <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"
@@ -316,7 +318,7 @@ const STANDARD_DEPARTMENTS: CatalogDept[] = [
                             <span class="pf-dcard-code">{{ d.code }}</span>
                             <button type="button" class="pf-dcard-toggle" (click)="toggleDeptActive(d)">{{ d.isActive ? 'Deactivate' : 'Reactivate' }}</button>
                           </div>
-                        } @empty { <p class="pf-lane-empty">No unassigned departments</p> }
+                        } @empty { <p class="pf-lane-empty">No departments in the default Lab space</p> }
                       </div>
                       @if (isAddingInLane(b.id, null)) {
                         <div class="pf-lane-add">
