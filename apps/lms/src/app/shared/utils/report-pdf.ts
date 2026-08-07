@@ -1433,6 +1433,27 @@ interface PanelRowData {
   isLow?: boolean;
   abnormal?: boolean;
   note?: string;
+  /** Admin-configured conditional row colour (engine palette hex) — painted
+   *  verbatim on the result cell; NOT gated by the theme's flagStyle. */
+  color?: string | null;
+  /** Admin-configured conditional bold (condition `then.bold`). */
+  bold?: boolean;
+  /** Text-typed cell values keyed by column name (e.g. description) so the
+   *  columnar renderer can fill admin text columns instead of leaving them
+   *  permanently blank. */
+  texts?: Record<string, string>;
+}
+
+/** Classify an engine row colour: the per-test layout conditions emit
+ *  red #C0392B (abnormal-high), orange #E87722 (warn) and green #1D9E75
+ *  (explicit normal). Green must never read as abnormal. */
+function colorSeverity(hex: string | null | undefined): 'high' | 'warn' | 'normal' | null {
+  const c = (hex ?? '').toLowerCase();
+  if (!c) return null;
+  if (c.includes('c0392b') || c.includes('dc26') || c.includes('ef44') || c.includes('b91c') || c.includes('red')) return 'high';
+  if (c.includes('e87722') || c.includes('f97316') || c.includes('orange')) return 'warn';
+  if (c.includes('1d9e75') || c.includes('16a34a') || c.includes('22c55e') || c.includes('green')) return 'normal';
+  return null;
 }
 
 interface PanelGroup {
@@ -1482,18 +1503,38 @@ function buildPanelGroup(
         }
         const label = flagLabel(r);
         const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
-        const letter = (label === 'High' ? 'H' : label === 'Low' ? 'L' : '') || rc.flag;
+        // Only real abnormality letters print — 'N' (normal) must never leak
+        // onto the row ("92 mg/dL N"). Same whitelist as the legacy path.
+        const letter = (label === 'High' ? 'H' : label === 'Low' ? 'L' : '')
+          || (['H', 'L', 'C', 'A'].includes(rc.flag) ? rc.flag : '');
+        const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
+        // Admin colour semantics: red/orange = abnormal; green is an explicit
+        // "normal" marker and must NOT trip the abnormal styling.
+        const sev = colorSeverity(r.color);
+        // Collect the admin's text-typed cells (description etc.) so the
+        // columnar renderer can print them.
+        const texts: Record<string, string> = {};
+        for (const c of cols) {
+          if (c.type !== 'text') continue;
+          const cellVal = coerceCellText(r.cells[c.name]);
+          if (cellVal) texts[c.name] = cellVal;
+        }
         group.rows.push({
           kind: 'param',
           name: humanize(r.parameterName ?? ''),
-          result: rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : ''),
+          result: resultText,
           range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
           // Prefer the Unit column when present; otherwise fall back to the
-          // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL").
-          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '') || (r.unit ?? ''),
+          // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL")
+          // — but never grow a unit onto a qualitative result ("Normal mg/dL").
+          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '')
+            || (looksNumeric(resultText) ? (r.unit ?? '') : ''),
           flag: letter,
           isLow: letter === 'L',
-          abnormal: !!r.color || (!!rc.flag && rc.flag !== 'N'),
+          abnormal: sev === 'high' || sev === 'warn' || !!letter,
+          color: r.color ?? null,
+          bold: !!r.isBold,
+          texts: Object.keys(texts).length ? texts : undefined,
         });
       }
     }
@@ -1704,7 +1745,8 @@ function renderColumnarTable(
           // is never blank when the parameter name is missing.
           case 'name':   return (r.name ?? '').trim() || g.testName;
           case 'result': return (r.result ?? '').trim();
-          case 'unit':   return (r.unit ?? '').trim();
+          // Never grow a unit onto a qualitative result ("Normal mg/dL").
+          case 'unit':   return looksNumeric(r.result) ? (r.unit ?? '').trim() : '';
           case 'range':  return (r.range ?? '').trim();
           case 'flag':   return (r.flag ?? '').trim();
           case 'text':
@@ -1712,9 +1754,17 @@ function renderColumnarTable(
             if (m.locked) return (m.lockedValue ?? '').trim();
             // A 'specimen' text column shows the group's specimen once.
             if (m.name === 'specimen') return isFirst ? (g.specimen ?? '').trim() : '';
-            return '';
+            // Admin text cells (e.g. Description) resolved by the layout engine.
+            return (r.texts?.[m.name] ?? '').trim();
         }
       };
+
+      // Explicit admin row colour (condition chips) paints the ACTUAL hex on
+      // the result cell — not gated by the theme's flagStyle, because the
+      // admin chose it per-row on purpose. Green (= explicit normal) never
+      // colours or bolds anything.
+      const rowSev = colorSeverity(r.color);
+      const adminColor = (rowSev === 'high' || rowSev === 'warn') ? (r.color as string) : null;
 
       const cells: Cell[] = vcols.map(vc => {
         let txt = vc.members.map(valueOf).filter(Boolean).join(' ');
@@ -1728,7 +1778,10 @@ function renderColumnarTable(
             styles['fontStyle'] = 'bold';
             if (theme.flagStyle === 'bold_color') styles['textColor'] = abnColor;
           }
+          if (adminColor) { styles['textColor'] = adminColor; styles['fontStyle'] = 'bold'; }
         }
+        // Conditional bold (condition `then.bold`) — bolds name + result.
+        if (r.bold && (vc.nameOnly || vc.hasResult)) styles['fontStyle'] = 'bold';
         return { content: txt, styles };
       });
       body.push(cells);
@@ -1838,30 +1891,64 @@ function renderGridSection(
   const rows = sec.rows ?? [];
   if (rows.length === 0) return startY;
   const bodyRows = rows.filter(r => !r.isMerged);
+  let y = startY;
 
-  // Lay this test out against the report-wide CANONICAL columns (set in
-  // buildReportPdf) so every test's table lines up. Investigation (the parameter
-  // name) is always the leading column and the typed columns + widths are
-  // identical for every test; the test's own layout only tells us WHICH of its
-  // columns supplies the value for each canonical type.
-  const canon = CANON_COLS;
-  const srcOf = (type: string): ReportColumn | undefined => layout.columns.find(c => c.type === type);
+  // Section label — the admin names sections in the layout editor ("Results",
+  // "Differential count"…); the preview shows it, so the PDF must too.
+  const secLabel = (sec.label ?? '').trim();
+  if (secLabel) {
+    doc.setFont(PDF_FONT, 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(secLabel.toUpperCase(), MARGIN_X, y + 8);
+    y += 12;
+  }
+
+  // Lay the table out against the TEST'S OWN resolved columns — the admin's
+  // per-department config (order, labels, widths, linked columns, text columns)
+  // is authoritative, exactly like the continuous table. A leading
+  // Investigation (name) column is synthesized when the layout has none.
+  const cfgCols = applyDefaultResultUnitLink(
+    (layout.columns?.length ? layout.columns : DEFAULT_RESULT_COLUMNS)
+      .slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  );
+  const hasNameCol = cfgCols.some(c => c.type === 'name');
+
+  // Merge linkedNext runs into virtual columns (same rules as the continuous
+  // table: the run keeps the first member's label; widths add up).
+  type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; isName: boolean };
+  const vcols: VCol[] = [];
+  for (let i = 0; i < cfgCols.length; i++) {
+    const members: ReportColumn[] = [cfgCols[i]];
+    while (cfgCols[i]?.linkedNext && i + 1 < cfgCols.length) { members.push(cfgCols[++i]); }
+    vcols.push({
+      members,
+      label: members[0].label || '',
+      weight: members.reduce((s, m) => s + (m.width || 0), 0) || 1,
+      hasResult: members.some(m => m.type === 'result'),
+      isName: members.every(m => m.type === 'name'),
+    });
+  }
+  if (!hasNameCol) {
+    vcols.unshift({
+      members: [{ id: 'g-name', name: 'name', label: 'Investigation', order: 0, width: 34, type: 'name', locked: false }],
+      label: 'Investigation', weight: 34, hasResult: false, isName: true,
+    });
+  }
 
   const usable = A4.w - 2 * MARGIN_X;
-  const investWidth = 0.34 * usable;
-  const remaining = usable - investWidth;
-  const RATIO: Record<string, number> = { result: 30, range: 42, unit: 28 };
-  const totalRatio = canon.reduce((s, c) => s + (RATIO[c.type] ?? 25), 0) || 1;
-  const dataColWidths = canon.map(c => ((RATIO[c.type] ?? 25) / totalRatio) * remaining);
+  const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
+  const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
+  const totalCols = vcols.length;
 
-  // ── Build head + body against the canonical columns ──
   type RowCell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
-  const head: RowCell[][] = [[
-    { content: 'Investigation', styles: { halign: 'left' as const } },
-    ...canon.map(c => ({ content: c.label, styles: { halign: alignFor(c.type) as 'left' | 'right' | 'center' } })),
-  ]];
+  const head: RowCell[][] = [
+    vcols.map(c => ({
+      content: c.label,
+      styles: { halign: alignFor(c.members[0].type) as 'left' | 'right' | 'center' },
+    })),
+  ];
 
-  const totalCols = 1 + canon.length;
   // Prefer the snapshot's sampleType; fall back to the layout's.
   const sampleTypeLine = ((t.sampleType ?? layout.sampleType) ?? '').trim();
 
@@ -1873,52 +1960,68 @@ function renderGridSection(
         styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'center', fontSize: 8.5 },
       }];
     }
-    // Bold parameter name + (only on the first non-merged row) the sample-type sub-line.
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
     const paramTitle = humanize(r.parameterName ?? '');
-    const investContent = isFirstBodyRow && sampleTypeLine
-      ? `${paramTitle}\n${sampleTypeLine}`
-      : paramTitle;
-    const investCell: RowCell = { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK, fontSize: 9 } };
+    const resultCol = cfgCols.find(c => c.type === 'result');
+    const resultText = resultCol ? coerceCellText(r.cells[resultCol.name]) : '';
+    // Engine condition colour: red/orange abnormal paints the row; green is an
+    // explicit normal marker — never coloured.
+    const sev = colorSeverity(r.color);
+    const rowColor = (sev === 'high' || sev === 'warn') ? (r.color as string) : null;
 
-    const dataCells: RowCell[] = canon.map(c => {
-      const src = srcOf(c.type);
-      // Unwrap an enriched value-object cell ({value,flag,…}) to its text so
-      // the PDF never prints raw JSON.
-      const value = src ? coerceCellText(r.cells[src.name]) : '';
-      const styles: Record<string, unknown> = {};
-      if (c.type === 'result') {
-        // The value is the focal point: bold, coloured red(high)/blue(low) by the
-        // engine, with an inline "High"/"Low" tag (Drlogy pattern).
-        styles['fontStyle'] = 'bold';
-        styles['textColor'] = r.color ?? BLACK;
-        if (r.color) {
-          const tag = flagLabel(r);
-          if (tag) return { content: `${value}    ${tag}`, styles };
+    const cellValue = (m: ReportColumn): string => {
+      switch (m.type) {
+        case 'name':
+          return isFirstBodyRow && sampleTypeLine ? `${paramTitle}\n${sampleTypeLine}` : paramTitle;
+        case 'result': return resultText;
+        // The row's own unit cell wins; the parameter unit is the fallback,
+        // but never onto a qualitative result ("Normal mg/dL").
+        case 'unit': {
+          const cell = coerceCellText(r.cells[m.name]);
+          return cell || (looksNumeric(resultText) ? (r.unit ?? '') : '');
         }
-        return { content: value, styles };
+        case 'flag': return '';
+        case 'range':
+        case 'text':
+        default:
+          if (m.locked && m.lockedValue) return m.lockedValue;
+          return coerceCellText(r.cells[m.name]);
       }
-      // Reference range + unit muted so the result value stands out.
-      styles['textColor'] = TEXT_DIM;
-      return { content: value, styles };
+    };
+
+    return vcols.map(vc => {
+      const txt = vc.members.map(cellValue).filter(Boolean).join(' ');
+      const styles: Record<string, unknown> = { halign: alignFor(vc.members[0].type) };
+      if (vc.isName) { styles['fontStyle'] = 'bold'; styles['textColor'] = rowColor ?? BLACK; styles['fontSize'] = 9; }
+      else if (vc.hasResult) {
+        styles['fontStyle'] = 'bold';
+        styles['textColor'] = rowColor ?? BLACK;
+        if (rowColor) {
+          const tag = flagLabel(r);
+          if (tag) return { content: `${txt}    ${tag}`, styles };
+        }
+      } else {
+        // Range / unit / text muted so the result stands out — but an
+        // abnormal row's colour carries across the whole row.
+        styles['textColor'] = rowColor ?? TEXT_DIM;
+      }
+      if (r.isBold) styles['fontStyle'] = 'bold';
+      return { content: txt, styles };
     });
-    return [investCell, ...dataCells];
   });
 
   const columnStyles: Record<number, { cellWidth: number; halign?: string }> = {};
-  let idx = 0;
-  columnStyles[idx++] = { cellWidth: investWidth, halign: 'left' };
-  canon.forEach((c, i) => { columnStyles[idx++] = { cellWidth: dataColWidths[i], halign: alignFor(c.type) }; });
+  vcols.forEach((c, i) => { columnStyles[i] = { cellWidth: colWidths[i], halign: alignFor(c.members[0].type) }; });
 
   autoTable(doc, {
-    startY,
+    startY: y,
     head: head as unknown as Array<Array<string | RowCell>>,
     body: body as unknown as Array<Array<string | RowCell>>,
     margin: { left: MARGIN_X, right: MARGIN_X },
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
-    bodyStyles: { fillColor: theme.tableHeaderBg === '#ffffff' ? '#ffffff' : '#ffffff' },
+    bodyStyles: { fillColor: '#ffffff' },
     alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
     columnStyles: columnStyles as unknown as Record<number, { cellWidth: number }>,
   });
@@ -2535,10 +2638,20 @@ function coerceCellText(raw: unknown): string {
 
 function flagLabel(r: ResolvedRow): string {
   if (!r.color) return '';
+  // The layout engine's condition palette is red #C0392B / orange #E87722 /
+  // green #1D9E75 — colorSeverity understands those AND the legacy theme hexes.
+  const sev = colorSeverity(r.color);
+  if (sev === 'high' || sev === 'warn') return 'High';
   const c = r.color.toLowerCase();
-  if (c.includes('dc26') || c.includes('ef44') || c.includes('red') || c.includes('b91c')) return 'High';
   if (c.includes('2563') || c.includes('3b82') || c.includes('blue')) return 'Low';
   return '';
+}
+
+/** True when a result reads as a number ("92", "<0.5", "5.2", "-3", "≈7") —
+ *  used to decide whether appending the unit makes sense. Qualitative results
+ *  ("Normal", "Reactive", "Present") must never grow a unit. */
+function looksNumeric(result: string | null | undefined): boolean {
+  return /^[<>≈~=]?\s*-?[\d.]/.test((result ?? '').trim());
 }
 
 function zoneHexForPdf(token: string): string {
