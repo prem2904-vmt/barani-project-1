@@ -518,7 +518,6 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
       doc.text(p.label, MARGIN, py);
       doc.text(':', payColonX, py);
       doc.text(p.amount, payAmtX, py, { align: 'right' });
-      if (p.ref) { doc.setTextColor(CB_GREY); doc.text(p.ref, payAmtX + 6, py); doc.setTextColor(CB_INK); }
       py += 14;
     }
   } else {
@@ -535,12 +534,14 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     ty += 17;
   };
   // One continuous vertical stack — every amount right-aligned to the same
-  // edge, top to bottom: Total (gross) → Discount → Net Payable → Collected →
-  // Amount Paid / Due (divider above, emphasised).
+  // edge: Total (gross) → Discount → Net Payable (only when a discount makes it
+  // differ from Total) → Amount Paid / Due (divider above, emphasised). No
+  // "Collected Amount" row — Amount Paid already states what was settled.
   tot('Total', m.grossTotal);
-  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
-  tot('Net Payable', m.netPayable, true);
-  tot('Collected Amount', m.collected);
+  if (m.hasDiscount) {
+    tot('Discount', `- ${m.discount}`, false, '#166534');
+    tot('Net Payable', m.netPayable, true);
+  }
   ty += 2;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(tLabelX, ty, rightX, ty); ty += 15;
   tot(m.paidOrDueLabel, m.paidOrDueAmount, true);
@@ -597,7 +598,7 @@ function estimateThermalHeight(input: InvoicePdfInput): number {
   h += (5 + (m.referredBy ? 1 : 0)) * 13 + 8;    // meta rows
   h += (m.items.length + 1) * 15 + 10;           // items head + rows + rule
   h += 14 + Math.max(1, m.payments.length) * 13; // mode of payment
-  h += (3 + (m.hasDiscount ? 1 : 0)) * 14 + 4;   // totals
+  h += (1 + (m.hasDiscount ? 2 : 0)) * 14 + 4;   // totals (Total [+ Discount + Net Payable])
   h += 28;                                       // amount in words (~2 lines)
   h += 22;                                       // paid/due
   h += 26;                                       // cashier
@@ -668,14 +669,14 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   doc.setFont('helvetica', 'normal');
   if (m.payments.length > 0) {
     for (const p of m.payments) {
-      doc.text(`${p.label} :${p.ref ? ' ' + p.ref : ''}`, MG, y);
+      doc.text(`${p.label} :`, MG, y);
       doc.text(p.amount, rightX, y, { align: 'right' });
       y += 13;
     }
   } else { doc.text('—', MG, y); y += 13; }
   y += 2;
 
-  // ── Totals: Total (gross) → Discount → Net Payable → Collected ──
+  // ── Totals: Total (gross) → Discount → Net Payable (only with a discount) ──
   const tot = (label: string, value: string, bold = false, color = CB_INK) => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 9.5 : 8.5); doc.setTextColor(color);
     doc.text(label, MG, y);
@@ -683,9 +684,10 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
     y += 14;
   };
   tot('Total', m.grossTotal);
-  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
-  tot('Net Payable', m.netPayable, true);
-  tot('Collected Amount', m.collected);
+  if (m.hasDiscount) {
+    tot('Discount', `- ${m.discount}`, false, '#166534');
+    tot('Net Payable', m.netPayable, true);
+  }
   // Amount Paid / Due — same stack, divider above.
   y += 2;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
