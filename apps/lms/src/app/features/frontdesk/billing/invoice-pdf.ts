@@ -365,7 +365,7 @@ interface CashBillModel {
   items: { sno: string; name: string; amount: string }[];
   payments: { label: string; amount: string; ref: string }[];
   grossTotal: string; discount: string; hasDiscount: boolean;
-  netPayable: string; collected: string;
+  netPayable: string; collected: string; isCredit: boolean;
   isPaid: boolean; paidOrDueLabel: string; paidOrDueAmount: string;
   amountWords: string;
 }
@@ -393,6 +393,13 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   }));
   if (payments.length === 0 && bill.totalPaid > 0) payments.push({ label: 'PAID', amount: plain(bill.totalPaid), ref: '' });
 
+  // Credit bills (paid from the patient's wallet / on credit) suppress the
+  // Net Payable + Collected Amount rows; cash and every other mode keep them.
+  const isCredit = (bill.payments ?? []).some(p => {
+    const mode = (p.mode || '').toLowerCase();
+    return mode === 'wallet' || mode === 'credit';
+  });
+
   const isPaid = bill.balance <= 0;
   return {
     patientName,
@@ -408,6 +415,7 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
     hasDiscount: discountNum > 0,
     netPayable: plain(effectivePayable),
     collected: plain(bill.totalPaid),
+    isCredit,
     isPaid,
     paidOrDueLabel: isPaid ? 'Amount Paid' : 'Due Amount',
     paidOrDueAmount: plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)),
@@ -534,13 +542,15 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     ty += 17;
   };
   // One continuous vertical stack — every amount right-aligned to the same
-  // edge: Total (gross) → Discount → Net Payable (only when a discount makes it
-  // differ from Total) → Amount Paid / Due (divider above, emphasised). No
-  // "Collected Amount" row — Amount Paid already states what was settled.
+  // edge: Total (gross) → Discount → Net Payable → Collected → Amount Paid / Due
+  // (divider above, emphasised). Credit bills drop Net Payable + Collected
+  // Amount (redundant/confusing for a credit sale); cash + every other mode
+  // keep the full stack.
   tot('Total', m.grossTotal);
-  if (m.hasDiscount) {
-    tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
+    tot('Collected Amount', m.collected);
   }
   ty += 2;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(tLabelX, ty, rightX, ty); ty += 15;
@@ -598,7 +608,7 @@ function estimateThermalHeight(input: InvoicePdfInput): number {
   h += (5 + (m.referredBy ? 1 : 0)) * 13 + 8;    // meta rows
   h += (m.items.length + 1) * 15 + 10;           // items head + rows + rule
   h += 14 + Math.max(1, m.payments.length) * 13; // mode of payment
-  h += (1 + (m.hasDiscount ? 2 : 0)) * 14 + 4;   // totals (Total [+ Discount + Net Payable])
+  h += (1 + (m.hasDiscount ? 1 : 0) + (m.isCredit ? 0 : 2)) * 14 + 4; // totals
   h += 28;                                       // amount in words (~2 lines)
   h += 22;                                       // paid/due
   h += 26;                                       // cashier
@@ -676,7 +686,8 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   } else { doc.text('—', MG, y); y += 13; }
   y += 2;
 
-  // ── Totals: Total (gross) → Discount → Net Payable (only with a discount) ──
+  // ── Totals: Total → Discount → Net Payable → Collected (Net Payable +
+  //    Collected dropped on credit bills only) ──
   const tot = (label: string, value: string, bold = false, color = CB_INK) => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 9.5 : 8.5); doc.setTextColor(color);
     doc.text(label, MG, y);
@@ -684,9 +695,10 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
     y += 14;
   };
   tot('Total', m.grossTotal);
-  if (m.hasDiscount) {
-    tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
+    tot('Collected Amount', m.collected);
   }
   // Amount Paid / Due — same stack, divider above.
   y += 2;

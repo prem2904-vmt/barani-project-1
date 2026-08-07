@@ -51,6 +51,9 @@ export class BranchLabConfigService {
   readonly queueFocus = computed<'patient' | 'sample'>(() => this._config()?.effectiveQueueFocus ?? 'patient');
   /** True when this branch's queues are sample-focused (rows keyed by Sample ID). */
   readonly sampleFocused = computed<boolean>(() => this.queueFocus() === 'sample');
+  /** True for a standalone lab (departments run as separate labs) → show the
+   *  department on lab tubes. An integrated lab (the default) hides it. */
+  readonly standaloneLab = computed<boolean>(() => this._config()?.labStructure === 'standalone');
 
   ensureLoaded(): void {
     if (this._loaded() || this._loading) return;

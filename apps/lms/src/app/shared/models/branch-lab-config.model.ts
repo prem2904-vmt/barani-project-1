@@ -29,6 +29,12 @@ export interface BranchLabConfig {
    *  'auto' resolves to 'sample' when the branch has 2+ lab spaces, else
    *  'patient'. Read this on the queue screens (not queueFocusMode). */
   effectiveQueueFocus?: 'patient' | 'sample';
+  /** Sample-ID prefix for departments in the default "Lab" space (no dedicated
+   *  space). Null → falls back to "LAB". Editable on the Branches board. */
+  defaultLabCode?: string | null;
+  /** Branch lab structure, copied from the branch: 'integrated' (all departments
+   *  run as one lab) hides the department on lab tubes; 'standalone' shows it. */
+  labStructure?: 'integrated' | 'standalone' | string | null;
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

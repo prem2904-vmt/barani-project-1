@@ -512,7 +512,9 @@ interface OrderGroup {
 
                 <div class="pf-tube__body">
                   <p class="pf-tube__label">{{ tube(s).label }}</p>
-                  <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
+                  @if (showTubeDept()) {
+                    <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
+                  }
 
                   @if (s.tests.length > 0 && drawVolume(s); as vol) {
                     <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
@@ -1838,6 +1840,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly printer = inject(PrinterService);
   private readonly printConfig = inject(PrintConfigService);
   private readonly labCfg = inject(BranchLabConfigService);
+  /** Show the department on a tube only for standalone labs; an integrated lab
+   *  (all departments run as one lab) hides it. (Cortex OPS-37) */
+  protected readonly showTubeDept = computed(() => this.labCfg.standaloneLab());
   private readonly dialog = inject(DialogService);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly scan = inject(ScanService);
