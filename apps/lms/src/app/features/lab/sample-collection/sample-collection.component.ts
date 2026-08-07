@@ -640,6 +640,19 @@ interface OrderGroup {
             }
           </div>
         </div>
+
+        <!-- Hold-to-peek popover — a child of .pf-drawer (which is a z-index
+             stacking context) so it always paints above the collect content.
+             Shown while a vial is held; hidden on release. -->
+        @if (peekId()) {
+          <div class="pf-tube__peekpop" (click)="$event.stopPropagation()"
+               [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
+            <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
+            <ul>
+              @for (n of peekTests(); track n) { <li>{{ n }}</li> }
+            </ul>
+          </div>
+        }
       </div>
     }
 
@@ -685,18 +698,6 @@ interface OrderGroup {
       </div>
     }
 
-    <!-- Tap-to-peek popover — rendered at the template root (outside the
-         drawer's containing block) so fixed positioning is viewport-relative
-         and never clipped. The backdrop closes it and blocks the collect tap. -->
-    @if (peekId()) {
-      <div class="pf-peek-backdrop" (click)="peekClose($event)" (pointerdown)="swallow($event)"></div>
-      <div class="pf-tube__peekpop" [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
-        <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
-        <ul>
-          @for (n of peekTests(); track n) { <li>{{ n }}</li> }
-        </ul>
-      </div>
-    }
   `,
   styles: [`
     /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
@@ -1150,11 +1151,11 @@ interface OrderGroup {
       color: var(--text-muted);
       pointer-events: none;
     }
-    /* Full-screen backdrop that closes the popover and blocks the collect tap. */
-    .pf-peek-backdrop { position: fixed; inset: 0; z-index: 1190; background: transparent; }
-    /* Floating peek popover (fixed, viewport-relative, above the drawer). */
+    /* Floating peek popover — a child of the drawer's own stacking context, so
+       a high local z-index keeps it above the collect content. Fixed = viewport
+       positioned (the drawer has no transform). */
     .pf-tube__peekpop {
-      position: fixed; z-index: 1200;
+      position: fixed; z-index: 100;
       width: 260px; max-height: 52vh; overflow-y: auto;
       padding: 12px 14px; border-radius: 12px;
       background: var(--bg-elevated, #0f172a);
@@ -2150,9 +2151,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (ev.button != null && ev.button !== 0) return; // primary / touch only
     this._longPressFired = false;
     this._downX = ev.clientX; this._downY = ev.clientY;
+    // Float the popover beside the vial (right, or left if no room) so the
+    // holding finger never covers it.
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = Math.max(8, Math.min(r.left + 12, window.innerWidth - 268));
-    const y = Math.min(r.top + 44, window.innerHeight - 260);
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
     const tests = (s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n);
     this.clearPress();
     this.holdingId.set(s.id); // start the hold-progress fill
@@ -2161,7 +2167,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.holdingId.set(null);
       this.peekPos.set({ x, y });
       this.peekTests.set(tests);
-      this.peekId.set(s.id);
+      this.peekId.set(s.id);   // popover shows while held
     }, SampleCollectionComponent.HOLD_MS);
   }
   onVialMove(ev: PointerEvent): void {
@@ -2173,6 +2179,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private clearPress(): void {
     if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
     this.holdingId.set(null);
+    this.peekId.set(null); // release hides the peek
   }
 
   /** The vial's click: suppress it when a long-press just peeked, otherwise
@@ -2181,9 +2188,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._longPressFired) { this._longPressFired = false; ev.preventDefault(); ev.stopPropagation(); return; }
     this.toggleCollected(s);
   }
-
-  peekClose(ev?: Event): void { ev?.stopPropagation(); this.peekId.set(null); }
-  swallow(ev: Event): void { ev.stopPropagation(); ev.preventDefault(); }
 
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a
