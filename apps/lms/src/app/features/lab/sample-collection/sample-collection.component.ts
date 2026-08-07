@@ -302,12 +302,14 @@ interface OrderGroup {
 
           <div class="pf-drawer__tubes">
             @for (s of g.samples; track s.id) {
-              <!-- A div (not <button>) so the "See tests" peek chip can nest as a
-                   real clickable without an invalid button-in-button (which made
-                   a peek tap collect the vial). -->
+              <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
+                   list (a floating popover). A div, not <button>, so the hold /
+                   pointer handling is clean. -->
               <div class="pf-tube" role="button" tabindex="0"
                    [class.pf-tube--done]="s.status !== 'pending'"
-                   (click)="toggleCollected(s)" (keydown.enter)="toggleCollected(s)">
+                   (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
+                   (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
+                   (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
                 @if (container(s).kind === 'urine_cup') {
                   <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
                        screw-cap lid, amber fill. -->
@@ -518,17 +520,9 @@ interface OrderGroup {
 
                   @if (s.tests.length > 0) {
                     <!-- Test list is hidden so a many-test tube (e.g. a 25-analyte
-                         SST) doesn't blow the column height. The vial is a tap-to-
-                         collect target, so tests are peeked by press-and-hold (a
-                         floating popover) — a tap here never collects. -->
-                    <button type="button" class="pf-tube__peek" (click)="peekToggle(s, $event)"
-                            [class.pf-tube__peek--on]="peekId() === s.id">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                           stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
-                      </svg>
-                      See {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}
-                    </button>
+                         SST) doesn't blow the column height; hold the vial ~2s to
+                         peek it. This is just a hint (pointer-events: none). -->
+                    <p class="pf-tube__hint">Hold to see {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}</p>
                     @if (drawVolume(s); as vol) {
                       <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
                     }
@@ -1035,6 +1029,7 @@ interface OrderGroup {
       overflow: hidden;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none; /* no iOS callout during the 2s hold-to-peek */
     }
     /* Send every click through to the button itself. Without this, a tap on
      * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
@@ -1133,25 +1128,13 @@ interface OrderGroup {
       text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
       opacity: 0.85;
     }
-    /* Tap-to-peek chip — opens the floating test list; the tap never collects
-       the vial (its click is swallowed). */
-    .pf-tube__peek {
-      appearance: none; -webkit-appearance: none; font-family: inherit;
-      margin-top: 10px;
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 11px; border-radius: 8px;
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
-      color: var(--text-secondary);
-      background: var(--glass-bg, rgba(255,255,255,0.05));
-      border: 1px solid var(--glass-border, rgba(148,163,184,0.22));
-      cursor: pointer; user-select: none; -webkit-user-select: none;
-      transition: background .12s ease, border-color .12s ease;
-    }
-    .pf-tube__peek:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.09)); }
-    .pf-tube__peek--on {
-      background: rgba(139, 92, 246, 0.16);
-      border-color: rgba(139, 92, 246, 0.5);
-      color: var(--text-primary);
+    /* "Hold to see N tests" hint — non-interactive; the hold is handled on the
+       vial itself. */
+    .pf-tube__hint {
+      margin: 10px 0 0;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+      color: var(--text-muted);
+      pointer-events: none;
     }
     /* Full-screen backdrop that closes the popover and blocks the collect tap. */
     .pf-peek-backdrop { position: fixed; inset: 0; z-index: 1190; background: transparent; }
@@ -2134,26 +2117,50 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
 
-  /** Tap-to-peek a tube's test list. The vial itself is a tap-to-collect button,
-   *  so the peek must NOT collect — the chip swallows its click and toggles a
-   *  floating popover; a full-screen backdrop closes it (and blocks the collect
-   *  underneath). Reliable on both mouse and touch (a press-and-hold was flaky). */
+  /** Long-press (hold ~2s) a vial to peek its test list; a normal tap collects.
+   *  The list floats as a popover that stays open until the backdrop is tapped.
+   *  A move (scroll) or early release cancels the peek; once the peek fires, the
+   *  release's click is suppressed so it never also collects. */
   readonly peekId = signal<string | null>(null);
   readonly peekPos = signal<{ x: number; y: number } | null>(null);
   readonly peekTests = signal<string[]>([]);
+  private static readonly HOLD_MS = 2000;
+  private _pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _longPressFired = false;
+  private _downX = 0;
+  private _downY = 0;
 
-  peekToggle(s: OrderSample, ev: Event): void {
-    ev.stopPropagation();
-    ev.preventDefault();
-    if (this.peekId() === s.id) { this.peekId.set(null); return; }
-    const el = ev.currentTarget as HTMLElement;
-    const r = el.getBoundingClientRect();
-    const x = Math.max(8, Math.min(r.left, window.innerWidth - 268));
-    const y = Math.min(r.bottom + 6, window.innerHeight - 260);
-    this.peekPos.set({ x, y });
-    this.peekTests.set((s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n));
-    this.peekId.set(s.id);
+  onVialDown(s: OrderSample, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return; // primary / touch only
+    this._longPressFired = false;
+    this._downX = ev.clientX; this._downY = ev.clientY;
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = Math.max(8, Math.min(r.left + 12, window.innerWidth - 268));
+    const y = Math.min(r.top + 44, window.innerHeight - 260);
+    const tests = (s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n);
+    this.clearPress();
+    this._pressTimer = setTimeout(() => {
+      this._longPressFired = true;
+      this.peekPos.set({ x, y });
+      this.peekTests.set(tests);
+      this.peekId.set(s.id);
+    }, SampleCollectionComponent.HOLD_MS);
   }
+  onVialMove(ev: PointerEvent): void {
+    if (this._pressTimer && (Math.abs(ev.clientX - this._downX) > 10 || Math.abs(ev.clientY - this._downY) > 10)) {
+      this.clearPress();
+    }
+  }
+  onVialUp(): void { this.clearPress(); }
+  private clearPress(): void { if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; } }
+
+  /** The vial's click: suppress it when a long-press just peeked, otherwise
+   *  it's a normal tap → collect. */
+  onVialClick(s: OrderSample, ev: Event): void {
+    if (this._longPressFired) { this._longPressFired = false; ev.preventDefault(); ev.stopPropagation(); return; }
+    this.toggleCollected(s);
+  }
+
   peekClose(ev?: Event): void { ev?.stopPropagation(); this.peekId.set(null); }
   swallow(ev: Event): void { ev.stopPropagation(); ev.preventDefault(); }
 
