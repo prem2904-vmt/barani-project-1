@@ -12,7 +12,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
-const BRANDING_NAME_MAX = 10;
+const BRANDING_NAME_MAX = 30;
 
 interface BrandingDraft {
   logoUrl: string;          // base64 data URL or '' for none
