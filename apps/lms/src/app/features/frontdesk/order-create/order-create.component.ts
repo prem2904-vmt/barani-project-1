@@ -1366,8 +1366,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       effectivePayable: bill.totalPayable,
       tatLabel: '',
       docTitle, qrDataUrl, orderQrDataUrl, logoDataUrl,
-      cashierName: this.auth.user()?.displayName || undefined,
-      cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
+      // The BILL's cashier (server-resolved: who billed/collected), so a later
+        // download by another user never swaps the attribution.
+        cashierName: bill.cashierName || this.auth.user()?.displayName || undefined,
+      cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
       ...invoiceTemplateFieldsFrom(tpl),
       practice: {
         name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,

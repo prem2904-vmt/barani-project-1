@@ -6,6 +6,7 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
+import { signatureFileToPng } from '../../shared/utils/signature-image';
 
 /**
  * "My signature" — a per-user digital signature the user draws once and reuses
@@ -20,27 +21,48 @@ import { ApiError } from '../../shared/models/api-response.model';
   template: `
     <div class="mx-auto w-full max-w-2xl px-4 py-4">
       <pf-screen-header title="My signature"
-        subtitle="Draw your signature once — it's saved to your account and printed wherever you sign (cash bills, reports). It follows you to any station you log in at.">
+        subtitle="Draw your signature — or upload a photo of it (we remove the paper background automatically). Saved to your account and printed wherever you sign (cash bills, reports).">
       </pf-screen-header>
 
       <div class="pf-sig-tile">
         <p class="pf-sig-eyebrow">Your signature</p>
 
-        @if (current()) {
+        @if (uploadPreview(); as up) {
+          <!-- Processed upload — confirm before it replaces the saved one. -->
+          <div class="pf-sig-preview">
+            <img [src]="up" alt="Processed signature" />
+          </div>
+          <p class="pf-sig-muted" style="margin-top: 8px;">Background removed. Use this signature?</p>
+          <div class="pf-sig-row">
+            <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;" [disabled]="busy()" (click)="confirmUpload()">Use this signature</button>
+            <button type="button" class="pf-sig-cta" (click)="uploadPreview.set(null)">Discard</button>
+          </div>
+        } @else if (current()) {
           <div class="pf-sig-preview">
             <img [src]="current()!" alt="Your signature" />
           </div>
           <div class="pf-sig-row">
             <button type="button" class="pf-sig-cta" (click)="pad.set(true)">Re-draw</button>
+            <button type="button" class="pf-sig-cta" [disabled]="processing()" (click)="file.click()">
+              {{ processing() ? 'Processing…' : 'Upload image' }}
+            </button>
             <button type="button" class="pf-sig-cta pf-sig-cta--danger" [disabled]="busy()" (click)="remove()">Remove</button>
           </div>
         } @else {
           <div class="pf-sig-empty">
             <p>No signature yet.</p>
-            <p class="pf-sig-muted">Draw one to have it appear on the bills and reports you print.</p>
+            <p class="pf-sig-muted">Draw one — or upload a photo/scan of your signature on paper and we'll cut the background out.</p>
           </div>
-          <button type="button" class="pf-sig-cta pf-sig-cta--primary" (click)="pad.set(true)">Draw signature</button>
+          <div class="pf-sig-row">
+            <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;" (click)="pad.set(true)">Draw signature</button>
+            <button type="button" class="pf-sig-cta" [disabled]="processing()" (click)="file.click()">
+              {{ processing() ? 'Processing…' : 'Upload image' }}
+            </button>
+          </div>
         }
+
+        <input #file type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+               (change)="onFileChosen($event)" />
       </div>
     </div>
 
@@ -77,6 +99,31 @@ export class MySignatureComponent {
   readonly current = computed(() => this.auth.user()?.signatureDataUrl);
   readonly pad = signal(false);
   readonly busy = signal(false);
+  /** Processed (background-removed) upload awaiting the user's confirmation. */
+  readonly uploadPreview = signal<string | null>(null);
+  readonly processing = signal(false);
+
+  async onFileChosen(ev: Event): Promise<void> {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-picking the same file
+    if (!file) return;
+    this.processing.set(true);
+    try {
+      this.uploadPreview.set(await signatureFileToPng(file));
+    } catch (e) {
+      this.toasts.error((e as Error)?.message || 'Could not process that image.');
+    } finally {
+      this.processing.set(false);
+    }
+  }
+
+  confirmUpload(): void {
+    const url = this.uploadPreview();
+    if (!url) return;
+    this.uploadPreview.set(null);
+    this.onSaved(url);
+  }
 
   onSaved(dataUrl: string): void {
     this.busy.set(true);
