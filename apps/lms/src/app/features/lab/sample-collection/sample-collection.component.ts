@@ -141,6 +141,10 @@ function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string 
 
 interface OrderGroup {
   orderId: string;
+  /** Human-readable order number (LAB-2607-000042); falls back to a short id.
+   *  Shown in the collect drawer's header — the order is what the collector is
+   *  working, while each tube's own barcode sits on its card. */
+  orderNo: string;
   patientName: string;
   patientMeta: string;
   createdAt: string;
@@ -286,7 +290,9 @@ interface OrderGroup {
             </button>
             <div class="pf-drawer__who">
               <p class="pf-drawer__name">{{ g.patientName }}</p>
-              <p class="pf-drawer__meta">{{ g.patientMeta }}</p>
+              <!-- Order number, not a sample id — the drawer is the whole order;
+                   each tube's own barcode is on its card below. -->
+              <p class="pf-drawer__meta">{{ g.orderNo }}</p>
             </div>
             <div class="pf-drawer__progress">
               <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
@@ -2012,6 +2018,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const p = s.order?.patient;
         g = {
           orderId: s.orderId,
+          orderNo: s.order?.orderNumber || ('#' + s.orderId.replace(/-/g, '').slice(-8).toUpperCase()),
           patientName: formatPatientInfo(p),
           patientMeta: '',
           createdAt: s.createdAt,
