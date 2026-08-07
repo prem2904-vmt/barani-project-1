@@ -415,8 +415,16 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   const cx = A4.w / 2;
   const rightX = A4.w - MARGIN;
 
-  // ── Header — logo at left, identity centred ──
+  // ── Header — logo at left, identity centred, track QR at top-right ──
   if (logoDataUrl) { try { doc.addImage(logoDataUrl, 'PNG', MARGIN, 30, 50, 50); } catch { /* ignore */ } }
+  // Patient result-tracking QR, pinned to the top-right so it's the easiest
+  // thing to scan off the printed bill.
+  if (qrDataUrl) {
+    const qs = 54, qxr = rightX - qs, qyr = 24;
+    try { doc.addImage(qrDataUrl, 'PNG', qxr, qyr, qs, qs); } catch { /* ignore */ }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
+    doc.text('SCAN TO TRACK', qxr + qs / 2, qyr + qs + 7, { align: 'center' });
+  }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(CB_INK);
   doc.text(practice.name ?? 'Diagnostic Centre', cx, 42, { align: 'center' });
   let hy = 56;
@@ -531,18 +539,16 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   doc.text(':', tColonX, y + 17);
   doc.text(m.paidOrDueAmount, rightX, y + 17, { align: 'right' });
 
-  // ── Verification QRs (bottom-left) — report tracking + staff order. ──
-  const qrSize = 46, qrTop = A4.h - qrSize - 54;
-  let qx = MARGIN;
-  const drawQr = (data: string | undefined, caption: string) => {
-    if (!data) return;
-    try { doc.addImage(data, 'PNG', qx, qrTop, qrSize, qrSize); } catch { return; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
-    doc.text(caption, qx + qrSize / 2, qrTop + qrSize + 8, { align: 'center' });
-    qx += qrSize + 34;
-  };
-  drawQr(qrDataUrl, 'TRACK REPORT');
-  drawQr(orderQrDataUrl, 'STAFF ORDER');
+  // ── Staff order QR (bottom-left). The patient track QR now lives at the
+  //    top-right of the header. ──
+  if (orderQrDataUrl) {
+    const qrSize = 46, qrTop = A4.h - qrSize - 54;
+    try {
+      doc.addImage(orderQrDataUrl, 'PNG', MARGIN, qrTop, qrSize, qrSize);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
+      doc.text('STAFF ORDER', MARGIN + qrSize / 2, qrTop + qrSize + 8, { align: 'center' });
+    } catch { /* ignore */ }
+  }
 
   // ── Cashier signature — moved to the bottom of the page (bottom-right),
   //    above the closing note. Chq/DD-favour + timestamp lines removed. ──
