@@ -24,6 +24,27 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         subtitle="Patient ID format and tenant data tools.">
       </pf-screen-header>
 
+      <!-- Organization login handle (tenant "username") — OPS-13 -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Organization login handle</h3>
+        <p class="pf-ls__hint">
+          This is the organization name your staff type on the sign-in screen.
+          <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle will stop working.
+        </p>
+        <div class="flex flex-wrap items-end gap-3 mt-4">
+          <label class="block">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Handle</span>
+            <input class="pf-input mt-1" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
+                   placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          </label>
+          <button type="button" class="pf-save-slug px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style="background: var(--violet-600, #7c3aed);"
+                  [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" (click)="saveSlug()">
+            {{ slugSaving() ? 'Saving…' : 'Save handle' }}
+          </button>
+        </div>
+      </pf-tile>
+
       <!-- Patient ID format -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -340,6 +361,11 @@ export class OrganizationSettingsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
 
+  // ── Login handle (tenant slug) — OPS-13 ──
+  protected readonly slug = signal('');
+  protected readonly slugOriginal = signal('');
+  protected readonly slugSaving = signal(false);
+
   // ── Danger-zone state ──
   protected readonly wiping = signal(false);
   protected readonly lastWiped = signal<WipeResult | null>(null);
@@ -364,6 +390,25 @@ export class OrganizationSettingsComponent implements OnInit {
     if (e.key === '-' || e.key === '+' || e.key === 'e') {
       e.preventDefault();
     }
+  }
+
+  /** Login handle is lowercase letters/numbers/hyphens only — sanitize as typed
+   *  (OPS-13). */
+  protected onSlugInput(v: string) {
+    this.slug.set((v ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40));
+  }
+  protected saveSlug() {
+    const s = this.slug();
+    if (!s || s === this.slugOriginal()) return;
+    this.slugSaving.set(true);
+    this.api.patch('/api/tenants/current', { slug: s }).subscribe({
+      next: () => {
+        this.slugSaving.set(false);
+        this.slugOriginal.set(s);
+        this.toasts.success('Login handle updated — staff now sign in with this handle.');
+      },
+      error: e => { this.slugSaving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
   }
 
   private sanitizePadValue(val: any, isAlpha: boolean): number {
@@ -446,6 +491,10 @@ export class OrganizationSettingsComponent implements OnInit {
   protected idSection<T>(f: T): T { return f; }
 
   ngOnInit() {
+    // Current tenant login handle (OPS-13).
+    this.api.get<any>('/api/tenants/current').subscribe({
+      next: t => { const s = (t?.slug ?? '').toLowerCase(); this.slug.set(s); this.slugOriginal.set(s); },
+    });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
         if (!c) return;

@@ -38,6 +38,15 @@ interface AutoAssignConfig {
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
 
+      <!-- This page has no Save button by design: every change persists the
+           moment you make it (OPS-15). Make that explicit so it doesn't read as
+           unsaved. -->
+      <div class="pf-ls__autosave" role="status">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <span>Changes are saved automatically</span>
+      </div>
+
       <!-- Counters & collection — now driven by the Workflow (single source) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Counters &amp; collection</h3>
@@ -318,6 +327,14 @@ interface AutoAssignConfig {
     </section>
   `,
   styles: [`
+    .pf-ls__autosave {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+      color: var(--emerald-text, #10b981);
+      background: rgba(16, 185, 129, 0.10);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+    }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }

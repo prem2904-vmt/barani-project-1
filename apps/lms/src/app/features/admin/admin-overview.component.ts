@@ -272,23 +272,19 @@ interface KpiCard {
         <p class="pf-ov__section">Configuration</p>
         <div class="pf-ov__stats">
           <div class="pf-ov__stat">
-            <span class="pf-ov__stat-v">{{ summary()?.branches ?? "—" }}</span
+            <span class="pf-ov__stat-v">{{ branchCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Branches</span>
           </div>
           <div class="pf-ov__stat">
-            <span class="pf-ov__stat-v">{{
-              summary()?.departments ?? "—"
-            }}</span
+            <span class="pf-ov__stat-v">{{ deptCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Departments</span>
           </div>
           <div class="pf-ov__stat">
-            <span class="pf-ov__stat-v">{{ summary()?.tests ?? "—" }}</span
+            <span class="pf-ov__stat-v">{{ testCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Tests</span>
           </div>
           <div class="pf-ov__stat">
-            <span class="pf-ov__stat-v">{{
-              summary()?.preSeededRoles ?? "—"
-            }}</span
+            <span class="pf-ov__stat-v">{{ roleCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Roles</span>
           </div>
           <div class="pf-ov__stat">
@@ -884,6 +880,13 @@ export class AdminOverviewComponent implements OnInit {
       "Admin",
   );
   readonly summary = signal<SeedSummary | null>(null);
+  // Tenant-scoped counts — /_seed/summary counts across ALL tenants (OPS-32:
+  // a 1-branch tenant saw 35 branches / 8443 tests) and its role count misses
+  // custom roles (OPS-21). Fetched per-tenant on every visit.
+  readonly branchCount = signal<number | null>(null);
+  readonly deptCount = signal<number | null>(null);
+  readonly testCount = signal<number | null>(null);
+  readonly roleCount = signal<number | null>(null);
 
   readonly metrics = signal<DashMetrics | null>(null);
   readonly loading = signal(false);
@@ -1307,6 +1310,11 @@ export class AdminOverviewComponent implements OnInit {
     this.api
       .get<SeedSummary>("/api/_seed/summary")
       .subscribe({ next: (s) => this.summary.set(s) });
+    // Tenant-scoped KPI counts (branches/departments/roles/tests for THIS tenant).
+    this.api.get<unknown[]>("/api/tenants/branches").subscribe({ next: (b) => this.branchCount.set(b?.length ?? 0) });
+    this.api.get<unknown[]>("/api/tenants/departments").subscribe({ next: (d) => this.deptCount.set(d?.length ?? 0) });
+    this.api.get<unknown[]>("/api/roles/").subscribe({ next: (r) => this.roleCount.set(r?.length ?? 0) });
+    this.api.get<any>("/api/tests").subscribe({ next: (t) => this.testCount.set(Array.isArray(t) ? t.length : (t?.total ?? t?.items?.length ?? 0)) });
     this.load();
   }
 
