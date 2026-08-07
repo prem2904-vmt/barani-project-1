@@ -587,15 +587,27 @@ interface OrderGroup {
                 <span class="pf-btn__text">Can't collect</span>
               </button>
             }
-            <!-- Print the order's tube labels (barcode + QR) — available any time
-                 in the drawer so tubes can be labelled before or after the draw. -->
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
-                    aria-label="Print labels" data-label="Print labels">
-              <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
-              </svg>
-              <span class="pf-btn__text">Print labels</span>
-            </button>
+            @if (scan.manualEntry()) {
+              <!-- Manual mode: nothing to print — show what to hand-write on
+                   each container instead. -->
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="writeUpOpen.set(true)"
+                      aria-label="Label by hand" data-label="Label by hand">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                </svg>
+                <span class="pf-btn__text">Label by hand</span>
+              </button>
+            } @else {
+              <!-- Print the order's tube labels (barcode + QR) — available any time
+                   in the drawer so tubes can be labelled before or after the draw. -->
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
+                      aria-label="Print labels" data-label="Print labels">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
+                </svg>
+                <span class="pf-btn__text">Print labels</span>
+              </button>
+            }
             @if (isDispatched(g)) {
               <span class="pf-drawer__done-stamp">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -666,6 +678,28 @@ interface OrderGroup {
             }
           </div>
         </div>
+
+        <!-- Manual-mode "Label by hand" sheet — what to write on each container
+             (no printer in manual mode). A child of .pf-drawer for stacking. -->
+        @if (writeUpOpen()) {
+          <div class="pf-wl" role="dialog" aria-modal="true" (click)="writeUpOpen.set(false)">
+            <div class="pf-wl__panel" (click)="$event.stopPropagation()">
+              <p class="pf-wl__title">Write on each container</p>
+              <p class="pf-wl__sub">{{ g.patientName }} · {{ g.orderNo }}</p>
+              <ul class="pf-wl__list">
+                @for (s of g.samples; track s.id) {
+                  <li class="pf-wl__row">
+                    <span class="pf-wl__dot" [style.background]="tube(s).color" aria-hidden="true"></span>
+                    <span class="pf-wl__container">{{ tube(s).label }}</span>
+                    <span class="pf-wl__code">{{ s.barcode ?? '—' }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="pf-wl__hint">Write the sample number (and patient name) on the matching container.</p>
+              <button type="button" class="pf-btn pf-btn-ghost pf-wl__close" (click)="writeUpOpen.set(false)">Done</button>
+            </div>
+          </div>
+        }
 
         <!-- Hold-to-peek popover — a child of .pf-drawer (which is a z-index
              stacking context) so it always paints above the collect content.
@@ -1180,6 +1214,31 @@ interface OrderGroup {
     /* Floating peek popover — a child of the drawer's own stacking context, so
        a high local z-index keeps it above the collect content. Fixed = viewport
        positioned (the drawer has no transform). */
+    /* Manual-mode "Label by hand" sheet — centered card over the drawer. */
+    .pf-wl {
+      position: absolute; inset: 0; z-index: 40;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .pf-wl__panel {
+      width: min(440px, 100%); max-height: 80vh; overflow-y: auto;
+      background: var(--surface-raised, #16161f); border: 1px solid var(--border-primary, rgba(255,255,255,0.1));
+      border-radius: 16px; padding: 20px;
+    }
+    .pf-wl__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .pf-wl__sub { margin: 4px 0 12px; font-size: 12.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-wl__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pf-wl__row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+    }
+    .pf-wl__dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); }
+    .pf-wl__container { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-secondary); }
+    .pf-wl__code { font-size: 15px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.04em; }
+    .pf-wl__hint { margin: 12px 0 14px; font-size: 12px; color: var(--text-tertiary); }
+    .pf-wl__close { width: 100%; justify-content: center; }
+
     .pf-tube__peekpop {
       position: fixed; z-index: 100;
       width: 260px; max-height: 52vh; overflow-y: auto;
@@ -2169,6 +2228,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly peekId = signal<string | null>(null);
   readonly peekPos = signal<{ x: number; y: number } | null>(null);
   readonly peekTests = signal<string[]>([]);
+  /** Manual-mode "Label by hand" sheet: what to hand-write on each container. */
+  readonly writeUpOpen = signal(false);
   /** Which vial is mid-hold — drives the progress-fill animation. */
   readonly holdingId = signal<string | null>(null);
   private static readonly HOLD_MS = 2000;
