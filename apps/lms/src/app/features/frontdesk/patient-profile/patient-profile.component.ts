@@ -304,7 +304,10 @@ export class PatientProfileComponent implements OnInit {
 
   // ── Edit patient info ─────────────────────────────────────────────
   readonly canEdit = computed(() => this.auth.hasAnyPermission(['edit_patient', 'register_patient']));
-  readonly bloodGroups = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+  // Common groups first, then the rarer sub-types that were previously
+  // impossible to record (OPS-30), then a free-text escape hatch.
+  readonly bloodGroups = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-',
+    'A1+', 'A1-', 'A1B+', 'A1B-', 'Bombay (hh)', 'Rh-null', 'Other'];
   private readonly _editDraft = signal<{
     firstName: string; fathersName: string; phone: string; email: string;
     sex: string; dateOfBirth: string; age: number | null; bloodGroup: string;

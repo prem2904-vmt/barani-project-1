@@ -73,7 +73,7 @@ type Tab = 'users' | 'roles';
 
       @if (tab() === 'users') {
         <div class="mb-4">
-          <input type="text" class="pf-input max-w-md" placeholder="Search name or email…"
+          <input type="text" class="pf-input max-w-md" placeholder="Search name or username…"
                  [ngModel]="search()" (ngModelChange)="onSearch($event)" />
         </div>
 
