@@ -248,6 +248,21 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   <p class="text-[11px] mb-2" style="color: var(--text-tertiary);">
                     Drag a department into a space. Tubes are counted per space + colour — departments in one space sharing a colour share a vial.
                   </p>
+                  <!-- Structure notice: the board's arrangement only DRIVES orders
+                       in Auto mode. Integrated = the one Lab space; Standalone =
+                       one space per department. The arrangement is kept either way
+                       so switching to Auto restores it. -->
+                  @if (structureOf(b) === 'integrated') {
+                    <p class="text-[11px] mb-2" style="color: var(--color-amber-400, #fbbf24);">
+                      This branch runs <strong>Integrated</strong> — one lab, one space: every department shares "Lab (default)".
+                      Space arrangement below is saved but only applies after switching the branch to <strong>Auto</strong> in Lab settings.
+                    </p>
+                  } @else if (structureOf(b) === 'standalone') {
+                    <p class="text-[11px] mb-2" style="color: var(--color-amber-400, #fbbf24);">
+                      This branch runs <strong>Standalone</strong> — every department is its own space with its own sample-ID prefix.
+                      Space arrangement below only applies after switching the branch to <strong>Auto</strong> in Lab settings.
+                    </p>
+                  }
 
                   <div class="pf-board">
                     <!-- Departments come from the Test Master — this board only
@@ -887,6 +902,14 @@ export class BranchesComponent implements OnInit {
 
   codeInitials(code: string): string {
     return code ? code.slice(0, 2) : '??';
+  }
+
+  /** Resolved lab structure for a branch: integrated (default) | standalone |
+   *  auto. Mirrors the backend's resolution (legacy "individual" = standalone,
+   *  empty/unknown = integrated). */
+  structureOf(b: Branch): 'integrated' | 'standalone' | 'auto' {
+    const v = b.labStructure;
+    return v === 'standalone' || v === 'individual' ? 'standalone' : v === 'auto' ? 'auto' : 'integrated';
   }
 
   toggle(id: string) {
