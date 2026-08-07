@@ -942,6 +942,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
     @if (!resultEntryUnlocked() && orderTest()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan vial to open result entry"
         [expectedBarcode]="expectedScanBarcode()"
         (matched)="onResumeScanMatched($event)"

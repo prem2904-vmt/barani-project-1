@@ -35,9 +35,11 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
             <span class="pf-sc__dot" [class.pf-sc__dot--live]="cameraReady()"></span>
             Scanner · {{ cameraReady() ? 'LIVE' : 'STARTING' }}
           </div>
-          <h2 class="pf-sc__title">{{ title }}</h2>
+          <h2 class="pf-sc__title">{{ displayTitle }}</h2>
           @if (expectedBarcode) {
             <p class="pf-sc__sub">Expected: <span class="pf-sc__code">{{ expectedBarcode }}</span></p>
+          } @else if (manualOnly) {
+            <p class="pf-sc__sub">Type the sample ID from the container.</p>
           } @else {
             <p class="pf-sc__sub">Aim at the barcode on the vial.</p>
           }
@@ -122,7 +124,23 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 Confirm
               </button>
             } @else {
-              <p class="pf-sc__manual-hint">Manual entry isn't available without an expected barcode. Use the search bar's manual option instead.</p>
+              <!-- Short sample IDs (LAB26001, BIO260800003…) don't segment —
+                   type the full number off the container. Same handleScan path,
+                   so the wrong-vial guard still applies. -->
+              <p class="pf-sc__manual-hint">Type the sample ID written on the container.</p>
+              <input #manualInput
+                     class="pf-sc__free-input uppercase"
+                     type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
+                     [placeholder]="expectedBarcode || 'Sample ID'"
+                     [ngModel]="manualFree()"
+                     (ngModelChange)="manualFree.set($event)"
+                     (keydown.enter)="submitManualFree()" />
+              <button type="button"
+                      class="pf-sc__manual-confirm press"
+                      [disabled]="!manualFree().trim()"
+                      (click)="submitManualFree()">
+                Confirm
+              </button>
             }
           </div>
         }
@@ -146,9 +164,11 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
             <div></div>
           }
           <div class="pf-sc__foot-actions">
-            <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
-              {{ manualMode() ? 'Use camera' : 'Enter manually' }}
-            </button>
+            @if (!manualOnly) {
+              <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
+                {{ manualMode() ? 'Use camera' : 'Enter manually' }}
+              </button>
+            }
             <button type="button" class="pf-sc__cancel press" (click)="cancel()">Cancel</button>
           </div>
         </footer>
@@ -386,11 +406,27 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
     }
     .pf-sc__manual-confirm:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.08); }
     .pf-sc__manual-confirm:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+    /* Free-text sample-ID input (short codes that don't segment) */
+    .pf-sc__free-input {
+      width: 100%; margin: 10px 0 12px; padding: 12px 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border-input, rgba(255,255,255,0.15));
+      border-radius: 10px; color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 17px; letter-spacing: 0.08em;
+    }
+    .pf-sc__free-input:focus { outline: none; border-color: var(--color-violet-500, #7c3aed); }
   `]
 })
 export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @Input() title = 'Scan vial barcode';
   @Input() expectedBarcode?: string;
+  /** Manual-mode tenants: the modal is typing-only — no camera ever starts,
+   *  no "Use camera" toggle. The title/hints read as "enter", not "scan". */
+  @Input() manualOnly = false;
+
+  /** Caller titles say "Scan vial to claim" etc. — reword for typing-only. */
+  protected get displayTitle(): string {
+    return this.manualOnly ? this.title.replace(/^Scan\b/i, 'Enter') : this.title;
+  }
 
   @Output() matched = new EventEmitter<string>();
   @Output() cancelled = new EventEmitter<void>();
@@ -443,6 +479,8 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   // logic still protects against wrong vials.
   protected readonly manualMode = signal(false);
   protected readonly manualSeq = signal('');
+  /** Free-text sample ID for short codes that don't segment (LAB26001…). */
+  protected readonly manualFree = signal('');
   protected readonly isTouch = signal<boolean>(
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
   );
@@ -462,6 +500,12 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // positioning can't cover the root-level nav — hide it instead). Removed
     // again in ngOnDestroy. The component only exists while open (@if).
     try { document.body.classList.add('pf-scanner-open'); } catch { /* SSR */ }
+    if (this.manualOnly) {
+      // Typing-only: never touch the camera; land straight on the manual panel.
+      this.manualMode.set(true);
+      setTimeout(() => this.manualInputEl?.nativeElement.focus(), 50);
+      return;
+    }
     this.detector = new BarcodeDetector({
       // Every symbology a tube/label or requisition could carry, incl. the new
       // Data Matrix option and the existing QR + Code128.
@@ -702,6 +746,14 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // the typed seq doesn't match the expected one, so we never claim the
     // wrong vial by typo.
     this.handleScan(assembled);
+  }
+
+  /** Free-text sample-ID confirm (short codes) — same handleScan path, so the
+   *  wrong-vial mismatch guard still applies. */
+  submitManualFree() {
+    const v = this.manualFree().trim().toUpperCase();
+    if (!v) return;
+    this.handleScan(v);
   }
 
   private friendlyError(err: unknown): string {

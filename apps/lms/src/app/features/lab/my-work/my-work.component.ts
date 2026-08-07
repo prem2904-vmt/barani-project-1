@@ -750,6 +750,7 @@ const COUNTERS: CounterSpec[] = [
 
     @if (scanTarget(); as t) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="scanExpected()"
         (matched)="onScanMatched($event)"
@@ -761,6 +762,7 @@ const COUNTERS: CounterSpec[] = [
       <!-- Search-bar camera mode: no expected code, any scan drops into
            the input and routes through the same claim-by-scan gate. -->
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan any vial barcode"
         (matched)="onBarSearchMatched($event)"
         (cancelled)="closeBarSearchScanner()">
@@ -782,6 +784,7 @@ const COUNTERS: CounterSpec[] = [
          code equals THIS tube's barcode, so a tech can't claim the wrong tube. -->
     @if (claimScanning() && claimTarget(); as c) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="c.barcode"
         (matched)="onClaimScanned()"

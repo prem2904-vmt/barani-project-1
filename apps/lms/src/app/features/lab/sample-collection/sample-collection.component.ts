@@ -231,6 +231,7 @@ interface OrderGroup {
 
       @if (scannerOpen()) {
         <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
           title="Scan vial barcode"
           (matched)="onScanMatched($event)"
           (cancelled)="scannerOpen.set(false)">

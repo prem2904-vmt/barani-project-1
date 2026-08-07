@@ -498,6 +498,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
     @if (pkgScannerOpen()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan dispatch package QR"
         (matched)="onPackageScanned($event)"
         (cancelled)="closePackageScanner()">
@@ -506,6 +507,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
     @if (barScannerOpen()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan tube barcode to intake"
         (matched)="onBarcodeScanned($event)"
         (cancelled)="closeBarcodeScanner()">
