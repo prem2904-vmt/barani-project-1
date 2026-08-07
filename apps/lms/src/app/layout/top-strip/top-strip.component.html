@@ -51,7 +51,7 @@
             <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
           }
           @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
           }
         </a>
       } @else {
@@ -64,7 +64,7 @@
             <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
           }
           @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ tenantName() || brandingName() }}</span>
+            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
           }
         </div>
       }
@@ -96,12 +96,13 @@
       </nav>
 
       @if (tenantLoaded()) {
+        <!-- Branch selector — kept on the top strip so route context stays
+             visible without a second navbar. md+ only. Hidden entirely (with its
+             separator) for single-branch tenants (OPS-9) — nothing to switch. -->
+        @if (canSwitchBranch()) {
         <!-- Pipe separator before the branch picker. -->
         <span class="pf-ts-sep hidden md:inline-block" aria-hidden="true"></span>
-        <!-- Branch selector — kept on the top strip so route context stays
-             visible without a second navbar. md+ only; mobile users use the
-             dedicated branch settings screen. -->
-        <div class="relative hidden md:block" [class.pf-ts-branch--single]="!canSwitchBranch()">
+        <div class="relative hidden md:block">
           <button type="button" class="pf-ts-branch press"
                   [class.pf-ts-branch--open]="branchOpen()"
                   [disabled]="!canSwitchBranch()"
@@ -144,6 +145,7 @@
             </div>
           }
         </div>
+        }
       }
 
       <!-- Admin (settings) — icon button next to the bell. Only renders
