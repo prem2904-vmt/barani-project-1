@@ -94,12 +94,12 @@ interface AutoAssignConfig {
         <p class="pf-ls__hint">
           How the technician worklist, lab intake and result-entry queues group work.
           <strong>Patient</strong> lists patients with their tests nested; <strong>Sample</strong>
-          keys each row by Sample ID (patient shown small). <strong>Auto</strong> decides from this
-          branch's lab spaces — one space is patient-focused, multiple spaces is sample-focused.
+          keys each row by Sample ID (patient shown small). By default this follows the
+          <strong>Lab structure</strong> below — pick one to override it.
         </p>
         <div class="pf-ls__gate">
           @for (opt of queueFocusOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="queueFocusMode() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="queueFocusSelected() === opt.value"
                     (click)="setQueueFocusMode(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -111,10 +111,13 @@ interface AutoAssignConfig {
         </div>
         @if (queueFocusMode() === 'auto') {
           <p class="pf-ls__hint" style="margin-top: 10px;">
-            Auto currently resolves to
-            <strong style="color: var(--text-primary);">{{ effectiveQueueFocus() === 'sample' ? 'Sample-focused' : 'Patient-focused' }}</strong>
-            for this branch.
+            Following the lab structure — currently
+            <strong style="color: var(--text-primary);">{{ effectiveQueueFocus() === 'sample' ? 'Sample-focused' : 'Patient-focused' }}</strong>.
           </p>
+        } @else {
+          <button type="button" class="pf-ls__link" style="margin-top: 10px;" (click)="setQueueFocusMode('auto')">
+            Reset — follow the lab structure
+          </button>
         }
       </pf-tile>
 
@@ -123,12 +126,12 @@ interface AutoAssignConfig {
         <h3 class="pf-ls__title">Lab structure</h3>
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
-          <strong>Integrated</strong> (default) = one lab, ONE space — everything
-          shares the default "Lab" space.
+          <strong>Auto</strong> (default) = arrange freely on the Branches board —
+          placed departments follow their space, the rest share the default "Lab".
+          <strong>Integrated</strong> = one lab, ONE space — everything shares the
+          default "Lab" space.
           <strong>Standalone</strong> = every department is its own space with its
           own sample-ID prefix.
-          <strong>Auto</strong> = arrange freely on the Branches board — placed
-          departments follow their space, the rest share the default "Lab".
         </p>
         <div class="pf-ls__gate">
           @for (opt of labStructureOptions; track opt.value) {
@@ -367,6 +370,8 @@ interface AutoAssignConfig {
     }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-ls__link  { background: none; border: none; padding: 0; font-size: 12.5px; color: var(--color-violet-400, #a78bfa); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
     .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
 
@@ -533,25 +538,33 @@ export class LabSettingsComponent implements OnInit {
     { value: 'manual', label: 'Manual entry', desc: 'No QR — the sample number is shown and typed by hand.' },
   ];
 
-  // ── Queue focus (per-branch): patient vs sample vs auto ──
+  // ── Queue focus (per-branch): patient vs sample ──
+  // No "Auto" card here — by default the focus FOLLOWS the Lab structure
+  // (integrated → patient, standalone → sample, auto → by the board's spaces);
+  // picking an option overrides it, and "follow" can be restored.
   protected readonly queueFocusMode = signal<'auto' | 'patient' | 'sample'>('auto');
-  /** Server-resolved focus when mode is 'auto' (from this branch's space count). */
+  /** Server-resolved focus when the mode follows the lab structure. */
   protected readonly effectiveQueueFocus = signal<'patient' | 'sample'>('patient');
-  protected readonly queueFocusOptions: Array<{ value: 'auto' | 'patient' | 'sample'; label: string; desc: string }> = [
-    { value: 'auto', label: 'Auto', desc: "Decide from this branch's lab spaces (1 → patient, 2+ → sample)." },
+  protected readonly queueFocusOptions: Array<{ value: 'patient' | 'sample'; label: string; desc: string }> = [
     { value: 'patient', label: 'Patient-focused', desc: 'Rows are patients; their tests nested underneath.' },
     { value: 'sample', label: 'Sample-focused', desc: 'Rows keyed by Sample ID; patient shown as secondary.' },
   ];
+  /** The option that reads as selected: a forced mode wins; otherwise the
+   *  structure-derived effective focus. */
+  protected readonly queueFocusSelected = computed<'patient' | 'sample'>(() => {
+    const m = this.queueFocusMode();
+    return m === 'patient' || m === 'sample' ? m : this.effectiveQueueFocus();
+  });
 
-  // ── Lab structure (per-branch): integrated / standalone / auto ──
+  // ── Lab structure (per-branch): auto (default) / integrated / standalone ──
   // Drives how vials group + sample-ID prefixes when an order is placed.
-  // Integrated is the default for every lab: ONE space only — the board's
-  // space arrangement is ignored until the branch is switched to Auto.
-  protected readonly labStructure = signal<'integrated' | 'standalone' | 'auto'>('integrated');
-  protected readonly labStructureOptions: Array<{ value: 'integrated' | 'standalone' | 'auto'; label: string; desc: string }> = [
-    { value: 'integrated', label: 'Integrated (default)', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared vial with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
+  // Auto is the default: the Branches-board arrangement applies (with nothing
+  // arranged it behaves exactly like Integrated — everything in the one Lab).
+  protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
+  protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
+    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
+    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared vial with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
     { value: 'standalone', label: 'Standalone', desc: 'Every department is split into its own space — its own sample-ID prefix (the department code), and a separate vial per department even for the same tube colour.' },
-    { value: 'auto', label: 'Auto (custom spaces)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
   ];
   // ── Sample ID — running-number width of the short sample barcode ──
   /** Editable number width (1–9). Seeded from the tenant once it loads. */
@@ -673,11 +686,11 @@ export class LabSettingsComponent implements OnInit {
         this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
         this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
         // Legacy "individual" reads as standalone; anything unknown/empty is
-        // integrated — the default.
+        // auto — the default.
         this.labStructure.set(
           c?.labStructure === 'standalone' || c?.labStructure === 'individual' ? 'standalone'
-          : c?.labStructure === 'auto' ? 'auto'
-          : 'integrated');
+          : c?.labStructure === 'integrated' ? 'integrated'
+          : 'auto');
       }
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the

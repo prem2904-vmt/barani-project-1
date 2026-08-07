@@ -278,7 +278,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                         <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!b.defaultLabCode"
                                [value]="b.defaultLabCode || ''" (change)="setDefaultLabCode(b, $any($event.target).value)"
                                maxlength="16" placeholder="LAB" aria-label="Default Lab code — prefixes sample IDs"
-                               title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001)" />
+                               title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001). Type NONE for no prefix — the ID is just the date + number." />
                         <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
                       </div>
                       <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"
@@ -904,12 +904,12 @@ export class BranchesComponent implements OnInit {
     return code ? code.slice(0, 2) : '??';
   }
 
-  /** Resolved lab structure for a branch: integrated (default) | standalone |
-   *  auto. Mirrors the backend's resolution (legacy "individual" = standalone,
-   *  empty/unknown = integrated). */
+  /** Resolved lab structure for a branch: auto (default) | integrated |
+   *  standalone. Mirrors the backend's resolution (legacy "individual" =
+   *  standalone, empty/unknown = auto). */
   structureOf(b: Branch): 'integrated' | 'standalone' | 'auto' {
     const v = b.labStructure;
-    return v === 'standalone' || v === 'individual' ? 'standalone' : v === 'auto' ? 'auto' : 'integrated';
+    return v === 'standalone' || v === 'individual' ? 'standalone' : v === 'integrated' ? 'integrated' : 'auto';
   }
 
   toggle(id: string) {
