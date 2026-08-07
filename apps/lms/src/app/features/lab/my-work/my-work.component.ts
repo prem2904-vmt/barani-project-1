@@ -641,20 +641,9 @@ const COUNTERS: CounterSpec[] = [
                         </div>
                       }
 
-                      <!-- Test list is hidden inline (a many-test order made the
-                           card huge); hold to peek it in a floating popover. -->
-                      @if (tube.tests.length > 0) {
-                        <div class="mb-2 pl-1">
-                          <span class="pf-mw-peek" (pointerdown)="peekDown(tube, $event)" (pointerup)="peekUp()"
-                                (pointerleave)="peekUp()" (pointercancel)="peekUp()" (pointermove)="peekMove($event)">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
-                            </svg>
-                            Hold to see {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
-                          </span>
-                        </div>
-                      }
+                      <!-- Test names are intentionally not listed on the queue
+                           card (the "· N tests" count above is enough; open the
+                           tube via "Pick · view tests" to see them). -->
                       <div class="flex justify-end gap-2">
                         @switch (tab()) {
                           @case ('service_queue') {
@@ -829,57 +818,8 @@ const COUNTERS: CounterSpec[] = [
       </pf-barcode-scanner-modal>
     }
 
-    <!-- Hold-to-peek test list popover (fixed, viewport-positioned). -->
-    @if (peekOpen()) {
-      <div class="pf-mw-peekpop" [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
-        <p class="pf-mw-peekpop-h">Tests ({{ peekTests().length }})</p>
-        <ul>
-          @for (t of peekTests(); track t.name) {
-            <li>
-              <span>{{ t.name }}</span>
-              @if (t.status === 'validated') { <span class="pf-mw-tag pf-mw-tag--ok">✓</span> }
-              @else if (t.status === 'entered') { <span class="pf-mw-tag pf-mw-tag--ip">⏳</span> }
-              @else if (t.status === 're_entry') { <span class="pf-mw-tag pf-mw-tag--re">↻</span> }
-            </li>
-          }
-        </ul>
-      </div>
-    }
-
   `,
   styles: [`
-    /* Hold-to-peek chip + floating popover for a queue card's test list. */
-    .pf-mw-peek {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 11px; border-radius: 8px;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
-      color: var(--text-secondary);
-      background: var(--glass-bg, rgba(255,255,255,0.05));
-      border: 1px solid var(--glass-border, rgba(148,163,184,0.22));
-      cursor: pointer; user-select: none; -webkit-user-select: none;
-      -webkit-touch-callout: none; touch-action: none;
-    }
-    .pf-mw-peek:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.09)); }
-    .pf-mw-peek:active { background: rgba(139,92,246,0.16); border-color: rgba(139,92,246,0.5); color: var(--text-primary); }
-    .pf-mw-peekpop {
-      position: fixed; z-index: 2000;
-      width: 300px; max-height: 60vh; overflow-y: auto;
-      padding: 12px 14px; border-radius: 12px;
-      background: var(--bg-elevated, #0f172a);
-      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
-      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
-    }
-    .pf-mw-peekpop-h {
-      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--text-tertiary);
-    }
-    .pf-mw-peekpop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-    .pf-mw-peekpop li { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
-    .pf-mw-tag { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 10px; }
-    .pf-mw-tag--ok { background: rgba(16,185,129,0.15); color: var(--green-text); }
-    .pf-mw-tag--ip { background: rgba(168,85,247,0.15); color: var(--violet-text); }
-    .pf-mw-tag--re { background: rgba(239,68,68,0.15); color: var(--red-text); }
 
     /* No page-level scroll — :host fills the routed area, the inner
      * <section> chains flex so the splitter takes the remaining height
@@ -2348,43 +2288,6 @@ export class MyWorkComponent implements OnInit {
     if (next.has(id)) next.delete(id); else next.add(id);
     this._expanded.set(next);
   }
-
-  // ── Hold-to-peek a queue card's test list ──────────────────────────
-  // The list is no longer printed inline (a 20-test order made the card huge);
-  // press and hold the "Hold to see N tests" chip to float it in a popover,
-  // release to hide. A move (scroll) or quick tap doesn't open it.
-  readonly peekOpen = signal(false);
-  readonly peekPos = signal<{ x: number; y: number } | null>(null);
-  readonly peekTests = signal<{ name: string; status?: string }[]>([]);
-  private _peekTimer: ReturnType<typeof setTimeout> | null = null;
-  private _peekDownX = 0;
-  private _peekDownY = 0;
-
-  peekDown(tube: { tests?: Array<{ test?: { name?: string } | null; status?: string }> }, ev: PointerEvent): void {
-    if (ev.button != null && ev.button !== 0) return;
-    ev.stopPropagation();
-    this._peekDownX = ev.clientX; this._peekDownY = ev.clientY;
-    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 300;
-    let x = r.right + 10;
-    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
-    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
-    const y = Math.max(8, Math.min(r.top, window.innerHeight - 340));
-    const tests = (tube.tests ?? []).map(t => ({ name: t.test?.name ?? 'Test', status: t.status }));
-    this.clearPeek();
-    this._peekTimer = setTimeout(() => {
-      this.peekPos.set({ x, y });
-      this.peekTests.set(tests);
-      this.peekOpen.set(true);
-    }, 350);
-  }
-  peekMove(ev: PointerEvent): void {
-    if (this._peekTimer && (Math.abs(ev.clientX - this._peekDownX) > 10 || Math.abs(ev.clientY - this._peekDownY) > 10)) {
-      this.clearPeek();
-    }
-  }
-  peekUp(): void { this.clearPeek(); this.peekOpen.set(false); }
-  private clearPeek(): void { if (this._peekTimer) { clearTimeout(this._peekTimer); this._peekTimer = null; } }
 
   toneFor(level: Level): TileTone {
     return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
