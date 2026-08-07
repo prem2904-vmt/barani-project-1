@@ -275,10 +275,10 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                     <div class="pf-lane">
                       <div class="pf-lane-hdr">
                         <span class="pf-lane-name">Lab (default)</span>
-                        <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!b.defaultLabCode"
+                        <input class="pf-lane-code-input uppercase"
                                [value]="b.defaultLabCode || ''" (change)="setDefaultLabCode(b, $any($event.target).value)"
-                               maxlength="16" placeholder="LAB" aria-label="Default Lab code — prefixes sample IDs"
-                               title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001). Type NONE for no prefix — the ID is just the date + number." />
+                               maxlength="16" placeholder="no prefix" aria-label="Default Lab code — prefixes sample IDs"
+                               title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001). Leave blank for no prefix — the ID is just the date + number." />
                         <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
                       </div>
                       <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"

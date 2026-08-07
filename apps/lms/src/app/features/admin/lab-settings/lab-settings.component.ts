@@ -147,7 +147,8 @@ interface AutoAssignConfig {
         </div>
         <p class="pf-ls__hint" style="margin-top: 12px;">
           Tip: set the default "Lab" code (the sample-ID prefix for departments with no
-          dedicated space) on the default "Lab" lane in <strong>Branches</strong>.
+          dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
+          leave it blank for no prefix.
         </p>
       </pf-tile>
 
