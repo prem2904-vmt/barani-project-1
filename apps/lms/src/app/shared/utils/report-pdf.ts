@@ -1037,10 +1037,16 @@ function drawPatientBlockThreeCol(
   // ── Col 1 — Patient identity ──
   const x1 = MARGIN_X + 10;
   let y = top + 18;
+  // Auto-shrink a long patient name so it never spills past the column
+  // separator into the Specimen(s) column (was overlapping at 13pt).
+  const patientName = snap.patient?.displayName ?? '—';
+  const nameMaxW = col1W - 16;
   doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(13);
+  let nameSize = 13;
+  doc.setFontSize(nameSize);
+  while (nameSize > 8 && doc.getTextWidth(patientName) > nameMaxW) { nameSize -= 0.5; doc.setFontSize(nameSize); }
   doc.setTextColor(BLACK);
-  doc.text(snap.patient?.displayName ?? '—', x1, y);
+  doc.text(patientName, x1, y);
   y += 16;
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
