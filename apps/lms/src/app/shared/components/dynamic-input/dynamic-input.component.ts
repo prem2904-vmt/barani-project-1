@@ -124,7 +124,7 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
                  sit together (no step switch). Age is anchored to today so it
                  increments over time; either way the field's value is a DOB. -->
             <div class="flex items-center gap-2 flex-wrap">
-              <input type="date" class="pf-input" style="flex:1 1 160px"
+              <input type="date" class="pf-input" style="flex:1 1 160px" [attr.max]="todayIso"
                      [ngModel]="value" (ngModelChange)="emit($event)" />
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
               <input type="number" class="pf-input" style="flex:0 0 116px" min="0" max="150"
@@ -741,6 +741,10 @@ export class DynamicInputComponent {
   // ── Hybrid DOB / Age ──────────────────────────────────────────────
   /** A date field that represents date-of-birth → render the DOB/Age hybrid. */
   readonly isDobField = computed(() => /(^|_)dob$|date_of_birth|birth_?date/i.test(this._field()?.name ?? ''));
+
+  /** Today (yyyy-MM-dd) — caps the DOB picker so a future birth date can't be
+   *  chosen (OPS-34). */
+  readonly todayIso = new Date().toISOString().slice(0, 10);
 
   /** Age implied by the current DOB value (so the age box mirrors the date). */
   readonly ageFromValue = computed<number | null>(() => {
