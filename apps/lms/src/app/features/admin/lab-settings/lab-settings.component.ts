@@ -118,16 +118,17 @@ interface AutoAssignConfig {
         }
       </pf-tile>
 
-      <!-- Lab structure (per-branch): integrated vs standalone vs auto -->
+      <!-- Lab structure (per-branch): integrated vs standalone -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Lab structure</h3>
         <p class="pf-ls__hint">
-          How departments that have no dedicated lab space share tubes.
-          <strong>Integrated</strong> runs everything as one lab — those departments
-          share the default "Lab" space, so same-colour tests draw one shared vial.
+          How departments that are NOT placed into a lab space share tubes.
+          <strong>Integrated</strong> (default) runs everything as one lab — those
+          departments share the default "Lab" space, so same-colour tests draw one
+          shared vial with the Lab-code prefix.
           <strong>Standalone</strong> treats each department as its own lab — its own
           sample-ID prefix and a separate vial per department, even for the same colour.
-          <strong>Auto</strong> picks based on whether you've created separate spaces below.
+          Departments dragged into a space always follow that space's code.
         </p>
         <div class="pf-ls__gate">
           @for (opt of labStructureOptions; track opt.value) {
@@ -542,14 +543,15 @@ export class LabSettingsComponent implements OnInit {
     { value: 'sample', label: 'Sample-focused', desc: 'Rows keyed by Sample ID; patient shown as secondary.' },
   ];
 
-  // ── Lab structure (per-branch): integrated vs standalone vs auto ──
+  // ── Lab structure (per-branch): integrated vs standalone ──
   // Drives how departments WITHOUT a dedicated lab space share vials + sample-ID
-  // prefixes when an order is placed.
-  protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
-  protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
-    { value: 'auto', label: 'Auto', desc: "Decide from this branch's lab spaces — no separate spaces means integrated, any separate space means standalone." },
-    { value: 'integrated', label: 'Integrated lab', desc: 'One lab processes everything. Departments with no dedicated space share the default "Lab" space, so same-colour tests across them draw ONE shared vial (Lab-code prefix).' },
-    { value: 'standalone', label: 'Standalone labs', desc: 'Departments run as separate labs. Each department is its own space — its own sample-ID prefix, and a separate vial even when two departments use the same tube colour.' },
+  // prefixes when an order is placed. Integrated is the default: unplaced
+  // departments always share the default "Lab" space (Lab-code prefix), no
+  // matter how many other spaces the branch has.
+  protected readonly labStructure = signal<'integrated' | 'standalone'>('integrated');
+  protected readonly labStructureOptions: Array<{ value: 'integrated' | 'standalone'; label: string; desc: string }> = [
+    { value: 'integrated', label: 'Integrated lab (default)', desc: 'One lab processes everything. Departments not placed into a space share the default "Lab" space — same-colour tests across them draw ONE shared vial with the Lab-code prefix.' },
+    { value: 'standalone', label: 'Standalone labs', desc: 'Departments run as separate labs. Each unplaced department is its own space — its own sample-ID prefix, and a separate vial even when two departments use the same tube colour.' },
   ];
   // ── Sample ID — running-number width of the short sample barcode ──
   /** Editable number width (1–9). Seeded from the tenant once it loads. */
@@ -632,7 +634,7 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.queueFocusMode.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
-  setLabStructure(v: 'auto' | 'integrated' | 'standalone') {
+  setLabStructure(v: 'integrated' | 'standalone') {
     const prev = this.labStructure();
     if (prev === v) return;
     this.labStructure.set(v);
@@ -670,7 +672,9 @@ export class LabSettingsComponent implements OnInit {
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
         this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
         this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
-        this.labStructure.set(c?.labStructure === 'integrated' || c?.labStructure === 'standalone' ? c.labStructure : 'auto');
+        // Anything other than an explicit standalone (incl. legacy "individual")
+        // reads as integrated — the default.
+        this.labStructure.set(c?.labStructure === 'standalone' || c?.labStructure === 'individual' ? 'standalone' : 'integrated');
       }
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
