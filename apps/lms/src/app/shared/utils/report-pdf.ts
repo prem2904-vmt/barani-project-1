@@ -1570,14 +1570,16 @@ function renderScopeHeading(
 ): number {
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
+  // Department band — the strongest heading inside the body (Drlogy pattern:
+  // clear department separation carries the whole multi-department report).
   doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(10.5);
   doc.setTextColor(theme.primary);
-  doc.text(text, MARGIN_X, y + 10);
-  doc.setDrawColor(HAIR);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, y + 14, A4.w - MARGIN_X, y + 14);
-  return y + 18;
+  doc.text(text, MARGIN_X, y + 12);
+  doc.setDrawColor(theme.primary);
+  doc.setLineWidth(1);
+  doc.line(MARGIN_X, y + 17, A4.w - MARGIN_X, y + 17);
+  return y + 23;
 }
 
 /** Render panel groups grouped into per-DEPARTMENT sections — each department's
@@ -1613,7 +1615,7 @@ function renderContinuousTable(
     if (dept && (multiDept || theme.groupByDepartment || theme.departmentPageBreak)) {
       y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice);
     }
-    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice);
+    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null);
     rendered++;
   }
   return y;
@@ -1652,14 +1654,15 @@ function renderColumnarTable(
   groups: PanelGroup[],
   cfg: ReportColumn[],
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  deptLabel: string | null = null
 ): number {
   if (groups.length === 0) return startY;
   if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
   const usable = A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
-  const vcols: VCol[] = [];
+  let vcols: VCol[] = [];
   for (let i = 0; i < cfg.length; i++) {
     const members: ReportColumn[] = [cfg[i]];
     while (cfg[i]?.linkedNext && i + 1 < cfg.length) { members.push(cfg[++i]); }
@@ -1672,6 +1675,23 @@ function renderColumnarTable(
       nameOnly: members.every(m => m.type === 'name'),
     });
   }
+  // Drop columns that would be COMPLETELY empty for this department block
+  // (e.g. an unused Description column) — a blank column wastes a fifth of
+  // the page and makes the table look ragged. Name/result always stay.
+  const memberHasContent = (m: ReportColumn): boolean => {
+    switch (m.type) {
+      case 'name': case 'result': return true;
+      case 'unit':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.unit ?? '').trim() && looksNumeric(r.result)));
+      case 'range': return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.range ?? '').trim()));
+      case 'flag':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.flag ?? '').trim()));
+      case 'text':
+      default:
+        if (m.locked && (m.lockedValue ?? '').trim()) return true;
+        if (m.name === 'specimen') return groups.some(g => !!(g.specimen ?? '').trim());
+        return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.texts?.[m.name] ?? '').trim()));
+    }
+  };
+  vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
@@ -1789,16 +1809,33 @@ function renderColumnarTable(
     }
   }
 
+  // When the table spills onto further pages, stamp "<DEPT> — continued" above
+  // the repeated column header — otherwise a reader on page 2 can't tell which
+  // department the rows belong to.
+  let tablePagesSeen = 0;
+
   autoTable(doc, {
     startY,
     head: head as unknown as Array<Array<string | Cell>>,
     body: body as unknown as Array<Array<string | Cell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM },
+    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: 56 },
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
     bodyStyles: { fillColor: '#ffffff' },
     alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
+    didDrawPage: () => {
+      tablePagesSeen++;
+      if (tablePagesSeen > 1 && deptLabel) {
+        doc.setFont(PDF_FONT, 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(theme.primary);
+        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, 42);
+        doc.setDrawColor(HAIR);
+        doc.setLineWidth(0.5);
+        doc.line(MARGIN_X, 46, A4.w - MARGIN_X, 46);
+      }
+    },
     columnStyles: Object.fromEntries(
       colWidths.map((w, i) => [i, { cellWidth: w, halign: 'left' }])
     ) as unknown as Record<number, { cellWidth: number }>,
@@ -2036,7 +2073,9 @@ function tableBodyStyles() {
   return {
     font: PDF_FONT,
     fontSize: 9 * theme.fontScale,
-    cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+    // Tighter rows than the old 6/6 padding — a 20-row department block
+    // should read as one dense professional table, not a spaced-out list.
+    cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
     textColor: TEXT,
     lineColor: HAIR,
     lineWidth: bordered ? 0.4 : 0,
@@ -2051,13 +2090,15 @@ function tableHeadStyles() {
     fillColor: theme.tableHeaderBg,
     textColor: theme.tableHeaderText,
     fontStyle: 'bold' as const,
-    fontSize: 10 * theme.fontScale,
+    // Column headers sit BELOW the data in the visual hierarchy — smaller
+    // than the body values, with a firm rule underneath (Drlogy pattern).
+    fontSize: 8.5 * theme.fontScale,
     halign: 'left' as const,
-    cellPadding: { top: 4, right: 6, bottom: 8, left: 6 },
+    cellPadding: { top: 3, right: 6, bottom: 6, left: 6 },
     lineColor: HAIR,
     lineWidth: bordered
       ? 0.4
-      : ({ top: 0, right: 0, bottom: 0.5, left: 0 } as unknown as number),
+      : ({ top: 0, right: 0, bottom: 0.7, left: 0 } as unknown as number),
   };
 }
 
@@ -2494,15 +2535,17 @@ function drawSigFooterPage(
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
   doc.text(`Page ${pageNo} of ${pageTotal}`, A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
-  // Blue band at the bottom (Drlogy "Sample Collection" strip).
+  // Blue band at the bottom (Drlogy "Sample Collection" strip) — the LAB's
+  // contact number (home-collection line), never the patient's phone.
   // Admin toggles via template.showSampleCollectionBand.
-  if (theme.showSampleBand && snap.patient?.phone) {
+  const collectPhone = (practice.phone ?? '').trim();
+  if (theme.showSampleBand && collectPhone) {
     doc.setFillColor(BLUE);
     doc.rect(0, A4.h - 12, A4.w, 12, 'F');
     doc.setFont(PDF_FONT, 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor('#ffffff');
-    doc.text(`Sample Collection  ${snap.patient.phone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
+    doc.text(`Sample Collection  ${collectPhone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
   }
 
   // Optional Powered-by footnote (last page only)
