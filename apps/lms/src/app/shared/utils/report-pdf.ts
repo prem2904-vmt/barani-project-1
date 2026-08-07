@@ -325,7 +325,10 @@ function resolveTheme(
   t.departmentPageBreak = tpl.departmentPageBreak ?? false;
   t.dateFormat      = tpl.dateFormat ?? t.dateFormat;
   t.timeFormat      = (tpl.timeFormat as 'none'|'12h'|'24h') ?? '12h';
-  t.dateTimeSeparator = tpl.dateTimeSeparator ?? t.dateTimeSeparator;
+  // An EMPTY separator mashes date+time together ("07 Aug 202608:03 PM") —
+  // never legible, so blank falls back to the default ", ". A single space is
+  // still respected as an explicit choice.
+  t.dateTimeSeparator = tpl.dateTimeSeparator ? tpl.dateTimeSeparator : t.dateTimeSeparator;
   t.showRegistered  = tpl.showRegistered ?? true;
   t.showCollected   = tpl.showCollectionDate ?? true;
   t.showReported    = tpl.showReportDate ?? true;
@@ -1643,25 +1646,33 @@ function renderColumnarTable(
   // so we draw a small triangle in didDrawCell). null = no arrow on that row.
   const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string } | null> = [];
   for (const g of groups) {
-    // Panel / profile header band — bold, full width.
-    body.push([{
-      content: g.testName.toUpperCase(),
-      colSpan: COLSPAN,
-      styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
-    }]);
-    bodyMeta.push(null);
+    // A single-analyte test renders COMPACT: one plain row, no bold panel band
+    // and no Method sub-line — the band + method treatment is reserved for
+    // multi-parameter panels/profiles (CBC, LFT…). This matches the classic
+    // report style: a 20-test biochem order reads as 20 rows, not 20 panels.
+    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab;
 
-    // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
-    const sub: string[] = [];
-    if (g.method) sub.push(`Method: ${g.method}`);
-    if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
-    if (sub.length > 0) {
+    if (!compact) {
+      // Panel / profile header band — bold, full width.
       body.push([{
-        content: sub.join('       '),
+        content: g.testName.toUpperCase(),
         colSpan: COLSPAN,
-        styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+        styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
       }]);
       bodyMeta.push(null);
+
+      // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
+      const sub: string[] = [];
+      if (g.method) sub.push(`Method: ${g.method}`);
+      if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
+      if (sub.length > 0) {
+        body.push([{
+          content: sub.join('       '),
+          colSpan: COLSPAN,
+          styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+        }]);
+        bodyMeta.push(null);
+      }
     }
 
     let firstParam = true;
@@ -1689,7 +1700,9 @@ function renderColumnarTable(
       // Value for a single configured column member, by type.
       const valueOf = (m: ReportColumn): string => {
         switch (m.type) {
-          case 'name':   return (r.name ?? '').trim();
+          // Compact single-analyte rows fall back to the TEST name so the row
+          // is never blank when the parameter name is missing.
+          case 'name':   return (r.name ?? '').trim() || g.testName;
           case 'result': return (r.result ?? '').trim();
           case 'unit':   return (r.unit ?? '').trim();
           case 'range':  return (r.range ?? '').trim();
