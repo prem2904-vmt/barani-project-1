@@ -76,37 +76,50 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── IDENTITY ────────── -->
             @case ('identity') {
               <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-3">
-                  <div><label class="pf-label">Lab name</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().labName"
-                           (ngModelChange)="patch({ labName: $event })" /></div>
-                  <div><label class="pf-label">Tagline</label>
-                    <input type="text" class="pf-input"
-                           placeholder="e.g. Accurate | Caring | Instant"
-                           [ngModel]="tpl().tagline"
-                           (ngModelChange)="patch({ tagline: $event })" /></div>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div><label class="pf-label">Phone</label>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Branding</h4>
+                  <p class="pf-rtb-s">The name and tagline printed at the top of every report.</p>
+                  <div class="space-y-3">
+                    <div><label class="pf-label">Lab name</label>
                       <input type="text" class="pf-input"
-                             [ngModel]="tpl().phone"
-                             (ngModelChange)="patch({ phone: $event })" /></div>
-                    <div><label class="pf-label">Email</label>
+                             [ngModel]="tpl().labName"
+                             (ngModelChange)="patch({ labName: $event })" /></div>
+                    <div><label class="pf-label">Tagline</label>
                       <input type="text" class="pf-input"
-                             [ngModel]="tpl().email"
-                             (ngModelChange)="patch({ email: $event })" /></div>
+                             placeholder="e.g. Accurate | Caring | Instant"
+                             [ngModel]="tpl().tagline"
+                             (ngModelChange)="patch({ tagline: $event })" /></div>
                   </div>
-                  <div><label class="pf-label">Website</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().website"
-                           (ngModelChange)="patch({ website: $event })" /></div>
-                  <div><label class="pf-label">Address</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().address"
-                           (ngModelChange)="patch({ address: $event })" /></div>
+                </div>
 
-                  <div class="pf-divider"></div>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Contact</h4>
+                  <p class="pf-rtb-s">Shown in the letterhead's right column.</p>
+                  <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div><label class="pf-label">Phone</label>
+                        <input type="text" class="pf-input"
+                               [ngModel]="tpl().phone"
+                               (ngModelChange)="patch({ phone: $event })" /></div>
+                      <div><label class="pf-label">Email</label>
+                        <input type="text" class="pf-input"
+                               [ngModel]="tpl().email"
+                               (ngModelChange)="patch({ email: $event })" /></div>
+                    </div>
+                    <div><label class="pf-label">Website</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="tpl().website"
+                             (ngModelChange)="patch({ website: $event })" /></div>
+                    <div><label class="pf-label">Address</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="tpl().address"
+                             (ngModelChange)="patch({ address: $event })" /></div>
+                  </div>
+                </div>
 
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Accreditation</h4>
+                  <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
                       <p class="font-semibold text-[14px]" style="color: var(--text-primary);">NABL accredited</p>
@@ -131,6 +144,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       </div>
                     </div>
                   }
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -138,9 +152,11 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── HEADER & LOGO ────────── -->
             @case ('header') {
               <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-4">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Logo</h4>
+                  <p class="pf-rtb-s">Upload once — position and size control where it sits in the letterhead.</p>
+                  <div class="space-y-3">
                   <div>
-                    <label class="pf-label">Lab logo</label>
                     <pf-image-upload [url]="tpl().logoUrl"
                                      (urlChange)="patch({ logoUrl: $event })">
                     </pf-image-upload>
@@ -175,7 +191,12 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       </pf-segmented>
                     </div>
                   </div>
+                  </div>
+                </div>
 
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Header extras</h4>
+                  <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
                       <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Top accent bar</p>
@@ -208,6 +229,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
                     </div>
                   }
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -215,9 +237,10 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── THEME ────────── -->
             @case ('theme') {
               <pf-tile tone="default" padding="lg" class="block">
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Colors</p>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Colours</h4>
+                  <p class="pf-rtb-s">Brand and table colours used across the printed report.</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                   @for (c of colorFields; track c.key) {
                     <div>
                       <label class="pf-label">{{ c.label }}</label>
@@ -232,11 +255,11 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </div>
                   }
                 </div>
+                </div>
 
-                <div class="pf-divider"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Typography & table style</p>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Typography &amp; table</h4>
+                  <p class="pf-rtb-s">Font, table lines and department behaviour.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label class="pf-label">Font family</label>
@@ -271,6 +294,13 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (checkedChange)="patch({ zebraRows: $event })">
                     </pf-toggle>
                   </div>
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Abnormal results</h4>
+                  <p class="pf-rtb-s">How out-of-range values are marked and coloured.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                        [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                     <label class="pf-label">Abnormal value style</label>
@@ -316,6 +346,12 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                              (ngModelChange)="patch({ abnormalLowColor: $event })" />
                     </div>
                   }
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Departments &amp; details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
                     <pf-toggle [checked]="tpl().groupByDepartment"
@@ -338,12 +374,16 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </pf-toggle>
                   </div>
                 </div>
+                </div>
               </pf-tile>
             }
 
             <!-- ────────── PATIENT BLOCK ────────── -->
             @case ('patient') {
               <pf-tile tone="default" padding="lg" class="block">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Patient block</h4>
+                  <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
                 <div class="space-y-4">
                   <div>
                     <label class="pf-label">Patient block layout</label>
@@ -416,6 +456,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </div>
                   </div>
                 </div>
+              </div>
               </pf-tile>
             }
 
@@ -434,6 +475,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── SIGN-OFF & FOOTER ────────── -->
             @case ('signoff') {
               <pf-tile tone="default" padding="lg" class="block">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Sign-off &amp; footer</h4>
+                  <p class="pf-rtb-s">Signature slots print at the bottom of the report (per-department signatories from the actual validators override these); disclaimer and end-of-report text close the page.</p>
                 <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
                    style="color: var(--text-muted);">Signature blocks (up to 3)</p>
 
@@ -538,6 +582,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </pf-toggle>
                   </div>
                 </div>
+              </div>
               </pf-tile>
             }
           }
@@ -569,6 +614,13 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     </section>
   `,
   styles: [`
+    /* ── Titled setting blocks (same language as the columns editor) ── */
+    .pf-rtb { margin-bottom: 14px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
+      border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .pf-rtb:last-child { margin-bottom: 0; }
+    .pf-rtb-h { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-rtb-s { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+
     /* ── Section-card nav (left pane) ── */
     .pf-rt-nav {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;
