@@ -207,22 +207,150 @@ function defaultResultParam(): TestParameter {
           </div>
         }
 
-        @for (grp of testGroups(); track grp.key) {
-          @if (grp.title) {
-            <!-- Profile / package block — the user ordered a PROFILE, so entry
-                 reads as ONE titled card with its member tests in sequence,
-                 not N unrelated test cards. -->
-            <div class="pf-sre__profile">
-              <header class="pf-sre__profile-hdr">
-                <h2 class="pf-sre__profile-name">{{ grp.title }}</h2>
-                <span class="pf-sre__profile-count">{{ grp.tests.length }} tests</span>
-              </header>
-              <ng-container *ngTemplateOutlet="testCard; context: { $implicit: grp.tests, member: true }"></ng-container>
-            </div>
+        @for (blk of entryBlocks(); track blk.key) {
+          @if (blk.kind === 'card' || viewMode() !== 'grid') {
+            <!-- Classic cards: multi-parameter/culture/schema-less tests, and
+                 the whole form view. -->
+            <ng-container *ngTemplateOutlet="testCard; context: { $implicit: blk.tests, member: false }"></ng-container>
           } @else {
-            <ng-container *ngTemplateOutlet="testCard; context: { $implicit: grp.tests, member: false }"></ng-container>
+            <!-- FLAT block: one column-header strip, then a plain sequence of
+                 rows. A profile shows its name once above (Profile → test,
+                 test, test…); plain tests need no header at all — the row's
+                 Parameter column already names the test. -->
+            <section class="pf-sre__test pf-sre__flat">
+              @if (blk.title) {
+                <header class="pf-sre__flat-hdr">
+                  <h2 class="pf-sre__profile-name">{{ blk.title }}</h2>
+                  <span class="pf-sre__profile-count">{{ blk.tests.length }} tests</span>
+                </header>
+              }
+              <div class="pf-sre__grid-wrap">
+                <table class="pf-sre__grid">
+                  <thead>
+                    <tr>
+                      <th class="pf-sre__gc-param">Parameter</th>
+                      <th class="pf-sre__gc-result">Result</th>
+                      <th class="pf-sre__gc-unit">Unit</th>
+                      <th class="pf-sre__gc-range">Reference range</th>
+                      <th class="pf-sre__gc-method">Method</th>
+                      <th class="pf-sre__gc-note"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (t of blk.tests; track t.id) {
+                      @if (t.status === 're_entry' && t.rejectionReason) {
+                        <tr class="pf-sre__grow-reject"><td colspan="6"><strong>Pathologist note:</strong> {{ t.rejectionReason }}</td></tr>
+                      }
+                      @if (parametersFor(t).length > 1) {
+                        <!-- Multi-parameter member inside a profile: one slim
+                             sub-label row, then its parameter rows. -->
+                        <tr class="pf-sre__gsub"><td colspan="6">{{ t.test?.name ?? 'Test' }}</td></tr>
+                      }
+                      @for (p of parametersFor(t); track p.name; let idx = $index) {
+                        <tr class="pf-sre__grow"
+                            [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
+                          <td class="pf-sre__gc-param">
+                            <span class="pf-sre__gname">{{ parametersFor(t).length > 1 ? (p.title || p.name) : (t.test?.name || p.title || p.name) }}@if (hasOpenComment(t.id, p.name)) {<span class="pf-sre__param-flag" title="Pathologist commented"> ↻</span>}</span>
+                          </td>
+                          <td class="pf-sre__gc-result">
+                            <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
+                            @if (p.unit) {
+                              <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span>
+                            }
+                          </td>
+                          <td class="pf-sre__gc-unit">{{ p.unit || '—' }}</td>
+                          <td class="pf-sre__gc-range">{{ refLabelFor(p) || '—' }}</td>
+                          <td class="pf-sre__gc-method">{{ methodologyOf(p) }}</td>
+                          <td class="pf-sre__gc-note">
+                            @if (idx === 0) {
+                              @if (t.status === 're_entry') { <span class="pf-sre__gdot pf-sre__gdot--rejected" title="Re-entry needed"></span> }
+                              @else if (t.status === 'entered' || t.status === 'validated') { <span class="pf-sre__gdot pf-sre__gdot--done" title="Entered"></span> }
+                              <button type="button" class="pf-sre__gnote press"
+                                      [class.pf-sre__gnote--has]="commentsFor(t.id, null).length > 0"
+                                      (click)="toggleOverall(t.id)" title="Note on this test">✎</button>
+                            }
+                          </td>
+                        </tr>
+                        @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
+                          <tr class="pf-sre__grow-comments">
+                            <td colspan="6">
+                              <pf-comment-thread
+                                [comments]="commentsFor(t.id, p.name)"
+                                currentRole="tech"
+                                [composeLabel]="'Add note on this parameter'"
+                                (add)="addParameterComment(t.id, p.name, $event.body, $event.type)"
+                                (reply)="replyToParameter(t.id, p.name, $event.parentId, $event.body)">
+                              </pf-comment-thread>
+                            </td>
+                          </tr>
+                        }
+                      }
+                      @if (isOverallOpen(t.id) || commentsFor(t.id, null).length > 0) {
+                        <tr class="pf-sre__grow-comments">
+                          <td colspan="6">
+                            <pf-comment-thread
+                              [comments]="commentsFor(t.id, null)"
+                              currentRole="tech"
+                              (add)="addOverallComment(t.id, $event.body, $event.type)"
+                              (reply)="replyToOverall(t.id, $event.parentId, $event.body)">
+                            </pf-comment-thread>
+                          </td>
+                        </tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
           }
         }
+
+        <!-- Shared result-input control (grid tables): one definition, used by
+             both the flat block rows and the classic card grid. -->
+        <ng-template #resultInput let-t="t" let-p="p">
+          @switch (inputKindFor(p)) {
+            @case ('number') {
+              <input type="number" step="any" class="pf-sre__ginput pf-sre__ginput--num"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @case ('select') {
+              <select class="pf-sre__ginput"
+                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                      [ngModel]="getValue(t.id, p.name)"
+                      (ngModelChange)="setValue(t.id, p.name, $event)">
+                <option value="">—</option>
+                @for (o of (p.options ?? []); track o) {
+                  <option [value]="o">{{ o }}</option>
+                }
+              </select>
+            }
+            @case ('textarea') {
+              <textarea class="pf-sre__ginput pf-sre__ginput--ta" rows="1"
+                        [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                        [ngModel]="getValue(t.id, p.name)"
+                        (ngModelChange)="setValue(t.id, p.name, $event)"></textarea>
+            }
+            @case ('checkbox') {
+              <input type="checkbox" class="pf-sre__cb"
+                     [ngModel]="!!getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @case ('date') {
+              <input type="date" class="pf-sre__ginput"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @default {
+              <input type="text" class="pf-sre__ginput"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+          }
+        </ng-template>
 
         <ng-template #testCard let-cardTests let-member="member">
         @for (t of cardTests; track t.id) {
@@ -816,6 +944,34 @@ function defaultResultParam(): TestParameter {
     }
     .pf-sre__test--member .pf-sre__test-name { font-size: 13px; }
 
+    /* ── FLAT block: one header strip + a plain sequence of rows ── */
+    .pf-sre__flat-hdr {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 2px 4px 12px;
+    }
+    /* Sub-label row for a multi-parameter member inside a profile. */
+    .pf-sre__gsub td {
+      padding: 8px 10px 4px; font-size: 12.5px; font-weight: 700;
+      color: var(--text-secondary, #cbd5e1); border-bottom: none;
+    }
+    /* Inline rejection note row. */
+    .pf-sre__grow-reject td {
+      padding: 6px 10px; font-size: 12px; color: #fca5a5;
+      background: rgba(248, 113, 113, 0.06);
+    }
+    /* Status dot + per-test note button (last slim column). */
+    .pf-sre__gc-note { width: 56px; text-align: right; white-space: nowrap; }
+    .pf-sre__gdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .pf-sre__gdot--done { background: #34d399; }
+    .pf-sre__gdot--rejected { background: #f87171; }
+    .pf-sre__gnote {
+      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25));
+      background: transparent; color: var(--text-tertiary, #94a3b8);
+      border-radius: 8px; width: 26px; height: 26px; font-size: 12px; cursor: pointer;
+    }
+    .pf-sre__gnote:hover { color: var(--text-primary, #e2e8f0); background: rgba(148, 163, 184, 0.12); }
+    .pf-sre__gnote--has { color: var(--violet-400, #a78bfa); border-color: rgba(167, 139, 250, 0.5); }
+
     /* Background autosave pill. */
     .pf-sre__autosave {
       display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
@@ -1319,25 +1475,46 @@ export class SampleResultEntryComponent {
    *  (editable on the My signature screen). */
   readonly techRegId = computed(() => this.auth.user()?.registrationId?.trim() || '—');
 
-  /** Entry blocks: tests ordered through a PROFILE are compiled into one
-   *  titled block (profile name above, member tests as the sequence inside);
-   *  individually-ordered tests stay as their own card. */
-  readonly testGroups = computed<Array<{ key: string; title: string | null; tests: OrderTest[] }>>(() => {
+  /** Entry blocks for the grid view.
+   *  - 'flat'  → ONE column-header strip + a sequence of rows. Used for
+   *    profile/package members (titled with the profile name) AND for plain
+   *    single-parameter tests (untitled — the row already names the test, so
+   *    no per-test header/card).
+   *  - 'card'  → the classic per-test card, kept only where it's needed:
+   *    multi-parameter standalone tests, cultures, and schema-less tests. */
+  readonly entryBlocks = computed<Array<
+    { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |
+    { kind: 'card'; key: string; tests: OrderTest[] }
+  >>(() => {
     const tests = this.sample()?.tests ?? [];
-    const out: Array<{ key: string; title: string | null; tests: OrderTest[] }> = [];
-    const byPkg = new Map<string, { key: string; title: string | null; tests: OrderTest[] }>();
+    const out: Array<
+      { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |
+      { kind: 'card'; key: string; tests: OrderTest[] }
+    > = [];
+    const byPkg = new Map<string, { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] }>();
+    let loose: { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } | null = null;
     for (const t of tests) {
+      const rowable = !this.isCultureTest(t) && this.parametersFor(t).length > 0;
       const pkg = t.packageTestId;
-      if (!pkg) { out.push({ key: t.id, title: null, tests: [t] }); continue; }
-      let g = byPkg.get(pkg);
-      if (!g) {
-        g = { key: 'pkg-' + pkg, title: t.packageName || 'Profile', tests: [] };
-        byPkg.set(pkg, g);
-        out.push(g);
+      if (pkg) {
+        if (!rowable) { out.push({ kind: 'card', key: t.id, tests: [t] }); continue; }
+        let g = byPkg.get(pkg);
+        if (!g) {
+          g = { kind: 'flat', key: 'pkg-' + pkg, title: t.packageName || 'Profile', tests: [] };
+          byPkg.set(pkg, g);
+          out.push(g);
+        }
+        g.tests.push(t);
+        continue;
       }
-      g.tests.push(t);
+      if (rowable && this.parametersFor(t).length === 1) {
+        if (!loose) { loose = { kind: 'flat', key: 'loose', title: null, tests: [] }; out.push(loose); }
+        loose.tests.push(t);
+        continue;
+      }
+      out.push({ kind: 'card', key: t.id, tests: [t] });
     }
-    return out;
+    return out.filter(b => b.tests.length > 0);
   });
 
   // ── Background autosave (manual Save draft is still available) ──────
