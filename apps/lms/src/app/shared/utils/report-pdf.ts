@@ -180,6 +180,12 @@ interface ReportSnapshot {
     name?: string;
     department?: string;
     departmentCode?: string;
+    /** The tube's sample ID — shown on the department band. */
+    sampleId?: string | null;
+    /** Profile linkage: tests ordered through a profile carry the profile's
+     *  test id + name and are compiled into ONE panel under that name. */
+    packageTestId?: string | null;
+    packageName?: string | null;
     /** Specimen / sample type — pulled from TestEntity.Parameters JSON
      *  during snapshot build. Rendered in the continuous results table's
      *  Specimen column (once, on the test's first parameter row). */
@@ -205,6 +211,10 @@ interface ReportSnapshot {
    *  prefers these over the admin template signature slots. Each `signatureUrl`
    *  is a base64 data URL (already embedded — no prefetch needed). */
   signatures?: ReportSignature[];
+  /** Per-department signatories (that department's technician + consultant),
+   *  drawn at the end of each department's block. When present, the global
+   *  per-page signature row is suppressed. */
+  deptSignatures?: Array<{ department?: string; signatures?: ReportSignature[] }>;
 }
 
 // ── Page geometry ─────────────────────────────────────────────────
@@ -558,8 +568,32 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // Keep zero-row groups: a test with a pending/empty result still renders its
   // bold panel header in its department position, rather than being dropped
   // (or, in the viewer, sunk to the un-bold block at the bottom).
-  const groups = tabular
-    .map(t => buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined));
+  //
+  // Tests ordered through a PROFILE (packageTestId) are COMPILED into one
+  // panel under the profile's name — "Liver Function Test" with its members
+  // as rows — instead of every member listing as its own standalone test.
+  const groups: PanelGroup[] = [];
+  const byPkg = new Map<string, PanelGroup>();
+  for (const t of tabular) {
+    const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
+    g.sampleId = t.sampleId ?? undefined;
+    const pkg = t.packageTestId ?? null;
+    if (!pkg) { groups.push(g); continue; }
+    let merged = byPkg.get(pkg);
+    if (!merged) {
+      // Method varies per member — a single method claim on the profile band
+      // would be wrong, so the merged panel carries none.
+      merged = { ...g, testName: t.packageName || g.testName, method: undefined, rows: [] };
+      byPkg.set(pkg, merged);
+      groups.push(merged);
+    }
+    if (g.rows.length === 1 && g.rows[0].kind === 'param') {
+      // Single-analyte member → one row named after the member test.
+      merged.rows.push({ ...g.rows[0], name: (g.rows[0].name ?? '').trim() || g.testName });
+    } else {
+      merged.rows.push(...g.rows);
+    }
+  }
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
   // Computed up-front so BOTH the continuous table and the grid sections lay
@@ -575,12 +609,19 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const outScope = claimsNabl ? groups.filter(g => g.inScope === false) : [];
   const inScope = outScope.length > 0 ? groups.filter(g => g.inScope !== false) : groups;
 
+  // Per-department signatories: that department's technician + consultant sign
+  // at the end of their OWN block.
+  const deptSigs = new Map<string, ReportSignature[]>();
+  for (const d of snap.deptSignatures ?? []) {
+    if (d.department && d.signatures?.length) deptSigs.set(d.department.trim(), d.signatures);
+  }
+
   if (inScope.length > 0) {
-    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null);
+    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs);
   }
   if (outScope.length > 0) {
     cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
-    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null);
+    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs);
   }
 
   // Narrative + microbiology blocks after the columnar results.
@@ -599,16 +640,9 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     cursorY += 10;
   }
 
-  // ── Pending-depts banner (preliminary only) ────────────────────
-  if (snap.isPartial && (snap.pendingDepts?.length ?? 0) > 0) {
-    if (cursorY > A4.h - MARGIN_BOTTOM - 60) { cursorY = newPage(doc, practice); }
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor('#92400e');
-    doc.text(`Other departments still pending: ${snap.pendingDepts!.join(', ')}`,
-      MARGIN_X, cursorY + 10);
-    cursorY += 22;
-  }
+  // (Pending-departments banner intentionally NOT printed — a preliminary
+  // report should read clean; the "End of Preliminary Report" marker already
+  // signals more results are coming.)
 
   // ── Trendogram charts (serial-result trends), 2-per-row, up to 6/page ──
   if (input.trendograms?.length) {
@@ -1468,6 +1502,8 @@ interface PanelGroup {
   referralLab?: string | null;
   /** undefined ⇒ treated as in NABL scope (no claim either way). */
   inScope?: boolean;
+  /** The tube's sample ID — surfaced on the department band. */
+  sampleId?: string;
   rows: PanelRowData[];
 }
 
@@ -1566,7 +1602,8 @@ function renderScopeHeading(
   doc: jsPDF,
   text: string,
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  rightText?: string | null
 ): number {
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
@@ -1576,6 +1613,13 @@ function renderScopeHeading(
   doc.setFontSize(10.5);
   doc.setTextColor(theme.primary);
   doc.text(text, MARGIN_X, y + 12);
+  if (rightText) {
+    // e.g. "Sample ID: 26001" — ties the department block to its tube(s).
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(rightText, A4.w - MARGIN_X, y + 12, { align: 'right' });
+  }
   doc.setDrawColor(theme.primary);
   doc.setLineWidth(1);
   doc.line(MARGIN_X, y + 17, A4.w - MARGIN_X, y + 17);
@@ -1590,7 +1634,8 @@ function renderContinuousTable(
   groups: PanelGroup[],
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>,
-  _title: string | null
+  _title: string | null,
+  deptSigs?: Map<string, ReportSignature[]>
 ): number {
   if (groups.length === 0) return startY;
   // Partition into departments, preserving first-seen order.
@@ -1611,14 +1656,62 @@ function renderContinuousTable(
       y = newPage(doc, practice);
     }
     // Show a department heading when the report spans departments (or when the
-    // admin opted into department banding or page breaks).
+    // admin opted into department banding or page breaks). The department's
+    // sample ID(s) print right-aligned on the same band.
     if (dept && (multiDept || theme.groupByDepartment || theme.departmentPageBreak)) {
-      y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice);
+      const ids = [...new Set(dg.map(g => g.sampleId).filter((s): s is string => !!s))];
+      const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
+      y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice, right);
     }
     y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null);
+    // This department's OWN technician + consultant sign at the end of its
+    // block — never the global set, never the downloader.
+    const sigs = deptSigs?.get(dept);
+    if (sigs?.length) y = drawInlineSignatures(doc, sigs, y, practice);
     rendered++;
   }
   return y;
+}
+
+/** Signature columns drawn INLINE at the end of a department block (image +
+ *  name + title, spread evenly). Page-breaks first when there's no room. */
+function drawInlineSignatures(
+  doc: jsPDF,
+  sigs: ReportSignature[],
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>
+): number {
+  const list = sigs.slice(0, 3).filter(s => s.name || s.signatureUrl);
+  if (list.length === 0) return startY;
+  let y = startY + 12;
+  if (y > A4.h - MARGIN_BOTTOM - 84) { y = newPage(doc, practice) + 6; }
+  const colW = (A4.w - 2 * MARGIN_X) / list.length;
+  const baseY = y + 30;
+  list.forEach((s, i) => {
+    const px = MARGIN_X + i * colW + colW / 2;
+    const sigSrc = s.signatureUrl
+      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
+      : null;
+    if (sigSrc) {
+      try { doc.addImage(sigSrc, 'PNG', px - 35, baseY - 20, 70, 24, undefined, 'FAST'); }
+      catch { drawSigScribble(doc, px, baseY + 4); }
+    } else {
+      drawSigScribble(doc, px, baseY + 4);
+    }
+    if (s.name) {
+      doc.setFont(PDF_FONT, 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(BLACK);
+      doc.text(s.name, px, baseY + 16, { align: 'center' });
+    }
+    if (s.title) {
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(TEXT_DIM);
+      doc.text(`(${s.title})`, px, baseY + 27, { align: 'center' });
+    }
+  });
+  return baseY + 34;
 }
 
 /** Resolve the column layout for one department's groups: the first group's
@@ -2446,7 +2539,12 @@ function drawSigFooterPage(
 
   // Prefer template-supplied signatures (admin-editable JSON array); the
   // legacy flat practice shape is the fallback when no template is set.
-  const sigs: ReportSignature[] = theme.signatures.length > 0
+  // When the snapshot carries PER-DEPARTMENT signatories, each department
+  // block already signs itself inline — skip the repeated page-bottom row
+  // entirely (the disclaimer/date strip below still draws).
+  const sigs: ReportSignature[] = (snap.deptSignatures?.length ?? 0) > 0
+    ? []
+    : theme.signatures.length > 0
     ? theme.signatures.slice(0, 3)
     : [
         { name: practice.sigLabTechName,      title: practice.sigLabTechTitle      },
@@ -2533,7 +2631,8 @@ function drawSigFooterPage(
   doc.setFontSize(8);
   doc.setTextColor(BLACK);
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
-  doc.text(`Page ${pageNo} of ${pageTotal}`, A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
+  // Plain page number ("1", "2", "3" …).
+  doc.text(String(pageNo), A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
   // Blue band at the bottom (Drlogy "Sample Collection" strip) — the LAB's
   // contact number (home-collection line), never the patient's phone.
