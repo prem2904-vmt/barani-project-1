@@ -78,7 +78,14 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               <pf-tile tone="default" padding="lg" class="block">
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Branding</h4>
-                  <p class="pf-rtb-s">The name and tagline printed at the top of every report.</p>
+                  <p class="pf-rtb-s">The name and tagline printed at the top of every report — live below.</p>
+                  <div class="pf-wys-paper pf-wys-masthead">
+                    <span class="pf-wys-masthead__name" [style.color]="colorOf('primaryColor') || '#1B3A6B'">
+                      {{ tpl().labName || 'Your Lab Name' }}
+                    </span>
+                    <span class="pf-wys-masthead__tag">{{ tpl().tagline || 'Tagline appears here' }}</span>
+                    <span class="pf-wys-masthead__bar" [style.background]="colorOf('accentColor') || '#0066CC'"></span>
+                  </div>
                   <div class="space-y-3">
                     <div><label class="pf-label">Lab name</label>
                       <input type="text" class="pf-input"
@@ -163,14 +170,22 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label class="pf-label">Header preset</label>
-                      <pf-segmented
-                        [options]="headerPresetOptions"
-                        [value]="tpl().headerPreset ?? 'drlogy'"
-                        size="sm"
-                        (valueChange)="patch({ headerPreset: $event })">
-                      </pf-segmented>
+                    <div class="md:col-span-3">
+                      <label class="pf-label">Header style</label>
+                      <div class="pf-wys-thumbs">
+                        @for (o of headerPresetOptions; track o.value) {
+                          <button type="button" class="pf-wys-thumb press"
+                                  [class.pf-wys-thumb--on]="(tpl().headerPreset ?? 'drlogy') === o.value"
+                                  (click)="patch({ headerPreset: $any(o.value) })">
+                            <span class="pf-wys-thumb__paper" [class]="'pf-wys-thumb__paper--' + o.value">
+                              <span class="pf-wys-thumb__logo"></span>
+                              <span class="pf-wys-thumb__lines"><i></i><i></i></span>
+                              <span class="pf-wys-thumb__accent"></span>
+                            </span>
+                            <span class="pf-wys-thumb__name">{{ o.label }}</span>
+                          </button>
+                        }
+                      </div>
                     </div>
                     <div>
                       <label class="pf-label">Logo position</label>
@@ -263,12 +278,17 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label class="pf-label">Font family</label>
-                    <pf-segmented
-                      [options]="fontOptions"
-                      [value]="tpl().fontFamily ?? 'helvetica'"
-                      size="sm"
-                      (valueChange)="patch({ fontFamily: $event })">
-                    </pf-segmented>
+                    <div class="pf-wys-fonts">
+                      @for (o of fontOptions; track o.value) {
+                        <button type="button" class="pf-wys-font press"
+                                [class.pf-wys-font--on]="(tpl().fontFamily ?? 'helvetica') === o.value"
+                                [style.fontFamily]="fontCss($any(o.value))"
+                                (click)="patch({ fontFamily: $any(o.value) })">
+                          <span class="pf-wys-font__sample">AaBb123</span>
+                          <span class="pf-wys-font__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
                   </div>
                   <div>
                     <label class="pf-label">Font size</label>
@@ -281,12 +301,18 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
                   <div>
                     <label class="pf-label">Table style</label>
-                    <pf-segmented
-                      [options]="tableStyleOptions"
-                      [value]="tpl().tableStyle ?? 'plain'"
-                      size="sm"
-                      (valueChange)="patch({ tableStyle: $event })">
-                    </pf-segmented>
+                    <div class="pf-wys-thumbs">
+                      @for (o of tableStyleOptions; track o.value) {
+                        <button type="button" class="pf-wys-thumb press"
+                                [class.pf-wys-thumb--on]="(tpl().tableStyle ?? 'plain') === o.value"
+                                (click)="patch({ tableStyle: $any(o.value) })">
+                          <span class="pf-wys-mini" [class]="'pf-wys-mini--' + o.value">
+                            <i></i><i></i><i></i><i></i>
+                          </span>
+                          <span class="pf-wys-thumb__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Zebra rows</span>
@@ -299,7 +325,17 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
 
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Abnormal results</h4>
-                  <p class="pf-rtb-s">How out-of-range values are marked and coloured.</p>
+                  <p class="pf-rtb-s">How out-of-range values are marked — this row is live:</p>
+                  <div class="pf-wys-paper pf-wys-demo">
+                    <span>Hemoglobin</span>
+                    <span [style.fontWeight]="(tpl().flagIndicator ?? 'letter') === 'none' ? '400' : '700'"
+                          [style.color]="(tpl().flagStyle ?? 'bold') === 'bold_color' && (tpl().flagIndicator ?? 'letter') !== 'none' ? (tpl().abnormalLowColor || '#2563eb') : '#111'">
+                      11.4 g/dL
+                      @if ((tpl().flagIndicator ?? 'letter') === 'letter') { <span>&nbsp;L</span> }
+                      @else if ((tpl().flagIndicator ?? 'letter') === 'arrow') { <span>&nbsp;▼</span> }
+                    </span>
+                    <span class="pf-wys-demo__range">12.0 – 16.0</span>
+                  </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                        [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
@@ -477,6 +513,19 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               <pf-tile tone="default" padding="lg" class="block">
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Sign-off &amp; footer</h4>
+                  <div class="pf-wys-paper pf-wys-sigs">
+                    @for (sig of signatures(); track $index) {
+                      <span class="pf-wys-sig">
+                        @if (sig.signatureUrl) { <img [src]="sig.signatureUrl" alt="" class="pf-wys-sig__img" /> }
+                        @else { <span class="pf-wys-sig__scribble">✎</span> }
+                        <b>{{ sig.name || 'Name' }}</b>
+                        <i>({{ sig.title || 'Title' }})</i>
+                        @if (sig.regNo) { <small>Reg. {{ sig.regNo }}</small> }
+                      </span>
+                    } @empty {
+                      <span class="pf-wys-sig pf-wys-sig--empty">No template signatures — reports sign with each department's actual technician &amp; validator.</span>
+                    }
+                  </div>
                   <p class="pf-rtb-s">Signature slots print at the bottom of the report (per-department signatories from the actual validators override these); disclaimer and end-of-report text close the page.</p>
                 <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
                    style="color: var(--text-muted);">Signature blocks (up to 3)</p>
@@ -614,6 +663,68 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     </section>
   `,
   styles: [`
+    /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
+    .pf-wys-paper { background: #ffffff; color: #111; border-radius: 10px; padding: 12px 14px;
+      border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 6px rgba(0,0,0,0.35); }
+    .pf-wys-masthead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+    .pf-wys-masthead__name { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; }
+    .pf-wys-masthead__tag { font-size: 11.5px; color: #555; }
+    .pf-wys-masthead__bar { height: 4px; border-radius: 2px; margin-top: 8px; }
+
+    .pf-wys-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
+    .pf-wys-thumb--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-thumb__name { font-size: 11px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
+    .pf-wys-thumb__paper { position: relative; width: 116px; height: 62px; border-radius: 6px; background: #fff;
+      display: block; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-thumb__logo { position: absolute; top: 8px; left: 8px; width: 14px; height: 14px; border-radius: 3px; background: #94a3b8; }
+    .pf-wys-thumb__lines { position: absolute; top: 9px; left: 28px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .pf-wys-thumb__lines i { height: 5px; border-radius: 2px; background: #cbd5e1; display: block; }
+    .pf-wys-thumb__lines i:first-child { background: #64748b; width: 70%; }
+    .pf-wys-thumb__accent { position: absolute; left: 0; right: 0; top: 30px; height: 3px; background: #3b82f6; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__accent { top: 0; height: 10px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__logo { top: 16px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__lines { top: 18px; }
+    .pf-wys-thumb__paper--classic .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__logo { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__lines { left: 10px; }
+
+    .pf-wys-fonts { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 92px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-wys-font--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-font__sample { font-size: 18px; }
+    .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
+
+    .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 116px; padding: 8px;
+      background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-mini i { display: block; height: 6px; border-radius: 2px; background: #e2e8f0; }
+    .pf-wys-mini i:first-child { background: #64748b; }
+    .pf-wys-mini--bordered i { border: 1px solid #94a3b8; background: #fff; height: 8px; }
+    .pf-wys-mini--bordered i:first-child { background: #cbd5e1; }
+    .pf-wys-mini--striped i:nth-child(odd) { background: #cbd5e1; }
+
+    .pf-wys-demo { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; font-size: 13px; }
+    .pf-wys-demo__range { color: #777; font-size: 12px; }
+
+    .pf-wys-sigs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pf-wys-sig { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; min-width: 120px; font-size: 12px; }
+    .pf-wys-sig__img { max-height: 30px; max-width: 90px; object-fit: contain; }
+    .pf-wys-sig__scribble { font-size: 20px; color: #999; }
+    .pf-wys-sig i { color: #666; font-size: 11px; }
+    .pf-wys-sig small { color: #888; font-size: 10px; }
+    .pf-wys-sig--empty { font-size: 11.5px; color: #666; text-align: center; }
+
+    /* Patient drag area framed like the printed patient strip */
+    .pf-pcols { position: relative; padding-top: 26px !important; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+      border-radius: 12px; padding: 26px 10px 10px; }
+    .pf-pcols::before { content: 'PATIENT BLOCK — AS PRINTED'; position: absolute; top: 6px; left: 12px;
+      font-size: 9.5px; letter-spacing: 0.14em; color: var(--text-tertiary, #94a3b8); font-weight: 700; }
+
     /* ── Titled setting blocks (same language as the columns editor) ── */
     .pf-rtb { margin-bottom: 14px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
       border-radius: 14px; background: rgba(255,255,255,0.02); }
@@ -835,6 +946,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly _tpl = signal<ReportTemplate>(this.defaultTemplate());
   readonly tpl = this._tpl.asReadonly();
   patch(p: Partial<ReportTemplate>) { this._tpl.update(v => ({ ...v, ...p })); }
+
+  /** Browser stand-ins for the PDF font families, so the picker cards render
+   *  IN the face they select. */
+  fontCss(v: string): string {
+    if (v === 'times') return "'Times New Roman', Georgia, serif";
+    if (v === 'courier') return "'Courier New', ui-monospace, monospace";
+    return 'Arial, Helvetica, sans-serif';
+  }
 
   // Live columns being edited in the Columns tab + their department, so the
   // preview can apply them to that department's sample tests before save.
