@@ -2283,8 +2283,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.toasts.success(`Report link sent via Email to ${contact}`);
   }
 
-  /** UI flag for the "Download report" button while we fetch + render. */
-  protected readonly _downloadingReport = signal<boolean>(false);
+  /** Order id whose report is currently being fetched + rendered — null when
+   *  idle. Holds the ID (not a boolean) so the template can mark ONLY the
+   *  clicked row as "Preparing…"; a shared boolean flipped every row's
+   *  Download button at once, which read as "all rows show the same
+   *  download". */
+  protected readonly _downloadingReport = signal<string | null>(null);
   readonly downloadingReport = this._downloadingReport.asReadonly();
 
   /** Pull the latest final report for the order and render it as a
@@ -2293,7 +2297,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  the backend already stores on Report.Data. */
   async downloadReport(o: Order) {
     if (this._downloadingReport()) return;
-    this._downloadingReport.set(true);
+    this._downloadingReport.set(o.id);
     try {
       const report = await firstValueFrom(
         this.api.get<Report | null>(`/api/reports/by-order/${o.id}`)
@@ -2319,7 +2323,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       console.error('[fd] download report failed', err);
       this.toasts.error('Could not download the report');
     } finally {
-      this._downloadingReport.set(false);
+      this._downloadingReport.set(null);
     }
   }
   /** Walk every test on the report and ask the engine to resolve its

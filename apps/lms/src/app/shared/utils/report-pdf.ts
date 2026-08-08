@@ -267,6 +267,8 @@ let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
 let IMG_CACHE: Record<string, string> = {};
+/** Template logo URL for the page-1 watermark combination (set per build). */
+let WM_LOGO_URL: string | null = null;
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
@@ -519,6 +521,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     HEADER_RESERVE = 70;
   }
 
+  WM_LOGO_URL = template?.logoUrl ?? null;
   drawLetterhead(doc, practice, template?.logoUrl ?? null);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
@@ -623,12 +626,17 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     if (d.department && d.signatures?.length) deptSigs.set(d.department.trim(), d.signatures);
   }
 
+  // The report's very last department signs AFTER the "End of Report" marker
+  // (deferred via this collector) — every earlier department still signs
+  // inline at the end of its own block.
+  const finalSigs: { sigs: ReportSignature[] | null } = { sigs: null };
   if (inScope.length > 0) {
-    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs);
+    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs,
+      outScope.length === 0 ? finalSigs : undefined);
   }
   if (outScope.length > 0) {
     cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
-    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs);
+    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs, finalSigs);
   }
 
   // Narrative + microbiology blocks after the columnar results.
@@ -659,7 +667,13 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
 
   // ── "Thanks for Reference  ...  ****End of Report****" line ────
   if (cursorY > A4.h - MARGIN_BOTTOM - 26) { cursorY = newPage(doc, practice); }
-  drawEndOfReport(doc, snap, cursorY);
+  cursorY = drawEndOfReport(doc, snap, cursorY);
+
+  // The final department's signatories sign BELOW the End-of-Report marker —
+  // the marker closes the results; the signatures authorise the document.
+  if (finalSigs.sigs?.length) {
+    cursorY = drawInlineSignatures(doc, finalSigs.sigs, cursorY, practice);
+  }
 
   // ── Signature footer + page numbers (every page, drawn last) ───
   // Skipped in letterpad mode — the blank MARGIN_BOTTOM reserve is where the
@@ -1658,7 +1672,8 @@ function renderContinuousTable(
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>,
   _title: string | null,
-  deptSigs?: Map<string, ReportSignature[]>
+  deptSigs?: Map<string, ReportSignature[]>,
+  deferLastSigs?: { sigs: ReportSignature[] | null }
 ): number {
   if (groups.length === 0) return startY;
   // Partition into departments, preserving first-seen order.
@@ -1688,9 +1703,14 @@ function renderContinuousTable(
     }
     y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null);
     // This department's OWN technician + consultant sign at the end of its
-    // block — never the global set, never the downloader.
+    // block — never the global set, never the downloader. The report's LAST
+    // department defers its signatures to after the End-of-Report marker.
     const sigs = deptSigs?.get(dept);
-    if (sigs?.length) y = drawInlineSignatures(doc, sigs, y, practice);
+    const isLast = rendered === order.length - 1;
+    if (sigs?.length) {
+      if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
+      else y = drawInlineSignatures(doc, sigs, y, practice);
+    }
     rendered++;
   }
   return y;
@@ -2536,7 +2556,7 @@ function renderTrendogramSection(
   return y + cellH + 14;   // advance past the last row
 }
 
-function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number) {
+function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): number {
   const y = startY + 12;
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
@@ -2548,6 +2568,7 @@ function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number) {
     ? `**** End of Preliminary Report ****`
     : theme.endOfReportText;
   doc.text(marker, A4.w / 2, y, { align: 'center' });
+  return y;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -2681,29 +2702,55 @@ function drawSigFooterPage(
     doc.text(`Sample Collection  ${collectPhone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
   }
 
-  // Optional Powered-by footnote (last page only)
-  if (theme.showPoweredBy && pageNo === pageTotal && !theme.showSampleBand) {
+  // Optional Powered-by footnote (last page only). With the Sample
+  // Collection band on, it sits centred on the date/page-number strip
+  // instead of the very edge (which the band occupies).
+  if (theme.showPoweredBy && pageNo === pageTotal) {
     doc.setFont(PDF_FONT, 'italic');
     doc.setFontSize(7);
     doc.setTextColor(TEXT_DIM);
-    doc.text('Powered by Prefrontal LMS', A4.w / 2, A4.h - 4, { align: 'center' });
+    const bandOn = theme.showSampleBand && (practice.phone ?? '').trim();
+    doc.text('Powered by Prefrontal LMS', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
   }
 
-  // Optional watermark — drawn behind everything (this runs per-page).
+  // Optional watermark — a COMBINATION of the lab's logo (faint, centred)
+  // and the admin's watermark text angled across it. Page 1 only.
   if (theme.watermarkText && pageNo === 1) {
     const wm = theme.watermarkText;
     const op = theme.watermarkOpacity;
-    // jsPDF doesn't expose a true alpha for text directly without GState;
-    // emulate via a very light grey color computed from the opacity.
+    const cx = A4.w / 2;
+    const cy = A4.h / 2;
+
+    // Logo half of the combination — real alpha via GState so the image
+    // ghosts instead of covering results. Skipped silently when no logo is
+    // cached or the jsPDF build lacks GState.
+    const wmLogo = WM_LOGO_URL ? IMG_CACHE[WM_LOGO_URL] : null;
+    if (wmLogo) {
+      try {
+        const anyDoc = doc as unknown as {
+          saveGraphicsState?: () => void;
+          restoreGraphicsState?: () => void;
+          setGState?: (g: unknown) => void;
+          GState?: new (o: { opacity: number }) => unknown;
+        };
+        if (anyDoc.saveGraphicsState && anyDoc.setGState && anyDoc.GState) {
+          const size = 220;
+          anyDoc.saveGraphicsState();
+          anyDoc.setGState(new anyDoc.GState({ opacity: Math.min(op * 1.6, 0.16) }));
+          doc.addImage(wmLogo, 'PNG', cx - size / 2, cy - size / 2, size, size, undefined, 'FAST');
+          anyDoc.restoreGraphicsState?.();
+        }
+      } catch { /* logo watermark is best-effort — text below still prints */ }
+    }
+
+    // Text half — jsPDF has no direct text alpha without GState; emulate via
+    // a very light grey computed from the opacity.
     const lighten = (1 - op) * 255;
     const grey = Math.round(lighten).toString(16).padStart(2, '0');
     const wmColor = `#${grey}${grey}${grey}`;
     doc.setFont(PDF_FONT, 'bold');
     doc.setFontSize(48);
     doc.setTextColor(wmColor);
-    // Rotate 30deg around page center
-    const cx = A4.w / 2;
-    const cy = A4.h / 2;
     doc.text(wm, cx, cy, { align: 'center', angle: 30 });
   }
 }

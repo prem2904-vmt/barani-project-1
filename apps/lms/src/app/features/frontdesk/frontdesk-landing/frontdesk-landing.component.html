@@ -787,9 +787,9 @@
                           (click)="reprintLabels(o)">Reprint Labels</button>
                         }
                         @if (o.status === 'partially_validated') {
-                        <button type="button" class="pf-ghostbtn press" [disabled]="downloadingReport()"
+                        <button type="button" class="pf-ghostbtn press" [disabled]="downloadingReport() !== null"
                           (click)="downloadReport(o)">
-                          @if (downloadingReport()) { Preparing… } @else { Download }
+                          @if (downloadingReport() === o.id) { Preparing… } @else { Download }
                         </button>
                         }
                       </div>
@@ -879,9 +879,9 @@
                           }
                         </div>
 
-                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" [disabled]="downloadingReport()"
+                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" [disabled]="downloadingReport() !== null"
                           (click)="downloadReport(o)">
-                          @if (downloadingReport()) { Preparing… } @else { Download }
+                          @if (downloadingReport() === o.id) { Preparing… } @else { Download }
                         </button>
                       </div>
                       }
@@ -1135,13 +1135,13 @@
 
       @if (so.status === 'validated' || so.status === 'partially_validated' || so.status === 'delivered' || so.status
       === 'completed') {
-      <button type="button" class="pf-actbtn press" [disabled]="downloadingReport()" (click)="downloadReport(so)"
+      <button type="button" class="pf-actbtn press" [disabled]="downloadingReport() !== null" (click)="downloadReport(so)"
         title="Download the report PDF" aria-label="Download report">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
         </svg>
-        <span class="pf-actbtn__label">{{ downloadingReport() ? 'Wait…' : 'Report' }}</span>
+        <span class="pf-actbtn__label">{{ downloadingReport() === so.id ? 'Wait…' : 'Report' }}</span>
       </button>
       }
 

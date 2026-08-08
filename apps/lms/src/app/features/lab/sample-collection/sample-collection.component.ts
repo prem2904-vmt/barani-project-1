@@ -310,8 +310,9 @@ interface OrderGroup {
             <div class="pf-drawer__who">
               <p class="pf-drawer__name">{{ g.patientName }}</p>
               <!-- Order number, not a sample id — the drawer is the whole order;
-                   each tube's own barcode is on its card below. -->
-              <p class="pf-drawer__meta">{{ g.orderNo }}</p>
+                   each tube's own barcode is on its card below. Labelled and
+                   dark so the collector can read it out / write it instantly. -->
+              <p class="pf-drawer__meta pf-drawer__meta--order">Order ID: {{ g.orderNo }}</p>
             </div>
             <div class="pf-drawer__progress">
               <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
@@ -336,9 +337,11 @@ interface OrderGroup {
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
                    (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
                    (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
-                @if (container(s).kind === 'urine_cup') {
-                  <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
-                       screw-cap lid, amber fill. -->
+                @if (container(s).kind !== 'vacutainer') {
+                  <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
+                       lid. Urine cups fill amber; sterile jars (body fluid,
+                       stool, CSF …) fill a neutral grey — same silhouette, a
+                       cylindrical container, never a test tube. -->
                   <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true"
                        [style.--tube-color]="container(s).color">
                     <defs>
@@ -355,9 +358,9 @@ interface OrderGroup {
                         <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
                       </linearGradient>
                       <linearGradient [attr.id]="'urine-' + s.id" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0"    stop-color="#fcd34d"/>
-                        <stop offset="0.35" stop-color="#f59e0b"/>
-                        <stop offset="1"    stop-color="#b45309"/>
+                        <stop offset="0"    [attr.stop-color]="cupFluid(s).top"/>
+                        <stop offset="0.35" [attr.stop-color]="cupFluid(s).mid"/>
+                        <stop offset="1"    [attr.stop-color]="cupFluid(s).bottom"/>
                       </linearGradient>
                       <clipPath [attr.id]="'cupclip-' + s.id">
                         <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
@@ -398,8 +401,8 @@ interface OrderGroup {
                             height="120"
                             [attr.fill]="'url(#urine-' + s.id + ')'"/>
                       @if (s.status !== 'pending') {
-                        <ellipse cx="70" cy="110" rx="53" ry="4" fill="#fde68a" opacity="0.6"/>
-                        <ellipse cx="70" cy="112" rx="50" ry="2" fill="#fef3c7" opacity="0.35"/>
+                        <ellipse cx="70" cy="110" rx="53" ry="4" [attr.fill]="cupFluid(s).surface" opacity="0.6"/>
+                        <ellipse cx="70" cy="112" rx="50" ry="2" [attr.fill]="cupFluid(s).surfaceHi" opacity="0.35"/>
                       }
                     </g>
 
@@ -546,17 +549,11 @@ interface OrderGroup {
                     <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
                   }
 
-                  @if (s.tests.length > 0) {
-                    <!-- Test list is hidden so a many-test tube (e.g. a 25-analyte
-                         SST) doesn't blow the column height; hold the vial ~2s to
-                         peek it. This is just a hint (pointer-events: none). -->
-                    <p class="pf-tube__hint">Hold to see {{ testCount(s.tests) }} test{{ testCount(s.tests) === 1 ? '' : 's' }}</p>
-                    @if (drawVolume(s); as vol) {
-                      <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
-                    }
-                  }
-
-                  <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
+                  <!-- Test list stays hidden so a many-test tube doesn't blow
+                       the column height; holding the vial ~2s peeks it. No
+                       textual hint and no draw-volume pill — the card carries
+                       only the container name and the sample id. -->
+                  <p class="pf-tube__code">Sample ID: {{ s.barcode ?? '—' }}</p>
 
                   @if (s.status !== 'pending') {
                     <span class="pf-tube__stamp">
@@ -1020,6 +1017,9 @@ interface OrderGroup {
       -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
     }
     .pf-drawer__meta { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
+    /* The order id must be instantly recognizable — primary-dark and bold,
+       never the muted meta grey. */
+    .pf-drawer__meta--order { color: var(--text-primary); font-weight: 700; font-size: 13.5px; }
 
     .pf-drawer__progress {
       text-align: right;
@@ -1293,9 +1293,10 @@ interface OrderGroup {
     }
     .pf-tube__code {
       margin: 4px 0 0;
-      font-size: 10.5px;
+      font-size: 11.5px;
+      font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
+      color: var(--text-primary);
       letter-spacing: 0.06em;
     }
     .pf-tube__stamp {
@@ -1695,12 +1696,36 @@ interface OrderGroup {
       border-color: rgba(16, 185, 129, 0.3);
     }
     :host-context([data-theme="light"]) .pf-tube__code {
-      color: #64748b;
+      color: #0f172a;
     }
     :host-context([data-theme="light"]) .pf-tube__draw {
       color: #b91c1c;
       background: rgba(220, 38, 38, 0.08);
       border-color: rgba(220, 38, 38, 0.28);
+    }
+
+    /* Manual-mode "Label by hand" sheet + hold-to-peek popover follow the
+       screen's theme — they were hard-coded dark and floated as black cards
+       over the light drawer. */
+    :host-context([data-theme="light"]) .pf-wl {
+      background: rgba(15, 23, 42, 0.28);
+    }
+    :host-context([data-theme="light"]) .pf-wl__panel {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.12);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-wl__row {
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-wl__dot {
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-tube__peekpop {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
     }
 
     :host-context([data-theme="light"]) .pf-drawer__done-stamp {
@@ -2221,6 +2246,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+
+  /** Fluid gradient for the cup/jar graphic: amber for urine, neutral grey
+   *  for sterile jars (body fluid, stool, CSF …). */
+  cupFluid(s: OrderSample): { top: string; mid: string; bottom: string; surface: string; surfaceHi: string } {
+    return this.container(s).kind === 'urine_cup'
+      ? { top: '#fcd34d', mid: '#f59e0b', bottom: '#b45309', surface: '#fde68a', surfaceHi: '#fef3c7' }
+      : { top: '#e2e8f0', mid: '#94a3b8', bottom: '#64748b', surface: '#e2e8f0', surfaceHi: '#f8fafc' };
+  }
 
   /** Long-press (hold ~2s) a vial to peek its test list; a normal tap collects.
    *  The list floats as a popover that stays open while held. A move (scroll)

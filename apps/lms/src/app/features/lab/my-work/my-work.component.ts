@@ -599,6 +599,10 @@ const COUNTERS: CounterSpec[] = [
                     <div class="rounded-lg p-2.5 pf-tube-tile"
                          [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                          [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                         [class.pf-tube-tile--holding]="holdingPeekId() === tube.sampleId"
+                         (pointerdown)="onCardDown(tube, $event)" (pointerup)="onCardUp()"
+                         (pointercancel)="onCardUp()" (pointerleave)="onCardUp()"
+                         (pointermove)="onCardMove($event)"
                          style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                       <!-- Primary bold line: the Sample ID (the tube) — the same
                            code shown on the patient-first tube tile. -->
@@ -642,8 +646,9 @@ const COUNTERS: CounterSpec[] = [
                       }
 
                       <!-- Test names are intentionally not listed on the queue
-                           card (the "· N tests" count above is enough; open the
-                           tube via "Pick · view tests" to see them). -->
+                           card. Press-and-hold the card (~2s, progress bar fills)
+                           to peek them — same gesture as the collection vials;
+                           deliberately no textual hint. -->
                       <div class="flex justify-end gap-2">
                         @switch (tab()) {
                           @case ('service_queue') {
@@ -674,6 +679,19 @@ const COUNTERS: CounterSpec[] = [
                 </li>
               }
             </ul>
+            }
+
+            <!-- Hold-to-peek popover for queue cards — floats beside the held
+                 card; hidden on release. Fixed-position so it escapes any
+                 overflow:hidden ancestors. -->
+            @if (cardPeekId()) {
+              <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+                   [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+                <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+                <ul>
+                  @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+                </ul>
+              </div>
             }
             <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
@@ -1374,6 +1392,40 @@ const COUNTERS: CounterSpec[] = [
     .pf-tube-tile:hover {
       border-color: rgba(168, 85, 247, 0.45) !important;
       box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
+    }
+    /* Hold-to-peek progress: a violet bar fills across the card's bottom over
+       the 2s hold (same gesture as the collection vials); when it completes,
+       the test list pops beside the card. No textual hint by design. */
+    .pf-tube-tile { user-select: none; -webkit-touch-callout: none; }
+    .pf-tube-tile::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube-tile--holding {
+      border-color: rgba(139, 92, 246, 0.55) !important;
+    }
+    .pf-tube-tile--holding::after { opacity: 1; animation: pf-card-hold-fill 2s linear forwards; }
+    @keyframes pf-card-hold-fill { from { width: 0; } to { width: 100%; } }
+
+    .pf-cardpeek {
+      position: fixed; z-index: 100;
+      width: 260px; max-height: 52vh; overflow-y: auto;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--bg-elevated, #0f172a);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pf-cardpeek__h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-cardpeek ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .pf-cardpeek li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
+    :host-context([data-theme="light"]) .pf-cardpeek {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
     }
     .pf-tube-tile.pf-tube-tile--picking {
       animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -2572,6 +2624,56 @@ export class MyWorkComponent implements OnInit {
   }
   private readonly _pickingTubeId = signal<string | null>(null);
   readonly pickingTubeId = this._pickingTubeId.asReadonly();
+
+  // ── Hold-to-peek on queue cards ───────────────────────────
+  // Press-and-hold a sample-focused queue card (~2s, progress bar fills along
+  // the card's bottom edge) to peek its test list — the same gesture as the
+  // collection screen's vials, deliberately without a textual hint. Moving
+  // (scrolling) or releasing early cancels; holds that start on a button
+  // (Pick / Delegate) are ignored so their taps behave normally.
+  readonly cardPeekId = signal<string | null>(null);
+  readonly cardPeekPos = signal<{ x: number; y: number } | null>(null);
+  readonly cardPeekTests = signal<string[]>([]);
+  readonly holdingPeekId = signal<string | null>(null);
+  private static readonly CARD_HOLD_MS = 2000;
+  private _cardPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _cardDownX = 0;
+  private _cardDownY = 0;
+
+  onCardDown(tube: { sampleId: string; tests: Enriched[] }, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return;
+    if ((ev.target as HTMLElement).closest('button')) return; // buttons keep their taps
+    this._cardDownX = ev.clientX; this._cardDownY = ev.clientY;
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    const names = (tube.tests ?? [])
+      .map(t => t.test?.name ?? (t as { name?: string }).name)
+      .filter((n): n is string => !!n);
+    this.clearCardPress();
+    this.holdingPeekId.set(tube.sampleId);
+    this._cardPressTimer = setTimeout(() => {
+      this.holdingPeekId.set(null);
+      this.cardPeekPos.set({ x, y });
+      this.cardPeekTests.set(names);
+      this.cardPeekId.set(tube.sampleId); // shows while held
+    }, MyWorkComponent.CARD_HOLD_MS);
+  }
+  onCardMove(ev: PointerEvent): void {
+    if (this._cardPressTimer
+        && (Math.abs(ev.clientX - this._cardDownX) > 10 || Math.abs(ev.clientY - this._cardDownY) > 10)) {
+      this.clearCardPress();
+    }
+  }
+  onCardUp(): void { this.clearCardPress(); }
+  private clearCardPress(): void {
+    if (this._cardPressTimer) { clearTimeout(this._cardPressTimer); this._cardPressTimer = null; }
+    this.holdingPeekId.set(null);
+    this.cardPeekId.set(null); // release hides the peek
+  }
 
   // ── Claim-into-my-queue popup ─────────────────────────────
   // Picking a tube from the service queue first shows the tech WHAT tests

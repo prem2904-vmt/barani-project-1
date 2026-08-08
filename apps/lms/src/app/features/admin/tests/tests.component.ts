@@ -223,6 +223,17 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
                 Departments
               </button>
             }
+            <div class="pf-tm-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              <input type="text" class="pf-tm-search__input"
+                     [placeholder]="'Search ' + (type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests') + '…'"
+                     [ngModel]="search()" (ngModelChange)="search.set($event)" />
+              @if (search()) {
+                <button type="button" class="pf-tm-search__clear" (click)="search.set('')" aria-label="Clear search">×</button>
+              }
+            </div>
             <span>{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
             <span class="pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
           </div>
@@ -407,6 +418,27 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
       justify-content: center; padding: 20px; }
     .pf-tm-backdrop { position: absolute; inset: 0; background: rgba(5,5,15,0.72);
       backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); }
+
+    .pf-tm-search {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 0 10px; height: 34px; min-width: 220px;
+      border-radius: 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted);
+    }
+    .pf-tm-search:focus-within { border-color: rgba(139, 92, 246, 0.55); }
+    .pf-tm-search__input {
+      flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+      font-size: 13px; color: var(--text-primary);
+    }
+    .pf-tm-search__input::placeholder { color: var(--text-muted); }
+    .pf-tm-search__clear {
+      border: 0; background: transparent; cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 0 2px;
+      color: var(--text-muted);
+    }
+    .pf-tm-search__clear:hover { color: var(--text-primary); }
     .pf-tm-card { position: relative; width: 100%; max-width: 30rem; max-height: 88vh; overflow-y: auto;
       padding: 22px; border-radius: 20px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border); box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
@@ -495,6 +527,16 @@ export class TestsComponent implements OnInit {
   /** All tests of the currently-selected type. */
   readonly typeTests = computed(() => this._tests().filter(t => t.type === this._type()));
 
+  /** Quick search across every tab — matches name, code or short name.
+   *  On Profiles/Packages a bundle also matches when one of its MEMBERS
+   *  matches (so typing "hemoglobin" surfaces CBC). */
+  readonly search = signal('');
+  private matchesSearch(t: Test, q: string): boolean {
+    return (t.name ?? '').toLowerCase().includes(q)
+        || (t.testCode ?? '').toLowerCase().includes(q)
+        || ((t as { shortName?: string }).shortName ?? '').toLowerCase().includes(q);
+  }
+
   /**
    * Left-panel buckets. Built from the REAL departments API (so id + active
    * state are available for the enable/disable toggle), with per-department
@@ -538,13 +580,15 @@ export class TestsComponent implements OnInit {
    *   rows can expand into indented member rows.
    */
   readonly rowData = computed<TestRow[]>(() => {
+    const q = this.search().trim().toLowerCase();
     if (this._type() === 'individual') {
       const dep = this._selectedDept();
-      const tests = this.typeTests();
-      if (!dep) return tests;
-      return tests.filter(t => (t.department?.name?.trim() || UNASSIGNED) === dep);
+      let tests = this.typeTests();
+      if (dep) tests = tests.filter(t => (t.department?.name?.trim() || UNASSIGNED) === dep);
+      if (q) tests = tests.filter(t => this.matchesSearch(t, q));
+      return tests;
     }
-    return this.buildTree();
+    return this.buildTree(q);
   });
 
   /** Member test ids of a bundle (profile/package) from its `parameters` JSON. */
@@ -566,7 +610,7 @@ export class TestsComponent implements OnInit {
    * one level, recursively (a package can hold profiles, which hold tests).
    * A path visited-set guards against cyclic membership.
    */
-  private buildTree(): TestRow[] {
+  private buildTree(q = ''): TestRow[] {
     const all = this._tests();
     const byId = new Map<string, Test>();
     for (const t of all) byId.set(t.id, t);
@@ -575,6 +619,14 @@ export class TestsComponent implements OnInit {
     const dep = this._selectedDept();
     let roots = all.filter(t => t.type === topType);
     if (dep) roots = roots.filter(t => (t.department?.name?.trim() || UNASSIGNED) === dep);
+    if (q) {
+      roots = roots.filter(t =>
+        this.matchesSearch(t, q)
+        || this.memberIds(t).some(id => {
+          const m = byId.get(id);
+          return !!m && this.matchesSearch(m, q);
+        }));
+    }
     roots = [...roots].sort((a, b) =>
       (a.testCode || a.name).localeCompare(b.testCode || b.name));
 
