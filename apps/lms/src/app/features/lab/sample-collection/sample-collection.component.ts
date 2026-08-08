@@ -9,7 +9,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
-import { Order, OrderSample } from '../../../shared/models/order.model';
+import { Order, OrderSample, logicalTestCount } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
@@ -550,7 +550,7 @@ interface OrderGroup {
                     <!-- Test list is hidden so a many-test tube (e.g. a 25-analyte
                          SST) doesn't blow the column height; hold the vial ~2s to
                          peek it. This is just a hint (pointer-events: none). -->
-                    <p class="pf-tube__hint">Hold to see {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }}</p>
+                    <p class="pf-tube__hint">Hold to see {{ testCount(s.tests) }} test{{ testCount(s.tests) === 1 ? '' : 's' }}</p>
                     @if (drawVolume(s); as vol) {
                       <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
                     }
@@ -2284,6 +2284,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a
    *  volume, so the "Draw ~N mL" pill is omitted rather than lying with 0. */
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number { return logicalTestCount(tests); }
+
   drawVolume(s: OrderSample): number | null {
     let sum = 0;
     let any = false;

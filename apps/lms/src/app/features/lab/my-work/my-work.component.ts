@@ -22,7 +22,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
-import { OrderSample, OrderTest } from '../../../shared/models/order.model';
+import { OrderSample, OrderTest, logicalTestCount } from '../../../shared/models/order.model';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
@@ -494,7 +494,7 @@ const COUNTERS: CounterSpec[] = [
                               style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                             <div class="flex items-center gap-2 mb-1.5">
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
-                                {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                                {{ tube.deptName || 'Tube' }} · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }}
                               </span>
                               @if (tube.hasDraft && !tube.allDone) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
@@ -618,7 +618,7 @@ const COUNTERS: CounterSpec[] = [
                       <!-- Secondary small line: patient demoted (Name | age/sex |
                            P-ID) alongside dept + test count. -->
                       <p class="text-[12px] font-mono mb-1.5" style="color: var(--text-tertiary);">
-                        {{ tube.patientInfo }} · {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                        {{ tube.patientInfo }} · {{ tube.deptName || 'Tube' }} · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }}
                       </p>
 
                       @if (tube.rejections.length > 0) {
@@ -2591,6 +2591,9 @@ export class MyWorkComponent implements OnInit {
   // barcode and only fires onClaimScanned() on an exact match.
   private readonly _claimScanning = signal(false);
   readonly claimScanning = this._claimScanning.asReadonly();
+
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number { return logicalTestCount(tests); }
 
   openClaim(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[] }, patientName: string) {
     this._claimTarget.set({ ...tube, patientName });

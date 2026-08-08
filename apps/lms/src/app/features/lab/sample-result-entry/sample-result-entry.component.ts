@@ -8,7 +8,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { OrderSample, OrderTest } from '../../../shared/models/order.model';
+import { OrderSample, OrderTest, logicalTestCount, sortTestsForDisplay } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -72,7 +72,7 @@ function defaultResultParam(): TestParameter {
           <div class="pf-sre__hdr-title">
             <!-- Sample-focused header: the Sample ID (tube barcode) is the primary
                  identity; the patient is demoted to a small secondary line. -->
-            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
+            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ logicalCount() }} test{{ logicalCount() === 1 ? '' : 's' }} on this tube</p>
             <h1 class="pf-sre__title">{{ s.barcode || '—' }}</h1>
             <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
             <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
@@ -1482,6 +1482,14 @@ export class SampleResultEntryComponent {
    *    no per-test header/card).
    *  - 'card'  → the classic per-test card, kept only where it's needed:
    *    multi-parameter standalone tests, cultures, and schema-less tests. */
+  /** Keep the tube's tests in their authored display order (profile member
+   *  sequence), and expose the logical count (a profile counts as ONE). */
+  private normalizeSample(s: OrderSample | null): OrderSample | null {
+    if (!s?.tests) return s;
+    return { ...s, tests: sortTestsForDisplay(s.tests) };
+  }
+  readonly logicalCount = computed(() => logicalTestCount(this.sample()?.tests));
+
   readonly entryBlocks = computed<Array<
     { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |
     { kind: 'card'; key: string; tests: OrderTest[] }
@@ -1605,7 +1613,7 @@ export class SampleResultEntryComponent {
     this._submitting.set(true);
     try {
       const updated = await firstValueFrom(this.api.post<OrderSample>(`/api/samples/${s.id}/reopen`, {}));
-      if (updated) { this._sample.set(updated); this.prefillValues(updated); }
+      if (updated) { this._sample.set(this.normalizeSample(updated)); this.prefillValues(updated); }
       this.toasts.success('Reopened — edit and submit again');
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
@@ -1853,7 +1861,7 @@ export class SampleResultEntryComponent {
     this.draftKey = `pf-lms.sre-draft.${id}`;
     try {
       const sample = await firstValueFrom(this.api.get<OrderSample>(`/api/samples/${id}/tests`));
-      this._sample.set(sample ?? null);
+      this._sample.set(this.normalizeSample(sample ?? null));
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
       this.prefillValues(sample ?? null);
@@ -1954,7 +1962,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
-      this._sample.set(resp?.sample ?? s);
+      this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Values reached the server — the local crash-recovery draft is done.
       this.clearDraft();
       // Backend auto-resolves correction threads on submit (see
@@ -2000,7 +2008,7 @@ export class SampleResultEntryComponent {
       const resp = await firstValueFrom(
         this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
       );
-      this._sample.set(resp?.sample ?? s);
+      this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Draft now lives on the server (currentResult prefills it next
       // open) — drop the local crash-recovery copy.
       this.clearDraft();
