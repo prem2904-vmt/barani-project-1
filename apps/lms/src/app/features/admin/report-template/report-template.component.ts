@@ -912,6 +912,13 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         columns: cols, sections: [], configured: true, version: 1,
       } as unknown as ResolvedReportLayout;
     };
+    // Columns tab: the preview mirrors the department being edited — every
+    // sample test takes the edited columns (the render step also relabels the
+    // department bands), so what you see IS what you're configuring.
+    if (this.tab() === 'columns') {
+      for (const t of snap.tests ?? []) apply(t);
+      return out;
+    }
     let matched = 0;
     for (const t of snap.tests ?? []) {
       const td = (t.department ?? '').trim().toLowerCase();
@@ -919,20 +926,35 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       const match = (!!td && (td === dn || td === dc)) || (!!tc && (tc === dn || tc === dc));
       if (match) { apply(t); matched++; }
     }
-    // The sample data only carries a couple of departments — when the admin is
-    // editing some OTHER department's columns, apply them to every sample test
-    // so the edit is ALWAYS visible in the preview instead of silently no-oping.
+    // When the edited department isn't in the sample data, apply to every test
+    // so the edit is ALWAYS visible instead of silently no-oping.
     if (matched === 0) for (const t of snap.tests ?? []) apply(t);
     return out;
   }
 
   private async renderPreview(tpl: ReportTemplate) {
     try {
+      // Columns tab: relabel the whole sample report to the department being
+      // edited so ONE section — titled with that department — previews the
+      // strip exactly; empty configured columns stay visible.
+      let data = this.sampleSnapshot();
+      const onColumns = this.tab() === 'columns';
+      if (onColumns && (this.editedDeptName() || this.editedDeptCode())) {
+        try {
+          const snap = JSON.parse(data);
+          for (const t of snap.tests ?? []) {
+            t.department = this.editedDeptName() || t.department;
+            t.departmentCode = this.editedDeptCode() || t.departmentCode;
+          }
+          data = JSON.stringify(snap);
+        } catch { /* keep the raw sample */ }
+      }
       const baseInput = {
         report: { id: 'preview-' + Date.now(), type: 'final',
-                  createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
+                  createdAt: new Date().toISOString(), data },
         template: tpl,
         resolvedLayouts: this.buildPreviewLayouts(),
+        previewKeepEmptyColumns: onColumns,
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step
@@ -963,15 +985,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
           sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
           result: { values: {
-            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L' },
+            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L', description: 'Low in anaemia / blood loss' },
             'RBC Count':    { value: '4.6',  unit: 'mill/cmm',  range: '3.8 – 4.8' },
-            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H' },
+            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H', description: 'Raised in acute infection' },
             'Platelets':    { value: '240000', unit: '/cmm',    range: '150000 – 410000' },
           } } },
         { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry', departmentCode: 'BIO',
           sampleType: 'Serum', method: 'Photometry',
           result: { values: {
-            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H' },
+            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H', description: 'Dietary review advised' },
             'HDL Cholesterol':   { value: '52',  unit: 'mg/dL', range: '> 40' },
             'LDL Cholesterol':   { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
             'Triglycerides':     { value: '120', unit: 'mg/dL', range: '< 150' },

@@ -27,6 +27,8 @@ import { ReportSignature, ReportTemplate } from '../models/report.model';
  * Reference Value · Unit).
  */
 export interface ReportPdfInput {
+  /** Admin live-preview: keep every configured column visible even when empty. */
+  previewKeepEmptyColumns?: boolean;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -260,6 +262,7 @@ let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
  *  these same columns + widths so the table lines up down the entire report,
  *  regardless of which typed columns an individual test's layout happens to
  *  carry. Set once per render in buildReportPdf, before the test loop. */
+let PREVIEW_KEEP_EMPTY_COLS = false; // admin preview: show configured columns even when empty
 let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
@@ -505,6 +508,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // printing only the results body. Reset to the normal defaults otherwise
   // (module-level margins persist across renders).
   LETTERPAD = !!template?.letterpadMode;
+  PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
     MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
@@ -1595,11 +1599,13 @@ function buildPanelGroup(
   }
 
   // Legacy values map.
-  const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string }> | undefined;
+  const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string; description?: string }> | undefined;
   for (const [paramName, v] of Object.entries(values ?? {})) {
     const flag = (v?.flag ?? '').toUpperCase();
     const letter = ['H', 'L', 'C', 'A'].includes(flag) ? flag : '';
     group.rows.push({
+      // Text columns (Description) read from the value payload when present.
+      texts: v?.description ? { description: v.description } : undefined,
       kind: 'param',
       name: humanize(paramName),
       result: String(v?.value ?? '—'),
@@ -1807,7 +1813,9 @@ function renderColumnarTable(
         return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.texts?.[m.name] ?? '').trim()));
     }
   };
-  vcols = vcols.filter(vc => vc.members.some(memberHasContent));
+  // Admin live-preview keeps EVERY configured column visible (structure
+  // fidelity beats economy there); the printed report still drops empties.
+  if (!PREVIEW_KEEP_EMPTY_COLS) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
