@@ -23,6 +23,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
+import { describeAllRanges } from '../../../shared/utils/reference-range';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
@@ -673,9 +674,18 @@ export class TestsComponent implements OnInit {
           // was read-only and derived-only, so typing a range appeared to do
           // nothing. Shows the typed value when set, else the range derived
           // from the parameter JSON.
+          // Conditional bands are the exception: one flat string can't hold
+          // "13–17 for adult males, 12–15 for adult females", so those cells
+          // are read-only and show every band instead.
           headerName: 'Reference range', colId: 'referenceRange',
-          field: 'adultReferenceRange', minWidth: 165, editable: true,
-          valueGetter: p => (p.data?.adultReferenceRange ?? '').trim() || this.referenceRange(p.data),
+          field: 'adultReferenceRange', minWidth: 165,
+          editable: p => !this.hasMultipleBands(p.data),
+          valueGetter: p => this.hasMultipleBands(p.data)
+            ? this.referenceRange(p.data)
+            : (p.data?.adultReferenceRange ?? '').trim() || this.referenceRange(p.data),
+          tooltipValueGetter: p => this.hasMultipleBands(p.data)
+            ? 'Sex/age-specific ranges — edit them in the test editor'
+            : undefined,
         },
         {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
@@ -902,21 +912,50 @@ export class TestsComponent implements OnInit {
     });
   }
 
-  /** Derive a readable reference range from the parameters JSON blob. */
+  /**
+   * Readable reference range for the grid — EVERY band on one row.
+   *
+   * This used to show `referenceRanges[0]` alone, so a test configured with a
+   * male and a female band displayed only the male one and looked as though
+   * the other had been lost. Bands are labelled and joined with a middot
+   * ("Adult Male 13–17 · Adult Female 12–15") rather than expanding into extra
+   * grid rows: the row is the TEST, and a test doesn't become several rows
+   * just because its range is conditional.
+   */
   private referenceRange(t?: Test): string {
     if (!t?.parameters) return '';
     try {
       const blob = JSON.parse(t.parameters);
       const p = Array.isArray(blob?.parameters) ? blob.parameters[0] : undefined;
       if (!p) return '';
-      const r = Array.isArray(p.referenceRanges) ? p.referenceRanges[0] : undefined;
-      if (r && (r.min != null || r.max != null)) {
-        const unit = r.unit || p.unit || '';
-        return `${r.min ?? ''}–${r.max ?? ''}${unit ? ' ' + unit : ''}`.trim();
+      const bands = describeAllRanges(p.referenceRanges);
+      if (bands.length) {
+        // The unit is stated once at the end; repeating it per band turns a
+        // three-band test into an unreadable row.
+        const unit = p.unit ? ` ${p.unit}` : '';
+        return bands.join(' · ') + unit;
       }
       if (p.normalValue) return String(p.normalValue);
       return '';
     } catch { return ''; }
+  }
+
+  /**
+   * True when the single analyte carries more than one band. The inline editor
+   * writes ONE flat string, which cannot express conditional bands — so rather
+   * than let a quick grid edit silently flatten a male/female pair into one
+   * range, those cells are read-only and the admin edits them in the test
+   * editor. (The backend refuses the same overwrite; this stops the UI from
+   * offering an edit the API will ignore.)
+   */
+  private hasMultipleBands(t?: Test): boolean {
+    if (!t?.parameters) return false;
+    try {
+      const blob = JSON.parse(t.parameters);
+      const ps = Array.isArray(blob?.parameters) ? blob.parameters : [];
+      return ps.length === 1 && Array.isArray(ps[0]?.referenceRanges)
+        && ps[0].referenceRanges.length > 1;
+    } catch { return false; }
   }
 
   /** Inline-edit committed → record it in the dirty buffer (no API call yet). */

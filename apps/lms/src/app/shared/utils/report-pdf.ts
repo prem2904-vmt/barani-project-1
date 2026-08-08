@@ -1604,6 +1604,59 @@ function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void
   d.cell.text = [''];
 }
 
+/**
+ * Reference-range cells arrive as "13–17\nAdult Male" — the band, then the
+ * patient group it applies to. When sex/age matched nothing, EVERY band comes
+ * through instead ("Adult Male 13–17\nAdult Female 12–15\n…"), because naming
+ * one would assert something the data doesn't support.
+ *
+ * The number must stay the thing a clinician reads first, so the qualifier
+ * lines are drawn smaller and grey. Same trick as the superscript hooks: blank
+ * the cell after layout (column widths and row heights are already computed
+ * from the full text, so nothing shifts) and repaint it line by line.
+ */
+type QualCell = { lines: string[]; styles: Record<string, unknown> };
+const QUAL_SCALE = 0.82;   // qualifier size, relative to the range's own size
+
+function stashQualifiedRangeCell(
+  store: Map<string, QualCell>, d: CellHookArg, rangeColIdx: number
+): void {
+  if (d.section !== 'body' || d.column.index !== rangeColIdx) return;
+  const lines = (Array.isArray(d.cell.text) ? d.cell.text : [String(d.cell.text ?? '')])
+    .map(l => pdfSafeText(l));
+  if (lines.length < 2) return;                       // plain single-band cell
+  store.set(`${d.row.index}:${d.column.index}`, { lines, styles: d.cell.styles ?? {} });
+  d.cell.text = [''];
+}
+
+function drawQualifiedRangeCell(
+  doc: jsPDF, store: Map<string, QualCell>, d: CellHookArg
+): void {
+  const q = store.get(`${d.row.index}:${d.column.index}`);
+  if (!q) return;
+  const st = q.styles as { fontSize?: number; cellPadding?: number };
+  const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
+  const padL = typeof st.cellPadding === 'number' ? st.cellPadding : 4;
+  const lh = fs * 1.15;
+  // Vertically centre the whole stack in the cell autotable already sized.
+  let y = d.cell.y + (d.cell.height - lh * q.lines.length) / 2 + fs * 0.9;
+
+  q.lines.forEach((line, i) => {
+    const qualifier = i > 0;
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setFontSize(qualifier ? fs * QUAL_SCALE : fs);
+    doc.setTextColor(qualifier ? TEXT_DIM : BLACK);
+    if (hasSuperscript(line)) {
+      drawTextWithSuperscripts(doc, line, d.cell.x + padL, y, qualifier ? fs * QUAL_SCALE : fs);
+    } else {
+      doc.text(line, d.cell.x + padL, y);
+    }
+    y += qualifier ? lh * QUAL_SCALE : lh;
+  });
+  doc.setFontSize(fs);
+  doc.setTextColor(BLACK);
+}
+
 function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHookArg): void {
   const sup = store.get(`${d.section}:${d.row.index}:${d.column.index}`);
   if (!sup) return;
@@ -2026,6 +2079,9 @@ function renderColumnarTable(
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
   const COLSPAN = vcols.length;
   const resultColIdx = Math.max(0, vcols.findIndex(c => c.hasResult));
+  // -1 when the layout has no reference column at all, which the hook treats
+  // as "never matches" — no special-casing needed at the call site.
+  const rangeColIdx = vcols.findIndex(c => c.members.some(m => m.type === 'range'));
 
   type Cell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const head: Cell[][] = [vcols.map(c => ({ content: c.label, styles: { halign: 'left' } }))];
@@ -2037,6 +2093,7 @@ function renderColumnarTable(
   const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string } | null> = [];
   // Cells needing raised-superscript redraw, keyed section:row:col.
   const supCells = new Map<string, SupCell>();
+  const qualCells = new Map<string, QualCell>();
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -2175,8 +2232,14 @@ function renderColumnarTable(
     // Units like ×10⁹/L survive as "×10^9/L" (cp1252 has no ⁹). Blank those
     // cells here — AFTER layout, so column widths are unaffected — and redraw
     // them with real raised digits in didDrawCell below.
-    willDrawCell: (d: CellHookArg) => stashSuperscriptCell(supCells, d),
+    willDrawCell: (d: CellHookArg) => {
+      // Order matters: a qualified range cell is claimed here first, so the
+      // superscript hook doesn't also blank it and fight over the redraw.
+      stashQualifiedRangeCell(qualCells, d, rangeColIdx);
+      stashSuperscriptCell(supCells, d);
+    },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
+      drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;
       const m = bodyMeta[d.row.index];

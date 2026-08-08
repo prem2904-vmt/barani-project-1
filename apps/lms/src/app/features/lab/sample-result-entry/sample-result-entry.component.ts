@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { TrendTest } from '../../../shared/utils/trend-chart';
+import { describeAllRanges } from '../../../shared/utils/reference-range';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -1811,10 +1812,14 @@ export class SampleResultEntryComponent {
   refLabelFor(p: TestParameter): string {
     const r = (p as TestParameter & { ref_range?: string }).ref_range;
     if (r) return r;
-    const rr = p.referenceRanges?.[0];
-    if (rr && rr.min != null && rr.max != null) return `${rr.min} – ${rr.max}`;
-    if (rr && rr.min != null) return `> ${rr.min}`;
-    if (rr && rr.max != null) return `< ${rr.max}`;
+    // Every band, labelled ("Adult Male 13–17 · Adult Female 12–15"). This
+    // showed referenceRanges[0] alone, so a tech entering a FEMALE patient's
+    // haemoglobin was shown the MALE band to judge it against. This screen has
+    // no patient sex/age in scope, so naming a single band would be a guess —
+    // showing them all is the honest form, and the backend still decides the
+    // flag that gets persisted and printed.
+    const bands = describeAllRanges(p.referenceRanges);
+    if (bands.length) return bands.join(' · ');
     if (p.normalValue) return p.normalValue;
     return '';
   }

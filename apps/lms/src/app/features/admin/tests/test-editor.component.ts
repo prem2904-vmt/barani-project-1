@@ -32,6 +32,7 @@ import { TestLayoutEditorComponent } from './test-layout-editor.component';
 import { TestNotesEditorComponent } from '../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from './test-consumables.component';
 import { AuthService } from '../../../core/auth/auth.service';
+import { describeAllRanges, deriveRangeLabel } from '../../../shared/utils/reference-range';
 
 /** Left-rail sections. One shows at a time (progressive disclosure) instead of
  *  stacking every field card on one screen. */
@@ -561,6 +562,17 @@ function newFieldId(): string {
                               </div>
                             </label>
                           </div>
+                          <!-- The name printed under this range on the report.
+                               Left blank it is composed from Sex + age above,
+                               so the whole catalogue reads the same way; the
+                               placeholder shows exactly what will print. -->
+                          <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
+                            <span class="pf-mini-lbl">Prints as</span>
+                            <input type="text" class="pf-input pf-input--compact"
+                                   [ngModel]="r.label ?? ''"
+                                   [placeholder]="autoRangeLabel(r)"
+                                   (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
+                          </label>
                         }
                         <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
                           <label class="flex flex-col gap-0.5 min-w-0">
@@ -1427,13 +1439,22 @@ export class TestEditorComponent implements OnInit {
     this._expandedParamId.update(cur => cur === id ? null : id);
   }
 
+  /** What this band will print as on the report if the admin types nothing —
+   *  shown as the Label placeholder so the naming rule is visible, not
+   *  guessed at. */
+  autoRangeLabel(r: ReferenceRange): string {
+    return deriveRangeLabel(r) ?? 'No qualifier — applies to everyone';
+  }
+
   /** Compact one-line description used by collapsed param rows. */
   paramSummary(p: FormField): string {
     const bits: string[] = [];
     if (this.isNumericType(p.type)) {
-      const r = (p.referenceRanges ?? [])[0];
-      if (r && (r.min != null || r.max != null)) {
-        bits.push(`${r.min ?? '–'} – ${r.max ?? '–'}${p.unit ? ' ' + p.unit : ''}`);
+      // Every band, labelled — the chip showed referenceRanges[0] alone, so a
+      // test with male and female bands looked like it only had the male one.
+      const bands = describeAllRanges(p.referenceRanges);
+      if (bands.length) {
+        bits.push(bands.join(' · ') + (p.unit ? ' ' + p.unit : ''));
       } else if (p.unit) {
         bits.push(p.unit);
       }
