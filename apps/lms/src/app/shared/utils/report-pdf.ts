@@ -1704,7 +1704,16 @@ function drawInlineSignatures(
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>
 ): number {
-  const list = sigs.slice(0, 3).filter(s => s.name || s.signatureUrl);
+  const all = sigs.slice(0, 7).filter(s => s.name || s.signatureUrl);
+  if (all.length > 3) {
+    // Wrap: rows of 3, drawn top-down.
+    let yy = startY;
+    for (let i = 0; i < all.length; i += 3) {
+      yy = drawInlineSignatures(doc, all.slice(i, i + 3), yy, practice);
+    }
+    return yy;
+  }
+  const list = all;
   if (list.length === 0) return startY;
   let y = startY + 12;
   if (y > A4.h - MARGIN_BOTTOM - 84) { y = newPage(doc, practice) + 6; }

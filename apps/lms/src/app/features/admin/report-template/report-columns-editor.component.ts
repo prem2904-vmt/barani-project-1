@@ -183,6 +183,56 @@ export interface ColumnsEditorState {
           <p class="pf-ce-dim mt-3">Tap a column card to edit it.</p>
         }
 
+        <!-- ── SIGNATORIES: who signs this department's report block ── -->
+        <div class="pf-ce-inspector" style="margin-top: 16px;">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+            <h4 style="margin:0; font-size:14px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
+            <pf-touch-btn size="sm" variant="primary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
+              {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
+            </pf-touch-btn>
+          </div>
+          <p class="pf-ce-dim" style="margin: 0 0 10px;">
+            Printed at the end of this department's report section, in this order (drag to reorder, max 7).
+            <b>Dynamic</b> = whoever actually did the activity signs; <b>Fixed</b> = always this person.
+            The designation you type prints under the name. No rows → the technician + validator sign automatically.
+          </p>
+          <ul class="pf-sig-list" cdkDropList (cdkDropListDropped)="dropSig($event)">
+            @for (s of signatories(); track s._key; let i = $index) {
+              <li class="pf-sig-row" cdkDrag>
+                <span class="pf-sig-grip" cdkDragHandle>⠿</span>
+                <span class="pf-sig-pos">{{ i + 1 }}</span>
+                <select class="pf-input pf-input--compact pf-sig-mode"
+                        [value]="s.mode" (change)="patchSig(i, { mode: $any($event.target).value })">
+                  <option value="role">Dynamic — by activity</option>
+                  <option value="user">Fixed — a person</option>
+                </select>
+                @if (s.mode === 'role') {
+                  <select class="pf-input pf-input--compact pf-sig-who"
+                          [value]="s.role" (change)="patchSig(i, { role: $any($event.target).value })">
+                    <option value="tested_by">Whoever tested (entered results)</option>
+                    <option value="validated_by">Whoever validated</option>
+                  </select>
+                } @else {
+                  <select class="pf-input pf-input--compact pf-sig-who"
+                          [value]="s.userId ?? ''" (change)="patchSig(i, { userId: $any($event.target).value || null })">
+                    <option value="">— pick a person —</option>
+                    @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }}</option> }
+                  </select>
+                }
+                <input type="text" class="pf-input pf-input--compact pf-sig-desig"
+                       [value]="s.designation" (input)="patchSig(i, { designation: $any($event.target).value })"
+                       placeholder="Designation (e.g. Consultant Pathologist)" />
+                <button type="button" class="pf-link-btn pf-link-btn--danger" (click)="removeSig(i)">✕</button>
+              </li>
+            } @empty {
+              <li class="pf-ce-dim" style="padding: 6px 0;">No slots — the department signs automatically (Tested by + Validated by).</li>
+            }
+          </ul>
+          @if (signatories().length < 7) {
+            <button type="button" class="pf-link-btn" (click)="addSig()">+ Add signatory</button>
+          }
+        </div>
+
       } @else {
         <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">Select a department to start.</p>
       }
@@ -263,6 +313,16 @@ export interface ColumnsEditorState {
     .cdk-drag-placeholder { opacity: 0.25; }
     .cdk-drop-list-dragging .pf-ce-col { transition: transform 200ms ease; }
 
+    .pf-sig-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-sig-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.18)); background: rgba(255,255,255,0.02); }
+    .pf-sig-grip { cursor: grab; color: var(--text-tertiary, #94a3b8); }
+    .pf-sig-pos { width: 18px; text-align: center; font-size: 11px; font-weight: 700; color: var(--violet-400, #a78bfa);
+      font-family: ui-monospace, monospace; }
+    .pf-sig-mode { width: 168px; }
+    .pf-sig-who { flex: 1; min-width: 150px; }
+    .pf-sig-desig { flex: 1; min-width: 150px; }
+
     @media (pointer: coarse) {
       .pf-ce-chain { width: 32px; height: 32px; }
       .pf-ce-step__btn, .pf-icon-btn { width: 40px; height: 40px; }
@@ -315,11 +375,58 @@ export class ReportColumnsEditorComponent implements OnInit {
   /** One tap to make widths legal again (scale to exactly 100). */
   distributeEvenly() { this.setCols(this.normalizeTo100(this.columns())); }
 
+  // ── Signatories (per-department report sign-off slots) ──
+  protected readonly users = signal<Array<{ id: string; displayName: string }>>([]);
+  protected readonly signatories = signal<Array<{ _key: string; mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>>([]);
+  protected readonly sigSaving = signal(false);
+  private sigKey(): string { return 's-' + Math.random().toString(36).slice(2, 9); }
+
+  private loadSignatories(deptId: string) {
+    this.api.get<Array<{ mode: string; role?: string | null; userId?: string | null; designation?: string }>>(
+      `/api/report-layout/department/${deptId}/signatories`).subscribe({
+      next: rows => this.signatories.set((rows ?? []).map(r => ({
+        _key: this.sigKey(),
+        mode: r.mode === 'user' ? 'user' as const : 'role' as const,
+        role: r.role || 'tested_by',
+        userId: r.userId ?? null,
+        designation: r.designation ?? '',
+      }))),
+      error: () => this.signatories.set([]),
+    });
+  }
+  addSig() {
+    if (this.signatories().length >= 7) return;
+    this.signatories.update(l => [...l, { _key: this.sigKey(), mode: 'role', role: 'tested_by', userId: null, designation: '' }]);
+  }
+  removeSig(i: number) { this.signatories.update(l => l.filter((_, idx) => idx !== i)); }
+  patchSig(i: number, p: Partial<{ mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>) {
+    this.signatories.update(l => l.map((s, idx) => idx === i ? { ...s, ...p } : s));
+  }
+  dropSig(ev: CdkDragDrop<unknown>) {
+    if (ev.previousIndex === ev.currentIndex) return;
+    this.signatories.update(l => { const n = l.slice(); moveItemInArray(n, ev.previousIndex, ev.currentIndex); return n; });
+  }
+  saveSignatories() {
+    const deptId = this.selectedDeptId();
+    if (!deptId) return;
+    this.sigSaving.set(true);
+    this.api.post(`/api/report-layout/department/${deptId}/signatories`, {
+      signatories: this.signatories().map(s => ({ mode: s.mode, role: s.role, userId: s.userId, designation: s.designation })),
+    }).subscribe({
+      next: () => { this.sigSaving.set(false); this.toasts.success('Signatories saved'); },
+      error: e => { this.sigSaving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
   typeLabel(t: string): string {
     return this.typeOptions.find(o => o.value === t)?.label ?? t;
   }
 
   ngOnInit() {
+    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/').subscribe({
+      next: l => this.users.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
+      error: () => { /* users list optional */ },
+    });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: list => {
         const depts = this.dedupeByCode(list ?? []);
@@ -350,6 +457,7 @@ export class ReportColumnsEditorComponent implements OnInit {
     if (!deptId) { this.selectedDeptId.set(''); return; }
     this.selectedDeptId.set(deptId);
     this.selectedIdx.set(null); // stale card index from the previous department
+    this.loadSignatories(deptId);
     this.selectedDept = this.departments().find(d => d.id === deptId);
     this.loading.set(true);
     this.layout.getDeptColumns(deptId).then(res => {
