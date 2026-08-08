@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import JsBarcode from 'jsbarcode';
 import {
   DEFAULT_RESULT_COLUMNS,
   ReportColumn,
@@ -162,6 +163,8 @@ interface ReportSnapshot {
   };
   order?: {
     id?: string;
+    /** Human order number (LAB-2608-000042) — the report barcode encodes it. */
+    orderNumber?: string | null;
     createdAt?: string;
     priority?: string;
     refDoctorName?: string;
@@ -1156,19 +1159,17 @@ function drawPatientBlockThreeCol(
   // ── Col 3 — Sample IDs + registration/collection/report times ──
   const x3 = MARGIN_X + col1W + col2W + 10;
   y = top + 14;
-  // Tiny barcode-style placeholder: a row of black bars to evoke a barcode.
+  // REAL scannable Code-128 barcode encoding the ORDER identifier (the human
+  // order number, else the order GUID). Scanning it — front-desk global scan,
+  // billing lookup — resolves straight to this order/patient. No digits
+  // printed underneath: the code itself is the accession link.
   if (theme.showBarcode) {
-    drawBarcodePlaceholder(doc, x3, y, col3W - 20, 18);
+    const value = snap.order?.orderNumber || snap.order?.id || report.id;
+    if (!drawRealBarcode(doc, String(value), x3, y, col3W - 20, 22)) {
+      drawBarcodePlaceholder(doc, x3, y, col3W - 20, 18);
+    }
   }
-  // Sample ID number under the barcode
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(BLACK);
-  // Barcode reads the report (accession) id, not the patient MRN — labs
-  // scan the per-visit code into the LIS, not the lifetime MRN.
-  const barcodeText = (snap.order?.id ?? report.id).replace(/-/g, '').slice(-12).toUpperCase();
-  doc.text(barcodeText, x3 + (col3W - 20) / 2, y + 26, { align: 'center' });
-  y += 36;
+  y += 32;
 
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8.5);
@@ -1434,6 +1435,22 @@ function drawPatientBlockStacked(
 /** Cheap visual stand-in for a Code-128 barcode — black bars of
  *  varying widths in a band. Good enough for a printed report; a real
  *  barcode can be wired up later with a font or canvas pass. */
+/** Render a REAL Code-128 barcode (via JsBarcode on an offscreen canvas) and
+ *  place it on the page. Returns false when generation fails (invalid value /
+ *  no DOM) so the caller can fall back to the decorative placeholder. */
+function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: number, h: number): boolean {
+  const v = (value ?? '').trim();
+  if (!v || typeof document === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    JsBarcode(canvas, v, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, w, h);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function drawBarcodePlaceholder(doc: jsPDF, x: number, y: number, w: number, h: number) {
   doc.setFillColor(BLACK);
   const widths = [1, 2, 1, 1, 3, 1, 2, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 1, 2, 1, 1, 3, 1, 2, 1, 2, 1, 3, 1, 1, 2, 1, 1, 3, 1, 2];
