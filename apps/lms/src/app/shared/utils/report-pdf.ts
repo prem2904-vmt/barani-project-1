@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { installPdfTextSanitizer } from './pdf-text';
+import { drawTextWithSuperscripts, hasSuperscript, installPdfTextSanitizer, pdfSafeText } from './pdf-text';
 import autoTable from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
@@ -588,11 +588,20 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const tests = snap.tests ?? [];
   const tabular: typeof tests = [];
   const special: typeof tests = [];
+  /** Profile id → one of its member rows, for every profile that was ordered. */
+  const orderedProfiles = new Map<string, (typeof tests)[number]>();
   for (const t of tests) {
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
+    if (t.packageTestId) orderedProfiles.set(t.packageTestId, t);
+    // A test ordered THROUGH a profile never prints its own narrative notes —
+    // the profile's print instead (see the merge below) — so its layout can't
+    // pull it out of the columnar table. Without this, a member that merely
+    // carries a note escaped the merge and printed as a standalone block.
+    const narrative = !t.packageTestId
+      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid');
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       special.push(t);
-    } else if (layout && layout.sections.some(s => s.isVisible && s.type !== 'grid')) {
+    } else if (narrative) {
       // Narrative / image / chart content can't live in the columnar table.
       special.push(t);
     } else {
@@ -610,6 +619,8 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // as rows — instead of every member listing as its own standalone test.
   const groups: PanelGroup[] = [];
   const byPkg = new Map<string, PanelGroup>();
+  /** Profile id → the profile's OWN note rows, appended after its members. */
+  const profileNotes = new Map<string, PanelRowData[]>();
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
@@ -622,13 +633,39 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       merged = { ...g, testName: t.packageName || g.testName, method: undefined, rows: [] };
       byPkg.set(pkg, merged);
       groups.push(merged);
+      // NOTES FOLLOW WHAT WAS ORDERED: the profile was ordered, so the
+      // PROFILE's own notes print here. Members' notes are dropped below.
+      // (Order a member on its own and it keeps its notes — the same test
+      // reads differently depending on how it was ordered.)
+      const pkgNotes = (resolvedLayouts[pkg]
+        ? buildPanelGroup({ ...t, testId: pkg, name: t.packageName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
+        : []).filter(r => r.kind === 'note');
+      profileNotes.set(pkg, pkgNotes);
     }
-    if (g.rows.length === 1 && g.rows[0].kind === 'param') {
+    // Drop the member's OWN notes — they belong to it only when ordered alone.
+    const memberRows = g.rows.filter(r => r.kind !== 'note');
+    if (memberRows.length === 1 && memberRows[0].kind === 'param') {
       // Single-analyte member → one row named after the member test.
-      merged.rows.push({ ...g.rows[0], name: (g.rows[0].name ?? '').trim() || g.testName });
+      merged.rows.push({ ...memberRows[0], name: (memberRows[0].name ?? '').trim() || g.testName });
     } else {
-      merged.rows.push(...g.rows);
+      merged.rows.push(...memberRows);
     }
+  }
+  // Append each profile's own notes AFTER its member rows.
+  for (const [pkg, notes] of profileNotes) {
+    const panel = byPkg.get(pkg);
+    if (panel && notes.length) panel.rows.push(...notes);
+  }
+
+  // The profile's own NARRATIVE notes (the "Interpretation" paragraphs the
+  // notes editor writes) render once under the profile's name, after the
+  // table — the same place a standalone test's narrative goes. Profiles have
+  // no row of their own in the snapshot, so stand one in from a member.
+  for (const [pkg, member] of orderedProfiles) {
+    const pl = resolvedLayouts[pkg];
+    if (!pl?.sections.some(s => s.isVisible && s.type !== 'grid')) continue;
+    special.push({ ...member, testId: pkg, packageTestId: null,
+                   name: member.packageName || pl.testName || '' });
   }
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
@@ -698,7 +735,16 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // The final department's signatories sign BELOW the End-of-Report marker —
   // the marker closes the results; the signatures authorise the document.
   if (finalSigs.sigs?.length) {
-    cursorY = drawInlineSignatures(doc, finalSigs.sigs, cursorY, practice);
+    // Sign-off belongs at the FOOT of the page, immediately above the
+    // disclaimer/footer strip — the conventional lab-report format — not
+    // floating directly under the last result row with a blank half-page
+    // beneath it. Anchor to the bottom, but never pull the block UP into
+    // content: a long report that already reaches this far keeps flowing.
+    // Exactly SIG_BLOCK_H above the footer reserve: the block then ends ON
+    // the reserve line. A single point lower trips drawInlineSignatures' own
+    // page-break guard and orphans the signatures onto a blank page.
+    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - SIG_BLOCK_H);
+    cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
   // ── Signature footer + page numbers (every page, drawn last) ───
@@ -1535,6 +1581,44 @@ function drawReportBarcode(doc: jsPDF, snap: ReportSnapshot, x: number, y: numbe
   return drawRealBarcode(doc, value, x, y, w, BARCODE_H) ? y + BARCODE_H + BARCODE_GAP : y;
 }
 
+/**
+ * Superscript redraw hooks for an autoTable.
+ *
+ * Units such as ×10⁹/L reach the PDF as "×10^9/L" because jsPDF's built-in
+ * fonts are cp1252 and have no ⁹. These two hooks turn the caret form back
+ * into a real raised digit: `willDrawCell` blanks the affected cell AFTER
+ * layout (so column widths are unchanged) and `didDrawCell` redraws it with
+ * the digits smaller and lifted. Cells with no superscript are never touched.
+ */
+type SupCell = { text: string; styles: Record<string, unknown> };
+type CellHookArg = {
+  section: string; column: { index: number }; row: { index: number };
+  cell: { x: number; y: number; width: number; height: number; text?: string[]; styles?: Record<string, unknown> };
+};
+
+function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void {
+  const raw = Array.isArray(d.cell.text) ? d.cell.text.join(' ') : String(d.cell.text ?? '');
+  const safe = pdfSafeText(raw);
+  if (!hasSuperscript(safe)) return;
+  store.set(`${d.section}:${d.row.index}:${d.column.index}`, { text: safe, styles: d.cell.styles ?? {} });
+  d.cell.text = [''];
+}
+
+function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHookArg): void {
+  const sup = store.get(`${d.section}:${d.row.index}:${d.column.index}`);
+  if (!sup) return;
+  const st = sup.styles as { fontSize?: number; fontStyle?: string; textColor?: unknown; cellPadding?: number };
+  const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
+  doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
+  doc.setFontSize(fs);
+  const tc = st.textColor;
+  doc.setTextColor(typeof tc === 'string' ? tc
+    : Array.isArray(tc) ? `#${(tc as number[]).map(n => n.toString(16).padStart(2, '0')).join('')}`
+    : BLACK);
+  const padL = typeof st.cellPadding === 'number' ? st.cellPadding : 4;
+  drawTextWithSuperscripts(doc, sup.text, d.cell.x + padL, d.cell.y + d.cell.height / 2 + fs * 0.35, fs);
+}
+
 /** Render a REAL Code-128 barcode (via JsBarcode on an offscreen canvas) and
  *  place it on the page. Returns false when generation fails (invalid value /
  *  no DOM) so the caller can fall back to the decorative placeholder. */
@@ -1792,6 +1876,9 @@ function renderContinuousTable(
  *  image/name/title/reg per row, wrapped 3-up and capped at 7 signatories.
  *  Callers RESERVE this in the table's bottom margin so the signatures can
  *  never be orphaned onto a page of their own. */
+/** One signature row: 12pt lead + 74pt of image/name/title/reg. */
+const SIG_BLOCK_H = 86;
+
 function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
   const n = Math.min(sigs?.length ?? 0, 7);
   if (n === 0) return 0;
@@ -1948,6 +2035,8 @@ function renderColumnarTable(
   // column for abnormal rows (jsPDF standard fonts can't render ↑/↓ glyphs,
   // so we draw a small triangle in didDrawCell). null = no arrow on that row.
   const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string } | null> = [];
+  // Cells needing raised-superscript redraw, keyed section:row:col.
+  const supCells = new Map<string, SupCell>();
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -2083,7 +2172,12 @@ function renderColumnarTable(
     ) as unknown as Record<number, { cellWidth: number }>,
     // Arrow indicator: draw a small ▲/▼ triangle at the right of the result
     // cell for abnormal rows (standard PDF fonts can't render ↑/↓ glyphs).
-    didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number } }) => {
+    // Units like ×10⁹/L survive as "×10^9/L" (cp1252 has no ⁹). Blank those
+    // cells here — AFTER layout, so column widths are unaffected — and redraw
+    // them with real raised digits in didDrawCell below.
+    willDrawCell: (d: CellHookArg) => stashSuperscriptCell(supCells, d),
+    didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
+      drawSuperscriptCell(doc, supCells, d as CellHookArg);
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;
       const m = bodyMeta[d.row.index];
       if (!m) return;
@@ -2462,6 +2556,7 @@ function renderLegacyTest(
     tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: 'italic', textColor: TEXT_DIM } }]);
   }
 
+  const legacySup = new Map<string, SupCell>();
   autoTable(doc, {
     startY: y,
     head: [['Investigation', 'Result', 'Reference Value', 'Unit']],
@@ -2478,7 +2573,11 @@ function renderLegacyTest(
       2: { cellWidth: 130 },
       3: { cellWidth: 'auto' as unknown as number },
     },
-  });
+    // This fallback table has its own Unit column, so it needs the same
+    // raised-superscript treatment as the main results table.
+    willDrawCell: (d: CellHookArg) => stashSuperscriptCell(legacySup, d),
+    didDrawCell: (d: CellHookArg) => drawSuperscriptCell(doc, legacySup, d),
+  } as unknown as Parameters<typeof autoTable>[1]);
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
 }
 

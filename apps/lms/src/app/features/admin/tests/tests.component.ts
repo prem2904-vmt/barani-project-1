@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { TubeColorEditorComponent } from './tube-color-editor.component';
+import { PfSelectOption } from '../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -22,7 +24,6 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -65,6 +66,13 @@ const TUBE_LABEL: Record<string, string> = {
   sterile: 'Sterile', urine: 'Urine', multiple: 'Multiple',
   red: 'Plain', lavender: 'EDTA', grey: 'Fluoride', blue: 'Citrate',
 };
+
+/** The container choices offered in the grid's Container dropdown. Deliberately
+ *  excludes the legacy aliases (red/lavender/grey/blue) — those still RENDER via
+ *  TUBE_LABEL for old rows, but picking one again would re-introduce a
+ *  duplicate spelling of a colour that already has a canonical key. */
+const TUBE_CHOICES = ['sst', 'plain', 'edta', 'fluoride', 'heparin', 'citrate',
+                      'esr', 'trace', 'sterile', 'urine', 'multiple'] as const;
 
 /** A department bucket for the left panel. `id`/`isActive` come from the real
  *  departments API (null id = a synthesised bucket, e.g. Unassigned). */
@@ -125,7 +133,6 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
     FormsModule,
     AgGridAngular,
     ScreenHeaderComponent,
-    SelectComponent,
     TouchButtonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -140,8 +147,6 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
             <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
             <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
           }
-          <pf-touch-btn size="sm" variant="secondary" (pressed)="openProfileDialog()">Create profile</pf-touch-btn>
-          <pf-touch-btn size="sm" variant="secondary" (pressed)="openPackageDialog()">Create package</pf-touch-btn>
           <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -254,76 +259,11 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
       </div>
     </section>
 
-    <!-- ── Create Profile dialog ─────────────────────────────── -->
-    @if (showProfile()) {
-      <div class="pf-tm-modal" role="dialog" aria-modal="true" aria-label="Create profile">
-        <div class="pf-tm-backdrop" (click)="closeProfileDialog()"></div>
-        <div class="pf-tm-card">
-          <h2 class="pf-tm-card-title">Create profile</h2>
-          <div class="pf-tm-form">
-            <label class="pf-tm-field">
-              <span class="pf-tm-label">Code <span class="pf-tm-req">*</span></span>
-              <input type="text" class="pf-input" [ngModel]="pfCode()" (ngModelChange)="pfCode.set($event)" placeholder="e.g. LFT" />
-            </label>
-            <label class="pf-tm-field">
-              <span class="pf-tm-label">Name <span class="pf-tm-req">*</span></span>
-              <input type="text" class="pf-input" [ngModel]="pfName()" (ngModelChange)="pfName.set($event)" placeholder="Liver Function Test" />
-            </label>
-            <div class="pf-tm-field">
-              <span class="pf-tm-label">Department</span>
-              <pf-select [options]="deptOptions()" [value]="pfDept()" placeholder="Select department"
-                         (valueChange)="pfDept.set($event)"></pf-select>
-            </div>
-            <label class="pf-tm-field">
-              <span class="pf-tm-label">Price (₹) <span class="pf-tm-req">*</span></span>
-              <input type="number" class="pf-input" min="0" step="0.01" [ngModel]="pfPrice()" (ngModelChange)="pfPrice.set($any($event))" />
-            </label>
-            <div class="pf-tm-field pf-tm-field--full">
-              <span class="pf-tm-label">Individual tests <span class="pf-tm-req">*</span></span>
-              <pf-select [multiple]="true" [options]="individualOptions()" [values]="pfItems()" placeholder="Pick tests…"
-                         (valuesChange)="pfItems.set($event)"></pf-select>
-            </div>
-          </div>
-          <div class="pf-tm-card-actions">
-            <pf-touch-btn size="sm" variant="ghost" [disabled]="saving()" (pressed)="closeProfileDialog()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || !profileValid()" (pressed)="submitProfile()">
-              @if (saving()) { Saving… } @else { Create profile }
-            </pf-touch-btn>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- ── Create Package dialog ─────────────────────────────── -->
-    @if (showPackage()) {
-      <div class="pf-tm-modal" role="dialog" aria-modal="true" aria-label="Create package">
-        <div class="pf-tm-backdrop" (click)="closePackageDialog()"></div>
-        <div class="pf-tm-card">
-          <h2 class="pf-tm-card-title">Create package</h2>
-          <div class="pf-tm-form">
-            <label class="pf-tm-field">
-              <span class="pf-tm-label">Name <span class="pf-tm-req">*</span></span>
-              <input type="text" class="pf-input" [ngModel]="pkName()" (ngModelChange)="pkName.set($event)" placeholder="Master Health Checkup" />
-            </label>
-            <label class="pf-tm-field">
-              <span class="pf-tm-label">Price (₹) <span class="pf-tm-req">*</span></span>
-              <input type="number" class="pf-input" min="0" step="0.01" [ngModel]="pkPrice()" (ngModelChange)="pkPrice.set($any($event))" />
-            </label>
-            <div class="pf-tm-field pf-tm-field--full">
-              <span class="pf-tm-label">Tests &amp; profiles <span class="pf-tm-req">*</span></span>
-              <pf-select [multiple]="true" [options]="testAndProfileOptions()" [values]="pkItems()" placeholder="Pick tests & profiles…"
-                         (valuesChange)="pkItems.set($event)"></pf-select>
-            </div>
-          </div>
-          <div class="pf-tm-card-actions">
-            <pf-touch-btn size="sm" variant="ghost" [disabled]="saving()" (pressed)="closePackageDialog()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || !packageValid()" (pressed)="submitPackage()">
-              @if (saving()) { Saving… } @else { Create package }
-            </pf-touch-btn>
-          </div>
-        </div>
-      </div>
-    }
+    <!-- The separate "Create profile" / "Create package" dialogs are gone.
+         One Create button routes to the editor, whose Identity section already
+         has a Type dropdown (individual / profile / package) — so there is a
+         single path for making anything, instead of three entry points with
+         two different UIs. -->
   `,
   styles: [`
     :host { display: block; max-width: 100%; }
@@ -708,14 +648,34 @@ export class TestsComponent implements OnInit {
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
         {
-          headerName: 'Container', colId: 'container', minWidth: 150, editable: false,
+          // Pick the container/tube colour straight from the grid.
+          // MUST bind `field: 'tubeColor'` — onCellValueChanged bails on
+          // `if (!field) return`, so a colId-only column would look editable
+          // and then drop every change on the floor. The editor works in
+          // COLOUR KEYS ('edta'); valueFormatter renders the human label so
+          // the cell and the dropdown both read "EDTA".
+          headerName: 'Container', colId: 'container', field: 'tubeColor',
+          minWidth: 160, editable: true,
           cellRenderer: this.containerRenderer,
-          valueGetter: p => TUBE_LABEL[p.data?.tubeColor ?? ''] ?? '',
+          // Custom editor: a native <select> can't show the colour swatch, so
+          // the dropdown would list bare names next to a cell showing a dot.
+          cellEditor: TubeColorEditorComponent,
+          cellEditorPopup: true,
+          cellEditorParams: {
+            choices: TUBE_CHOICES.map(k => ({ key: k, label: TUBE_LABEL[k], hex: TUBE_HEX[k] })),
+          },
+          valueFormatter: p => TUBE_LABEL[p.value as string] ?? '',
         },
         { headerName: 'Unit', field: 'unit', editable: true, minWidth: 100 },
         {
-          headerName: 'Reference range', colId: 'referenceRange', minWidth: 150,
-          valueGetter: p => this.referenceRange(p.data), editable: false,
+          // Editable, and bound to `adultReferenceRange` — the field the
+          // backend now mirrors into the test's single parameter on save. It
+          // was read-only and derived-only, so typing a range appeared to do
+          // nothing. Shows the typed value when set, else the range derived
+          // from the parameter JSON.
+          headerName: 'Reference range', colId: 'referenceRange',
+          field: 'adultReferenceRange', minWidth: 165, editable: true,
+          valueGetter: p => (p.data?.adultReferenceRange ?? '').trim() || this.referenceRange(p.data),
         },
         {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
@@ -748,6 +708,10 @@ export class TestsComponent implements OnInit {
         headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140, sortable: false, filter: false,
         valueGetter: p => this.kindLabel(p.data),
       },
+      // Short name — the individual grid has always shown it; profiles and
+      // packages were missing it, so a bundle's abbreviation was invisible
+      // and uneditable here.
+      { headerName: 'Short', field: 'shortName', editable: true, minWidth: 110, sortable: false, filter: false },
       { headerName: 'Unit', field: 'unit', minWidth: 100, sortable: false, filter: false },
       {
         headerName: 'Reference range', colId: 'referenceRange', minWidth: 150, sortable: false, filter: false,
@@ -884,23 +848,6 @@ export class TestsComponent implements OnInit {
     wrap.appendChild(label);
     return wrap;
   };
-
-  // ── Create-Profile dialog state ──────────────────────────────
-  readonly showProfile = signal(false);
-  readonly pfCode = signal('');
-  readonly pfName = signal('');
-  readonly pfDept = signal<string>('');
-  readonly pfPrice = signal<number>(0);
-  readonly pfItems = signal<string[]>([]);
-  readonly profileValid = computed(() =>
-    this.pfCode().trim().length > 0 && this.pfName().trim().length > 0 && this.pfItems().length > 0);
-
-  // ── Create-Package dialog state ──────────────────────────────
-  readonly showPackage = signal(false);
-  readonly pkName = signal('');
-  readonly pkPrice = signal<number>(0);
-  readonly pkItems = signal<string[]>([]);
-  readonly packageValid = computed(() => this.pkName().trim().length > 0 && this.pkItems().length > 0);
 
   ngOnInit() {
     this.loadTests();
@@ -1053,63 +1000,4 @@ export class TestsComponent implements OnInit {
     this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._type() } });
   }
 
-  // ── Create Profile ───────────────────────────────────────────
-  openProfileDialog() {
-    this.pfCode.set(''); this.pfName.set(''); this.pfDept.set(''); this.pfPrice.set(0); this.pfItems.set([]);
-    this.showProfile.set(true);
-  }
-  closeProfileDialog() { this.showProfile.set(false); }
-
-  submitProfile() {
-    if (!this.profileValid() || this.saving()) return;
-    this.saving.set(true);
-    const body: Record<string, unknown> = {
-      type: 'profile',
-      name: this.pfName().trim(),
-      testCode: this.pfCode().trim(),
-      price: Number(this.pfPrice()) || 0,
-      parametersJson: JSON.stringify({ items: this.pfItems().map(testId => ({ testId })) }),
-    };
-    if (this.pfDept()) body['departmentId'] = this.pfDept();
-    this.api.post<Test>('/api/tests/', body).subscribe({
-      next: () => {
-        this.saving.set(false);
-        this.showProfile.set(false);
-        this.toasts.success('Profile created');
-        this._type.set('profile');
-        this._selectedDept.set(null);
-        this.loadTests();
-      },
-      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
-
-  // ── Create Package ───────────────────────────────────────────
-  openPackageDialog() {
-    this.pkName.set(''); this.pkPrice.set(0); this.pkItems.set([]);
-    this.showPackage.set(true);
-  }
-  closePackageDialog() { this.showPackage.set(false); }
-
-  submitPackage() {
-    if (!this.packageValid() || this.saving()) return;
-    this.saving.set(true);
-    const body: Record<string, unknown> = {
-      type: 'package',
-      name: this.pkName().trim(),
-      price: Number(this.pkPrice()) || 0,
-      parametersJson: JSON.stringify({ items: this.pkItems().map(testId => ({ testId })) }),
-    };
-    this.api.post<Test>('/api/tests/', body).subscribe({
-      next: () => {
-        this.saving.set(false);
-        this.showPackage.set(false);
-        this.toasts.success('Package created');
-        this._type.set('package');
-        this._selectedDept.set(null);
-        this.loadTests();
-      },
-      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
 }

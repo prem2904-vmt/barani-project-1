@@ -2328,7 +2328,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  back to the legacy parameter table for those). */
   private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
     const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let tests: Array<{ testId?: string; packageTestId?: string | null; result?: { values?: Record<string, unknown> } }> = [];
     let patient: { sex?: string | null; age?: number | null } | undefined;
     try {
       const snap = JSON.parse(report.data ?? '{}');
@@ -2344,6 +2344,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       try {
         out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
       } catch { /* test without a layout — fallback table renders */ }
+    }));
+    // A test ordered through a PROFILE prints the PROFILE's notes, never its
+    // own — so the profile's layout has to be fetched too. Profiles aren't
+    // snapshot rows (only their members are), so collect the distinct
+    // packageTestIds and resolve those as well.
+    const pkgIds = [...new Set(tests.map(t => t.packageTestId).filter((id): id is string => !!id))];
+    await Promise.all(pkgIds.map(async id => {
+      if (out[id]) return;
+      try {
+        out[id] = await svc.preview(id, {}, [], patient);
+      } catch { /* profile without notes — nothing extra prints */ }
     }));
     return out;
   }

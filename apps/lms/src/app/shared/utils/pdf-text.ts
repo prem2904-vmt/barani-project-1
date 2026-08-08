@@ -67,3 +67,80 @@ export function installPdfTextSanitizer(doc: jsPDF): void {
     original(Array.isArray(text) ? text.map(pdfSafeText) : pdfSafeText(text), ...rest);
   d.__pfSanitized = true;
 }
+
+// ──────────────────────────────────────────────────────────────
+// True superscripts
+// ──────────────────────────────────────────────────────────────
+
+/** `^9`, `^12`, `^-3` … — the caret form pdfSafeText leaves behind. */
+const SUP_MARKER = /\^([0-9+-]+)/g;
+
+/** Split "×10^9/L" into runs: [{t:'×10'},{t:'9',sup:true},{t:'/L'}]. */
+export function splitSuperscriptRuns(text: string): Array<{ t: string; sup?: boolean }> {
+  const out: Array<{ t: string; sup?: boolean }> = [];
+  let last = 0;
+  for (const m of text.matchAll(SUP_MARKER)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ t: text.slice(last, i) });
+    out.push({ t: m[1], sup: true });
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push({ t: text.slice(last) });
+  return out;
+}
+
+export function hasSuperscript(text: string): boolean {
+  SUP_MARKER.lastIndex = 0;
+  return SUP_MARKER.test(text);
+}
+
+/** Width of `text` with its superscript runs rendered smaller. */
+export function measureWithSuperscripts(
+  doc: { getTextWidth: (s: string) => number; setFontSize: (n: number) => void },
+  text: string, fontSize: number
+): number {
+  let w = 0;
+  for (const run of splitSuperscriptRuns(text)) {
+    doc.setFontSize(run.sup ? fontSize * SUP_SCALE : fontSize);
+    w += doc.getTextWidth(run.t);
+  }
+  doc.setFontSize(fontSize);
+  return w;
+}
+
+const SUP_SCALE = 0.66;   // superscript glyph size, relative to the body size
+const SUP_RISE  = 0.32;   // how far above the baseline, as a fraction of size
+
+/**
+ * Draw text with REAL raised superscripts — "×10⁹/L" rather than "×10^9/L".
+ *
+ * jsPDF's built-in fonts are cp1252, which has no ⁹, so the glyph itself can't
+ * be printed. Embedding a Unicode font would cost a few hundred KB and would
+ * override the admin's Helvetica/Times/Courier choice, so instead the digits
+ * are drawn smaller and raised — which is what a superscript actually IS
+ * typographically, and it inherits whichever font is selected.
+ *
+ * Returns the total advance width.
+ */
+export function drawTextWithSuperscripts(
+  doc: {
+    text: (t: string, x: number, y: number) => unknown;
+    getTextWidth: (s: string) => number;
+    setFontSize: (n: number) => void;
+  },
+  text: string, x: number, y: number, fontSize: number
+): number {
+  let cx = x;
+  for (const run of splitSuperscriptRuns(text)) {
+    if (run.sup) {
+      doc.setFontSize(fontSize * SUP_SCALE);
+      doc.text(run.t, cx, y - fontSize * SUP_RISE);
+    } else {
+      doc.setFontSize(fontSize);
+      doc.text(run.t, cx, y);
+    }
+    cx += doc.getTextWidth(run.t);
+  }
+  doc.setFontSize(fontSize);
+  return cx - x;
+}

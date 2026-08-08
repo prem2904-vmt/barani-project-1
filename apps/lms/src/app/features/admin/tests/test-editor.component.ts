@@ -35,6 +35,9 @@ import { AuthService } from '../../../core/auth/auth.service';
 
 /** Left-rail sections. One shows at a time (progressive disclosure) instead of
  *  stacking every field card on one screen. */
+/** Label of the synthetic picker group holding the already-chosen members. */
+const SELECTED_GROUP = 'Selected';
+
 type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'layout' | 'consumables';
 
 interface DraftTest {
@@ -234,6 +237,16 @@ function newFieldId(): string {
                 </div>
               }
             </div>
+            <!-- Short name applies to EVERY type. It used to sit in
+                 "Sample & handling", which is gated to individual tests — so a
+                 profile could never be given one and the grid column stayed
+                 blank. -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div><label class="pf-label">Short name</label>
+                <input type="text" class="pf-input" [ngModel]="d.shortName"
+                       (ngModelChange)="patch({ shortName: $event })"
+                       placeholder="e.g. CBC" /></div>
+            </div>
             <!-- Sample type is an individual-test concern; bundles (profiles /
                  packages) inherit collection from their member tests. -->
             @if (d.type === 'individual') {
@@ -323,10 +336,6 @@ function newFieldId(): string {
             <h3 class="section-title">Sample &amp; handling</h3>
             <div class="space-y-3 mt-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div><label class="pf-label">Short name</label>
-                  <input type="text" class="pf-input" [ngModel]="d.shortName"
-                         (ngModelChange)="patch({ shortName: $event })"
-                         placeholder="e.g. CBC" /></div>
                 <div><label class="pf-label">Section</label>
                   <input type="text" class="pf-input" [ngModel]="d.section"
                          (ngModelChange)="patch({ section: $event })"
@@ -636,59 +645,6 @@ function newFieldId(): string {
 
         }
 
-        @if (section() === 'layout') {
-        <!-- Report Layout — gated until the test has an id (the layout
-             endpoints all key off testId). -->
-        @if (d.id) {
-          <!-- Two views over the SAME per-test layout store
-               (/api/report-layout/test/:id). "Notes & description" is the
-               everyday content pass — the text that prints beside each
-               parameter — and used to live on /admin/reports, which meant a
-               second screen to finish a test. "Advanced structure" is the
-               section/grid builder for the rare test that needs it. -->
-          <div class="pf-lay-switch">
-            <button type="button" class="pf-lay-switch__btn"
-                    [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
-                    (click)="layoutView.set('notes')">Notes &amp; description</button>
-            <button type="button" class="pf-lay-switch__btn"
-                    [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
-                    (click)="layoutView.set('advanced')">Advanced structure</button>
-          </div>
-
-          <!-- Read-only: the column structure is a DEPARTMENT-wide setting, so
-               it is shown here for context but edited where it applies to all
-               of the department's tests. -->
-          @if (deptColumnsLabel(); as cols) {
-            <p class="pf-lay-cols">
-              <span class="pf-lay-cols__k">{{ selectedDeptName() || 'This department' }} prints</span>
-              <span class="pf-lay-cols__v">{{ cols }}</span>
-              <a class="pf-lay-cols__a" routerLink="/admin/reports">Change columns</a>
-            </p>
-          }
-
-          @if (layoutView() === 'notes') {
-            <pf-test-notes-editor class="block"
-              [fixedTestId]="d.id || ''"
-              [hidePreview]="false">
-            </pf-test-notes-editor>
-          } @else {
-            <pf-test-layout-editor class="block"
-              [testId]="d.id || ''"
-              [departmentId]="d.departmentId || ''"
-              [parameters]="parameterNames()">
-            </pf-test-layout-editor>
-          }
-        } @else {
-          <pf-tile tone="default" padding="lg" class="block">
-            <p class="text-[13px]" style="color: var(--text-tertiary);">
-              <strong style="color: var(--text-secondary);">Report Layout</strong>
-              — save this test first, then come back to this tab to design how the
-              test's results render in the patient report.
-            </p>
-          </pf-tile>
-        }
-        }
-
         @if (section() === 'consumables') {
         @if (d.id) {
           <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
@@ -751,7 +707,8 @@ function newFieldId(): string {
             <div class="flex flex-col gap-5">
               @for (group of filteredPackageCatalogByDept(); track group.department) {
                 <div>
-                  <div class="pf-pkg-dept-hdr">
+                  <div class="pf-pkg-dept-hdr"
+                       [class.pf-pkg-dept-hdr--sel]="group.department === 'Selected'">
                     <span class="pf-pkg-dept-hdr__name">{{ group.department }}</span>
                     <span class="pf-pkg-dept-hdr__count">{{ group.tests.length }}</span>
                   </div>
@@ -784,11 +741,73 @@ function newFieldId(): string {
           }
         </pf-tile>
       }
+        <!-- Report layout sits OUTSIDE the type branch: profiles need it too,
+             because a profile carries its own notes and those are what print
+             when the profile is ordered. -->
+        @if (section() === 'layout') {
+        <!-- Report Layout — gated until the test has an id (the layout
+             endpoints all key off testId). -->
+        @if (d.id) {
+          <!-- Two views over the SAME per-test layout store
+               (/api/report-layout/test/:id). "Notes & description" is the
+               everyday content pass — the text that prints beside each
+               parameter — and used to live on /admin/reports, which meant a
+               second screen to finish a test. "Advanced structure" is the
+               section/grid builder for the rare test that needs it. -->
+          <div class="pf-lay-switch">
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
+                    (click)="layoutView.set('notes')">Notes &amp; description</button>
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
+                    (click)="layoutView.set('advanced')">Advanced structure</button>
+          </div>
+
+          <!-- Read-only: the column structure is a DEPARTMENT-wide setting, so
+               it is shown here for context but edited where it applies to all
+               of the department's tests. -->
+          @if (deptColumnsLabel(); as cols) {
+            <p class="pf-lay-cols">
+              <span class="pf-lay-cols__k">{{ selectedDeptName() || 'This department' }} prints</span>
+              <span class="pf-lay-cols__v">{{ cols }}</span>
+              <a class="pf-lay-cols__a" routerLink="/admin/reports">Change columns</a>
+            </p>
+          }
+
+          @if (layoutView() === 'notes') {
+            <pf-test-notes-editor class="block"
+              [fixedTestId]="d.id || ''"
+              [hidePreview]="false">
+            </pf-test-notes-editor>
+          } @else {
+            <pf-test-layout-editor class="block"
+              [testId]="d.id || ''"
+              [departmentId]="d.departmentId || ''"
+              [parameters]="parameterNames()">
+            </pf-test-layout-editor>
+          }
+        } @else {
+          <pf-tile tone="default" padding="lg" class="block">
+            <p class="text-[13px]" style="color: var(--text-tertiary);">
+              <strong style="color: var(--text-secondary);">Report Layout</strong>
+              — save this test first, then come back to this tab to design how the
+              test's results render in the patient report.
+            </p>
+          </pf-tile>
+        }
+        }
+
+
         </div><!-- /pf-te__body -->
       </div><!-- /pf-te -->
     </section>
   `,
   styles: [`
+    /* The pinned "Selected" group reads as a summary, not another dept. */
+    .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--violet-text); }
+    .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count {
+      background: rgba(139, 92, 246, 0.2); color: var(--violet-text);
+    }
 
     /* ── Editor shell: sticky section rail + one content column ──────────
        Replaces the old "five stacked cards + a tab strip halfway down" page.
@@ -1459,7 +1478,12 @@ export class TestEditorComponent implements OnInit {
     ];
     // Consumables was permission-gated when it was a tab — keep that gate.
     const allowed = this.canManageInventory() ? all : all.filter(x => x.value !== 'consumables');
-    return individual ? allowed : allowed.filter(x => x.value === 'identity' || x.value === 'pricing');
+    if (individual) return allowed;
+    // Bundles: no sample handling, parameters or consumables of their own —
+    // those belong to their member tests. They DO get Report layout, because a
+    // profile carries its own notes, and when a profile is ordered those notes
+    // are what print (never the members'). See the notes rule in the renderer.
+    return allowed.filter(x => x.value === 'identity' || x.value === 'pricing' || x.value === 'layout');
   });
   /** Human list of the DEPARTMENT's report columns — read-only context only.
    *  Editing lives on /admin/reports because one change hits every test in the
@@ -1564,7 +1588,7 @@ export class TestEditorComponent implements OnInit {
       const arr = groups.get(key);
       if (arr) arr.push(t); else groups.set(key, [t]);
     }
-    return Array.from(groups.entries())
+    const out = Array.from(groups.entries())
       // Keep the Profiles cluster last so individual-test departments read first.
       .map(([department, tests]) => ({ department, tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name)) }))
       .sort((a, b) => {
@@ -1572,6 +1596,20 @@ export class TestEditorComponent implements OnInit {
         if (b.department === 'Profiles') return -1;
         return a.department.localeCompare(b.department);
       });
+
+    // Everything already chosen collects into a "Selected" group pinned at the
+    // TOP. With ~280 candidates the ticks were scattered across departments and
+    // there was no way to see what the bundle actually contained without
+    // scrolling the whole catalogue. Members still appear in their own
+    // department below, so unticking works from either place.
+    const chosen = new Set(this._packageItems());
+    if (chosen.size > 0) {
+      const picked = this.pickerSource()
+        .filter(t => chosen.has(t.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (picked.length > 0) out.unshift({ department: SELECTED_GROUP, tests: picked });
+    }
+    return out;
   });
 
   isInPackage(id: string): boolean { return this._packageItems().includes(id); }

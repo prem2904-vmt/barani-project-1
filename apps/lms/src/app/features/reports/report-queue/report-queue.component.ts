@@ -585,6 +585,27 @@ export class ReportQueueComponent implements OnInit {
       }),
     ]);
 
+    // Tests ordered through a PROFILE print the PROFILE's notes, not their own,
+    // so the profile's layout must be resolved as well. Profiles aren't
+    // snapshot rows — only their members are, carrying packageTestId.
+    const pkgIds = [
+      ...new Set(
+        (tests as Array<{ packageTestId?: string | null }>)
+          .map((t) => t.packageTestId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    await Promise.all(
+      pkgIds.map(async (id) => {
+        if (resolvedLayouts[id]) return;
+        try {
+          resolvedLayouts[id] = await svc.preview(id, {}, [], patient);
+        } catch {
+          /* profile without notes — nothing extra prints */
+        }
+      }),
+    );
+
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
     const [imageCache, trendograms] = await Promise.all([
       preloadReportImages(baseInput, platform.getApiUrl()),
