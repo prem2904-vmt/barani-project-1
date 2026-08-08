@@ -32,14 +32,14 @@ import { TestLayoutEditorComponent } from './test-layout-editor.component';
 import { TestNotesEditorComponent } from '../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from './test-consumables.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { describeAllRanges, deriveRangeLabel } from '../../../shared/utils/reference-range';
+import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../shared/utils/reference-range';
 
 /** Left-rail sections. One shows at a time (progressive disclosure) instead of
  *  stacking every field card on one screen. */
 /** Label of the synthetic picker group holding the already-chosen members. */
 const SELECTED_GROUP = 'Selected';
 
-type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'layout' | 'consumables';
+type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'ranges' | 'layout' | 'consumables';
 
 interface DraftTest {
   id?: string;
@@ -386,10 +386,11 @@ function newFieldId(): string {
                 <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
                            (valueChange)="patch({ reportFormat: $event })"></pf-select>
               </div>
-              <div><label class="pf-label">Adult reference range</label>
-                <input type="text" class="pf-input" [ngModel]="d.adultReferenceRange"
-                       (ngModelChange)="patch({ adultReferenceRange: $event })"
-                       placeholder="e.g. 13.0 – 17.0 g/dL" /></div>
+              <!-- The flat "Adult reference range" box used to sit here, next
+                   to a Reference range section that holds the real bands. Two
+                   places for one fact is how a range gets edited in one and
+                   read from the other; it is now kept in step on save from the
+                   bands, which are the thing the report actually uses. -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
                 <div><label class="pf-label">Critical low</label>
                   <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
@@ -401,6 +402,133 @@ function newFieldId(): string {
                 </div>
               </div>
             </div>
+          </pf-tile>
+        }
+
+        <!-- ── Reference range ────────────────────────────────────────
+             Its own rail section. These were previously reachable only by
+             opening the Results section, expanding a parameter, and scrolling
+             — three steps deep for the field a lab tunes most often, which is
+             why they read as missing. -->
+        @if (section() === 'ranges' && d.type === 'individual') {
+          <pf-tile tone="default" padding="lg" class="block">
+            <div class="flex items-center justify-between">
+              <h3 class="section-title">Reference range</h3>
+              @if (numericFields().length > 0) {
+                <span class="text-[11px] text-slate-400">Normal values by sex and age</span>
+              }
+            </div>
+
+            @if (numericFields().length === 0) {
+              <!-- A simple test shouldn't make anyone think about "parameters"
+                   first: this creates the single analyte, named after the test,
+                   and drops the admin straight into its bands. -->
+              <div class="mt-4 rounded-xl border border-dashed border-slate-600/50 p-6 text-center">
+                <p class="text-sm text-slate-300">No reference range set for this test yet.</p>
+                <p class="text-xs text-slate-500 mt-1">
+                  Leave it empty for a qualitative test, or add the normal values now.
+                </p>
+                <div class="mt-3">
+                  <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">
+                    Add a reference range
+                  </pf-touch-btn>
+                </div>
+              </div>
+            } @else {
+              <div class="space-y-5 mt-4">
+                @for (p of fields(); let i = $index; track i) {
+                  @if (isNumericType(p.type)) {
+                    <div class="pf-rr-block">
+                      <!-- The analyte is named only when there is more than one:
+                           a single-analyte test IS the test, and repeating its
+                           name here is noise. -->
+                      @if (numericFields().length > 1) {
+                        <div class="flex items-baseline gap-2 mb-2">
+                          <span class="text-sm font-semibold text-slate-100">{{ p.name || 'Unnamed' }}</span>
+                          @if (p.unit) { <span class="text-[11px] text-slate-400">{{ p.unit }}</span> }
+                        </div>
+                      }
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="pf-mini-lbl">{{ bandsCaption(p) }}</span>
+                        <button type="button"
+                                class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                (click)="addRange(i)">+ Add range</button>
+                      </div>
+              @for (r of (p.referenceRanges ?? []); track $index) {
+                <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Sex</span>
+                    <select class="pf-input pf-input--compact"
+                            [ngModel]="r.sex ?? 'any'"
+                            (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
+                      <option value="any">Any</option>
+                      <option value="M">Male</option>
+                      <option value="F">Female</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Min age</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                      [value]="r.minAge ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Max age</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                      [value]="r.maxAge ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Age unit</span>
+                    <select class="pf-input pf-input--compact"
+                            [ngModel]="r.ageUnit ?? 'years'"
+                            (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
+                      <option value="years">Years</option>
+                      <option value="months">Months</option>
+                      <option value="days">Days</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Normal min</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                      [value]="r.min ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Normal max</span>
+                    <div class="flex items-end gap-1">
+                      <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                        [value]="r.max ?? null"
+                                        (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
+                      </pf-number-input>
+                      @if ((p.referenceRanges ?? []).length > 1) {
+                        <button type="button" title="Remove range"
+                                class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
+                                (click)="removeRange(i, $index)">×</button>
+                      }
+                    </div>
+                  </label>
+                </div>
+                <!-- The name printed under this range on the report.
+                     Left blank it is composed from Sex + age above,
+                     so the whole catalogue reads the same way; the
+                     placeholder shows exactly what will print. -->
+                <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
+                  <span class="pf-mini-lbl">Prints as</span>
+                  <input type="text" class="pf-input pf-input--compact"
+                         [ngModel]="r.label ?? ''"
+                         [placeholder]="autoRangeLabel(r)"
+                         (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
+                </label>
+              }
+                    </div>
+                  }
+                }
+              </div>
+            }
           </pf-tile>
         }
 
@@ -495,85 +623,12 @@ function newFieldId(): string {
 
                     @if (isNumericType(p.type)) {
                       <div class="param-row__ranges">
-                        <div class="flex items-center justify-between">
-                          <span class="pf-mini-lbl pf-mini-lbl--strong">Reference ranges</span>
-                          <button type="button"
-                                  class="text-xs font-medium text-violet-400 hover:text-violet-300"
-                                  (click)="addRange(i)">+ Add range</button>
-                        </div>
-                        <!-- One band per sex/age segment. Sex/age select which band
-                             a given patient is flagged against; leave Sex = Any and
-                             ages blank for a single all-patients range. -->
-                        @for (r of (p.referenceRanges ?? []); track $index) {
-                          <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Sex</span>
-                              <select class="pf-input pf-input--compact"
-                                      [ngModel]="r.sex ?? 'any'"
-                                      (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
-                                <option value="any">Any</option>
-                                <option value="M">Male</option>
-                                <option value="F">Female</option>
-                              </select>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Min age</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
-                                                [value]="r.minAge ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Max age</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
-                                                [value]="r.maxAge ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Age unit</span>
-                              <select class="pf-input pf-input--compact"
-                                      [ngModel]="r.ageUnit ?? 'years'"
-                                      (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
-                                <option value="years">Years</option>
-                                <option value="months">Months</option>
-                                <option value="days">Days</option>
-                              </select>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Normal min</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                                [value]="r.min ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Normal max</span>
-                              <div class="flex items-end gap-1">
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                                  [value]="r.max ?? null"
-                                                  (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
-                                </pf-number-input>
-                                @if ((p.referenceRanges ?? []).length > 1) {
-                                  <button type="button" title="Remove range"
-                                          class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
-                                          (click)="removeRange(i, $index)">×</button>
-                                }
-                              </div>
-                            </label>
-                          </div>
-                          <!-- The name printed under this range on the report.
-                               Left blank it is composed from Sex + age above,
-                               so the whole catalogue reads the same way; the
-                               placeholder shows exactly what will print. -->
-                          <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
-                            <span class="pf-mini-lbl">Prints as</span>
-                            <input type="text" class="pf-input pf-input--compact"
-                                   [ngModel]="r.label ?? ''"
-                                   [placeholder]="autoRangeLabel(r)"
-                                   (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
-                          </label>
-                        }
+                        <!-- Reference ranges moved out to their own rail
+                             section: they are the thing a lab edits most, and
+                             burying them two levels deep (expand parameter →
+                             scroll) made them look missing. Critical and
+                             plausible bands stay here — they are safety limits
+                             on the analyte, not the normal range. -->
                         <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
                           <label class="flex flex-col gap-0.5 min-w-0">
                             <span class="pf-mini-lbl">Critical low</span>
@@ -1167,6 +1222,15 @@ function newFieldId(): string {
       border: 1px dashed var(--glass-border);
     }
 
+    /* Reference range section: one block per analyte. A single-analyte test
+       shows no frame at all — the tile IS the block — so the common case
+       reads as a plain form rather than a nested container. */
+    .pf-rr-block { display: flex; flex-direction: column; gap: 6px; }
+    .pf-rr-block + .pf-rr-block {
+      padding-top: 14px;
+      border-top: 1px dashed var(--glass-border);
+    }
+
     /* ── Option chips ── */
     .pf-option-count {
       display: inline-flex;
@@ -1439,6 +1503,58 @@ export class TestEditorComponent implements OnInit {
     this._expandedParamId.update(cur => cur === id ? null : id);
   }
 
+  /**
+   * Keep the test's flat `adultReferenceRange` in step with the bands.
+   *
+   * That column is what the Test Master grid shows and what the backend mirrors
+   * back into a single analyte on save, so leaving it stale would put two
+   * different ranges on screen for the same test. One all-patients band is
+   * expressible as a flat string, so it is written; conditional bands are not,
+   * so the field is cleared and the grid falls back to rendering every band.
+   */
+  private flatRangeFromBands(current: string): string {
+    const numeric = this.numericFields();
+    if (numeric.length !== 1) return current;
+    const bands = numeric[0].referenceRanges ?? [];
+    if (bands.length !== 1) return '';
+    return formatRange(bands[0]) ?? '';
+  }
+
+  /**
+   * One line telling the admin who this analyte's ranges apply to. A single
+   * band is usually the all-patients case, but not always — a lab may
+   * configure one female-only band — so it reports what the band actually
+   * says rather than assuming.
+   */
+  protected bandsCaption(p: FormField): string {
+    const bands = p.referenceRanges ?? [];
+    if (bands.length === 0) return 'No range set';
+    if (bands.length > 1) return `${bands.length} ranges by sex / age`;
+    return deriveRangeLabel(bands[0]) ?? 'Applies to every patient';
+  }
+
+  /** Analytes that can carry a numeric band — the Reference range section's
+   *  subject. A qualitative test (Positive/Negative) legitimately has none. */
+  protected readonly numericFields = computed(() =>
+    this.fields().filter(f => this.isNumericType(f.type)));
+
+  /**
+   * Give a test its first reference range without making the admin think in
+   * "parameters" first. A single-analyte test IS the test, so the analyte is
+   * created named after it, carrying the unit already typed in Results, with
+   * one all-patients band ready to fill in.
+   */
+  protected startReferenceRange(): void {
+    if (this.numericFields().length > 0) return;
+    this.addParameter();
+    const i = this.fields().length - 1;
+    const d = this._draft();
+    this.patchField(i, {
+      name: (d.name ?? '').trim() || 'Result',
+      unit: (d.unit ?? '').trim() || undefined,
+    });
+  }
+
   /** What this band will print as on the report if the admin types nothing —
    *  shown as the Label placeholder so the naming rule is visible, not
    *  guessed at. */
@@ -1493,7 +1609,8 @@ export class TestEditorComponent implements OnInit {
       { value: 'identity',    label: 'Identity',        desc: 'Name, code, department, type' },
       { value: 'pricing',     label: 'Pricing & TAT',   desc: 'Price, tax, turnaround' },
       { value: 'sample',      label: 'Sample & handling', desc: 'Specimen, tube, volume, fasting' },
-      { value: 'results',     label: 'Results',         desc: 'Parameters, units, reference ranges' },
+      { value: 'results',     label: 'Results',         desc: 'Parameters, units, critical limits' },
+      { value: 'ranges',      label: 'Reference range', desc: 'Normal values by sex and age' },
       { value: 'layout',      label: 'Report layout',   desc: 'Notes, description, structure' },
       { value: 'consumables', label: 'Consumables',     desc: 'Inventory used per test' },
     ];
@@ -1990,7 +2107,7 @@ export class TestEditorComponent implements OnInit {
       resultType: pkg ? undefined : d.resultType,
       unit: pkg ? undefined : d.unit,
       reportFormat: pkg ? undefined : d.reportFormat,
-      adultReferenceRange: pkg ? undefined : d.adultReferenceRange,
+      adultReferenceRange: pkg ? undefined : this.flatRangeFromBands(d.adultReferenceRange),
       criticalLow: pkg ? undefined : (d.criticalLow ?? undefined),
       criticalHigh: pkg ? undefined : (d.criticalHigh ?? undefined),
       parametersJson,
