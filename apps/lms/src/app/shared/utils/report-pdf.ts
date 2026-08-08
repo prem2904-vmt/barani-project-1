@@ -2582,15 +2582,9 @@ function drawSigFooterPage(
   // When the snapshot carries PER-DEPARTMENT signatories, each department
   // block already signs itself inline — skip the repeated page-bottom row
   // entirely (the disclaimer/date strip below still draws).
-  const sigs: ReportSignature[] = (snap.deptSignatures?.length ?? 0) > 0
-    ? []
-    : theme.signatures.length > 0
-    ? theme.signatures.slice(0, 3)
-    : [
-        { name: practice.sigLabTechName,      title: practice.sigLabTechTitle      },
-        { name: practice.sigPathologist1Name, title: practice.sigPathologist1Title },
-        { name: practice.sigPathologist2Name, title: practice.sigPathologist2Title },
-      ];
+  // Signatures NEVER print in the page footer — they sign at the end of each
+  // department's section (per-department signatories / tester+validator).
+  const sigs: ReportSignature[] = [];
 
   sigs.forEach((s, i) => {
     if (!s.name && !s.signatureUrl) return;

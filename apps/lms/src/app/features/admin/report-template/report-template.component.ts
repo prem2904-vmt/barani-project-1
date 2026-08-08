@@ -512,58 +512,13 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             @case ('signoff') {
               <pf-tile tone="default" padding="lg" class="block">
                 <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Sign-off &amp; footer</h4>
-                  <div class="pf-wys-paper pf-wys-sigs">
-                    @for (sig of signatures(); track $index) {
-                      <span class="pf-wys-sig">
-                        @if (sig.signatureUrl) { <img [src]="sig.signatureUrl" alt="" class="pf-wys-sig__img" /> }
-                        @else { <span class="pf-wys-sig__scribble">✎</span> }
-                        <b>{{ sig.name || 'Name' }}</b>
-                        <i>({{ sig.title || 'Title' }})</i>
-                        @if (sig.regNo) { <small>Reg. {{ sig.regNo }}</small> }
-                      </span>
-                    } @empty {
-                      <span class="pf-wys-sig pf-wys-sig--empty">No template signatures — reports sign with each department's actual technician &amp; validator.</span>
-                    }
-                  </div>
-                  <p class="pf-rtb-s">Signature slots print at the bottom of the report (per-department signatories from the actual validators override these); disclaimer and end-of-report text close the page.</p>
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Signature blocks (up to 3)</p>
+                  <h4 class="pf-rtb-h">Footer</h4>
+                  <p class="pf-rtb-s">
+                    Signatures are configured per department (Report columns → Signatories) and print at
+                    the end of each department's section — nothing signs in the footer. The texts below
+                    close the page.
+                  </p>
 
-                @for (sig of signatures(); track $index; let i = $index) {
-                  <div class="pf-sig-card">
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-[12px] font-semibold" style="color: var(--text-secondary);">Sign-off #{{ i + 1 }}</span>
-                      <button type="button" class="pf-link-btn" (click)="removeSignature(i)">Remove</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input class="pf-input" placeholder="Name (e.g. Dr. Payal Shah)"
-                             [ngModel]="sig.name"
-                             (ngModelChange)="updateSignature(i, { name: $event })" />
-                      <input class="pf-input" placeholder="Title (e.g. MD, Pathologist)"
-                             [ngModel]="sig.title"
-                             (ngModelChange)="updateSignature(i, { title: $event })" />
-                      <input class="pf-input" placeholder="Reg. No"
-                             [ngModel]="sig.regNo"
-                             (ngModelChange)="updateSignature(i, { regNo: $event })" />
-                    </div>
-                    <div class="mt-2">
-                      <label class="pf-label">Signature image (optional)</label>
-                      <pf-image-upload [url]="sig.signatureUrl"
-                                       (urlChange)="updateSignature(i, { signatureUrl: $event })">
-                      </pf-image-upload>
-                    </div>
-                  </div>
-                }
-
-                @if (signatures().length < 3) {
-                  <button type="button" class="pf-add-btn" (click)="addSignature()">+ Add sign-off block</button>
-                }
-
-                <div class="pf-divider mt-4"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Footer text</p>
                 <div class="space-y-3">
                   <div>
                     <label class="pf-label">Disclaimer (small print)</label>
@@ -841,7 +796,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'patient',  label: 'Patient' },
     { value: 'columns',  label: 'Columns' },
     { value: 'testlayout', label: 'Per-test layout' },
-    { value: 'signoff',  label: 'Sign-off & Footer' },
+    { value: 'signoff',  label: 'Footer' },
   ];
   /** Section cards for the left nav — a plain-words label + what it changes,
    *  so the admin never has to guess what lives behind a tab. */
@@ -852,7 +807,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'patient',    label: 'Patient block',     desc: 'Which patient fields print, arranged how' },
     { value: 'columns',    label: 'Report columns',    desc: 'Per-department table columns & widths' },
     { value: 'testlayout', label: 'Test descriptions', desc: 'Interpretation notes & description text per test' },
-    { value: 'signoff',    label: 'Sign-off & footer', desc: 'Signatures, disclaimer, end-of-report' },
+    { value: 'signoff',    label: 'Footer', desc: 'Disclaimer, end-of-report, watermark' },
   ];
   private readonly _tab = signal<Tab>('identity');
   readonly tab = this._tab.asReadonly();
