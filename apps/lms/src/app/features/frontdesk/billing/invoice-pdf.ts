@@ -1,4 +1,6 @@
 import { jsPDF } from 'jspdf';
+import { installPdfTextSanitizer } from '../../../shared/utils/pdf-text';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import autoTable from 'jspdf-autotable';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -47,9 +49,14 @@ export interface InvoicePdfInput {
   /** The printing user's saved digital signature (PNG data URL). Drawn above the
    *  cashier line on the Cash Bill when present. */
   cashierSignatureDataUrl?: string;
-  /** Paper size for the Cash Bill template: full-page A4 (default) or a 4-inch
-   *  (≈104 mm) thermal receipt roll. Ignored by the other letterhead styles. */
-  paperSize?: 'a4' | 'thermal';
+  /** Paper the invoice prints on. 'a4' is the full page; the rest are
+   *  continuous thermal receipt rolls, cut to exact content height:
+   *    thermal_25in → 2.5 in (≈64 mm)
+   *    thermal_3in  → 3 in   (≈80 mm, the common desk receipt printer)
+   *    thermal      → 4 in   (≈104 mm) — kept as the legacy alias so rows
+   *                   saved before the narrower sizes existed still work.
+   *  Applies to EVERY letterhead style, not just the Cash Bill. */
+  paperSize?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in';
   action?: 'save' | 'print' | 'view' | 'blob';
 }
 
@@ -76,22 +83,36 @@ export function generateInvoicePdf(input: InvoicePdfInput): string | void {
   //    (centered header, S.No/Test/Amount table, Mode-of-Payment +
   //    Total/Discount/Net Payable/Collected block, amount-in-words,
   //    Due-Amount box). Prints on A4 or a 4-inch thermal roll. ─────
+  // Thermal is a PAPER choice, not a letterhead choice: a lab on classic or
+  // modern still needs the receipt roll at the counter. Previously this was
+  // nested under `template === 'cashbill'`, so picking Thermal did nothing
+  // unless the Cash Bill style happened to be selected.
+  const thermalW = thermalWidthPt(input.paperSize);
+  if (thermalW) {
+    // Two passes: render once onto an over-tall page purely to MEASURE where
+    // the content ends, then render again onto a page cut to exactly that
+    // height. Beats maintaining height arithmetic by hand (which drifted every
+    // time a row was added) and guarantees the printer feeds/cuts right after
+    // the bill — no trailing blank paper at any of the three widths.
+    const probe = new jsPDF({ unit: 'pt', format: [thermalW, 4000] });
+    installPdfTextSanitizer(probe);
+    const used = drawThermalBill(probe, input, isTaxInvoice, thermalW);
+    const hPt = Math.max(220, Math.ceil(used + 12));
+    const tdoc = new jsPDF({ unit: 'pt', format: [thermalW, hPt] });
+    installPdfTextSanitizer(tdoc);
+    drawThermalBill(tdoc, input, isTaxInvoice, thermalW);
+    return finishInvoice(tdoc, input);
+  }
+
   if (template === 'cashbill') {
-    if ((input.paperSize ?? 'a4') === 'thermal') {
-      // Thermal: narrow, continuous roll sized to the content height so the
-      // printer feeds/cuts right after the bill (no trailing blank page).
-      const wPt = 288; // 4 in @ 72 pt/in
-      const hPt = estimateThermalHeight(input);
-      const tdoc = new jsPDF({ unit: 'pt', format: [wPt, hPt] });
-      drawThermalBill(tdoc, input, isTaxInvoice, wPt, hPt);
-      return finishInvoice(tdoc, input);
-    }
     const cbDoc = new jsPDF({ unit: 'pt', format: 'a4' });
+    installPdfTextSanitizer(cbDoc);
     drawCashBill(cbDoc, input, isTaxInvoice);
     return finishInvoice(cbDoc, input);
   }
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  installPdfTextSanitizer(doc);
   const accent = accentColor || '#1B3A6B';
   const right = A4.w - MARGIN;
 
@@ -169,16 +190,8 @@ function finishInvoice(doc: jsPDF, input: InvoicePdfInput): string | void {
   if (action === 'blob') return doc.output('bloburl') as unknown as string;
   if (action === 'view') { window.open(doc.output('bloburl') as unknown as string, '_blank'); return; }
   if (action === 'print') {
-    const blobUrl = doc.output('bloburl') as unknown as string;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    frame.src = blobUrl;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { window.open(blobUrl, '_blank'); }
-      setTimeout(() => frame.remove(), 60_000);
-    };
-    document.body.appendChild(frame);
+    // Shared helper: an off-screen A4-sized iframe. A 0-sized one prints blank.
+    printPdfBlobUrl(doc.output('bloburl') as unknown as string, { revokeOnDone: true });
     return;
   }
   doc.save(`${input.invoiceNumber}.pdf`);
@@ -596,57 +609,111 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
 /** Estimate the continuous-roll height (pt) so the page is cut right after the
  *  content. Deliberately a little generous — trailing whitespace is fine on a
  *  roll, a clipped bill is not. */
-function estimateThermalHeight(input: InvoicePdfInput): number {
-  const m = buildCashBillModel(input);
-  const addr = input.practice?.address ?? '';
-  let h = 24;                                    // top pad
-  h += 16;                                       // lab name
-  if (input.tagline) h += 11;
-  h += Math.ceil(addr.length / 42) * 10;         // wrapped address
-  h += 11;                                       // contact line
-  h += 12 + 22;                                  // rule + title
-  h += (5 + (m.referredBy ? 1 : 0)) * 13 + 8;    // meta rows
-  h += (m.items.length + 1) * 15 + 10;           // items head + rows + rule
-  h += 14 + Math.max(1, m.payments.length) * 13; // mode of payment
-  h += (1 + (m.hasDiscount ? 1 : 0) + (m.isCredit ? 0 : 2)) * 14 + 4; // totals
-  h += 28;                                       // amount in words (~2 lines)
-  h += 22;                                       // paid/due
-  h += 26;                                       // cashier
-  h += 96;                                       // QRs + note
-  return Math.max(380, Math.round(h));
+/** Roll width in points for a thermal paperSize, or null for A4.
+ *  72 pt = 1 inch. 'thermal' is the legacy 4-inch alias. */
+function thermalWidthPt(paperSize: InvoicePdfInput['paperSize']): number | null {
+  switch (paperSize) {
+    case 'thermal_25in': return 180; // 2.5 in ≈ 64 mm
+    case 'thermal_3in':  return 216; // 3 in   ≈ 80 mm
+    case 'thermal':      return 288; // 4 in   ≈ 104 mm (legacy default)
+    default:             return null;
+  }
 }
 
-function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean, W: number, H: number): void {
+/** Per-width type scale. A layout tuned for the 4-inch roll overflows at 2.5 in,
+ *  so margins, font sizes and the two fixed columns (meta label, amount) shrink
+ *  with the paper instead of being hardcoded. */
+function thermalMetrics(W: number) {
+  if (W <= 180) return { MG: 10, name: 10, body: 6.8, small: 6, labelW: 50, amtW: 46, qr: 52, snoW: 15 };
+  if (W <= 216) return { MG: 12, name: 11, body: 7.4, small: 6.2, labelW: 58, amtW: 52, qr: 60, snoW: 17 };
+  return { MG: 14, name: 12, body: 8, small: 6.5, labelW: 66, amtW: 58, qr: 68, snoW: 20 };
+}
+
+/**
+ * Draw the receipt-roll bill and return the Y where the content ends (the
+ * caller uses that to cut the page). Everything flows top-to-bottom — nothing
+ * is pinned to the page bottom, which is what lets the two-pass measurement
+ * produce an exact-height roll.
+ *
+ * The tracking QR sits at the TOP, directly under the title, mirroring the
+ * restructured A4 report: the patient's first action is scanning to track, so
+ * it should not be buried under the totals.
+ */
+function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean, W: number): number {
   const { practice = {}, logoDataUrl, tagline, cashierName, cashierSignatureDataUrl, qrDataUrl, orderQrDataUrl } = input;
   const m = buildCashBillModel(input);
-  const MG = 14;                    // tight margins for a narrow roll
+  const M = thermalMetrics(W);
+  const MG = M.MG;
   const cx = W / 2, rightX = W - MG;
+  const inner = W - 2 * MG;
 
   // ── Header (centred) ──
-  let y = 22;
-  if (logoDataUrl) { try { doc.addImage(logoDataUrl, 'PNG', cx - 18, y - 4, 36, 36); y += 34; } catch { /* ignore */ } }
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(CB_INK);
-  doc.text(practice.name ?? 'Diagnostic Centre', cx, y, { align: 'center' }); y += 13;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(CB_GREY);
-  if (tagline) { doc.setFont('helvetica', 'italic'); doc.text(tagline, cx, y, { align: 'center' }); doc.setFont('helvetica', 'normal'); y += 10; }
-  if (practice.address) { for (const l of doc.splitTextToSize(practice.address, W - 2 * MG)) { doc.text(l, cx, y, { align: 'center' }); y += 9; } }
+  let y = 18;
+  // addImage anchors at the TOP of the box while text() anchors at the
+  // BASELINE, so every image→text hand-off has to clear the image box *and*
+  // one text ascent. Missing that is what put the logo on top of the lab name.
+  if (logoDataUrl) {
+    const lw = Math.min(36, inner * 0.28);
+    try {
+      doc.addImage(logoDataUrl, 'PNG', cx - lw / 2, y, lw, lw);
+      y += lw + 6 + M.name;          // image box + gap + ascent of the name
+    } catch { /* logo optional */ }
+  } else {
+    y += M.name;                     // no logo: still drop to the first baseline
+  }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.name); doc.setTextColor(CB_INK);
+  for (const l of doc.splitTextToSize(practice.name ?? 'Diagnostic Centre', inner)) {
+    doc.text(l, cx, y, { align: 'center' }); y += M.name + 1;
+  }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.small + 1); doc.setTextColor(CB_GREY);
+  if (tagline) {
+    doc.setFont('helvetica', 'italic');
+    for (const l of doc.splitTextToSize(tagline, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 9; }
+    doc.setFont('helvetica', 'normal');
+  }
+  if (practice.address) {
+    for (const l of doc.splitTextToSize(practice.address, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 8.5; }
+  }
   const contact = [practice.phone ? `Ph: ${practice.phone}` : '', practice.gstin ? `GSTIN: ${practice.gstin}` : ''].filter(Boolean).join('   ');
-  if (contact) { doc.text(contact, cx, y, { align: 'center' }); y += 10; }
+  if (contact) { for (const l of doc.splitTextToSize(contact, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 9; } }
 
-  y += 2; doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 15;
+  y += 3; doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
 
   // ── Title ──
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(CB_INK);
-  doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' }); y += 16;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.name); doc.setTextColor(CB_INK);
+  doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' }); y += 14;
 
-  // ── Meta (single column). Sample ID removed; Invoice/Bill No + Referred by. ──
+  // ── QRs at the top, centred side by side (single QR centres on its own) ──
+  const qrs: Array<{ data: string; caption: string }> = [];
+  if (qrDataUrl) qrs.push({ data: qrDataUrl, caption: 'TRACK REPORT' });
+  if (orderQrDataUrl) qrs.push({ data: orderQrDataUrl, caption: 'STAFF ORDER' });
+  const CAP_GAP = 5;   // whitespace between a QR and its caption
+  if (qrs.length > 0) {
+    const gap = qrs.length > 1 ? Math.max(12, inner * 0.07) : 0;
+    const blockW = qrs.length * M.qr + gap * (qrs.length - 1);
+    let qx = cx - blockW / 2;
+    let drew = false;
+    for (const q of qrs) {
+      try { doc.addImage(q.data, 'PNG', qx, y, M.qr, M.qr); drew = true; } catch { qx += M.qr + gap; continue; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(M.small - 0.5); doc.setTextColor(CB_GREY);
+      doc.text(q.caption, qx + M.qr / 2, y + M.qr + CAP_GAP + M.small, { align: 'center' });
+      qx += M.qr + gap;
+    }
+    // Caption baseline sits (qr + capGap) below the QR top; the next element is
+    // another text baseline, so clear the caption's own line plus a gap —
+    // otherwise "TRACK REPORT" lands on the "Patient Name" row.
+    if (drew) y += M.qr + CAP_GAP + M.small + 10 + M.body;
+  }
+
+  // ── Meta (single column) ──
   const kv = (label: string, value: string) => {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(CB_GREY);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(M.body); doc.setTextColor(CB_GREY);
     doc.text(label, MG, y);
-    doc.text(':', MG + 66, y);
+    doc.text(':', MG + M.labelW, y);
     doc.setTextColor(CB_INK);
-    doc.text(doc.splitTextToSize(value || '—', rightX - (MG + 72))[0] ?? '—', MG + 72, y);
-    y += 13;
+    const vx = MG + M.labelW + 6;
+    doc.text(doc.splitTextToSize(value || '—', rightX - vx)[0] ?? '—', vx, y);
+    y += M.body + 4.5;
   };
   kv('Patient Name', m.patientName);
   kv('Patient ID', m.ptId);
@@ -656,43 +723,49 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   if (m.referredBy) kv('Referred By', m.referredBy);
   y += 2;
 
-  // ── Items: S.No | Test | Amount (no Quantity) ──
+  // ── Items: S.No | Test | Amount ──
   autoTable(doc, {
     startY: y,
     head: [['#', 'Test', 'Amount']],
     body: m.items.map(it => [it.sno, it.name, it.amount]),
-    margin: { left: MG, right: MG },
+    // bottom: 0 so the exact-height second pass can't trigger a page break.
+    margin: { left: MG, right: MG, top: 0, bottom: 0 },
     theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 3, right: 3, bottom: 3, left: 3 }, textColor: CB_INK, lineWidth: 0 },
-    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 8, lineColor: CB_RULE, lineWidth: { top: 0.6, right: 0, bottom: 0.6, left: 0 } as unknown as number },
-    // Amount column flush-right (zero right-padding) so it lines up with the
-    // totals stack below, which right-aligns to rightX.
-    columnStyles: { 0: { cellWidth: 20, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 58, halign: 'right', cellPadding: { top: 3, right: 0, bottom: 3, left: 3 } } },
+    styles: { font: 'helvetica', fontSize: M.body, cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 }, textColor: CB_INK, lineWidth: 0 },
+    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: M.body, lineColor: CB_RULE, lineWidth: { top: 0.6, right: 0, bottom: 0.6, left: 0 } as unknown as number },
+    // Amount flush-right (no right padding) so it lines up with the totals
+    // stack below, which right-aligns to rightX.
+    columnStyles: {
+      0: { cellWidth: M.snoW, halign: 'left' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: M.amtW, halign: 'right', cellPadding: { top: 2.5, right: 0, bottom: 2.5, left: 2.5 } },
+    },
     didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 13;
 
-  // ── Mode of Payment (amounts aligned right) ──
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(CB_INK);
-  doc.text('Mode of Payment', MG, y); y += 13;
+  // ── Mode of Payment ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 0.5); doc.setTextColor(CB_INK);
+  doc.text('Mode of Payment', MG, y); y += M.body + 4.5;
   doc.setFont('helvetica', 'normal');
   if (m.payments.length > 0) {
     for (const p of m.payments) {
       doc.text(`${p.label} :`, MG, y);
       doc.text(p.amount, rightX, y, { align: 'right' });
-      y += 13;
+      y += M.body + 4.5;
     }
-  } else { doc.text('—', MG, y); y += 13; }
+  } else { doc.text('—', MG, y); y += M.body + 4.5; }
   y += 2;
 
-  // ── Totals: Total → Discount → Net Payable → Collected (Net Payable +
-  //    Collected dropped on credit bills only) ──
+  // ── Totals ──
   const tot = (label: string, value: string, bold = false, color = CB_INK) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 9.5 : 8.5); doc.setTextColor(color);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setFontSize(bold ? M.body + 1.5 : M.body + 0.5);
+    doc.setTextColor(color);
     doc.text(label, MG, y);
     doc.text(value, rightX, y, { align: 'right' });
-    y += 14;
+    y += M.body + 5.5;
   };
   tot('Total', m.grossTotal);
   if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
@@ -700,39 +773,35 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
     tot('Net Payable', m.netPayable, true);
     tot('Collected Amount', m.collected);
   }
-  // Amount Paid / Due — same stack, divider above.
   y += 2;
-  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(CB_INK);
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += M.body + 5.5;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 1.5); doc.setTextColor(CB_INK);
   doc.text(m.paidOrDueLabel, MG, y);
-  doc.text(m.paidOrDueAmount, rightX, y, { align: 'right' }); y += 16;
+  doc.text(m.paidOrDueAmount, rightX, y, { align: 'right' }); y += M.body + 7;
 
   // ── Amount in words ──
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(CB_INK);
-  for (const l of doc.splitTextToSize(`(In words: ${m.amountWords} Only)`, W - 2 * MG)) { doc.text(l, MG, y); y += 11; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 0.5); doc.setTextColor(CB_INK);
+  for (const l of doc.splitTextToSize(`(In words: ${m.amountWords} Only)`, inner)) { doc.text(l, MG, y); y += M.body + 3; }
   y += 4;
 
-  // ── Cashier signature (bottom) — saved signature image above the name. ──
+  // ── Cashier signature — saved signature image above the name ──
   if (cashierSignatureDataUrl) {
-    try { doc.addImage(cashierSignatureDataUrl, 'PNG', MG, y, 96, 26); y += 28; } catch { /* ignore */ }
+    const sw = Math.min(96, inner * 0.55);
+    try {
+      doc.addImage(cashierSignatureDataUrl, 'PNG', MG, y, sw, sw * 0.27);
+      y += sw * 0.27 + 4 + M.body;   // image box + gap + ascent of the name line
+    } catch { /* signature optional */ }
   }
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(CB_INK);
-  doc.text(cashierName ? `Cashier: ${cashierName}` : 'Cashier', MG, y); y += 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.body); doc.setTextColor(CB_INK);
+  doc.text(cashierName ? `Cashier: ${cashierName}` : 'Cashier', MG, y); y += M.body + 6;
 
-  // ── QRs (side by side) + closing note, pinned to the bottom of the roll. ──
-  const qrSize = 40, qrTop = H - qrSize - 26;
-  let qx = MG;
-  const drawQr = (data: string | undefined, caption: string) => {
-    if (!data) return;
-    try { doc.addImage(data, 'PNG', qx, qrTop, qrSize, qrSize); } catch { return; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(5.5); doc.setTextColor(CB_GREY);
-    doc.text(caption, qx + qrSize / 2, qrTop + qrSize + 7, { align: 'center' });
-    qx += qrSize + 24;
-  };
-  drawQr(qrDataUrl, 'TRACK REPORT');
-  drawQr(orderQrDataUrl, 'STAFF ORDER');
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor('#555555');
-  doc.text('Computerized bill — no signature required', rightX, H - 10, { align: 'right' });
+  // ── Closing note ──
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.small); doc.setTextColor('#555555');
+  for (const l of doc.splitTextToSize('Computerized bill — no signature required', inner)) {
+    doc.text(l, cx, y, { align: 'center' }); y += M.small + 2.5;
+  }
+
+  return y;
 }
 
 /** Plain rupee amount with Indian grouping, no currency symbol — matches

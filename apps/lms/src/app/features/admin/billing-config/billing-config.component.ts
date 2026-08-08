@@ -606,9 +606,11 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead' },
     { value: 'cashbill', label: 'Cash Bill' },
   ];
-  readonly paperSizes: Array<{ value: 'a4' | 'thermal'; label: string }> = [
-    { value: 'a4', label: 'A4' },
-    { value: 'thermal', label: '4-inch thermal' },
+  readonly paperSizes: Array<{ value: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in'; label: string }> = [
+    { value: 'a4',           label: 'A4 sheet' },
+    { value: 'thermal',      label: 'Receipt 4"' },
+    { value: 'thermal_3in',  label: 'Receipt 3"' },
+    { value: 'thermal_25in', label: 'Receipt 2.5"' },
   ];
   patchTpl(p: Record<string, unknown>) { this._tpl.set({ ...this._tpl(), ...p }); }
   saveTpl() {
@@ -678,7 +680,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         docTitle: taxMode ? 'TAX INVOICE' : 'BILL OF SUPPLY',
         practice: { name: t.labName || 'Prefrontal Lab', address: t.address, phone: t.phone, email: t.email, gstin: t.gstin },
         template: (t.template ?? 'classic') as InvoiceTemplateStyle,
-        paperSize: (t.paperSize ?? 'a4') as 'a4' | 'thermal',
+        paperSize: (t.paperSize ?? 'a4') as 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in',
         accentColor: t.accentColor, logoDataUrl,
         qrDataUrl: qrs.qr, orderQrDataUrl: qrs.orderQr,
         tagline: t.tagline, footerText: t.footerText, bankDetails: t.bankDetails,

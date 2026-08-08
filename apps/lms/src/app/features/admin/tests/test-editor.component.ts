@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { Department } from '../../../shared/models/tenant.model';
 import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
@@ -27,10 +29,13 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from './test-layout-editor.component';
+import { TestNotesEditorComponent } from '../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from './test-consumables.component';
 import { AuthService } from '../../../core/auth/auth.service';
 
-type TestEditorTab = 'parameters' | 'layout' | 'consumables';
+/** Left-rail sections. One shows at a time (progressive disclosure) instead of
+ *  stacking every field card on one screen. */
+type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'layout' | 'consumables';
 
 interface DraftTest {
   id?: string;
@@ -127,6 +132,7 @@ function newFieldId(): string {
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
+    RouterLink,
     FormsModule,
     ConditionEditorComponent,
     CurrencyInrPipe,
@@ -139,6 +145,7 @@ function newFieldId(): string {
     TileComponent,
     TouchButtonComponent,
     TestLayoutEditorComponent,
+    TestNotesEditorComponent,
     TestConsumablesComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -164,14 +171,33 @@ function newFieldId(): string {
 
       @let d = draft();
 
-      <!-- General + Pricing side-by-side on wide screens so the top of the
-           form uses horizontal space instead of stacking two short cards. -->
-      <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-4">
+      <!-- Rail + single content column. The page used to stack FIVE field cards
+           (Identity, Pricing, Outsourcing, Details, Result & report) all at
+           once and then drop a tab strip halfway down for Parameters/Layout —
+           so the first screen was a wall of ~30 inputs and the tabs were easy
+           to miss. Progressive disclosure (Nielsen): show one section at a
+           time, defer the rare fields. The rail mirrors /admin/reports so the
+           two admin editors read the same way. -->
+      <div class="pf-te">
+        <nav class="pf-te__rail" aria-label="Test sections">
+          @for (sec of visibleSections(); track sec.value) {
+            <button type="button" class="pf-te__nav press"
+                    [class.pf-te__nav--on]="section() === sec.value"
+                    [attr.aria-current]="section() === sec.value ? 'true' : null"
+                    (click)="setSection(sec.value)">
+              <span class="pf-te__nav-l">{{ sec.label }}</span>
+              <span class="pf-te__nav-d">{{ sec.desc }}</span>
+            </button>
+          }
+        </nav>
+
+        <div class="pf-te__body">
 
         <!-- Identity — the core "what is this" fields: name, type, flow, the
              department it sits under, and (for individual tests + profiles) its
              unique code. Sample-collection descriptors live below for individual
              tests only. -->
+        @if (section() === 'identity') {
         <pf-tile tone="default" padding="lg" class="block">
           <h3 class="section-title">Identity</h3>
           <div class="space-y-3 mt-4">
@@ -238,10 +264,12 @@ function newFieldId(): string {
           </div>
         </pf-tile>
 
-        <!-- Pricing + TAT — 1-col on lg (it's narrower), 3-col on smaller. -->
+        }
+
+        @if (section() === 'pricing') {
         <pf-tile tone="default" padding="lg" class="block">
-          <h3 class="section-title">Pricing & TAT</h3>
-          <div class="pf-pricing-grid grid grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
+          <h3 class="section-title">Pricing &amp; TAT</h3>
+          <div class="pf-pricing-grid grid grid-cols-3 gap-3 mt-4">
             <div><label class="pf-label">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
@@ -262,8 +290,11 @@ function newFieldId(): string {
              tests form their own vials per (lab + department) at collection.
              Individual tests only — bundles outsource via their members. -->
         @if (d.type === 'individual') {
+          <!-- Deferred: most tests are run in-house, so subcontracting is
+               collapsed rather than occupying the main path. -->
           <pf-tile tone="default" padding="lg" class="block">
-            <h3 class="section-title">Outsourcing</h3>
+            <details class="pf-te__adv">
+              <summary class="pf-te__adv-s">Outsourcing <span>optional</span></summary>
             <div class="space-y-3 mt-4">
               <div><label class="pf-label">Outsource to</label>
                 <pf-select [options]="referralLabOptions()" [value]="d.outsourcedVendorId"
@@ -281,14 +312,15 @@ function newFieldId(): string {
                 </div>
               }
             </div>
+            </details>
           </pf-tile>
         }
+        }
 
-        <!-- Test details — master-data descriptors. Individual tests only; a
-             profile's only descriptor is its code, which lives in Identity. -->
-        @if (d.type === 'individual') {
+        <!-- Sample & handling — how the specimen is taken and carried. -->
+        @if (section() === 'sample' && d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
-            <h3 class="section-title">Details</h3>
+            <h3 class="section-title">Sample &amp; handling</h3>
             <div class="space-y-3 mt-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Short name</label>
@@ -326,7 +358,7 @@ function newFieldId(): string {
 
         <!-- Result & report — how the result is captured and rendered, plus
              test-level reference/critical limits. Individual tests only. -->
-        @if (d.type === 'individual') {
+        @if (section() === 'results' && d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <h3 class="section-title">Result &amp; report</h3>
             <div class="space-y-3 mt-4">
@@ -361,33 +393,14 @@ function newFieldId(): string {
             </div>
           </pf-tile>
         }
-      </div>
 
-      <!-- Bundles (packages AND profiles) have a totally different body — a
-           member-test picker instead of parameters/report-layout — so we branch
-           here on type. Individual tests get the tab strip + parameter/layout
-           editors; bundles get the shared member picker with its summary chips. -->
-      @if (d.type === 'individual') {
-      <!-- Tab strip — sits between Pricing & TAT and the Parameters / Report
-           Layout content so admins don't have to scroll to find the layout
-           editor, but General + Pricing stay always visible up top. -->
-      <div class="mb-4">
-        <div class="tab-strip">
-          <pf-segmented
-            [options]="tabOptions()"
-            [value]="tab()"
-            size="md"
-            (valueChange)="setTab($event)">
-          </pf-segmented>
-        </div>
-        @if (!d.id && tab() === 'layout') {
-          <p class="mt-2 text-[12px]" style="color: var(--text-tertiary);">
-            Save the test first — the report layout editor needs an id to attach to.
-          </p>
-        }
-      </div>
+        <!-- Bundles (packages AND profiles) have a different body — a member
+             picker instead of parameters/report-layout — so we branch on type.
+             The old mid-page tab strip is gone: the rail on the left is the
+             single place sections are chosen. -->
+        @if (d.type === 'individual') {
 
-      @if (tab() === 'parameters') {
+        @if (section() === 'results') {
 
       <!-- Parameters -->
       <pf-tile tone="default" padding="lg" class="block">
@@ -621,15 +634,50 @@ function newFieldId(): string {
         }
       </pf-tile>
 
-      } @else if (tab() === 'layout') {
+        }
+
+        @if (section() === 'layout') {
         <!-- Report Layout — gated until the test has an id (the layout
              endpoints all key off testId). -->
         @if (d.id) {
-          <pf-test-layout-editor class="block"
-            [testId]="d.id || ''"
-            [departmentId]="d.departmentId || ''"
-            [parameters]="parameterNames()">
-          </pf-test-layout-editor>
+          <!-- Two views over the SAME per-test layout store
+               (/api/report-layout/test/:id). "Notes & description" is the
+               everyday content pass — the text that prints beside each
+               parameter — and used to live on /admin/reports, which meant a
+               second screen to finish a test. "Advanced structure" is the
+               section/grid builder for the rare test that needs it. -->
+          <div class="pf-lay-switch">
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
+                    (click)="layoutView.set('notes')">Notes &amp; description</button>
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
+                    (click)="layoutView.set('advanced')">Advanced structure</button>
+          </div>
+
+          <!-- Read-only: the column structure is a DEPARTMENT-wide setting, so
+               it is shown here for context but edited where it applies to all
+               of the department's tests. -->
+          @if (deptColumnsLabel(); as cols) {
+            <p class="pf-lay-cols">
+              <span class="pf-lay-cols__k">{{ selectedDeptName() || 'This department' }} prints</span>
+              <span class="pf-lay-cols__v">{{ cols }}</span>
+              <a class="pf-lay-cols__a" routerLink="/admin/reports">Change columns</a>
+            </p>
+          }
+
+          @if (layoutView() === 'notes') {
+            <pf-test-notes-editor class="block"
+              [fixedTestId]="d.id || ''"
+              [hidePreview]="false">
+            </pf-test-notes-editor>
+          } @else {
+            <pf-test-layout-editor class="block"
+              [testId]="d.id || ''"
+              [departmentId]="d.departmentId || ''"
+              [parameters]="parameterNames()">
+            </pf-test-layout-editor>
+          }
         } @else {
           <pf-tile tone="default" padding="lg" class="block">
             <p class="text-[13px]" style="color: var(--text-tertiary);">
@@ -639,7 +687,9 @@ function newFieldId(): string {
             </p>
           </pf-tile>
         }
-      } @else if (tab() === 'consumables') {
+        }
+
+        @if (section() === 'consumables') {
         @if (d.id) {
           <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
         } @else {
@@ -647,8 +697,9 @@ function newFieldId(): string {
             <p class="text-[13px]" style="color: var(--text-tertiary);">Save the test first, then add the inventory items it consumes here.</p>
           </pf-tile>
         }
-      }
-      } @else {
+        }
+
+        } @else {
         <!-- Bundle member picker (packages + profiles). A profile bundles
              individual tests; a package bundles tests AND profiles (exploded
              recursively backend-side). Checkboxes write the selected ids into
@@ -733,9 +784,78 @@ function newFieldId(): string {
           }
         </pf-tile>
       }
+        </div><!-- /pf-te__body -->
+      </div><!-- /pf-te -->
     </section>
   `,
   styles: [`
+
+    /* ── Editor shell: sticky section rail + one content column ──────────
+       Replaces the old "five stacked cards + a tab strip halfway down" page.
+       Same rail idiom as /admin/reports so both admin editors read alike. */
+    .pf-te { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .pf-te__rail { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .pf-te__nav {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 9px 12px; border-radius: 10px; text-align: left; cursor: pointer;
+      background: transparent; border: 1px solid transparent;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .pf-te__nav:hover { background: var(--glass-bg); }
+    .pf-te__nav--on { background: rgba(139, 92, 246, 0.14); border-color: rgba(139, 92, 246, 0.34); }
+    .pf-te__nav-l { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .pf-te__nav--on .pf-te__nav-l { color: var(--text-primary); }
+    .pf-te__nav-d { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
+    .pf-te__body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+    /* Deferred blocks (e.g. Outsourcing) — present but out of the main path. */
+    .pf-te__adv > summary {
+      list-style: none; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; color: var(--text-secondary);
+    }
+    .pf-te__adv > summary::-webkit-details-marker { display: none; }
+    .pf-te__adv > summary::before {
+      content: '›'; display: inline-block; font-size: 16px; line-height: 1;
+      color: var(--text-muted); transition: transform .15s ease;
+    }
+    .pf-te__adv[open] > summary::before { transform: rotate(90deg); }
+    .pf-te__adv > summary span {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .pf-te__adv > summary:hover { color: var(--text-primary); }
+
+    @media (max-width: 900px) {
+      .pf-te { grid-template-columns: 1fr; gap: 14px; }
+      /* Rail becomes a horizontal scroller on narrow screens — same control,
+         no separate mobile design. */
+      .pf-te__rail { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+      .pf-te__nav { flex: 0 0 auto; min-width: 132px; }
+      .pf-te__nav-d { display: none; }
+    }
+    @media (pointer: coarse) { .pf-te__nav { min-height: 44px; justify-content: center; } }
+
+    /* Report Layout tab: notes vs advanced structure. */
+    .pf-lay-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border); margin-bottom: 12px; }
+    .pf-lay-switch__btn { padding: 6px 13px; border: 0; border-radius: 8px; cursor: pointer;
+      font-size: 12.5px; font-weight: 600; color: var(--text-tertiary); background: transparent;
+      transition: color .15s ease, background .15s ease; }
+    .pf-lay-switch__btn:hover { color: var(--text-primary); }
+    .pf-lay-switch__btn--on { color: var(--text-primary); background: rgba(139, 92, 246, 0.18); }
+
+    /* Read-only department columns context. */
+    .pf-lay-cols { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+      margin: 0 0 14px; padding: 9px 12px; border-radius: 10px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      font-size: 12px; }
+    .pf-lay-cols__k { color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.08em; font-size: 10px; font-weight: 700; }
+    .pf-lay-cols__v { color: var(--text-secondary); font-weight: 500; }
+    .pf-lay-cols__a { margin-left: auto; color: var(--violet-text); font-weight: 600;
+      text-decoration: none; font-size: 11.5px; }
+    .pf-lay-cols__a:hover { text-decoration: underline; }
     .section-title {
       font-size: 15px;
       font-weight: 600;
@@ -1148,6 +1268,7 @@ function newFieldId(): string {
 export class TestEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly layoutSvc = inject(ReportLayoutService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   /** Consumables tab only for users who manage inventory. */
@@ -1310,14 +1431,51 @@ export class TestEditorComponent implements OnInit {
   // General + Pricing & TAT live ABOVE the tabs and are always visible.
   // Layout is the secondary tab so first-time creates land on parameters —
   // admins can't fill the layout until the test has an id anyway.
-  private readonly _tab = signal<TestEditorTab>('parameters');
-  readonly tab = this._tab.asReadonly();
-  setTab(t: TestEditorTab) { this._tab.set(t); }
-  readonly tabOptions = computed<SegmentedOption<TestEditorTab>[]>(() => [
-    { value: 'parameters', label: 'Parameters' },
-    { value: 'layout',     label: 'Report layout' },
-    ...(this.canManageInventory() ? [{ value: 'consumables' as const, label: 'Consumables' }] : [])
-  ]);
+
+  /** Which half of the Report Layout tab is showing. Notes leads: it is the
+   *  pass every test needs, while the section builder serves the few that need
+   *  bespoke structure. */
+  protected readonly layoutView = signal<'notes' | 'advanced'>('notes');
+
+  /** Which rail section is open. */
+  private readonly _section = signal<TestSection>('identity');
+  readonly section = this._section.asReadonly();
+  setSection(v: TestSection) {
+    this._section.set(v);
+    if (v === 'layout' && !this.deptColumns()) this.loadDeptColumns(this._draft().departmentId);
+  }
+  /** Rail entries. Bundles (profile/package) have no sample, results, layout or
+   *  consumables of their own — those belong to their member tests — so the
+   *  rail collapses to what actually applies. */
+  readonly visibleSections = computed<Array<{ value: TestSection; label: string; desc: string }>>(() => {
+    const individual = this._draft().type === 'individual';
+    const all: Array<{ value: TestSection; label: string; desc: string }> = [
+      { value: 'identity',    label: 'Identity',        desc: 'Name, code, department, type' },
+      { value: 'pricing',     label: 'Pricing & TAT',   desc: 'Price, tax, turnaround' },
+      { value: 'sample',      label: 'Sample & handling', desc: 'Specimen, tube, volume, fasting' },
+      { value: 'results',     label: 'Results',         desc: 'Parameters, units, reference ranges' },
+      { value: 'layout',      label: 'Report layout',   desc: 'Notes, description, structure' },
+      { value: 'consumables', label: 'Consumables',     desc: 'Inventory used per test' },
+    ];
+    // Consumables was permission-gated when it was a tab — keep that gate.
+    const allowed = this.canManageInventory() ? all : all.filter(x => x.value !== 'consumables');
+    return individual ? allowed : allowed.filter(x => x.value === 'identity' || x.value === 'pricing');
+  });
+  /** Human list of the DEPARTMENT's report columns — read-only context only.
+   *  Editing lives on /admin/reports because one change hits every test in the
+   *  department, which is exactly the blast radius a per-test screen hides. */
+  protected readonly deptColumns = signal<string>('');
+  deptColumnsLabel(): string { return this.deptColumns(); }
+
+  /** Fetch the department's column labels for the read-only strip. Best-effort:
+   *  the strip simply stays hidden when the department has no custom set. */
+  private loadDeptColumns(departmentId: string | null | undefined): void {
+    if (!departmentId) { this.deptColumns.set(''); return; }
+    this.layoutSvc.getDeptColumns(departmentId)
+      .then(res => this.deptColumns.set(
+        (res?.columns ?? []).map(c => c.label || c.name).filter(Boolean).join(' · ')))
+      .catch(() => this.deptColumns.set(''));
+  }
 
   private readonly _fields = signal<FormField[]>([]);
   readonly fields = this._fields.asReadonly();

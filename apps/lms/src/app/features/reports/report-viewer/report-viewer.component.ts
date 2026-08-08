@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -1442,23 +1443,8 @@ export class ReportViewerComponent implements OnInit {
       if (isNative && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Print report' });
       } else {
-        const url = URL.createObjectURL(this._pdfBlob);
-        const frame = document.createElement('iframe');
-        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-        frame.src = url;
-        frame.onload = () => {
-          try {
-            frame.contentWindow?.focus();
-            frame.contentWindow?.print();
-          } catch {
-            window.open(url, '_blank');
-          }
-          setTimeout(() => {
-            frame.remove();
-            URL.revokeObjectURL(url);
-          }, 60_000);
-        };
-        document.body.appendChild(frame);
+        // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+        printPdfBlobUrl(URL.createObjectURL(this._pdfBlob), { revokeOnDone: true });
       }
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed

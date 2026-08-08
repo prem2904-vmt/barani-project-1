@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -1796,15 +1797,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   printInvoicePreview() {
     const blobUrl = this.invoiceBlobUrl;
     if (!blobUrl) return;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    frame.src = blobUrl;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { /* ignore — preview already on screen */ }
-      setTimeout(() => frame.remove(), 60_000);
-    };
-    document.body.appendChild(frame);
+    // The preview is already on screen, so a failure needs no tab fallback.
+    // The blob stays alive for that preview — closeInvoicePreview revokes it.
+    printPdfBlobUrl(blobUrl, { onFallback: () => { /* preview already visible */ } });
   }
 
   closeInvoicePreview() {

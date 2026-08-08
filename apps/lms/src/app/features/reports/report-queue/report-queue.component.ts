@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from "@angular/common";
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -665,23 +666,8 @@ export class ReportQueueComponent implements OnInit {
             const doc = buildReportPdf({ ...baseInput, imageCache, trendograms });
             doc.autoPrint();
             const blob = doc.output('blob');
-            const blobUrl = URL.createObjectURL(blob);
-            const frame = document.createElement('iframe');
-            frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-            frame.src = blobUrl;
-            frame.onload = () => {
-              try {
-                frame.contentWindow?.focus();
-                frame.contentWindow?.print();
-              } catch {
-                window.open(blobUrl, '_blank');
-              }
-              setTimeout(() => {
-                frame.remove();
-                URL.revokeObjectURL(blobUrl);
-              }, 60_000);
-            };
-            document.body.appendChild(frame);
+            // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+            printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
           } catch (err) {
             console.error("[reports] print failed", err);
             this.toasts.error("Could not open print window");

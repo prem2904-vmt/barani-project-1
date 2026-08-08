@@ -147,6 +147,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly currentBill = signal<Bill | null>(null);
 
   readonly isReadOnly = computed(() => !!this.viewOrderId());
+  /**
+   * The order is finished — its test list must not change any more. Two states
+   * reach this: opening an existing order via ?orderId= (isReadOnly), and
+   * completing payment inline in this session (paidOrderId). Only the second
+   * one was unguarded, which is why the catalogue stayed clickable behind a
+   * "Payment recorded" pane.
+   *
+   * Deliberately NOT tied to editOrderId: ?editOrderId= is the supervisor
+   * Modify-tests flow, which is *supposed* to change tests on an already
+   * billed order (the backend rebuilds the bill and can raise a refund), so
+   * that mode must stay fully editable.
+   */
+  readonly orderLocked = computed(() => this.isReadOnly() || !!this.paidOrderId());
 
   readonly isPaymentDueMode = computed(() => {
     const bill = this.currentBill();
@@ -960,7 +973,20 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
+  /** Blocks every cart mutation once the order is complete. The template also
+   *  swaps the catalogue for a read-only summary, so this is the belt-and-braces
+   *  half: keyboard, stale DOM and programmatic paths can't slip through. */
+  private rejectIfLocked(): boolean {
+    if (!this.orderLocked()) return false;
+    this.toasts.warning(
+      this.paidOrderId()
+        ? 'This order is already complete — start a new order to add tests.'
+        : 'This order is closed for editing — use Modify to change its tests.');
+    return true;
+  }
+
   toggleTest(t: Test) {
+    if (this.rejectIfLocked()) return;
     if (this.isSelected(t.id) && this.isCollected(t.id)) {
       this.toasts.warning(`Cannot remove ${t.name} — sample has already been collected`);
       return;
@@ -972,6 +998,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
   removeTest(id: string) {
+    if (this.rejectIfLocked()) return;
     if (this.isCollected(id)) {
       const t = this.findTest(id);
       this.toasts.warning(`Cannot remove ${t?.name ?? 'test'} — sample has already been collected`);
@@ -980,6 +1007,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._selected.update(cur => cur.filter(x => x !== id));
   }
   clearCart() {
+    if (this.rejectIfLocked()) return;
     const collected = this.collectedTestIds();
     if (collected.size > 0) {
       const kept = this._selected().filter(id => collected.has(id));
@@ -999,6 +1027,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    * Quietly mutates selection without flooding the toast stack — the cart
    * sidebar is the source of truth and visually reflects the change. */
   togglePackage(pkg: Test) {
+    if (this.rejectIfLocked()) return;
     if (this.isSelected(pkg.id) && this.isCollected(pkg.id)) {
       this.toasts.warning(`Cannot remove ${pkg.name} — sample has already been collected`);
       return;
@@ -1314,6 +1343,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }
+  /** Force the receipt-roll layout for this print even when the tenant's saved
+   *  default is A4 (a counter can have both printers). Width comes from the
+   *  saved setting when that is already a roll; otherwise 3 in / 80 mm, the
+   *  common desk receipt printer. */
+  printPaidThermal() { void this.emitPaidInvoice('print', 'thermal_auto'); }
 
   /** Post-payment "Share on WhatsApp". On the native shell we hand the real
    *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
@@ -1337,12 +1371,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
-  private async emitPaidInvoice(action: 'print' | 'blob' | 'share') {
+  private async emitPaidInvoice(
+    action: 'print' | 'blob' | 'share',
+    /** 'thermal_auto' = "a roll, width per the tenant's setting" — resolved
+     *  below once the template has been fetched. */
+    paperOverride?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | 'thermal_auto') {
     const bill = this.paidBill();
     const oid = this.paidOrderId();
     if (!bill || !oid) return;
     let tpl: any = null;
     try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
+    // Resolve the roll width now that the saved setting is in hand: reuse it
+    // when it is already a roll, else 3 in / 80 mm.
+    const savedPaper = tpl?.paperSize as 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | undefined;
+    const paper = paperOverride === 'thermal_auto'
+      ? (savedPaper && savedPaper !== 'a4' ? savedPaper : 'thermal_3in')
+      : paperOverride;
     let qrDataUrl: string | undefined;
     let orderQrDataUrl: string | undefined;
     try {
@@ -1371,6 +1415,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         cashierName: bill.cashierName || this.auth.user()?.displayName || undefined,
       cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
       ...invoiceTemplateFieldsFrom(tpl),
+      // A per-print choice beats the tenant default, so a counter with both an
+      // A4 printer and a receipt roll can pick per patient.
+      ...(paper ? { paperSize: paper } : {}),
       practice: {
         name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,
         address: tpl?.address || undefined,

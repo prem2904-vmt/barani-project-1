@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { installPdfTextSanitizer } from './pdf-text';
 import autoTable from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
@@ -170,6 +171,13 @@ interface ReportSnapshot {
     createdAt?: string;
     priority?: string;
     refDoctorName?: string;
+    /** Referral + collection details, placeable in the patient block. */
+    refHospitalName?: string | null;
+    branchName?: string | null;
+    collectedBy?: string | null;
+    collectedAt?: string | null;
+    /** Comma-joined distinct department names across the order's samples. */
+    departments?: string | null;
   };
   type?: string;
   isPartial?: boolean;
@@ -230,6 +238,16 @@ interface ReportSnapshot {
 // below — 0 in letterpad mode (no header is drawn).
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN_X = 30;
+/** Barcode height in points. 26pt ≈ 9.2mm: tall enough to scan reliably at
+ *  counter range, while leaving room for the three timestamp lines inside the
+ *  80pt header block. (12mm would be ideal in isolation but crowds the block.)
+ *  Width is NOT reduced — at the full column the narrow bar is 0.254mm, just
+ *  over the 0.25mm ISO floor; narrowing it is what actually breaks scanning. */
+const BARCODE_H = 26;
+/** Clearance under the barcode before the next line of text. addImage is
+ *  TOP-anchored and text is BASELINE-anchored, so this has to cover the
+ *  following line's ascent — 6pt alone let the timestamps print over the bars. */
+const BARCODE_GAP = 14;
 let MARGIN_TOP = 28;
 let MARGIN_BOTTOM = 150; // reserves room for the 3-column sig block + disclaimer band
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
@@ -416,7 +434,11 @@ function parsePatientColumns(json: string | undefined | null): string[][] {
   if (!json || !json.trim()) return [];
   try {
     const arr = JSON.parse(json);
-    if (Array.isArray(arr) && arr.length === 3 && arr.every(c => Array.isArray(c))) {
+    // Accept ANY column count. The admin arranger saves 4 columns for the
+    // four-col layout and 1 for stacked; requiring exactly 3 silently threw
+    // those away and fell back to the hardcoded renderer, so the admin's
+    // arrangement appeared not to save.
+    if (Array.isArray(arr) && arr.length >= 1 && arr.every(c => Array.isArray(c))) {
       return arr.map(c => c.filter((k: unknown): k is string => typeof k === 'string'));
     }
     return [];
@@ -482,6 +504,10 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const { report, practice: rawPractice = {}, resolvedLayouts = {}, template = null, imageCache = {} } = input;
   const snap = parseSnapshot(report.data);
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
+  // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
+  // doc.text covers every draw here AND inside jspdf-autotable.
+  installPdfTextSanitizer(doc);
   IMG_CACHE = imageCache;
 
   // Merge template identity fields into the practice shape. The drawing
@@ -1182,12 +1208,11 @@ function drawPatientBlockThreeCol(
   // billing lookup — resolves straight to this order/patient. No digits
   // printed underneath: the code itself is the accession link.
   if (theme.showBarcode) {
-    const value = snap.order?.orderNumber || snap.order?.id || report.id;
-    if (!drawRealBarcode(doc, String(value), x3, y, col3W - 20, 22)) {
-      drawBarcodePlaceholder(doc, x3, y, col3W - 20, 18);
-    }
+    // Full column width so the bars stay above the ISO minimum; plain, no digits.
+    y = drawReportBarcode(doc, snap, x3, y, col3W - 6);
+  } else {
+    y += 6;
   }
-  y += 32;
 
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(8.5);
@@ -1247,6 +1272,22 @@ function drawPatientBlockColumns(
 /** Draw one patient-block item at (x, y) within a column of width colW; returns
  *  the new y. Unknown keys are treated as custom registration fields (label from
  *  theme.patientFields, value from the patient's saved attributes). */
+/** "Label: value" row in the patient block — label normal, value bold, matching
+ *  how "Ref. By:" already prints. Skips the row entirely when there's no value
+ *  so an unset field costs no vertical space. */
+function drawPatientLabelled(
+  doc: jsPDF, label: string, value: string | null | undefined, x: number, y: number
+): number {
+  const v = (value ?? '').trim();
+  if (!v) return y;
+  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+  doc.text(label, x, y);
+  const lw = doc.getTextWidth(label);
+  doc.setFont(PDF_FONT, 'bold');
+  doc.text(v, x + lw, y);
+  return y + 12;
+}
+
 function drawPatientItem(
   doc: jsPDF, key: string, x: number, colW: number, y: number,
   snap: ReportSnapshot, report: ReportPdfInput['report']
@@ -1274,7 +1315,10 @@ function drawPatientItem(
       doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
       doc.text(`Phone : ${snap.patient.phone}`, x, y); return y + 12;
     case 'orderid': {
-      const oid = (snap.order?.id ?? '').slice(0, 8); if (!oid) return y;
+      // The human order number (LAB-2608-000049) — not a slice of the GUID,
+      // which is what staff were being asked to read out loud.
+      const oid = snap.order?.orderNumber?.trim() || (snap.order?.id ?? '').slice(0, 8);
+      if (!oid) return y;
       doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
       doc.text(`Order : ${oid}`, x, y); return y + 12;
     }
@@ -1286,6 +1330,14 @@ function drawPatientItem(
       doc.setFont(PDF_FONT, 'bold'); doc.text(snap.order.refDoctorName, x + rw, y);
       return y + 12;
     }
+    case 'refhospital':
+      return drawPatientLabelled(doc, 'Ref. Hospital: ', snap.order?.refHospitalName, x, y);
+    case 'collectedby':
+      return drawPatientLabelled(doc, 'Collected by: ', snap.order?.collectedBy, x, y);
+    case 'department':
+      return drawPatientLabelled(doc, 'Department: ', snap.order?.departments, x, y);
+    case 'branch':
+      return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y);
     case 'specimen': {
       const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s)));
       doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLUE);
@@ -1297,14 +1349,13 @@ function drawPatientItem(
       }
       return y;
     }
-    case 'barcode': {
-      // Placement in a column is the show control here — always draw it.
-      drawBarcodePlaceholder(doc, x, y - 4, Math.min(colW, 130), 18);
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(BLACK);
-      const txt = (snap.order?.id ?? report.id).replace(/-/g, '').slice(-12).toUpperCase();
-      doc.text(txt, x, y + 22);
-      return y + 30;
-    }
+    case 'barcode':
+      // THE path that actually runs whenever the admin has arranged the patient
+      // block (patientColumnsJson set). It used to draw a DECORATIVE placeholder
+      // — bars that encode nothing — plus a 12-char slice of the order GUID
+      // underneath: the "random barcode with a random id below it". Now it is a
+      // real Code-128 of the order number, with no digits beneath.
+      return drawReportBarcode(doc, snap, x, y, Math.min(colW, 150));
     case 'registered': return drawPatientTimeItem(doc, 'Registered on: ', formatShort(snap.order?.createdAt), x, y);
     case 'collected':  return drawPatientTimeItem(doc, 'Collected on: ',  formatShort(snap.order?.createdAt), x, y);
     case 'reported':   return drawPatientTimeItem(doc, 'Reported on: ',   formatShort(report.createdAt), x, y);
@@ -1453,6 +1504,37 @@ function drawPatientBlockStacked(
 /** Cheap visual stand-in for a Code-128 barcode — black bars of
  *  varying widths in a band. Good enough for a printed report; a real
  *  barcode can be wired up later with a font or canvas pass. */
+/**
+ * What the report's barcode encodes: the HUMAN order number and nothing else.
+ *
+ * Returns null rather than falling back to the order GUID or the report id.
+ * Those fall-backs are why this bug kept coming back — they scan to something,
+ * so nothing looked broken, but the code printed was an unreadable random
+ * string instead of the visit's order number. A null here means "draw no
+ * barcode and say so", which is loud and fixable.
+ *
+ * `OrderLookupService.ResolveAsync` matches this value exactly, so scanning it
+ * opens the order at the front desk.
+ */
+export function reportBarcodeValue(snap: ReportSnapshot): string | null {
+  const n = snap.order?.orderNumber?.trim();
+  return n ? n : null;
+}
+
+/** Draw the report barcode: plain Code-128, no digits beneath it.
+ *  12mm tall / full column so the narrow bar clears the 0.25mm ISO floor —
+ *  the old 7.8mm box scanned unreliably even when the value was right. */
+function drawReportBarcode(doc: jsPDF, snap: ReportSnapshot, x: number, y: number, w: number): number {
+  const value = reportBarcodeValue(snap);
+  if (!value) {
+    // Deliberately draw NOTHING. A decorative placeholder used to be drawn
+    // here, which is indistinguishable from a real code and encodes nothing.
+    console.warn('[report-pdf] no order number on the snapshot — barcode omitted');
+    return y;
+  }
+  return drawRealBarcode(doc, value, x, y, w, BARCODE_H) ? y + BARCODE_H + BARCODE_GAP : y;
+}
+
 /** Render a REAL Code-128 barcode (via JsBarcode on an offscreen canvas) and
  *  place it on the page. Returns false when generation fails (invalid value /
  *  no DOM) so the caller can fall back to the decorative placeholder. */
@@ -1466,20 +1548,6 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
     return true;
   } catch {
     return false;
-  }
-}
-
-function drawBarcodePlaceholder(doc: jsPDF, x: number, y: number, w: number, h: number) {
-  doc.setFillColor(BLACK);
-  const widths = [1, 2, 1, 1, 3, 1, 2, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 1, 2, 1, 1, 3, 1, 2, 1, 2, 1, 3, 1, 1, 2, 1, 1, 3, 1, 2];
-  let cx = x;
-  let i = 0;
-  while (cx < x + w - 2) {
-    const bw = widths[i % widths.length];
-    const gap = (i % 3 === 0) ? 1.5 : 1;
-    doc.rect(cx, y, bw, h, 'F');
-    cx += bw + gap;
-    i++;
   }
 }
 
@@ -1701,12 +1769,16 @@ function renderContinuousTable(
       const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
       y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice, right);
     }
-    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null);
+    const sigs = deptSigs?.get(dept);
+    const isLast = rendered === order.length - 1;
+    // Hold back the room this department's signatures need (plus the
+    // End-of-Report line when they are the deferred final block) so the table
+    // breaks EARLY and the signatures land under the last rows they belong to.
+    const reserve = signatureBlockHeight(sigs) + (isLast && deferLastSigs && sigs?.length ? 26 : 0);
+    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null, reserve);
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
     // department defers its signatures to after the End-of-Report marker.
-    const sigs = deptSigs?.get(dept);
-    const isLast = rendered === order.length - 1;
     if (sigs?.length) {
       if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
       else y = drawInlineSignatures(doc, sigs, y, practice);
@@ -1716,8 +1788,19 @@ function renderContinuousTable(
   return y;
 }
 
+/** Vertical space one signature block needs: 12pt lead + 74pt of
+ *  image/name/title/reg per row, wrapped 3-up and capped at 7 signatories.
+ *  Callers RESERVE this in the table's bottom margin so the signatures can
+ *  never be orphaned onto a page of their own. */
+function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
+  const n = Math.min(sigs?.length ?? 0, 7);
+  if (n === 0) return 0;
+  return Math.ceil(n / 3) * 86;
+}
+
 /** Signature columns drawn INLINE at the end of a department block (image +
- *  name + title, spread evenly). Page-breaks first when there's no room. */
+ *  name + title, spread evenly). Callers reserve the space up-front, so the
+ *  page-break here is only a last-resort guard. */
 function drawInlineSignatures(
   doc: jsPDF,
   sigs: ReportSignature[],
@@ -1736,7 +1819,9 @@ function drawInlineSignatures(
   const list = all;
   if (list.length === 0) return startY;
   let y = startY + 12;
-  if (y > A4.h - MARGIN_BOTTOM - 84) { y = newPage(doc, practice) + 6; }
+  // The block spans 74pt below y; only break when it genuinely cannot fit in
+  // the reserved footer band (callers pre-reserve, so this rarely fires).
+  if (y + 74 > A4.h - MARGIN_BOTTOM) { y = newPage(doc, practice) + 6; }
   const colW = (A4.w - 2 * MARGIN_X) / list.length;
   const baseY = y + 30;
   list.forEach((s, i) => {
@@ -1806,10 +1891,14 @@ function renderColumnarTable(
   cfg: ReportColumn[],
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>,
-  deptLabel: string | null = null
+  deptLabel: string | null = null,
+  /** Extra bottom margin held back for whatever follows this table on the same
+   *  page — the department's signature block. Without it autoTable fills to
+   *  MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
+  reserveBottom = 0
 ): number {
   if (groups.length === 0) return startY;
-  if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
+  if (startY > A4.h - MARGIN_BOTTOM - reserveBottom - 70) { startY = newPage(doc, practice); }
 
   const usable = A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
@@ -1971,7 +2060,7 @@ function renderColumnarTable(
     startY,
     head: head as unknown as Array<Array<string | Cell>>,
     body: body as unknown as Array<Array<string | Cell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: 56 },
+    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM + reserveBottom, top: 56 },
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),

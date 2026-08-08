@@ -76,10 +76,10 @@ function defaultResultParam(): TestParameter {
             <h1 class="pf-sre__title">{{ s.barcode || '—' }}</h1>
             <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
             <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
-            @if (s.tests.length) {
+            @if (headerChips().length) {
               <div class="pf-sre__chips">
-                @for (t of s.tests; track t.id) {
-                  <span class="pf-sre__chip">{{ t.test?.shortName || t.test?.name || 'Test' }}</span>
+                @for (c of headerChips(); track $index) {
+                  <span class="pf-sre__chip">{{ c }}</span>
                 }
               </div>
             }
@@ -1489,6 +1489,30 @@ export class SampleResultEntryComponent {
     return { ...s, tests: sortTestsForDisplay(s.tests) };
   }
   readonly logicalCount = computed(() => logicalTestCount(this.sample()?.tests));
+
+  /**
+   * Header chips — one per LOGICAL test, matching the "N tests on this tube"
+   * count beside them. A profile collapses to a single chip carrying its own
+   * name; its member analytes are NOT listed here (a 20-analyte CBC used to
+   * spray 20 chips across the header while the counter next to it said "1").
+   * The members are already laid out in the profile's block below, which is
+   * where the tech actually reads them.
+   */
+  readonly headerChips = computed<string[]>(() => {
+    const out: string[] = [];
+    const seenPkg = new Set<string>();
+    for (const t of this.sample()?.tests ?? []) {
+      const pkg = t.packageTestId;
+      if (pkg) {
+        if (seenPkg.has(pkg)) continue;
+        seenPkg.add(pkg);
+        out.push(t.packageName || 'Profile');
+        continue;
+      }
+      out.push(t.test?.shortName || t.test?.name || 'Test');
+    }
+    return out;
+  });
 
   readonly entryBlocks = computed<Array<
     { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |

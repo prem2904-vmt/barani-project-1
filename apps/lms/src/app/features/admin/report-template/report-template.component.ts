@@ -14,13 +14,12 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
-import { TestLayoutEditorComponent } from './test-layout-editor.component';
 import { ImageUploadComponent } from './image-upload.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 
-type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'testlayout' | 'signoff';
+type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'signoff';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -39,7 +38,6 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     ToggleComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
-    TestLayoutEditorComponent,
     ImageUploadComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,9 +53,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
       </pf-screen-header>
 
       <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-        <!-- ── Left: tabbed form. On Per-test layout it spans the full width so
-                the per-test editor + its own resolved preview fill the row. ── -->
-        <div class="{{ tab() === 'testlayout' ? 'lg:col-span-2' : '' }}">
+        <!-- ── Left: tabbed form. Every section pairs with the live PDF
+                preview on the right. ── -->
+        <div>
           <!-- Section cards — each names what it changes, so the editor reads
                as a map of the report instead of a row of cryptic tabs. -->
           <nav class="pf-rt-nav mb-5" aria-label="Report template sections">
@@ -503,11 +501,6 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               </pf-report-columns-editor>
             }
 
-            <!-- ────────── PER-TEST LAYOUT (sections engine) ────────── -->
-            @case ('testlayout') {
-              <pf-test-layout-editor></pf-test-layout-editor>
-            }
-
             <!-- ────────── SIGN-OFF & FOOTER ────────── -->
             @case ('signoff') {
               <pf-tile tone="default" padding="lg" class="block">
@@ -592,10 +585,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
           }
         </div>
 
-        <!-- ── Right: live PDF preview. Shared by all tabs EXCEPT Per-test
-                layout, which renders its own engine-resolved preview for the
-                selected test (full-width). ─────── -->
-        @if (tab() !== 'testlayout') {
+        <!-- ── Right: live PDF preview, shared by every section. ─────── -->
         <aside class="lg:sticky lg:top-4 h-fit">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
              style="color: var(--text-muted);">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
@@ -613,7 +603,6 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             Preview uses a sample order. Save to apply this template to real reports.
           </p>
         </aside>
-        }
       </div>
     </section>
   `,
@@ -795,7 +784,6 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'theme',    label: 'Theme' },
     { value: 'patient',  label: 'Patient' },
     { value: 'columns',  label: 'Columns' },
-    { value: 'testlayout', label: 'Per-test layout' },
     { value: 'signoff',  label: 'Footer' },
   ];
   /** Section cards for the left nav — a plain-words label + what it changes,
@@ -806,7 +794,6 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'theme',      label: 'Style & table',     desc: 'Font, colours, abnormal highlighting' },
     { value: 'patient',    label: 'Patient block',     desc: 'Which patient fields print, arranged how' },
     { value: 'columns',    label: 'Report columns',    desc: 'Per-department table columns & widths' },
-    { value: 'testlayout', label: 'Test descriptions', desc: 'Interpretation notes & description text per test' },
     { value: 'signoff',    label: 'Footer', desc: 'Disclaimer, end-of-report, watermark' },
   ];
   private readonly _tab = signal<Tab>('identity');
@@ -1104,8 +1091,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     return JSON.stringify({
       patient: { displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
       order:   { id: 'preview-order-12345',
+                 // A realistic order number so the preview's barcode is a true
+                 // Code-128 of a scannable value, not a placeholder.
+                 orderNumber: 'LAB-2608-000042',
                  createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-                 refDoctorName: 'Dr. A. Sharma' },
+                 refDoctorName: 'Dr. A. Sharma',
+                 refHospitalName: 'Apollo Speciality Hospital',
+                 branchName: 'Chennai Main',
+                 collectedBy: 'S. Priya',
+                 departments: 'Haematology, Biochemistry' },
       type: 'final',
       tests: [
         { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
@@ -1200,6 +1194,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Drag-arranged 3-column patient block ──
   private readonly ALL_PATIENT_ITEMS = [
     'name', 'age', 'sex', 'mrn', 'phone', 'orderid', 'refdoctor',
+    // Referral + collection details. Sourced from the ORDER (not the patient
+    // record), so they arrive via the report snapshot's `order` block.
+    'refhospital', 'collectedby', 'department', 'branch',
     'specimen', 'barcode', 'registered', 'collected', 'reported',
   ];
   private readonly DEFAULT_PATIENT_COLS: string[][] = [
@@ -1212,6 +1209,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
     barcode: 'Barcode', registered: 'Registered date', collected: 'Collected date',
     reported: 'Reported date',
+    refhospital: 'Referring hospital', collectedby: 'Collected by',
+    department: 'Department', branch: 'Branch / collection centre',
   };
 
   readonly patientCols = signal<string[][]>([[], [], []]);

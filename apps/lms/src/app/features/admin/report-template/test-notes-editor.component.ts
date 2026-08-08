@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -34,7 +34,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
  * interpretive content per test.
  */
 @Component({
-  selector: 'pf-test-layout-editor',
+  selector: 'pf-test-notes-editor',
   standalone: true,
   imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,9 +44,10 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
       <!-- ─────────────── LEFT: section editor ─────────────── -->
       <pf-tile tone="default" padding="lg" class="block">
 
-        <!-- Test picker + status -->
+        <!-- Test picker + status. The picker disappears when the host already
+             knows the test (Test Master); the status pill stays useful. -->
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <div class="flex items-center gap-3 pf-test-pick">
+          <div class="flex items-center gap-3 pf-test-pick" [hidden]="!!fixedTestId()">
             <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Test</label>
             <pf-select
@@ -428,11 +429,15 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-prev-para { white-space: pre-wrap; color: var(--text-primary); line-height: 1.55; }
   `]
 })
-export class TestLayoutEditorComponent implements OnInit {
+export class TestNotesEditorComponent implements OnInit {
   /** When embedded in the Report Template shell (which has its own shared PDF
    *  preview on the right), hide this editor's own preview pane and render the
    *  section editor full-width. */
   readonly hidePreview = input(false);
+  /** Drive the editor from a KNOWN test (Test Master embeds it inside a test
+   *  that is already open) instead of its own dropdown. When set, the picker
+   *  row is hidden and the catalogue fetch is skipped entirely. */
+  readonly fixedTestId = input<string>('');
 
   private readonly api = inject(ApiService);
   private readonly layout = inject(ReportLayoutService);
@@ -494,7 +499,17 @@ export class TestLayoutEditorComponent implements OnInit {
   protected readonly selectedTest = computed<Test | undefined>(() =>
     this.tests().find(t => t.id === this.selectedTestId()));
 
+  constructor() {
+    // Host-driven test id: load whenever it changes (and skip the catalogue
+    // fetch — the host already resolved the test).
+    effect(() => {
+      const id = this.fixedTestId();
+      if (id && id !== this.selectedTestId()) this.selectTest(id);
+    });
+  }
+
   ngOnInit() {
+    if (this.fixedTestId()) return;   // embedded: no dropdown to populate
     this.api.get<Test[]>('/api/tests/').subscribe({
       next: list => this.tests.set((list ?? []).filter(t => t.type === 'individual')),
       error: () => this.toasts.error('Failed to load tests'),
@@ -607,7 +622,7 @@ export class TestLayoutEditorComponent implements OnInit {
     const fromPreview = this.preview()?.columns?.map(c => c.name);
     return (fromPreview && fromPreview.length > 0)
       ? fromPreview
-      : TestLayoutEditorComponent.DEFAULT_CELL_COLUMNS;
+      : TestNotesEditorComponent.DEFAULT_CELL_COLUMNS;
   }
 
   cellPlaceholder(col: string): string {
