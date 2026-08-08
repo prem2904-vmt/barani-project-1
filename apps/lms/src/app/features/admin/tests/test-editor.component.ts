@@ -39,7 +39,7 @@ import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../share
 /** Label of the synthetic picker group holding the already-chosen members. */
 const SELECTED_GROUP = 'Selected';
 
-type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'ranges' | 'layout' | 'consumables';
+type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'layout' | 'consumables';
 
 interface DraftTest {
   id?: string;
@@ -406,11 +406,12 @@ function newFieldId(): string {
         }
 
         <!-- ── Reference range ────────────────────────────────────────
-             Its own rail section. These were previously reachable only by
-             opening the Results section, expanding a parameter, and scrolling
-             — three steps deep for the field a lab tunes most often, which is
-             why they read as missing. -->
-        @if (section() === 'ranges' && d.type === 'individual') {
+             Inside Results, between "Result & report" and the analyte details
+             — reading unit → normal values → parameters. It is a tile of its
+             own rather than a field buried inside a parameter accordion, which
+             is what made it look missing, but it is NOT a separate rail
+             section: a range belongs with the result it qualifies. -->
+        @if (section() === 'results' && d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <div class="flex items-center justify-between">
               <h3 class="section-title">Reference range</h3>
@@ -1609,8 +1610,7 @@ export class TestEditorComponent implements OnInit {
       { value: 'identity',    label: 'Identity',        desc: 'Name, code, department, type' },
       { value: 'pricing',     label: 'Pricing & TAT',   desc: 'Price, tax, turnaround' },
       { value: 'sample',      label: 'Sample & handling', desc: 'Specimen, tube, volume, fasting' },
-      { value: 'results',     label: 'Results',         desc: 'Parameters, units, critical limits' },
-      { value: 'ranges',      label: 'Reference range', desc: 'Normal values by sex and age' },
+      { value: 'results',     label: 'Results',         desc: 'Parameters, units, reference ranges' },
       { value: 'layout',      label: 'Report layout',   desc: 'Notes, description, structure' },
       { value: 'consumables', label: 'Consumables',     desc: 'Inventory used per test' },
     ];
