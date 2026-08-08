@@ -74,28 +74,79 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
           </div>
         } @else if (selectedTestId()) {
 
-          @if (sections().length === 0) {
-            <p class="text-center py-5 text-[13px]" style="color: var(--text-tertiary);">
-              No sections yet. Add a grid (results table) or a paragraph (notes / interpretation).
+          <!-- ── 1 · DESCRIPTION column ─────────────────────────────
+               What most departments actually want here: the text printed in
+               the report's Description column beside each parameter. -->
+          <div class="pf-tl-block">
+            <h4 class="pf-tl-h">Description column</h4>
+            <p class="pf-tl-hint">
+              Printed in the report's <strong>Description</strong> column beside each
+              parameter — e.g. what a high or low value means. Leave blank for none.
             </p>
-          }
+            @for (name of paramNames(); track name) {
+              <div class="pf-tl-desc-row">
+                <span class="pf-tl-desc-name">{{ name }}</span>
+                <input type="text" class="pf-input pf-input--compact grow"
+                       [value]="descriptionFor(name)"
+                       (input)="setDescription(name, $any($event.target).value)"
+                       placeholder="e.g. High in dehydration · Low in anaemia" />
+              </div>
+            } @empty {
+              <p class="text-[12px] py-1" style="color: var(--text-tertiary);">This test has no parameters.</p>
+            }
+          </div>
 
+          <!-- ── 2 · NOTES & INTERPRETATION paragraphs ───────────── -->
+          <div class="pf-tl-block">
+            <h4 class="pf-tl-h">Notes &amp; interpretation</h4>
+            <p class="pf-tl-hint">
+              Free-text paragraphs printed under this test's results. Supports
+              placeholders — e.g. {{ '{{Hemoglobin}}' }}, {{ '{{Hemoglobin_range}}' }}.
+            </p>
+            @for (ps of paragraphSecs(); track ps.s.id) {
+              <div class="pf-tl-para">
+                <div class="flex items-center gap-2 mb-1">
+                  <input type="text" class="pf-input pf-input--compact grow"
+                         [value]="ps.s.label ?? ''"
+                         (input)="patchSection(ps.si, { label: $any($event.target).value })"
+                         placeholder="Heading (e.g. Interpretation)" />
+                  <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                          (click)="removeSection(ps.si)" aria-label="Delete note">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                  </button>
+                </div>
+                <textarea class="pf-input min-h-[72px]"
+                          [value]="paraSection(ps.s).template"
+                          (input)="patchSection(ps.si, { template: $any($event.target).value })"
+                          placeholder="e.g. Values above {{ '{{Hemoglobin_range}}' }} suggest…"></textarea>
+              </div>
+            }
+            <button type="button" class="pf-link-btn" (click)="addParagraphPreset('Interpretation')">+ Add note block</button>
+          </div>
+
+          <!-- ── 3 · ADVANCED: raw table layout (kept, tucked away) ── -->
+          <button type="button" class="pf-tl-adv-toggle press" (click)="showAdvanced.set(!showAdvanced())">
+            {{ showAdvanced() ? '▾' : '▸' }} Advanced table layout
+            <span class="pf-tl-adv-sub">custom rows &amp; per-cell templates — most tests don't need this</span>
+          </button>
+
+          @if (showAdvanced()) {
           <ul class="pf-sec-list">
             @for (s of sections(); track s.id; let si = $index) {
+              @if (s.type !== 'paragraph') {
               <li class="pf-sec-card">
 
                 <!-- Section header bar -->
                 <div class="pf-sec-head">
-                  <span class="pf-sec-badge"
-                        [class.pf-sec-badge--grid]="s.type === 'grid'"
-                        [class.pf-sec-badge--para]="s.type === 'paragraph'">
-                    {{ s.type }}
-                  </span>
+                  <span class="pf-sec-badge pf-sec-badge--grid">{{ s.type }}</span>
 
                   <input type="text" class="pf-input pf-input--compact grow"
                          [value]="s.label ?? ''"
                          (input)="patchSection(si, { label: $any($event.target).value })"
-                         [placeholder]="s.type === 'paragraph' ? 'Section label (e.g. Interpretation, Method / Notes)' : 'Section label (optional)'" />
+                         placeholder="Section label (optional)" />
 
                   <div class="pf-sec-head__actions">
                     <button type="button" class="pf-icon-btn" [disabled]="si === 0"
@@ -170,34 +221,19 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                   </div>
                 }
 
-                <!-- ───── PARAGRAPH section body ───── -->
-                @if (s.type === 'paragraph') {
-                  <div class="pf-sec-body">
-                    <textarea class="pf-input min-h-[88px]"
-                              [value]="paraSection(s).template"
-                              (input)="patchSection(si, { template: $any($event.target).value })"
-                              placeholder="Free text. Supports {{ '{{placeholders}}' }} — e.g. {{ '{{Hemoglobin}}' }}, {{ '{{Hemoglobin_unit}}' }}, {{ '{{Hemoglobin_range}}' }}."></textarea>
-                    <p class="text-[10.5px] mt-1" style="color: var(--text-tertiary);">
-                      Use this for interpretation, method or notes. Placeholders resolve from entered results.
-                    </p>
-                  </div>
-                }
 
               </li>
+              }
             }
           </ul>
+          <button type="button" class="pf-link-btn" (click)="addSection('grid')">+ Custom table section</button>
+          }
 
-          <!-- Add-section + save footer -->
-          <div class="flex items-center justify-between gap-3 mt-4 flex-wrap">
-            <div class="flex items-center gap-2">
-              <button type="button" class="pf-link-btn" (click)="addSection('grid')">+ Grid section</button>
-              <button type="button" class="pf-link-btn" (click)="addSection('paragraph')">+ Paragraph section</button>
-              <button type="button" class="pf-link-btn" (click)="addParagraphPreset('Interpretation')">+ Interpretation</button>
-              <button type="button" class="pf-link-btn" (click)="addParagraphPreset('Method / Notes')">+ Method / Notes</button>
-            </div>
+          <!-- Save footer -->
+          <div class="flex items-center justify-end gap-3 mt-4">
             <pf-touch-btn size="sm" variant="primary"
                           [disabled]="saving()" (pressed)="save()">
-              @if (saving()) { Saving… } @else { Save layout }
+              @if (saving()) { Saving… } @else { Save }
             </pf-touch-btn>
           </div>
 
@@ -294,6 +330,21 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     </div>
   `,
   styles: [`
+    /* ── Simple-mode blocks ── */
+    .pf-tl-block { margin-bottom: 18px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
+      border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .pf-tl-h { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-tl-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+    .pf-tl-desc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .pf-tl-desc-name { flex: 0 0 190px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary, #cbd5e1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-tl-para { margin-bottom: 12px; }
+    .pf-tl-adv-toggle { display: block; width: 100%; text-align: left; margin: 4px 0 10px; padding: 10px 12px;
+      border: 1px dashed var(--glass-border, rgba(148,163,184,0.3)); border-radius: 12px; background: transparent;
+      font-size: 13px; font-weight: 600; color: var(--text-secondary, #cbd5e1); cursor: pointer; }
+    .pf-tl-adv-toggle:hover { border-color: rgba(168,85,247,0.4); }
+    .pf-tl-adv-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--text-tertiary, #94a3b8); }
+
     .pf-input--compact { padding: 6px 10px; font-size: 12.5px; }
     .pf-input--mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
 
@@ -468,6 +519,81 @@ export class TestLayoutEditorComponent implements OnInit {
       this.loading.set(false);
       this.toasts.error('Failed to load layout');
     });
+  }
+
+  // ── Simple-mode state & helpers ─────────────────────────
+  /** Advanced (raw table) editor collapsed by default — most departments only
+   *  need the description column + note paragraphs. */
+  protected readonly showAdvanced = signal(false);
+
+  /** Paragraph sections with their real index (for patch/remove by index). */
+  protected paragraphSecs(): Array<{ s: ReportSection; si: number }> {
+    return this.sections().map((s, si) => ({ s, si })).filter(x => x.s.type === 'paragraph');
+  }
+
+  /** Parameter names of the selected test (from the test master), used to lay
+   *  out the Description-column fields even before any layout exists. */
+  protected paramNames(): string[] {
+    const t = this.selectedTest();
+    const raw = (t as unknown as { parameters?: unknown })?.parameters;
+    if (!raw) return this.gridParamNames();
+    try {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
+      const list = (obj['parameters'] ?? obj['fields']) as Array<{ name?: string; label?: string }> | undefined;
+      const names = (list ?? []).map(p => (p.name || p.label || '').trim()).filter(Boolean);
+      return names.length ? names : this.gridParamNames();
+    } catch { return this.gridParamNames(); }
+  }
+  private gridParamNames(): string[] {
+    const g = this.sections().find(s => s.type === 'grid') as GridSection | undefined;
+    return (g?.rows ?? []).map(r => (r as GridRowParameter).parameter_name).filter(Boolean);
+  }
+
+  /** The Description-column text for one parameter (first grid section). */
+  protected descriptionFor(name: string): string {
+    const g = this.sections().find(s => s.type === 'grid') as GridSection | undefined;
+    const row = (g?.rows ?? []).find(r => (r as GridRowParameter).parameter_name === name) as GridRowParameter | undefined;
+    return row?.cells?.['description'] ?? '';
+  }
+
+  /** Write the Description cell — creating the grid section / row on demand so
+   *  the admin never has to touch the advanced editor for this. */
+  protected setDescription(name: string, value: string): void {
+    this.sections.update(arr => {
+      const next = [...arr];
+      let gi = next.findIndex(s => s.type === 'grid');
+      if (gi < 0) {
+        // No table yet → synthesize one row per test parameter, preserving order.
+        const rows: GridRow[] = this.paramNamesFromTest().map(n => ({
+          id: this.newId('row'), row_merge: false, parameter_name: n, cells: {},
+        }) as unknown as GridRow);
+        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows } as unknown as ReportSection);
+        gi = next.length - 1;
+      }
+      const g = { ...(next[gi] as GridSection) };
+      g.rows = [...(g.rows ?? [])];
+      let ri = g.rows.findIndex(r => (r as GridRowParameter).parameter_name === name);
+      if (ri < 0) {
+        g.rows.push({ id: this.newId('row'), row_merge: false, parameter_name: name, cells: {} } as unknown as GridRow);
+        ri = g.rows.length - 1;
+      }
+      const row = { ...(g.rows[ri] as GridRowParameter) };
+      row.cells = { ...(row.cells ?? {}), description: value };
+      g.rows[ri] = row as unknown as GridRow;
+      next[gi] = g;
+      return next;
+    });
+  }
+  /** Parameter names strictly from the test master (for row synthesis). */
+  private paramNamesFromTest(): string[] {
+    const t = this.selectedTest();
+    const raw = (t as unknown as { parameters?: unknown })?.parameters;
+    if (!raw) return [];
+    try {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
+      const list = (obj['parameters'] ?? obj['fields']) as Array<{ name?: string; label?: string }> | undefined;
+      return (list ?? []).map(p => (p.name || p.label || '').trim()).filter(Boolean);
+    } catch { return []; }
   }
 
   // ── Narrowing helpers for the template ──────────────────
