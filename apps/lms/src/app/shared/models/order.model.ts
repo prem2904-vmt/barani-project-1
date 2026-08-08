@@ -73,6 +73,8 @@ export interface OrderTest {
   testId: string;
   name: string;
   packageTestId?: string;
+  /** Resolved profile/package name (annotated by the samples endpoint). */
+  packageName?: string;
   status: string;
   assignedTo?: string;
   currentResult?: string;

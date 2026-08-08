@@ -1710,8 +1710,14 @@ function drawInlineSignatures(
       doc.setTextColor(TEXT_DIM);
       doc.text(`(${s.title})`, px, baseY + 27, { align: 'center' });
     }
+    if (s.regNo) {
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(TEXT_DIM);
+      doc.text(`Reg. ${s.regNo}`, px, baseY + 37, { align: 'center' });
+    }
   });
-  return baseY + 34;
+  return baseY + 44;
 }
 
 /** Resolve the column layout for one department's groups: the first group's

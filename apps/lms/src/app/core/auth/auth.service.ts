@@ -24,6 +24,8 @@ interface MeResponse {
   branches?: BranchRef[];
   hasPin?: boolean;
   signatureDataUrl?: string;
+  /** Medical council / registration number (dash on screens until set). */
+  registrationId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -530,6 +532,12 @@ export class AuthService {
     if (u) this._user.set({ ...u, signatureDataUrl: dataUrl ?? undefined });
   }
 
+  /** Mirror a saved registration ID onto the in-memory user. */
+  setRegistrationIdLocal(regId: string | null): void {
+    const u = this._user();
+    if (u) this._user.set({ ...u, registrationId: regId ?? undefined });
+  }
+
   async getAccessToken(): Promise<string | null> {
     // Prefer the session we set locally via directTokenFetch — the SDK's
     // getSession() occasionally hangs on cold starts waiting on the Web-Locks
@@ -608,7 +616,8 @@ export class AuthService {
         permissions: data.permissions ?? [],
         branches: data.branches ?? [],
         hasPin: data.hasPin ?? false,
-        signatureDataUrl: data.signatureDataUrl ?? undefined
+        signatureDataUrl: data.signatureDataUrl ?? undefined,
+        registrationId: data.registrationId ?? undefined
       });
       this._lastProfileLoadedAt = Date.now();
 

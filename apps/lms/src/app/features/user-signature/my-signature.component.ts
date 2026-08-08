@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { SignaturePadComponent } from '../../shared/components/signature-pad/signature-pad.component';
@@ -64,6 +64,22 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
         <input #file type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
                (change)="onFileChosen($event)" />
       </div>
+
+      <!-- Medical registration ID — shown beside your name on entry screens
+           (dash until set) and printed under your signature on reports. -->
+      <div class="pf-sig-tile">
+        <p class="pf-sig-eyebrow">Registration ID</p>
+        <p class="pf-sig-muted" style="margin-bottom: 10px;">
+          Your medical council / registration number. Appears next to your name on
+          lab screens and as "Reg. …" under your signature on reports.
+        </p>
+        <div class="pf-sig-row" style="margin-top: 0;">
+          <input type="text" class="pf-sig-input" maxlength="64" placeholder="e.g. TN-12345"
+                 [value]="regId()" (input)="regId.set($any($event.target).value)" />
+          <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;"
+                  [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()">Save</button>
+        </div>
+      </div>
     </div>
 
     @if (pad()) {
@@ -89,6 +105,10 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
     .pf-sig-cta--primary { margin-top: 16px; background: var(--violet-600, #7c3aed); border-color: transparent; color: #fff; }
     .pf-sig-cta--danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
     .pf-sig-cta:disabled { opacity: .5; cursor: default; }
+    .pf-sig-input { flex: 1; min-width: 0; border-radius: 10px; padding: 10px 12px; font-size: 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      color: var(--text-primary, #e2e8f0); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-sig-input:focus { outline: none; border-color: var(--violet-500, #8b5cf6); }
   `],
 })
 export class MySignatureComponent {
@@ -123,6 +143,24 @@ export class MySignatureComponent {
     if (!url) return;
     this.uploadPreview.set(null);
     this.onSaved(url);
+  }
+
+  /** Medical registration ID (shown as "Reg: …" on entry screens + reports). */
+  readonly savedRegId = computed(() => this.auth.user()?.registrationId?.trim() ?? '');
+  readonly regId = signal('');
+  private readonly _regSeed = effect(() => this.regId.set(this.savedRegId()));
+
+  saveRegId(): void {
+    const value = this.regId().trim();
+    this.busy.set(true);
+    this.api.put<{ registrationId: string | null }>('/api/auth/me/registration-id', { registrationId: value }).subscribe({
+      next: r => {
+        this.auth.setRegistrationIdLocal(r.registrationId ?? null);
+        this.busy.set(false);
+        this.toasts.success(value ? 'Registration ID saved' : 'Registration ID cleared');
+      },
+      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
   }
 
   onSaved(dataUrl: string): void {

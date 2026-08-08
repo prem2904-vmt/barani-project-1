@@ -85,12 +85,14 @@ function defaultResultParam(): TestParameter {
             }
           </div>
         }
-        <!-- Signed-in technician (right of header). -->
+        <!-- Signed-in technician (right of header): name + medical
+             registration ID (dash until the user adds one in My signature). -->
         <span class="pf-sre__tech" title="Signed-in technician">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
           </svg>
           <span class="pf-sre__tech-name">{{ techName() }}</span>
+          <span class="pf-sre__tech-reg" title="Registration ID">Reg: {{ techRegId() }}</span>
         </span>
         <!-- Background autosave indicator (manual Save draft still available). -->
         @if (autosaving()) {
@@ -205,8 +207,27 @@ function defaultResultParam(): TestParameter {
           </div>
         }
 
-        @for (t of sample()!.tests; track t.id) {
+        @for (grp of testGroups(); track grp.key) {
+          @if (grp.title) {
+            <!-- Profile / package block — the user ordered a PROFILE, so entry
+                 reads as ONE titled card with its member tests in sequence,
+                 not N unrelated test cards. -->
+            <div class="pf-sre__profile">
+              <header class="pf-sre__profile-hdr">
+                <h2 class="pf-sre__profile-name">{{ grp.title }}</h2>
+                <span class="pf-sre__profile-count">{{ grp.tests.length }} tests</span>
+              </header>
+              <ng-container *ngTemplateOutlet="testCard; context: { $implicit: grp.tests, member: true }"></ng-container>
+            </div>
+          } @else {
+            <ng-container *ngTemplateOutlet="testCard; context: { $implicit: grp.tests, member: false }"></ng-container>
+          }
+        }
+
+        <ng-template #testCard let-cardTests let-member="member">
+        @for (t of cardTests; track t.id) {
           <section class="pf-sre__test"
+                   [class.pf-sre__test--member]="member"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">
             <header class="pf-sre__test-hdr">
@@ -448,6 +469,7 @@ function defaultResultParam(): TestParameter {
             }
           </section>
         }
+        </ng-template>
 
         <footer class="pf-sre__footer">
           @if (hasReopenable()) {
@@ -761,6 +783,38 @@ function defaultResultParam(): TestParameter {
     .pf-sre__tech svg { flex: 0 0 auto; opacity: 0.75; }
     .pf-sre__tech-name { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     @media (max-width: 640px) { .pf-sre__tech-name { display: none; } }
+    /* Medical registration ID beside the name — dash until the user sets one. */
+    .pf-sre__tech-reg {
+      font-size: 11px; color: var(--text-tertiary, #94a3b8);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) { .pf-sre__tech-reg { display: none; } }
+
+    /* ── Profile / package block: one titled card, member tests inside ── */
+    .pf-sre__profile {
+      margin-bottom: 20px; padding: 14px 14px 6px;
+      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.22));
+      border-radius: 18px;
+      background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+    }
+    .pf-sre__profile-hdr {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 2px 4px 12px;
+    }
+    .pf-sre__profile-name { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: 0.01em; }
+    .pf-sre__profile-count {
+      font-size: 11px; color: var(--text-tertiary, #94a3b8);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    /* Member cards inside a profile sit flatter — the profile card carries the
+       chrome; members read as a sequence of rows under the one title. */
+    .pf-sre__test--member {
+      margin-bottom: 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .pf-sre__test--member .pf-sre__test-name { font-size: 13px; }
 
     /* Background autosave pill. */
     .pf-sre__autosave {
@@ -1261,6 +1315,30 @@ export class SampleResultEntryComponent {
   /** Signed-in technician shown on the right of the header. Uses displayName
    *  (the /me response has no separate login username field today). */
   readonly techName = computed(() => this.auth.user()?.displayName?.trim() || 'Technician');
+  /** Medical registration ID beside the name — a dash until the user sets one
+   *  (editable on the My signature screen). */
+  readonly techRegId = computed(() => this.auth.user()?.registrationId?.trim() || '—');
+
+  /** Entry blocks: tests ordered through a PROFILE are compiled into one
+   *  titled block (profile name above, member tests as the sequence inside);
+   *  individually-ordered tests stay as their own card. */
+  readonly testGroups = computed<Array<{ key: string; title: string | null; tests: OrderTest[] }>>(() => {
+    const tests = this.sample()?.tests ?? [];
+    const out: Array<{ key: string; title: string | null; tests: OrderTest[] }> = [];
+    const byPkg = new Map<string, { key: string; title: string | null; tests: OrderTest[] }>();
+    for (const t of tests) {
+      const pkg = t.packageTestId;
+      if (!pkg) { out.push({ key: t.id, title: null, tests: [t] }); continue; }
+      let g = byPkg.get(pkg);
+      if (!g) {
+        g = { key: 'pkg-' + pkg, title: t.packageName || 'Profile', tests: [] };
+        byPkg.set(pkg, g);
+        out.push(g);
+      }
+      g.tests.push(t);
+    }
+    return out;
+  });
 
   // ── Background autosave (manual Save draft is still available) ──────
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
