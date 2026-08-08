@@ -449,11 +449,49 @@ function newFieldId(): string {
                           @if (p.unit) { <span class="text-[11px] text-slate-400">{{ p.unit }}</span> }
                         </div>
                       }
+                      @if (!showAdvancedRanges(p)) {
+                        <!-- DEFAULT: one range for everyone, which is what the
+                             overwhelming majority of tests need. Two boxes, no
+                             sex/age vocabulary to read past. -->
+                        <div class="grid gap-2 grid-cols-2 md:grid-cols-3 items-end">
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Normal min</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="firstBand(p).min ?? null"
+                                              (valueChange)="patchRangeAt(i, 0, { min: $event ?? null })">
+                            </pf-number-input>
+                          </label>
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Normal max</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="firstBand(p).max ?? null"
+                                              (valueChange)="patchRangeAt(i, 0, { max: $event ?? null })">
+                            </pf-number-input>
+                          </label>
+                          <div class="flex items-end pb-1">
+                            <button type="button"
+                                    class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                    (click)="openAdvancedRanges()">
+                              Different by sex or age?
+                            </button>
+                          </div>
+                        </div>
+                      } @else {
                       <div class="flex items-center justify-between mb-1">
                         <span class="pf-mini-lbl">{{ bandsCaption(p) }}</span>
-                        <button type="button"
-                                class="text-xs font-medium text-violet-400 hover:text-violet-300"
-                                (click)="addRange(i)">+ Add range</button>
+                        <div class="flex items-center gap-3">
+                          @if (!needsAdvancedRanges(p)) {
+                            <!-- Only offered when nothing would be lost: a test
+                                 that really has sex/age bands can't be shown in
+                                 the two-box view without hiding them. -->
+                            <button type="button"
+                                    class="text-xs font-medium text-slate-400 hover:text-slate-300"
+                                    (click)="closeAdvancedRanges()">Simple</button>
+                          }
+                          <button type="button"
+                                  class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                  (click)="addRange(i)">+ Add range</button>
+                        </div>
                       </div>
               @for (r of (p.referenceRanges ?? []); track $index) {
                 <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
@@ -525,6 +563,7 @@ function newFieldId(): string {
                          (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
                 </label>
               }
+                      }
                     </div>
                   }
                 }
@@ -1519,6 +1558,40 @@ export class TestEditorComponent implements OnInit {
     const bands = numeric[0].referenceRanges ?? [];
     if (bands.length !== 1) return '';
     return formatRange(bands[0]) ?? '';
+  }
+
+  /**
+   * Reference ranges open in the SIMPLE two-box form — one range for everyone,
+   * which is what nearly every test needs. Sex/age bands are a deliberate step
+   * in, not vocabulary to read past on the way to typing 70 and 100.
+   *
+   * The exception is a test that already HAS conditional bands: the two-box
+   * form can't show those without hiding real configuration, so
+   * {@link needsAdvancedRanges} forces the full editor open and the "Simple"
+   * escape is withheld. Nothing is ever silently dropped.
+   */
+  private readonly _advancedRanges = signal(false);
+  protected openAdvancedRanges() { this._advancedRanges.set(true); }
+  protected closeAdvancedRanges() { this._advancedRanges.set(false); }
+
+  /** True when this analyte's bands can't be expressed in the two-box form. */
+  protected needsAdvancedRanges(p: FormField): boolean {
+    const bands = p.referenceRanges ?? [];
+    if (bands.length > 1) return true;
+    const b = bands[0];
+    if (!b) return false;
+    return !!(b.sex && b.sex !== 'any') || b.minAge != null || b.maxAge != null || !!b.label;
+  }
+
+  protected showAdvancedRanges(p: FormField): boolean {
+    return this._advancedRanges() || this.needsAdvancedRanges(p);
+  }
+
+  /** The band the simple form edits. Always index 0 — `addParameter` and
+   *  `startReferenceRange` both seed one, so it exists by the time this
+   *  renders; the empty object is a render-time guard, not a real state. */
+  protected firstBand(p: FormField): ReferenceRange {
+    return (p.referenceRanges ?? [])[0] ?? { segment: 'normal', min: null, max: null };
   }
 
   /**
