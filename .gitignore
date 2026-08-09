@@ -67,3 +67,6 @@ ios/DerivedData/
 
 # Electron build output
 dist/electron/
+
+# Graphify code-graph output (generated; rebuild with `graphify update .`)
+graphify-out/
