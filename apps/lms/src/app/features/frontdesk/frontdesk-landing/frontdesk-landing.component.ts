@@ -492,7 +492,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly bills = this._bills.asReadonly();
   readonly selectedOrder = this._selectedOrder.asReadonly();
 
-  readonly firstName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'there');
+  // Always the FIRST word only — profiles routinely carry the full name in
+  // firstName, which made the greeting read "Good day, First Last".
+  readonly firstName = computed(() => {
+    const raw = this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
+    return raw.trim().split(/\s+/)[0] || 'there';
+  });
 
   /** Today's date — shown as a small eyebrow above the greeting. */
   readonly today = new Date();
