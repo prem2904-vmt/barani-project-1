@@ -16,6 +16,7 @@ import bwipjs from 'bwip-js/browser';
 import { OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { tubeColor } from '../../../shared/utils/tube-colors';
 
 export interface TubeSpec {
   label: string;
@@ -40,7 +41,42 @@ const TUBE_MAP: Record<string, TubeSpec> = {
 };
 const DEFAULT_TUBE: TubeSpec = { label: 'Grey', color: 'grey', volume: '5 mL' };
 
+/** Chip styling keys this card has CSS for. Anything else falls to grey — the
+ *  chip is a visual aid, and a missing swatch beats a mislabelled tube. */
+const CHIP_BY_KEY: Readonly<Record<string, TubeSpec['color']>> = {
+  edta: 'lavender', sst: 'yellow', urine: 'yellow', plain: 'red',
+  heparin: 'green', sterile: 'container', fluoride: 'grey',
+  citrate: 'grey', esr: 'grey', trace: 'grey', multiple: 'grey',
+};
+
+/**
+ * The tube printed on the label.
+ *
+ * The test's configured container wins. This used to read the DEPARTMENT code
+ * and nothing else, so a test whose container was set to Red in Test Master
+ * still printed "Lavender" if it sat in Haematology — while the collection
+ * screen, which does honour the field, drew the red tube. Two screens in one
+ * workflow disagreeing about which tube to draw is exactly the failure the
+ * phlebotomist pays for.
+ *
+ * The department map stays as the fallback for samples with no container
+ * configured, which is how every pre-NABL test still prints something useful.
+ */
 export function tubeSpec(s: OrderSample): TubeSpec {
+  const tc = tubeColor(s.tubeColor);
+  if (tc) {
+    return {
+      label: tc.short,
+      color: CHIP_BY_KEY[tc.key] ?? 'grey',
+      // Volume isn't carried on the container itself; keep the department's
+      // conventional draw volume rather than inventing one.
+      volume: deptTube(s).volume,
+    };
+  }
+  return deptTube(s);
+}
+
+function deptTube(s: OrderSample): TubeSpec {
   const code = (s.department?.code ?? s.department?.name ?? '').toUpperCase().trim();
   return TUBE_MAP[code] ?? DEFAULT_TUBE;
 }
