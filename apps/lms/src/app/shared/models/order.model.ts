@@ -73,6 +73,13 @@ export interface OrderTest {
   testId: string;
   name: string;
   packageTestId?: string;
+  /** Bundle type of packageTestId ('profile'|'package') — resolved by the
+   *  per-sample endpoint; lets legacy rows (no profileTestId) group right. */
+  packageType?: string | null;
+  /** Nearest enclosing PROFILE this leaf arrived through (null = arrived
+   *  directly: standalone test, or a package's direct member). */
+  profileTestId?: string | null;
+  profileName?: string | null;
   /** Resolved profile/package name (annotated by the samples endpoint). */
   packageName?: string;
   /** Display sequence within the tube (profile-authored order, never alphabetical). */
@@ -103,13 +110,22 @@ export interface CreateOrderInput {
 }
 
 /** Logical test count for display: a PROFILE counts as ONE test (its members
- *  don't inflate the number), individually-ordered tests count as themselves. */
-export function logicalTestCount(tests: Array<{ packageTestId?: string | null }> | null | undefined): number {
+ *  don't inflate the number), individually-ordered tests count as themselves.
+ *  A PACKAGE is a commercial wrapper, not a bench unit — where the rows are
+ *  enriched (profileTestId/packageType present), its contents count as their
+ *  profiles + individual tests. Unenriched rows keep the legacy
+ *  group-by-bundle count so screens without the extra data are unaffected. */
+export function logicalTestCount(
+  tests: Array<{ packageTestId?: string | null; profileTestId?: string | null; packageType?: string | null }>
+    | null | undefined
+): number {
   if (!tests?.length) return 0;
   const pkgs = new Set<string>();
   let singles = 0;
   for (const t of tests) {
-    if (t.packageTestId) pkgs.add(t.packageTestId);
+    if (t.profileTestId) pkgs.add(t.profileTestId);
+    else if (t.packageTestId && t.packageType === 'package') singles++;
+    else if (t.packageTestId) pkgs.add(t.packageTestId);
     else singles++;
   }
   return singles + pkgs.size;
