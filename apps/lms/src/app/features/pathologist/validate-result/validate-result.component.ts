@@ -955,8 +955,10 @@ interface ValueRow {
       /* Horizontal scroll fallback below the mobile-area layout breakpoint
          (767px) so the table stays readable even on the narrowest devices
          before grid-areas kicks in. */
-      overflow-x: auto;
-      overflow: hidden;
+      /* One shorthand: horizontal scroll, vertical clip — the previous pair
+         cancelled the overflow-x on the next line, clipping the flag column
+         on iPad portrait instead of scrolling. */
+      overflow: auto hidden;
     }
     .pf-table__head, .pf-table__row {
       display: grid;
@@ -1431,7 +1433,11 @@ interface ValueRow {
       background: var(--input-bg, rgba(255,255,255,0.05)); border: 1px solid var(--glass-border);
       border-radius: 6px; padding: 3px 6px; color: var(--text-primary); font-size: 11.5px;
     }
-  `]
+  
+    @media (max-width: 640px) {
+      .pf-summary { grid-template-columns: repeat(2, 1fr); }
+    }
+`]
 })
 export class ValidateResultComponent implements OnInit {
   private readonly api = inject(ApiService);

@@ -241,7 +241,11 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
     .pf-prev-c { flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:700; color:#0f172a; border:1.5px solid #0f172a; border-radius:3px; }
     .pf-prev-c[data-mode='barcode'] { width:34%; min-width:30px; height:60%; background: repeating-linear-gradient(90deg,#0f172a 0 1.5px,#fff 1.5px 3px); border:none; color:transparent; }
     .pf-prev-c[data-mode='qr'], .pf-prev-c[data-mode='datamatrix'] { aspect-ratio:1; height:74%; }
-  `]
+  
+    /* The mm-scaled preview can reach 408px; cap it to the viewport so a
+       120mm label doesn't push the whole page sideways on a phone. */
+    .pf-prev, [class*='preview'] { max-width: 100%; }
+`]
 })
 export class LabelPrinterComponent implements OnInit, OnDestroy {
   readonly printer = inject(PrinterService);

@@ -842,10 +842,16 @@ const STATUS_CLASS: Record<string, string> = {
       /* Day / Week grid: narrower time rail + allow the 7-day week to
        * scroll horizontally instead of crushing columns to nothing.
        * Each day column gets a sensible min so events stay readable. */
-      .pf-cal-time__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* The FRAME scrolls, not the body: with the body as the scroller the
+         day headers stayed frozen while columns slid beneath them — you
+         could book against the wrong day. One scroller moves head, body and
+         the now-line overlay as a unit. */
+      .pf-cal-frame { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pf-cal-time__body { overflow-x: visible; }
       .pf-cal-time__head,
       .pf-cal-time__body {
         grid-template-columns: 44px repeat(var(--col-count, 7), minmax(64px, 1fr));
+        min-width: calc(44px + var(--col-count, 7) * 64px);
       }
       .pf-cal-time__overlay { left: 44px; }
       .pf-cal-time__hour > span { right: 5px; font-size: 9.5px; }

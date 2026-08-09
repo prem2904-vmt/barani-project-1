@@ -64,7 +64,16 @@ import { Component, ElementRef, EventEmitter, Input, Output, ViewChild, AfterVie
     .pf-sig-btn--primary { background: var(--violet-600, #7c3aed); color: #fff; }
     .pf-sig-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
     .pf-sig-btn:disabled { opacity: 0.45; cursor: default; }
-  `],
+  
+    /* Short viewports (phone landscape): overlay scrolls, canvas shrinks —
+       Save/Clear must never sit off-screen. */
+    .pf-sig-overlay { overflow-y: auto; }
+    .pf-sig-card { max-height: 100dvh; }
+    @media (max-height: 500px) {
+      .pf-sig-overlay { align-items: flex-start; }
+      .pf-sig-canvas { height: 140px; }
+    }
+`],
 })
 export class SignaturePadComponent implements AfterViewInit, OnDestroy {
   /** Optional existing signature to seed the canvas for re-editing. */

@@ -203,6 +203,12 @@ const CATEGORY_LABELS: Record<string, string> = {
                       <input type="checkbox" [checked]="a.enabled" (change)="toggleEnabled(i)" />
                       <span></span>
                     </label>
+                    <span class="pf-kpi-tile__updown" aria-hidden="false">
+                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === 0"
+                              (click)="move(i, -1)" aria-label="Move up">▲</button>
+                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === assigned().length - 1"
+                              (click)="move(i, 1)" aria-label="Move down">▼</button>
+                    </span>
                     <button type="button" class="pf-kpi-tile__x"
                             (click)="removeAt(i)" aria-label="Remove">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -701,7 +707,22 @@ const CATEGORY_LABELS: Record<string, string> = {
       /* Catalog rows comfortable to tap. */
       .pf-kpi-cat__row { min-height: 48px; align-content: center; }
     }
-  `]
+  
+    /* Touch reorder buttons — drag doesn't exist on touch. Hidden where a
+       mouse can drag, shown on coarse pointers. */
+    .pf-kpi-tile__updown { display: none; }
+    .pf-kpi-tile__mv {
+      width: 34px; height: 22px; border-radius: 6px; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-secondary); font-size: 10px; cursor: pointer;
+      min-width: 34px !important; min-height: 22px !important;
+    }
+    .pf-kpi-tile__mv:disabled { opacity: .3; }
+    @media (pointer: coarse) {
+      .pf-kpi-tile__updown { display: inline-flex; flex-direction: column; gap: 3px; }
+      .pf-kpi-tile__grip { display: none; }
+      .pf-kpi-tile__mv { min-height: 30px !important; }
+    }
+`]
 })
 export class KpiConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -877,6 +898,19 @@ export class KpiConfigComponent implements OnInit {
   onDragEnd() {
     this.draggingIndex.set(null);
     this.dragOverIndex.set(null);
+  }
+
+  /** Touch reorder: HTML5 drag events never fire on touch devices, so the
+   *  ↑/↓ buttons (coarse pointers only) are the phone/iPad path. Same array
+   *  mutation as onDrop, one step at a time. */
+  move(index: number, delta: -1 | 1) {
+    const target = index + delta;
+    const next = this._draft().slice();
+    if (target < 0 || target >= next.length) return;
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    next.forEach((a, i) => a.sortOrder = i);
+    this._draft.set(next);
   }
 
   // ── Catalog look-ups ───────────────────────────────────────

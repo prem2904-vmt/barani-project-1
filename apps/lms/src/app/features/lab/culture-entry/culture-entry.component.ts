@@ -85,7 +85,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               }
             </div>
 
-            <table class="w-full text-[12px]">
+            <div class="overflow-x-auto"><table class="w-full text-[12px]">
               <thead>
                 <tr style="color: var(--text-tertiary);">
                   <th class="text-left font-semibold pb-1">Antimicrobial</th>
@@ -128,7 +128,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                   </tr>
                 }
               </tbody>
-            </table>
+            </table></div>
           </div>
           }
         }
@@ -167,7 +167,19 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
       }
     </div>
   `,
-  styles: [`.pf-input--compact { padding: 4px 8px; font-size: 12px; }`]
+  styles: [`.pf-input--compact { padding: 4px 8px; font-size: 12px; }
+    /* ── Phone (additive; desktop untouched) ── */
+    @media (max-width: 640px) {
+      /* AST table scrolls sideways instead of crushing the antimicrobial
+         name column; the global 44px button floor otherwise blew the
+         S/I/R triplet out of the row. */
+      :host table { min-width: 520px; }
+      :host .overflow-x-auto, :host [class*='ast'] { -webkit-overflow-scrolling: touch; }
+    }
+    @media (pointer: coarse) {
+      :host table button { min-width: 0 !important; min-height: 44px; }
+    }
+`]
 })
 export class CultureEntryComponent implements OnInit {
   readonly organisms = COMMON_ORGANISMS;

@@ -206,7 +206,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
   styles: [`
     .pm-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 12px; }
     .pm-backdrop--full { padding: 0; }
-    .pm-panel { width: 100%; max-width: 960px; max-height: 92vh; display: flex; flex-direction: column; background: var(--surface-1, #14161c); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden; }
+    .pm-panel { width: 100%; max-width: 960px; max-height: 92dvh; display: flex; flex-direction: column; background: var(--surface-1, #14161c); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden; }
     .pm-panel--full { max-width: none; width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
     .pm-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
     .pm-head .min-w-0 { flex: 1; }
@@ -215,9 +215,9 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
     .pm-capture { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 20px; min-height: 320px; }
     .pm-cam { width: 100%; max-width: 520px; aspect-ratio: 4 / 3; border-radius: 12px; background: #000; object-fit: cover; border: 1px solid var(--glass-border); }
     .pm-body { flex: 1; display: flex; min-height: 360px; }
-    .pm-stage { position: relative; flex: 1; min-width: 0; background: #000; touch-action: none; overflow: hidden; }
+    .pm-stage { position: relative; flex: 1; min-width: 0; background: #000; touch-action: pan-y; overflow: hidden; }
     .pm-dim { display: none; }
-    .pm-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    .pm-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; }
     .pm-loupe { position: absolute; width: 110px; height: 110px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.5); background-repeat: no-repeat; pointer-events: none; z-index: 4; }
     .pm-loupe-x { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%,-50%); }
     .pm-loupe-x::before, .pm-loupe-x::after { content: ''; position: absolute; background: rgba(255,0,0,0.7); }
@@ -236,7 +236,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
     .pm-list { width: 220px; flex-shrink: 0; border-left: 1px solid var(--border-subtle); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 5px; }
     .pm-list-hd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 2px; line-height: 1.5; }
     .pm-search { width: 100%; padding: 6px 9px; border-radius: 8px; font-size: 12px; background: var(--glass-bg); border: 1px solid var(--border-subtle); color: var(--text-primary); margin-bottom: 4px; }
-    .pm-list-item { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-subtle); color: var(--text-secondary); background: var(--glass-bg); cursor: grab; touch-action: none; user-select: none; }
+    .pm-list-item { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-subtle); color: var(--text-secondary); background: var(--glass-bg); cursor: grab; touch-action: pan-y; user-select: none; }
     .pm-list-item--assigned { border-color: #10b981; color: var(--green-text); }
     .pm-list-item--drag { opacity: 0.4; }
     .pm-grip { color: var(--text-tertiary); font-size: 13px; }
@@ -255,7 +255,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
       .pm-head { padding-top: max(10px, env(safe-area-inset-top)); }
       .pm-body { flex-direction: column; min-height: 0; }
       .pm-stage { min-height: 0; }
-      .pm-list { width: auto; border-left: 0; border-top: 1px solid var(--border-subtle); flex-direction: row; flex-wrap: wrap; max-height: 26vh; overflow-y: auto; }
+      .pm-list { width: auto; border-left: 0; border-top: 1px solid var(--border-subtle); flex-direction: row; flex-wrap: wrap; max-height: 26dvh; overflow-y: auto; }
       .pm-list-hd, .pm-search { width: 100%; }
       .pm-list-item { flex: 0 1 auto; padding: 8px 10px; }
       .pm-controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); }

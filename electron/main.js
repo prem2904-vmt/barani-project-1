@@ -10,6 +10,10 @@ const isDev = !app.isPackaged;
 // electron falls back to package.json `name` which is the npm slug;
 // this forces the human-friendly name everywhere regardless of host.
 app.setName('Prefrontal');
+// Windows toasts are attributed by AppUserModelID and are silently DROPPED
+// when it doesn't match the installed app's identity. Must equal
+// electron-builder's build.appId in package.json. No-op on macOS/Linux.
+app.setAppUserModelId('in.prefrontal.app');
 app.setAboutPanelOptions({
   applicationName: 'Prefrontal',
   applicationVersion: app.getVersion(),

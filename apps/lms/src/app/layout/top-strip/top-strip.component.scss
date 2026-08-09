@@ -1069,7 +1069,7 @@ a.pf-ts-tenant:hover {
 
 /* Belt-and-braces: the popover itself never outgrows the viewport. */
 .pf-profile-pop {
-  max-height: calc(100vh - 84px);
+  max-height: calc(100dvh - 84px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }

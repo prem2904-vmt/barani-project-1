@@ -24,8 +24,25 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/o/" />
                 <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="med-stg.prefrontal.health" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="med-stg.prefrontal.health" android:pathPrefix="/track/" />
             </intent-filter>
         </activity>
+
+        <!-- Background FCM notifications (delivered while the app is killed)
+             are rendered by the Firebase SDK, not our JS — these defaults stop
+             them falling back to the launcher icon (a white square on API 26+)
+             and to a channel we never created. pf_messages is created on boot
+             by PushService.createChannel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="pf_messages" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -39,6 +56,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ runtime notification permission. The push plugin only
+         DISPATCHES the runtime request — without this manifest declaration the
+         request auto-denies with no dialog and FCM never gets a token. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

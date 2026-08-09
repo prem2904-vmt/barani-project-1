@@ -75,6 +75,32 @@ export class ChatNotifyService implements OnDestroy {
     } catch { /* swallow — Notification ctor can throw on Safari iOS */ }
   }
 
+  /**
+   * OS-level notification for a BUSINESS event (bell catalog types), not chat.
+   * This is the desktop/browser delivery rail: in Electron the Notification
+   * API renders through macOS Notification Center / Windows toasts natively,
+   * and in a browser tab it shows the normal web notification. Caller decides
+   * WHEN (typically only while the window is hidden/unfocused); clicking
+   * focuses the app and opens the notification bell. NOT silent — unlike chat
+   * (which has its own ringtone), the OS sound is the only audible cue here.
+   */
+  notifyBusiness(title: string, body: string): void {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    try {
+      const n = new Notification(title, {
+        body: body.length > 140 ? body.slice(0, 140) + '…' : body,
+        tag: 'pf-bell',                                          // collapse bursts into one
+        icon: '/favicon.ico'
+      });
+      n.onclick = () => {
+        try { window.focus(); } catch { /* ignore */ }
+        window.dispatchEvent(new CustomEvent('pf-open-bell'));
+        try { n.close(); } catch { /* ignore */ }
+      };
+    } catch { /* swallow — Notification ctor can throw on Safari iOS */ }
+  }
+
   /** Reset the title + clear unread counter (called on tab focus). */
   restore(): void {
     if (this.flashTimer !== null) {

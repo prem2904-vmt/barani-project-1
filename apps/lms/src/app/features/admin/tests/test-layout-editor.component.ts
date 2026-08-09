@@ -1575,7 +1575,7 @@ const OPERATORS = [
       border-radius: 14px;
       background: rgba(0, 0, 0, 0.22);
       position: sticky; top: 12px;
-      max-height: calc(100vh - 24px);
+      max-height: calc(100dvh - 24px);
       overflow: auto;
     }
     .pf-le-preview__hdr {
@@ -1653,7 +1653,13 @@ const OPERATORS = [
 
     /* Generic flex helper used by toolbar / sticky-spacer spans. */
     .grow { flex: 1; }
-  `]
+  
+    @media (max-width: 640px) {
+      .pf-le-grid3 { grid-template-columns: 1fr; }
+      /* Sticky preview pins over the editor on a short viewport — flow it. */
+      [class*='preview'][style*='sticky'], .pf-le-preview { position: static; }
+    }
+`]
 })
 export class TestLayoutEditorComponent {
   private readonly layout = inject(ReportLayoutService);

@@ -328,6 +328,34 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          (focus)="setActive(p.name)"
                                          (change)="setValue(p.name, asInput($event))"/>
                                 }
+                                @case ('phone') {
+                                  <input type="tel" inputmode="tel" class="pf-rg__input"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         placeholder="—"/>
+                                }
+                                @case ('email') {
+                                  <input type="email" inputmode="email" class="pf-rg__input"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         placeholder="—"/>
+                                }
+                                @case ('time') {
+                                  <input type="time" class="pf-rg__input pf-rg__date"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (change)="setValue(p.name, asInput($event))"/>
+                                }
+                                @case ('datetime') {
+                                  <input type="datetime-local" class="pf-rg__input pf-rg__date"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         (focus)="setActive(p.name)"
+                                         (change)="setValue(p.name, asInput($event))"/>
+                                }
                                 @default {
                                   <input type="text" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"

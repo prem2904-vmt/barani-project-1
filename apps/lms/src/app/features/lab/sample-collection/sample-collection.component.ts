@@ -1222,7 +1222,7 @@ interface OrderGroup {
       display: flex; align-items: center; justify-content: center; padding: 20px;
     }
     .pf-wl__panel {
-      width: min(440px, 100%); max-height: 80vh; overflow-y: auto;
+      width: min(440px, 100%); max-height: 80dvh; overflow-y: auto;
       background: var(--surface-raised, #16161f); border: 1px solid var(--border-primary, rgba(255,255,255,0.1));
       border-radius: 16px; padding: 20px;
     }
@@ -1242,7 +1242,7 @@ interface OrderGroup {
 
     .pf-tube__peekpop {
       position: fixed; z-index: 100;
-      width: 260px; max-height: 52vh; overflow-y: auto;
+      width: 260px; max-height: 52dvh; overflow-y: auto;
       padding: 12px 14px; border-radius: 12px;
       background: var(--bg-elevated, #0f172a);
       border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
@@ -1964,7 +1964,14 @@ interface OrderGroup {
       }
     }
 
-  `]
+  
+    /* pf-collect-immersive hides the bottom nav, so the drawer footer's
+       --tab-nav-total-height reserve became ~100px of dead space under the
+       primary CTA. Reclaim it; keep only the safe-area inset. */
+    :host-context(html.pf-collect-immersive) .pf-drawer__foot {
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+`]
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);

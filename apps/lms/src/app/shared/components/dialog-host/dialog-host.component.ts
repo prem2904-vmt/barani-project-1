@@ -257,6 +257,14 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       .pf-dh-backdrop, .pf-dh-card { animation: none; }
     }
 
+        /* Phone: 16px stops the iOS focus-zoom every prompt dialog triggered;
+       the card scrolls within the viewport so the keyboard can never push the
+       confirm button out of reach. Desktop untouched. */
+    @media (max-width: 640px) {
+      .pf-dh-field { font-size: 16px; }
+      .pf-dh-root { overflow-y: auto; }
+      .pf-dh-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+    }
     @media (max-width: 480px) {
       .pf-dh-card { padding: 20px 18px 16px; border-radius: 18px; }
       .pf-dh-icon { width: 36px; height: 36px; border-radius: 10px; }

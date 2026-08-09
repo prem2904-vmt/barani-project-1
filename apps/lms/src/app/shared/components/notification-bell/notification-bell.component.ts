@@ -295,6 +295,19 @@ export class NotificationBellComponent implements OnInit {
     if (this._open()) this.load();
   }
 
+  /** A tap on a system push with no dedicated screen lands here: the push
+   *  service broadcasts pf-open-bell so the tapped notification is visible. */
+  @HostListener('window:pf-open-bell')
+  onOpenRequest() {
+    if (!this._open()) { this._open.set(true); this.load(); }
+  }
+
+  /** Live badge: ChatService broadcasts this when a BusinessNotification
+   *  arrives over SignalR — refetch so the count/list update without a
+   *  reload on every platform. */
+  @HostListener('window:pf-notification-received')
+  onLiveNotification() { this.load(); }
+
   @HostListener('document:click', ['$event'])
   onDocClick(ev: MouseEvent) {
     if (!this._open()) return;

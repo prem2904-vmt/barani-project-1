@@ -855,7 +855,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       gap: 6px;
     }
     @media (min-width: 640px) {
-      .pf-pay-modes__grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .pf-pay-modes__grid { /* auto-fit: the grid lives in a container that halves at >=768px, so a
+           viewport-keyed 6-up crushed tiles to ~44px on iPad portrait. */
+        grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
     }
     .pf-pay-divider {
       margin: 18px -20px;

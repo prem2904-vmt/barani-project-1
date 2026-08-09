@@ -7,6 +7,8 @@ import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiService } from './api.service';
 import { RingtoneService } from './ringtone.service';
 import { ChatNotifyService } from './chat-notify.service';
+import { PlatformService } from './platform.service';
+import { ToastService } from './toast.service';
 
 /**
  * Conversation-based chat (1:1 + group). One persistent SignalR
@@ -29,6 +31,8 @@ export class ChatService implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly ringtone = inject(RingtoneService);
   private readonly notify = inject(ChatNotifyService);
+  private readonly platform = inject(PlatformService);
+  private readonly toasts = inject(ToastService);
   private connection: signalR.HubConnection | null = null;
   private connecting: Promise<void> | null = null;
   private typingClearTimers = new Map<string, number>(); // convId|userId → setTimeout id
@@ -84,6 +88,12 @@ export class ChatService implements OnDestroy {
       .build();
 
     this.connection.on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
+    // Business (bell-catalog) events ride the chat connection — see
+    // onBusinessNotification for why this lives here and how each platform
+    // surfaces it.
+    this.connection.on('BusinessNotification',
+      (p: { kind: string; title: string; body?: string | null; critical?: boolean }) =>
+        this.onBusinessNotification(p));
     this.connection.on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
       this.onMessageRead(p));
     this.connection.on('MessageEdited', (p: { id: string; conversationId: string; body: string; editedAt: string }) =>
@@ -439,6 +449,32 @@ export class ChatService implements OnDestroy {
   }
 
   // ── Server event handlers ───────────────────────────────────────────
+
+  /**
+   * A business notification (bell catalog) arrived over SignalR. The backend
+   * broadcasts these alongside the DB bell row + APNs/FCM push, because
+   * browser tabs and the Electron shell have no device-push channel — this
+   * connection IS their delivery rail.
+   *
+   *  - every platform: poke the bell so its badge/list update live
+   *  - browser/Electron, window hidden: OS notification (macOS Notification
+   *    Center / Windows toast / web notification) via ChatNotifyService
+   *  - browser/Electron, window visible: toast
+   *  - iOS/Android (Capacitor): bell poke ONLY — the real push already
+   *    delivers the banner/toast, so anything louder here would double up
+   */
+  private onBusinessNotification(
+    p: { kind: string; title: string; body?: string | null; critical?: boolean }
+  ): void {
+    window.dispatchEvent(new CustomEvent('pf-notification-received'));
+    if (this.platform.isCapacitor()) return;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (hidden) {
+      this.notify.notifyBusiness(p.title, p.body ?? '');
+    } else {
+      this.toasts.info(p.body ? `${p.title} — ${p.body}` : p.title);
+    }
+  }
 
   private onMessageReceived(m: ChatMessage) {
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
