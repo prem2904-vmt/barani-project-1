@@ -255,7 +255,7 @@ const BARCODE_H = 26;
  *  following line's ascent — 6pt alone let the timestamps print over the bars. */
 const BARCODE_GAP = 14;
 let MARGIN_TOP = 28;
-let MARGIN_BOTTOM = 150; // reserves room for the 3-column sig block + disclaimer band
+let MARGIN_BOTTOM = 150; // table floor — the band signatures are pulled DOWN into (see FOOTER_RESERVE)
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
@@ -763,10 +763,8 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     // floating directly under the last result row with a blank half-page
     // beneath it. Anchor to the bottom, but never pull the block UP into
     // content: a long report that already reaches this far keeps flowing.
-    // Exactly SIG_BLOCK_H above the footer reserve: the block then ends ON
-    // the reserve line. A single point lower trips drawInlineSignatures' own
-    // page-break guard and orphans the signatures onto a blank page.
-    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - SIG_BLOCK_H);
+    // Ends flush on the footer band — directly above the disclaimer line.
+    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - SIG_BLOCK_H);
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
@@ -1941,7 +1939,16 @@ function renderContinuousTable(
     // department defers its signatures to after the End-of-Report marker.
     if (sigs?.length) {
       if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
-      else y = drawInlineSignatures(doc, sigs, y, practice);
+      else {
+        // Sign-off sits at the FOOT of the department's last page, directly
+        // above the footer strip — not floating under the last row with a
+        // blank half-page beneath (the page-2 bug in REPORT-49289714).
+        const anchored = Math.max(y, A4.h - FOOTER_RESERVE - signatureBlockHeight(sigs));
+        y = drawInlineSignatures(doc, sigs, anchored, practice);
+        // The signatures close this department's page; the next department
+        // opens clean rather than squeezing under a sign-off.
+        if (rendered < order.length - 1) y = newPage(doc, practice);
+      }
     }
     rendered++;
   }
@@ -1954,6 +1961,11 @@ function renderContinuousTable(
  *  never be orphaned onto a page of their own. */
 /** One signature row: 12pt lead + 74pt of image/name/title/reg. */
 const SIG_BLOCK_H = 86;
+/** The page's REAL footer band: hairline at h-30, generated-on at h-18, the
+ *  disclaimer stacking up to ≈h-58. Signatures anchor to THIS — anchoring to
+ *  MARGIN_BOTTOM (the 150pt table floor) parked them ~100pt above the
+ *  disclaimer with a dead band beneath, which is not how a lab report ends. */
+const FOOTER_RESERVE = 64;
 
 function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
   const n = Math.min(sigs?.length ?? 0, 7);
@@ -1982,9 +1994,10 @@ function drawInlineSignatures(
   const list = all;
   if (list.length === 0) return startY;
   let y = startY + 12;
-  // The block spans 74pt below y; only break when it genuinely cannot fit in
-  // the reserved footer band (callers pre-reserve, so this rarely fires).
-  if (y + 74 > A4.h - MARGIN_BOTTOM) { y = newPage(doc, practice) + 6; }
+  // The block spans 74pt below y; signatures live INSIDE the table's bottom
+  // reserve by design, so only break when the block would collide with the
+  // actual footer strip (disclaimer + generated-on).
+  if (y + 74 > A4.h - FOOTER_RESERVE) { y = newPage(doc, practice) + 6; }
   const colW = (A4.w - 2 * MARGIN_X) / list.length;
   const baseY = y + 30;
   list.forEach((s, i) => {
