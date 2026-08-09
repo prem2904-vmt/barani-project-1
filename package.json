@@ -2,7 +2,7 @@
   "name": "prefrontal",
   "productName": "Prefrontal",
   "version": "0.0.0",
-  "description": "Prefrontal — clinical lab workflow.",
+  "description": "Prefrontal \u2014 clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
     "email": "support@prefrontal.in"
@@ -26,12 +26,13 @@
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
     "cap:run:ios": "npx cap run ios",
-    "cap:run:android": "npx cap run android"
+    "cap:run:android": "npx cap run android",
+    "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist"
   },
   "build": {
     "appId": "in.prefrontal.app",
     "productName": "Prefrontal",
-    "copyright": "Copyright © 2026 Prefrontal Inc",
+    "copyright": "Copyright \u00a9 2026 Prefrontal Inc",
     "directories": {
       "output": "dist/electron"
     },
