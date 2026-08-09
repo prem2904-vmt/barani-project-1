@@ -39,6 +39,14 @@ export interface ProcessWorkflowRecord {
   configJson: string;
   version: number;
   updatedAt: string;
+  /**
+   * Shipped by us, not the lab: read-only to the tenant and refreshed by every
+   * deploy so improvements reach every lab. Saving one does NOT update it — the
+   * API forks it into the tenant's own workflow — so the builder must offer
+   * "Customise" rather than "Save", or the admin is left wondering why the
+   * default they edited is unchanged and a new workflow appeared.
+   */
+  isSystemDefault?: boolean;
 }
 
 /** A built-in action: maps a `type` to its route, icon and permissions. */
