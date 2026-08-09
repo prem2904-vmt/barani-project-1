@@ -764,7 +764,10 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     // beneath it. Anchor to the bottom, but never pull the block UP into
     // content: a long report that already reaches this far keeps flowing.
     // Ends flush on the footer band — directly above the disclaimer line.
-    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - SIG_BLOCK_H);
+    // Height comes from the block itself: 1-3 signatories are one row,
+    // 4-7 wrap 3-up into more rows, and the anchor rises to fit them so the
+    // LAST row still lands on the footer band.
+    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - signatureBlockHeight(finalSigs.sigs));
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
@@ -1946,8 +1949,11 @@ function renderContinuousTable(
         const anchored = Math.max(y, A4.h - FOOTER_RESERVE - signatureBlockHeight(sigs));
         y = drawInlineSignatures(doc, sigs, anchored, practice);
         // The signatures close this department's page; the next department
-        // opens clean rather than squeezing under a sign-off.
-        if (rendered < order.length - 1) y = newPage(doc, practice);
+        // opens clean rather than squeezing under a sign-off. When the theme
+        // already breaks per department, ITS break at the loop top is the one
+        // and only feed — adding ours too produced a fully blank page
+        // (REPORT-49289714-2 page 3).
+        if (rendered < order.length - 1 && !theme.departmentPageBreak) y = newPage(doc, practice);
       }
     }
     rendered++;
