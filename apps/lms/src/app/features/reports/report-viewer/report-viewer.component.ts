@@ -19,6 +19,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -1498,7 +1499,7 @@ export class ReportViewerComponent implements OnInit {
     const platform = this.injector.get(PlatformService);
     const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
 
-    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let tests: LayoutSnapshotTest[] = [];
     let patient: { sex?: string | null; age?: number | null } | undefined;
     try {
       const snap = JSON.parse(r.data ?? '{}');
@@ -1506,15 +1507,15 @@ export class ReportViewerComponent implements OnInit {
       patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
     } catch { /* malformed snapshot — render without layouts */ }
 
-    const [template] = await Promise.all([
+    // Resolves PROFILE layouts as well as each test's own. Looping `tests` by
+    // hand here omitted the profiles, so a profile-ordered test printed NO
+    // notes on this screen while the report queue printed them correctly.
+    const [template, layouts] = await Promise.all([
       this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-      ...tests.map(async t => {
-        if (!t.testId) return;
-        try {
-          resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
-        } catch { /* fallback table */ }
-      }),
+      resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
+        (id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
     ]);
+    Object.assign(resolvedLayouts, layouts);
 
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
     const [imageCache, trendograms] = await Promise.all([
