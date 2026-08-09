@@ -185,6 +185,7 @@ function defaultResultParam(): TestParameter {
       } @else if (!sample()) {
         <p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p>
       } @else {
+        <div class="pf-sre__scroll">
         <!-- Top-of-screen banner when one or more tests on this tube
              were sent back. Lists the affected tests + the pathologist's
              reason so the tech sees the why before scrolling into the
@@ -599,6 +600,7 @@ function defaultResultParam(): TestParameter {
           </section>
         }
         </ng-template>
+        </div>
 
         <footer class="pf-sre__footer">
           @if (hasReopenable()) {
@@ -856,19 +858,41 @@ function defaultResultParam(): TestParameter {
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
-    /* Desktop web: the floating glass chrome (.pf-chrome, sticky top:8px,
-       64px tall) overlays the top of the scroll area, so top:0 pinned this
-       header BEHIND it — its translucent light-theme background then let grid
-       rows show through in the band between the chrome and the title (the
-       "row floating above the header" bug). Pin below the chrome instead, and
-       go OPAQUE while pinned so nothing ever reads through the title block —
-       same trick .pf-sre__test-hdr already uses. Phones/native keep top:0:
-       the chrome is hidden there and the safe-area maths above is tuned. */
+    /* Desktop: NON-SCROLL app screen (WORK page) — the same pattern
+       result-entry uses. The page fills shell-main exactly (shell-main is
+       flex:1; min-height:0; overflow-y:auto, so a height:100% child fits),
+       the header and Submit bar are FIXED flex children, and scrolling
+       happens only inside .pf-sre__scroll. No sticky maths against the
+       chrome, so nothing can overlap the top bar and there is no dead gap —
+       the two bugs the previous top-offset attempts traded between.
+       Phones keep the existing flow: the wrapper div is inert there and the
+       tuned sticky/safe-area behaviour stands. */
     @media (min-width: 641px) {
+      :host { display: block; height: 100%; overflow: hidden; }
+      .pf-sre {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding-bottom: 0;
+      }
       .pf-sre__hdr--sticky {
-        top: 76px;                                   /* 8px offset + 64px chrome + gap */
-        background: var(--bg-secondary, #0e1018);    /* opaque — no show-through */
-        border-radius: 14px;
+        position: static;            /* fixed by flex layout, not by pinning */
+        flex: 0 0 auto;
+        padding-top: 0;
+        background: transparent;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      .pf-sre__scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .pf-sre__footer {
+        position: static;
+        flex: 0 0 auto;
       }
     }
     .pf-sre__back {
