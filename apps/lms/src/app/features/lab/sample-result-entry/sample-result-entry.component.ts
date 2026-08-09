@@ -1499,15 +1499,31 @@ export class SampleResultEntryComponent {
    * The members are already laid out in the profile's block below, which is
    * where the tech actually reads them.
    */
+  /**
+   * The bench grouping rule: results compile under a PROFILE, never under a
+   * package. A package is a commercial wrapper — "3 profiles + 4 tests" must
+   * appear as those 3 profile blocks and 4 individual tests. Nearest profile
+   * (profileTestId) wins; legacy rows without it fall back by the bundle's
+   * TYPE, and rows where even the type is unknown keep the old
+   * group-by-bundle behaviour rather than silently splitting.
+   */
+  private benchGroup(t: OrderTest): { id: string; name: string } | null {
+    if (t.profileTestId) return { id: t.profileTestId, name: t.profileName || t.packageName || 'Profile' };
+    if (!t.packageTestId) return null;
+    if (t.packageType === 'profile') return { id: t.packageTestId, name: t.packageName || 'Profile' };
+    if (t.packageType) return null;               // known package → members stand alone
+    return { id: t.packageTestId, name: t.packageName || 'Profile' };  // unknown → legacy behaviour
+  }
+
   readonly headerChips = computed<string[]>(() => {
     const out: string[] = [];
     const seenPkg = new Set<string>();
     for (const t of this.sample()?.tests ?? []) {
-      const pkg = t.packageTestId;
-      if (pkg) {
-        if (seenPkg.has(pkg)) continue;
-        seenPkg.add(pkg);
-        out.push(t.packageName || 'Profile');
+      const grp = this.benchGroup(t);
+      if (grp) {
+        if (seenPkg.has(grp.id)) continue;
+        seenPkg.add(grp.id);
+        out.push(grp.name);
         continue;
       }
       out.push(t.test?.shortName || t.test?.name || 'Test');
@@ -1528,13 +1544,13 @@ export class SampleResultEntryComponent {
     let loose: { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } | null = null;
     for (const t of tests) {
       const rowable = !this.isCultureTest(t) && this.parametersFor(t).length > 0;
-      const pkg = t.packageTestId;
-      if (pkg) {
+      const grp = this.benchGroup(t);
+      if (grp) {
         if (!rowable) { out.push({ kind: 'card', key: t.id, tests: [t] }); continue; }
-        let g = byPkg.get(pkg);
+        let g = byPkg.get(grp.id);
         if (!g) {
-          g = { kind: 'flat', key: 'pkg-' + pkg, title: t.packageName || 'Profile', tests: [] };
-          byPkg.set(pkg, g);
+          g = { kind: 'flat', key: 'pkg-' + grp.id, title: grp.name, tests: [] };
+          byPkg.set(grp.id, g);
           out.push(g);
         }
         g.tests.push(t);
