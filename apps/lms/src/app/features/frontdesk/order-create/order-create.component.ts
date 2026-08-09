@@ -14,6 +14,7 @@ import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Patient, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
+import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -146,6 +147,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly currentBill = signal<Bill | null>(null);
 
   readonly isReadOnly = computed(() => !!this.viewOrderId());
+  /**
+   * The order is finished — its test list must not change any more. Two states
+   * reach this: opening an existing order via ?orderId= (isReadOnly), and
+   * completing payment inline in this session (paidOrderId). Only the second
+   * one was unguarded, which is why the catalogue stayed clickable behind a
+   * "Payment recorded" pane.
+   *
+   * Deliberately NOT tied to editOrderId: ?editOrderId= is the supervisor
+   * Modify-tests flow, which is *supposed* to change tests on an already
+   * billed order (the backend rebuilds the bill and can raise a refund), so
+   * that mode must stay fully editable.
+   */
+  readonly orderLocked = computed(() => this.isReadOnly() || !!this.paidOrderId());
 
   readonly isPaymentDueMode = computed(() => {
     const bill = this.currentBill();
@@ -200,8 +214,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
-  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'all'>('recent');
-  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'all' = 'recent';
+  readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'profiles' | 'all'>('recent');
+  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all' = 'recent';
   /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
   readonly favouriteIds = signal<Set<string>>(new Set());
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
@@ -264,11 +278,51 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly query = this._query.asReadonly();
   readonly cartOpen = this._cartOpen.asReadonly();
 
-  readonly individualTests = computed(() => this._tests().filter(t => t.type !== 'package'));
+  readonly individualTests = computed(() => this._tests().filter(t => t.type === 'individual'));
   readonly packages = computed(() => {
     const list = this._tests().filter(t => t.type === 'package');
     return this.filterTestList(list, this._query());
   });
+  /** Profiles — orderable coded bundles, their own filter tab (kept out of
+   *  "All tests", which is individuals only). */
+  readonly profiles = computed(() => {
+    const list = this._tests().filter(t => t.type === 'profile');
+    return this.filterByDept(this.filterTestList(list, this._query()));
+  });
+  /** Profiles grouped by department (dept header on top, like the tests view). */
+  readonly profilesByDept = computed<Array<{ department: string; tests: Test[] }>>(() => {
+    const groups = new Map<string, Test[]>();
+    for (const p of this.profiles()) {
+      const key = p.department?.name?.trim() || '(No department)';
+      const arr = groups.get(key);
+      if (arr) arr.push(p); else groups.set(key, [p]);
+    }
+    return [...groups.entries()]
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort(this.byCode) }))
+      .sort((a, b) => a.department.localeCompare(b.department));
+  });
+
+  // ── Department quick-filter (pill row below the tabs) ──────────────
+  /** '' = all departments. */
+  private readonly _deptFilter = signal<string>('');
+  readonly deptFilter = this._deptFilter.asReadonly();
+  setDeptFilter(name: string) { this._deptFilter.set(this._deptFilter() === name ? '' : name); }
+
+  /** Distinct departments across the loaded (active) tests, with their code —
+   *  drives the pill filters. */
+  readonly deptChips = computed<Array<{ name: string; code: string }>>(() => {
+    const map = new Map<string, string>();
+    for (const t of this._tests()) {
+      const name = t.department?.name?.trim();
+      if (name && !map.has(name)) map.set(name, (t.department?.code ?? '').trim());
+    }
+    return [...map.entries()].map(([name, code]) => ({ name, code })).sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  private filterByDept(list: Test[]): Test[] {
+    const d = this._deptFilter();
+    return d ? list.filter(t => (t.department?.name?.trim() || '') === d) : list;
+  }
 
   // ── Category-aware test lists ────────────────────────────────────
 
@@ -293,46 +347,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
-  readonly filteredTests = computed(() => this.filterTestList(this.individualTests(), this._query()));
+  readonly filteredTests = computed(() => {
+    const q = this._query().trim();
+    // A search spans the WHOLE catalogue (individual + profile + package) and
+    // overrides the department pill — searching a package while on Tests still
+    // surfaces it. With no query, show dept-filtered individual tests only.
+    return q
+      ? this.filterTestList(this._tests(), q)
+      : this.filterByDept(this.individualTests());
+  });
+
+  /** Sort key: test code, natural/numeric-aware (BIO0002 before BIO0010). */
+  private byCode = (a: Test, b: Test) =>
+    ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
   private filterTestList(list: Test[], q: string): Test[] {
-    const query = q.trim().toLowerCase();
-    if (!query) return list;
-    const variants = this.spellingVariants(query);
-    return list.filter(t => {
-      const hay = [
-        t.name,
-        // Match by the test's unique code / human SKU too (#135), so typing a
-        // code finds the test even when the name doesn't contain the query.
-        t.code ?? '',
-        t.testCode ?? '',
-        // Short name too — the Biochemistry catalogue is searched by its
-        // abbreviations (FBS, LFT, CARD…) as often as by code or full name.
-        t.shortName ?? '',
-        t.hsnSacCode ?? '',
-        t.department?.name ?? ''
-      ].join(' ').toLowerCase();
-      return variants.some(v => hay.includes(v));
-    });
-  }
-
-  /** Generate US/UK spelling variants of a search string so the catalogue
-   *  matches regardless of which spelling the lab catalogue or the user
-   *  typed. Cheap substring substitution; not a full medical thesaurus. */
-  private spellingVariants(q: string): string[] {
-    const swaps: Array<[string, string]> = [
-      ['hema',   'haema'],   // hematology ↔ haematology
-      ['pedia',  'paedia'],  // pediatric ↔ paediatric
-      ['anesth', 'anaesth'], // anesthesia ↔ anaesthesia
-      ['fetal',  'foetal'],  // fetal ↔ foetal
-      ['leuk',   'leuc'],    // leukocyte ↔ leucocyte
-    ];
-    const out = new Set<string>([q]);
-    for (const [us, uk] of swaps) {
-      if (q.includes(us)) out.add(q.replace(us, uk));
-      if (q.includes(uk)) out.add(q.replace(uk, us));
-    }
-    return Array.from(out);
+    return sharedFilterTestList(list, q);
   }
 
   /** Tests grouped by department, sorted by dept name. "(No department)"
@@ -348,7 +378,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Array.from(groups.entries())
       .map(([department, tests]) => ({
         department,
-        tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name))
+        tests: tests.slice().sort(this.byCode)
       }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
@@ -639,7 +669,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngOnInit() {
     this.labCfg.ensureLoaded();
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    // Only active tests are orderable — a disabled department's tests (cascaded
+    // to inactive) must not appear in the picker.
+    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
     });
@@ -941,7 +973,20 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
+  /** Blocks every cart mutation once the order is complete. The template also
+   *  swaps the catalogue for a read-only summary, so this is the belt-and-braces
+   *  half: keyboard, stale DOM and programmatic paths can't slip through. */
+  private rejectIfLocked(): boolean {
+    if (!this.orderLocked()) return false;
+    this.toasts.warning(
+      this.paidOrderId()
+        ? 'This order is already complete — start a new order to add tests.'
+        : 'This order is closed for editing — use Modify to change its tests.');
+    return true;
+  }
+
   toggleTest(t: Test) {
+    if (this.rejectIfLocked()) return;
     if (this.isSelected(t.id) && this.isCollected(t.id)) {
       this.toasts.warning(`Cannot remove ${t.name} — sample has already been collected`);
       return;
@@ -953,6 +998,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
   removeTest(id: string) {
+    if (this.rejectIfLocked()) return;
     if (this.isCollected(id)) {
       const t = this.findTest(id);
       this.toasts.warning(`Cannot remove ${t?.name ?? 'test'} — sample has already been collected`);
@@ -961,6 +1007,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._selected.update(cur => cur.filter(x => x !== id));
   }
   clearCart() {
+    if (this.rejectIfLocked()) return;
     const collected = this.collectedTestIds();
     if (collected.size > 0) {
       const kept = this._selected().filter(id => collected.has(id));
@@ -980,6 +1027,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    * Quietly mutates selection without flooding the toast stack — the cart
    * sidebar is the source of truth and visually reflects the change. */
   togglePackage(pkg: Test) {
+    if (this.rejectIfLocked()) return;
     if (this.isSelected(pkg.id) && this.isCollected(pkg.id)) {
       this.toasts.warning(`Cannot remove ${pkg.name} — sample has already been collected`);
       return;
@@ -1295,6 +1343,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }
+  /** Force the receipt-roll layout for this print even when the tenant's saved
+   *  default is A4 (a counter can have both printers). Width comes from the
+   *  saved setting when that is already a roll; otherwise 3 in / 80 mm, the
+   *  common desk receipt printer. */
+  printPaidThermal() { void this.emitPaidInvoice('print', 'thermal_auto'); }
 
   /** Post-payment "Share on WhatsApp". On the native shell we hand the real
    *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
@@ -1318,12 +1371,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
-  private async emitPaidInvoice(action: 'print' | 'blob' | 'share') {
+  private async emitPaidInvoice(
+    action: 'print' | 'blob' | 'share',
+    /** 'thermal_auto' = "a roll, width per the tenant's setting" — resolved
+     *  below once the template has been fetched. */
+    paperOverride?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | 'thermal_auto') {
     const bill = this.paidBill();
     const oid = this.paidOrderId();
     if (!bill || !oid) return;
     let tpl: any = null;
     try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
+    // Resolve the roll width now that the saved setting is in hand: reuse it
+    // when it is already a roll, else 3 in / 80 mm.
+    const savedPaper = tpl?.paperSize as 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | undefined;
+    const paper = paperOverride === 'thermal_auto'
+      ? (savedPaper && savedPaper !== 'a4' ? savedPaper : 'thermal_3in')
+      : paperOverride;
     let qrDataUrl: string | undefined;
     let orderQrDataUrl: string | undefined;
     try {
@@ -1347,8 +1410,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       effectivePayable: bill.totalPayable,
       tatLabel: '',
       docTitle, qrDataUrl, orderQrDataUrl, logoDataUrl,
-      cashierName: this.auth.user()?.displayName || undefined,
+      // The BILL's cashier (server-resolved: who billed/collected), so a later
+        // download by another user never swaps the attribution.
+        cashierName: bill.cashierName || this.auth.user()?.displayName || undefined,
+      cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
       ...invoiceTemplateFieldsFrom(tpl),
+      // A per-print choice beats the tenant default, so a counter with both an
+      // A4 printer and a receipt roll can pick per patient.
+      ...(paper ? { paperSize: paper } : {}),
       practice: {
         name: (tpl?.labName || this.auth.user()?.tenantName) || undefined,
         address: tpl?.address || undefined,
@@ -1542,7 +1611,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'all'): void {
+  setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all'): void {
     this.categoryTab.set(tab);
     this.preSearchTab = tab;
   }

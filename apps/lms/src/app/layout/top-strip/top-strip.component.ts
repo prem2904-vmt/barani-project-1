@@ -245,6 +245,17 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
   closeProfile() { this.profileOpen.set(false); this.statusListOpen.set(false); }
 
+  /** Show the per-station Print settings entry only to people who actually
+   *  print things — front desk (invoices), collection/lab (labels), reports. */
+  canPrint(): boolean {
+    return this.auth.hasAnyPermission([
+      'create_order', 'register_patient', 'collect_sample',
+      'enter_result', 'deliver_report', 'view_report', 'manage_lab_settings',
+    ]);
+  }
+  goPrinting() { this.closeProfile(); this.router.navigate(['/printing']); }
+  goSignature() { this.closeProfile(); this.router.navigate(['/signature']); }
+
   // ── Presence status picker (Teams-style presets) ───────────────────
   protected readonly statusOptions = PRESENCE_OPTIONS;
   protected readonly statusListOpen = signal(false);

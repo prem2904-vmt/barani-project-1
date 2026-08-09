@@ -62,7 +62,7 @@ const MODES: ModeOption[] = [
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-3xl">
+    <section class="px-4 md:px-8 pt-6 pb-10">
       <pf-screen-header
         eyebrow="Admin"
         title="Appointments & queue"

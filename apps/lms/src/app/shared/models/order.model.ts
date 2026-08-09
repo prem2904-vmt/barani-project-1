@@ -4,6 +4,11 @@ import { Test } from './test.model';
 
 export interface Order {
   id: string;
+  /** Human-readable, module-prefixed order number, e.g. `LAB-2607-000042`.
+   *  Generated at creation; null on legacy orders. */
+  orderNumber?: string | null;
+  /** Module that owns the order (lab/opd/ipd/…) — drives the OrderNumber prefix. */
+  module?: string | null;
   patientId: string;
   branchId: string;
   refDoctorId?: string;
@@ -68,6 +73,10 @@ export interface OrderTest {
   testId: string;
   name: string;
   packageTestId?: string;
+  /** Resolved profile/package name (annotated by the samples endpoint). */
+  packageName?: string;
+  /** Display sequence within the tube (profile-authored order, never alphabetical). */
+  position?: number;
   status: string;
   assignedTo?: string;
   currentResult?: string;
@@ -91,4 +100,24 @@ export interface CreateOrderInput {
   collectionType: string;
   testIds: string[];
   customFieldsJson?: string;
+}
+
+/** Logical test count for display: a PROFILE counts as ONE test (its members
+ *  don't inflate the number), individually-ordered tests count as themselves. */
+export function logicalTestCount(tests: Array<{ packageTestId?: string | null }> | null | undefined): number {
+  if (!tests?.length) return 0;
+  const pkgs = new Set<string>();
+  let singles = 0;
+  for (const t of tests) {
+    if (t.packageTestId) pkgs.add(t.packageTestId);
+    else singles++;
+  }
+  return singles + pkgs.size;
+}
+
+/** Sort tests for display: authored position first (profile member sequence),
+ *  name as the legacy fallback. */
+export function sortTestsForDisplay<T extends { position?: number; name?: string }>(tests: T[]): T[] {
+  return tests.slice().sort((a, b) =>
+    ((a.position ?? 0) - (b.position ?? 0)) || (a.name ?? '').localeCompare(b.name ?? ''));
 }

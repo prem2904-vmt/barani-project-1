@@ -8,6 +8,7 @@ import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
+import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 
 interface TimelineDoc {
   id: string; fileName: string; contentType: string; url: string; uploadedAt: string; isImage: boolean;
@@ -910,17 +911,19 @@ export class PatientTimelineComponent implements OnDestroy {
       const platform = this.injector.get(PlatformService);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resolvedLayouts: Record<string, any> = {};
-      let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+      let tests: LayoutSnapshotTest[] = [];
       let patient: { sex?: string | null; age?: number | null } | undefined;
       try { const snap = JSON.parse(rep.data ?? '{}'); tests = snap?.tests ?? []; patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null }; } catch { /* */ }
-      const [template] = await Promise.all([
+      // Resolves PROFILE layouts too. Looping `tests` by hand omitted them, so
+      // a profile-ordered test printed NO notes when the report was opened from
+      // the timeline, while the report queue printed them correctly.
+      const [template, layouts] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         firstValueFrom(this.api.get<any>('/api/config/report-template')).catch(() => null),
-        ...tests.map(async t => {
-          if (!t.testId) return;
-          try { resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient); } catch { /* */ }
-        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        resolveReportLayouts<any>((id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
       ]);
+      Object.assign(resolvedLayouts, layouts);
       const baseInput = { report: rep, resolvedLayouts, template: template ?? null };
       const [imageCache, trendograms] = await Promise.all([
         preloadReportImages(baseInput, platform.getApiUrl()),

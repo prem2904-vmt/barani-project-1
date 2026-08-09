@@ -14,8 +14,8 @@ export interface Test {
   /** Profile group tag (e.g. 'LFT', 'Lipid Profile') from the test catalogue. */
   profile?: string | null;
   description?: string;
-  type: 'individual' | 'package';
-  flow: 'direct' | 'approval';
+  type: "individual" | "profile" | "package";
+  flow: "direct" | "approval";
   hsnSacCode?: string;
   taxSlab: number;
   price: number;
@@ -56,14 +56,25 @@ export interface Test {
 // Canonical reference-range shape (segment label + min/max + structured
 // sex/age selectors). Defined once in the form-field model; re-exported here
 // so result/report code can import it from the test model too.
-export type { ReferenceRange } from '../forms/form-field.model';
-import type { ReferenceRange } from '../forms/form-field.model';
+export type { ReferenceRange } from "../forms/form-field.model";
+import type { ReferenceRange } from "../forms/form-field.model";
 
 export interface TestParameter {
   id: string;
   name: string;
   title: string;
-  type: 'numeric' | 'text' | 'textarea' | 'select' | 'multiselect' | 'radio' | 'button_select' | 'yesno' | 'toggle' | 'date' | 'numeric_with_range';
+  type:
+    | "numeric"
+    | "text"
+    | "textarea"
+    | "select"
+    | "multiselect"
+    | "radio"
+    | "button_select"
+    | "yesno"
+    | "toggle"
+    | "date"
+    | "numeric_with_range";
   unit?: string;
   options?: string[];
   referenceRanges?: ReferenceRange[];
@@ -88,7 +99,7 @@ export interface TestParametersBlob {
   // per-field metadata (id, showWhen, conditional links) that the legacy
   // TestParameter shape can't express. Renderers should prefer this when
   // present and fall back to `parameters` otherwise.
-  fields?: import('../forms/form-field.model').FormField[];
+  fields?: import("../forms/form-field.model").FormField[];
 }
 
 export interface TestCondition {

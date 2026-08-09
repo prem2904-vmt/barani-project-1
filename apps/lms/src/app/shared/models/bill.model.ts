@@ -6,6 +6,11 @@ export interface Bill {
   type: string;
   /** Server-allocated invoice number (prefix + running counter). */
   invoiceNumber?: string;
+  /** Resolved by the server: the user who ACTUALLY billed / collected the last
+   *  payment. The invoice prints THIS name + signature — never those of
+   *  whoever happens to download the PDF later. */
+  cashierName?: string | null;
+  cashierSignatureUrl?: string | null;
   supplierGstin?: string;
   placeOfSupply?: string;
   isInterstate: boolean;

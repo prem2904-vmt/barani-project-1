@@ -116,6 +116,10 @@ export interface ReferenceRange {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
+  /** Overrides the name printed under this range on the report. Left blank,
+   *  the name is composed from `sex` + the age bounds ("Adult Male"), which
+   *  keeps the whole catalogue phrased consistently. */
+  label?: string | null;
 }
 
 // ── Per-type config blocks (stubs where complex renders aren't needed yet) ─

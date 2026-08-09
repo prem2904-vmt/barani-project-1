@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from "@angular/common";
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -584,6 +585,27 @@ export class ReportQueueComponent implements OnInit {
       }),
     ]);
 
+    // Tests ordered through a PROFILE print the PROFILE's notes, not their own,
+    // so the profile's layout must be resolved as well. Profiles aren't
+    // snapshot rows — only their members are, carrying packageTestId.
+    const pkgIds = [
+      ...new Set(
+        (tests as Array<{ packageTestId?: string | null }>)
+          .map((t) => t.packageTestId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    await Promise.all(
+      pkgIds.map(async (id) => {
+        if (resolvedLayouts[id]) return;
+        try {
+          resolvedLayouts[id] = await svc.preview(id, {}, [], patient);
+        } catch {
+          /* profile without notes — nothing extra prints */
+        }
+      }),
+    );
+
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
     const [imageCache, trendograms] = await Promise.all([
       preloadReportImages(baseInput, platform.getApiUrl()),
@@ -643,21 +665,36 @@ export class ReportQueueComponent implements OnInit {
         "noopener",
       );
     }
-    if (via === "print" && this.isNativePlatform()) {
-      // There's no reliable print() inside the Capacitor WKWebView, so render
-      // the PDF and hand it to the native share sheet — the user can pick Print
-      // (or Save to Files) from there. Best-effort; the deliver record below
-      // still fires regardless.
-      (async () => {
-        try {
-          const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-          const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-          await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
-        } catch (err) {
-          console.error("[reports] native print share failed", err);
-          this.toasts.error("Could not open report");
-        }
-      })();
+    if (via === "print") {
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: render PDF and hand it to native share sheet
+        (async () => {
+          try {
+            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+            await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
+          } catch (err) {
+            console.error("[reports] native print share failed", err);
+            this.toasts.error("Could not open report");
+          }
+        })();
+      } else {
+        // Web: render PDF and open browser print window
+        (async () => {
+          try {
+            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+            const doc = buildReportPdf({ ...baseInput, imageCache, trendograms });
+            doc.autoPrint();
+            const blob = doc.output('blob');
+            // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+            printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
+          } catch (err) {
+            console.error("[reports] print failed", err);
+            this.toasts.error("Could not open print window");
+          }
+        })();
+      }
     }
     this.api
       .post(`/api/reports/${r.id}/deliver`, {

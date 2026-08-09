@@ -43,30 +43,30 @@ export interface ColumnsEditorState {
   template: `
     <pf-tile tone="default" padding="lg" class="block">
 
-      <!-- Department picker + status pill -->
-      <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
-        <div class="flex items-center gap-3 pf-dept-pick">
-          <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                 style="color: var(--text-muted);">Department</label>
-          <pf-select
-            style="width: 220px"
-            [options]="deptOptions()"
-            [value]="selectedDeptId()"
-            [placeholder]="departments().length === 0 ? 'Loading…' : 'Select department'"
-            (valueChange)="selectDepartment($event)">
-          </pf-select>
-        </div>
-        @if (configured()) {
-          <span class="pf-status-pill pf-status-pill--ok">Configured</span>
-        } @else {
-          <span class="pf-status-pill pf-status-pill--default">Defaults — not yet saved</span>
+      <!-- ── Toolbar: department · status · actions ─────────────── -->
+      <div class="pf-ce-bar">
+        <pf-select
+          style="width: 230px"
+          [options]="deptOptions()"
+          [value]="selectedDeptId()"
+          [placeholder]="departments().length === 0 ? 'Loading…' : 'Department'"
+          (valueChange)="selectDepartment($event)">
+        </pf-select>
+        @if (selectedDeptId()) {
+          @if (configured()) { <span class="pf-status-pill pf-status-pill--ok">Configured</span> }
+          @else { <span class="pf-status-pill pf-status-pill--default">Defaults — not saved</span> }
         }
+        <span class="grow"></span>
+        <pf-touch-btn size="sm" variant="secondary" (pressed)="resetToDefaults()">Reset</pf-touch-btn>
+        <pf-touch-btn size="sm" variant="secondary"
+                      [disabled]="!totalOk() || applyingAll()" (pressed)="applyToAll()">
+          {{ applyingAll() ? 'Applying…' : 'Apply to all' }}
+        </pf-touch-btn>
+        <pf-touch-btn size="sm" variant="primary"
+                      [disabled]="!totalOk() || saving()" (pressed)="save()">
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </pf-touch-btn>
       </div>
-      <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
-        Drag <span style="opacity:.7">⠿</span> to reorder · tap <span style="color:#c4b5fd">🔗</span> to
-        merge a column with the next (e.g. Result + Unit → "11.4&nbsp;g/dL"). This layout applies to every
-        test in <strong>{{ selectedDeptName() || 'this department' }}</strong>.
-      </p>
 
       @if (loading()) {
         <div class="flex justify-center py-8">
@@ -74,178 +74,260 @@ export interface ColumnsEditorState {
         </div>
       } @else if (selectedDeptId()) {
 
-        <div class="pf-cols-header">
-          <span style="width: 22px"></span>
-          <span class="grow">Column</span>
-          <span style="width: 150px">Type</span>
-          <span style="width: 70px; text-align: right;">Width %</span>
-          <span style="width: 30px; text-align:center">Link</span>
-          <span style="width: 26px"></span>
-          <span style="width: 26px"></span>
+        <p class="pf-ce-hint">
+          This strip IS the printed table for <strong>{{ selectedDeptName() }}</strong> — left to right,
+          widths to scale. Drag a card to reorder · tap a card to edit it · tap the
+          <span class="pf-ce-chain-demo">🔗</span> between two cards to merge them into one cell
+          (Result + Unit → "11.4 g/dL").
+        </p>
+
+        <!-- ── THE STRIP: a live miniature of the report table ───── -->
+        <div class="pf-ce-strip" cdkDropList cdkDropListOrientation="horizontal"
+             (cdkDropListDropped)="drop($event)">
+          @for (c of columns(); track c.id; let i = $index; let last = $last) {
+            <div class="pf-ce-col" cdkDrag
+                 [style.flexGrow]="c.width || 1"
+                 [class.pf-ce-col--on]="selectedIdx() === i"
+                 [class.pf-ce-col--linkL]="i > 0 && columns()[i-1].linkedNext"
+                 [class.pf-ce-col--linkR]="c.linkedNext && !last"
+                 (click)="selectCol(i)">
+              <span class="pf-ce-col__label">{{ c.label || '—' }}</span>
+              <span class="pf-ce-col__meta">{{ typeLabel(c.type) }} · {{ c.width }}%</span>
+              @if (c.locked) { <span class="pf-ce-col__lock" title="Locked value">🔒</span> }
+            </div>
+            @if (!last) {
+              <button type="button" class="pf-ce-chain press"
+                      [class.pf-ce-chain--on]="c.linkedNext"
+                      (click)="toggleLinkAt(i); $event.stopPropagation()"
+                      [title]="c.linkedNext ? 'Unmerge these columns' : 'Merge into one cell'">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+              </button>
+            }
+          }
         </div>
 
-        <ul class="pf-cols-list" cdkDropList (cdkDropListDropped)="drop($event)">
-          @for (c of columns(); track c.id; let i = $index; let last = $last; let first = $first) {
-            <li class="pf-col-row" cdkDrag
-                [class.pf-col-row--linked]="c.linkedNext || (!first && columns()[i - 1]?.linkedNext)">
-              <button type="button" class="pf-drag-handle" cdkDragHandle aria-label="Drag to reorder" title="Drag to reorder">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
-                  <circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>
-                  <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
-                </svg>
-              </button>
-
-              <div class="grow grid gap-1">
-                <input type="text" class="pf-input pf-input--compact"
-                       [value]="c.label"
-                       (input)="onLabelInput(i, $any($event.target).value)"
-                       placeholder="Label (Investigation, Result, …)" />
-                <input type="text" class="pf-input pf-input--mono"
-                       [value]="c.name"
-                       (input)="patchCol(i, { name: slugifyName($any($event.target).value) })"
-                       placeholder="machine_name" />
-              </div>
-
-              <pf-select style="width: 150px" size="sm"
-                [options]="typeOptions" [value]="c.type"
-                (valueChange)="patchCol(i, { type: $any($event) })">
-              </pf-select>
-
-              <input type="number" class="pf-input pf-input--compact pf-input--num" style="width: 70px"
-                     [value]="c.width" min="1" max="99"
-                     (input)="patchCol(i, { width: clampWidth($any($event.target).value) })" />
-
-              <button type="button" class="pf-icon-btn" [class.pf-icon-btn--on]="c.linkedNext"
-                      [disabled]="last"
-                      (click)="patchCol(i, { linkedNext: !c.linkedNext })"
-                      [attr.aria-label]="c.linkedNext ? 'Unlink from next column' : 'Merge with next column'"
-                      [title]="last ? 'Nothing after to link' : (c.linkedNext ? 'Linked — merged with the next column' : 'Merge this column with the next')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>
-                </svg>
-              </button>
-
-              <button type="button" class="pf-icon-btn" [class.pf-icon-btn--on]="c.locked"
-                      (click)="patchCol(i, { locked: !c.locked })"
-                      [attr.aria-label]="c.locked ? 'Unlock column' : 'Lock column'"
-                      [title]="c.locked ? 'Locked — uses fixed value' : 'Lock to a fixed value for all rows'">
-                @if (c.locked) {
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
-                  </svg>
-                } @else {
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/>
-                  </svg>
-                }
-              </button>
-
-              <button type="button" class="pf-icon-btn pf-icon-btn--danger"
-                      (click)="removeCol(i)" aria-label="Delete column" [disabled]="columns().length <= 1">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                </svg>
-              </button>
-
-              @if (c.linkedNext && !last) {
-                <div class="pf-col-row__merge">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#c4b5fd">
-                    <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>
-                  </svg>
-                  Merged into one cell with <strong>{{ columns()[i + 1]?.label || 'next column' }}</strong>
-                </div>
-              }
-
-              @if (c.locked) {
-                <div class="pf-col-row__lockval">
-                  <span class="text-[10.5px] font-mono uppercase tracking-[0.16em]"
-                        style="color: var(--text-muted);">Locked value</span>
-                  <input type="text" class="pf-input pf-input--compact grow"
-                         [value]="c.lockedValue ?? ''"
-                         (input)="patchCol(i, { lockedValue: $any($event.target).value })"
-                         placeholder="e.g. Blood - EDTA" />
-                </div>
-              }
-            </li>
+        <!-- ── Width bar: shares of the printed page width ───────── -->
+        <div class="pf-ce-widthbar" aria-hidden="true">
+          @for (c of columns(); track c.id; let i = $index) {
+            <div class="pf-ce-widthseg" [style.flexGrow]="c.width || 1"
+                 [class.pf-ce-widthseg--on]="selectedIdx() === i" (click)="selectCol(i)"></div>
           }
-        </ul>
-
-        <div class="flex items-center justify-between gap-3 mt-4 flex-wrap">
+        </div>
+        <div class="pf-ce-widthrow">
+          <span class="pf-ce-total" [class.pf-ce-total--bad]="!totalOk()">
+            Total {{ totalWidth() }}%@if (!totalOk()) { <span> · must be 100</span> }
+          </span>
+          <button type="button" class="pf-link-btn" (click)="distributeEvenly()">Distribute to 100%</button>
           <button type="button" class="pf-link-btn" (click)="addColumn()">+ Add column</button>
-          <div class="flex items-center gap-3">
-            <span class="text-[12px]" [style.color]="totalOk() ? '#10b981' : '#f87171'">
-              Total: <strong>{{ totalWidth() }}%</strong>@if (!totalOk()) { · must be 100 }
-            </span>
-            <pf-touch-btn size="sm" variant="secondary" (pressed)="resetToDefaults()">Reset</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="secondary"
-                          [disabled]="!totalOk() || applyingAll()" (pressed)="applyToAll()">
-              @if (applyingAll()) { Applying… } @else { Apply to all departments }
-            </pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" [disabled]="!totalOk() || saving()" (pressed)="save()">
-              @if (saving()) { Saving… } @else { Save columns }
+        </div>
+
+        <!-- ── Inspector: the ONE selected column's details ──────── -->
+        @if (selectedCol(); as sc) {
+          <div class="pf-ce-inspector">
+            <div class="pf-ce-insp-grid">
+              <div>
+                <label class="pf-label">Column heading</label>
+                <input type="text" class="pf-input pf-input--compact"
+                       [value]="sc.label ?? ''"
+                       (input)="onLabelInput(selectedIdx()!, $any($event.target).value)" />
+              </div>
+              <div>
+                <label class="pf-label">Shows</label>
+                <pf-select size="sm" [options]="typeOptions" [value]="sc.type"
+                           (valueChange)="patchCol(selectedIdx()!, { type: $any($event) })"></pf-select>
+              </div>
+              <div>
+                <label class="pf-label">Width %</label>
+                <div class="pf-ce-step">
+                  <button type="button" class="pf-ce-step__btn press" (click)="stepWidth(selectedIdx()!, -1)">−</button>
+                  <input type="number" class="pf-input pf-input--compact pf-ce-step__num" min="1" max="99"
+                         [value]="sc.width"
+                         (input)="patchCol(selectedIdx()!, { width: clampWidth($any($event.target).value) })" />
+                  <button type="button" class="pf-ce-step__btn press" (click)="stepWidth(selectedIdx()!, 1)">+</button>
+                </div>
+              </div>
+              <div>
+                <label class="pf-label">Fixed text (lock)</label>
+                <div class="flex items-center gap-2">
+                  <button type="button" class="pf-icon-btn press" [class.pf-icon-btn--on]="sc.locked"
+                          (click)="patchCol(selectedIdx()!, { locked: !sc.locked })"
+                          [title]="sc.locked ? 'Unlock — value resolves automatically' : 'Lock to a fixed text'">
+                    @if (sc.locked) {
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    } @else {
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                    }
+                  </button>
+                  @if (sc.locked) {
+                    <input type="text" class="pf-input pf-input--compact grow"
+                           [value]="sc.lockedValue ?? ''"
+                           (input)="patchCol(selectedIdx()!, { lockedValue: $any($event.target).value })"
+                           placeholder="e.g. Blood - EDTA" />
+                  } @else {
+                    <span class="pf-ce-dim">Auto from results</span>
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="pf-ce-insp-foot">
+              <span class="pf-ce-dim pf-ce-mono">field: {{ sc.name }}</span>
+              <button type="button" class="pf-link-btn pf-link-btn--danger"
+                      [disabled]="columns().length <= 1"
+                      (click)="removeCol(selectedIdx()!)">Delete column</button>
+            </div>
+          </div>
+        } @else {
+          <p class="pf-ce-dim mt-3">Tap a column card to edit it.</p>
+        }
+
+        <!-- ── SIGNATORIES: who signs this department's report block ── -->
+        <div class="pf-ce-inspector" style="margin-top: 16px;">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+            <h4 style="margin:0; font-size:14px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
+            <pf-touch-btn size="sm" variant="primary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
+              {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
             </pf-touch-btn>
           </div>
+          <p class="pf-ce-dim" style="margin: 0 0 10px;">
+            Printed at the end of this department's report section, in this order (drag to reorder, max 7).
+            <b>Dynamic</b> = whoever actually did the activity signs; <b>Fixed</b> = always this person.
+            The designation you type prints under the name. No rows → the technician + validator sign automatically.
+          </p>
+          <ul class="pf-sig-list" cdkDropList (cdkDropListDropped)="dropSig($event)">
+            @for (s of signatories(); track s._key; let i = $index) {
+              <li class="pf-sig-row" cdkDrag>
+                <span class="pf-sig-grip" cdkDragHandle>⠿</span>
+                <span class="pf-sig-pos">{{ i + 1 }}</span>
+                <select class="pf-input pf-input--compact pf-sig-mode"
+                        [value]="s.mode" (change)="patchSig(i, { mode: $any($event.target).value })">
+                  <option value="role">Dynamic — by activity</option>
+                  <option value="user">Fixed — a person</option>
+                </select>
+                @if (s.mode === 'role') {
+                  <select class="pf-input pf-input--compact pf-sig-who"
+                          [value]="s.role" (change)="patchSig(i, { role: $any($event.target).value })">
+                    <option value="tested_by">Whoever tested (entered results)</option>
+                    <option value="validated_by">Whoever validated</option>
+                  </select>
+                } @else {
+                  <select class="pf-input pf-input--compact pf-sig-who"
+                          [value]="s.userId ?? ''" (change)="patchSig(i, { userId: $any($event.target).value || null })">
+                    <option value="">— pick a person —</option>
+                    @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }}</option> }
+                  </select>
+                }
+                <input type="text" class="pf-input pf-input--compact pf-sig-desig"
+                       [value]="s.designation" (input)="patchSig(i, { designation: $any($event.target).value })"
+                       placeholder="Designation (e.g. Consultant Pathologist)" />
+                <button type="button" class="pf-link-btn pf-link-btn--danger" (click)="removeSig(i)">✕</button>
+              </li>
+            } @empty {
+              <li class="pf-ce-dim" style="padding: 6px 0;">No slots — the department signs automatically (Tested by + Validated by).</li>
+            }
+          </ul>
+          @if (signatories().length < 7) {
+            <button type="button" class="pf-link-btn" (click)="addSig()">+ Add signatory</button>
+          }
         </div>
+
       } @else {
         <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">Select a department to start.</p>
       }
     </pf-tile>
   `,
   styles: [`
-    .pf-input--compact { padding: 6px 10px; font-size: 12.5px; }
-    .pf-input--mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
-    .pf-input--num { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .grow { flex: 1; }
+    .pf-ce-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pf-ce-hint { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); }
+    .pf-ce-chain-demo { font-size: 11px; }
 
-    .pf-status-pill { display: inline-flex; align-items: center; padding: 4px 10px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 9999px; border: 1px solid var(--glass-border); }
-    .pf-status-pill--ok { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
-    .pf-status-pill--default { background: rgba(245, 158, 11, 0.10); border-color: rgba(245, 158, 11, 0.32); color: #fbbf24; }
+    /* ── The strip ── */
+    .pf-ce-strip { display: flex; align-items: stretch; gap: 0; min-height: 72px; }
+    .pf-ce-col {
+      position: relative; flex-basis: 0; min-width: 56px;
+      display: flex; flex-direction: column; justify-content: center; gap: 2px;
+      padding: 10px 10px; cursor: pointer; user-select: none;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25));
+      border-radius: 10px; margin: 0 3px;
+      background: rgba(255,255,255,0.03);
+    }
+    .pf-ce-col:hover { border-color: rgba(168,85,247,0.45); }
+    .pf-ce-col--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    /* Linked pair reads as ONE joined cell */
+    .pf-ce-col--linkR { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; border-right-style: dashed; }
+    .pf-ce-col--linkL { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; border-left-style: dashed; }
+    .pf-ce-col__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary, #e2e8f0);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-ce-col__meta { font-size: 10.5px; color: var(--text-tertiary, #94a3b8);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-ce-col__lock { position: absolute; top: 4px; right: 6px; font-size: 10px; }
+    .pf-ce-chain {
+      align-self: center; flex: 0 0 auto; z-index: 1;
+      width: 24px; height: 24px; margin: 0 -1px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.35));
+      background: var(--bg-card-solid, #14161e); color: var(--text-tertiary, #94a3b8); cursor: pointer;
+    }
+    .pf-ce-chain:hover { color: var(--text-primary, #e2e8f0); border-color: rgba(168,85,247,0.5); }
+    .pf-ce-chain--on { background: var(--violet-600, #7c3aed); border-color: transparent; color: #fff; }
 
-    .pf-cols-header { display: flex; align-items: center; gap: 10px; padding: 0 8px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px dashed var(--glass-border); margin-bottom: 8px; }
-    .pf-cols-header > .grow { flex: 1; }
+    /* ── Width bar ── */
+    .pf-ce-widthbar { display: flex; gap: 2px; height: 8px; margin: 10px 3px 6px; }
+    .pf-ce-widthseg { flex-basis: 0; border-radius: 4px; background: rgba(148,163,184,0.35); cursor: pointer; }
+    .pf-ce-widthseg--on { background: var(--violet-500, #8b5cf6); }
+    .pf-ce-widthrow { display: flex; align-items: center; gap: 14px; margin: 0 3px 4px; }
+    .pf-ce-total { font-size: 12px; font-weight: 600; color: #34d399; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-ce-total--bad { color: #f87171; }
 
-    .pf-cols-list { display: flex; flex-direction: column; gap: 8px; list-style: none; padding: 0; margin: 0; }
-    .pf-col-row { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; padding: 10px 8px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 12px; }
-    .pf-col-row--linked { border-color: rgba(168, 85, 247, 0.55); background: rgba(168, 85, 247, 0.06); }
-    .pf-col-row > .grow { flex: 1; min-width: 200px; }
-    .pf-col-row__lockval, .pf-col-row__merge { flex-basis: 100%; display: flex; align-items: center; gap: 8px; }
-    .pf-col-row__lockval { padding-top: 8px; border-top: 1px dashed var(--glass-border); }
-    .pf-col-row__lockval > .grow { flex: 1; }
-    .pf-col-row__merge { font-size: 11.5px; color: var(--text-tertiary); padding-top: 4px; }
-    .pf-col-row__merge strong { color: #c4b5fd; font-weight: 600; }
+    /* ── Inspector ── */
+    .pf-ce-inspector { margin-top: 12px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+      border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .pf-ce-insp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .pf-ce-insp-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+    .pf-ce-step { display: flex; align-items: center; gap: 6px; }
+    .pf-ce-step__btn { width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.3)); background: transparent;
+      color: var(--text-secondary, #cbd5e1); font-size: 15px; font-weight: 700; }
+    .pf-ce-step__num { width: 64px; text-align: center; }
+    .pf-ce-dim { font-size: 12px; color: var(--text-tertiary, #94a3b8); }
+    .pf-ce-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
 
-    .cdk-drag-preview { box-shadow: 0 10px 30px rgba(0,0,0,0.45); border-radius: 12px; background: var(--bg-elevated, #1a1a24); }
-    .cdk-drag-placeholder { opacity: 0.4; }
-    .cdk-drag-animating { transition: transform 180ms cubic-bezier(0,0,0.2,1); }
-    .pf-cols-list.cdk-drop-list-dragging .pf-col-row:not(.cdk-drag-placeholder) { transition: transform 180ms cubic-bezier(0,0,0.2,1); }
-    .pf-drag-handle { width: 22px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--text-muted); cursor: grab; }
-    .pf-drag-handle:active { cursor: grabbing; }
+    .pf-status-pill { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+    .pf-status-pill--ok { color: #34d399; border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
+    .pf-status-pill--default { color: #fbbf24; border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+    .pf-icon-btn { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.3)); background: transparent; color: var(--text-tertiary, #94a3b8); cursor: pointer; }
+    .pf-icon-btn--on { color: #fff; background: var(--violet-600, #7c3aed); border-color: transparent; }
+    .pf-link-btn { background: none; border: none; padding: 0; font-size: 12.5px; font-weight: 600;
+      color: var(--violet-400, #a78bfa); cursor: pointer; }
+    .pf-link-btn:hover { color: var(--violet-300, #c4b5fd); }
+    .pf-link-btn--danger { color: #f87171; }
+    .pf-link-btn:disabled { opacity: 0.4; cursor: default; }
 
-    .pf-icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-muted); cursor: pointer; transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease; }
-    .pf-icon-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: rgba(168, 85, 247, 0.4); }
-    .pf-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .pf-icon-btn--on { background: rgba(168, 85, 247, 0.16); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.5); }
-    .pf-icon-btn--danger:hover:not(:disabled) { color: #f87171; border-color: rgba(244, 63, 94, 0.5); }
-    .pf-link-btn { background: transparent; border: 0; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: #c4b5fd; cursor: pointer; border-radius: 8px; }
+    /* CDK drag ghosts */
+    .cdk-drag-preview.pf-ce-col { opacity: 0.9; }
+    .cdk-drag-placeholder { opacity: 0.25; }
+    .cdk-drop-list-dragging .pf-ce-col { transition: transform 200ms ease; }
 
-    @media (hover: hover) { .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); } }
+    .pf-sig-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-sig-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.18)); background: rgba(255,255,255,0.02); }
+    .pf-sig-grip { cursor: grab; color: var(--text-tertiary, #94a3b8); }
+    .pf-sig-pos { width: 18px; text-align: center; font-size: 11px; font-weight: 700; color: var(--violet-400, #a78bfa);
+      font-family: ui-monospace, monospace; }
+    .pf-sig-mode { width: 168px; }
+    .pf-sig-who { flex: 1; min-width: 150px; }
+    .pf-sig-desig { flex: 1; min-width: 150px; }
+
     @media (pointer: coarse) {
-      .pf-icon-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
-      .pf-drag-handle { width: 44px; height: 44px; }
-      .pf-link-btn { min-height: 44px; display: inline-flex; align-items: center; }
+      .pf-ce-chain { width: 32px; height: 32px; }
+      .pf-ce-step__btn, .pf-icon-btn { width: 40px; height: 40px; }
     }
-    @media (max-width: 640px) {
-      .pf-cols-header { display: none; }
-      :host ::ng-deep .pf-col-row pf-select { width: 100% !important; }
-      :host ::ng-deep .pf-dept-pick pf-select { width: 100% !important; }
-      .pf-dept-pick { flex: 1 1 100%; }
-    }
-  `]
+  `],
 })
 export class ReportColumnsEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -273,7 +355,78 @@ export class ReportColumnsEditorComponent implements OnInit {
   private selectedDept?: Department;
   selectedDeptName(): string { return this.selectedDept?.name ?? ''; }
 
+  /** The card currently open in the inspector (index into columns()). */
+  protected readonly selectedIdx = signal<number | null>(null);
+  protected readonly selectedCol = computed<ReportColumn | null>(() => {
+    const i = this.selectedIdx();
+    return i == null ? null : (this.columns()[i] ?? null);
+  });
+  selectCol(i: number) { this.selectedIdx.set(this.selectedIdx() === i ? null : i); }
+
+  /** The chain button between card i and i+1 → toggle the merge. */
+  toggleLinkAt(i: number) { this.patchCol(i, { linkedNext: !this.columns()[i]?.linkedNext }); }
+
+  stepWidth(i: number, delta: number) {
+    const c = this.columns()[i];
+    if (!c) return;
+    this.patchCol(i, { width: this.clampWidth((Number(c.width) || 0) + delta) });
+  }
+
+  /** One tap to make widths legal again (scale to exactly 100). */
+  distributeEvenly() { this.setCols(this.normalizeTo100(this.columns())); }
+
+  // ── Signatories (per-department report sign-off slots) ──
+  protected readonly users = signal<Array<{ id: string; displayName: string }>>([]);
+  protected readonly signatories = signal<Array<{ _key: string; mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>>([]);
+  protected readonly sigSaving = signal(false);
+  private sigKey(): string { return 's-' + Math.random().toString(36).slice(2, 9); }
+
+  private loadSignatories(deptId: string) {
+    this.api.get<Array<{ mode: string; role?: string | null; userId?: string | null; designation?: string }>>(
+      `/api/report-layout/department/${deptId}/signatories`).subscribe({
+      next: rows => this.signatories.set((rows ?? []).map(r => ({
+        _key: this.sigKey(),
+        mode: r.mode === 'user' ? 'user' as const : 'role' as const,
+        role: r.role || 'tested_by',
+        userId: r.userId ?? null,
+        designation: r.designation ?? '',
+      }))),
+      error: () => this.signatories.set([]),
+    });
+  }
+  addSig() {
+    if (this.signatories().length >= 7) return;
+    this.signatories.update(l => [...l, { _key: this.sigKey(), mode: 'role', role: 'tested_by', userId: null, designation: '' }]);
+  }
+  removeSig(i: number) { this.signatories.update(l => l.filter((_, idx) => idx !== i)); }
+  patchSig(i: number, p: Partial<{ mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>) {
+    this.signatories.update(l => l.map((s, idx) => idx === i ? { ...s, ...p } : s));
+  }
+  dropSig(ev: CdkDragDrop<unknown>) {
+    if (ev.previousIndex === ev.currentIndex) return;
+    this.signatories.update(l => { const n = l.slice(); moveItemInArray(n, ev.previousIndex, ev.currentIndex); return n; });
+  }
+  saveSignatories() {
+    const deptId = this.selectedDeptId();
+    if (!deptId) return;
+    this.sigSaving.set(true);
+    this.api.post(`/api/report-layout/department/${deptId}/signatories`, {
+      signatories: this.signatories().map(s => ({ mode: s.mode, role: s.role, userId: s.userId, designation: s.designation })),
+    }).subscribe({
+      next: () => { this.sigSaving.set(false); this.toasts.success('Signatories saved'); },
+      error: e => { this.sigSaving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  typeLabel(t: string): string {
+    return this.typeOptions.find(o => o.value === t)?.label ?? t;
+  }
+
   ngOnInit() {
+    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/').subscribe({
+      next: l => this.users.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
+      error: () => { /* users list optional */ },
+    });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: list => {
         const depts = this.dedupeByCode(list ?? []);
@@ -303,6 +456,8 @@ export class ReportColumnsEditorComponent implements OnInit {
   selectDepartment(deptId: string) {
     if (!deptId) { this.selectedDeptId.set(''); return; }
     this.selectedDeptId.set(deptId);
+    this.selectedIdx.set(null); // stale card index from the previous department
+    this.loadSignatories(deptId);
     this.selectedDept = this.departments().find(d => d.id === deptId);
     this.loading.set(true);
     this.layout.getDeptColumns(deptId).then(res => {
@@ -408,6 +563,7 @@ export class ReportColumnsEditorComponent implements OnInit {
 
   removeCol(i: number) {
     if (this.columns().length <= 1) return;
+    this.selectedIdx.set(null);
     this.setCols(this.normalizeTo100(this.columns().filter((_, idx) => idx !== i)));
   }
 

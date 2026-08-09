@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { Department } from '../../../shared/models/tenant.model';
 import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
@@ -27,15 +29,22 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from './test-layout-editor.component';
+import { TestNotesEditorComponent } from '../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from './test-consumables.component';
 import { AuthService } from '../../../core/auth/auth.service';
+import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../shared/utils/reference-range';
 
-type TestEditorTab = 'parameters' | 'layout' | 'consumables';
+/** Left-rail sections. One shows at a time (progressive disclosure) instead of
+ *  stacking every field card on one screen. */
+/** Label of the synthetic picker group holding the already-chosen members. */
+const SELECTED_GROUP = 'Selected';
+
+type TestSection = 'identity' | 'pricing' | 'sample' | 'results' | 'layout' | 'consumables';
 
 interface DraftTest {
   id?: string;
   name: string;
-  type: 'individual' | 'package';
+  type: 'individual' | 'profile' | 'package';
   flow: 'direct' | 'approval';
   price: number;
   taxSlab: number;
@@ -127,6 +136,7 @@ function newFieldId(): string {
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
+    RouterLink,
     FormsModule,
     ConditionEditorComponent,
     CurrencyInrPipe,
@@ -139,6 +149,7 @@ function newFieldId(): string {
     TileComponent,
     TouchButtonComponent,
     TestLayoutEditorComponent,
+    TestNotesEditorComponent,
     TestConsumablesComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -147,7 +158,7 @@ function newFieldId(): string {
 
       <pf-screen-header
         eyebrow="Admin · Tests"
-        [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : 'test')"
+        [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : draft().type === 'profile' ? 'profile' : 'test')"
         [subtitle]="subtitle()">
         <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
           <span icon-left aria-hidden="true">
@@ -164,13 +175,35 @@ function newFieldId(): string {
 
       @let d = draft();
 
-      <!-- General + Pricing side-by-side on wide screens so the top of the
-           form uses horizontal space instead of stacking two short cards. -->
-      <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-4">
+      <!-- Rail + single content column. The page used to stack FIVE field cards
+           (Identity, Pricing, Outsourcing, Details, Result & report) all at
+           once and then drop a tab strip halfway down for Parameters/Layout —
+           so the first screen was a wall of ~30 inputs and the tabs were easy
+           to miss. Progressive disclosure (Nielsen): show one section at a
+           time, defer the rare fields. The rail mirrors /admin/reports so the
+           two admin editors read the same way. -->
+      <div class="pf-te">
+        <nav class="pf-te__rail" aria-label="Test sections">
+          @for (sec of visibleSections(); track sec.value) {
+            <button type="button" class="pf-te__nav press"
+                    [class.pf-te__nav--on]="section() === sec.value"
+                    [attr.aria-current]="section() === sec.value ? 'true' : null"
+                    (click)="setSection(sec.value)">
+              <span class="pf-te__nav-l">{{ sec.label }}</span>
+              <span class="pf-te__nav-d">{{ sec.desc }}</span>
+            </button>
+          }
+        </nav>
 
-        <!-- General -->
+        <div class="pf-te__body">
+
+        <!-- Identity — the core "what is this" fields: name, type, flow, the
+             department it sits under, and (for individual tests + profiles) its
+             unique code. Sample-collection descriptors live below for individual
+             tests only. -->
+        @if (section() === 'identity') {
         <pf-tile tone="default" padding="lg" class="block">
-          <h3 class="section-title">General</h3>
+          <h3 class="section-title">Identity</h3>
           <div class="space-y-3 mt-4">
             <div><label class="pf-label">Name</label>
               <input type="text" class="pf-input"
@@ -192,11 +225,41 @@ function newFieldId(): string {
                            placeholder="— Select department —"
                            (valueChange)="onDeptPicked($event)"></pf-select>
               </div>
-              <div><label class="pf-label">Sample type</label>
-                <input type="text" class="pf-input" [ngModel]="d.sampleType"
-                       (ngModelChange)="patch({ sampleType: $event })" /></div>
+              <!-- Code shows for individual tests AND profiles (a profile REQUIRES
+                   its own unique code). Packages carry no code. -->
+              @if (d.type === 'individual' || d.type === 'profile') {
+                <div><label class="pf-label">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
+                  <input type="text" class="pf-input"
+                         [class.pf-input--error]="fieldError('testCode')"
+                         [ngModel]="d.testCode"
+                         (ngModelChange)="patch({ testCode: $event })"
+                         [placeholder]="d.type === 'profile' ? 'e.g. LIPID01' : 'e.g. CBC001'" />
+                  @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
+                </div>
+              }
             </div>
-            <!-- Tube colour: drives vial grouping (one vial per space + colour). -->
+            <!-- Short name applies to EVERY type. It used to sit in
+                 "Sample & handling", which is gated to individual tests — so a
+                 profile could never be given one and the grid column stayed
+                 blank. -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div><label class="pf-label">Short name</label>
+                <input type="text" class="pf-input" [ngModel]="d.shortName"
+                       (ngModelChange)="patch({ shortName: $event })"
+                       placeholder="e.g. CBC" /></div>
+            </div>
+            <!-- Sample type is an individual-test concern; bundles (profiles /
+                 packages) inherit collection from their member tests. -->
+            @if (d.type === 'individual') {
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><label class="pf-label">Sample type</label>
+                  <input type="text" class="pf-input" [ngModel]="d.sampleType"
+                         (ngModelChange)="patch({ sampleType: $event })" /></div>
+              </div>
+            }
+            <!-- Tube colour: drives vial grouping (one vial per space + colour).
+                 Individual tests only — bundles don't draw their own sample. -->
+            @if (d.type === 'individual') {
             <div class="mt-1">
               <label class="pf-label">Tube colour</label>
               <div class="pf-tube-swatches">
@@ -211,13 +274,16 @@ function newFieldId(): string {
               </div>
               <p class="pf-hint mt-1">The vial colour this test is drawn into. Leave unset to use the department's container colour.</p>
             </div>
+            }
           </div>
         </pf-tile>
 
-        <!-- Pricing + TAT — 1-col on lg (it's narrower), 3-col on smaller. -->
+        }
+
+        @if (section() === 'pricing') {
         <pf-tile tone="default" padding="lg" class="block">
-          <h3 class="section-title">Pricing & TAT</h3>
-          <div class="pf-pricing-grid grid grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
+          <h3 class="section-title">Pricing &amp; TAT</h3>
+          <div class="pf-pricing-grid grid grid-cols-3 gap-3 mt-4">
             <div><label class="pf-label">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
@@ -235,10 +301,14 @@ function newFieldId(): string {
         </pf-tile>
 
         <!-- Outsourcing — subcontract this test to a referral lab. Outsourced
-             tests form their own vials per (lab + department) at collection. -->
-        @if (d.type !== 'package') {
+             tests form their own vials per (lab + department) at collection.
+             Individual tests only — bundles outsource via their members. -->
+        @if (d.type === 'individual') {
+          <!-- Deferred: most tests are run in-house, so subcontracting is
+               collapsed rather than occupying the main path. -->
           <pf-tile tone="default" padding="lg" class="block">
-            <h3 class="section-title">Outsourcing</h3>
+            <details class="pf-te__adv">
+              <summary class="pf-te__adv-s">Outsourcing <span>optional</span></summary>
             <div class="space-y-3 mt-4">
               <div><label class="pf-label">Outsource to</label>
                 <pf-select [options]="referralLabOptions()" [value]="d.outsourcedVendorId"
@@ -256,36 +326,27 @@ function newFieldId(): string {
                 </div>
               }
             </div>
+            </details>
           </pf-tile>
         }
+        }
 
-        <!-- Test details — master-data descriptors (code, section, specimen
-             handling). Individual tests only. -->
-        @if (d.type !== 'package') {
+        <!-- Sample & handling — how the specimen is taken and carried. -->
+        @if (section() === 'sample' && d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
-            <h3 class="section-title">Details</h3>
+            <h3 class="section-title">Sample &amp; handling</h3>
             <div class="space-y-3 mt-4">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div><label class="pf-label">Test code</label>
-                  <input type="text" class="pf-input" [ngModel]="d.testCode"
-                         (ngModelChange)="patch({ testCode: $event })"
-                         placeholder="e.g. CBC001" /></div>
-                <div><label class="pf-label">Short name</label>
-                  <input type="text" class="pf-input" [ngModel]="d.shortName"
-                         (ngModelChange)="patch({ shortName: $event })"
-                         placeholder="e.g. CBC" /></div>
-              </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Section</label>
                   <input type="text" class="pf-input" [ngModel]="d.section"
                          (ngModelChange)="patch({ section: $event })"
                          placeholder="Sub-group under the department" /></div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Profile</label>
                   <input type="text" class="pf-input" [ngModel]="d.profile"
                          (ngModelChange)="patch({ profile: $event })"
                          placeholder="e.g. LFT, Lipid Profile" /></div>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label class="pf-label">Methodology</label>
                   <input type="text" class="pf-input" [ngModel]="d.methodology"
                          (ngModelChange)="patch({ methodology: $event })"
@@ -303,9 +364,11 @@ function newFieldId(): string {
               </div>
             </div>
           </pf-tile>
+        }
 
-          <!-- Result & report — how the result is captured and rendered, plus
-               test-level reference/critical limits. -->
+        <!-- Result & report — how the result is captured and rendered, plus
+             test-level reference/critical limits. Individual tests only. -->
+        @if (section() === 'results' && d.type === 'individual') {
           <pf-tile tone="default" padding="lg" class="block">
             <h3 class="section-title">Result &amp; report</h3>
             <div class="space-y-3 mt-4">
@@ -323,10 +386,11 @@ function newFieldId(): string {
                 <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
                            (valueChange)="patch({ reportFormat: $event })"></pf-select>
               </div>
-              <div><label class="pf-label">Adult reference range</label>
-                <input type="text" class="pf-input" [ngModel]="d.adultReferenceRange"
-                       (ngModelChange)="patch({ adultReferenceRange: $event })"
-                       placeholder="e.g. 13.0 – 17.0 g/dL" /></div>
+              <!-- The flat "Adult reference range" box used to sit here, next
+                   to a Reference range section that holds the real bands. Two
+                   places for one fact is how a range gets edited in one and
+                   read from the other; it is now kept in step on save from the
+                   bands, which are the thing the report actually uses. -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
                 <div><label class="pf-label">Critical low</label>
                   <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
@@ -340,33 +404,181 @@ function newFieldId(): string {
             </div>
           </pf-tile>
         }
-      </div>
 
-      <!-- Packages have a totally different body — a member-test picker
-           instead of parameters/report-layout — so we branch here on type.
-           Individual tests get the tab strip + parameter/layout editors;
-           packages get the member picker with its own summary chips. -->
-      @if (d.type !== 'package') {
-      <!-- Tab strip — sits between Pricing & TAT and the Parameters / Report
-           Layout content so admins don't have to scroll to find the layout
-           editor, but General + Pricing stay always visible up top. -->
-      <div class="mb-4">
-        <div class="tab-strip">
-          <pf-segmented
-            [options]="tabOptions()"
-            [value]="tab()"
-            size="md"
-            (valueChange)="setTab($event)">
-          </pf-segmented>
-        </div>
-        @if (!d.id && tab() === 'layout') {
-          <p class="mt-2 text-[12px]" style="color: var(--text-tertiary);">
-            Save the test first — the report layout editor needs an id to attach to.
-          </p>
+        <!-- ── Reference range ────────────────────────────────────────
+             Inside Results, between "Result & report" and the analyte details
+             — reading unit → normal values → parameters. It is a tile of its
+             own rather than a field buried inside a parameter accordion, which
+             is what made it look missing, but it is NOT a separate rail
+             section: a range belongs with the result it qualifies. -->
+        @if (section() === 'results' && d.type === 'individual') {
+          <pf-tile tone="default" padding="lg" class="block">
+            <div class="flex items-center justify-between">
+              <h3 class="section-title">Reference range</h3>
+              @if (numericFields().length > 0) {
+                <span class="text-[11px] text-slate-400">Normal values by sex and age</span>
+              }
+            </div>
+
+            @if (numericFields().length === 0) {
+              <!-- A simple test shouldn't make anyone think about "parameters"
+                   first: this creates the single analyte, named after the test,
+                   and drops the admin straight into its bands. -->
+              <div class="mt-4 rounded-xl border border-dashed border-slate-600/50 p-6 text-center">
+                <p class="text-sm text-slate-300">No reference range set for this test yet.</p>
+                <p class="text-xs text-slate-500 mt-1">
+                  Leave it empty for a qualitative test, or add the normal values now.
+                </p>
+                <div class="mt-3">
+                  <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">
+                    Add a reference range
+                  </pf-touch-btn>
+                </div>
+              </div>
+            } @else {
+              <div class="space-y-5 mt-4">
+                @for (p of fields(); let i = $index; track i) {
+                  @if (isNumericType(p.type)) {
+                    <div class="pf-rr-block">
+                      <!-- The analyte is named only when there is more than one:
+                           a single-analyte test IS the test, and repeating its
+                           name here is noise. -->
+                      @if (numericFields().length > 1) {
+                        <div class="flex items-baseline gap-2 mb-2">
+                          <span class="text-sm font-semibold text-slate-100">{{ p.name || 'Unnamed' }}</span>
+                          @if (p.unit) { <span class="text-[11px] text-slate-400">{{ p.unit }}</span> }
+                        </div>
+                      }
+                      @if (!showAdvancedRanges(p)) {
+                        <!-- DEFAULT: one range for everyone, which is what the
+                             overwhelming majority of tests need. Two boxes, no
+                             sex/age vocabulary to read past. -->
+                        <div class="grid gap-2 grid-cols-2 md:grid-cols-3 items-end">
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Normal min</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="firstBand(p).min ?? null"
+                                              (valueChange)="patchRangeAt(i, 0, { min: $event ?? null })">
+                            </pf-number-input>
+                          </label>
+                          <label class="flex flex-col gap-0.5 min-w-0">
+                            <span class="pf-mini-lbl">Normal max</span>
+                            <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                              [value]="firstBand(p).max ?? null"
+                                              (valueChange)="patchRangeAt(i, 0, { max: $event ?? null })">
+                            </pf-number-input>
+                          </label>
+                          <div class="flex items-end pb-1">
+                            <button type="button"
+                                    class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                    (click)="openAdvancedRanges()">
+                              Different by sex or age?
+                            </button>
+                          </div>
+                        </div>
+                      } @else {
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="pf-mini-lbl">{{ bandsCaption(p) }}</span>
+                        <div class="flex items-center gap-3">
+                          @if (!needsAdvancedRanges(p)) {
+                            <!-- Only offered when nothing would be lost: a test
+                                 that really has sex/age bands can't be shown in
+                                 the two-box view without hiding them. -->
+                            <button type="button"
+                                    class="text-xs font-medium text-slate-400 hover:text-slate-300"
+                                    (click)="closeAdvancedRanges()">Simple</button>
+                          }
+                          <button type="button"
+                                  class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                  (click)="addRange(i)">+ Add range</button>
+                        </div>
+                      </div>
+              @for (r of (p.referenceRanges ?? []); track $index) {
+                <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Sex</span>
+                    <select class="pf-input pf-input--compact"
+                            [ngModel]="r.sex ?? 'any'"
+                            (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
+                      <option value="any">Any</option>
+                      <option value="M">Male</option>
+                      <option value="F">Female</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Min age</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                      [value]="r.minAge ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Max age</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                      [value]="r.maxAge ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Age unit</span>
+                    <select class="pf-input pf-input--compact"
+                            [ngModel]="r.ageUnit ?? 'years'"
+                            (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
+                      <option value="years">Years</option>
+                      <option value="months">Months</option>
+                      <option value="days">Days</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Normal min</span>
+                    <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                      [value]="r.min ?? null"
+                                      (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
+                    </pf-number-input>
+                  </label>
+                  <label class="flex flex-col gap-0.5 min-w-0">
+                    <span class="pf-mini-lbl">Normal max</span>
+                    <div class="flex items-end gap-1">
+                      <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                        [value]="r.max ?? null"
+                                        (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
+                      </pf-number-input>
+                      @if ((p.referenceRanges ?? []).length > 1) {
+                        <button type="button" title="Remove range"
+                                class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
+                                (click)="removeRange(i, $index)">×</button>
+                      }
+                    </div>
+                  </label>
+                </div>
+                <!-- The name printed under this range on the report.
+                     Left blank it is composed from Sex + age above,
+                     so the whole catalogue reads the same way; the
+                     placeholder shows exactly what will print. -->
+                <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
+                  <span class="pf-mini-lbl">Prints as</span>
+                  <input type="text" class="pf-input pf-input--compact"
+                         [ngModel]="r.label ?? ''"
+                         [placeholder]="autoRangeLabel(r)"
+                         (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
+                </label>
+              }
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </pf-tile>
         }
-      </div>
 
-      @if (tab() === 'parameters') {
+        <!-- Bundles (packages AND profiles) have a different body — a member
+             picker instead of parameters/report-layout — so we branch on type.
+             The old mid-page tab strip is gone: the rail on the left is the
+             single place sections are chosen. -->
+        @if (d.type === 'individual') {
+
+        @if (section() === 'results') {
 
       <!-- Parameters -->
       <pf-tile tone="default" padding="lg" class="block">
@@ -451,74 +663,12 @@ function newFieldId(): string {
 
                     @if (isNumericType(p.type)) {
                       <div class="param-row__ranges">
-                        <div class="flex items-center justify-between">
-                          <span class="pf-mini-lbl pf-mini-lbl--strong">Reference ranges</span>
-                          <button type="button"
-                                  class="text-xs font-medium text-violet-400 hover:text-violet-300"
-                                  (click)="addRange(i)">+ Add range</button>
-                        </div>
-                        <!-- One band per sex/age segment. Sex/age select which band
-                             a given patient is flagged against; leave Sex = Any and
-                             ages blank for a single all-patients range. -->
-                        @for (r of (p.referenceRanges ?? []); track $index) {
-                          <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Sex</span>
-                              <select class="pf-input pf-input--compact"
-                                      [ngModel]="r.sex ?? 'any'"
-                                      (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
-                                <option value="any">Any</option>
-                                <option value="M">Male</option>
-                                <option value="F">Female</option>
-                              </select>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Min age</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
-                                                [value]="r.minAge ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Max age</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
-                                                [value]="r.maxAge ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Age unit</span>
-                              <select class="pf-input pf-input--compact"
-                                      [ngModel]="r.ageUnit ?? 'years'"
-                                      (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
-                                <option value="years">Years</option>
-                                <option value="months">Months</option>
-                                <option value="days">Days</option>
-                              </select>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Normal min</span>
-                              <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                                [value]="r.min ?? null"
-                                                (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
-                              </pf-number-input>
-                            </label>
-                            <label class="flex flex-col gap-0.5 min-w-0">
-                              <span class="pf-mini-lbl">Normal max</span>
-                              <div class="flex items-end gap-1">
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                                  [value]="r.max ?? null"
-                                                  (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
-                                </pf-number-input>
-                                @if ((p.referenceRanges ?? []).length > 1) {
-                                  <button type="button" title="Remove range"
-                                          class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
-                                          (click)="removeRange(i, $index)">×</button>
-                                }
-                              </div>
-                            </label>
-                          </div>
-                        }
+                        <!-- Reference ranges moved out to their own rail
+                             section: they are the thing a lab edits most, and
+                             burying them two levels deep (expand parameter →
+                             scroll) made them look missing. Critical and
+                             plausible bands stay here — they are safety limits
+                             on the analyte, not the normal range. -->
                         <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
                           <label class="flex flex-col gap-0.5 min-w-0">
                             <span class="pf-mini-lbl">Critical low</span>
@@ -600,25 +750,9 @@ function newFieldId(): string {
         }
       </pf-tile>
 
-      } @else if (tab() === 'layout') {
-        <!-- Report Layout — gated until the test has an id (the layout
-             endpoints all key off testId). -->
-        @if (d.id) {
-          <pf-test-layout-editor class="block"
-            [testId]="d.id || ''"
-            [departmentId]="d.departmentId || ''"
-            [parameters]="parameterNames()">
-          </pf-test-layout-editor>
-        } @else {
-          <pf-tile tone="default" padding="lg" class="block">
-            <p class="text-[13px]" style="color: var(--text-tertiary);">
-              <strong style="color: var(--text-secondary);">Report Layout</strong>
-              — save this test first, then come back to this tab to design how the
-              test's results render in the patient report.
-            </p>
-          </pf-tile>
         }
-      } @else if (tab() === 'consumables') {
+
+        @if (section() === 'consumables') {
         @if (d.id) {
           <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
         } @else {
@@ -626,59 +760,83 @@ function newFieldId(): string {
             <p class="text-[13px]" style="color: var(--text-tertiary);">Save the test first, then add the inventory items it consumes here.</p>
           </pf-tile>
         }
-      }
-      } @else {
-        <!-- Package member picker. List of all individual tests grouped by
-             department; checkboxes write the selected ids into the package's
-             member list. Price + member count surface at the top so admins
-             can sanity-check the bundle as they tick tests. -->
+        }
+
+        } @else {
+        <!-- Bundle member picker (packages + profiles). A profile bundles
+             individual tests; a package bundles tests AND profiles (exploded
+             recursively backend-side). Checkboxes write the selected ids into
+             the bundle's member list. The pill filter + search + live summary
+             sit in one toolbar so admins can sanity-check as they tick. -->
         <pf-tile tone="default" padding="lg" class="block">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="section-title">Package members</h3>
-              <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                Pick the individual tests included in this package.
+          <div class="pf-picker-head">
+            <div class="min-w-0">
+              <h3 class="section-title">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h3>
+              <p class="pf-picker-sub">
+                @if (d.type === 'profile') {
+                  Pick the individual tests included in this profile.
+                } @else {
+                  Pick the tests and profiles included in this package.
+                }
               </p>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="pf-pkg-chip">
-                <strong>{{ packageItems().length }}</strong> tests
-              </span>
-              <span class="pf-pkg-chip">
-                Member total: <strong>{{ packageMembersTotal() | inr }}</strong>
-              </span>
-            </div>
+            <span class="pf-picker-summary" [class.pf-picker-summary--on]="packageItems().length > 0">
+              <strong>{{ packageItems().length }}</strong>
+              {{ packageItems().length === 1 ? 'member' : 'members' }}
+              <span class="pf-picker-summary__sep">·</span>
+              <strong>{{ packageMembersTotal() | inr }}</strong>
+            </span>
           </div>
 
-          <input type="text" class="pf-input mb-4" placeholder="Search tests by name or department…"
-                 [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+          <div class="pf-picker-toolbar">
+            @if (d.type === 'package') {
+              <pf-segmented [options]="pickFilterOptions" [value]="pickFilter()" size="sm"
+                            (valueChange)="pickFilter.set($event)"></pf-segmented>
+            }
+            <input type="text" class="pf-input pf-picker-search"
+                   placeholder="Search by name or department…"
+                   [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+          </div>
 
           @if (filteredPackageCatalogByDept().length === 0) {
-            <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">
-              @if (allIndividualTests().length === 0) {
-                No individual tests configured yet — create a few tests first, then build the package.
+            <p class="pf-picker-empty">
+              @if (pickerSource().length === 0) {
+                @if (d.type === 'profile') {
+                  No individual tests configured yet — create a few tests first, then build the profile.
+                } @else {
+                  No tests or profiles configured yet — create a few first, then build the package.
+                }
               } @else {
-                No tests match "{{ packageQuery() }}".
+                Nothing matches your filter{{ packageQuery() ? ' "' + packageQuery() + '"' : '' }}.
               }
             </p>
           } @else {
-            <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-5">
               @for (group of filteredPackageCatalogByDept(); track group.department) {
                 <div>
-                  <div class="pf-pkg-dept-hdr">
+                  <div class="pf-pkg-dept-hdr"
+                       [class.pf-pkg-dept-hdr--sel]="group.department === 'Selected'">
                     <span class="pf-pkg-dept-hdr__name">{{ group.department }}</span>
                     <span class="pf-pkg-dept-hdr__count">{{ group.tests.length }}</span>
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <div class="pf-pick-grid">
                     @for (t of group.tests; track t.id) {
                       <label class="pf-pkg-pick"
                              [class.pf-pkg-pick--on]="isInPackage(t.id)">
                         <input type="checkbox"
                                [checked]="isInPackage(t.id)"
                                (change)="togglePackageMember(t.id)" />
-                        <span class="flex-1 min-w-0">
-                          <span class="pf-pkg-pick__name">{{ t.name }}</span>
-                          <span class="pf-pkg-pick__meta">TAT {{ t.tatHours }}h</span>
+                        <span class="pf-pkg-pick__body">
+                          <span class="pf-pkg-pick__title">
+                            <span class="pf-pkg-pick__name">{{ t.name }}</span>
+                            @if (t.type === 'profile') {
+                              <span class="pf-pkg-badge">Profile</span>
+                            }
+                          </span>
+                          <span class="pf-pkg-pick__meta">
+                            @if (t.testCode) { <span>{{ t.testCode }}</span><span class="pf-pkg-pick__dot">·</span> }
+                            <span>TAT {{ t.tatHours }}h</span>
+                          </span>
                         </span>
                         <span class="pf-pkg-pick__price">{{ t.price | inr }}</span>
                       </label>
@@ -690,9 +848,140 @@ function newFieldId(): string {
           }
         </pf-tile>
       }
+        <!-- Report layout sits OUTSIDE the type branch: profiles need it too,
+             because a profile carries its own notes and those are what print
+             when the profile is ordered. -->
+        @if (section() === 'layout') {
+        <!-- Report Layout — gated until the test has an id (the layout
+             endpoints all key off testId). -->
+        @if (d.id) {
+          <!-- Two views over the SAME per-test layout store
+               (/api/report-layout/test/:id). "Notes & description" is the
+               everyday content pass — the text that prints beside each
+               parameter — and used to live on /admin/reports, which meant a
+               second screen to finish a test. "Advanced structure" is the
+               section/grid builder for the rare test that needs it. -->
+          <div class="pf-lay-switch">
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
+                    (click)="layoutView.set('notes')">Notes &amp; description</button>
+            <button type="button" class="pf-lay-switch__btn"
+                    [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
+                    (click)="layoutView.set('advanced')">Advanced structure</button>
+          </div>
+
+          <!-- Read-only: the column structure is a DEPARTMENT-wide setting, so
+               it is shown here for context but edited where it applies to all
+               of the department's tests. -->
+          @if (deptColumnsLabel(); as cols) {
+            <p class="pf-lay-cols">
+              <span class="pf-lay-cols__k">{{ selectedDeptName() || 'This department' }} prints</span>
+              <span class="pf-lay-cols__v">{{ cols }}</span>
+              <a class="pf-lay-cols__a" routerLink="/admin/reports">Change columns</a>
+            </p>
+          }
+
+          @if (layoutView() === 'notes') {
+            <pf-test-notes-editor class="block"
+              [fixedTestId]="d.id || ''"
+              [hidePreview]="false">
+            </pf-test-notes-editor>
+          } @else {
+            <pf-test-layout-editor class="block"
+              [testId]="d.id || ''"
+              [departmentId]="d.departmentId || ''"
+              [parameters]="parameterNames()">
+            </pf-test-layout-editor>
+          }
+        } @else {
+          <pf-tile tone="default" padding="lg" class="block">
+            <p class="text-[13px]" style="color: var(--text-tertiary);">
+              <strong style="color: var(--text-secondary);">Report Layout</strong>
+              — save this test first, then come back to this tab to design how the
+              test's results render in the patient report.
+            </p>
+          </pf-tile>
+        }
+        }
+
+
+        </div><!-- /pf-te__body -->
+      </div><!-- /pf-te -->
     </section>
   `,
   styles: [`
+    /* The pinned "Selected" group reads as a summary, not another dept. */
+    .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--violet-text); }
+    .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count {
+      background: rgba(139, 92, 246, 0.2); color: var(--violet-text);
+    }
+
+    /* ── Editor shell: sticky section rail + one content column ──────────
+       Replaces the old "five stacked cards + a tab strip halfway down" page.
+       Same rail idiom as /admin/reports so both admin editors read alike. */
+    .pf-te { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .pf-te__rail { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .pf-te__nav {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 9px 12px; border-radius: 10px; text-align: left; cursor: pointer;
+      background: transparent; border: 1px solid transparent;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .pf-te__nav:hover { background: var(--glass-bg); }
+    .pf-te__nav--on { background: rgba(139, 92, 246, 0.14); border-color: rgba(139, 92, 246, 0.34); }
+    .pf-te__nav-l { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .pf-te__nav--on .pf-te__nav-l { color: var(--text-primary); }
+    .pf-te__nav-d { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
+    .pf-te__body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+    /* Deferred blocks (e.g. Outsourcing) — present but out of the main path. */
+    .pf-te__adv > summary {
+      list-style: none; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; color: var(--text-secondary);
+    }
+    .pf-te__adv > summary::-webkit-details-marker { display: none; }
+    .pf-te__adv > summary::before {
+      content: '›'; display: inline-block; font-size: 16px; line-height: 1;
+      color: var(--text-muted); transition: transform .15s ease;
+    }
+    .pf-te__adv[open] > summary::before { transform: rotate(90deg); }
+    .pf-te__adv > summary span {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .pf-te__adv > summary:hover { color: var(--text-primary); }
+
+    @media (max-width: 900px) {
+      .pf-te { grid-template-columns: 1fr; gap: 14px; }
+      /* Rail becomes a horizontal scroller on narrow screens — same control,
+         no separate mobile design. */
+      .pf-te__rail { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+      .pf-te__nav { flex: 0 0 auto; min-width: 132px; }
+      .pf-te__nav-d { display: none; }
+    }
+    @media (pointer: coarse) { .pf-te__nav { min-height: 44px; justify-content: center; } }
+
+    /* Report Layout tab: notes vs advanced structure. */
+    .pf-lay-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border); margin-bottom: 12px; }
+    .pf-lay-switch__btn { padding: 6px 13px; border: 0; border-radius: 8px; cursor: pointer;
+      font-size: 12.5px; font-weight: 600; color: var(--text-tertiary); background: transparent;
+      transition: color .15s ease, background .15s ease; }
+    .pf-lay-switch__btn:hover { color: var(--text-primary); }
+    .pf-lay-switch__btn--on { color: var(--text-primary); background: rgba(139, 92, 246, 0.18); }
+
+    /* Read-only department columns context. */
+    .pf-lay-cols { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+      margin: 0 0 14px; padding: 9px 12px; border-radius: 10px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      font-size: 12px; }
+    .pf-lay-cols__k { color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.08em; font-size: 10px; font-weight: 700; }
+    .pf-lay-cols__v { color: var(--text-secondary); font-weight: 500; }
+    .pf-lay-cols__a { margin-left: auto; color: var(--violet-text); font-weight: 600;
+      text-decoration: none; font-size: 11.5px; }
+    .pf-lay-cols__a:hover { text-decoration: underline; }
     .section-title {
       font-size: 15px;
       font-weight: 600;
@@ -713,7 +1002,7 @@ function newFieldId(): string {
     .pf-tube__dot { width: 15px; height: 15px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset; flex-shrink: 0; }
     .pf-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
 
-    /* ── Package picker ── */
+    /* ── Package / profile member picker ── */
     .pf-pkg-chip {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 4px 10px;
@@ -723,11 +1012,54 @@ function newFieldId(): string {
       border: 1px solid rgba(168, 85, 247, 0.32);
       color: var(--text-primary);
     }
+
+    /* Picker header: title + subtitle on the left, live summary chip right. */
+    .pf-picker-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .pf-picker-sub {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .pf-picker-summary {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      white-space: nowrap;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .pf-picker-summary strong { color: var(--text-primary); font-weight: 700; }
+    .pf-picker-summary__sep { color: var(--text-muted); }
+    .pf-picker-summary--on {
+      background: rgba(168, 85, 247, 0.12);
+      border-color: rgba(168, 85, 247, 0.4);
+      color: var(--text-primary);
+    }
+
+    /* Toolbar: pill filter + search on one row (wraps on narrow widths). */
+    .pf-picker-toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .pf-picker-search { flex: 1 1 220px; min-width: 0; margin-bottom: 0; }
+    .pf-picker-empty {
+      text-align: center;
+      padding: 28px 8px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
     .pf-pkg-dept-hdr {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 4px 8px;
       border-bottom: 1px dashed var(--glass-border);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .pf-pkg-dept-hdr__name {
       font-size: 11px; font-weight: 800;
@@ -741,35 +1073,58 @@ function newFieldId(): string {
       background: rgba(168, 85, 247, 0.16);
       color: var(--violet-text);
     }
+
+    /* Equal-height pick cards in an auto-fill grid so rows align cleanly. */
+    .pf-pick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px;
+    }
     .pf-pkg-pick {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 10px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid var(--glass-border);
       background: var(--glass-bg);
       cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
+      height: 100%;
+      transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
     }
     .pf-pkg-pick:hover { border-color: rgba(168, 85, 247, 0.45); }
     .pf-pkg-pick--on {
       background: rgba(168, 85, 247, 0.10);
       border-color: rgba(168, 85, 247, 0.55);
+      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.25);
     }
-    .pf-pkg-pick input[type="checkbox"] { width: 16px; height: 16px; accent-color: #a855f7; }
+    .pf-pkg-pick input[type="checkbox"] { width: 16px; height: 16px; accent-color: #a855f7; flex-shrink: 0; }
+    .pf-pkg-pick__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-pkg-pick__title { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .pf-pkg-pick__name {
-      display: block;
       font-weight: 600; font-size: 13px;
       color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .pf-pkg-pick__meta {
-      display: block;
+      display: flex; align-items: center; gap: 5px;
       font-size: 11px;
       color: var(--text-tertiary);
     }
+    .pf-pkg-pick__dot { color: var(--text-muted); }
     .pf-pkg-pick__price {
       font-size: 12.5px; font-weight: 600;
       color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    /* PROFILE tag on profile member rows — distinct from the violet package UI. */
+    .pf-pkg-badge {
+      flex-shrink: 0;
+      padding: 1px 7px;
+      font-size: 8.5px; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.38);
+      color: #7dd3fc;
     }
 
     /* ── Parameter row ── */
@@ -907,6 +1262,15 @@ function newFieldId(): string {
       border: 1px dashed var(--glass-border);
     }
 
+    /* Reference range section: one block per analyte. A single-analyte test
+       shows no frame at all — the tile IS the block — so the common case
+       reads as a plain form rather than a nested container. */
+    .pf-rr-block { display: flex; flex-direction: column; gap: 6px; }
+    .pf-rr-block + .pf-rr-block {
+      padding-top: 14px;
+      border-top: 1px dashed var(--glass-border);
+    }
+
     /* ── Option chips ── */
     .pf-option-count {
       display: inline-flex;
@@ -1039,14 +1403,16 @@ function newFieldId(): string {
 export class TestEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly layoutSvc = inject(ReportLayoutService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   /** Consumables tab only for users who manage inventory. */
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
 
-  readonly typeOptions: PfSelectOption<'individual' | 'package'>[] = [
+  readonly typeOptions: PfSelectOption<'individual' | 'profile' | 'package'>[] = [
     { value: 'individual', label: 'Individual' },
+    { value: 'profile',    label: 'Profile' },
     { value: 'package',    label: 'Package' }
   ];
   readonly flowOptions: PfSelectOption<'direct' | 'approval'>[] = [
@@ -1150,11 +1516,21 @@ export class TestEditorComponent implements OnInit {
   readonly draft = this._draft.asReadonly();
 
   /** The four vacutainer tube colours used for vial grouping. */
+  // NABL / standard vacutainer cap colours (order-of-draw). The key is stored
+  // on the test as `tubeColor`; the legacy keys red/lavender/grey/blue still
+  // resolve in sample-collection's colour map for older tests.
   readonly tubeColors = [
-    { key: 'red',      label: 'Red',      hex: '#ef4444' },
-    { key: 'lavender', label: 'Lavender', hex: '#a78bfa' },
-    { key: 'grey',     label: 'Grey',     hex: '#9ca3af' },
-    { key: 'blue',     label: 'Blue',     hex: '#3b82f6' },
+    { key: 'sst',      label: 'SST · Gold',              hex: '#eab308' },
+    { key: 'plain',    label: 'Plain · Red',             hex: '#ef4444' },
+    { key: 'edta',     label: 'EDTA · Lavender',         hex: '#a855f7' },
+    { key: 'fluoride', label: 'Fluoride · Grey',         hex: '#9ca3af' },
+    { key: 'heparin',  label: 'Lithium Heparin · Green', hex: '#22c55e' },
+    { key: 'citrate',  label: 'Sodium Citrate · Blue',   hex: '#38bdf8' },
+    { key: 'esr',      label: 'ESR · Black',             hex: '#1f2937' },
+    { key: 'trace',    label: 'Trace metal · Royal blue',hex: '#1d4ed8' },
+    { key: 'sterile',  label: 'Sterile Container',       hex: '#e5e7eb' },
+    { key: 'urine',    label: 'Urine Bottle · Yellow',   hex: '#facc15' },
+    { key: 'multiple', label: 'Multiple',                hex: '#6366f1' },
   ];
 
   // Parameter rows collapse to a one-line summary by default — admins
@@ -1167,13 +1543,108 @@ export class TestEditorComponent implements OnInit {
     this._expandedParamId.update(cur => cur === id ? null : id);
   }
 
+  /**
+   * Keep the test's flat `adultReferenceRange` in step with the bands.
+   *
+   * That column is what the Test Master grid shows and what the backend mirrors
+   * back into a single analyte on save, so leaving it stale would put two
+   * different ranges on screen for the same test. One all-patients band is
+   * expressible as a flat string, so it is written; conditional bands are not,
+   * so the field is cleared and the grid falls back to rendering every band.
+   */
+  private flatRangeFromBands(current: string): string {
+    const numeric = this.numericFields();
+    if (numeric.length !== 1) return current;
+    const bands = numeric[0].referenceRanges ?? [];
+    if (bands.length !== 1) return '';
+    return formatRange(bands[0]) ?? '';
+  }
+
+  /**
+   * Reference ranges open in the SIMPLE two-box form — one range for everyone,
+   * which is what nearly every test needs. Sex/age bands are a deliberate step
+   * in, not vocabulary to read past on the way to typing 70 and 100.
+   *
+   * The exception is a test that already HAS conditional bands: the two-box
+   * form can't show those without hiding real configuration, so
+   * {@link needsAdvancedRanges} forces the full editor open and the "Simple"
+   * escape is withheld. Nothing is ever silently dropped.
+   */
+  private readonly _advancedRanges = signal(false);
+  protected openAdvancedRanges() { this._advancedRanges.set(true); }
+  protected closeAdvancedRanges() { this._advancedRanges.set(false); }
+
+  /** True when this analyte's bands can't be expressed in the two-box form. */
+  protected needsAdvancedRanges(p: FormField): boolean {
+    const bands = p.referenceRanges ?? [];
+    if (bands.length > 1) return true;
+    const b = bands[0];
+    if (!b) return false;
+    return !!(b.sex && b.sex !== 'any') || b.minAge != null || b.maxAge != null || !!b.label;
+  }
+
+  protected showAdvancedRanges(p: FormField): boolean {
+    return this._advancedRanges() || this.needsAdvancedRanges(p);
+  }
+
+  /** The band the simple form edits. Always index 0 — `addParameter` and
+   *  `startReferenceRange` both seed one, so it exists by the time this
+   *  renders; the empty object is a render-time guard, not a real state. */
+  protected firstBand(p: FormField): ReferenceRange {
+    return (p.referenceRanges ?? [])[0] ?? { segment: 'normal', min: null, max: null };
+  }
+
+  /**
+   * One line telling the admin who this analyte's ranges apply to. A single
+   * band is usually the all-patients case, but not always — a lab may
+   * configure one female-only band — so it reports what the band actually
+   * says rather than assuming.
+   */
+  protected bandsCaption(p: FormField): string {
+    const bands = p.referenceRanges ?? [];
+    if (bands.length === 0) return 'No range set';
+    if (bands.length > 1) return `${bands.length} ranges by sex / age`;
+    return deriveRangeLabel(bands[0]) ?? 'Applies to every patient';
+  }
+
+  /** Analytes that can carry a numeric band — the Reference range section's
+   *  subject. A qualitative test (Positive/Negative) legitimately has none. */
+  protected readonly numericFields = computed(() =>
+    this.fields().filter(f => this.isNumericType(f.type)));
+
+  /**
+   * Give a test its first reference range without making the admin think in
+   * "parameters" first. A single-analyte test IS the test, so the analyte is
+   * created named after it, carrying the unit already typed in Results, with
+   * one all-patients band ready to fill in.
+   */
+  protected startReferenceRange(): void {
+    if (this.numericFields().length > 0) return;
+    this.addParameter();
+    const i = this.fields().length - 1;
+    const d = this._draft();
+    this.patchField(i, {
+      name: (d.name ?? '').trim() || 'Result',
+      unit: (d.unit ?? '').trim() || undefined,
+    });
+  }
+
+  /** What this band will print as on the report if the admin types nothing —
+   *  shown as the Label placeholder so the naming rule is visible, not
+   *  guessed at. */
+  autoRangeLabel(r: ReferenceRange): string {
+    return deriveRangeLabel(r) ?? 'No qualifier — applies to everyone';
+  }
+
   /** Compact one-line description used by collapsed param rows. */
   paramSummary(p: FormField): string {
     const bits: string[] = [];
     if (this.isNumericType(p.type)) {
-      const r = (p.referenceRanges ?? [])[0];
-      if (r && (r.min != null || r.max != null)) {
-        bits.push(`${r.min ?? '–'} – ${r.max ?? '–'}${p.unit ? ' ' + p.unit : ''}`);
+      // Every band, labelled — the chip showed referenceRanges[0] alone, so a
+      // test with male and female bands looked like it only had the male one.
+      const bands = describeAllRanges(p.referenceRanges);
+      if (bands.length) {
+        bits.push(bands.join(' · ') + (p.unit ? ' ' + p.unit : ''));
       } else if (p.unit) {
         bits.push(p.unit);
       }
@@ -1190,14 +1661,56 @@ export class TestEditorComponent implements OnInit {
   // General + Pricing & TAT live ABOVE the tabs and are always visible.
   // Layout is the secondary tab so first-time creates land on parameters —
   // admins can't fill the layout until the test has an id anyway.
-  private readonly _tab = signal<TestEditorTab>('parameters');
-  readonly tab = this._tab.asReadonly();
-  setTab(t: TestEditorTab) { this._tab.set(t); }
-  readonly tabOptions = computed<SegmentedOption<TestEditorTab>[]>(() => [
-    { value: 'parameters', label: 'Parameters' },
-    { value: 'layout',     label: 'Report layout' },
-    ...(this.canManageInventory() ? [{ value: 'consumables' as const, label: 'Consumables' }] : [])
-  ]);
+
+  /** Which half of the Report Layout tab is showing. Notes leads: it is the
+   *  pass every test needs, while the section builder serves the few that need
+   *  bespoke structure. */
+  protected readonly layoutView = signal<'notes' | 'advanced'>('notes');
+
+  /** Which rail section is open. */
+  private readonly _section = signal<TestSection>('identity');
+  readonly section = this._section.asReadonly();
+  setSection(v: TestSection) {
+    this._section.set(v);
+    if (v === 'layout' && !this.deptColumns()) this.loadDeptColumns(this._draft().departmentId);
+  }
+  /** Rail entries. Bundles (profile/package) have no sample, results, layout or
+   *  consumables of their own — those belong to their member tests — so the
+   *  rail collapses to what actually applies. */
+  readonly visibleSections = computed<Array<{ value: TestSection; label: string; desc: string }>>(() => {
+    const individual = this._draft().type === 'individual';
+    const all: Array<{ value: TestSection; label: string; desc: string }> = [
+      { value: 'identity',    label: 'Identity',        desc: 'Name, code, department, type' },
+      { value: 'pricing',     label: 'Pricing & TAT',   desc: 'Price, tax, turnaround' },
+      { value: 'sample',      label: 'Sample & handling', desc: 'Specimen, tube, volume, fasting' },
+      { value: 'results',     label: 'Results',         desc: 'Parameters, units, reference ranges' },
+      { value: 'layout',      label: 'Report layout',   desc: 'Notes, description, structure' },
+      { value: 'consumables', label: 'Consumables',     desc: 'Inventory used per test' },
+    ];
+    // Consumables was permission-gated when it was a tab — keep that gate.
+    const allowed = this.canManageInventory() ? all : all.filter(x => x.value !== 'consumables');
+    if (individual) return allowed;
+    // Bundles: no sample handling, parameters or consumables of their own —
+    // those belong to their member tests. They DO get Report layout, because a
+    // profile carries its own notes, and when a profile is ordered those notes
+    // are what print (never the members'). See the notes rule in the renderer.
+    return allowed.filter(x => x.value === 'identity' || x.value === 'pricing' || x.value === 'layout');
+  });
+  /** Human list of the DEPARTMENT's report columns — read-only context only.
+   *  Editing lives on /admin/reports because one change hits every test in the
+   *  department, which is exactly the blast radius a per-test screen hides. */
+  protected readonly deptColumns = signal<string>('');
+  deptColumnsLabel(): string { return this.deptColumns(); }
+
+  /** Fetch the department's column labels for the read-only strip. Best-effort:
+   *  the strip simply stays hidden when the department has no custom set. */
+  private loadDeptColumns(departmentId: string | null | undefined): void {
+    if (!departmentId) { this.deptColumns.set(''); return; }
+    this.layoutSvc.getDeptColumns(departmentId)
+      .then(res => this.deptColumns.set(
+        (res?.columns ?? []).map(c => c.label || c.name).filter(Boolean).join(' · ')))
+      .catch(() => this.deptColumns.set(''));
+  }
 
   private readonly _fields = signal<FormField[]>([]);
   readonly fields = this._fields.asReadonly();
@@ -1225,28 +1738,89 @@ export class TestEditorComponent implements OnInit {
   private readonly _allIndividualTests = signal<Test[]>([]);
   readonly allIndividualTests = this._allIndividualTests.asReadonly();
 
-  /** Sum of the prices of the tests currently ticked. Helps admins set
-   *  a sensible package price below the member total. */
-  readonly packageMembersTotal = computed(() => {
-    const picked = new Set(this._packageItems());
-    return this._allIndividualTests()
-      .filter(t => picked.has(t.id))
-      .reduce((s, t) => s + (t.price ?? 0), 0);
+  /** All profiles in the catalog. A PACKAGE may bundle profiles too (the
+   *  backend explodes them recursively); a PROFILE bundles individual tests
+   *  only, so this feeds the package picker exclusively. */
+  private readonly _allProfiles = signal<Test[]>([]);
+  readonly allProfiles = this._allProfiles.asReadonly();
+
+  /** Package-only pill filter narrowing the picker to tests / profiles / all.
+   *  (Profiles being edited pick individual tests only, so no filter shows.) */
+  readonly pickFilter = signal<'all' | 'tests' | 'profiles'>('all');
+  readonly pickFilterOptions: SegmentedOption<'all' | 'tests' | 'profiles'>[] = [
+    { value: 'all',      label: 'All' },
+    { value: 'tests',    label: 'Tests' },
+    { value: 'profiles', label: 'Profiles' }
+  ];
+
+  /** The member candidates for the current bundle, minus the bundle itself:
+   *   • profile  → individual tests only
+   *   • package  → individual tests + profiles (exploded recursively backend-side)
+   *  Excluding `d.id` stops a package/profile from listing (and picking) itself. */
+  readonly pickerSource = computed<Test[]>(() => {
+    const d = this._draft();
+    const selfId = d.id ?? '';
+    const tests = this._allIndividualTests().filter(t => t.id !== selfId);
+    if (d.type !== 'package') return tests;
+    const profiles = this._allProfiles().filter(t => t.id !== selfId);
+    return [...tests, ...profiles];
   });
 
-  /** Group the picker's tests by dept and apply the search query. */
+  /** Every pickable member (tests + profiles) keyed by id — used to price the
+   *  current selection regardless of the active filter. */
+  private readonly _memberById = computed<Map<string, Test>>(() => {
+    const m = new Map<string, Test>();
+    for (const t of this._allIndividualTests()) m.set(t.id, t);
+    for (const t of this._allProfiles()) m.set(t.id, t);
+    return m;
+  });
+
+  /** Sum of the prices of ALL picked members (tests AND profiles). Helps
+   *  admins set a sensible bundle price below the member total. */
+  readonly packageMembersTotal = computed(() => {
+    const by = this._memberById();
+    return this._packageItems().reduce((s, id) => s + (by.get(id)?.price ?? 0), 0);
+  });
+
+  /** Group the picker's candidates by dept (profiles cluster under a synthetic
+   *  "Profiles" group), applying the package pill filter then the search. */
   readonly filteredPackageCatalogByDept = computed(() => {
+    const d = this._draft();
     const q = this.packageQuery().trim().toLowerCase();
+    const filter = this.pickFilter();
+    let source = this.pickerSource();
+    if (d.type === 'package' && filter !== 'all') {
+      source = source.filter(t => filter === 'profiles' ? t.type === 'profile' : t.type !== 'profile');
+    }
     const groups = new Map<string, Test[]>();
-    for (const t of this._allIndividualTests()) {
+    for (const t of source) {
       if (q && !t.name.toLowerCase().includes(q) && !(t.department?.name ?? '').toLowerCase().includes(q)) continue;
-      const key = t.department?.name?.trim() || '(No department)';
+      const key = t.type === 'profile' ? 'Profiles' : (t.department?.name?.trim() || '(No department)');
       const arr = groups.get(key);
       if (arr) arr.push(t); else groups.set(key, [t]);
     }
-    return Array.from(groups.entries())
+    const out = Array.from(groups.entries())
+      // Keep the Profiles cluster last so individual-test departments read first.
       .map(([department, tests]) => ({ department, tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name)) }))
-      .sort((a, b) => a.department.localeCompare(b.department));
+      .sort((a, b) => {
+        if (a.department === 'Profiles') return 1;
+        if (b.department === 'Profiles') return -1;
+        return a.department.localeCompare(b.department);
+      });
+
+    // Everything already chosen collects into a "Selected" group pinned at the
+    // TOP. With ~280 candidates the ticks were scattered across departments and
+    // there was no way to see what the bundle actually contained without
+    // scrolling the whole catalogue. Members still appear in their own
+    // department below, so unticking works from either place.
+    const chosen = new Set(this._packageItems());
+    if (chosen.size > 0) {
+      const picked = this.pickerSource()
+        .filter(t => chosen.has(t.id))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (picked.length > 0) out.unshift({ department: SELECTED_GROUP, tests: picked });
+    }
+    return out;
   });
 
   isInPackage(id: string): boolean { return this._packageItems().includes(id); }
@@ -1272,6 +1846,11 @@ export class TestEditorComponent implements OnInit {
     this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
       next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
     });
+    // Profiles are also pickable members of a PACKAGE (backend explodes them
+    // recursively), so load them too — the picker source switches on bundle type.
+    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
+      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
+    });
 
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
@@ -1284,7 +1863,7 @@ export class TestEditorComponent implements OnInit {
       // package" button lands on this editor with the package type pre-
       // selected instead of defaulting to individual.
       const t = this.route.snapshot.queryParamMap.get('type');
-      if (t === 'package' || t === 'individual') {
+      if (t === 'package' || t === 'individual' || t === 'profile') {
         this.patch({ type: t });
       }
     }
@@ -1309,8 +1888,9 @@ export class TestEditorComponent implements OnInit {
       outsourcedDepartmentId: t.outsourcedDepartmentId ?? ''
     });
     this._fields.set(this.loadParameters(t.parameters ?? ''));
-    // Packages store member-test ids under `items` in the same JSON blob.
-    if (t.type === 'package') {
+    // Bundles (packages AND profiles) store member-test ids under `items` in
+    // the same JSON blob — load them into the shared member picker.
+    if (t.type === 'package' || t.type === 'profile') {
       try {
         const blob = JSON.parse(t.parameters ?? '{}');
         // Accept BOTH member shapes: canonical [{ testId }] (what the backend
@@ -1542,7 +2122,26 @@ export class TestEditorComponent implements OnInit {
   saveTest() {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
+
+    // Profiles are bundles (member picker + a required unique code). Guard the
+    // two profile-specific invariants before we build the body; the backend
+    // also 409s on a duplicate code, which handleSaveError routes to the input.
+    if (d.type === 'profile') {
+      if (!d.testCode.trim()) {
+        this._fieldErrors.update(m => ({ ...m, testCode: 'Profile code is required' }));
+        this.toasts.warning('Profile code is required');
+        return;
+      }
+      if (this._packageItems().length === 0) {
+        this.toasts.warning('Add at least one member test to the profile');
+        return;
+      }
+    }
+
     const pkg = d.type === 'package';
+    // Bundles (packages + profiles) serialise their member-test ids, not the
+    // individual-test parameter/field schema.
+    const bundle = d.type !== 'individual';
 
     // Packages: serialise member-test ids into the same JSON blob as
     // `{items: [...]}` so the order-create picker + admin list both
@@ -1553,7 +2152,7 @@ export class TestEditorComponent implements OnInit {
     // backend exploder (ParsePackageChildIds) and order-create's
     // parsePackageMembers read. The previous plain-string array parsed as zero
     // members, so editor-saved packages silently never exploded at order time.
-    const parametersJson = d.type === 'package'
+    const parametersJson = bundle
       ? JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) })
       : (d.parametersJson || undefined);
 
@@ -1581,7 +2180,7 @@ export class TestEditorComponent implements OnInit {
       resultType: pkg ? undefined : d.resultType,
       unit: pkg ? undefined : d.unit,
       reportFormat: pkg ? undefined : d.reportFormat,
-      adultReferenceRange: pkg ? undefined : d.adultReferenceRange,
+      adultReferenceRange: pkg ? undefined : this.flatRangeFromBands(d.adultReferenceRange),
       criticalLow: pkg ? undefined : (d.criticalLow ?? undefined),
       criticalHigh: pkg ? undefined : (d.criticalHigh ?? undefined),
       parametersJson,
@@ -1612,7 +2211,7 @@ export class TestEditorComponent implements OnInit {
     this._saving.set(false);
     const err = ApiError.from(e);
     const field = err.field ?? '';
-    if (field === 'name' || field === 'price') {
+    if (field === 'name' || field === 'price' || field === 'testCode') {
       this._fieldErrors.update(m => ({ ...m, [field]: err.message }));
     } else {
       this.toasts.error(err.message);

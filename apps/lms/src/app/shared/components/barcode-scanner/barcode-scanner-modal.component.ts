@@ -4,8 +4,7 @@ import {
   ViewChild, computed, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
-import { Exception, Result } from '@zxing/library';
+import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { NumPadComponent } from '../../primitives/num-pad.component';
 
 // Reusable barcode scanner modal. Two input channels:
@@ -36,9 +35,11 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
             <span class="pf-sc__dot" [class.pf-sc__dot--live]="cameraReady()"></span>
             Scanner · {{ cameraReady() ? 'LIVE' : 'STARTING' }}
           </div>
-          <h2 class="pf-sc__title">{{ title }}</h2>
+          <h2 class="pf-sc__title">{{ displayTitle }}</h2>
           @if (expectedBarcode) {
             <p class="pf-sc__sub">Expected: <span class="pf-sc__code">{{ expectedBarcode }}</span></p>
+          } @else if (manualOnly) {
+            <p class="pf-sc__sub">Type the sample ID from the container.</p>
           } @else {
             <p class="pf-sc__sub">Aim at the barcode on the vial.</p>
           }
@@ -50,8 +51,25 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
         </header>
 
         <div class="pf-sc__viewport" [hidden]="manualMode()">
-          <video #video autoplay muted playsinline class="pf-sc__video"></video>
+          <video #video autoplay muted playsinline class="pf-sc__video" (click)="refocus()" title="Tap to focus"></video>
           <div class="pf-sc__frame" aria-hidden="true"></div>
+          @if (torchAvailable()) {
+            <button type="button" class="pf-sc__torch" [class.pf-sc__torch--on]="torchOn()"
+                    (click)="toggleTorch()" [attr.aria-pressed]="torchOn()" aria-label="Toggle torch" title="Torch">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.3V16h6v-1.2c0-.9.4-1.7 1-2.3A6 6 0 0 0 12 2z"/>
+              </svg>
+            </button>
+          }
+          @if (canSwitchCamera()) {
+            <button type="button" class="pf-sc__torch pf-sc__switch" (click)="switchCamera()"
+                    aria-label="Switch camera" title="Switch camera">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          }
           @if (!cameraReady()) {
             <div class="pf-sc__viewport-fallback">
               @if (cameraError()) {
@@ -106,7 +124,23 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 Confirm
               </button>
             } @else {
-              <p class="pf-sc__manual-hint">Manual entry isn't available without an expected barcode. Use the search bar's manual option instead.</p>
+              <!-- Short sample IDs (LAB26001, BIO260800003…) don't segment —
+                   type the full number off the container. Same handleScan path,
+                   so the wrong-vial guard still applies. -->
+              <p class="pf-sc__manual-hint">Type the sample ID written on the container.</p>
+              <input #manualInput
+                     class="pf-sc__free-input uppercase"
+                     type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
+                     [placeholder]="expectedBarcode || 'Sample ID'"
+                     [ngModel]="manualFree()"
+                     (ngModelChange)="manualFree.set($event)"
+                     (keydown.enter)="submitManualFree()" />
+              <button type="button"
+                      class="pf-sc__manual-confirm press"
+                      [disabled]="!manualFree().trim()"
+                      (click)="submitManualFree()">
+                Confirm
+              </button>
             }
           </div>
         }
@@ -130,9 +164,11 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
             <div></div>
           }
           <div class="pf-sc__foot-actions">
-            <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
-              {{ manualMode() ? 'Use camera' : 'Enter manually' }}
-            </button>
+            @if (!manualOnly) {
+              <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
+                {{ manualMode() ? 'Use camera' : 'Enter manually' }}
+              </button>
+            }
             <button type="button" class="pf-sc__cancel press" (click)="cancel()">Cancel</button>
           </div>
         </footer>
@@ -233,6 +269,18 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       overflow: hidden;
     }
     .pf-sc__video { width: 100%; height: 100%; object-fit: cover; }
+    .pf-sc__torch {
+      position: absolute; bottom: 12px; right: 12px; z-index: 2;
+      width: 42px; height: 42px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(10, 12, 20, 0.55); color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.25); cursor: pointer;
+      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .pf-sc__torch--on { background: #fbbf24; color: #1f2937; border-color: #fbbf24; }
+    .pf-sc__switch { right: auto; left: 12px; }
+    .pf-sc__video { cursor: pointer; }
     .pf-sc__frame {
       position: absolute; inset: 12%;
       border: 2px dashed rgba(236, 72, 153, 0.55);
@@ -358,11 +406,27 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
     }
     .pf-sc__manual-confirm:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.08); }
     .pf-sc__manual-confirm:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+    /* Free-text sample-ID input (short codes that don't segment) */
+    .pf-sc__free-input {
+      width: 100%; margin: 10px 0 12px; padding: 12px 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border-input, rgba(255,255,255,0.15));
+      border-radius: 10px; color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 17px; letter-spacing: 0.08em;
+    }
+    .pf-sc__free-input:focus { outline: none; border-color: var(--color-violet-500, #7c3aed); }
   `]
 })
 export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @Input() title = 'Scan vial barcode';
   @Input() expectedBarcode?: string;
+  /** Manual-mode tenants: the modal is typing-only — no camera ever starts,
+   *  no "Use camera" toggle. The title/hints read as "enter", not "scan". */
+  @Input() manualOnly = false;
+
+  /** Caller titles say "Scan vial to claim" etc. — reword for typing-only. */
+  protected get displayTitle(): string {
+    return this.manualOnly ? this.title.replace(/^Scan\b/i, 'Enter') : this.title;
+  }
 
   @Output() matched = new EventEmitter<string>();
   @Output() cancelled = new EventEmitter<void>();
@@ -371,12 +435,36 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @ViewChild('manualInput') manualInputEl?: ElementRef<HTMLInputElement>;
   @ViewChild('confirmBtn') confirmBtnEl?: ElementRef<HTMLButtonElement>;
 
-  private reader: BrowserMultiFormatReader | null = null;
-  private controls: IScannerControls | null = null;
+  // Camera stream owned directly (not by a decoding library) so we can request
+  // a high-resolution feed + continuous autofocus + torch — the levers that let
+  // a code be read at arm's length instead of pressed against the lens.
+  private stream: MediaStream | null = null;
+  private track: MediaStreamTrack | null = null;
+  // Native BarcodeDetector when the browser has it (hardware-accelerated),
+  // otherwise a ZXing-C++ WebAssembly fallback — both far stronger than the old
+  // pure-JS decoder.
+  private detector: BarcodeDetector | null = null;
+  private rafId: number | null = null;
+  private active = false;
+  private lastDetectAt = 0;
+  // Auto-refocus: continuous AF (Chrome/Android) gets stuck when the scene
+  // changes (an object comes near then leaves), so we re-trigger focus when the
+  // decoder has seen nothing for a beat — that's the "out of focus" signal.
+  private focusSupported = false;
+  private lastCodeSeenAt = 0;
+  private lastFocusKickAt = 0;
+  private focusKicking = false;
+  private static readonly FOCUS_STALE_MS = 1200;   // no code seen → likely blurry
+  private static readonly FOCUS_KICK_GAP_MS = 1600; // min gap between kicks
 
   protected readonly cameraReady = signal(false);
   protected readonly cameraError = signal<string | null>(null);
   protected readonly lastMismatch = signal<string | null>(null);
+  protected readonly torchAvailable = signal(false);
+  protected readonly torchOn = signal(false);
+  /** Which camera to open, and whether a second one exists to switch to. */
+  private readonly facing = signal<'environment' | 'user'>('environment');
+  protected readonly canSwitchCamera = signal(false);
 
   // HID barcode guns emit keystrokes and terminate with Enter. We buffer
   // recent keys while the modal is open and treat the buffer as a scanned
@@ -391,6 +479,8 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   // logic still protects against wrong vials.
   protected readonly manualMode = signal(false);
   protected readonly manualSeq = signal('');
+  /** Free-text sample ID for short codes that don't segment (LAB26001…). */
+  protected readonly manualFree = signal('');
   protected readonly isTouch = signal<boolean>(
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
   );
@@ -410,31 +500,162 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // positioning can't cover the root-level nav — hide it instead). Removed
     // again in ngOnDestroy. The component only exists while open (@if).
     try { document.body.classList.add('pf-scanner-open'); } catch { /* SSR */ }
+    if (this.manualOnly) {
+      // Typing-only: never touch the camera; land straight on the manual panel.
+      this.manualMode.set(true);
+      setTimeout(() => this.manualInputEl?.nativeElement.focus(), 50);
+      return;
+    }
+    this.detector = new BarcodeDetector({
+      // Every symbology a tube/label or requisition could carry, incl. the new
+      // Data Matrix option and the existing QR + Code128.
+      formats: ['qr_code', 'data_matrix', 'code_128', 'code_39', 'ean_13', 'ean_8',
+        'itf', 'codabar', 'upc_a', 'upc_e', 'pdf417', 'aztec'],
+    });
+    await this.startCamera();
+  }
+
+  ngOnDestroy() {
+    this.stopCamera();
+    try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
+  }
+
+  /** Open a high-res back-camera stream, enable continuous autofocus + detect
+   *  torch support, then start the detection loop. */
+  private async startCamera() {
     try {
-      this.reader = new BrowserMultiFormatReader();
-      // decodeFromVideoDevice(null, …) picks the default / back camera.
-      this.controls = await this.reader.decodeFromVideoDevice(
-        undefined,
-        this.videoEl.nativeElement,
-        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
-          if (!result) return;
-          this.cameraReady.set(true);
-          const text = result.getText();
-          this.handleScan(text, controls);
-        }
-      );
-      // If decodeFromVideoDevice starts the stream successfully, the video
-      // metadata fires loadedmetadata pretty quickly; mark ready optimistically.
-      this.videoEl.nativeElement.onloadedmetadata = () => this.cameraReady.set(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: this.facing() },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+      this.stream = stream;
+      this.track = stream.getVideoTracks()[0] ?? null;
+      const video = this.videoEl.nativeElement;
+      video.srcObject = stream;
+      video.onloadedmetadata = () => { this.cameraReady.set(true); video.play().catch(() => { /* ignore */ }); };
+      await video.play().catch(() => { /* autoplay may need the metadata event */ });
+      // Continuous autofocus keeps codes sharp across distances (best-effort;
+      // silently ignored where the platform doesn't expose focusMode).
+      try { await this.track?.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }); } catch { /* unsupported */ }
+      try {
+        const caps = this.track?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] }) | undefined;
+        this.torchAvailable.set(!!caps && 'torch' in caps);
+        // Only run the auto-refocus loop where the platform actually exposes
+        // focus control (Chrome/Android); elsewhere it's a harmless no-op.
+        this.focusSupported = !!caps?.focusMode && (caps.focusMode.includes('single-shot') || caps.focusMode.includes('continuous'));
+      } catch { /* unsupported */ }
+      this.lastCodeSeenAt = performance.now();
+      this.lastFocusKickAt = performance.now();
+      // Show the camera-switch button only if a second camera exists (labels
+      // are populated once permission is granted, which it now is).
+      try {
+        const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        this.canSwitchCamera.set(cams.length > 1);
+      } catch { /* unsupported */ }
+      this.active = true;
+      this.lastDetectAt = 0;
+      this.rafId = requestAnimationFrame(this.scanTick);
     } catch (err) {
-      // getUserMedia denied / no camera / running on http without permission.
       this.cameraError.set(this.friendlyError(err));
     }
   }
 
-  ngOnDestroy() {
-    try { this.controls?.stop(); } catch { /* ignore */ }
-    try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
+  /** rAF detection loop, throttled to ~8 detections/sec (a full-rate detect is
+   *  wasteful and can starve the decoder). */
+  private scanTick = () => {
+    if (!this.active) return;
+    const video = this.videoEl?.nativeElement;
+    if (this.detector && video && video.readyState >= 2) {
+      const now = performance.now();
+      if (now - this.lastDetectAt >= 120) {
+        this.lastDetectAt = now;
+        this.detector.detect(video).then(codes => {
+          if (this.active && codes && codes.length) {
+            this.lastCodeSeenAt = performance.now(); // a code is visible → in focus
+            if (codes[0].rawValue) this.handleScan(codes[0].rawValue);
+          }
+        }).catch(() => { /* transient decode error — keep scanning */ });
+      }
+      // Nothing decoded for a beat ⇒ likely out of focus (continuous AF stuck
+      // after the scene changed). Re-trigger focus, rate-limited.
+      if (this.focusSupported && !this.focusKicking
+          && now - this.lastCodeSeenAt > BarcodeScannerModalComponent.FOCUS_STALE_MS
+          && now - this.lastFocusKickAt > BarcodeScannerModalComponent.FOCUS_KICK_GAP_MS) {
+        this.lastFocusKickAt = now;
+        void this.kickFocus();
+      }
+    }
+    if (this.active) this.rafId = requestAnimationFrame(this.scanTick);
+  };
+
+  /** Stop the detection loop and release the camera. */
+  private stopCamera() {
+    this.active = false;
+    if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+    try { this.stream?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
+    this.stream = null;
+    this.track = null;
+    this.torchOn.set(false);
+    this.cameraReady.set(false);
+  }
+
+  /** Toggle the camera torch (labs are dim and tubes are glossy). */
+  async toggleTorch() {
+    if (!this.track) return;
+    const next = !this.torchOn();
+    try {
+      await this.track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      this.torchOn.set(next);
+    } catch { /* torch not supported on this device */ }
+  }
+
+  /** Switch between the front/back cameras (mobile devices). */
+  async switchCamera() {
+    this.facing.update(f => (f === 'environment' ? 'user' : 'environment'));
+    this.stopCamera();
+    await this.startCamera();
+  }
+
+  /** Tap-to-focus: manual re-trigger. */
+  async refocus() {
+    this.lastCodeSeenAt = performance.now(); // avoid an immediate auto-kick on top
+    await this.kickFocus();
+  }
+
+  /** Re-trigger the camera's autofocus. The reliable "kick" across Android
+   *  devices is single-shot → back to continuous (a plain re-apply of
+   *  'continuous' often doesn't force a re-hunt once it's stuck). Falls back to
+   *  a focusDistance sweep, then to re-applying continuous. */
+  private async kickFocus() {
+    const track = this.track;
+    if (!track || this.focusKicking) return;
+    this.focusKicking = true;
+    try {
+      const caps = track.getCapabilities?.() as (MediaTrackCapabilities & { focusMode?: string[]; focusDistance?: { min: number; max: number } }) | undefined;
+      const modes = caps?.focusMode ?? [];
+      if (modes.includes('single-shot')) {
+        await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 500));
+        if (modes.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+        }
+      } else if (caps?.focusDistance && modes.includes('manual')) {
+        // Sweep the focus distance to force a re-hunt, then return to continuous.
+        const { min, max } = caps.focusDistance;
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: min } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 250));
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: max } as MediaTrackConstraintSet] });
+        await new Promise(r => setTimeout(r, 250));
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+      } else {
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => { /* noop */ });
+      }
+    } catch { /* unsupported on this platform */ }
+    finally { this.focusKicking = false; }
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -472,7 +693,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private handleScan(code: string, controls?: IScannerControls) {
+  private handleScan(code: string) {
     const trimmed = (code || '').trim();
     if (!trimmed) return;
 
@@ -485,28 +706,26 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    try { (controls ?? this.controls)?.stop(); } catch { /* ignore */ }
+    this.stopCamera();
     this.matched.emit(trimmed);
   }
 
   cancel() {
-    try { this.controls?.stop(); } catch { /* ignore */ }
+    this.stopCamera();
     this.cancelled.emit();
   }
 
   toggleManual() {
     const next = !this.manualMode();
     this.manualMode.set(next);
-    // Pause the camera while the manual panel is in front, resume on close.
+    // Release the camera while the manual panel is in front; reopen on close.
     if (next) {
-      try { this.controls?.stop(); } catch { /* ignore */ }
-      this.cameraReady.set(false);
+      this.stopCamera();
       setTimeout(() => {
         this.manualInputEl?.nativeElement.focus();
       }, 50);
     } else {
-      // Reattach the camera if the user goes back to scanning.
-      this.restartCamera();
+      void this.startCamera();
     }
   }
 
@@ -529,22 +748,12 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     this.handleScan(assembled);
   }
 
-  private async restartCamera() {
-    if (!this.reader || !this.videoEl?.nativeElement) return;
-    try {
-      this.controls = await this.reader.decodeFromVideoDevice(
-        undefined,
-        this.videoEl.nativeElement,
-        (result: Result | undefined, _err: Exception | undefined, controls: IScannerControls) => {
-          if (!result) return;
-          this.cameraReady.set(true);
-          this.handleScan(result.getText(), controls);
-        }
-      );
-      this.videoEl.nativeElement.onloadedmetadata = () => this.cameraReady.set(true);
-    } catch (err) {
-      this.cameraError.set(this.friendlyError(err));
-    }
+  /** Free-text sample-ID confirm (short codes) — same handleScan path, so the
+   *  wrong-vial mismatch guard still applies. */
+  submitManualFree() {
+    const v = this.manualFree().trim().toUpperCase();
+    if (!v) return;
+    this.handleScan(v);
   }
 
   private friendlyError(err: unknown): string {

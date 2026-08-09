@@ -23,6 +23,9 @@ interface MeResponse {
   permissions: string[];
   branches?: BranchRef[];
   hasPin?: boolean;
+  signatureDataUrl?: string;
+  /** Medical council / registration number (dash on screens until set). */
+  registrationId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -521,6 +524,20 @@ export class AuthService {
     }
   }
 
+  /** Patch the cached signature after a save/remove so anything reading
+   *  `user()?.signatureDataUrl` (invoices, the My-signature screen) updates live
+   *  without re-fetching the whole profile. */
+  setSignatureLocal(dataUrl: string | null): void {
+    const u = this._user();
+    if (u) this._user.set({ ...u, signatureDataUrl: dataUrl ?? undefined });
+  }
+
+  /** Mirror a saved registration ID onto the in-memory user. */
+  setRegistrationIdLocal(regId: string | null): void {
+    const u = this._user();
+    if (u) this._user.set({ ...u, registrationId: regId ?? undefined });
+  }
+
   async getAccessToken(): Promise<string | null> {
     // Prefer the session we set locally via directTokenFetch — the SDK's
     // getSession() occasionally hangs on cold starts waiting on the Web-Locks
@@ -598,7 +615,9 @@ export class AuthService {
         roles: data.roles ?? [],
         permissions: data.permissions ?? [],
         branches: data.branches ?? [],
-        hasPin: data.hasPin ?? false
+        hasPin: data.hasPin ?? false,
+        signatureDataUrl: data.signatureDataUrl ?? undefined,
+        registrationId: data.registrationId ?? undefined
       });
       this._lastProfileLoadedAt = Date.now();
 

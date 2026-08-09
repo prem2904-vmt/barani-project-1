@@ -19,6 +19,8 @@ export interface RangeLike {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
+  /** Admin's override for the auto-derived friendly name. */
+  label?: string | null;
 }
 
 /** Normalize a free-text sex to 'M' | 'F' | 'O' or null. */
@@ -54,6 +56,106 @@ export function selectReferenceRange<T extends RangeLike>(
     }
   }
   return best ?? ranges[0];
+}
+
+/**
+ * Like {@link selectReferenceRange}, but also reports whether the winner was
+ * chosen ON MERIT. A band that merely survived (nothing contradicted it)
+ * mustn't be printed as "Adult Male" — that would assert something about a
+ * patient whose sex/age we don't know. Mirrors `ReferenceRangeResolver.Select`.
+ */
+export function matchReferenceRange<T extends RangeLike>(
+  ranges: readonly T[] | undefined | null,
+  sex: 'M' | 'F' | 'O' | null,
+  ageYears: number | null
+): { range: T | undefined; isSpecific: boolean } {
+  if (!ranges || ranges.length === 0) return { range: undefined, isSpecific: false };
+  let best: T | undefined;
+  let bestScore = -Infinity;
+  for (const r of ranges) {
+    const { eligible, score } = scoreRange(r, sex, ageYears);
+    if (!eligible) continue;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  if (!best) return { range: ranges[0], isSpecific: false };
+  return { range: best, isSpecific: bestScore > 0 };
+}
+
+/**
+ * The friendly name shown beside a band — "Adult Male", "Child", "Female".
+ * Derived from the band's own constraints so the catalogue reads consistently;
+ * an explicit `label` overrides it for anything the rule can't name. Returns
+ * null for an unconstrained band, which needs no qualifier.
+ * Mirrors `ReferenceRangeResolver.DeriveLabel`.
+ */
+export function deriveRangeLabel(r: RangeLike): string | null {
+  if (r.label && r.label.trim()) return r.label.trim();
+
+  const rSex = (r.sex && r.sex !== 'any') ? r.sex : parseSegmentSex(r.segment);
+  const sexWord = rSex === 'M' ? 'Male' : rSex === 'F' ? 'Female' : null;
+  const ageWord = ageWordFor(r);
+
+  if (ageWord && sexWord) return `${ageWord} ${sexWord}`;
+  if (ageWord) return ageWord;
+  if (sexWord) return sexWord;
+
+  const seg = (r.segment ?? '').trim();
+  if (seg && seg.toLowerCase() !== 'normal' && seg.toLowerCase() !== 'default') return prettify(seg);
+  return null;
+}
+
+function ageWordFor(r: RangeLike): string | null {
+  const { minY, maxY, hasAge } = resolveRangeAgeYears(r);
+  if (!hasAge) return null;
+
+  if (minY != null && minY >= 18 && maxY == null) return 'Adult';
+  if (minY == null || minY <= 0) {
+    if (maxY != null && maxY <= 0.09) return 'Newborn';   // ≈ 28 days
+    if (maxY != null && maxY <= 1) return 'Infant';
+    if (maxY != null && maxY <= 12) return 'Child';
+    if (maxY != null && maxY <= 18) return 'Paediatric';
+  }
+  if (minY != null && minY >= 60 && maxY == null) return 'Geriatric';
+
+  if (minY != null && maxY != null) return `${ageNum(minY)}–${ageNum(maxY)} y`;
+  if (minY != null) return `> ${ageNum(minY)} y`;
+  if (maxY != null) return `< ${ageNum(maxY)} y`;
+  return null;
+}
+
+const ageNum = (y: number): string =>
+  y >= 1 || y === 0 ? num(Math.round(y * 10) / 10) : `${num(Math.round(y * 120) / 10)} mo`;
+
+const num = (n: number): string => Number.isInteger(n) ? String(n) : String(+n.toFixed(4));
+
+const prettify = (s: string): string =>
+  s.replace(/[_-]+/g, ' ').split(' ').filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+
+/** Band values as display text: "13–17", "< 200", "> 40". */
+export function formatRange(r: RangeLike | undefined | null): string | null {
+  if (!r) return null;
+  if (r.min != null && r.max != null) return `${num(r.min)}–${num(r.max)}`;
+  if (r.max != null) return `< ${num(r.max)}`;
+  if (r.min != null) return `> ${num(r.min)}`;
+  return null;
+}
+
+/**
+ * Every band as "Label 13–17". Used for the report's no-specific-match case
+ * and for the Test Master grid, where all bands must read on ONE row rather
+ * than splitting a test across several. Mirrors `DescribeAll`.
+ */
+export function describeAllRanges(ranges: readonly RangeLike[] | undefined | null): string[] {
+  if (!ranges) return [];
+  const out: string[] = [];
+  for (const r of ranges) {
+    const text = formatRange(r);
+    if (!text) continue;
+    const label = deriveRangeLabel(r);
+    out.push(label ? `${label} ${text}` : text);
+  }
+  return out;
 }
 
 function scoreRange(r: RangeLike, sex: 'M' | 'F' | 'O' | null, ageYears: number | null): { eligible: boolean; score: number } {
@@ -101,9 +203,14 @@ function toYears(n: number, unit?: string | null): number {
 
 export function parseSegmentSex(segment?: string | null): 'M' | 'F' | null {
   if (!segment) return null;
-  const s = segment.toLowerCase();
-  if (s.includes('female') || s.includes('woman') || s.includes('women') || /\bf\b/.test(s)) return 'F';
-  if (s.includes('male') || s.includes('man') || s.includes('men') || /\bm\b/.test(s)) return 'M';
+  // Whole words only, and separators normalised to spaces first. Substring
+  // matching read "post_menopausal" as MALE (it contains "men"), which both
+  // excluded that band from every female patient and named it "Male" on the
+  // report. Underscores must become spaces before the word boundaries are
+  // applied, or "adult_male" stops matching — `_` is itself a word character.
+  const s = segment.toLowerCase().replace(/[_-]+/g, ' ');
+  if (/\b(female|females|woman|women|f)\b/.test(s)) return 'F';
+  if (/\b(male|males|man|men|m)\b/.test(s)) return 'M';
   return null;
 }
 

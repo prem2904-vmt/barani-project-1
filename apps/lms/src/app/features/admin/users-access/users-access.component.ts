@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -73,7 +73,7 @@ type Tab = 'users' | 'roles';
 
       @if (tab() === 'users') {
         <div class="mb-4">
-          <input type="text" class="pf-input max-w-md" placeholder="Search name or email…"
+          <input type="text" class="pf-input max-w-md" placeholder="Search name or username…"
                  [ngModel]="search()" (ngModelChange)="onSearch($event)" />
         </div>
 
@@ -242,6 +242,7 @@ export class UsersAccessComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
   private readonly presence = inject(PresenceService);
@@ -300,6 +301,12 @@ export class UsersAccessComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.route.queryParams.subscribe(params => {
+      if (params['tab'] === 'roles' || params['tab'] === 'users') {
+        this._tab.set(params['tab']);
+      }
+    });
+
     this.api.get<User[]>('/api/users/').subscribe({ next: l => {
       this._users.set(l ?? []);
       // The users list carries each user's persisted presenceStatus —
@@ -310,7 +317,15 @@ export class UsersAccessComponent implements OnInit {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
   }
 
-  setTab(t: Tab) { this._tab.set(t); }
+  setTab(t: Tab) {
+    this._tab.set(t);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: t },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
+  }
   onSearch(v: string) { this._search.set(v); }
 
   openInvite() { this.router.navigateByUrl('/admin/users/invite'); }

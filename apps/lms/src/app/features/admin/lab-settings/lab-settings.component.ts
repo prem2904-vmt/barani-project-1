@@ -38,6 +38,15 @@ interface AutoAssignConfig {
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
 
+      <!-- This page has no Save button by design: every change persists the
+           moment you make it (OPS-15). Make that explicit so it doesn't read as
+           unsaved. -->
+      <div class="pf-ls__autosave" role="status">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <span>Changes are saved automatically</span>
+      </div>
+
       <!-- Counters & collection — now driven by the Workflow (single source) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Counters &amp; collection</h3>
@@ -55,6 +64,92 @@ interface AutoAssignConfig {
           </span>
           <button type="button" class="text-[12px] font-semibold text-violet-400 hover:text-violet-300" (click)="goWorkflow()">Edit in Workflow →</button>
         </div>
+      </pf-tile>
+
+      <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Sample identification</h3>
+        <p class="pf-ls__hint">
+          How techs identify a sample on the lab screens. <strong>Scan</strong> shows the camera
+          QR/barcode scanner (a hardware scanner also types into the field). <strong>Manual</strong>
+          hides the scanner and shows the <strong>sample number</strong> to read and type by hand.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of scanModeOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="scanMode() === opt.value"
+                    (click)="setScanMode(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      </pf-tile>
+
+      <!-- Queue focus (per-branch) — how the lab worklists group work. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Queue focus</h3>
+        <p class="pf-ls__hint">
+          How the technician worklist, lab intake and result-entry queues group work.
+          <strong>Patient</strong> lists patients with their tests nested; <strong>Sample</strong>
+          keys each row by Sample ID (patient shown small). By default this follows the
+          <strong>Lab structure</strong> below — pick one to override it.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of queueFocusOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="queueFocusSelected() === opt.value"
+                    (click)="setQueueFocusMode(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+        @if (queueFocusMode() === 'auto') {
+          <p class="pf-ls__hint" style="margin-top: 10px;">
+            Following the lab structure — currently
+            <strong style="color: var(--text-primary);">{{ effectiveQueueFocus() === 'sample' ? 'Sample-focused' : 'Patient-focused' }}</strong>.
+          </p>
+        } @else {
+          <button type="button" class="pf-ls__link" style="margin-top: 10px;" (click)="setQueueFocusMode('auto')">
+            Reset — follow the lab structure
+          </button>
+        }
+      </pf-tile>
+
+      <!-- Lab structure (per-branch): integrated / standalone / auto -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Lab structure</h3>
+        <p class="pf-ls__hint">
+          How this branch's tubes group into spaces.
+          <strong>Auto</strong> (default) = arrange freely on the Branches board —
+          placed departments follow their space, the rest share the default "Lab".
+          <strong>Integrated</strong> = one lab, ONE space — everything shares the
+          default "Lab" space.
+          <strong>Standalone</strong> = every department is its own space with its
+          own sample-ID prefix.
+        </p>
+        <div class="pf-ls__gate">
+          @for (opt of labStructureOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labStructure() === opt.value"
+                    (click)="setLabStructure(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+        <p class="pf-ls__hint" style="margin-top: 12px;">
+          Tip: set the default "Lab" code (the sample-ID prefix for departments with no
+          dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
+          leave it blank for no prefix.
+        </p>
       </pf-tile>
 
       <!-- Sample ID — short sample barcode number width (tenant-wide) -->
@@ -139,6 +234,31 @@ interface AutoAssignConfig {
             </button>
           }
         </div>
+      </pf-tile>
+
+      <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
+           are per-station (a user's Print settings), never stored in the cloud. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Specimen label code</h3>
+        <p class="pf-ls__hint">
+          The <strong>one</strong> machine-readable code printed on every tube label across the
+          organisation. A tube label can't fit more than one. Label size, printer &amp; darkness
+          are set per station under <strong>Print settings</strong> (profile menu).
+        </p>
+
+        <div class="pf-ls__gate mt-3">
+          @for (opt of labelCodeOptions; track opt.value) {
+            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labelCodeMode() === opt.value"
+                    (click)="setLabelCodeMode(opt.value)">
+              <span class="pf-ls__gate-radio"></span>
+              <span class="pf-ls__gate-text">
+                <span class="pf-ls__gate-t">{{ opt.label }}</span>
+                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
+              </span>
+            </button>
+          }
+        </div>
+
       </pf-tile>
 
       <!-- Require validation for all results -->
@@ -241,10 +361,21 @@ interface AutoAssignConfig {
     </section>
   `,
   styles: [`
+    .pf-ls__autosave {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 600;
+      color: var(--emerald-text, #10b981);
+      background: rgba(16, 185, 129, 0.10);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+    }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-ls__link  { background: none; border: none; padding: 0; font-size: 12.5px; color: var(--color-violet-400, #a78bfa); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
     .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
+
 
     /* Payment-gate radio options */
     .pf-ls__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
@@ -399,6 +530,43 @@ export class LabSettingsComponent implements OnInit {
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
 
+  // ── Sample identification mode (tenant-wide): scan (QR) vs manual entry ──
+  /** Current mode; anything other than 'manual' (incl. absent/empty) = 'scan'. */
+  readonly scanMode = computed<'scan' | 'manual'>(() =>
+    this.tenantState.tenant()?.scanMode === 'manual' ? 'manual' : 'scan');
+  protected readonly scanModeOptions: Array<{ value: 'scan' | 'manual'; label: string; desc: string }> = [
+    { value: 'scan', label: 'Scan (QR / barcode)', desc: 'Camera scanner on the lab screens; hardware scanners also type into the field (default).' },
+    { value: 'manual', label: 'Manual entry', desc: 'No QR — the sample number is shown and typed by hand.' },
+  ];
+
+  // ── Queue focus (per-branch): patient vs sample ──
+  // No "Auto" card here — by default the focus FOLLOWS the Lab structure
+  // (integrated → patient, standalone → sample, auto → by the board's spaces);
+  // picking an option overrides it, and "follow" can be restored.
+  protected readonly queueFocusMode = signal<'auto' | 'patient' | 'sample'>('auto');
+  /** Server-resolved focus when the mode follows the lab structure. */
+  protected readonly effectiveQueueFocus = signal<'patient' | 'sample'>('patient');
+  protected readonly queueFocusOptions: Array<{ value: 'patient' | 'sample'; label: string; desc: string }> = [
+    { value: 'patient', label: 'Patient-focused', desc: 'Rows are patients; their tests nested underneath.' },
+    { value: 'sample', label: 'Sample-focused', desc: 'Rows keyed by Sample ID; patient shown as secondary.' },
+  ];
+  /** The option that reads as selected: a forced mode wins; otherwise the
+   *  structure-derived effective focus. */
+  protected readonly queueFocusSelected = computed<'patient' | 'sample'>(() => {
+    const m = this.queueFocusMode();
+    return m === 'patient' || m === 'sample' ? m : this.effectiveQueueFocus();
+  });
+
+  // ── Lab structure (per-branch): auto (default) / integrated / standalone ──
+  // Drives how vials group + sample-ID prefixes when an order is placed.
+  // Auto is the default: the Branches-board arrangement applies (with nothing
+  // arranged it behaves exactly like Integrated — everything in the one Lab).
+  protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
+  protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
+    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
+    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared vial with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
+    { value: 'standalone', label: 'Standalone', desc: 'Every department is split into its own space — its own sample-ID prefix (the department code), and a separate vial per department even for the same tube colour.' },
+  ];
   // ── Sample ID — running-number width of the short sample barcode ──
   /** Editable number width (1–9). Seeded from the tenant once it loads. */
   protected readonly sampleNumberWidth = signal(5);
@@ -427,6 +595,14 @@ export class LabSettingsComponent implements OnInit {
   ];
   protected readonly requireValidation = signal(false);
   protected readonly showPaymentsDue = signal(true);
+  /** The SINGLE code that prints on a specimen label. A tube label can't fit
+   *  more than one, so this is a mutually-exclusive choice. */
+  protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'datamatrix'>('barcode');
+  protected readonly labelCodeOptions: Array<{ value: 'barcode' | 'qr' | 'datamatrix'; label: string; desc: string }> = [
+    { value: 'barcode', label: 'Barcode (1D)', desc: 'A 1D Code-128 barcode encoding the Sample ID (default).' },
+    { value: 'qr', label: 'QR (2D)', desc: 'A QR encoding the MRN + Sample ID.' },
+    { value: 'datamatrix', label: 'Data Matrix (2D)', desc: 'A compact Data Matrix (Sample ID) — fits a tiny tube area and still scans.' },
+  ];
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
     this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
@@ -449,6 +625,36 @@ export class LabSettingsComponent implements OnInit {
     this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).subscribe({
       next: () => this.toasts.success(msg),
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setLabelCodeMode(v: 'barcode' | 'qr' | 'datamatrix') {
+    const prev = this.labelCodeMode();
+    if (prev === v) return;
+    this.labelCodeMode.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).subscribe({
+      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label code format updated'); },
+      error: e => { this.labelCodeMode.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setQueueFocusMode(v: 'auto' | 'patient' | 'sample') {
+    const prev = this.queueFocusMode();
+    if (prev === v) return;
+    this.queueFocusMode.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).subscribe({
+      next: cfg => {
+        if (cfg) { this.labCfg.update(cfg); this.effectiveQueueFocus.set(cfg.effectiveQueueFocus ?? 'patient'); }
+        this.toasts.success('Queue focus updated');
+      },
+      error: e => { this.queueFocusMode.set(prev); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setLabStructure(v: 'integrated' | 'standalone' | 'auto') {
+    const prev = this.labStructure();
+    if (prev === v) return;
+    this.labStructure.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labStructure: v }).subscribe({
+      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Lab structure updated'); },
+      error: e => { this.labStructure.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
@@ -474,9 +680,18 @@ export class LabSettingsComponent implements OnInit {
       next: c => {
         this.inventoryEnabled.set(c?.inventoryEnabled === true);
         this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
+        this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
+        this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
+        this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
+        // Legacy "individual" reads as standalone; anything unknown/empty is
+        // auto — the default.
+        this.labStructure.set(
+          c?.labStructure === 'standalone' || c?.labStructure === 'individual' ? 'standalone'
+          : c?.labStructure === 'integrated' ? 'integrated'
+          : 'auto');
       }
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
@@ -569,6 +784,16 @@ export class LabSettingsComponent implements OnInit {
   setAllowNoScan(v: boolean) {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
       next: t => this.tenantState.update(t),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Tenant-wide scan vs manual sample-identification mode. Broadcasts via
+   *  tenantState so the lab screens flip immediately (no reload). */
+  setScanMode(v: 'scan' | 'manual') {
+    if (this.scanMode() === v) return;
+    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success(v === 'manual' ? 'Manual entry — scanner hidden on lab screens' : 'Scan mode — QR/barcode scanner shown'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }

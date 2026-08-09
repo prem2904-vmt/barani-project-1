@@ -1,4 +1,6 @@
 import { jsPDF } from 'jspdf';
+import { installPdfTextSanitizer } from '../../../shared/utils/pdf-text';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import autoTable from 'jspdf-autotable';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -44,6 +46,17 @@ export interface InvoicePdfInput {
   declaration?: string;
   /** Cashier / counter staff name — printed in the Cash Bill footer. */
   cashierName?: string;
+  /** The printing user's saved digital signature (PNG data URL). Drawn above the
+   *  cashier line on the Cash Bill when present. */
+  cashierSignatureDataUrl?: string;
+  /** Paper the invoice prints on. 'a4' is the full page; the rest are
+   *  continuous thermal receipt rolls, cut to exact content height:
+   *    thermal_25in → 2.5 in (≈64 mm)
+   *    thermal_3in  → 3 in   (≈80 mm, the common desk receipt printer)
+   *    thermal      → 4 in   (≈104 mm) — kept as the legacy alias so rows
+   *                   saved before the narrower sizes existed still work.
+   *  Applies to EVERY letterhead style, not just the Cash Bill. */
+  paperSize?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in';
   action?: 'save' | 'print' | 'view' | 'blob';
 }
 
@@ -62,21 +75,46 @@ export function generateInvoicePdf(input: InvoicePdfInput): string | void {
     jurisdiction, declaration,
   } = input;
 
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const accent = accentColor || '#1B3A6B';
   const title = (docTitle ?? 'TAX INVOICE').toUpperCase();
   const isTaxInvoice = title.includes('TAX');
-  const right = A4.w - MARGIN;
 
   // ── Cash Bill style — a self-contained monochrome layout that
   //    mirrors the classic Indian diagnostic "CASH BILL" receipt
-  //    (centered header, S.No/Test/Qty/Amount table, Mode-of-Pay +
-  //    Total/Net Payable/Collected block, amount-in-words, Due-Amount
-  //    box). Rendered end-to-end here, then output below. ──────────
-  if (template === 'cashbill') {
-    drawCashBill(doc, input, isTaxInvoice);
-    return finishInvoice(doc, input);
+  //    (centered header, S.No/Test/Amount table, Mode-of-Payment +
+  //    Total/Discount/Net Payable/Collected block, amount-in-words,
+  //    Due-Amount box). Prints on A4 or a 4-inch thermal roll. ─────
+  // Thermal is a PAPER choice, not a letterhead choice: a lab on classic or
+  // modern still needs the receipt roll at the counter. Previously this was
+  // nested under `template === 'cashbill'`, so picking Thermal did nothing
+  // unless the Cash Bill style happened to be selected.
+  const thermalW = thermalWidthPt(input.paperSize);
+  if (thermalW) {
+    // Two passes: render once onto an over-tall page purely to MEASURE where
+    // the content ends, then render again onto a page cut to exactly that
+    // height. Beats maintaining height arithmetic by hand (which drifted every
+    // time a row was added) and guarantees the printer feeds/cuts right after
+    // the bill — no trailing blank paper at any of the three widths.
+    const probe = new jsPDF({ unit: 'pt', format: [thermalW, 4000] });
+    installPdfTextSanitizer(probe);
+    const used = drawThermalBill(probe, input, isTaxInvoice, thermalW);
+    const hPt = Math.max(220, Math.ceil(used + 12));
+    const tdoc = new jsPDF({ unit: 'pt', format: [thermalW, hPt] });
+    installPdfTextSanitizer(tdoc);
+    drawThermalBill(tdoc, input, isTaxInvoice, thermalW);
+    return finishInvoice(tdoc, input);
   }
+
+  if (template === 'cashbill') {
+    const cbDoc = new jsPDF({ unit: 'pt', format: 'a4' });
+    installPdfTextSanitizer(cbDoc);
+    drawCashBill(cbDoc, input, isTaxInvoice);
+    return finishInvoice(cbDoc, input);
+  }
+
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  installPdfTextSanitizer(doc);
+  const accent = accentColor || '#1B3A6B';
+  const right = A4.w - MARGIN;
 
   // ── Header (per template style) ─────────────────────────────
   let y = drawHeader(doc, template, accent, practice, tagline, logoDataUrl);
@@ -152,16 +190,8 @@ function finishInvoice(doc: jsPDF, input: InvoicePdfInput): string | void {
   if (action === 'blob') return doc.output('bloburl') as unknown as string;
   if (action === 'view') { window.open(doc.output('bloburl') as unknown as string, '_blank'); return; }
   if (action === 'print') {
-    const blobUrl = doc.output('bloburl') as unknown as string;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    frame.src = blobUrl;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { window.open(blobUrl, '_blank'); }
-      setTimeout(() => frame.remove(), 60_000);
-    };
-    document.body.appendChild(frame);
+    // Shared helper: an off-screen A4-sized iframe. A 0-sized one prints blank.
+    printPdfBlobUrl(doc.output('bloburl') as unknown as string, { revokeOnDone: true });
     return;
   }
   doc.save(`${input.invoiceNumber}.pdf`);
@@ -339,9 +369,76 @@ const CB_INK = '#111111';
 const CB_GREY = '#444444';
 const CB_RULE = '#333333';
 
-function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
-  const { bill, order, invoiceNumber, effectivePayable, practice = {}, logoDataUrl, tagline, footerText, bankDetails, cashierName, qrDataUrl, orderQrDataUrl } = input;
+/** Computed, presentation-ready Cash Bill values — shared by the A4 and thermal
+ *  renderers so both obey the same rules (no Sample ID, bill number in the head,
+ *  no per-test discount, gross Total → Discount → adjusted Net Payable). */
+interface CashBillModel {
+  patientName: string; ptId: string; mobile: string; dateStr: string;
+  invoiceNo: string; referredBy: string;
+  items: { sno: string; name: string; amount: string }[];
+  payments: { label: string; amount: string; ref: string }[];
+  grossTotal: string; discount: string; hasDiscount: boolean;
+  netPayable: string; collected: string; isCredit: boolean;
+  isPaid: boolean; paidOrDueLabel: string; paidOrDueAmount: string;
+  amountWords: string;
+}
+
+function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
+  const { bill, order, invoiceNumber, effectivePayable } = input;
   const patient = order?.patient;
+  const ageSex = [patient?.age != null ? String(patient.age) : '', patient?.sex ?? ''].filter(Boolean).join(' / ');
+  const patientName = patient?.displayName
+    ? (ageSex ? `${patient.displayName} (${ageSex})` : patient.displayName) : '—';
+
+  // Requirement: keep the Total as-is (gross, before any discount) and apply the
+  // discount once at the bill level. Items therefore show the un-discounted price
+  // (it.price), the Total is the gross sum, and Net Payable is the adjusted figure.
+  const grossTotalNum = bill.items.reduce((s, it) => s + (it.price ?? 0), 0) || bill.subTotal || 0;
+  const discountNum = Math.max(0, grossTotalNum - effectivePayable);
+
+  const payments = (bill.payments ?? []).map(p => ({
+    // A wallet payment is drawn from the patient's prepaid credit — label it "Credit".
+    label: ((p.mode || 'PAID').toLowerCase() === 'wallet' ? 'CREDIT' : (p.mode || 'PAID')).toUpperCase(),
+    amount: plain(p.amount),  // same comma-grouped format as the totals column
+    // Keep a short, traceable reference — a full txn UUID used to overrun the
+    // amount and overlap the totals column. Long ids collapse to "#<last 8>".
+    ref: shortPayRef(p.referenceNo),
+  }));
+  if (payments.length === 0 && bill.totalPaid > 0) payments.push({ label: 'PAID', amount: plain(bill.totalPaid), ref: '' });
+
+  // Credit bills (paid from the patient's wallet / on credit) suppress the
+  // Net Payable + Collected Amount rows; cash and every other mode keep them.
+  const isCredit = (bill.payments ?? []).some(p => {
+    const mode = (p.mode || '').toLowerCase();
+    return mode === 'wallet' || mode === 'credit';
+  });
+
+  const isPaid = bill.balance <= 0;
+  return {
+    patientName,
+    ptId: patient?.mrn ?? shortId(order?.id),
+    mobile: patient?.phone ?? '—',
+    dateStr: formatDateTime(bill.createdAt),
+    invoiceNo: invoiceNumber,
+    referredBy: order?.refDoctorName ?? '',
+    items: bill.items.map((it, i) => ({ sno: String(i + 1), name: it.testName, amount: plain(it.price ?? it.total) })),
+    payments,
+    grossTotal: plain(grossTotalNum),
+    discount: plain(discountNum),
+    hasDiscount: discountNum > 0,
+    netPayable: plain(effectivePayable),
+    collected: plain(bill.totalPaid),
+    isCredit,
+    isPaid,
+    paidOrDueLabel: isPaid ? 'Amount Paid' : 'Due Amount',
+    paidOrDueAmount: plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)),
+    amountWords: numberToWordsINR(Math.round(effectivePayable)),
+  };
+}
+
+function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean): void {
+  const { practice = {}, logoDataUrl, tagline, cashierName, cashierSignatureDataUrl, qrDataUrl, orderQrDataUrl } = input;
+  const m = buildCashBillModel(input);
   const cx = A4.w / 2;
   const rightX = A4.w - MARGIN;
 
@@ -371,7 +468,22 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' });
   y += 24;
 
-  // ── Patient / meta block — two columns with aligned colons ──
+  // ── Patient result-tracking QR — right side of the CASH BILL body, beside
+  //    the meta block (easiest thing to scan; staff-order QR stays bottom).
+  //    Vertically centred in the band between the header rule (y-46) and the
+  //    items-table rule (y+56) so it doesn't sink to the bottom. ──
+  if (qrDataUrl) {
+    const qs = 52, qxr = rightX - qs;
+    const bandTop = y - 46, bandBottom = y + 56;
+    const qyr = bandTop + (bandBottom - bandTop - qs) / 2;
+    try { doc.addImage(qrDataUrl, 'PNG', qxr, qyr, qs, qs); } catch { /* ignore */ }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
+    doc.text('SCAN TO TRACK', qxr + qs / 2, qyr + qs + 7, { align: 'center' });
+  }
+
+  // ── Patient / meta block — two columns, aligned colons. Order (Sample ID
+  //    removed, Invoice/Bill No added): left = Name, Patient ID, Mobile;
+  //    right = Date, Invoice No, Referred by. ──
   const colL = MARGIN, colR = cx + 16;
   const labGap = 80;
   const kv = (x: number, yy: number, label: string, value: string) => {
@@ -381,121 +493,315 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
     doc.setTextColor(CB_INK);
     doc.text(value || '—', x + labGap + 6, yy);
   };
-  const ageSex = [patient?.age != null ? String(patient.age) : '', patient?.sex ?? ''].filter(Boolean).join(' / ');
-  const nameLine = patient?.displayName
-    ? (ageSex ? `${patient.displayName} (${ageSex})` : patient.displayName)
-    : '—';
   let ly = y;
-  kv(colL, ly, 'Patient No', patient?.mrn ?? shortId(order?.id));
-  kv(colR, ly, 'Sample ID', cashSampleId(order)); ly += 16;
-  kv(colL, ly, 'Patient Name', nameLine);
-  kv(colR, ly, 'Date', formatDateTime(bill.createdAt)); ly += 16;
-  kv(colL, ly, 'Mobile No', patient?.phone ?? '—'); ly += 16;
-  if (order?.refDoctorName) { kv(colL, ly, 'Consultant', order.refDoctorName); ly += 16; }
+  kv(colL, ly, 'Patient Name', m.patientName);
+  kv(colR, ly, 'Date', m.dateStr); ly += 16;
+  kv(colL, ly, 'Patient ID', m.ptId);
+  kv(colR, ly, 'Invoice No', m.invoiceNo); ly += 16;
+  kv(colL, ly, 'Mobile No', m.mobile);
+  if (m.referredBy) kv(colR, ly, 'Referred By', m.referredBy);
+  ly += 16;
   y = ly + 8;
 
-  // ── Items table: S.No | Test Name | Quantity | Amount ──
+  // ── Items table: S.No | Test Name | Amount (Quantity removed) ──
   autoTable(doc, {
     startY: y,
-    head: [['S.No', 'Test Name', 'Quantity', 'Amount']],
-    body: bill.items.map((it, i) => [String(i + 1), it.testName, '1', plain(it.total)]),
+    head: [['S.No', 'Test Name', 'Amount']],
+    body: m.items.map(it => [it.sno, it.name, it.amount]),
     margin: { left: MARGIN, right: MARGIN },
     theme: 'plain',
     styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, textColor: CB_INK, lineWidth: 0 },
-    // No halign here — let columnStyles set per-column alignment so the header
-    // label and its body cells share the same edge (was: head left / body right).
     headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: 9.5, lineColor: CB_RULE, lineWidth: { top: 0.7, right: 0, bottom: 0.7, left: 0 } as unknown as number },
     bodyStyles: { fillColor: '#ffffff' },
-    columnStyles: { 0: { cellWidth: 44, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 84, halign: 'center' }, 3: { cellWidth: 84, halign: 'right' } },
+    // Amount column: zero right-padding so the values sit flush to the table's
+    // right edge (rightX) — the exact edge the Total / Net Payable / Amount Paid
+    // stack aligns to below, so the whole money column lines up top to bottom.
+    columnStyles: { 0: { cellWidth: 48, halign: 'left' }, 1: { cellWidth: 'auto', halign: 'left' }, 2: { cellWidth: 96, halign: 'right', cellPadding: { top: 5, right: 0, bottom: 5, left: 6 } } },
+    // Right-align the "Amount" header too so it sits directly above the values
+    // (autoTable leaves head cells left-aligned even when the column is right).
+    didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7); doc.line(MARGIN, y, rightX, y);
   y += 18;
 
-  // ── Mode of Pay (left) + totals (right) ──
+  // ── Mode of Payment (left, amounts aligned) + totals (right) ──
   const blockTop = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
-  doc.text('Mode Of Pay:', MARGIN, y);
+  doc.text('Mode of Payment', MARGIN, y);
   doc.setFont('helvetica', 'normal'); doc.setTextColor(CB_INK);
-  let py = y + 14;
-  const payments = bill.payments ?? [];
-  if (payments.length > 0) {
-    for (const p of payments) {
-      const ref = p.referenceNo ? `   (${p.referenceNo})` : '';
-      doc.text(`${(p.mode || 'PAID').toUpperCase()} : ${p.amount.toFixed(2)}${ref}`, MARGIN, py);
-      py += 13;
+  let py = y + 15;
+  const payColonX = MARGIN + 66;    // aligned colon, mirroring the totals column
+  const payAmtX = MARGIN + 150;     // right edge the payment amounts align to
+  if (m.payments.length > 0) {
+    for (const p of m.payments) {
+      // "CASH : 10,240" — label, aligned colon, right-aligned amount (matches Total).
+      doc.text(p.label, MARGIN, py);
+      doc.text(':', payColonX, py);
+      doc.text(p.amount, payAmtX, py, { align: 'right' });
+      py += 14;
     }
-  } else if (bill.totalPaid > 0) {
-    // Bill is settled but the payment breakdown wasn't supplied — show the
-    // collected total so the mode line isn't blank on a paid invoice.
-    doc.text(`PAID : ${bill.totalPaid.toFixed(2)}`, MARGIN, py); py += 13;
   } else {
-    doc.text('—', MARGIN, py); py += 13;
+    doc.text('—', MARGIN, py); py += 14;
   }
 
   const tLabelX = cx + 16, tColonX = rightX - 78;
   let ty = blockTop;
-  const tot = (label: string, value: string, bold = false) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(10); doc.setTextColor(CB_INK);
+  const tot = (label: string, value: string, bold = false, color = CB_INK) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(10); doc.setTextColor(color);
     doc.text(label, tLabelX, ty);
     doc.text(':', tColonX, ty);
     doc.text(value, rightX, ty, { align: 'right' });
     ty += 17;
   };
-  tot('Total', plain(bill.totalPayable));
-  tot('Net Payable', plain(effectivePayable), true);
-  tot('Collected Amount', plain(bill.totalPaid));
-  y = Math.max(py, ty) + 6;
+  // One continuous vertical stack — every amount right-aligned to the same
+  // edge: Total (gross) → Discount → Net Payable → Collected → Amount Paid / Due
+  // (divider above, emphasised). Credit bills drop Net Payable + Collected
+  // Amount (redundant/confusing for a credit sale); cash + every other mode
+  // keep the full stack.
+  tot('Total', m.grossTotal);
+  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (!m.isCredit) {
+    tot('Net Payable', m.netPayable, true);
+    tot('Collected Amount', m.collected);
+  }
+  ty += 2;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(tLabelX, ty, rightX, ty); ty += 15;
+  tot(m.paidOrDueLabel, m.paidOrDueAmount, true);
 
-  // ── Amount in words ──
+  // ── Amount in words (left column, below the payment + totals blocks) ──
+  let wy = Math.max(py, ty) + 6;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(CB_INK);
-  const words = numberToWordsINR(Math.round(effectivePayable));
-  for (const l of doc.splitTextToSize(`(Amount in words: ${words} Only)`, cx + 10 - MARGIN)) { doc.text(l, MARGIN, y); y += 14; }
-  y += 6;
+  for (const l of doc.splitTextToSize(`(Amount in words: ${m.amountWords} Only)`, cx + 10 - MARGIN)) { doc.text(l, MARGIN, wy); wy += 14; }
 
-  // ── Paid / Due box (right) — label + colour follow the actual status ──
-  const isPaid = bill.balance <= 0;
-  const boxX = rightX - 230;
-  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.7);
-  doc.line(boxX, y, rightX, y);
-  doc.line(boxX, y + 26, rightX, y + 26);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(CB_INK);
-  doc.text(isPaid ? 'Amount Paid' : 'Due Amount', boxX + 4, y + 17);
-  doc.text(':', tColonX, y + 17);
-  doc.text(plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)), rightX, y + 17, { align: 'right' });
-  y += 26 + 26;
+  // ── Staff order QR (bottom-left). The patient track QR sits at the top-right
+  //    of the cash-bill body, beside the meta block. ──
+  if (orderQrDataUrl) {
+    const qrSize = 46, qrTop = A4.h - qrSize - 54;
+    try {
+      doc.addImage(orderQrDataUrl, 'PNG', MARGIN, qrTop, qrSize, qrSize);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
+      doc.text('STAFF ORDER', MARGIN + qrSize / 2, qrTop + qrSize + 8, { align: 'center' });
+    } catch { /* ignore */ }
+  }
 
-  // ── Footer ──
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(CB_GREY);
-  const favour = bankDetails || practice.name;
-  if (favour) { doc.text(`Chq / DD : Favour Of ${favour}`, MARGIN, y); y += 14; }
-  const ded = [footerText || tagline, formatDateTime(bill.createdAt)].filter(Boolean).join('        ');
-  if (ded) { doc.text(ded, MARGIN, y); }
-
-  // Cashier (right, aligned with the favour/dedication lines).
-  doc.setTextColor(CB_INK);
-  doc.text('Cashier', rightX, y - 14, { align: 'right' });
-  if (cashierName) { doc.setFont('helvetica', 'normal'); doc.text(cashierName, rightX, y, { align: 'right' }); }
-
-  // ── Verification QRs (bottom) — report-status tracking + staff order.
-  //    Pinned above the closing note with a single-line caption so they
-  //    never collide with it. ──
-  const qrSize = 46, qrTop = A4.h - qrSize - 54;
-  let qx = MARGIN;
-  const drawQr = (data: string | undefined, caption: string) => {
-    if (!data) return;
-    try { doc.addImage(data, 'PNG', qx, qrTop, qrSize, qrSize); } catch { return; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(CB_GREY);
-    doc.text(caption, qx + qrSize / 2, qrTop + qrSize + 8, { align: 'center' });
-    qx += qrSize + 34;
-  };
-  drawQr(qrDataUrl, 'TRACK REPORT');
-  drawQr(orderQrDataUrl, 'STAFF ORDER');
+  // ── Cashier signature — bottom-right, above the closing note. The printing
+  //    user's saved signature image sits above the line; name below. ──
+  const sigY = A4.h - 44;
+  if (cashierSignatureDataUrl) {
+    const sw = 120, sh = 34;
+    try { doc.addImage(cashierSignatureDataUrl, 'PNG', rightX - sw, sigY - sh - 2, sw, sh); } catch { /* ignore */ }
+  }
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.5);
+  doc.line(rightX - 150, sigY, rightX, sigY);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(CB_INK);
+  doc.text(cashierName ? `Cashier: ${cashierName}` : 'Cashier', rightX, sigY + 12, { align: 'right' });
 
   // Computer-generated note (very bottom).
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor('#555555');
   doc.text('This is a computerized bill and does not require signature', MARGIN, A4.h - 22);
-  doc.text(`Invoice No: ${invoiceNumber}`, rightX, A4.h - 22, { align: 'right' });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Thermal Cash Bill — single-column 4-inch (≈104 mm) receipt roll
+// ──────────────────────────────────────────────────────────────
+
+/** Estimate the continuous-roll height (pt) so the page is cut right after the
+ *  content. Deliberately a little generous — trailing whitespace is fine on a
+ *  roll, a clipped bill is not. */
+/** Roll width in points for a thermal paperSize, or null for A4.
+ *  72 pt = 1 inch. 'thermal' is the legacy 4-inch alias. */
+function thermalWidthPt(paperSize: InvoicePdfInput['paperSize']): number | null {
+  switch (paperSize) {
+    case 'thermal_25in': return 180; // 2.5 in ≈ 64 mm
+    case 'thermal_3in':  return 216; // 3 in   ≈ 80 mm
+    case 'thermal':      return 288; // 4 in   ≈ 104 mm (legacy default)
+    default:             return null;
+  }
+}
+
+/** Per-width type scale. A layout tuned for the 4-inch roll overflows at 2.5 in,
+ *  so margins, font sizes and the two fixed columns (meta label, amount) shrink
+ *  with the paper instead of being hardcoded. */
+function thermalMetrics(W: number) {
+  if (W <= 180) return { MG: 10, name: 10, body: 6.8, small: 6, labelW: 50, amtW: 46, qr: 52, snoW: 15 };
+  if (W <= 216) return { MG: 12, name: 11, body: 7.4, small: 6.2, labelW: 58, amtW: 52, qr: 60, snoW: 17 };
+  return { MG: 14, name: 12, body: 8, small: 6.5, labelW: 66, amtW: 58, qr: 68, snoW: 20 };
+}
+
+/**
+ * Draw the receipt-roll bill and return the Y where the content ends (the
+ * caller uses that to cut the page). Everything flows top-to-bottom — nothing
+ * is pinned to the page bottom, which is what lets the two-pass measurement
+ * produce an exact-height roll.
+ *
+ * The tracking QR sits at the TOP, directly under the title, mirroring the
+ * restructured A4 report: the patient's first action is scanning to track, so
+ * it should not be buried under the totals.
+ */
+function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean, W: number): number {
+  const { practice = {}, logoDataUrl, tagline, cashierName, cashierSignatureDataUrl, qrDataUrl, orderQrDataUrl } = input;
+  const m = buildCashBillModel(input);
+  const M = thermalMetrics(W);
+  const MG = M.MG;
+  const cx = W / 2, rightX = W - MG;
+  const inner = W - 2 * MG;
+
+  // ── Header (centred) ──
+  let y = 18;
+  // addImage anchors at the TOP of the box while text() anchors at the
+  // BASELINE, so every image→text hand-off has to clear the image box *and*
+  // one text ascent. Missing that is what put the logo on top of the lab name.
+  if (logoDataUrl) {
+    const lw = Math.min(36, inner * 0.28);
+    try {
+      doc.addImage(logoDataUrl, 'PNG', cx - lw / 2, y, lw, lw);
+      y += lw + 6 + M.name;          // image box + gap + ascent of the name
+    } catch { /* logo optional */ }
+  } else {
+    y += M.name;                     // no logo: still drop to the first baseline
+  }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.name); doc.setTextColor(CB_INK);
+  for (const l of doc.splitTextToSize(practice.name ?? 'Diagnostic Centre', inner)) {
+    doc.text(l, cx, y, { align: 'center' }); y += M.name + 1;
+  }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.small + 1); doc.setTextColor(CB_GREY);
+  if (tagline) {
+    doc.setFont('helvetica', 'italic');
+    for (const l of doc.splitTextToSize(tagline, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 9; }
+    doc.setFont('helvetica', 'normal');
+  }
+  if (practice.address) {
+    for (const l of doc.splitTextToSize(practice.address, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 8.5; }
+  }
+  const contact = [practice.phone ? `Ph: ${practice.phone}` : '', practice.gstin ? `GSTIN: ${practice.gstin}` : ''].filter(Boolean).join('   ');
+  if (contact) { for (const l of doc.splitTextToSize(contact, inner)) { doc.text(l, cx, y, { align: 'center' }); y += 9; } }
+
+  y += 3; doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 14;
+
+  // ── Title ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.name); doc.setTextColor(CB_INK);
+  doc.text(isTaxInvoice ? 'TAX INVOICE' : 'CASH BILL', cx, y, { align: 'center' }); y += 14;
+
+  // ── QRs at the top, centred side by side (single QR centres on its own) ──
+  const qrs: Array<{ data: string; caption: string }> = [];
+  if (qrDataUrl) qrs.push({ data: qrDataUrl, caption: 'TRACK REPORT' });
+  if (orderQrDataUrl) qrs.push({ data: orderQrDataUrl, caption: 'STAFF ORDER' });
+  const CAP_GAP = 5;   // whitespace between a QR and its caption
+  if (qrs.length > 0) {
+    const gap = qrs.length > 1 ? Math.max(12, inner * 0.07) : 0;
+    const blockW = qrs.length * M.qr + gap * (qrs.length - 1);
+    let qx = cx - blockW / 2;
+    let drew = false;
+    for (const q of qrs) {
+      try { doc.addImage(q.data, 'PNG', qx, y, M.qr, M.qr); drew = true; } catch { qx += M.qr + gap; continue; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(M.small - 0.5); doc.setTextColor(CB_GREY);
+      doc.text(q.caption, qx + M.qr / 2, y + M.qr + CAP_GAP + M.small, { align: 'center' });
+      qx += M.qr + gap;
+    }
+    // Caption baseline sits (qr + capGap) below the QR top; the next element is
+    // another text baseline, so clear the caption's own line plus a gap —
+    // otherwise "TRACK REPORT" lands on the "Patient Name" row.
+    if (drew) y += M.qr + CAP_GAP + M.small + 10 + M.body;
+  }
+
+  // ── Meta (single column) ──
+  const kv = (label: string, value: string) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(M.body); doc.setTextColor(CB_GREY);
+    doc.text(label, MG, y);
+    doc.text(':', MG + M.labelW, y);
+    doc.setTextColor(CB_INK);
+    const vx = MG + M.labelW + 6;
+    doc.text(doc.splitTextToSize(value || '—', rightX - vx)[0] ?? '—', vx, y);
+    y += M.body + 4.5;
+  };
+  kv('Patient Name', m.patientName);
+  kv('Patient ID', m.ptId);
+  kv('Mobile No', m.mobile);
+  kv('Date', m.dateStr);
+  kv('Invoice No', m.invoiceNo);
+  if (m.referredBy) kv('Referred By', m.referredBy);
+  y += 2;
+
+  // ── Items: S.No | Test | Amount ──
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Test', 'Amount']],
+    body: m.items.map(it => [it.sno, it.name, it.amount]),
+    // bottom: 0 so the exact-height second pass can't trigger a page break.
+    margin: { left: MG, right: MG, top: 0, bottom: 0 },
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: M.body, cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 }, textColor: CB_INK, lineWidth: 0 },
+    headStyles: { fillColor: '#ffffff', textColor: CB_INK, fontStyle: 'bold', fontSize: M.body, lineColor: CB_RULE, lineWidth: { top: 0.6, right: 0, bottom: 0.6, left: 0 } as unknown as number },
+    // Amount flush-right (no right padding) so it lines up with the totals
+    // stack below, which right-aligns to rightX.
+    columnStyles: {
+      0: { cellWidth: M.snoW, halign: 'left' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: M.amtW, halign: 'right', cellPadding: { top: 2.5, right: 0, bottom: 2.5, left: 2.5 } },
+    },
+    didParseCell: d => { if (d.section === 'head' && d.column.index === 2) d.cell.styles.halign = 'right'; },
+  });
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += 13;
+
+  // ── Mode of Payment ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 0.5); doc.setTextColor(CB_INK);
+  doc.text('Mode of Payment', MG, y); y += M.body + 4.5;
+  doc.setFont('helvetica', 'normal');
+  if (m.payments.length > 0) {
+    for (const p of m.payments) {
+      doc.text(`${p.label} :`, MG, y);
+      doc.text(p.amount, rightX, y, { align: 'right' });
+      y += M.body + 4.5;
+    }
+  } else { doc.text('—', MG, y); y += M.body + 4.5; }
+  y += 2;
+
+  // ── Totals ──
+  const tot = (label: string, value: string, bold = false, color = CB_INK) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setFontSize(bold ? M.body + 1.5 : M.body + 0.5);
+    doc.setTextColor(color);
+    doc.text(label, MG, y);
+    doc.text(value, rightX, y, { align: 'right' });
+    y += M.body + 5.5;
+  };
+  tot('Total', m.grossTotal);
+  if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (!m.isCredit) {
+    tot('Net Payable', m.netPayable, true);
+    tot('Collected Amount', m.collected);
+  }
+  y += 2;
+  doc.setDrawColor(CB_RULE); doc.setLineWidth(0.6); doc.line(MG, y, rightX, y); y += M.body + 5.5;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 1.5); doc.setTextColor(CB_INK);
+  doc.text(m.paidOrDueLabel, MG, y);
+  doc.text(m.paidOrDueAmount, rightX, y, { align: 'right' }); y += M.body + 7;
+
+  // ── Amount in words ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(M.body + 0.5); doc.setTextColor(CB_INK);
+  for (const l of doc.splitTextToSize(`(In words: ${m.amountWords} Only)`, inner)) { doc.text(l, MG, y); y += M.body + 3; }
+  y += 4;
+
+  // ── Cashier signature — saved signature image above the name ──
+  if (cashierSignatureDataUrl) {
+    const sw = Math.min(96, inner * 0.55);
+    try {
+      doc.addImage(cashierSignatureDataUrl, 'PNG', MG, y, sw, sw * 0.27);
+      y += sw * 0.27 + 4 + M.body;   // image box + gap + ascent of the name line
+    } catch { /* signature optional */ }
+  }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.body); doc.setTextColor(CB_INK);
+  doc.text(cashierName ? `Cashier: ${cashierName}` : 'Cashier', MG, y); y += M.body + 6;
+
+  // ── Closing note ──
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(M.small); doc.setTextColor('#555555');
+  for (const l of doc.splitTextToSize('Computerized bill — no signature required', inner)) {
+    doc.text(l, cx, y, { align: 'center' }); y += M.small + 2.5;
+  }
+
+  return y;
 }
 
 /** Plain rupee amount with Indian grouping, no currency symbol — matches
@@ -506,12 +812,14 @@ function plain(n: number): string {
   return v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
-/** First sample barcode. Falls back to '—' (NOT the order id) so the Sample ID
- *  field never duplicates the Patient No, which already uses the order id when
- *  no MRN is present. */
-function cashSampleId(order: Order | null | undefined): string {
-  const bc = order?.samples?.find(s => !!s.barcode)?.barcode;
-  return bc || '—';
+/** Short, traceable payment reference. A full transaction UUID (e.g. a wallet
+ *  txn id) would overrun the amount and overlap the totals column, so long ids
+ *  collapse to "#<last 8>"; short human refs (cheque no. etc.) pass through. */
+function shortPayRef(ref: string | null | undefined): string {
+  const r = (ref ?? '').trim();
+  if (!r) return '';
+  const short = r.length > 14 ? `#${r.replace(/-/g, '').slice(-8)}` : r;
+  return `(${short})`;
 }
 
 function shortId(id: string | undefined | null): string {
@@ -570,6 +878,7 @@ export function invoiceTemplateFieldsFrom(tpl: Record<string, unknown> | null | 
   if (!tpl) return {};
   return {
     template: (tpl['template'] as InvoiceTemplateStyle) || 'classic',
+    paperSize: (tpl['paperSize'] as 'a4' | 'thermal') || 'a4',
     accentColor: (tpl['accentColor'] as string) || undefined,
     tagline: (tpl['tagline'] as string) || undefined,
     footerText: (tpl['footerText'] as string) || undefined,

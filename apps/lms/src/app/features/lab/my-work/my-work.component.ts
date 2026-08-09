@@ -3,9 +3,11 @@ import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, effec
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
@@ -13,15 +15,13 @@ import { DelegateModalComponent } from './delegate-modal.component';
 import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
 import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
-import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
-import { OrderSample, OrderTest } from '../../../shared/models/order.model';
-import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { OrderSample, OrderTest, logicalTestCount } from '../../../shared/models/order.model';
+import { formatPatientInfo, formatPatientMeta } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -52,7 +52,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -149,15 +149,9 @@ const COUNTERS: CounterSpec[] = [
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
-                 [placeholder]="'Scan a barcode or type a sample ID (e.g. ' + sampleIdExample() + ')…'"
+                 [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
                  class="pf-scan__input"/>
-          <button type="button"
-                  class="pf-scan__manual press"
-                  (click)="toggleManual()"
-                  [attr.aria-expanded]="manualMode()"
-                  aria-label="Toggle manual entry">
-            @if (manualMode()) { Close manual } @else { Manual entry }
-          </button>
+          @if (!scanSvc.manualEntry()) {
           <button type="button"
                   class="pf-scan__camera press"
                   (click)="openBarSearchScanner()"
@@ -168,6 +162,7 @@ const COUNTERS: CounterSpec[] = [
               <circle cx="12" cy="13" r="3.5"/>
             </svg>
           </button>
+          }
         </div>
         <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
           Open
@@ -179,70 +174,9 @@ const COUNTERS: CounterSpec[] = [
         </pf-touch-btn>
       </div>
 
-      @if (manualMode()) {
-        <pf-tile tone="default" padding="lg" class="block mb-5">
-          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 block"
-                 style="color: var(--text-muted);">Manual barcode entry</label>
-
-          <div class="seg-row">
-            <span class="seg seg--locked seg--dept">{{ selectedDeptSampleCode() || '01' }}</span>
-            <span class="seg-sep">·</span>
-            <span class="seg seg--locked">{{ yy() }}</span>
-            <span class="seg-sep">·</span>
-            <input class="seg seg--input"
-                   inputmode="numeric"
-                   pattern="[0-9]*"
-                   [attr.maxlength]="numberWidth()"
-                   [placeholder]="'0'.repeat(numberWidth())"
-                   [ngModel]="seqValue()"
-                   (ngModelChange)="onSeqChange($event)" />
-          </div>
-
-          <div class="manual-meta">
-            <div class="dept-picker">
-              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
-                     style="color: var(--text-muted);">Department</label>
-              <pf-select
-                [options]="deptOptions()"
-                [value]="selectedDeptCode()"
-                placeholder="Select department"
-                (valueChange)="onDeptChange($event)"></pf-select>
-            </div>
-            <div class="preview">
-              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
-                     style="color: var(--text-muted);">Preview</label>
-              <div class="preview-code">{{ fullManualBarcode() }}</div>
-            </div>
-          </div>
-
-          @if (isTouch()) {
-            <div class="numpad-wrap">
-              <pf-num-pad
-                [value]="seqValue()"
-                [allowDecimal]="false"
-                [allowNegative]="false"
-                [maxLength]="numberWidth()"
-                (valueChange)="onSeqChange($event)"></pf-num-pad>
-            </div>
-          }
-
-          <div class="manual-actions">
-            @if (seqValue().length > 0 && seqValue().length < numberWidth()) {
-              <span class="seq-hint">{{ numberWidth() - seqValue().length }} more digit{{ numberWidth() - seqValue().length === 1 ? '' : 's' }}</span>
-            }
-            <pf-touch-btn size="md" variant="primary"
-                          [disabled]="!canManualConfirm()"
-                          (pressed)="submitManual()">
-              Open
-              <span icon-right aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                </svg>
-              </span>
-            </pf-touch-btn>
-          </div>
-        </pf-tile>
-      }
+      <!-- The segmented "manual barcode entry" panel was removed: the scan box
+           above already accepts a typed sample ID (and Enter submits it), so the
+           panel duplicated the same job with a second, fiddlier control. -->
 
       <!-- 2-col layout: Lab Intake on the left, My Work / Queue tabs on
            the right. Same pattern as the Frontdesk landing splitter so
@@ -342,10 +276,11 @@ const COUNTERS: CounterSpec[] = [
                 <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
               </svg>
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
-                     [placeholder]="'Scan or type ' + sampleIdExample()"
+                     [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
                      (keydown.enter)="intakeReceive()" />
+              @if (!scanSvc.manualEntry()) {
               <button type="button" class="pf-mw-scan__cam press" (click)="openIntakeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -355,6 +290,7 @@ const COUNTERS: CounterSpec[] = [
                   <circle cx="12" cy="13" r="3.5"/>
                 </svg>
               </button>
+              }
               <button type="button" class="pf-mw-scan__btn press"
                       [disabled]="!intakeScanInput().trim()"
                       (click)="intakeReceive()">Receive</button>
@@ -448,6 +384,7 @@ const COUNTERS: CounterSpec[] = [
 
             <!-- Group by patient/order so a single patient with 3 tests is one
                  expandable card, not 3 floating cards across columns. -->
+            @if (!labCfg.sampleFocused()) {
             <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
@@ -481,13 +418,18 @@ const COUNTERS: CounterSpec[] = [
                            tube for combined entry (Fix 6 contract). -->
                       <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
                         @for (tube of tubesIn(g.items); track tube.sampleId) {
-                          <li class="rounded-lg p-2.5 pf-tube-tile"
+                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                              role="button" tabindex="0"
+                              [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
+                              (click)="onCardActivate(tube, g.patientName, $event)"
+                              (keydown.enter)="onCardActivate(tube, g.patientName)"
+                              (keydown.space)="onCardActivate(tube, g.patientName)"
                               style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                             <div class="flex items-center gap-2 mb-1.5">
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
-                                {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                                {{ tube.deptName || 'Tube' }} · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }}
                               </span>
                               @if (tube.hasDraft && !tube.allDone) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
@@ -544,30 +486,26 @@ const COUNTERS: CounterSpec[] = [
                                 </li>
                               }
                             </ul>
+                            <!-- The CARD itself is the primary action (opens the
+                                 tube, or claims it from the queue), so only the
+                                 secondary Delegate button remains here. -->
                             <div class="flex justify-end gap-2">
                               @switch (tab()) {
                                 @case ('service_queue') {
-                                  @if (!tube.assignedTo || tube.assignedTo === myUserId()) {
-                                    <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, g.patientName)">Pick · view tests</button>
-                                  }
                                   <!-- Routing pool/others' work is supervisor-grade
                                        (backend enforces reassign_result) — don't
                                        show a button that would 403. -->
                                   @if (canReassign()) {
-                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests); $event.stopPropagation()">Delegate</button>
                                   }
                                 }
                                 @default {
                                   @if (!tube.allDone) {
-                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests); $event.stopPropagation()">Delegate</button>
                                   }
-                                  @if (tube.rejections.length > 0) {
-                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
-                                  } @else if (tube.allDone) {
+                                  @if (tube.allDone) {
                                     <span class="px-2 py-0.5 text-[11px] font-medium rounded"
                                           style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓ All entered</span>
-                                  } @else {
-                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
                                   }
                                 }
                               }
@@ -580,6 +518,112 @@ const COUNTERS: CounterSpec[] = [
                 </li>
               }
             </ul>
+            } @else {
+            <!-- Sample-focused: one row PER TUBE across ALL patients, keyed by
+                 Sample ID. The tube (sample) is the bold headline; the patient
+                 is demoted to a small secondary line. Same tests + same actions
+                 and CSS as the patient-first tube tile. -->
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              @for (tube of sampleRows(bucket.items); track tube.sampleId) {
+                <li>
+                  <!-- Designed for touch FIRST, so the mouse gets the same
+                       layout rather than a second one: nothing is hidden behind
+                       hover. The row is the primary target (open / pick); the
+                       one secondary action lives in its own trailing zone,
+                       separated by a hairline, always visible, with a 44px hit
+                       area. Hover and press only add FEEDBACK — never reveal
+                       content — so the card is identical on a bench tablet and
+                       a desktop. -->
+                  <div class="pf-tq"
+                       [class.pf-tq--urgent]="bucket.level === 'urgent'"
+                       [class.pf-tq--high]="bucket.level === 'high'"
+                       [class.pf-tq--rejected]="tube.rejections.length > 0"
+                       [class.pf-tq--picking]="pickingTubeId() === tube.sampleId"
+                       [class.pf-tq--holding]="holdingPeekId() === tube.sampleId"
+                       [class.pf-tq--done]="tube.allDone">
+                    <span class="pf-tq__cap" aria-hidden="true"></span>
+
+                    <!-- Primary zone: the whole block opens / picks the tube. -->
+                    <div class="pf-tq__main"
+                         role="button" tabindex="0"
+                         [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
+                         (pointerdown)="onCardDown(tube, $event)" (pointerup)="onCardUp()"
+                         (pointercancel)="onCardUp()" (pointerleave)="onCardUp()"
+                         (pointermove)="onCardMove($event)"
+                         (click)="onCardActivate(tube, tube.patientName, $event)"
+                         (keydown.enter)="onCardActivate(tube, tube.patientName)"
+                         (keydown.space)="onCardActivate(tube, tube.patientName)">
+                      <div class="pf-tq__line">
+                        <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
+                        @if (tube.hasDraft && !tube.allDone) {
+                          <span class="pf-tq__tag pf-tq__tag--draft">Draft</span>
+                        }
+                        @if (tube.rejections.length > 0) {
+                          <span class="pf-tq__tag pf-tq__tag--warn">Re-entry</span>
+                        }
+                        @if (tab() === 'service_queue' && tube.assignedTo) {
+                          <span class="pf-tq__tag">{{ assigneeName(tube.assignedTo) }}</span>
+                        }
+                      </div>
+                      <p class="pf-tq__sub">
+                        <span class="pf-tq__who">{{ tube.patientName }}</span>
+                        @if (tube.patientMeta) {
+                          <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
+                        }
+                        <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                      </p>
+                      @if (tube.rejections.length > 0) {
+                        <p class="pf-tq__note">
+                          @for (r of tube.rejections; track r.testName) {
+                            <span class="pf-tq__note-test">{{ r.testName }}</span>{{ r.reason }}
+                          }
+                        </p>
+                      }
+                    </div>
+
+                    <!-- Trailing zone: count is a read-only stat; Delegate is a
+                         real button with its own hit area, permanently visible. -->
+                    <div class="pf-tq__side">
+                      @if (tube.allDone) {
+                        <span class="pf-tq__stat pf-tq__stat--done">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                          <span class="pf-tq__stat-u">done</span>
+                        </span>
+                      } @else {
+                        <span class="pf-tq__stat">
+                          {{ testCount(tube.tests) }}
+                          <span class="pf-tq__stat-u">{{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                        </span>
+                      }
+                      @if (tab() === 'service_queue' ? canReassign() : !tube.allDone) {
+                        <button type="button" class="pf-tq__act"
+                                [attr.aria-label]="'Delegate ' + (tube.barcode || tube.sampleId)"
+                                (click)="openDelegate(tube.tests); $event.stopPropagation()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M18 8h4m-2-2v4"/>
+                          </svg>
+                          <span class="pf-tq__act-t">Delegate</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </li>
+              }
+            </ul>
+            }
+
+            <!-- Hold-to-peek popover for queue cards — floats beside the held
+                 card; hidden on release. Fixed-position so it escapes any
+                 overflow:hidden ancestors. -->
+            @if (cardPeekId()) {
+              <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+                   [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+                <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+                <ul>
+                  @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+                </ul>
+              </div>
+            }
             <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
@@ -655,6 +699,7 @@ const COUNTERS: CounterSpec[] = [
 
     @if (scanTarget(); as t) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="scanExpected()"
         (matched)="onScanMatched($event)"
@@ -666,6 +711,7 @@ const COUNTERS: CounterSpec[] = [
       <!-- Search-bar camera mode: no expected code, any scan drops into
            the input and routes through the same claim-by-scan gate. -->
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan any vial barcode"
         (matched)="onBarSearchMatched($event)"
         (cancelled)="closeBarSearchScanner()">
@@ -680,61 +726,24 @@ const COUNTERS: CounterSpec[] = [
       </pf-delegate-modal>
     }
 
-    <!-- Pick → see the tube's tests → claim it into My Work. Centered modal on
-         web/iPad; full-width bottom-sheet on phones. -->
-    @if (claimTarget(); as c) {
-      <div class="pf-claim" role="dialog" aria-modal="true" aria-labelledby="pf-claim-title">
-        <div class="pf-claim__backdrop" (click)="cancelClaim()"></div>
-        <div class="pf-claim__sheet">
-          <header class="pf-claim__hdr">
-            <div class="pf-claim__hdr-main">
-              <p class="pf-claim__eyebrow">{{ c.deptName || 'Tube' }}{{ c.barcode ? ' · ' + c.barcode : '' }}</p>
-              <h2 id="pf-claim-title" class="pf-claim__title">{{ c.patientName }}</h2>
-            </div>
-            <button type="button" class="pf-claim__close press" (click)="cancelClaim()" aria-label="Close">✕</button>
-          </header>
-          <p class="pf-claim__lead">{{ c.tests.length }} test{{ c.tests.length === 1 ? '' : 's' }} to be taken on this tube:</p>
-          <ul class="pf-claim__tests">
-            @for (t of c.tests; track t.id) {
-              <li class="pf-claim__test">
-                <span class="pf-claim__test-name">{{ t.test?.name ?? 'Test' }}</span>
-                @if (t.test?.department?.name || t.subOrder?.department?.name; as d) {
-                  <span class="pf-claim__test-dept">{{ d }}</span>
-                }
-              </li>
-            }
-          </ul>
-          <div class="pf-claim__actions">
-            @if (allowNoScanClaim()) {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="confirmClaim()">
-                {{ claiming() ? 'Claiming…' : 'Claim into my work' }}
-              </button>
-            } @else {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
-                {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
-              </button>
-            }
-          </div>
-          <p class="pf-claim__foot">
-            @if (allowNoScanClaim()) { The tube moves into My Work — you can scan or type it later to enter results. }
-            @else { Scan this tube's barcode to confirm you have the right sample — it then moves into My Work. }
-          </p>
-        </div>
-      </div>
-    }
+    <!-- (The intermediate "Scan tube to claim" card was removed — "Pick" claims
+         directly, or opens the scanner below when a scan is required.) -->
 
     <!-- Scan gate for claiming: the modal only emits matched when the scanned
          code equals THIS tube's barcode, so a tech can't claim the wrong tube. -->
     @if (claimScanning() && claimTarget(); as c) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="c.barcode"
         (matched)="onClaimScanned()"
         (cancelled)="cancelClaimScan()">
       </pf-barcode-scanner-modal>
     }
+
   `,
   styles: [`
+
     /* No page-level scroll — :host fills the routed area, the inner
      * <section> chains flex so the splitter takes the remaining height
      * and each pane scrolls its own body. Mirrors Frontdesk landing. */
@@ -1315,6 +1324,189 @@ const COUNTERS: CounterSpec[] = [
       border-color: rgba(168, 85, 247, 0.45) !important;
       box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
     }
+    /* Hold-to-peek progress: a violet bar fills across the card's bottom over
+       the 2s hold (same gesture as the collection vials); when it completes,
+       the test list pops beside the card. No textual hint by design. */
+    .pf-tube-tile { user-select: none; -webkit-touch-callout: none; }
+    /* The whole card is the button now, so say so on hover/focus. */
+    .pf-tube-tile--tappable { cursor: pointer; }
+    .pf-tube-tile--tappable:focus-visible {
+      outline: 2px solid rgba(139, 92, 246, 0.7);
+      outline-offset: 2px;
+    }
+    .pf-tube-tile::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube-tile--holding {
+      border-color: rgba(139, 92, 246, 0.55) !important;
+    }
+    .pf-tube-tile--holding::after { opacity: 1; animation: pf-card-hold-fill 2s linear forwards; }
+    @keyframes pf-card-hold-fill { from { width: 0; } to { width: 100%; } }
+
+    /* ── Queue row (sample-focused My Work / Queue) ────────────────────
+       ONE layout for touch and mouse. Nothing is hover-revealed: a hidden
+       affordance is unreachable on a bench tablet, and a coarse-pointer
+       fallback would mean maintaining two designs. Instead the row splits
+       into a primary zone (tap = open/pick) and a trailing action zone with
+       its own 44px target; hover and press add feedback only.
+
+       Depth comes from a hairline + 1px inset highlight rather than a heavy
+       panel, and priority is a 3px cap stripe down the left edge — a nod to
+       the tube's own cap — so colour never floods the surface. */
+    .pf-tq {
+      --tq-accent: rgba(148, 163, 184, 0.5);
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.022));
+      border: 1px solid rgba(255,255,255,0.075);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      overflow: hidden;
+      transition: border-color .18s ease, box-shadow .22s ease;
+    }
+    .pf-tq:hover { border-color: rgba(255,255,255,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 6px 20px rgba(0,0,0,0.26); }
+    .pf-tq--done { opacity: 0.6; }
+    .pf-tq--rejected { border-color: rgba(242, 85, 90, 0.34); }
+
+    /* Cap stripe = priority. */
+    .pf-tq__cap { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tq-accent); }
+    .pf-tq--urgent { --tq-accent: #f2555a; }
+    .pf-tq--high   { --tq-accent: #f0a03c; }
+    .pf-tq--done   { --tq-accent: #34d399; }
+
+    /* Primary zone — the tap target for open / pick. */
+    .pf-tq__main {
+      flex: 1 1 auto; min-width: 0;
+      padding: 13px 12px 13px 16px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .16s ease;
+    }
+    .pf-tq__main:hover  { background: rgba(255,255,255,0.028); }
+    .pf-tq__main:active { background: rgba(255,255,255,0.055); }
+    .pf-tq__main:focus-visible { outline: 2px solid rgba(139,92,246,0.75); outline-offset: -2px; border-radius: 12px; }
+
+    .pf-tq__line { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .pf-tq__id {
+      flex: 0 1 auto; min-width: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* Status is micro-type, not chips — colour carries the meaning. */
+    .pf-tq__tag {
+      flex: 0 0 auto;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted);
+      max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-tq__tag--draft { color: #f0a03c; }
+    .pf-tq__tag--warn  { color: #f2555a; }
+
+    .pf-tq__sub {
+      margin: 5px 0 0;
+      font-size: 12.5px; line-height: 1.4;
+      color: var(--text-muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-tq__who { color: var(--text-secondary); font-weight: 500; }
+    .pf-tq__sep { margin: 0 6px; opacity: 0.45; }
+
+    .pf-tq__note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+    .pf-tq__note-test { color: #f2555a; font-weight: 600; margin-right: 6px; }
+
+    /* Trailing zone — separated by a hairline so it reads as its own control. */
+    .pf-tq__side {
+      flex: 0 0 auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 12px;
+      border-left: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.12);
+    }
+    .pf-tq__stat {
+      display: inline-flex; align-items: baseline; gap: 4px;
+      font-size: 15px; font-weight: 650; line-height: 1;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-tq__stat-u { font-size: 10px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.02em; }
+    .pf-tq__stat--done { color: #34d399; align-items: center; }
+    .pf-tq__stat--done .pf-tq__stat-u { color: #34d399; opacity: 0.8; }
+
+    .pf-tq__act {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      min-height: 30px; padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11.5px; font-weight: 500;
+      color: var(--text-secondary);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .pf-tq__act:hover  { color: var(--text-primary); background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.16); }
+    .pf-tq__act:active { background: rgba(255,255,255,0.18); }
+    .pf-tq__act:focus-visible { outline: 2px solid rgba(139,92,246,0.75); outline-offset: 2px; }
+
+    /* Hold-to-peek progress — same 2s gesture as the collection vials. */
+    .pf-tq__main::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+      background: var(--tq-accent); opacity: 0; pointer-events: none;
+    }
+    .pf-tq--holding .pf-tq__main::after { opacity: 1; animation: pf-card-hold-fill 2s linear forwards; }
+    .pf-tq--holding { border-color: rgba(255,255,255,0.2); }
+    .pf-tq--picking { animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    :host-context([data-theme="light"]) .pf-tq {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.09);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    :host-context([data-theme="light"]) .pf-tq:hover { border-color: rgba(15,23,42,0.16); box-shadow: 0 6px 20px rgba(15,23,42,0.09); }
+    :host-context([data-theme="light"]) .pf-tq__main:hover  { background: rgba(15,23,42,0.02); }
+    :host-context([data-theme="light"]) .pf-tq__main:active { background: rgba(15,23,42,0.045); }
+    :host-context([data-theme="light"]) .pf-tq__side { background: rgba(15,23,42,0.025); border-left-color: rgba(15,23,42,0.07); }
+    :host-context([data-theme="light"]) .pf-tq__act { background: rgba(15,23,42,0.04); border-color: rgba(15,23,42,0.10); }
+
+    /* Touch: same layout, bigger targets — never a different design. */
+    @media (pointer: coarse) {
+      .pf-tq__act { min-height: 40px; padding: 8px 12px; }
+      .pf-tq__side { padding: 10px; gap: 9px; }
+    }
+    /* Narrow: drop the Delegate label to the icon so the row never wraps. */
+    @media (max-width: 460px) {
+      .pf-tq__act-t { display: none; }
+      .pf-tq__act { padding: 8px; min-width: 40px; }
+      .pf-tq__main { padding: 12px 10px 12px 14px; }
+    }
+
+    .pf-cardpeek {
+      position: fixed; z-index: 100;
+      width: 260px; max-height: 52vh; overflow-y: auto;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--bg-elevated, #0f172a);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pf-cardpeek__h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-cardpeek ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .pf-cardpeek li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
+    :host-context([data-theme="light"]) .pf-cardpeek {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+    }
     .pf-tube-tile.pf-tube-tile--picking {
       animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
       border-color: rgba(124, 58, 237, 0.65) !important;
@@ -1819,6 +2011,8 @@ export class MyWorkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly process = inject(ProcessWorkflowService);
+  protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly scanSvc = inject(ScanService);
 
   /** Collect-in-lab: sample collection is placed in the lab work-area, so the
    *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
@@ -1995,13 +2189,8 @@ export class MyWorkComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
 
-  protected readonly manualMode = signal(false);
-  protected readonly seqValue = signal('');
   protected readonly departments = signal<Department[]>([]);
   protected readonly selectedDeptCode = signal<string>('');
-  protected readonly isTouch = signal<boolean>(
-    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  );
   /** Phone viewport — drives DOM-level removal of chrome that belongs only on
    *  larger screens (the KPI strip + inline counter filter row, both replaced
    *  by the header Stats popover on phone). Kept in sync via matchMedia. */
@@ -2019,13 +2208,6 @@ export class MyWorkComponent implements OnInit {
   /** 2-digit year suffix (YY). */
   readonly yy = computed(() => (this.currentYear % 100).toString().padStart(2, '0'));
 
-  readonly deptOptions = computed<PfSelectOption<string>[]>(() =>
-    this.departments().map(d => ({
-      value: d.code,
-      label: `${d.sampleCode != null ? d.sampleCode.toString().padStart(2, '0') : '··'} · ${d.name}`,
-    }))
-  );
-
   /** The selected department's 2-digit sample code — the prefix of the new
    *  short barcode. Null when the admin hasn't assigned one yet. */
   readonly selectedDeptSampleCode = computed(() => {
@@ -2035,50 +2217,12 @@ export class MyWorkComponent implements OnInit {
       : null;
   });
 
-  /** New short sample barcode: DD(dept) + YY(year) + running number. */
-  readonly fullManualBarcode = computed(() => {
-    const dd = this.selectedDeptSampleCode() ?? '——';
-    const seq = (this.seqValue() || '').padStart(this.numberWidth(), '0');
-    return `${dd}${this.yy()}${seq}`;
-  });
-
   /** Example sample id for the scan/search placeholders, e.g. 012600001. */
   readonly sampleIdExample = computed(() => {
     const dd = this.selectedDeptSampleCode() ?? '01';
     const seq = ''.padStart(this.numberWidth(), '0').replace(/0$/, '1');
     return `${dd}${this.yy()}${seq}`;
   });
-
-  readonly canManualConfirm = computed(() =>
-    this.seqValue().length === this.numberWidth() &&
-    !!this.selectedDeptSampleCode()
-  );
-
-  toggleManual() {
-    const next = !this.manualMode();
-    this.manualMode.set(next);
-    if (next) {
-      this.tenantState.ensureLoaded();
-      if (this.departments().length === 0) this.loadDepartments();
-    }
-  }
-
-  onSeqChange(v: string) {
-    this.seqValue.set((v ?? '').replace(/\D/g, '').slice(0, this.numberWidth()));
-  }
-
-  onDeptChange(code: string) {
-    this.selectedDeptCode.set(code);
-    try { localStorage.setItem(LAST_DEPT_KEY, code); } catch { /* ignore */ }
-  }
-
-  submitManual() {
-    if (!this.canManualConfirm()) return;
-    const code = this.fullManualBarcode();
-    this.setScan(code);
-    this.scanSubmit();
-    this.seqValue.set('');
-  }
 
   private loadDepartments() {
     const branchId = this.auth.user()?.branchId;
@@ -2209,8 +2353,15 @@ export class MyWorkComponent implements OnInit {
     // Re-fetch the active workflow so a `lab_intake` toggle in /admin/process
     // reflects here (hides/shows the Lab Intake pane) on each visit.
     this.process.refreshActive();
+    // Per-branch queue focus (patient vs sample). Additive presentation only.
+    this.labCfg.ensureLoaded();
     this.refresh();
     this.refreshAllCounts();
+    // Departments feed sampleIdExample(), the "e.g. 012600001" hint in the scan
+    // box. The removed Manual-entry toggle used to be the only thing that
+    // loaded them, which would have frozen the hint at its '01' fallback.
+    this.tenantState.ensureLoaded();
+    if (this.departments().length === 0) this.loadDepartments();
     this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
   }
 
@@ -2452,6 +2603,40 @@ export class MyWorkComponent implements OnInit {
   }
 
   /**
+   * Sample-focused rows for the whole bucket. Reuses tubesIn's grouping (one
+   * row per tube/sampleId across ALL patients in the bucket, since a sample
+   * belongs to exactly one order/patient) and augments each tube with the
+   * patient it belongs to — derived the same way patientGroups does, from the
+   * tube's tests' order/patient. Consumed only when labCfg.sampleFocused().
+   */
+  sampleRows(items: Enriched[]): Array<{
+    sampleId: string;
+    deptName: string;
+    barcode: string;
+    tests: Enriched[];
+    allDone: boolean;
+    hasDraft: boolean;
+    assignedTo: string | null;
+    rejections: Array<{ testName: string; reason: string }>;
+    patientName: string;
+    patientInfo: string;
+    patientMeta: string;
+  }> {
+    return this.tubesIn(items).map(tube => {
+      const patient = tube.tests[0]?.subOrder?.order?.patient;
+      return {
+        ...tube,
+        patientName: patient?.displayName ?? 'Patient',
+        // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
+        patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
+        // Age/sex + MRN on their own, so the queue row can emphasise the NAME
+        // and trail the identifiers in a muted run instead of one flat string.
+        patientMeta: patient ? formatPatientMeta(patient) : ''
+      };
+    });
+  }
+
+  /**
    * Pick action on a tube row. Uses the existing scan-gated startPick on
    * the first test (so the modal demands the tube barcode) — once the
    * scanner emits matched, onScanMatched ends up calling enterJustScanned
@@ -2479,6 +2664,77 @@ export class MyWorkComponent implements OnInit {
   private readonly _pickingTubeId = signal<string | null>(null);
   readonly pickingTubeId = this._pickingTubeId.asReadonly();
 
+  // ── Hold-to-peek on queue cards ───────────────────────────
+  // Press-and-hold a sample-focused queue card (~2s, progress bar fills along
+  // the card's bottom edge) to peek its test list — the same gesture as the
+  // collection screen's vials, deliberately without a textual hint. Moving
+  // (scrolling) or releasing early cancels; holds that start on a button
+  // (Pick / Delegate) are ignored so their taps behave normally.
+  readonly cardPeekId = signal<string | null>(null);
+  readonly cardPeekPos = signal<{ x: number; y: number } | null>(null);
+  readonly cardPeekTests = signal<string[]>([]);
+  readonly holdingPeekId = signal<string | null>(null);
+  private static readonly CARD_HOLD_MS = 2000;
+  private _cardPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _cardDownX = 0;
+  private _cardDownY = 0;
+
+  onCardDown(tube: { sampleId: string; tests: Enriched[] }, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return;
+    if ((ev.target as HTMLElement).closest('button')) return; // buttons keep their taps
+    this._cardDownX = ev.clientX; this._cardDownY = ev.clientY;
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    const names = (tube.tests ?? [])
+      .map(t => t.test?.name ?? (t as { name?: string }).name)
+      .filter((n): n is string => !!n);
+    this.clearCardPress();
+    this.holdingPeekId.set(tube.sampleId);
+    this._cardPressTimer = setTimeout(() => {
+      this.holdingPeekId.set(null);
+      this.cardPeekPos.set({ x, y });
+      this.cardPeekTests.set(names);
+      this.cardPeekId.set(tube.sampleId); // shows while held
+    }, MyWorkComponent.CARD_HOLD_MS);
+  }
+  onCardMove(ev: PointerEvent): void {
+    if (this._cardPressTimer
+        && (Math.abs(ev.clientX - this._cardDownX) > 10 || Math.abs(ev.clientY - this._cardDownY) > 10)) {
+      this.clearCardPress();
+    }
+  }
+  onCardUp(): void { this.clearCardPress(); }
+
+  /**
+   * The card IS the primary action — "Open tube" / "Pick · view tests" buttons
+   * were removed, so tapping anywhere on the card does what they did: claim it
+   * from the service queue, or open it for entry in My Work. Delegate stops
+   * propagation, and a completed long-press (hold-to-peek) is swallowed so a
+   * peek never doubles as a tap.
+   */
+  onCardActivate(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[]; assignedTo?: string | null; allDone?: boolean },
+                 patientName: string, ev?: Event): void {
+    if (this.cardPeekId() || this.holdingPeekId()) { this.clearCardPress(); return; }
+    if (ev && (ev.target as HTMLElement).closest('button')) return;
+    if (this.tab() === 'service_queue') {
+      // Someone else's claimed tube isn't ours to pick up.
+      if (tube.assignedTo && tube.assignedTo !== this.myUserId()) return;
+      this.openClaim(tube, patientName);
+      return;
+    }
+    if (tube.allDone) return;   // nothing left to enter
+    this.pickTube(tube);
+  }
+  private clearCardPress(): void {
+    if (this._cardPressTimer) { clearTimeout(this._cardPressTimer); this._cardPressTimer = null; }
+    this.holdingPeekId.set(null);
+    this.cardPeekId.set(null); // release hides the peek
+  }
+
   // ── Claim-into-my-queue popup ─────────────────────────────
   // Picking a tube from the service queue first shows the tech WHAT tests
   // are on the tube, then claims the whole tube into "My Work" (the tech can
@@ -2498,8 +2754,17 @@ export class MyWorkComponent implements OnInit {
   private readonly _claimScanning = signal(false);
   readonly claimScanning = this._claimScanning.asReadonly();
 
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number { return logicalTestCount(tests); }
+
   openClaim(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[] }, patientName: string) {
     this._claimTarget.set({ ...tube, patientName });
+    // Skip the intermediate "Scan tube to claim" card — go straight to the
+    // action: a direct claim when no scan is required (or the tube has no
+    // barcode), otherwise straight to the scanner (the scan itself is the
+    // verification; the card just added a click).
+    if (this.allowNoScanClaim() || !tube.barcode) this.confirmClaim();
+    else this.startClaimScan();
   }
   cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
 
@@ -2512,7 +2777,7 @@ export class MyWorkComponent implements OnInit {
     if (!c.barcode) { this.confirmClaim(); return; }
     this._claimScanning.set(true);
   }
-  cancelClaimScan() { this._claimScanning.set(false); }
+  cancelClaimScan() { this._claimScanning.set(false); this._claimTarget.set(null); }
   /** Correct tube scanned — commit the claim. */
   onClaimScanned() { this._claimScanning.set(false); this.confirmClaim(); }
 

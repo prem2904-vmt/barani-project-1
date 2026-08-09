@@ -29,7 +29,6 @@ export class NavBackService {
     '/login',
     '/track',
     '/set-password',
-    '/setup',
     '', // normalised "/"
   ]);
 

@@ -19,6 +19,10 @@ export interface CurrentUser {
   branches?: BranchRef[];
   /** Whether a quick-switch/unlock PIN is set for this account. */
   hasPin?: boolean;
+  /** The user's saved digital signature (PNG data URL), drawn on invoices/
+   *  reports they sign. Set on My signature; follows the user across stations. */
+  signatureDataUrl?: string;
+  registrationId?: string;
 }
 
 export interface BranchRef {

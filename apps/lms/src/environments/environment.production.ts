@@ -1,9 +1,9 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://lab-fetch.prefrontal.health',
+  apiUrl: 'https://med-fetch-dev.prefrontal.health',
   // Public web origin for patient-facing report links (window.location.origin is
   // capacitor://localhost in the native app, which can't be opened externally).
-  reportPublicBaseUrl: 'https://lab.prefrontal.health',
+  reportPublicBaseUrl: 'https://med-dev.prefrontal.health',
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',

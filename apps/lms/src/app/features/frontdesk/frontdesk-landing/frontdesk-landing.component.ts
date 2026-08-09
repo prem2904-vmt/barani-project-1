@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -577,14 +578,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   // Filtered lists -------------------------------------------
   // Show only appointments that are still actionable on the desk.
-  // Checked-in patients have moved to In-progress (the order takes over);
-  // cancelled appointments shouldn't clutter the queue. Both stay
-  // visible on the calendar route, just not on the operational landing.
+  // Show the actionable appointments on the operational landing: booked (needs
+  // check-in), confirmed, and checked-in. Checked-in ones STAY here (as a
+  // "Resume order" card) because check-in no longer auto-creates an order — if
+  // the FD backs out of the order page the patient must still be reachable.
+  // Terminal states (completed / cancelled / no-show) drop off (they remain on
+  // the calendar route), as do home collections.
   readonly visibleAppointments = computed(() =>
     this._appointments().filter(a =>
       this.inApptRange(a.appointmentDate)
-      && a.status !== 'checked_in'
       && a.status !== 'cancelled'
+      && a.status !== 'completed'
+      && a.status !== 'no_show'
       && a.collectionType !== 'home_collection'
     )
   );
@@ -1753,7 +1758,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         tatLabel: '',
         docTitle,
         qrDataUrl, orderQrDataUrl, logoDataUrl,
-        cashierName: this.auth.user()?.displayName || undefined,
+        // The BILL's cashier (server-resolved: who billed/collected), so a later
+        // download by another user never swaps the attribution.
+        cashierName: bill.cashierName || this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
         ...invoiceTemplateFieldsFrom(tpl),
         // Always carry a name so the invoice never reads "Prefrontal Lab":
         // configured letterhead first, else the tenant's own name.
@@ -1789,15 +1797,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   printInvoicePreview() {
     const blobUrl = this.invoiceBlobUrl;
     if (!blobUrl) return;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    frame.src = blobUrl;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { /* ignore — preview already on screen */ }
-      setTimeout(() => frame.remove(), 60_000);
-    };
-    document.body.appendChild(frame);
+    // The preview is already on screen, so a failure needs no tab fallback.
+    // The blob stays alive for that preview — closeInvoicePreview revokes it.
+    printPdfBlobUrl(blobUrl, { onFallback: () => { /* preview already visible */ } });
   }
 
   closeInvoicePreview() {
@@ -2081,6 +2083,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Already checked-in but the order wasn't created yet → jump back to the
+   *  order page with the pre-booked tests pre-filled to finish it. */
+  resumeAppointmentOrder(a: Appointment) {
+    this.router.navigate(['/frontdesk/order'], {
+      queryParams: { patientId: a.patientId, appointmentId: a.id }
+    });
+  }
+
   private firstOfThisMonth(): Date {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1);
@@ -2268,8 +2278,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.toasts.success(`Report link sent via Email to ${contact}`);
   }
 
-  /** UI flag for the "Download report" button while we fetch + render. */
-  protected readonly _downloadingReport = signal<boolean>(false);
+  /** Order id whose report is currently being fetched + rendered — null when
+   *  idle. Holds the ID (not a boolean) so the template can mark ONLY the
+   *  clicked row as "Preparing…"; a shared boolean flipped every row's
+   *  Download button at once, which read as "all rows show the same
+   *  download". */
+  protected readonly _downloadingReport = signal<string | null>(null);
   readonly downloadingReport = this._downloadingReport.asReadonly();
 
   /** Pull the latest final report for the order and render it as a
@@ -2278,7 +2292,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  the backend already stores on Report.Data. */
   async downloadReport(o: Order) {
     if (this._downloadingReport()) return;
-    this._downloadingReport.set(true);
+    this._downloadingReport.set(o.id);
     try {
       const report = await firstValueFrom(
         this.api.get<Report | null>(`/api/reports/by-order/${o.id}`)
@@ -2304,7 +2318,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       console.error('[fd] download report failed', err);
       this.toasts.error('Could not download the report');
     } finally {
-      this._downloadingReport.set(false);
+      this._downloadingReport.set(null);
     }
   }
   /** Walk every test on the report and ask the engine to resolve its
@@ -2314,7 +2328,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  back to the legacy parameter table for those). */
   private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
     const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let tests: Array<{ testId?: string; packageTestId?: string | null; result?: { values?: Record<string, unknown> } }> = [];
     let patient: { sex?: string | null; age?: number | null } | undefined;
     try {
       const snap = JSON.parse(report.data ?? '{}');
@@ -2330,6 +2344,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       try {
         out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
       } catch { /* test without a layout — fallback table renders */ }
+    }));
+    // A test ordered through a PROFILE prints the PROFILE's notes, never its
+    // own — so the profile's layout has to be fetched too. Profiles aren't
+    // snapshot rows (only their members are), so collect the distinct
+    // packageTestIds and resolve those as well.
+    const pkgIds = [...new Set(tests.map(t => t.packageTestId).filter((id): id is string => !!id))];
+    await Promise.all(pkgIds.map(async id => {
+      if (out[id]) return;
+      try {
+        out[id] = await svc.preview(id, {}, [], patient);
+      } catch { /* profile without notes — nothing extra prints */ }
     }));
     return out;
   }

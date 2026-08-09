@@ -99,6 +99,34 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* ── Department quick-filter pills ── */
+.pf-deptpills {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 10px 4px 2px;
+}
+.pf-deptpill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.pf-deptpill:hover { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.4); }
+.pf-deptpill--on {
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
+  border-color: transparent;
+}
+.pf-deptpill__code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 1px 5px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pf-deptpill--on .pf-deptpill__code { background: rgba(255, 255, 255, 0.22); }
+
 /* ── Horizontal rail of test cards ── */
 .pf-rail {
   display: flex; gap: 10px;

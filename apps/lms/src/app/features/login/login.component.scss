@@ -369,6 +369,22 @@
   }
 }
 
+/* ── Hide the browser's OWN password-reveal control ──────────────────
+   The field already has our custom eye button; some browsers (Edge
+   ::-ms-reveal, Chromium reveal/autofill buttons) draw a SECOND native
+   eye, so two icons showed (OPS-9). Suppress the native one. Shared by
+   login + set-password (same styleUrls). */
+.pf-auth__field-input::-ms-reveal,
+.pf-auth__field-input::-ms-clear {
+  display: none;
+}
+.pf-auth__field-input::-webkit-credentials-auto-fill-button,
+.pf-auth__field-input::-webkit-strong-password-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+}
+
 /* ── Phone (<=640) ─────────────────────────────────────────────────
    Additive, below-desktop only. Keep the form comfortably within the
    small viewport: cap the card width to the available space and let

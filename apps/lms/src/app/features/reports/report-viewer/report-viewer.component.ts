@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -18,6 +19,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -1092,8 +1094,10 @@ export class ReportViewerComponent implements OnInit {
       const isCulture = t.result?.microFormat === 'culture_sensitivity';
       const hasNonGrid = !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid');
       if (isCulture || hasNonGrid) { special.push(t); continue; }
-      const g = this.buildViewGroup(t, layout);
-      if (g.rows.length > 0) tabular.push(g); else special.push(t);
+      // Keep zero-row groups in the tabular table so a pending/empty test still
+      // shows its bold panel header in its department position, rather than being
+      // sunk to the un-bold block at the bottom.
+      tabular.push(this.buildViewGroup(t, layout));
     }
 
     const claimsNabl = !!this.tpl()?.nablAccredited;
@@ -1440,9 +1444,8 @@ export class ReportViewerComponent implements OnInit {
       if (isNative && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Print report' });
       } else {
-        const url = URL.createObjectURL(this._pdfBlob);
-        window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+        printPdfBlobUrl(URL.createObjectURL(this._pdfBlob), { revokeOnDone: true });
       }
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
@@ -1496,7 +1499,7 @@ export class ReportViewerComponent implements OnInit {
     const platform = this.injector.get(PlatformService);
     const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
 
-    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
+    let tests: LayoutSnapshotTest[] = [];
     let patient: { sex?: string | null; age?: number | null } | undefined;
     try {
       const snap = JSON.parse(r.data ?? '{}');
@@ -1504,15 +1507,15 @@ export class ReportViewerComponent implements OnInit {
       patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
     } catch { /* malformed snapshot — render without layouts */ }
 
-    const [template] = await Promise.all([
+    // Resolves PROFILE layouts as well as each test's own. Looping `tests` by
+    // hand here omitted the profiles, so a profile-ordered test printed NO
+    // notes on this screen while the report queue printed them correctly.
+    const [template, layouts] = await Promise.all([
       this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-      ...tests.map(async t => {
-        if (!t.testId) return;
-        try {
-          resolvedLayouts[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
-        } catch { /* fallback table */ }
-      }),
+      resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
+        (id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
     ]);
+    Object.assign(resolvedLayouts, layouts);
 
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
     const [imageCache, trendograms] = await Promise.all([

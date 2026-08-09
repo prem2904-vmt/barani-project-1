@@ -67,7 +67,15 @@ export const ADMIN_NAV: NavItem = {
  *  in the nav" always equals "can open the Front Desk route". Deliberately does
  *  NOT include `view_patient` (a read capability lab techs hold) or
  *  `collect_sample` (which gets its own "Collect" nav entry). */
-export const FRONTDESK_PERMS = ['register_patient', 'create_order'];
+export const FRONTDESK_PERMS = [
+  'register_patient', 'create_order',
+  // Front desk is also where billing happens and where a branch manager
+  // oversees the counter, so admit those roles too (OPS-10): billing counter
+  // (create_bill / collect_payment) and branch manager (manage_branch). These
+  // are not held by lab techs / pathologists, so it doesn't leak the route to
+  // them.
+  'create_bill', 'collect_payment', 'manage_branch',
+];
 
 /** Landing routes whose real guard is NARROWER than the union of the actions an
  *  admin may drop into their work area — e.g. a lab tech's `collect_sample`

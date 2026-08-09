@@ -64,7 +64,7 @@ interface Category {
   template: `
     <section class="pf-admin-page">
       <header class="pf-admin-hdr">
-        <div>
+        <div class="pf-admin-hdr__left">
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <div class="flex items-center gap-1.5">
             <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Back to overview">
@@ -72,12 +72,14 @@ interface Category {
             </button>
             <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
           </div>
+          <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
         </div>
-        <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
-        <input class="pf-admin-search" type="search" [value]="q()"
-               (input)="setQ($any($event.target).value)"
-               placeholder="Search settings — inventory, invoice, patient ID…"
-               aria-label="Search admin settings" />
+        <div class="pf-admin-hdr__right">
+          <input class="pf-admin-search" type="search" [value]="q()"
+                 (input)="setQ($any($event.target).value)"
+                 placeholder="Search settings — inventory, invoice, patient ID…"
+                 aria-label="Search admin settings" />
+        </div>
       </header>
 
       <div class="pf-admin-layout">
@@ -208,9 +210,13 @@ interface Category {
 
     /* Compact header — was a tall greeting card. */
     .pf-admin-hdr {
-      display: flex; flex-wrap: wrap; align-items: baseline;
-      justify-content: space-between; gap: 12px;
-      margin: 10px 0 14px;
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 16px;
+      margin: 8px 0 16px;
+    }
+    .pf-admin-hdr__left {
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .pf-admin-hdr__eyebrow {
       font-size: 11px; font-weight: 600;
@@ -227,7 +233,13 @@ interface Category {
     .pf-admin-hdr__sub {
       font-size: 12.5px;
       color: var(--text-tertiary);
-      margin: 0;
+      margin: 4px 0 0;
+    }
+    .pf-admin-hdr__right {
+      flex: 0 1 auto;
+      min-width: 280px;
+      max-width: 420px;
+      width: 100%;
     }
 
     /* Mobile-only back chevron before the title (phone-only via md:hidden in
@@ -236,10 +248,8 @@ interface Category {
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
     .pf-admin-search {
-      margin-top: 12px;
       width: 100%;
-      max-width: 460px;
-      padding: 10px 14px;
+      padding: 9px 14px;
       border-radius: 12px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
@@ -580,6 +590,14 @@ export class AdminDashboardComponent implements OnInit {
 
   private readonly _summary = signal<SeedSummary | null>(null);
   readonly summary = this._summary.asReadonly();
+
+  // Tenant-scoped counts for the KPI tiles. The /_seed/summary endpoint counts
+  // across ALL tenants (OPS-32: a 1-branch tenant saw "35 branches"), and its
+  // role count only covers global pre-seeded roles (OPS-21: a new custom role
+  // never showed up). These are fetched per-tenant on every visit instead.
+  private readonly _branchCount = signal<number | null>(null);
+  private readonly _deptCount = signal<number | null>(null);
+  private readonly _roleCount = signal<number | null>(null);
   readonly today = new Date();
   readonly userName = () => this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
 
@@ -604,7 +622,7 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Users & Access', href: '/admin/users', gradient: 'violet',
           iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
           iconExtra: 'M2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM21.5 20a5 5 0 0 0-4.5-4',
-          subtitle: () => `${this._summary()?.preSeededRoles ?? '—'} roles · ${this._summary()?.permissions ?? '—'} permissions` },
+          subtitle: () => `${this._roleCount() ?? '—'} roles · ${this._summary()?.permissions ?? '—'} permissions` },
         { title: 'Audit trail', href: '/admin/audit', gradient: 'rose',
           iconPath: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
           iconExtra: 'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2ZM9 12h6M9 16h6',
@@ -626,7 +644,7 @@ export class AdminDashboardComponent implements OnInit {
       tiles: [
         { title: 'Branches & Departments', href: '/admin/branches', gradient: 'sky',
           iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
-          subtitle: () => `${this._summary()?.branches ?? '—'} branches · ${this._summary()?.departments ?? '—'} departments` },
+          subtitle: () => `${this._branchCount() ?? '—'} branches · ${this._deptCount() ?? '—'} departments` },
         { title: 'Organization & Identity', href: '/admin/organization', gradient: 'sky',
           iconPath: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2',
           subtitle: () => 'Patient ID format · data tools' },
@@ -728,5 +746,10 @@ export class AdminDashboardComponent implements OnInit {
     this.api.get<SeedSummary>('/api/_seed/summary').subscribe({
       next: s => this._summary.set(s)
     });
+    // Tenant-scoped KPI counts (re-fetched on every visit, so a newly created
+    // role / branch reflects immediately).
+    this.api.get<unknown[]>('/api/tenants/branches').subscribe({ next: b => this._branchCount.set(b?.length ?? 0) });
+    this.api.get<unknown[]>('/api/tenants/departments').subscribe({ next: d => this._deptCount.set(d?.length ?? 0) });
+    this.api.get<unknown[]>('/api/roles/').subscribe({ next: r => this._roleCount.set(r?.length ?? 0) });
   }
 }

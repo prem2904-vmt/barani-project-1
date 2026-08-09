@@ -12,7 +12,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 
 const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
-const BRANDING_NAME_MAX = 10;
+const BRANDING_NAME_MAX = 30;
 
 interface BrandingDraft {
   logoUrl: string;          // base64 data URL or '' for none
@@ -149,7 +149,7 @@ interface BrandingDraft {
       <!-- Save -->
       <div class="mt-6 flex items-center justify-end">
         <pf-touch-btn size="md" variant="primary"
-                       [disabled]="saving()"
+                       [disabled]="saving() || !dirty()"
                        (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save branding' }}
         </pf-touch-btn>
@@ -314,6 +314,9 @@ export class SetupWizardComponent {
   readonly nameMax = BRANDING_NAME_MAX;
 
   private readonly _branding = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
+  // Last-saved snapshot — drives the dirty check so Save disables once there are
+  // no unsaved changes (OPS-9).
+  private readonly _savedBaseline = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
   private readonly _draggingLogo = signal(false);
   private readonly _logoError = signal<string | null>(null);
   private readonly _nameError = signal<string | null>(null);
@@ -332,12 +335,20 @@ export class SetupWizardComponent {
     const t = this.tenantState.tenant();
     if (t && !this._seeded) {
       this._seeded = true;
-      this._branding.set({
+      const seed = {
         logoUrl: t.logoUrl ?? '',
         brandingName: t.brandingName ?? '',
         brandingMode: t.brandingMode ?? 'both'
-      });
+      };
+      this._branding.set(seed);
+      this._savedBaseline.set({ ...seed });
     }
+  });
+
+  /** True when the draft differs from the last-saved snapshot (OPS-9). */
+  readonly dirty = computed(() => {
+    const a = this._branding(), b = this._savedBaseline();
+    return a.logoUrl !== b.logoUrl || a.brandingName !== b.brandingName || a.brandingMode !== b.brandingMode;
   });
 
   constructor() { this.tenantState.ensureLoaded(); }
@@ -354,7 +365,12 @@ export class SetupWizardComponent {
   readonly hasBrand = computed(() => this.showLogoPreview() || this.showNamePreview());
 
   updateBranding(patch: Partial<BrandingDraft>) {
-    if ('brandingName' in patch) this._nameError.set(null);
+    if ('brandingName' in patch) {
+      this._nameError.set(null);
+      // Short name is a display label: letters/numbers/spaces + a few brand
+      // punctuation chars only — strip other special characters (OPS-9).
+      patch = { ...patch, brandingName: (patch.brandingName ?? '').replace(/[^\p{L}\p{N} &._'-]/gu, '') };
+    }
     this._branding.update(b => ({ ...b, ...patch }));
   }
   openLogoPicker() { this.logoInput?.nativeElement?.click(); }
@@ -409,6 +425,7 @@ export class SetupWizardComponent {
         logoUrl: br.logoUrl || ''
       }));
       this.tenantState.update(updated);
+      this._savedBaseline.set({ ...this._branding() }); // now pristine (OPS-9)
       this.toasts.success('Branding saved.');
     } catch (e: unknown) {
       const err = ApiError.from(e);

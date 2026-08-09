@@ -45,6 +45,15 @@ export class BranchLabConfigService {
    *  nav entry only renders when this is true (and the user holds an inventory
    *  permission). Defaults to false until the config loads / if absent. */
   readonly inventoryEnabled = computed<boolean>(() => this._config()?.inventoryEnabled ?? false);
+  /** Server-resolved queue focus for this branch. Queue screens (My Work,
+   *  Receive, result-entry list) read this to group by patient vs sample.
+   *  Defaults to 'patient' until the config loads. */
+  readonly queueFocus = computed<'patient' | 'sample'>(() => this._config()?.effectiveQueueFocus ?? 'patient');
+  /** True when this branch's queues are sample-focused (rows keyed by Sample ID). */
+  readonly sampleFocused = computed<boolean>(() => this.queueFocus() === 'sample');
+  /** True for a standalone lab (departments run as separate labs) → show the
+   *  department on lab tubes. An integrated lab (the default) hides it. */
+  readonly standaloneLab = computed<boolean>(() => this._config()?.labStructure === 'standalone');
 
   ensureLoaded(): void {
     if (this._loaded() || this._loading) return;

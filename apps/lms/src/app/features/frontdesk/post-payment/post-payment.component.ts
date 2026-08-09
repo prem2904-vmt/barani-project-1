@@ -4,6 +4,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { PrinterService } from '../../../core/printer/printer.service';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Bill } from '../../../shared/models/bill.model';
@@ -40,6 +42,8 @@ export class PostPaymentComponent implements OnInit {
   private readonly labCfg  = inject(BranchLabConfigService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly auth    = inject(AuthService);
+  private readonly printer = inject(PrinterService);
+  private readonly printConfig = inject(PrintConfigService);
 
   private readonly _order       = signal<Order | null>(null);
   private readonly _bill        = signal<Bill | null>(null);
@@ -149,9 +153,16 @@ export class PostPaymentComponent implements OnInit {
     this.runLabelPrint();
   }
 
-  /** Print only the selected tube labels — `pf-printing-label` makes the global
-   *  print stylesheet hide everything except the `.pf-print-label` grid. */
+  /** Print the tube labels. When a directly-driven printer is present
+   *  (Electron USB / iPad BLE) we render each label at the branch's configured
+   *  size + single code type and stream it straight to the printer. Otherwise
+   *  we fall back to the browser print dialog (`pf-printing-label` hides
+   *  everything except the `.pf-print-label` grid). */
   private runLabelPrint() {
+    if (this.printer.directPrintAvailable()) {
+      void this.runDirectPrint();
+      return;
+    }
     document.body.classList.add('pf-printing-label');
     const done = () => {
       this._printingIds.set(new Set());
@@ -161,6 +172,34 @@ export class PostPaymentComponent implements OnInit {
     window.addEventListener('afterprint', done);
     setTimeout(() => window.print(), 50);
     setTimeout(done, 2000);
+  }
+
+  private async runDirectPrint() {
+    const opts = this.printConfig.labelOpts();
+    const order = this._order();
+    const patient = order?.patient ?? null;
+    const ids = this._printingIds();
+    const samples = (order?.samples ?? []).filter(s => ids.has(s.id));
+    if (samples.length) this.toasts.info(`Printing ${samples.length} label${samples.length > 1 ? 's' : ''}…`);
+    let ok = 0, fail = 0;
+    for (const s of samples) {
+      const code = s.barcode ?? s.id;
+      const mrn = (patient as unknown as { mrn?: string })?.mrn;
+      const spec = tubeSpec(s);
+      const res = await this.printer.printLabelData({
+        code,
+        qrValue: mrn ? `${mrn}|${code}` : code,
+        patientName: patient?.displayName ?? 'Patient',
+        ageSex: this.ageSex(patient),
+        mrn: mrn ?? undefined,
+        deptCode: (s.department?.code ?? '').toUpperCase(),
+        tube: `${spec.label} · ${spec.volume}`,
+      }, opts).catch(e => ({ ok: false, direct: true, error: e?.message }));
+      if (res.ok) ok++; else { fail++; if (res.error) this.toasts.error(res.error); }
+    }
+    this._printingIds.set(new Set());
+    if (ok) this.toasts.success(`Printed ${ok} label${ok > 1 ? 's' : ''}`);
+    if (fail && !ok) this.toasts.error('Label print failed');
   }
 
   printReceipt() { this.toasts.success('Receipt print · coming soon'); }

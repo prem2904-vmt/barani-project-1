@@ -4,19 +4,24 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Order, OrderSample } from '../../../shared/models/order.model';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { Order, OrderSample, logicalTestCount } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
-import { LabelCardComponent } from '../../frontdesk/post-payment/label-card.component';
+import { LabelCardComponent, tubeSpec } from '../../frontdesk/post-payment/label-card.component';
+import { PrinterService } from '../../../core/printer/printer.service';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 
 /**
@@ -35,10 +40,10 @@ interface Container {
 
 // Tube colour conventions for blood vacutainers, keyed by department code.
 const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
-  HAEM:  { color: '#a78bfa', label: 'EDTA · Lavender' },
-  BIO:   { color: '#f59e0b', label: 'SST · Gold' },
+  HAEM:  { color: '#a855f7', label: 'EDTA · Lavender' },
+  BIO:   { color: '#eab308', label: 'SST · Gold' },
   SERO:  { color: '#ef4444', label: 'Plain · Red' },
-  MICRO: { color: '#10b981', label: 'Sterile tube' },
+  MICRO: { color: '#e5e7eb', label: 'Sterile container' },
   HISTO: { color: '#64748b', label: 'Formalin tube' }
 };
 const BLOOD_FILL = '#b91c1c';
@@ -51,32 +56,96 @@ const URINE_FILL = '#f59e0b';
  */
 // The four vacutainer tube colours a vial can be grouped by (space, colour).
 const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
+  // NABL / standard vacutainer cap colours.
+  sst:      { color: '#eab308', label: 'SST · Gold' },
+  plain:    { color: '#ef4444', label: 'Plain · Red' },
+  edta:     { color: '#a855f7', label: 'EDTA · Lavender' },
+  fluoride: { color: '#9ca3af', label: 'Fluoride · Grey' },
+  heparin:  { color: '#22c55e', label: 'Lithium Heparin · Green' },
+  citrate:  { color: '#38bdf8', label: 'Sodium Citrate · Blue' },
+  esr:      { color: '#1f2937', label: 'ESR · Black' },
+  trace:    { color: '#1d4ed8', label: 'Trace metal · Royal blue' },
+  sterile:  { color: '#e5e7eb', label: 'Sterile Container' },
+  urine:    { color: '#facc15', label: 'Urine Bottle' },
+  multiple: { color: '#6366f1', label: 'Multiple' },
+  // Legacy keys (pre-NABL) so older tests still render a colour.
   red:      { color: '#ef4444', label: 'Plain · Red' },
-  lavender: { color: '#a78bfa', label: 'EDTA · Lavender' },
+  lavender: { color: '#a855f7', label: 'EDTA · Lavender' },
   grey:     { color: '#9ca3af', label: 'Fluoride · Grey' },
-  blue:     { color: '#3b82f6', label: 'Citrate · Blue' },
+  blue:     { color: '#38bdf8', label: 'Sodium Citrate · Blue' },
 };
+
+/** Map ONE specimen/sampleType token to its NABL vacutainer container, or null
+ *  when it doesn't match a known specimen (the caller then tries the next A/B
+ *  option, and finally the department default). Ordered specific → general so
+ *  "EDTA Plasma" resolves to EDTA, not the generic plasma branch. */
+/** "synovial fluid" → "Synovial Fluid"; "csf" → "CSF". */
+function specimenTitle(s: string): string {
+  const t = s.trim().replace(/\b[a-z]/g, ch => ch.toUpperCase());
+  return t.replace(/\bCsf\b/g, 'CSF');
+}
+
+function specimenContainer(sampleType: string): Container | null {
+  if (!sampleType) return null;
+  if (sampleType.includes('urine')) return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine bottle' };
+  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')
+      || sampleType.includes('csf') || sampleType.includes('fluid') || sampleType.includes('sterile')
+      || sampleType.includes('semen') || sampleType.includes('secretion'))
+    // One container PER SPECIMEN TYPE (stool ≠ CSF ≠ semen…) — name the
+    // specimen so two sterile pots on one order are distinguishable.
+    return { kind: 'jar', color: '#e5e7eb', fill: '#9ca3af', label: `Sterile · ${specimenTitle(sampleType)}` };
+  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
+  if (sampleType.includes('fluoride') || sampleType.includes('glucose') || sampleType.includes('oxalate') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#9ca3af', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
+  if (sampleType.includes('citrate') || sampleType.includes('coag')) return { kind: 'vacutainer', color: '#38bdf8', fill: BLOOD_FILL, label: 'Sodium Citrate · Blue' };
+  if (sampleType.includes('esr')) return { kind: 'vacutainer', color: '#1f2937', fill: BLOOD_FILL, label: 'ESR · Black' };
+  if (sampleType.includes('heparin') || sampleType.includes('arterial') || sampleType.includes('abg')) return { kind: 'vacutainer', color: '#22c55e', fill: BLOOD_FILL, label: 'Lithium Heparin · Green' };
+  if (sampleType.includes('sst') || sampleType.includes('gold') || sampleType.includes('serum')) return { kind: 'vacutainer', color: '#eab308', fill: BLOOD_FILL, label: 'SST · Gold' };
+  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  if (sampleType.includes('plasma')) return { kind: 'vacutainer', color: '#22c55e', fill: BLOOD_FILL, label: 'Lithium Heparin · Green' };
+  if (sampleType.includes('blood')) return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
+  return null;
+}
 
 function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
   // The vial's own colour (set on the test → grouped into this vial) is
   // authoritative: it's what defined this tube's (space, colour) group.
   const tc = s.tubeColor && TUBE_COLOR_MAP[s.tubeColor];
-  if (tc) return { kind: 'vacutainer', color: tc.color, fill: BLOOD_FILL, label: tc.label };
-  const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
-  if (sampleType.includes('urine')) {
-    return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
+  if (tc) {
+    // Sterile pots hold ONE specimen type each — label it with the specimen so
+    // two sterile containers on an order read differently (Stool vs CSF…).
+    if (s.tubeColor === 'sterile') {
+      const spec = (s.tests[0]?.test?.sampleType ?? '').toLowerCase().trim();
+      return { kind: 'jar', color: tc.color, fill: '#9ca3af', label: spec ? `Sterile · ${specimenTitle(spec)}` : tc.label };
+    }
+    if (s.tubeColor === 'urine') return { kind: 'urine_cup', color: tc.color, fill: URINE_FILL, label: tc.label };
+    return { kind: 'vacutainer', color: tc.color, fill: BLOOD_FILL, label: tc.label };
   }
-  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')) {
-    return { kind: 'jar', color: '#10b981', fill: '#6b7280', label: 'Sterile container' };
+  // Analyte-driven tubes (NABL): a few analytes dictate the tube regardless of a
+  // generic serum/plasma specimen. Blood sugar / glucose-tolerance → sodium
+  // fluoride (grey, stops glycolysis); HbA1c → EDTA (lavender). An explicit
+  // per-test tube colour above still wins.
+  const testName = (s.tests[0]?.test?.name ?? '').toLowerCase();
+  if (/hba1c|glycated h|glycosylated h/.test(testName)) {
+    return { kind: 'vacutainer', color: '#a855f7', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
   }
-  // Blood: vacutainer. Prefer the tube colour spelt out in the sampleType
-  // ("Blood - EDTA"), otherwise use the department's conventional colour.
-  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a78bfa', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
-  if (sampleType.includes('sst') || sampleType.includes('gold')) return { kind: 'vacutainer', color: '#f59e0b', fill: BLOOD_FILL, label: 'SST · Gold' };
-  if (sampleType.includes('fluoride') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#6b7280', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
-  if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
-  if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
-  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  if (/\bsugar\b|glucose tolerance|\bogtt\b|\bgtt\b/.test(testName)) {
+    return { kind: 'vacutainer', color: '#9ca3af', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
+  }
+  // Map the test's specimen/sampleType to the NABL vacutainer cap colour.
+  // Ordered specific → general so e.g. "EDTA Plasma" resolves to EDTA, not
+  // the generic plasma branch below.
+  const raw = (s.tests[0]?.test?.sampleType ?? '').toLowerCase().trim();
+  // "A + B" ("Serum + 24h Urine") means BOTH containers are drawn; a literal
+  // "Multiple" specimen likewise → the Multiple tube.
+  if (raw === 'multiple' || raw.includes('+')) {
+    return { kind: 'vacutainer', color: '#6366f1', fill: BLOOD_FILL, label: 'Multiple' };
+  }
+  // "A / B" ("Serum/Plasma") means EITHER is acceptable — resolve to the first
+  // option that maps, falling through to the next ("use A, else B").
+  for (const part of raw.split('/')) {
+    const hit = specimenContainer(part.trim());
+    if (hit) return hit;
+  }
   // Department container: the admin-configured colour/label wins (set per
   // department in Branches → Departments), then the sample's own department
   // record, then the built-in convention, then a neutral grey tube.
@@ -90,6 +159,10 @@ function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string 
 
 interface OrderGroup {
   orderId: string;
+  /** Human-readable order number (LAB-2607-000042); falls back to a short id.
+   *  Shown in the collect drawer's header — the order is what the collector is
+   *  working, while each tube's own barcode sits on its card. */
+  orderNo: string;
   patientName: string;
   patientMeta: string;
   createdAt: string;
@@ -138,6 +211,7 @@ interface OrderGroup {
 
       @if (!deepLinkMode()) {
       <div class="pf-scan">
+        @if (!scan.manualEntry()) {
         <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
                 title="Scan with camera" aria-label="Open camera scanner">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -145,10 +219,11 @@ interface OrderGroup {
             <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
           </svg>
         </button>
+        }
         <div class="pf-scan__body">
-          <label class="pf-scan__label">Find patient or scan</label>
+          <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
           <input type="text" class="pf-scan__input"
-                 placeholder="Name · MRN · phone · order # · barcode"
+                 [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" autofocus aria-label="Search" />
         </div>
@@ -156,6 +231,7 @@ interface OrderGroup {
 
       @if (scannerOpen()) {
         <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
           title="Scan vial barcode"
           (matched)="onScanMatched($event)"
           (cancelled)="scannerOpen.set(false)">
@@ -233,7 +309,10 @@ interface OrderGroup {
             </button>
             <div class="pf-drawer__who">
               <p class="pf-drawer__name">{{ g.patientName }}</p>
-              <p class="pf-drawer__meta">{{ g.patientMeta }}</p>
+              <!-- Order number, not a sample id — the drawer is the whole order;
+                   each tube's own barcode is on its card below. Labelled and
+                   dark so the collector can read it out / write it instantly. -->
+              <p class="pf-drawer__meta pf-drawer__meta--order">Order ID: {{ g.orderNo }}</p>
             </div>
             <div class="pf-drawer__progress">
               <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
@@ -249,12 +328,20 @@ interface OrderGroup {
 
           <div class="pf-drawer__tubes">
             @for (s of g.samples; track s.id) {
-              <button type="button" class="pf-tube"
-                      [class.pf-tube--done]="s.status !== 'pending'"
-                      (click)="toggleCollected(s)">
-                @if (container(s).kind === 'urine_cup') {
-                  <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
-                       screw-cap lid, amber fill. -->
+              <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
+                   list (a floating popover). A div, not <button>, so the hold /
+                   pointer handling is clean. -->
+              <div class="pf-tube" role="button" tabindex="0"
+                   [class.pf-tube--done]="s.status !== 'pending'"
+                   [class.pf-tube--holding]="holdingId() === s.id"
+                   (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
+                   (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
+                   (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
+                @if (container(s).kind !== 'vacutainer') {
+                  <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
+                       lid. Urine cups fill amber; sterile jars (body fluid,
+                       stool, CSF …) fill a neutral grey — same silhouette, a
+                       cylindrical container, never a test tube. -->
                   <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true"
                        [style.--tube-color]="container(s).color">
                     <defs>
@@ -271,9 +358,9 @@ interface OrderGroup {
                         <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
                       </linearGradient>
                       <linearGradient [attr.id]="'urine-' + s.id" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0"    stop-color="#fcd34d"/>
-                        <stop offset="0.35" stop-color="#f59e0b"/>
-                        <stop offset="1"    stop-color="#b45309"/>
+                        <stop offset="0"    [attr.stop-color]="cupFluid(s).top"/>
+                        <stop offset="0.35" [attr.stop-color]="cupFluid(s).mid"/>
+                        <stop offset="1"    [attr.stop-color]="cupFluid(s).bottom"/>
                       </linearGradient>
                       <clipPath [attr.id]="'cupclip-' + s.id">
                         <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
@@ -314,8 +401,8 @@ interface OrderGroup {
                             height="120"
                             [attr.fill]="'url(#urine-' + s.id + ')'"/>
                       @if (s.status !== 'pending') {
-                        <ellipse cx="70" cy="110" rx="53" ry="4" fill="#fde68a" opacity="0.6"/>
-                        <ellipse cx="70" cy="112" rx="50" ry="2" fill="#fef3c7" opacity="0.35"/>
+                        <ellipse cx="70" cy="110" rx="53" ry="4" [attr.fill]="cupFluid(s).surface" opacity="0.6"/>
+                        <ellipse cx="70" cy="112" rx="50" ry="2" [attr.fill]="cupFluid(s).surfaceHi" opacity="0.35"/>
                       }
                     </g>
 
@@ -458,28 +545,15 @@ interface OrderGroup {
 
                 <div class="pf-tube__body">
                   <p class="pf-tube__label">{{ tube(s).label }}</p>
-                  <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
-
-                  @if (s.tests.length > 0) {
-                    <!-- Every test going into this tube, each with its draw
-                         volume when the test declares one, plus a per-tube
-                         total so the phlebotomist knows how much to pull. -->
-                    <ul class="pf-tube__testlist">
-                      @for (t of s.tests; track t.id) {
-                        <li class="pf-tube__test">
-                          <span class="pf-tube__test-name">{{ t.test?.name ?? t.name }}</span>
-                          @if (t.test?.sampleVolumeMl != null) {
-                            <span class="pf-tube__test-vol">{{ t.test?.sampleVolumeMl }} mL</span>
-                          }
-                        </li>
-                      }
-                    </ul>
-                    @if (drawVolume(s); as vol) {
-                      <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
-                    }
+                  @if (showTubeDept()) {
+                    <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
                   }
 
-                  <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
+                  <!-- Test list stays hidden so a many-test tube doesn't blow
+                       the column height; holding the vial ~2s peeks it. No
+                       textual hint and no draw-volume pill — the card carries
+                       only the container name and the sample id. -->
+                  <p class="pf-tube__code">Sample ID: {{ s.barcode ?? '—' }}</p>
 
                   @if (s.status !== 'pending') {
                     <span class="pf-tube__stamp">
@@ -493,7 +567,7 @@ interface OrderGroup {
                     <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
                   }
                 </div>
-              </button>
+              </div>
             }
           </div>
 
@@ -511,15 +585,27 @@ interface OrderGroup {
                 <span class="pf-btn__text">Can't collect</span>
               </button>
             }
-            <!-- Print the order's tube labels (barcode + QR) — available any time
-                 in the drawer so tubes can be labelled before or after the draw. -->
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
-                    aria-label="Print labels" data-label="Print labels">
-              <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
-              </svg>
-              <span class="pf-btn__text">Print labels</span>
-            </button>
+            @if (scan.manualEntry()) {
+              <!-- Manual mode: nothing to print — show what to hand-write on
+                   each container instead. -->
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="writeUpOpen.set(true)"
+                      aria-label="Label by hand" data-label="Label by hand">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                </svg>
+                <span class="pf-btn__text">Label by hand</span>
+              </button>
+            } @else {
+              <!-- Print the order's tube labels (barcode + QR) — available any time
+                   in the drawer so tubes can be labelled before or after the draw. -->
+              <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
+                      aria-label="Print labels" data-label="Print labels">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
+                </svg>
+                <span class="pf-btn__text">Print labels</span>
+              </button>
+            }
             @if (isDispatched(g)) {
               <span class="pf-drawer__done-stamp">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -542,7 +628,7 @@ interface OrderGroup {
                  Under a payment hold the gate would reject the dispatch, so the
                  slot offers "Bill" (→ billing screen) instead — or a passive
                  "Payment pending" note for collectors without billing access. -->
-            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold) {
+            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold && dispatchStep()) {
               @if (canBill()) {
                 <button type="button" class="pf-btn pf-btn-primary" (click)="goToBilling(g)"
                         aria-label="Bill" data-label="Bill">
@@ -590,6 +676,41 @@ interface OrderGroup {
             }
           </div>
         </div>
+
+        <!-- Manual-mode "Label by hand" sheet — what to write on each container
+             (no printer in manual mode). A child of .pf-drawer for stacking. -->
+        @if (writeUpOpen()) {
+          <div class="pf-wl" role="dialog" aria-modal="true" (click)="writeUpOpen.set(false)">
+            <div class="pf-wl__panel" (click)="$event.stopPropagation()">
+              <p class="pf-wl__title">Write on each container</p>
+              <p class="pf-wl__sub">{{ g.patientName }} · {{ g.orderNo }}</p>
+              <ul class="pf-wl__list">
+                @for (s of g.samples; track s.id) {
+                  <li class="pf-wl__row">
+                    <span class="pf-wl__dot" [style.background]="tube(s).color" aria-hidden="true"></span>
+                    <span class="pf-wl__container">{{ tube(s).label }}</span>
+                    <span class="pf-wl__code">{{ s.barcode ?? '—' }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="pf-wl__hint">Write the sample number (and patient name) on the matching container.</p>
+              <button type="button" class="pf-btn pf-btn-ghost pf-wl__close" (click)="writeUpOpen.set(false)">Done</button>
+            </div>
+          </div>
+        }
+
+        <!-- Hold-to-peek popover — a child of .pf-drawer (which is a z-index
+             stacking context) so it always paints above the collect content.
+             Shown while a vial is held; hidden on release. -->
+        @if (peekId()) {
+          <div class="pf-tube__peekpop" (click)="$event.stopPropagation()"
+               [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
+            <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
+            <ul>
+              @for (n of peekTests(); track n) { <li>{{ n }}</li> }
+            </ul>
+          </div>
+        }
       </div>
     }
 
@@ -634,6 +755,7 @@ interface OrderGroup {
         </div>
       </div>
     }
+
   `,
   styles: [`
     /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
@@ -844,7 +966,12 @@ interface OrderGroup {
      * opaque so the pending queue behind never peeks through. */
     .pf-drawer {
       position: fixed;
-      top: var(--navbar-height, 4rem);
+      /* Full-bleed from the very top: the shell chrome + the page's own
+         "Sample collection" header are hidden while a drawer is open
+         (html.pf-collect-immersive), so the drawer owns the whole viewport.
+         Pad for the notch on native so the ✕ clears the status bar. */
+      top: 0;
+      padding-top: env(safe-area-inset-top, 0px);
       right: 0;
       bottom: 0;
       left: 0;
@@ -869,9 +996,7 @@ interface OrderGroup {
     .pf-drawer__head {
       display: flex; align-items: center; gap: 16px;
       padding: 28px 48px 20px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
     }
     .pf-drawer__close {
       all: unset; cursor: pointer;
@@ -892,6 +1017,9 @@ interface OrderGroup {
       -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
     }
     .pf-drawer__meta { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
+    /* The order id must be instantly recognizable — primary-dark and bold,
+       never the muted meta grey. */
+    .pf-drawer__meta--order { color: var(--text-primary); font-weight: 700; font-size: 13.5px; }
 
     .pf-drawer__progress {
       text-align: right;
@@ -906,7 +1034,6 @@ interface OrderGroup {
 
     .pf-drawer__progressbar {
       margin: 0 auto;
-      max-width: calc(1280px - 96px);
       width: calc(100% - 96px);
       height: 4px; border-radius: 999px;
       background: rgba(255,255,255,0.06); overflow: hidden;
@@ -920,7 +1047,6 @@ interface OrderGroup {
 
     .pf-drawer__hint {
       margin: 16px auto 0;
-      max-width: calc(1280px - 96px);
       padding: 0 48px;
       font-size: 13px; color: var(--text-muted);
       text-align: center;
@@ -930,15 +1056,25 @@ interface OrderGroup {
      * genuinely centre across the screen instead of hugging the left column
      * of an auto-fill grid. 5+ wraps naturally. */
     .pf-drawer__tubes {
-      flex: 1 1 auto; overflow-y: auto;
+      /* Shrink-wrap to the tube grid's own height (NOT the full drawer) and
+         center it vertically with auto margins — so 1 card sits balanced and
+         many cards form a centered block; on overflow the auto margins collapse
+         and it scrolls from the top (no clipping). Mobile resets this below. */
+      flex: 0 1 auto;
+      margin-block: auto;
+      min-height: 0;
+      overflow-y: auto;
       padding: 28px 48px 32px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      align-content: flex-start;
+      /* stretch → every card matches the TALLEST card's height, so a row of
+         tubes lines up cleanly instead of sitting at ragged heights. Because the
+         container is content-height (flex:0), stretch grows cards to the tallest
+         sibling, never to the whole drawer. */
+      align-items: stretch;
+      align-content: center;
       gap: 18px;
     }
     .pf-tube { width: min(320px, 100%); }
@@ -956,7 +1092,21 @@ interface OrderGroup {
       overflow: hidden;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none; /* no iOS callout during the 2s hold-to-peek */
     }
+    /* Hold-to-peek progress: a bar fills across the bottom of the vial over the
+       2s hold; when full, the test list pops. Also a subtle press-in. */
+    .pf-tube::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube--holding {
+      border-color: rgba(139, 92, 246, 0.55);
+      background: linear-gradient(180deg, rgba(139,92,246,0.10), rgba(139,92,246,0.03));
+    }
+    .pf-tube--holding::after { opacity: 1; animation: pf-hold-fill 2s linear forwards; }
+    @keyframes pf-hold-fill { from { width: 0; } to { width: 100%; } }
     /* Send every click through to the button itself. Without this, a tap on
      * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
      * child element and the parent button only registers the SECOND tap.
@@ -991,13 +1141,19 @@ interface OrderGroup {
 
     /* ─── Vial illustration ────────────────────────────────── */
     .pf-vial {
-      width: 88px; height: 280px;
+      /* Scale with viewport height so the tube GROWS to fill a tall desktop
+         drawer instead of stranding at a fixed 280px. width:auto + aspect-ratio
+         keeps the illustration proportional as the height clamps. Tablet/short
+         and mobile breakpoints below override with their own sizes. */
+      height: clamp(260px, 40dvh, 500px);
+      width: auto;
+      aspect-ratio: 88 / 280;
       flex-shrink: 0;
       filter: drop-shadow(0 22px 28px rgba(0,0,0,0.55));
     }
     /* Urine cup is short and wide — swap the vial's portrait box for a more
      * squat one so it doesn't get squeezed into a tall-narrow slot. */
-    .pf-vial--cup { width: 150px; height: 236px; }
+    .pf-vial--cup { height: clamp(220px, 34dvh, 420px); width: auto; aspect-ratio: 150 / 236; }
     .pf-vial__outline {
       fill: rgba(255,255,255,0.03);
       stroke: rgba(255,255,255,0.22);
@@ -1048,6 +1204,56 @@ interface OrderGroup {
       text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
       opacity: 0.85;
     }
+    /* "Hold to see N tests" hint — non-interactive; the hold is handled on the
+       vial itself. */
+    .pf-tube__hint {
+      margin: 10px 0 0;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    /* Floating peek popover — a child of the drawer's own stacking context, so
+       a high local z-index keeps it above the collect content. Fixed = viewport
+       positioned (the drawer has no transform). */
+    /* Manual-mode "Label by hand" sheet — centered card over the drawer. */
+    .pf-wl {
+      position: absolute; inset: 0; z-index: 40;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .pf-wl__panel {
+      width: min(440px, 100%); max-height: 80vh; overflow-y: auto;
+      background: var(--surface-raised, #16161f); border: 1px solid var(--border-primary, rgba(255,255,255,0.1));
+      border-radius: 16px; padding: 20px;
+    }
+    .pf-wl__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .pf-wl__sub { margin: 4px 0 12px; font-size: 12.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-wl__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pf-wl__row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+    }
+    .pf-wl__dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); }
+    .pf-wl__container { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-secondary); }
+    .pf-wl__code { font-size: 15px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.04em; }
+    .pf-wl__hint { margin: 12px 0 14px; font-size: 12px; color: var(--text-tertiary); }
+    .pf-wl__close { width: 100%; justify-content: center; }
+
+    .pf-tube__peekpop {
+      position: fixed; z-index: 100;
+      width: 260px; max-height: 52vh; overflow-y: auto;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--bg-elevated, #0f172a);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pf-tube__peekpop-h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-tube__peekpop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .pf-tube__peekpop li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
     /* Per-tube test list: one row per test, name on the left, its draw
        volume right-aligned in mono so the numbers line up down the tube. */
     .pf-tube__testlist {
@@ -1087,9 +1293,10 @@ interface OrderGroup {
     }
     .pf-tube__code {
       margin: 4px 0 0;
-      font-size: 10.5px;
+      font-size: 11.5px;
+      font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
+      color: var(--text-primary);
       letter-spacing: 0.06em;
     }
     .pf-tube__stamp {
@@ -1112,9 +1319,7 @@ interface OrderGroup {
     .pf-drawer__foot {
       display: flex; align-items: center; gap: 12px;
       padding: 18px 48px 28px;
-      max-width: 1280px;
       width: 100%;
-      margin: 0 auto;
       border-top: 1px solid var(--glass-border);
       background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
     }
@@ -1491,12 +1696,36 @@ interface OrderGroup {
       border-color: rgba(16, 185, 129, 0.3);
     }
     :host-context([data-theme="light"]) .pf-tube__code {
-      color: #64748b;
+      color: #0f172a;
     }
     :host-context([data-theme="light"]) .pf-tube__draw {
       color: #b91c1c;
       background: rgba(220, 38, 38, 0.08);
       border-color: rgba(220, 38, 38, 0.28);
+    }
+
+    /* Manual-mode "Label by hand" sheet + hold-to-peek popover follow the
+       screen's theme — they were hard-coded dark and floated as black cards
+       over the light drawer. */
+    :host-context([data-theme="light"]) .pf-wl {
+      background: rgba(15, 23, 42, 0.28);
+    }
+    :host-context([data-theme="light"]) .pf-wl__panel {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.12);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-wl__row {
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-wl__dot {
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-tube__peekpop {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
     }
 
     :host-context([data-theme="light"]) .pf-drawer__done-stamp {
@@ -1681,6 +1910,10 @@ interface OrderGroup {
        >=641px is untouched (gated to <=640). ───────────────────────────── */
     @media (max-width: 640px) {
       .pf-drawer__tubes {
+        /* Phone: a top-packed, fill-height scroll list — NOT the desktop
+           content-height + auto-centered grid (undo the base's flex:0/margin). */
+        flex: 1 1 auto !important;
+        margin-block: 0 !important;
         flex-direction: column !important;
         flex-wrap: nowrap !important;
         align-items: stretch !important;
@@ -1737,15 +1970,31 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
+  private readonly printer = inject(PrinterService);
+  private readonly printConfig = inject(PrintConfigService);
+  private readonly labCfg = inject(BranchLabConfigService);
+  /** Show the department on a tube only for standalone labs; an integrated lab
+   *  (all departments run as one lab) hides it. (Cortex OPS-37) */
+  protected readonly showTubeDept = computed(() => this.labCfg.standaloneLab());
   private readonly dialog = inject(DialogService);
+  private readonly process = inject(ProcessWorkflowService);
+  protected readonly scan = inject(ScanService);
 
   /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
    *  host supplies its own pane header, so we suppress our KPI strip + screen
    *  header + outer page padding while keeping the queue + scan + drawer. */
   @Input() embedded = false;
 
-  /** Whether this user can dispatch (hand collected tubes to the lab). */
-  readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
+  /** Whether this user can dispatch (hand collected tubes to the lab) — needs
+   *  the permission AND the workflow to actually include a dispatch step (else
+   *  the backend rejects it, so the button must not show at all). */
+  readonly canDispatch = computed(() =>
+    this.auth.hasPermission('dispatch_sample') && this.process.dispatchStepEnabled());
+
+  /** True when the workflow actually has a dispatch step (independent of the
+   *  user's permission) — hides ALL dispatch chrome (button + payment-hold note)
+   *  in auto-receive workflows where there's nothing to dispatch. */
+  readonly dispatchStep = computed(() => this.process.dispatchStepEnabled());
   /** Whether this user can take a payment-held order to the billing screen
    *  (route /frontdesk/order needs create_order; create_bill implies desk staff). */
   readonly canBill = computed(() =>
@@ -1775,6 +2024,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._pending.update(list => list.map(s =>
         s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
       this.toasts.success('Dispatched to lab');
+      // Reached from the front desk (?from=…) → go back there automatically.
+      // In the standalone lab queue (_returnTo null) stay put.
+      if (this._returnTo) {
+        const target = this._returnTo;
+        this._returnTo = null;
+        this.router.navigateByUrl(target);
+      }
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
@@ -1817,6 +2073,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
+      // Immersive full-screen: while a patient's collection drawer is OPEN the
+      // tube-tapping view owns the whole viewport, so tag <html> to hide the
+      // shell's top chrome + bottom nav (they otherwise paint over/around the
+      // teleported overlay). The queue list (drawer closed) keeps normal chrome.
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('pf-collect-immersive', hasDrawer);
+      }
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -1832,7 +2095,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy() { this.detachTeleport(); }
+  ngOnDestroy() {
+    this.detachTeleport();
+    // Leaving the screen with a drawer still open must not strand the immersive
+    // flag on <html> — that would hide the chrome on the next screen too.
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('pf-collect-immersive');
+    }
+  }
 
   private detachTeleport() {
     if (this.teleportedEl && this.teleportedEl.parentNode === document.body) {
@@ -1875,6 +2145,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const p = s.order?.patient;
         g = {
           orderId: s.orderId,
+          orderNo: s.order?.orderNumber || ('#' + s.orderId.replace(/-/g, '').slice(-8).toUpperCase()),
           patientName: formatPatientInfo(p),
           patientMeta: '',
           createdAt: s.createdAt,
@@ -1926,6 +2197,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   });
 
   async ngOnInit() {
+    // Per-branch label config (size + code) for direct-to-printer label print.
+    this.labCfg.ensureLoaded();
     // Load the lab's configured container colours (best-effort — falls back to
     // the built-in conventions if it fails or a department has none set).
     this.api.get<{ code: string; containerColor?: string | null; containerLabel?: string | null }[]>('/api/tenants/departments')
@@ -1973,9 +2246,80 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
   container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+
+  /** Fluid gradient for the cup/jar graphic: amber for urine, neutral grey
+   *  for sterile jars (body fluid, stool, CSF …). */
+  cupFluid(s: OrderSample): { top: string; mid: string; bottom: string; surface: string; surfaceHi: string } {
+    return this.container(s).kind === 'urine_cup'
+      ? { top: '#fcd34d', mid: '#f59e0b', bottom: '#b45309', surface: '#fde68a', surfaceHi: '#fef3c7' }
+      : { top: '#e2e8f0', mid: '#94a3b8', bottom: '#64748b', surface: '#e2e8f0', surfaceHi: '#f8fafc' };
+  }
+
+  /** Long-press (hold ~2s) a vial to peek its test list; a normal tap collects.
+   *  The list floats as a popover that stays open while held. A move (scroll)
+   *  or early release cancels the peek; once the peek fires, the release's
+   *  click is suppressed so it never also collects. */
+  readonly peekId = signal<string | null>(null);
+  readonly peekPos = signal<{ x: number; y: number } | null>(null);
+  readonly peekTests = signal<string[]>([]);
+  /** Manual-mode "Label by hand" sheet: what to hand-write on each container. */
+  readonly writeUpOpen = signal(false);
+  /** Which vial is mid-hold — drives the progress-fill animation. */
+  readonly holdingId = signal<string | null>(null);
+  private static readonly HOLD_MS = 2000;
+  private _pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _longPressFired = false;
+  private _downX = 0;
+  private _downY = 0;
+
+  onVialDown(s: OrderSample, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return; // primary / touch only
+    this._longPressFired = false;
+    this._downX = ev.clientX; this._downY = ev.clientY;
+    // Float the popover beside the vial (right, or left if no room) so the
+    // holding finger never covers it.
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    const tests = (s.tests ?? []).map(t => t.test?.name ?? t.name).filter((n): n is string => !!n);
+    this.clearPress();
+    this.holdingId.set(s.id); // start the hold-progress fill
+    this._pressTimer = setTimeout(() => {
+      this._longPressFired = true;
+      this.holdingId.set(null);
+      this.peekPos.set({ x, y });
+      this.peekTests.set(tests);
+      this.peekId.set(s.id);   // popover shows while held
+    }, SampleCollectionComponent.HOLD_MS);
+  }
+  onVialMove(ev: PointerEvent): void {
+    if (this._pressTimer && (Math.abs(ev.clientX - this._downX) > 10 || Math.abs(ev.clientY - this._downY) > 10)) {
+      this.clearPress();
+    }
+  }
+  onVialUp(): void { this.clearPress(); }
+  private clearPress(): void {
+    if (this._pressTimer) { clearTimeout(this._pressTimer); this._pressTimer = null; }
+    this.holdingId.set(null);
+    this.peekId.set(null); // release hides the peek
+  }
+
+  /** The vial's click: suppress it when a long-press just peeked, otherwise
+   *  it's a normal tap → collect. */
+  onVialClick(s: OrderSample, ev: Event): void {
+    if (this._longPressFired) { this._longPressFired = false; ev.preventDefault(); ev.stopPropagation(); return; }
+    this.toggleCollected(s);
+  }
+
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a
    *  volume, so the "Draw ~N mL" pill is omitted rather than lying with 0. */
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number { return logicalTestCount(tests); }
+
   drawVolume(s: OrderSample): number | null {
     let sum = 0;
     let any = false;
@@ -2041,7 +2385,49 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  labels reach paper — nothing else on the screen prints. */
   printLabels(g: OrderGroup) {
     if (!g.samples.length) { this.toasts.warning('No tubes to label'); return; }
+    if (this.printer.directPrintAvailable()) { void this.directPrint(g); return; }
     printLabelOnly();
+  }
+
+  /** Render each tube label at the branch's configured size + single code and
+   *  stream it straight to the label printer (Electron USB / iPad BLE). */
+  private async directPrint(g: OrderGroup) {
+    const opts = this.printConfig.labelOpts();
+    this.toasts.info(`Printing ${g.samples.length} label${g.samples.length > 1 ? 's' : ''}…`);
+    let ok = 0, fail = 0;
+    for (const s of g.samples) {
+      const p = s.order?.patient;
+      const code = s.barcode ?? s.id;
+      const mrn = p?.mrn ?? undefined;
+      const spec = tubeSpec(s);
+      const res = await this.printer.printLabelData({
+        code,
+        qrValue: mrn ? `${mrn}|${code}` : code,
+        // Just the name — age/sex + MRN print as their own lines below, so the
+        // combined "name | age/sex | id" string would duplicate them.
+        patientName: (p && patientDisplayName(p)) || g.patientName,
+        ageSex: this.labelAgeSex(p),
+        mrn,
+        deptCode: (s.department?.code ?? '').toUpperCase(),
+        tube: `${spec.label} · ${spec.volume}`,
+      }, opts).catch((e: unknown) => ({ ok: false, direct: true, error: (e as Error)?.message }));
+      if (res.ok) ok++; else { fail++; if (res.error) this.toasts.error(res.error); }
+    }
+    if (ok) this.toasts.success(`Printed ${ok} label${ok > 1 ? 's' : ''}`);
+    else if (fail) this.toasts.error('Label print failed');
+  }
+
+  private labelAgeSex(p: { age?: number | null; dateOfBirth?: string | null; sex?: string | null } | null | undefined): string {
+    if (!p) return '';
+    let age = p.age ?? null;
+    if (age == null && p.dateOfBirth) {
+      const d = new Date(p.dateOfBirth), now = new Date();
+      age = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+    }
+    const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
+    return [age != null ? `${age}Y` : null, s].filter(Boolean).join(' ');
   }
 
   openScanner() { this.scannerOpen.set(true); }
@@ -2125,9 +2511,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    * and would make the one just tapped vanish mid-animation.
    */
   toggleCollected(s: OrderSample) {
-    if (s.status === 'pending') this.markCollected(s);
-    else if (s.status === 'collected') this.markPending(s);
-    // any other downstream status is locked — user can't undo from here.
+    if (s.status === 'pending') { this.markCollected(s); return; }
+    if (s.status === 'collected') { this.markPending(s); return; }
+    // Auto-receive workflows have NO dispatch step: collection immediately marks
+    // the tube 'received' at the lab. The front desk must still be able to undo a
+    // mis-tap, so treat an auto-received tube as un-collectable here — the backend
+    // reverses the auto-receipt. Genuine dispatch-workflow receipts stay locked.
+    if (s.status === 'received' && !this.dispatchStep()) { this.markPending(s); return; }
+    // dispatched / picked_up / processing / rejected / validated → locked.
   }
 
   private markCollected(s: OrderSample) {

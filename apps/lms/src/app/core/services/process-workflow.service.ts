@@ -53,6 +53,25 @@ export class ProcessWorkflowService {
     return a ? a.enabled : true;
   }
 
+  /**
+   * Is "dispatch" a genuine front-desk→lab handoff step in this workflow?
+   *
+   * Unlike {@link isEnabled} (opt-out: silent ⇒ on), dispatch is OPT-IN and must
+   * mirror the backend `ShouldAutoReceiveAsync`: a tube auto-receives into the lab
+   * on collection — leaving no dispatch step — when the workflow collects in-lab,
+   * OR omits/disables `lab_intake`, OR omits/disables `dispatch`. Only when none of
+   * those hold is dispatch a real step. No active workflow ⇒ classic flow, which
+   * does include dispatch. Screens use this to hide the Dispatch button/holds when
+   * the workflow has no dispatch step (else the button rejects every attempt).
+   */
+  dispatchStepEnabled(): boolean {
+    const cfg = this._active();
+    if (!cfg) return true;                 // classic flow — dispatch exists
+    if (collectsInLab(cfg)) return false;  // drawn at the bench ⇒ auto-received
+    const on = (type: string) => !!cfg.actions?.find(x => x.type === type)?.enabled;
+    return on('lab_intake') && on('dispatch');
+  }
+
   /** Which menu/work-area an action is placed in (null if not placed/enabled). */
   placedIn(type: string): string | null {
     const a = this._active()?.actions?.find(x => x.type === type && x.enabled);

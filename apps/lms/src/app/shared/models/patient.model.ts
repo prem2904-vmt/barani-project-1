@@ -67,6 +67,23 @@ export function formatPatientInfo(
   return `${truncatedName} | ${age}/${sexCode} | ${pid}`;
 }
 
+/** Age/sex + MRN WITHOUT the name — "23/M · AA0040". For layouts that give the
+ *  patient's name its own emphasis and trail the identifiers behind it, where
+ *  formatPatientInfo's single "Name | 23/M | AA0040" string would repeat it. */
+export function formatPatientMeta(
+  p: Pick<Patient, 'age' | 'sex' | 'mrn'> | null | undefined
+): string {
+  if (!p) return '';
+  const age = p.age != null ? String(p.age) : '—';
+  let sexCode = '—';
+  if (p.sex) {
+    const t = p.sex.trim().toLowerCase();
+    sexCode = t.startsWith('m') ? 'M' : t.startsWith('f') ? 'F' : t.startsWith('o') ? 'O'
+            : p.sex.charAt(0).toUpperCase();
+  }
+  return [`${age}/${sexCode}`, p.mrn?.trim() || '—'].join(' · ');
+}
+
 export interface RegisterPatientInput {
   firstName: string;
   fathersName: string;

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { TrendTest } from '../../../shared/utils/trend-chart';
+import { describeAllRanges } from '../../../shared/utils/reference-range';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -7,7 +8,8 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { OrderSample, OrderTest } from '../../../shared/models/order.model';
+import { AuthService } from '../../../core/auth/auth.service';
+import { OrderSample, OrderTest, logicalTestCount, sortTestsForDisplay } from '../../../shared/models/order.model';
 import { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -69,10 +71,35 @@ function defaultResultParam(): TestParameter {
         </button>
         @if (sample(); as s) {
           <div class="pf-sre__hdr-title">
-            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ s.barcode || '—' }}</p>
-            <h1 class="pf-sre__title">{{ formatPatient(s.order?.patient) }}</h1>
-            <p class="pf-sre__sub">{{ s.tests.length }} test{{ s.tests.length === 1 ? '' : 's' }} on this tube</p>
+            <!-- Sample-focused header: the Sample ID (tube barcode) is the primary
+                 identity; the patient is demoted to a small secondary line. -->
+            <p class="pf-sre__eyebrow">{{ s.department?.code ?? 'Tube' }} · {{ logicalCount() }} test{{ logicalCount() === 1 ? '' : 's' }} on this tube</p>
+            <h1 class="pf-sre__title">{{ s.barcode || '—' }}</h1>
+            <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
+            <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
+            @if (headerChips().length) {
+              <div class="pf-sre__chips">
+                @for (c of headerChips(); track $index) {
+                  <span class="pf-sre__chip">{{ c }}</span>
+                }
+              </div>
+            }
           </div>
+        }
+        <!-- Signed-in technician (right of header): name + medical
+             registration ID (dash until the user adds one in My signature). -->
+        <span class="pf-sre__tech" title="Signed-in technician">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span class="pf-sre__tech-name">{{ techName() }}</span>
+          <span class="pf-sre__tech-reg" title="Registration ID">Reg: {{ techRegId() }}</span>
+        </span>
+        <!-- Background autosave indicator (manual Save draft still available). -->
+        @if (autosaving()) {
+          <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot"></span>Saving…</span>
+        } @else if (lastSavedLabel(); as l) {
+          <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span>{{ l }}</span>
         }
         <span class="pf-sre__view" role="group" aria-label="Result view">
           <button type="button" class="pf-sre__view-btn"
@@ -181,8 +208,155 @@ function defaultResultParam(): TestParameter {
           </div>
         }
 
-        @for (t of sample()!.tests; track t.id) {
+        @for (blk of entryBlocks(); track blk.key) {
+          @if (blk.kind === 'card' || viewMode() !== 'grid') {
+            <!-- Classic cards: multi-parameter/culture/schema-less tests, and
+                 the whole form view. -->
+            <ng-container *ngTemplateOutlet="testCard; context: { $implicit: blk.tests, member: false }"></ng-container>
+          } @else {
+            <!-- FLAT block: one column-header strip, then a plain sequence of
+                 rows. A profile shows its name once above (Profile → test,
+                 test, test…); plain tests need no header at all — the row's
+                 Parameter column already names the test. -->
+            <section class="pf-sre__test pf-sre__flat">
+              @if (blk.title) {
+                <header class="pf-sre__flat-hdr">
+                  <h2 class="pf-sre__profile-name">{{ blk.title }}</h2>
+                  <span class="pf-sre__profile-count">{{ blk.tests.length }} tests</span>
+                </header>
+              }
+              <div class="pf-sre__grid-wrap">
+                <table class="pf-sre__grid">
+                  <thead>
+                    <tr>
+                      <th class="pf-sre__gc-param">Parameter</th>
+                      <th class="pf-sre__gc-result">Result</th>
+                      <th class="pf-sre__gc-unit">Unit</th>
+                      <th class="pf-sre__gc-range">Reference range</th>
+                      <th class="pf-sre__gc-method">Method</th>
+                      <th class="pf-sre__gc-note"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (t of blk.tests; track t.id) {
+                      @if (t.status === 're_entry' && t.rejectionReason) {
+                        <tr class="pf-sre__grow-reject"><td colspan="6"><strong>Pathologist note:</strong> {{ t.rejectionReason }}</td></tr>
+                      }
+                      @if (parametersFor(t).length > 1) {
+                        <!-- Multi-parameter member inside a profile: one slim
+                             sub-label row, then its parameter rows. -->
+                        <tr class="pf-sre__gsub"><td colspan="6">{{ t.test?.name ?? 'Test' }}</td></tr>
+                      }
+                      @for (p of parametersFor(t); track p.name; let idx = $index) {
+                        <tr class="pf-sre__grow"
+                            [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
+                          <td class="pf-sre__gc-param">
+                            <span class="pf-sre__gname">{{ parametersFor(t).length > 1 ? (p.title || p.name) : (t.test?.name || p.title || p.name) }}@if (hasOpenComment(t.id, p.name)) {<span class="pf-sre__param-flag" title="Pathologist commented"> ↻</span>}</span>
+                          </td>
+                          <td class="pf-sre__gc-result">
+                            <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
+                            @if (p.unit) {
+                              <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span>
+                            }
+                          </td>
+                          <td class="pf-sre__gc-unit">{{ p.unit || '—' }}</td>
+                          <td class="pf-sre__gc-range">{{ refLabelFor(p) || '—' }}</td>
+                          <td class="pf-sre__gc-method">{{ methodologyOf(p) }}</td>
+                          <td class="pf-sre__gc-note">
+                            @if (idx === 0) {
+                              @if (t.status === 're_entry') { <span class="pf-sre__gdot pf-sre__gdot--rejected" title="Re-entry needed"></span> }
+                              @else if (t.status === 'entered' || t.status === 'validated') { <span class="pf-sre__gdot pf-sre__gdot--done" title="Entered"></span> }
+                              <button type="button" class="pf-sre__gnote press"
+                                      [class.pf-sre__gnote--has]="commentsFor(t.id, null).length > 0"
+                                      (click)="toggleOverall(t.id)" title="Note on this test">✎</button>
+                            }
+                          </td>
+                        </tr>
+                        @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
+                          <tr class="pf-sre__grow-comments">
+                            <td colspan="6">
+                              <pf-comment-thread
+                                [comments]="commentsFor(t.id, p.name)"
+                                currentRole="tech"
+                                [composeLabel]="'Add note on this parameter'"
+                                (add)="addParameterComment(t.id, p.name, $event.body, $event.type)"
+                                (reply)="replyToParameter(t.id, p.name, $event.parentId, $event.body)">
+                              </pf-comment-thread>
+                            </td>
+                          </tr>
+                        }
+                      }
+                      @if (isOverallOpen(t.id) || commentsFor(t.id, null).length > 0) {
+                        <tr class="pf-sre__grow-comments">
+                          <td colspan="6">
+                            <pf-comment-thread
+                              [comments]="commentsFor(t.id, null)"
+                              currentRole="tech"
+                              (add)="addOverallComment(t.id, $event.body, $event.type)"
+                              (reply)="replyToOverall(t.id, $event.parentId, $event.body)">
+                            </pf-comment-thread>
+                          </td>
+                        </tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          }
+        }
+
+        <!-- Shared result-input control (grid tables): one definition, used by
+             both the flat block rows and the classic card grid. -->
+        <ng-template #resultInput let-t="t" let-p="p">
+          @switch (inputKindFor(p)) {
+            @case ('number') {
+              <input type="number" step="any" class="pf-sre__ginput pf-sre__ginput--num"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @case ('select') {
+              <select class="pf-sre__ginput"
+                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                      [ngModel]="getValue(t.id, p.name)"
+                      (ngModelChange)="setValue(t.id, p.name, $event)">
+                <option value="">—</option>
+                @for (o of (p.options ?? []); track o) {
+                  <option [value]="o">{{ o }}</option>
+                }
+              </select>
+            }
+            @case ('textarea') {
+              <textarea class="pf-sre__ginput pf-sre__ginput--ta" rows="1"
+                        [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                        [ngModel]="getValue(t.id, p.name)"
+                        (ngModelChange)="setValue(t.id, p.name, $event)"></textarea>
+            }
+            @case ('checkbox') {
+              <input type="checkbox" class="pf-sre__cb"
+                     [ngModel]="!!getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @case ('date') {
+              <input type="date" class="pf-sre__ginput"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+            @default {
+              <input type="text" class="pf-sre__ginput"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)" />
+            }
+          }
+        </ng-template>
+
+        <ng-template #testCard let-cardTests let-member="member">
+        @for (t of cardTests; track t.id) {
           <section class="pf-sre__test"
+                   [class.pf-sre__test--member]="member"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">
             <header class="pf-sre__test-hdr">
@@ -424,6 +598,7 @@ function defaultResultParam(): TestParameter {
             }
           </section>
         }
+        </ng-template>
 
         <footer class="pf-sre__footer">
           @if (hasReopenable()) {
@@ -648,6 +823,10 @@ function defaultResultParam(): TestParameter {
       .pf-sre__title  { order: 1; font-size: 16px; margin: 0; line-height: 1.2;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
       .pf-sre__eyebrow { order: 2; font-size: 9.5px; letter-spacing: 0.1em; }
+      .pf-sre__pid { order: 3; font-size: 11px; }
+      /* Keep the phone header compact — chip glimpse + tech pill are desktop-only. */
+      .pf-sre__chips { display: none; }
+      .pf-sre__tech { display: none; }
       .pf-sre__sub { display: none; }
       /* Submit (or undo) lives top-right as an icon; the bottom bar is gone.
          margin-left:auto pins it to the far right even if the title is short,
@@ -704,8 +883,105 @@ function defaultResultParam(): TestParameter {
       color: var(--text-tertiary);
       font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
-    .pf-sre__title { margin: 4px 0 2px; font-size: 22px; font-weight: 700; color: var(--text-primary); }
+    /* Sample ID is the primary identity — big + monospace like an accession no. */
+    .pf-sre__title { margin: 4px 0 2px; font-size: 22px; font-weight: 700; color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.01em; }
     .pf-sre__sub { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+    /* Demoted patient line — small + secondary, always visible. */
+    .pf-sre__pid { margin: 1px 0 0; font-size: 12px; color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Test-kind glimpse chips (tube-as-probe). */
+    .pf-sre__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .pf-sre__chip {
+      display: inline-flex; align-items: center; padding: 2px 9px;
+      border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.5;
+      color: var(--text-secondary);
+      background: color-mix(in srgb, var(--accent, #a855f7) 14%, transparent);
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    }
+
+    /* Signed-in technician (right of header). */
+    .pf-sre__tech {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      align-self: center; padding: 5px 11px; border-radius: 999px;
+      font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+      background: var(--glass-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    }
+    .pf-sre__tech svg { flex: 0 0 auto; opacity: 0.75; }
+    .pf-sre__tech-name { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 640px) { .pf-sre__tech-name { display: none; } }
+    /* Medical registration ID beside the name — dash until the user sets one. */
+    .pf-sre__tech-reg {
+      font-size: 11px; color: var(--text-tertiary, #94a3b8);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) { .pf-sre__tech-reg { display: none; } }
+
+    /* ── Profile / package block: one titled card, member tests inside ── */
+    .pf-sre__profile {
+      margin-bottom: 20px; padding: 14px 14px 6px;
+      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.22));
+      border-radius: 18px;
+      background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+    }
+    .pf-sre__profile-hdr {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 2px 4px 12px;
+    }
+    .pf-sre__profile-name { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: 0.01em; }
+    .pf-sre__profile-count {
+      font-size: 11px; color: var(--text-tertiary, #94a3b8);
+      font-family: 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    /* Member cards inside a profile sit flatter — the profile card carries the
+       chrome; members read as a sequence of rows under the one title. */
+    .pf-sre__test--member {
+      margin-bottom: 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .pf-sre__test--member .pf-sre__test-name { font-size: 13px; }
+
+    /* ── FLAT block: one header strip + a plain sequence of rows ── */
+    .pf-sre__flat-hdr {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 2px 4px 12px;
+    }
+    /* Sub-label row for a multi-parameter member inside a profile. */
+    .pf-sre__gsub td {
+      padding: 8px 10px 4px; font-size: 12.5px; font-weight: 700;
+      color: var(--text-secondary, #cbd5e1); border-bottom: none;
+    }
+    /* Inline rejection note row. */
+    .pf-sre__grow-reject td {
+      padding: 6px 10px; font-size: 12px; color: #fca5a5;
+      background: rgba(248, 113, 113, 0.06);
+    }
+    /* Status dot + per-test note button (last slim column). */
+    .pf-sre__gc-note { width: 56px; text-align: right; white-space: nowrap; }
+    .pf-sre__gdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .pf-sre__gdot--done { background: #34d399; }
+    .pf-sre__gdot--rejected { background: #f87171; }
+    .pf-sre__gnote {
+      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25));
+      background: transparent; color: var(--text-tertiary, #94a3b8);
+      border-radius: 8px; width: 26px; height: 26px; font-size: 12px; cursor: pointer;
+    }
+    .pf-sre__gnote:hover { color: var(--text-primary, #e2e8f0); background: rgba(148, 163, 184, 0.12); }
+    .pf-sre__gnote--has { color: var(--violet-400, #a78bfa); border-color: rgba(167, 139, 250, 0.5); }
+
+    /* Background autosave pill. */
+    .pf-sre__autosave {
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+      align-self: center; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary);
+    }
+    .pf-sre__autosave-dot { width: 7px; height: 7px; border-radius: 50%;
+      background: var(--amber-text, #f59e0b); animation: pf-sre-pulse 1s ease-in-out infinite; }
+    .pf-sre__autosave-dot--ok { background: #10b981; animation: none; }
+    @keyframes pf-sre-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
     .pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
     .pf-sre__msg--err { color: var(--red-text); }
@@ -1190,7 +1466,100 @@ export class SampleResultEntryComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
+  private readonly auth = inject(AuthService);
   protected readonly formatPatient = formatPatientInfo;
+
+  /** Signed-in technician shown on the right of the header. Uses displayName
+   *  (the /me response has no separate login username field today). */
+  readonly techName = computed(() => this.auth.user()?.displayName?.trim() || 'Technician');
+  /** Medical registration ID beside the name — a dash until the user sets one
+   *  (editable on the My signature screen). */
+  readonly techRegId = computed(() => this.auth.user()?.registrationId?.trim() || '—');
+
+  /** Entry blocks for the grid view.
+   *  - 'flat'  → ONE column-header strip + a sequence of rows. Used for
+   *    profile/package members (titled with the profile name) AND for plain
+   *    single-parameter tests (untitled — the row already names the test, so
+   *    no per-test header/card).
+   *  - 'card'  → the classic per-test card, kept only where it's needed:
+   *    multi-parameter standalone tests, cultures, and schema-less tests. */
+  /** Keep the tube's tests in their authored display order (profile member
+   *  sequence), and expose the logical count (a profile counts as ONE). */
+  private normalizeSample(s: OrderSample | null): OrderSample | null {
+    if (!s?.tests) return s;
+    return { ...s, tests: sortTestsForDisplay(s.tests) };
+  }
+  readonly logicalCount = computed(() => logicalTestCount(this.sample()?.tests));
+
+  /**
+   * Header chips — one per LOGICAL test, matching the "N tests on this tube"
+   * count beside them. A profile collapses to a single chip carrying its own
+   * name; its member analytes are NOT listed here (a 20-analyte CBC used to
+   * spray 20 chips across the header while the counter next to it said "1").
+   * The members are already laid out in the profile's block below, which is
+   * where the tech actually reads them.
+   */
+  readonly headerChips = computed<string[]>(() => {
+    const out: string[] = [];
+    const seenPkg = new Set<string>();
+    for (const t of this.sample()?.tests ?? []) {
+      const pkg = t.packageTestId;
+      if (pkg) {
+        if (seenPkg.has(pkg)) continue;
+        seenPkg.add(pkg);
+        out.push(t.packageName || 'Profile');
+        continue;
+      }
+      out.push(t.test?.shortName || t.test?.name || 'Test');
+    }
+    return out;
+  });
+
+  readonly entryBlocks = computed<Array<
+    { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |
+    { kind: 'card'; key: string; tests: OrderTest[] }
+  >>(() => {
+    const tests = this.sample()?.tests ?? [];
+    const out: Array<
+      { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } |
+      { kind: 'card'; key: string; tests: OrderTest[] }
+    > = [];
+    const byPkg = new Map<string, { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] }>();
+    let loose: { kind: 'flat'; key: string; title: string | null; tests: OrderTest[] } | null = null;
+    for (const t of tests) {
+      const rowable = !this.isCultureTest(t) && this.parametersFor(t).length > 0;
+      const pkg = t.packageTestId;
+      if (pkg) {
+        if (!rowable) { out.push({ kind: 'card', key: t.id, tests: [t] }); continue; }
+        let g = byPkg.get(pkg);
+        if (!g) {
+          g = { kind: 'flat', key: 'pkg-' + pkg, title: t.packageName || 'Profile', tests: [] };
+          byPkg.set(pkg, g);
+          out.push(g);
+        }
+        g.tests.push(t);
+        continue;
+      }
+      if (rowable && this.parametersFor(t).length === 1) {
+        if (!loose) { loose = { kind: 'flat', key: 'loose', title: null, tests: [] }; out.push(loose); }
+        loose.tests.push(t);
+        continue;
+      }
+      out.push({ kind: 'card', key: t.id, tests: [t] });
+    }
+    return out.filter(b => b.tests.length > 0);
+  });
+
+  // ── Background autosave (manual Save draft is still available) ──────
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly _autosaving = signal(false);
+  readonly autosaving = this._autosaving.asReadonly();
+  private readonly _lastSavedAt = signal<Date | null>(null);
+  readonly lastSavedLabel = computed(() => {
+    const t = this._lastSavedAt();
+    if (!t) return '';
+    return `Saved ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  });
 
   private readonly _sample = signal<OrderSample | null>(null);
   private readonly _loading = signal<boolean>(true);
@@ -1269,7 +1638,7 @@ export class SampleResultEntryComponent {
     this._submitting.set(true);
     try {
       const updated = await firstValueFrom(this.api.post<OrderSample>(`/api/samples/${s.id}/reopen`, {}));
-      if (updated) { this._sample.set(updated); this.prefillValues(updated); }
+      if (updated) { this._sample.set(this.normalizeSample(updated)); this.prefillValues(updated); }
       this.toasts.success('Reopened — edit and submit again');
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
@@ -1360,6 +1729,43 @@ export class SampleResultEntryComponent {
   setCulture(testId: string, v: CultureResult) {
     this._values.update(all => ({ ...all, [testId]: v as unknown as Record<string, unknown> }));
     this.scheduleDraftSave();
+    this.scheduleServerAutosave();
+  }
+
+  // ── Background server autosave ────────────────────────────────────
+  // A silent, debounced draft POST so typed-but-unsubmitted results reach
+  // the server without the tech pressing Save draft. Unlike the manual
+  // saveDraft() it does NOT navigate away, does NOT toast, and does NOT
+  // reset the sample (which would disrupt in-progress typing). The manual
+  // Save draft button stays exactly as-is.
+  private scheduleServerAutosave() {
+    if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => { this.autosaveTimer = null; void this.autoSaveDraft(); }, 2500);
+  }
+
+  private async autoSaveDraft() {
+    const s = this._sample();
+    if (!s || this._submitting() || this._savingDraft() || this._autosaving()) return;
+    const all = this._values();
+    const writable = (s.tests ?? []).filter(t => t.status !== 'validated' && t.status !== 'entered');
+    const payload = {
+      results: writable
+        .filter(t => all[t.id] && Object.keys(all[t.id]).length > 0)
+        .map(t => ({ orderTestId: t.id, values: all[t.id], note: undefined }))
+    };
+    if (payload.results.length === 0) return;
+    this._autosaving.set(true);
+    try {
+      await firstValueFrom(
+        this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
+      );
+      this._lastSavedAt.set(new Date());
+      // Keep the local crash-recovery copy until a manual save/submit clears it.
+    } catch {
+      /* silent — the localStorage draft remains the fallback */
+    } finally {
+      this._autosaving.set(false);
+    }
   }
 
   inputKindFor(p: TestParameter): 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text' {
@@ -1406,10 +1812,14 @@ export class SampleResultEntryComponent {
   refLabelFor(p: TestParameter): string {
     const r = (p as TestParameter & { ref_range?: string }).ref_range;
     if (r) return r;
-    const rr = p.referenceRanges?.[0];
-    if (rr && rr.min != null && rr.max != null) return `${rr.min} – ${rr.max}`;
-    if (rr && rr.min != null) return `> ${rr.min}`;
-    if (rr && rr.max != null) return `< ${rr.max}`;
+    // Every band, labelled ("Adult Male 13–17 · Adult Female 12–15"). This
+    // showed referenceRanges[0] alone, so a tech entering a FEMALE patient's
+    // haemoglobin was shown the MALE band to judge it against. This screen has
+    // no patient sex/age in scope, so naming a single band would be a guess —
+    // showing them all is the honest form, and the backend still decides the
+    // flag that gets persisted and printed.
+    const bands = describeAllRanges(p.referenceRanges);
+    if (bands.length) return bands.join(' · ');
     if (p.normalValue) return p.normalValue;
     return '';
   }
@@ -1430,6 +1840,7 @@ export class SampleResultEntryComponent {
       [testId]: { ...(all[testId] ?? {}), [paramName]: v }
     }));
     this.scheduleDraftSave();
+    this.scheduleServerAutosave();
   }
 
   // ── Local draft persistence ───────────────────────────────────────
@@ -1468,6 +1879,7 @@ export class SampleResultEntryComponent {
 
   private clearDraft() {
     if (this.draftTimer !== null) { clearTimeout(this.draftTimer); this.draftTimer = null; }
+    if (this.autosaveTimer !== null) { clearTimeout(this.autosaveTimer); this.autosaveTimer = null; }
     if (!this.draftKey) return;
     try { localStorage.removeItem(this.draftKey); } catch { /* private mode */ }
   }
@@ -1478,7 +1890,7 @@ export class SampleResultEntryComponent {
     this.draftKey = `pf-lms.sre-draft.${id}`;
     try {
       const sample = await firstValueFrom(this.api.get<OrderSample>(`/api/samples/${id}/tests`));
-      this._sample.set(sample ?? null);
+      this._sample.set(this.normalizeSample(sample ?? null));
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
       this.prefillValues(sample ?? null);
@@ -1579,7 +1991,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
-      this._sample.set(resp?.sample ?? s);
+      this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Values reached the server — the local crash-recovery draft is done.
       this.clearDraft();
       // Backend auto-resolves correction threads on submit (see
@@ -1625,7 +2037,7 @@ export class SampleResultEntryComponent {
       const resp = await firstValueFrom(
         this.api.post<BulkSubmitResponse>(`/api/samples/${s.id}/results/draft`, payload)
       );
-      this._sample.set(resp?.sample ?? s);
+      this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Draft now lives on the server (currentResult prefills it next
       // open) — drop the local crash-recovery copy.
       this.clearDraft();

@@ -24,6 +24,27 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
         subtitle="Patient ID format and tenant data tools.">
       </pf-screen-header>
 
+      <!-- Organization login handle (tenant "username") — OPS-13 -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Organization login handle</h3>
+        <p class="pf-ls__hint">
+          This is the organization name your staff type on the sign-in screen.
+          <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle will stop working.
+        </p>
+        <div class="flex flex-wrap items-end gap-3 mt-4">
+          <label class="block">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Handle</span>
+            <input class="pf-input mt-1" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
+                   placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          </label>
+          <button type="button" class="pf-save-slug px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style="background: var(--violet-600, #7c3aed);"
+                  [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" (click)="saveSlug()">
+            {{ slugSaving() ? 'Saving…' : 'Save handle' }}
+          </button>
+        </div>
+      </pf-tile>
+
       <!-- Patient ID format -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -61,7 +82,7 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="pidPad.set(+$event)" />
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
             </label>
             <label class="block">
               <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Prefix (optional)</span>
@@ -106,6 +127,114 @@ interface WipeResult { patients: number; orders: number; bills: number; reports:
                 style="background: var(--violet-600, #7c3aed);" [disabled]="pidSaving()" (click)="savePatientId()">
           {{ pidSaving() ? 'Saving…' : 'Save format' }}
         </button>
+      </pf-tile>
+
+      <!-- Sample ID format (prefix = space code) -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="min-w-0">
+          <h3 class="pf-ls__title">Sample ID format</h3>
+          <p class="pf-ls__hint">
+            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="font-mono">MIC-2607-00001</span>).
+            The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
+          </p>
+        </div>
+        @if (idSection(sampleFmt); as f) {
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date</span>
+              <select class="pf-input mt-1" [ngModel]="f.date()" (ngModelChange)="f.date.set($event)">
+                <option value="yymmdd">YYMMDD</option><option value="ddmmyy">DDMMYY</option>
+                <option value="mmdd">MMDD</option><option value="yymm">YYMM</option>
+                <option value="mmyy">MMYY</option><option value="yy">YY</option>
+                <option value="dd">DD</option><option value="none">None</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
+              <input class="pf-input mt-1" maxlength="3" [ngModel]="f.sep()" (ngModelChange)="f.sep.set($event)" placeholder="none" />
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
+            </label>
+          </div>
+          <label class="pf-ls__inline-toggle mt-4">
+            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span style="opacity:.7">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
+            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="f.serial() === 'alpha'">
+              <input type="checkbox" [checked]="f.serial() === 'alpha'" (change)="f.serial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
+              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+            </span>
+          </label>
+          @if (f.serial() === 'alpha') {
+            <label class="block mt-4 max-w-[220px]">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
+              <select class="pf-input mt-1" [ngModel]="f.letters()" (ngModelChange)="f.letters.set(+$event)">
+                <option [ngValue]="1">A</option><option [ngValue]="2">AA</option><option [ngValue]="3">AAA</option><option [ngValue]="4">AAAA</option>
+              </select>
+            </label>
+          }
+          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
+            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ f.preview() }}</strong>
+          </p>
+          <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style="background: var(--violet-600, #7c3aed);" [disabled]="f.saving()" (click)="saveIdFormat(f)">
+            {{ f.saving() ? 'Saving…' : 'Save format' }}
+          </button>
+        }
+      </pf-tile>
+
+      <!-- Order ID format (prefix = module code) -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <div class="min-w-0">
+          <h3 class="pf-ls__title">Order ID format</h3>
+          <p class="pf-ls__hint">
+            Each order's ID is <strong>MODULE-DATE-NUMBER</strong> (e.g. <span class="font-mono">LAB-2607-000042</span>).
+            The <strong>module</strong> is set automatically (lab orders → <span class="font-mono">LAB</span>; OPD/IPD later). The number restarts <strong>each month per module</strong>.
+          </p>
+        </div>
+        @if (idSection(orderFmt); as f) {
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date</span>
+              <select class="pf-input mt-1" [ngModel]="f.date()" (ngModelChange)="f.date.set($event)">
+                <option value="yymmdd">YYMMDD</option><option value="ddmmyy">DDMMYY</option>
+                <option value="mmdd">MMDD</option><option value="yymm">YYMM</option>
+                <option value="mmyy">MMYY</option><option value="yy">YY</option>
+                <option value="dd">DD</option><option value="none">None</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
+              <input class="pf-input mt-1" maxlength="3" [ngModel]="f.sep()" (ngModelChange)="f.sep.set($event)" placeholder="none" />
+            </label>
+            <label class="block">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
+            </label>
+          </div>
+          <label class="pf-ls__inline-toggle mt-4">
+            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span style="opacity:.7">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
+            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="f.serial() === 'alpha'">
+              <input type="checkbox" [checked]="f.serial() === 'alpha'" (change)="f.serial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
+              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+            </span>
+          </label>
+          @if (f.serial() === 'alpha') {
+            <label class="block mt-4 max-w-[220px]">
+              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
+              <select class="pf-input mt-1" [ngModel]="f.letters()" (ngModelChange)="f.letters.set(+$event)">
+                <option [ngValue]="1">A</option><option [ngValue]="2">AA</option><option [ngValue]="3">AAA</option><option [ngValue]="4">AAAA</option>
+              </select>
+            </label>
+          }
+          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
+            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ f.preview() }}</strong>
+          </p>
+          <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style="background: var(--violet-600, #7c3aed);" [disabled]="f.saving()" (click)="saveIdFormat(f)">
+            {{ f.saving() ? 'Saving…' : 'Save format' }}
+          </button>
+        }
       </pf-tile>
 
       <!-- ─── Danger zone ────────────────────────────────────────
@@ -232,6 +361,11 @@ export class OrganizationSettingsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
 
+  // ── Login handle (tenant slug) — OPS-13 ──
+  protected readonly slug = signal('');
+  protected readonly slugOriginal = signal('');
+  protected readonly slugSaving = signal(false);
+
   // ── Danger-zone state ──
   protected readonly wiping = signal(false);
   protected readonly lastWiped = signal<WipeResult | null>(null);
@@ -252,6 +386,46 @@ export class OrganizationSettingsComponent implements OnInit {
   /** Fixed letter-block width for alpha mode (1–4 → A/AA/AAA/AAAA). */
   protected readonly pidLetters = signal(2);
   protected readonly pidSaving = signal(false);
+  protected preventMinus(e: KeyboardEvent) {
+    if (e.key === '-' || e.key === '+' || e.key === 'e') {
+      e.preventDefault();
+    }
+  }
+
+  /** Login handle is lowercase letters/numbers/hyphens only — sanitize as typed
+   *  (OPS-13). */
+  protected onSlugInput(v: string) {
+    this.slug.set((v ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40));
+  }
+  protected saveSlug() {
+    const s = this.slug();
+    if (!s || s === this.slugOriginal()) return;
+    this.slugSaving.set(true);
+    this.api.patch('/api/tenants/current', { slug: s }).subscribe({
+      next: () => {
+        this.slugSaving.set(false);
+        this.slugOriginal.set(s);
+        this.toasts.success('Login handle updated — staff now sign in with this handle.');
+      },
+      error: e => { this.slugSaving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  private sanitizePadValue(val: any, isAlpha: boolean): number {
+    const maxPad = isAlpha ? 6 : 10;
+    const num = Math.abs(parseInt(val, 10));
+    if (isNaN(num) || num < 1) return 1;
+    return Math.min(num, maxPad);
+  }
+
+  protected onPidPadChange(val: any) {
+    this.pidPad.set(this.sanitizePadValue(val, this.pidSerial() === 'alpha'));
+  }
+
+  protected onFormatPadChange(f: { serial: () => string; pad: { set: (v: number) => void } }, val: any) {
+    f.pad.set(this.sanitizePadValue(val, f.serial() === 'alpha'));
+  }
+
   /** Live sample of what a new id looks like with today's date + seq 1. */
   protected readonly pidPreview = computed(() => {
     const n = new Date();
@@ -267,37 +441,112 @@ export class OrganizationSettingsComponent implements OnInit {
       : this.pidDate() === 'dd' ? dd : '';
     // First id (seq 1): the fixed-width UPPERCASE letters + the number, padded
     // to the configured min width (capped at 6 for alpha). e.g. AA001.
+    const cleanPad = this.sanitizePadValue(this.pidPad(), this.pidSerial() === 'alpha');
     const serial = this.pidSerial() === 'alpha'
-      ? 'A'.repeat(Math.min(Math.max(this.pidLetters(), 1), 4)) + '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 6), '0')
-      : '1'.padStart(Math.min(Math.max(this.pidPad(), 1), 10), '0');
+      ? 'A'.repeat(Math.min(Math.max(this.pidLetters(), 1), 4)) + '1'.padStart(cleanPad, '0')
+      : '1'.padStart(cleanPad, '0');
     const head = (this.pidPrefix() ?? '') + date;
     // Blank separator → no separator (e.g. mmdd000).
     const sep = this.pidSep() ?? '';
     return head.length ? `${head}${sep}${serial}` : serial;
   });
 
+  // ── Sample-ID & Order-ID formats ──
+  // Same engine as Patient ID but with a DYNAMIC prefix: the space code for
+  // samples (e.g. MIC-2607-00001), the module code for orders (LAB-2607-000042).
+  // The preview uses a stand-in prefix. Counter restarts monthly per space/module.
+  protected readonly sampleFmt = this.makeIdFormat('sample', 'MIC', 'yymm', 5);
+  protected readonly orderFmt = this.makeIdFormat('order', 'LAB', 'yymm', 6);
+
+  private makeIdFormat(scope: 'sample' | 'order', samplePrefix: string, defaultDate: string, defaultPad: number) {
+    const date = signal(defaultDate);
+    const sep = signal('-');
+    const pad = signal(defaultPad);
+    const serial = signal<'numeric' | 'alpha'>('numeric');
+    const letters = signal(2);
+    const saving = signal(false);
+    const preview = computed(() => {
+      const n = new Date();
+      const dd = String(n.getDate()).padStart(2, '0');
+      const mm = String(n.getMonth() + 1).padStart(2, '0');
+      const yy = String(n.getFullYear() % 100).padStart(2, '0');
+      const d = date() === 'yymmdd' ? yy + mm + dd
+        : date() === 'ddmmyy' ? dd + mm + yy
+        : date() === 'mmdd' ? mm + dd
+        : date() === 'yymm' ? yy + mm
+        : date() === 'mmyy' ? mm + yy
+        : date() === 'yy' ? yy
+        : date() === 'dd' ? dd : '';
+      const cleanPad = this.sanitizePadValue(pad(), serial() === 'alpha');
+      const ser = serial() === 'alpha'
+        ? 'A'.repeat(Math.min(Math.max(letters(), 1), 4)) + '1'.padStart(cleanPad, '0')
+        : '1'.padStart(cleanPad, '0');
+      // Separator between EVERY non-empty part — mirrors backend GenerateScoped.
+      return [samplePrefix, d, ser].filter(p => p.length).join(sep() ?? '');
+    });
+    return { scope, samplePrefix, date, sep, pad, serial, letters, saving, preview };
+  }
+  private idFmts() { return [this.sampleFmt, this.orderFmt]; }
+  /** Identity passthrough so the template can bind a format object via `@if (…; as f)`. */
+  protected idSection<T>(f: T): T { return f; }
+
   ngOnInit() {
+    // Current tenant login handle (OPS-13).
+    this.api.get<any>('/api/tenants/current').subscribe({
+      next: t => { const s = (t?.slug ?? '').toLowerCase(); this.slug.set(s); this.slugOriginal.set(s); },
+    });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
         if (!c) return;
         this.pidEnabled.set(!!c.enabled);
         this.pidDate.set(c.datePrefix ?? 'ddmmyy');
         this.pidSep.set(c.separator ?? '-');
-        this.pidPad.set(c.padding ?? 4);
+        this.pidPad.set(this.sanitizePadValue(c.padding ?? 4, c.serialMode === 'alpha'));
         this.pidPrefix.set(c.prefix ?? '');
         this.pidSerial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
         this.pidLetters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
       }
     });
+    for (const f of this.idFmts()) {
+      this.api.get<any>(`/api/config/${f.scope}-id`).subscribe({
+        next: c => {
+          if (!c) return;
+          f.date.set(c.datePrefix ?? f.date());
+          f.sep.set(c.separator ?? '-');
+          f.pad.set(this.sanitizePadValue(c.padding ?? f.pad(), c.serialMode === 'alpha'));
+          f.serial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
+          f.letters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
+        }
+      });
+    }
+  }
+
+  saveIdFormat(f: { scope: 'sample' | 'order'; date: any; sep: any; pad: any; serial: any; letters: any; saving: any }) {
+    const cleanPad = this.sanitizePadValue(f.pad(), f.serial() === 'alpha');
+    f.pad.set(cleanPad);
+    f.saving.set(true);
+    this.api.post(`/api/config/${f.scope}-id`, {
+      enabled: true,
+      datePrefix: f.date(),
+      separator: f.sep() ?? '',
+      padding: cleanPad,
+      serialMode: f.serial(),
+      letterCount: f.letters(),
+    }).subscribe({
+      next: () => { f.saving.set(false); this.toasts.success(`${f.scope === 'sample' ? 'Sample' : 'Order'} ID format saved`); },
+      error: e => { f.saving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
   }
 
   savePatientId() {
+    const cleanPad = this.sanitizePadValue(this.pidPad(), this.pidSerial() === 'alpha');
+    this.pidPad.set(cleanPad);
     this.pidSaving.set(true);
     this.api.post('/api/config/patient-id', {
       enabled: this.pidEnabled(),
       datePrefix: this.pidDate(),
       separator: this.pidSep() ?? '',
-      padding: this.pidPad(),
+      padding: cleanPad,
       prefix: this.pidPrefix()?.trim() || null,
       serialMode: this.pidSerial(),
       letterCount: this.pidLetters(),

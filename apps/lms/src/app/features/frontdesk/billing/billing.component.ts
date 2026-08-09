@@ -8,6 +8,7 @@ import { BarcodeDisplayComponent } from '../../../shared/components/barcode-disp
 import { BillingEventsService } from '../../../core/services/billing-events.service';
 import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { PrinterService } from '../../../core/printer/printer.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -1628,6 +1629,7 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly location = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
   private readonly billingEvents = inject(BillingEventsService);
+  private readonly printer = inject(PrinterService);
 
   /** Embedded mode: render inline (e.g. inside the order screen) without the
    *  page header. The orderId comes from {@link embeddedOrderId} instead of the
@@ -2341,6 +2343,7 @@ export class BillingComponent implements OnInit, OnChanges {
         tatLabel: this.tatLabel(),
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
         docTitle,
         ...invoiceTemplateFieldsFrom(tpl),
         practice: {
@@ -2372,8 +2375,18 @@ export class BillingComponent implements OnInit, OnChanges {
         generateInvoicePdf({ ...input, action: 'view' });
         return;
       }
-      // Web/desktop: the browser print dialog works.
-      generateInvoicePdf({ ...input, action: 'print' });
+      // Desktop with a chosen invoice printer (Printing settings) → print the
+      // PDF silently to it. Otherwise fall back to the browser print dialog.
+      const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+      const bytes = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
+      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+      const routed = await this.printer.printInvoicePdf(bytes);
+      if (routed.handled) {
+        if (routed.ok) this.toasts.success('Invoice sent to printer');
+        else this.toasts.error(routed.error || 'Invoice print failed');
+      } else {
+        generateInvoicePdf({ ...input, action: 'print' });
+      }
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);
       this.toasts.error('Could not generate invoice PDF');

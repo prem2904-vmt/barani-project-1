@@ -14,13 +14,12 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
-import { TestLayoutEditorComponent } from './test-layout-editor.component';
 import { ImageUploadComponent } from './image-upload.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 
-type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'testlayout' | 'signoff';
+type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'signoff';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -39,7 +38,6 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     ToggleComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
-    TestLayoutEditorComponent,
     ImageUploadComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,54 +53,78 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
       </pf-screen-header>
 
       <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-        <!-- ── Left: tabbed form. On Per-test layout it spans the full width so
-                the per-test editor + its own resolved preview fill the row. ── -->
-        <div class="{{ tab() === 'testlayout' ? 'lg:col-span-2' : '' }}">
-          <div class="mb-5 overflow-x-auto pb-1">
-            <pf-segmented
-              [options]="tabOptions"
-              [value]="tab()"
-              size="md"
-              (valueChange)="setTab($event)">
-            </pf-segmented>
-          </div>
+        <!-- ── Left: tabbed form. Every section pairs with the live PDF
+                preview on the right. ── -->
+        <div>
+          <!-- Section cards — each names what it changes, so the editor reads
+               as a map of the report instead of a row of cryptic tabs. -->
+          <nav class="pf-rt-nav mb-5" aria-label="Report template sections">
+            @for (s of sections; track s.value) {
+              <button type="button" class="pf-rt-nav__item press"
+                      [class.pf-rt-nav__item--on]="tab() === s.value"
+                      (click)="setTab(s.value)">
+                <span class="pf-rt-nav__t">{{ s.label }}</span>
+                <span class="pf-rt-nav__s">{{ s.desc }}</span>
+              </button>
+            }
+          </nav>
 
           @switch (tab()) {
 
             <!-- ────────── IDENTITY ────────── -->
             @case ('identity') {
               <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-3">
-                  <div><label class="pf-label">Lab name</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().labName"
-                           (ngModelChange)="patch({ labName: $event })" /></div>
-                  <div><label class="pf-label">Tagline</label>
-                    <input type="text" class="pf-input"
-                           placeholder="e.g. Accurate | Caring | Instant"
-                           [ngModel]="tpl().tagline"
-                           (ngModelChange)="patch({ tagline: $event })" /></div>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div><label class="pf-label">Phone</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="tpl().phone"
-                             (ngModelChange)="patch({ phone: $event })" /></div>
-                    <div><label class="pf-label">Email</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="tpl().email"
-                             (ngModelChange)="patch({ email: $event })" /></div>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Branding</h4>
+                  <p class="pf-rtb-s">The name and tagline printed at the top of every report — live below.</p>
+                  <div class="pf-wys-paper pf-wys-masthead">
+                    <span class="pf-wys-masthead__name" [style.color]="colorOf('primaryColor') || '#1B3A6B'">
+                      {{ tpl().labName || 'Your Lab Name' }}
+                    </span>
+                    <span class="pf-wys-masthead__tag">{{ tpl().tagline || 'Tagline appears here' }}</span>
+                    <span class="pf-wys-masthead__bar" [style.background]="colorOf('accentColor') || '#0066CC'"></span>
                   </div>
-                  <div><label class="pf-label">Website</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().website"
-                           (ngModelChange)="patch({ website: $event })" /></div>
-                  <div><label class="pf-label">Address</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().address"
-                           (ngModelChange)="patch({ address: $event })" /></div>
+                  <div class="space-y-3">
+                    <div><label class="pf-label">Lab name</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="tpl().labName"
+                             (ngModelChange)="patch({ labName: $event })" /></div>
+                    <div><label class="pf-label">Tagline</label>
+                      <input type="text" class="pf-input"
+                             placeholder="e.g. Accurate | Caring | Instant"
+                             [ngModel]="tpl().tagline"
+                             (ngModelChange)="patch({ tagline: $event })" /></div>
+                  </div>
+                </div>
 
-                  <div class="pf-divider"></div>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Contact</h4>
+                  <p class="pf-rtb-s">Shown in the letterhead's right column.</p>
+                  <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div><label class="pf-label">Phone</label>
+                        <input type="text" class="pf-input"
+                               [ngModel]="tpl().phone"
+                               (ngModelChange)="patch({ phone: $event })" /></div>
+                      <div><label class="pf-label">Email</label>
+                        <input type="text" class="pf-input"
+                               [ngModel]="tpl().email"
+                               (ngModelChange)="patch({ email: $event })" /></div>
+                    </div>
+                    <div><label class="pf-label">Website</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="tpl().website"
+                             (ngModelChange)="patch({ website: $event })" /></div>
+                    <div><label class="pf-label">Address</label>
+                      <input type="text" class="pf-input"
+                             [ngModel]="tpl().address"
+                             (ngModelChange)="patch({ address: $event })" /></div>
+                  </div>
+                </div>
 
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Accreditation</h4>
+                  <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
                       <p class="font-semibold text-[14px]" style="color: var(--text-primary);">NABL accredited</p>
@@ -127,6 +149,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       </div>
                     </div>
                   }
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -134,23 +157,33 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── HEADER & LOGO ────────── -->
             @case ('header') {
               <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-4">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Logo</h4>
+                  <p class="pf-rtb-s">Upload once — position and size control where it sits in the letterhead.</p>
+                  <div class="space-y-3">
                   <div>
-                    <label class="pf-label">Lab logo</label>
                     <pf-image-upload [url]="tpl().logoUrl"
                                      (urlChange)="patch({ logoUrl: $event })">
                     </pf-image-upload>
                   </div>
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label class="pf-label">Header preset</label>
-                      <pf-segmented
-                        [options]="headerPresetOptions"
-                        [value]="tpl().headerPreset ?? 'drlogy'"
-                        size="sm"
-                        (valueChange)="patch({ headerPreset: $event })">
-                      </pf-segmented>
+                    <div class="md:col-span-3">
+                      <label class="pf-label">Header style</label>
+                      <div class="pf-wys-thumbs">
+                        @for (o of headerPresetOptions; track o.value) {
+                          <button type="button" class="pf-wys-thumb press"
+                                  [class.pf-wys-thumb--on]="(tpl().headerPreset ?? 'drlogy') === o.value"
+                                  (click)="patch({ headerPreset: $any(o.value) })">
+                            <span class="pf-wys-thumb__paper" [class]="'pf-wys-thumb__paper--' + o.value">
+                              <span class="pf-wys-thumb__logo"></span>
+                              <span class="pf-wys-thumb__lines"><i></i><i></i></span>
+                              <span class="pf-wys-thumb__accent"></span>
+                            </span>
+                            <span class="pf-wys-thumb__name">{{ o.label }}</span>
+                          </button>
+                        }
+                      </div>
                     </div>
                     <div>
                       <label class="pf-label">Logo position</label>
@@ -171,7 +204,12 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       </pf-segmented>
                     </div>
                   </div>
+                  </div>
+                </div>
 
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Header extras</h4>
+                  <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
                       <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Top accent bar</p>
@@ -204,6 +242,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
                     </div>
                   }
+                  </div>
                 </div>
               </pf-tile>
             }
@@ -211,9 +250,10 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── THEME ────────── -->
             @case ('theme') {
               <pf-tile tone="default" padding="lg" class="block">
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Colors</p>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Colours</h4>
+                  <p class="pf-rtb-s">Brand and table colours used across the printed report.</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                   @for (c of colorFields; track c.key) {
                     <div>
                       <label class="pf-label">{{ c.label }}</label>
@@ -228,20 +268,25 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </div>
                   }
                 </div>
+                </div>
 
-                <div class="pf-divider"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Typography & table style</p>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Typography &amp; table</h4>
+                  <p class="pf-rtb-s">Font, table lines and department behaviour.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label class="pf-label">Font family</label>
-                    <pf-segmented
-                      [options]="fontOptions"
-                      [value]="tpl().fontFamily ?? 'helvetica'"
-                      size="sm"
-                      (valueChange)="patch({ fontFamily: $event })">
-                    </pf-segmented>
+                    <div class="pf-wys-fonts">
+                      @for (o of fontOptions; track o.value) {
+                        <button type="button" class="pf-wys-font press"
+                                [class.pf-wys-font--on]="(tpl().fontFamily ?? 'helvetica') === o.value"
+                                [style.fontFamily]="fontCss($any(o.value))"
+                                (click)="patch({ fontFamily: $any(o.value) })">
+                          <span class="pf-wys-font__sample">AaBb123</span>
+                          <span class="pf-wys-font__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
                   </div>
                   <div>
                     <label class="pf-label">Font size</label>
@@ -254,12 +299,18 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
                   <div>
                     <label class="pf-label">Table style</label>
-                    <pf-segmented
-                      [options]="tableStyleOptions"
-                      [value]="tpl().tableStyle ?? 'plain'"
-                      size="sm"
-                      (valueChange)="patch({ tableStyle: $event })">
-                    </pf-segmented>
+                    <div class="pf-wys-thumbs">
+                      @for (o of tableStyleOptions; track o.value) {
+                        <button type="button" class="pf-wys-thumb press"
+                                [class.pf-wys-thumb--on]="(tpl().tableStyle ?? 'plain') === o.value"
+                                (click)="patch({ tableStyle: $any(o.value) })">
+                          <span class="pf-wys-mini" [class]="'pf-wys-mini--' + o.value">
+                            <i></i><i></i><i></i><i></i>
+                          </span>
+                          <span class="pf-wys-thumb__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Zebra rows</span>
@@ -267,6 +318,23 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                                (checkedChange)="patch({ zebraRows: $event })">
                     </pf-toggle>
                   </div>
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Abnormal results</h4>
+                  <p class="pf-rtb-s">How out-of-range values are marked — this row is live:</p>
+                  <div class="pf-wys-paper pf-wys-demo">
+                    <span>Hemoglobin</span>
+                    <span [style.fontWeight]="(tpl().flagIndicator ?? 'letter') === 'none' ? '400' : '700'"
+                          [style.color]="(tpl().flagStyle ?? 'bold') === 'bold_color' && (tpl().flagIndicator ?? 'letter') !== 'none' ? (tpl().abnormalLowColor || '#2563eb') : '#111'">
+                      11.4 g/dL
+                      @if ((tpl().flagIndicator ?? 'letter') === 'letter') { <span>&nbsp;L</span> }
+                      @else if ((tpl().flagIndicator ?? 'letter') === 'arrow') { <span>&nbsp;▼</span> }
+                    </span>
+                    <span class="pf-wys-demo__range">12.0 – 16.0</span>
+                  </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                        [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                     <label class="pf-label">Abnormal value style</label>
@@ -312,9 +380,15 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                              (ngModelChange)="patch({ abnormalLowColor: $event })" />
                     </div>
                   }
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Departments &amp; details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
-                    <pf-toggle [checked]="tpl().groupByDepartment ?? false"
+                    <pf-toggle [checked]="tpl().groupByDepartment"
                                (checkedChange)="patch({ groupByDepartment: $event })">
                     </pf-toggle>
                   </div>
@@ -329,10 +403,11 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[14px]" style="color: var(--text-primary);">Show method line</span>
-                    <pf-toggle [checked]="tpl().showMethod ?? false"
+                    <pf-toggle [checked]="tpl().showMethod"
                                (checkedChange)="patch({ showMethod: $event })">
                     </pf-toggle>
                   </div>
+                </div>
                 </div>
               </pf-tile>
             }
@@ -340,6 +415,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             <!-- ────────── PATIENT BLOCK ────────── -->
             @case ('patient') {
               <pf-tile tone="default" padding="lg" class="block">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Patient block</h4>
+                  <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
                 <div class="space-y-4">
                   <div>
                     <label class="pf-label">Patient block layout</label>
@@ -412,6 +490,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </div>
                   </div>
                 </div>
+              </div>
               </pf-tile>
             }
 
@@ -422,51 +501,17 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               </pf-report-columns-editor>
             }
 
-            <!-- ────────── PER-TEST LAYOUT (sections engine) ────────── -->
-            @case ('testlayout') {
-              <pf-test-layout-editor></pf-test-layout-editor>
-            }
-
             <!-- ────────── SIGN-OFF & FOOTER ────────── -->
             @case ('signoff') {
               <pf-tile tone="default" padding="lg" class="block">
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Signature blocks (up to 3)</p>
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Footer</h4>
+                  <p class="pf-rtb-s">
+                    Signatures are configured per department (Report columns → Signatories) and print at
+                    the end of each department's section — nothing signs in the footer. The texts below
+                    close the page.
+                  </p>
 
-                @for (sig of signatures(); track $index; let i = $index) {
-                  <div class="pf-sig-card">
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-[12px] font-semibold" style="color: var(--text-secondary);">Sign-off #{{ i + 1 }}</span>
-                      <button type="button" class="pf-link-btn" (click)="removeSignature(i)">Remove</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input class="pf-input" placeholder="Name (e.g. Dr. Payal Shah)"
-                             [ngModel]="sig.name"
-                             (ngModelChange)="updateSignature(i, { name: $event })" />
-                      <input class="pf-input" placeholder="Title (e.g. MD, Pathologist)"
-                             [ngModel]="sig.title"
-                             (ngModelChange)="updateSignature(i, { title: $event })" />
-                      <input class="pf-input" placeholder="Reg. No"
-                             [ngModel]="sig.regNo"
-                             (ngModelChange)="updateSignature(i, { regNo: $event })" />
-                    </div>
-                    <div class="mt-2">
-                      <label class="pf-label">Signature image (optional)</label>
-                      <pf-image-upload [url]="sig.signatureUrl"
-                                       (urlChange)="updateSignature(i, { signatureUrl: $event })">
-                      </pf-image-upload>
-                    </div>
-                  </div>
-                }
-
-                @if (signatures().length < 3) {
-                  <button type="button" class="pf-add-btn" (click)="addSignature()">+ Add sign-off block</button>
-                }
-
-                <div class="pf-divider mt-4"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Footer text</p>
                 <div class="space-y-3">
                   <div>
                     <label class="pf-label">Disclaimer (small print)</label>
@@ -534,15 +579,13 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </pf-toggle>
                   </div>
                 </div>
+              </div>
               </pf-tile>
             }
           }
         </div>
 
-        <!-- ── Right: live PDF preview. Shared by all tabs EXCEPT Per-test
-                layout, which renders its own engine-resolved preview for the
-                selected test (full-width). ─────── -->
-        @if (tab() !== 'testlayout') {
+        <!-- ── Right: live PDF preview, shared by every section. ─────── -->
         <aside class="lg:sticky lg:top-4 h-fit">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
              style="color: var(--text-muted);">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
@@ -560,11 +603,97 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
             Preview uses a sample order. Save to apply this template to real reports.
           </p>
         </aside>
-        }
       </div>
     </section>
   `,
   styles: [`
+    /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
+    .pf-wys-paper { background: #ffffff; color: #111; border-radius: 10px; padding: 12px 14px;
+      border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 6px rgba(0,0,0,0.35); }
+    .pf-wys-masthead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+    .pf-wys-masthead__name { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; }
+    .pf-wys-masthead__tag { font-size: 11.5px; color: #555; }
+    .pf-wys-masthead__bar { height: 4px; border-radius: 2px; margin-top: 8px; }
+
+    .pf-wys-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
+    .pf-wys-thumb--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-thumb__name { font-size: 11px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
+    .pf-wys-thumb__paper { position: relative; width: 116px; height: 62px; border-radius: 6px; background: #fff;
+      display: block; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-thumb__logo { position: absolute; top: 8px; left: 8px; width: 14px; height: 14px; border-radius: 3px; background: #94a3b8; }
+    .pf-wys-thumb__lines { position: absolute; top: 9px; left: 28px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .pf-wys-thumb__lines i { height: 5px; border-radius: 2px; background: #cbd5e1; display: block; }
+    .pf-wys-thumb__lines i:first-child { background: #64748b; width: 70%; }
+    .pf-wys-thumb__accent { position: absolute; left: 0; right: 0; top: 30px; height: 3px; background: #3b82f6; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__accent { top: 0; height: 10px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__logo { top: 16px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__lines { top: 18px; }
+    .pf-wys-thumb__paper--classic .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__logo { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__lines { left: 10px; }
+
+    .pf-wys-fonts { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 92px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-wys-font--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-font__sample { font-size: 18px; }
+    .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
+
+    .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 116px; padding: 8px;
+      background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-mini i { display: block; height: 6px; border-radius: 2px; background: #e2e8f0; }
+    .pf-wys-mini i:first-child { background: #64748b; }
+    .pf-wys-mini--bordered i { border: 1px solid #94a3b8; background: #fff; height: 8px; }
+    .pf-wys-mini--bordered i:first-child { background: #cbd5e1; }
+    .pf-wys-mini--striped i:nth-child(odd) { background: #cbd5e1; }
+
+    .pf-wys-demo { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; font-size: 13px; }
+    .pf-wys-demo__range { color: #777; font-size: 12px; }
+
+    .pf-wys-sigs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pf-wys-sig { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; min-width: 120px; font-size: 12px; }
+    .pf-wys-sig__img { max-height: 30px; max-width: 90px; object-fit: contain; }
+    .pf-wys-sig__scribble { font-size: 20px; color: #999; }
+    .pf-wys-sig i { color: #666; font-size: 11px; }
+    .pf-wys-sig small { color: #888; font-size: 10px; }
+    .pf-wys-sig--empty { font-size: 11.5px; color: #666; text-align: center; }
+
+    /* Patient drag area framed like the printed patient strip */
+    .pf-pcols { position: relative; padding-top: 26px !important; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+      border-radius: 12px; padding: 26px 10px 10px; }
+    .pf-pcols::before { content: 'PATIENT BLOCK — AS PRINTED'; position: absolute; top: 6px; left: 12px;
+      font-size: 9.5px; letter-spacing: 0.14em; color: var(--text-tertiary, #94a3b8); font-weight: 700; }
+
+    /* ── Titled setting blocks (same language as the columns editor) ── */
+    .pf-rtb { margin-bottom: 14px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
+      border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .pf-rtb:last-child { margin-bottom: 0; }
+    .pf-rtb-h { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-rtb-s { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+
+    /* ── Section-card nav (left pane) ── */
+    .pf-rt-nav {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;
+    }
+    .pf-rt-nav__item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      padding: 10px 12px; text-align: left; cursor: pointer;
+      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.18));
+      border-radius: 12px; background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+    }
+    .pf-rt-nav__item:hover { border-color: rgba(168, 85, 247, 0.35); }
+    .pf-rt-nav__item--on {
+      border-color: var(--violet-500, #8b5cf6);
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .pf-rt-nav__t { font-size: 13px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-rt-nav__s { font-size: 11px; line-height: 1.35; color: var(--text-tertiary, #94a3b8); }
+
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }
@@ -655,8 +784,17 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'theme',    label: 'Theme' },
     { value: 'patient',  label: 'Patient' },
     { value: 'columns',  label: 'Columns' },
-    { value: 'testlayout', label: 'Per-test layout' },
-    { value: 'signoff',  label: 'Sign-off & Footer' },
+    { value: 'signoff',  label: 'Footer' },
+  ];
+  /** Section cards for the left nav — a plain-words label + what it changes,
+   *  so the admin never has to guess what lives behind a tab. */
+  readonly sections: Array<{ value: Tab; label: string; desc: string }> = [
+    { value: 'identity',   label: 'Lab identity',      desc: 'Name, contact, address, NABL badge' },
+    { value: 'header',     label: 'Header & logo',     desc: 'Logo, header style, letterpad mode' },
+    { value: 'theme',      label: 'Style & table',     desc: 'Font, colours, abnormal highlighting' },
+    { value: 'patient',    label: 'Patient block',     desc: 'Which patient fields print, arranged how' },
+    { value: 'columns',    label: 'Report columns',    desc: 'Per-department table columns & widths' },
+    { value: 'signoff',    label: 'Footer', desc: 'Disclaimer, end-of-report, watermark' },
   ];
   private readonly _tab = signal<Tab>('identity');
   readonly tab = this._tab.asReadonly();
@@ -750,6 +888,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly _tpl = signal<ReportTemplate>(this.defaultTemplate());
   readonly tpl = this._tpl.asReadonly();
   patch(p: Partial<ReportTemplate>) { this._tpl.update(v => ({ ...v, ...p })); }
+
+  /** Browser stand-ins for the PDF font families, so the picker cards render
+   *  IN the face they select. */
+  fontCss(v: string): string {
+    if (v === 'times') return "'Times New Roman', Georgia, serif";
+    if (v === 'courier') return "'Courier New', ui-monospace, monospace";
+    return 'Arial, Helvetica, sans-serif';
+  }
 
   // Live columns being edited in the Columns tab + their department, so the
   // preview can apply them to that department's sample tests before save.
@@ -873,27 +1019,55 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     let snap: { tests?: { testId: string; name?: string; department?: string; departmentCode?: string; sampleType?: string }[] };
     try { snap = JSON.parse(this.sampleSnapshot()); } catch { return {}; }
     const out: Record<string, ResolvedReportLayout> = {};
+    const apply = (t: { testId: string; name?: string; sampleType?: string }) => {
+      out[t.testId] = {
+        testId: t.testId, testName: t.name ?? '', sampleType: t.sampleType ?? '',
+        columns: cols, sections: [], configured: true, version: 1,
+      } as unknown as ResolvedReportLayout;
+    };
+    // Columns tab: the preview mirrors the department being edited — every
+    // sample test takes the edited columns (the render step also relabels the
+    // department bands), so what you see IS what you're configuring.
+    if (this.tab() === 'columns') {
+      for (const t of snap.tests ?? []) apply(t);
+      return out;
+    }
+    let matched = 0;
     for (const t of snap.tests ?? []) {
       const td = (t.department ?? '').trim().toLowerCase();
       const tc = (t.departmentCode ?? '').trim().toLowerCase();
       const match = (!!td && (td === dn || td === dc)) || (!!tc && (tc === dn || tc === dc));
-      if (match) {
-        out[t.testId] = {
-          testId: t.testId, testName: t.name ?? '', sampleType: t.sampleType ?? '',
-          columns: cols, sections: [], configured: true, version: 1,
-        } as unknown as ResolvedReportLayout;
-      }
+      if (match) { apply(t); matched++; }
     }
+    // When the edited department isn't in the sample data, apply to every test
+    // so the edit is ALWAYS visible instead of silently no-oping.
+    if (matched === 0) for (const t of snap.tests ?? []) apply(t);
     return out;
   }
 
   private async renderPreview(tpl: ReportTemplate) {
     try {
+      // Columns tab: relabel the whole sample report to the department being
+      // edited so ONE section — titled with that department — previews the
+      // strip exactly; empty configured columns stay visible.
+      let data = this.sampleSnapshot();
+      const onColumns = this.tab() === 'columns';
+      if (onColumns && (this.editedDeptName() || this.editedDeptCode())) {
+        try {
+          const snap = JSON.parse(data);
+          for (const t of snap.tests ?? []) {
+            t.department = this.editedDeptName() || t.department;
+            t.departmentCode = this.editedDeptCode() || t.departmentCode;
+          }
+          data = JSON.stringify(snap);
+        } catch { /* keep the raw sample */ }
+      }
       const baseInput = {
         report: { id: 'preview-' + Date.now(), type: 'final',
-                  createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
+                  createdAt: new Date().toISOString(), data },
         template: tpl,
         resolvedLayouts: this.buildPreviewLayouts(),
+        previewKeepEmptyColumns: onColumns,
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step
@@ -917,22 +1091,29 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     return JSON.stringify({
       patient: { displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
       order:   { id: 'preview-order-12345',
+                 // A realistic order number so the preview's barcode is a true
+                 // Code-128 of a scannable value, not a placeholder.
+                 orderNumber: 'LAB-2608-000042',
                  createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-                 refDoctorName: 'Dr. A. Sharma' },
+                 refDoctorName: 'Dr. A. Sharma',
+                 refHospitalName: 'Apollo Speciality Hospital',
+                 branchName: 'Chennai Main',
+                 collectedBy: 'S. Priya',
+                 departments: 'Haematology, Biochemistry' },
       type: 'final',
       tests: [
         { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
           sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
           result: { values: {
-            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L' },
+            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L', description: 'Low in anaemia / blood loss' },
             'RBC Count':    { value: '4.6',  unit: 'mill/cmm',  range: '3.8 – 4.8' },
-            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H' },
+            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H', description: 'Raised in acute infection' },
             'Platelets':    { value: '240000', unit: '/cmm',    range: '150000 – 410000' },
           } } },
         { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry', departmentCode: 'BIO',
           sampleType: 'Serum', method: 'Photometry',
           result: { values: {
-            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H' },
+            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H', description: 'Dietary review advised' },
             'HDL Cholesterol':   { value: '52',  unit: 'mg/dL', range: '> 40' },
             'LDL Cholesterol':   { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
             'Triglycerides':     { value: '120', unit: 'mg/dL', range: '< 150' },
@@ -1013,6 +1194,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Drag-arranged 3-column patient block ──
   private readonly ALL_PATIENT_ITEMS = [
     'name', 'age', 'sex', 'mrn', 'phone', 'orderid', 'refdoctor',
+    // Referral + collection details. Sourced from the ORDER (not the patient
+    // record), so they arrive via the report snapshot's `order` block.
+    'refhospital', 'collectedby', 'department', 'branch',
     'specimen', 'barcode', 'registered', 'collected', 'reported',
   ];
   private readonly DEFAULT_PATIENT_COLS: string[][] = [
@@ -1025,6 +1209,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
     barcode: 'Barcode', registered: 'Registered date', collected: 'Collected date',
     reported: 'Reported date',
+    refhospital: 'Referring hospital', collectedby: 'Collected by',
+    department: 'Department', branch: 'Branch / collection centre',
   };
 
   readonly patientCols = signal<string[][]>([[], [], []]);

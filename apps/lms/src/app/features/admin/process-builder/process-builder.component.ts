@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
@@ -55,7 +56,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
           <button type="button" class="pb-btn" (click)="newWorkflow()" title="New workflow">+ New</button>
           <button type="button" class="pb-btn" [disabled]="!currentId()" (click)="duplicate()">Duplicate</button>
           <button type="button" class="pb-btn" [disabled]="!currentId() || isActive()" (click)="activate()">Set active</button>
-          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
         </div>
       </header>
 
@@ -415,6 +416,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
 export class ProcessBuilderComponent implements OnInit {
   private readonly svc = inject(ProcessWorkflowService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly api = inject(ApiService);
   protected readonly navBack = inject(NavBackService);
 
@@ -448,6 +450,12 @@ export class ProcessBuilderComponent implements OnInit {
   /** Workflows in the currently-selected branch scope. */
   readonly scopedWorkflows = computed(() => this.workflows().filter(w => (w.branchId ?? null) === this.scope()));
   readonly isActive = computed(() => this.workflows().find(w => w.id === this.currentId())?.isActive ?? false);
+  /** OURS, not the lab's: shipped, read-only, refreshed by every deploy. Saving
+   *  it forks into a tenant-owned copy (the API enforces this), so the button
+   *  says Customise — an admin pressing "Save" and getting a different workflow
+   *  back would rightly read that as a bug. */
+  readonly isSystemDefault = computed(() =>
+    this.workflows().find(w => w.id === this.currentId())?.isSystemDefault ?? false);
 
   ngOnInit() {
     this.reload();
@@ -757,10 +765,38 @@ export class ProcessBuilderComponent implements OnInit {
       error: e => this.toasts.error(ApiError.from(e).message),
     });
   }
-  save() {
+  async save() {
     const id = this.currentId(); const cfg = this.buildConfig(); const nm = this.name().trim() || 'Workflow';
+
+    // Customising the shipped default is not an ordinary save — it produces a
+    // SEPARATE workflow and leaves the default alone. Say so before it happens:
+    // an admin who thinks they edited the standard flow, and later sees it
+    // unchanged after a deploy refreshes it, has every reason to call that a
+    // bug. The API forks regardless; this popup is what makes it expected.
+    if (this.isSystemDefault()) {
+      const ok = await this.dialog.confirm({
+        title: 'Customise the standard flow?',
+        message: `"${this.name().trim() || 'Standard flow'}" is the standard flow we ship and keep updated. `
+          + 'Your changes are saved as a NEW workflow for your lab and become active. '
+          + 'The standard flow stays as shipped, so future improvements still reach you.',
+        confirmLabel: 'Create my version',
+        cancelLabel: 'Cancel',
+        tone: 'primary',
+      });
+      if (!ok) return;
+    }
+
     this.saving.set(true);
-    const done = (w: ProcessWorkflowRecord) => { this.saving.set(false); if (this.isActive()) this.svc.refreshActive(); this.reload(w.id); this.toasts.success('Saved'); };
+    // Saving OUR default forks it: the API returns a NEW tenant-owned workflow
+    // and leaves the default untouched, so the toast must say that. "Saved"
+    // would leave the admin hunting for changes on a row that never changed.
+    const forking = this.isSystemDefault();
+    const done = (w: ProcessWorkflowRecord) => {
+      this.saving.set(false); if (this.isActive()) this.svc.refreshActive(); this.reload(w.id);
+      this.toasts.success(forking
+        ? `Created "${w.name}" — the standard flow stays as shipped`
+        : 'Saved');
+    };
     const fail = (e: unknown) => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); };
     if (id) this.svc.update(id, nm, cfg).subscribe({ next: done, error: fail });
     else this.svc.create(nm, cfg, this.scope()).subscribe({ next: done, error: fail });
