@@ -95,18 +95,6 @@ export class LoginComponent {
   /** True when running inside Capacitor (iOS/Android), false on web. */
   protected readonly isNative = computed(() => this.platform.isCapacitor());
 
-  /** Trimmed display of the configured API host — shown as a tiny
-   *  diagnostic strip on native builds so connection issues are
-   *  obvious from the login screen ("oh, it's pointed at production
-   *  instead of LAN"). */
-  protected readonly apiHost = computed(() => {
-    try {
-      return new URL(environment.apiUrl).host;
-    } catch {
-      return environment.apiUrl;
-    }
-  });
-
   protected canSubmit(): boolean {
     return this.org().trim().length >= 1 && this.username().trim().length >= 1 && this.password().length >= 1;
   }
@@ -189,10 +177,10 @@ export class LoginComponent {
     const msg = (e?.message ?? String(e)) as string;
     // Capacitor WKWebView fetch failures
     if (msg.includes('Failed to fetch') || msg.includes('Load failed') || msg.includes('Network request failed')) {
-      if (this.isNative()) {
-        return `Can't reach the backend (${this.apiHost()}). Either the server is unreachable from this device, or its CORS allowlist is missing capacitor://localhost. Tap the api line below to check.`;
-      }
-      return `Can't reach the backend (${this.apiHost()}). Check your connection or the API URL.`;
+      // Deliberately no backend host/URL here — this is a professional
+      // login screen, infrastructure details stay out of it. The full
+      // error is still in the console for diagnosis.
+      return `Can't reach the server. Check your internet connection and try again.`;
     }
     // Supabase password errors land with a 400/401 status
     if (msg.includes('Invalid login credentials') || msg.includes('400')) {

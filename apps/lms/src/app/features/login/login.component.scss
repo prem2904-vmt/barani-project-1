@@ -269,42 +269,13 @@
 }
 .pf-auth__error-msg { flex: 1; min-width: 0; word-break: break-word; }
 
-/* ── Hint + env strip ──────────────────────────────────────────── */
+/* ── Hint ──────────────────────────────────────────────────────── */
 .pf-auth__hint {
   margin: 2px 0 0;
   font-size: 12px;
   color: var(--text-muted, rgba(148, 163, 184, 0.6));
   text-align: center;
 }
-.pf-auth__env {
-  margin: 6px 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  color: var(--text-muted, rgba(148, 163, 184, 0.5));
-  opacity: 0.7;
-}
-.pf-auth__env-key {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  letter-spacing: 0.08em;
-}
-.pf-auth__env-val { word-break: break-all; }
-
-/* ── Footer ────────────────────────────────────────────────────── */
-.pf-auth__foot {
-  text-align: center;
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted, rgba(148, 163, 184, 0.4));
-}
-
 /* ── Tablet / desktop refinement ───────────────────────────────── */
 @media (min-width: 768px) {
   .pf-auth { padding: 48px; }
@@ -334,8 +305,7 @@
 :host-context([data-theme="light"]) .pf-auth__wordmark { color: #0f172a; }
 :host-context([data-theme="light"]) .pf-auth__tagline,
 :host-context([data-theme="light"]) .pf-auth__field-label,
-:host-context([data-theme="light"]) .pf-auth__hint,
-:host-context([data-theme="light"]) .pf-auth__env { color: #64748b; }
+:host-context([data-theme="light"]) .pf-auth__hint { color: #64748b; }
 :host-context([data-theme="light"]) .pf-auth__field-input {
   background: rgba(246,244,252,0.95);
   border-color: rgba(15, 23, 42, 0.12);

@@ -151,20 +151,6 @@
         Locked out? Ask your admin to reset your password.
       </p>
 
-      @if (isNative()) {
-        <!-- Tiny diagnostic strip — visible only on native builds so
-             we can see at a glance which backend the WebView is
-             hitting. If sign-in fails it's usually CORS or the wrong
-             host; this makes that obvious. -->
-        <p class="pf-auth__env">
-          <span class="pf-auth__env-key">api</span>
-          <span class="pf-auth__env-val">{{ apiHost() }}</span>
-        </p>
-      }
     </form>
-
-    <footer class="pf-auth__foot">
-      <span>Prefrontal LMS · v0.1.0</span>
-    </footer>
   </main>
 </section>
