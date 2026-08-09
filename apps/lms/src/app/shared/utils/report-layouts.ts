@@ -17,6 +17,9 @@
 export interface LayoutSnapshotTest {
   testId?: string;
   packageTestId?: string | null;
+  /** Nearest enclosing profile (package members) — its layout carries the
+   *  notes the report prints for that group. */
+  profileTestId?: string | null;
   result?: { values?: Record<string, unknown> } | null;
 }
 
@@ -53,7 +56,8 @@ export async function resolveReportLayouts<T>(
   // a profile has no results of its own, only the notes that qualify its
   // members' results.
   const profileIds = [...new Set(
-    tests.map(t => t.packageTestId).filter((id): id is string => !!id),
+    tests.flatMap(t => [t.packageTestId, t.profileTestId])
+      .filter((id): id is string => !!id),
   )];
   await Promise.all(
     profileIds.map(async id => {

@@ -199,6 +199,12 @@ interface ReportSnapshot {
      *  test id + name and are compiled into ONE panel under that name. */
     packageTestId?: string | null;
     packageName?: string | null;
+    /** Bundle type of packageTestId ('profile'|'package'); null on legacy
+     *  snapshots, which then keep the old group-by-bundle behaviour. */
+    packageType?: string | null;
+    /** Nearest enclosing PROFILE the leaf came through (package members). */
+    profileTestId?: string | null;
+    profileName?: string | null;
     /** Specimen / sample type — pulled from TestEntity.Parameters JSON
      *  during snapshot build. Rendered in the continuous results table's
      *  Specimen column (once, on the test's first parameter row). */
@@ -588,11 +594,8 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const tests = snap.tests ?? [];
   const tabular: typeof tests = [];
   const special: typeof tests = [];
-  /** Profile id → one of its member rows, for every profile that was ordered. */
-  const orderedProfiles = new Map<string, (typeof tests)[number]>();
   for (const t of tests) {
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
-    if (t.packageTestId) orderedProfiles.set(t.packageTestId, t);
     // A test ordered THROUGH a profile never prints its own narrative notes —
     // the profile's print instead (see the merge below) — so its layout can't
     // pull it out of the columnar table. Without this, a member that merely
@@ -624,13 +627,24 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
-    const pkg = t.packageTestId ?? null;
+    // The panel a member compiles under is the BENCH bundle: its nearest
+    // PROFILE. A package's name never appears on a report — a package is
+    // billing vocabulary; the report speaks in profiles and individual tests.
+    // So a package's direct members print standalone, its profile members
+    // compile under the profile, and only legacy snapshots (no packageType)
+    // keep the old group-by-ordered-bundle behaviour.
+    const legacy = t.packageType == null;
+    const pkg = t.profileTestId
+      ?? (t.packageType === 'profile' ? t.packageTestId : null)
+      ?? (legacy ? t.packageTestId : null)
+      ?? null;
+    const pkgName = t.profileTestId ? (t.profileName || t.packageName) : t.packageName;
     if (!pkg) { groups.push(g); continue; }
     let merged = byPkg.get(pkg);
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: t.packageName || g.testName, method: undefined, rows: [] };
+      merged = { ...g, testName: pkgName || g.testName, method: undefined, rows: [] };
       byPkg.set(pkg, merged);
       groups.push(merged);
       // NOTES FOLLOW WHAT WAS ORDERED: the profile was ordered, so the
@@ -638,7 +652,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       // (Order a member on its own and it keeps its notes — the same test
       // reads differently depending on how it was ordered.)
       const pkgNotes = (resolvedLayouts[pkg]
-        ? buildPanelGroup({ ...t, testId: pkg, name: t.packageName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
+        ? buildPanelGroup({ ...t, testId: pkg, name: pkgName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
         : []).filter(r => r.kind === 'note');
       profileNotes.set(pkg, pkgNotes);
     }
@@ -661,11 +675,20 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // notes editor writes) render once under the profile's name, after the
   // table — the same place a standalone test's narrative goes. Profiles have
   // no row of their own in the snapshot, so stand one in from a member.
-  for (const [pkg, member] of orderedProfiles) {
+  const benchBundles = new Map<string, (typeof tests)[number]>();
+  for (const t of tests) {
+    const legacy = t.packageType == null;
+    const b = t.profileTestId
+      ?? (t.packageType === 'profile' ? t.packageTestId : null)
+      ?? (legacy ? t.packageTestId : null);
+    if (b && !benchBundles.has(b)) benchBundles.set(b, t);
+  }
+  for (const [pkg, member] of benchBundles) {
     const pl = resolvedLayouts[pkg];
     if (!pl?.sections.some(s => s.isVisible && s.type !== 'grid')) continue;
-    special.push({ ...member, testId: pkg, packageTestId: null,
-                   name: member.packageName || pl.testName || '' });
+    special.push({ ...member, testId: pkg, packageTestId: null, profileTestId: null,
+                   name: (member.profileTestId === pkg ? member.profileName : member.packageName)
+                         || pl.testName || '' });
   }
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
