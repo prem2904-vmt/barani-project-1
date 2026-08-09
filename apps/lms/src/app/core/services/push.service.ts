@@ -273,6 +273,10 @@ export class PushService {
    *  swallowed. Retry with backoff until it lands. */
   private async postTokensToBackend(): Promise<void> {
     if (!this.appToken() && !this.voipToken()) return;
+    // Tokens routinely arrive before login — a POST now can only 401, and the
+    // retry loop was hammering the backend with guaranteed failures. The auth
+    // effect in the constructor re-posts the moment we're signed in.
+    if (!this.auth.user()) return;
     if (this._registering) return;
     this._registering = true;
     const delays = [0, 2000, 5000, 10000, 20000]; // ~37s of attempts
