@@ -856,6 +856,21 @@ function defaultResultParam(): TestParameter {
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
+    /* Desktop web: the floating glass chrome (.pf-chrome, sticky top:8px,
+       64px tall) overlays the top of the scroll area, so top:0 pinned this
+       header BEHIND it — its translucent light-theme background then let grid
+       rows show through in the band between the chrome and the title (the
+       "row floating above the header" bug). Pin below the chrome instead, and
+       go OPAQUE while pinned so nothing ever reads through the title block —
+       same trick .pf-sre__test-hdr already uses. Phones/native keep top:0:
+       the chrome is hidden there and the safe-area maths above is tuned. */
+    @media (min-width: 641px) {
+      .pf-sre__hdr--sticky {
+        top: 76px;                                   /* 8px offset + 64px chrome + gap */
+        background: var(--bg-secondary, #0e1018);    /* opaque — no show-through */
+        border-radius: 14px;
+      }
+    }
     .pf-sre__back {
       display: inline-flex; align-items: center; gap: 4px;
       height: 36px; padding: 0 12px;
