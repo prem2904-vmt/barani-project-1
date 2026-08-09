@@ -101,7 +101,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <h4 class="pf-rtb-h">Contact</h4>
                   <p class="pf-rtb-s">Shown in the letterhead's right column.</p>
                   <div class="space-y-3">
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div><label class="pf-label">Phone</label>
                         <input type="text" class="pf-input"
                                [ngModel]="tpl().phone"
@@ -231,7 +231,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </pf-toggle>
                   </div>
                   @if (tpl().letterpadMode) {
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div><label class="pf-label">Header blank space (mm)</label>
                         <input type="number" min="0" max="120" class="pf-input"
                                [ngModel]="tpl().letterpadHeaderMm ?? 45"

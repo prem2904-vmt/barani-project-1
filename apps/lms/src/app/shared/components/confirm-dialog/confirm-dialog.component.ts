@@ -179,7 +179,13 @@ export type ConfirmTone = 'primary' | 'danger';
       .pf-cd-actions { flex-direction: column-reverse; }
       .pf-cd-actions pf-touch-btn { width: 100%; }
     }
-  `]
+  
+    @media (max-width: 640px) {
+      /* Keyboard-safe: the dialog scrolls inside the viewport instead of
+         clipping its buttons. Desktop untouched. */
+      :host ::ng-deep .pf-cd-card, .pf-cd-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+    }
+`]
 })
 export class ConfirmDialogComponent {
   @Input() open = false;

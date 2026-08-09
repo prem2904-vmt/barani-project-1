@@ -414,7 +414,14 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
       font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 17px; letter-spacing: 0.08em;
     }
     .pf-sc__free-input:focus { outline: none; border-color: var(--color-violet-500, #7c3aed); }
-  `]
+  
+    /* Touch: the two controls on the one phone-first screen meet the 44px
+       floor. Desktop untouched. */
+    @media (pointer: coarse) {
+      .pf-sc__close { width: 44px; height: 44px; }
+      .pf-sc__torch { width: 44px; height: 44px; }
+    }
+`]
 })
 export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @Input() title = 'Scan vial barcode';

@@ -272,7 +272,20 @@ interface FinanceSummary {
     .pf-fin__stub { text-align: center; padding: 64px 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; }
     .pf-fin__stub-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-fin__stub-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
-  `]
+  
+    /* ── Phone + touch (additive; desktop untouched) ───────────── */
+    @media (max-width: 640px) {
+      .pf-fin__range input { font-size: 16px; min-height: 44px; }
+    }
+    @media (pointer: coarse) {
+      .pf-fin__tab, .pf-fin__quick button { min-height: 44px; }
+    }
+    /* Long partner names truncate instead of pushing the balance out of the
+       card; the ledger scrolls sideways instead of clipping its amount col. */
+    .pf-fin__vname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-fin__vledger { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .pf-fin__ledger { min-width: 340px; }
+`]
 })
 export class FinanceHubComponent implements OnInit {
   private readonly api = inject(ApiService);

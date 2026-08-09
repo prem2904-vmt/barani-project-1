@@ -589,7 +589,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 [value]="hcAddress()"
                 (input)="hcAddress.set($any($event.target).value)"
               />
-              <div class="grid grid-cols-3 gap-2">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <input
                   type="text"
                   inputmode="numeric"

@@ -254,6 +254,11 @@
   box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);
   // Bumped on mobile for sunlight readability + thumb-recognisable size.
   @media (max-width: 640px) {
+  /* iOS focus-zoom guard: any input under 16px zooms the viewport and breaks
+     the immersive chat layout. Desktop untouched. */
+  .pf-msgs__composer textarea, .pf-composer textarea, textarea { font-size: 16px !important; }
+  .pf-msgs__search input, input[type='search'], input[type='text'] { font-size: 16px !important; }
+
     min-width: 22px;
     height: 22px;
     line-height: 18px;

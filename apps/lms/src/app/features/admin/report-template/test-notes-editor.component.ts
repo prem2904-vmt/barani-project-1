@@ -427,7 +427,12 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-prev-table th { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--glass-border); color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
     .pf-prev-table td { padding: 5px 6px; border-bottom: 1px dashed var(--glass-border); color: var(--text-primary); }
     .pf-prev-para { white-space: pre-wrap; color: var(--text-primary); line-height: 1.55; }
-  `]
+  
+    @media (max-width: 640px) {
+      .pf-tl-desc-row { flex-wrap: wrap; }
+      .pf-tl-desc-name { flex: 1 1 100%; }
+    }
+`]
 })
 export class TestNotesEditorComponent implements OnInit {
   /** When embedded in the Report Template shell (which has its own shared PDF

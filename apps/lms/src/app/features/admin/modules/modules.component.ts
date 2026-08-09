@@ -123,7 +123,16 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
     .pf-tog--sm .pf-tog__track { width: 36px; height: 21px; }
     .pf-tog--sm .pf-tog__thumb { width: 17px; height: 17px; }
     .pf-tog--sm.pf-tog--on .pf-tog__thumb { transform: translateX(15px); }
-  `],
+  
+    /* Touch: the pf-tog switches are ~24px tall and exempt from the global
+       44px button floor (they're labels) — give them a real touch box. */
+    @media (pointer: coarse) {
+      .pf-tog { min-height: 44px; align-items: center; }
+    }
+    @media (max-width: 640px) {
+      .pf-mod__feats { padding-left: 18px; }
+    }
+`],
 })
 export class AdminModulesComponent implements OnInit {
   private readonly entitlements = inject(TenantEntitlementsService);

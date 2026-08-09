@@ -143,7 +143,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
         eyebrow="Admin"
         title="Test Master"
         subtitle="Master catalogue of tests, profiles and packages — filter, and edit prices inline.">
-        <div actions class="flex items-center gap-2">
+        <div actions class="flex flex-wrap items-center gap-2 justify-end">
           @if (dirtyCount() > 0) {
             <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
             <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
@@ -244,10 +244,11 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
             <span class="pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
           </div>
           <ag-grid-angular
+        [singleClickEdit]="isCoarse"
             class="pf-tm-grid"
             [theme]="gridTheme()"
             [rowData]="rowData()"
-            [columnDefs]="colDefs()"
+            [columnDefs]="phoneTrim(colDefs())"
             [defaultColDef]="defaultColDef"
             [getRowId]="getRowId"
             [context]="gridContext"
@@ -340,7 +341,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
       margin-bottom: 8px; font-size: 12px; color: var(--text-tertiary); }
     .pf-tm-hint { color: var(--text-muted); }
     @media (max-width: 640px) { .pf-tm-hint { display: none; } }
-    .pf-tm-grid { display: block; width: 100%; height: calc(100vh - 260px); min-height: 420px; }
+    .pf-tm-grid { display: block; width: 100%; height: calc(100dvh - 260px); min-height: 420px; }
 
     /* Manual tree cell (Profiles / Packages nested rows) */
     .pf-tm-tree-cell { display: flex; align-items: center; gap: 6px; height: 100%; min-width: 0; }
@@ -380,7 +381,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
       color: var(--text-muted);
     }
     .pf-tm-search__clear:hover { color: var(--text-primary); }
-    .pf-tm-card { position: relative; width: 100%; max-width: 30rem; max-height: 88vh; overflow-y: auto;
+    .pf-tm-card { position: relative; width: 100%; max-width: 30rem; max-height: 88dvh; overflow-y: auto;
       padding: 22px; border-radius: 20px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border); box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
     .pf-tm-card-title { font-size: 17px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
@@ -391,7 +392,18 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
     .pf-tm-req { color: #f472b6; }
     .pf-tm-card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
     @media (max-width: 480px) { .pf-tm-form { grid-template-columns: 1fr; } }
-  `]
+  
+    /* The global coarse-pointer 44px button floor inflates the tree
+       chevrons, the dept switch and the in-row action buttons into blobs
+       that overflow AG-Grid rows. These are secondary controls inside an
+       already-large touch row — exempt them and keep their designed size. */
+    @media (hover: none) and (pointer: coarse) {
+      .pf-tm-tree-toggle, .pf-tm-dept-switch,
+      .pf-tm-actions button, .ag-cell button {
+        min-width: 0 !important; min-height: 0 !important;
+      }
+    }
+`]
 })
 export class TestsComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -437,7 +449,13 @@ export class TestsComponent implements OnInit {
     return !!c && this.dupCodes().has(c);
   }
   /** Collapse the left department panel to give the grid full width. */
-  readonly sideCollapsed = signal(false);
+  /** Coarse-pointer / narrow-viewport probe, sampled once — drives the
+   *  phone column set, tap-to-edit, and the collapsed department rail. */
+  readonly isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+  readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  // Phone: the rail otherwise stacks 260px above the grid and pushes it
+  // below the fold on every load.
+  readonly sideCollapsed = signal(this.isPhone);
   toggleSide() { this.sideCollapsed.update(v => !v); }
 
   readonly type = this._type.asReadonly();
@@ -628,6 +646,17 @@ export class TestsComponent implements OnInit {
     flex: 1,
     minWidth: 110,
   };
+
+  /** On phone the 9-column / ~1,235px individual view is unusable — Name
+   *  scrolled off-screen immediately. Pin the name and drop the columns a
+   *  phone admin doesn't edit; desktop/iPad keep the full set. */
+  protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
+    if (!this.isPhone) return cols;
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'isActive']);
+    return cols
+      .filter(c => !drop.has(String(c.field ?? c.colId ?? '')))
+      .map(c => (c.field === 'name' ? { ...c, pinned: 'left' as const, minWidth: 150, maxWidth: 190 } : c));
+  }
 
   readonly colDefs = computed<ColDef<TestRow>[]>(() => {
     const view = this._type();

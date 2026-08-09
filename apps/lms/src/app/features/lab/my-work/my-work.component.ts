@@ -1492,7 +1492,7 @@ const COUNTERS: CounterSpec[] = [
 
     .pf-cardpeek {
       position: fixed; z-index: 100;
-      width: 260px; max-height: 52vh; overflow-y: auto;
+      width: 260px; max-height: 52dvh; overflow-y: auto;
       padding: 12px 14px; border-radius: 12px;
       background: var(--bg-elevated, #0f172a);
       border: 1px solid var(--glass-border, rgba(148,163,184,0.28));

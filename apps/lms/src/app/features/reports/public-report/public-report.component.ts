@@ -42,7 +42,22 @@ interface PublicReportResult {
             <span class="viewer-org">{{ result()?.org || 'Your lab' }}</span>
             <a class="viewer-open" [href]="rawPdfUrl()" target="_blank" rel="noopener">Open in new tab ↗</a>
           </div>
-          <iframe class="frame" [src]="pdfUrl()!" title="Report"></iframe>
+          @if (isIos) {
+            <!-- iOS (Safari + WKWebView) renders ONLY PAGE 1 of a PDF inside
+                 an iframe — a patient with a 3-page report would never see
+                 pages 2-3 and never know they existed. Hand off to Safari's
+                 own full viewer instead, with the first page framed behind
+                 the CTA so the page still looks like their report. -->
+            <div class="ios-viewer">
+              <iframe class="frame frame--peek" [src]="pdfUrl()!" title="Report preview (first page)"></iframe>
+              <a class="btn ios-open" [href]="rawPdfUrl()" target="_blank" rel="noopener">
+                View full report ({{ '\u2197' }})
+              </a>
+              <p class="ios-note">Preview shows the first page — tap above for all pages.</p>
+            </div>
+          } @else {
+            <iframe class="frame" [src]="pdfUrl()!" title="Report"></iframe>
+          }
         </div>
       }
     </div>
@@ -81,7 +96,12 @@ interface PublicReportResult {
     @media (max-width:640px) {
       .inp { font-size:16px; }
       .btn { min-height:48px; }
-      /* PDF viewer goes full-bleed on phones so the report is readable */
+    }
+    /* PDF viewer goes full-bleed on phones AND tablets: the 100dvh viewer
+       inside a 24px-padded flex column overflowed on iPad, cutting the
+       bottom of the report and the viewer bar. Desktop (>1024px) keeps the
+       framed layout. */
+    @media (max-width:1024px) {
       .wrap:has(.viewer) { padding:0; gap:0; }
       .viewer { max-width:none; }
       .frame { border-radius:0; }
@@ -100,9 +120,19 @@ interface PublicReportResult {
       padding-right:calc(14px + env(safe-area-inset-right));
     }
     .btn { -webkit-tap-highlight-color:transparent; }
-  `]
+  
+    .ios-viewer { flex:1; display:flex; flex-direction:column; min-height:0; }
+    .frame--peek { pointer-events:none; }
+    .ios-open { margin:10px 14px calc(10px + env(safe-area-inset-bottom)); width:auto; }
+    .ios-note { text-align:center; color:rgba(255,255,255,.45); font-size:12px; margin:0 0 10px; }
+`]
 })
 export class PublicReportComponent {
+  /** iOS renders only page 1 of iframe PDFs — route those users to Safari's
+   *  full viewer (see template). */
+  readonly isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);

@@ -327,7 +327,15 @@ export interface ColumnsEditorState {
       .pf-ce-chain { width: 32px; height: 32px; }
       .pf-ce-step__btn, .pf-icon-btn { width: 40px; height: 40px; }
     }
-  `],
+  
+    /* ── Phone (additive; desktop untouched) ── */
+    @media (max-width: 640px) {
+      .pf-ce-strip { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pf-sig-row { flex-wrap: wrap; }
+      .pf-sig-mode, .pf-sig-who, .pf-sig-desig { width: 100%; min-width: 0; }
+      .pf-ce-bar pf-select { width: 100% !important; }
+    }
+`],
 })
 export class ReportColumnsEditorComponent implements OnInit {
   private readonly api = inject(ApiService);

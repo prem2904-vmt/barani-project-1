@@ -367,7 +367,7 @@ interface TimelineItem {
     .pf-tl__ov-ctl input[type=range] { flex: 1; accent-color: #a855f7; }
     .pf-tl__grid { display: grid; grid-template-columns: repeat(var(--cols, 2), 1fr); gap: 10px; width: 100%; align-content: start; }
     .pf-tl__cell { margin: 0; position: relative; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--bg-card-solid); border: 1px solid var(--glass-border); }
-    .pf-tl__cell-media { position: relative; height: clamp(220px, 42vh, 460px); display: flex; align-items: center; justify-content: center; background: #0a0a0f; }
+    .pf-tl__cell-media { position: relative; height: clamp(220px, 42dvh, 460px); display: flex; align-items: center; justify-content: center; background: #0a0a0f; }
     .pf-tl__cell-media img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .pf-tl__cell-media.pdf { display: block; overflow: auto; padding: 6px; }
     .pf-tl__cell-media.pdf pf-pdf-canvas { display: block; width: 100%; }
@@ -432,6 +432,11 @@ interface TimelineItem {
     :host-context(html.light) .pf-tl__foot { background: rgba(246, 244, 252, 0.5); border-top-color: rgba(124, 58, 237, 0.16); box-shadow: inset 0 1px 0 rgba(124, 58, 237, 0.05); }
 
     @media (max-width: 760px) {
+      /* The absolute filter + zoom clusters collided inside the clipped foot
+         at <=375px, hiding the Pharmacy pill entirely. Flow the filter as a
+         scrollable row instead. */
+      .pf-tl__typefilter { position: static; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 60%; }
+
       /* Stack the two panels: left becomes a horizontal file strip. */
       .pf-tl__main { flex-direction: column; }
       .pf-tl__left { flex: 0 0 auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--glass-border); gap: 8px; padding: 10px 12px; }
