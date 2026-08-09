@@ -11,6 +11,9 @@ export const environment = {
   isElectron: true,
   isMobile: false,
   apiUrl: 'http://localhost:5270',
+  // Public web origin for patient-facing report links (report-share code reads
+  // this on every profile; its absence broke the electron builds at compile).
+  reportPublicBaseUrl: 'https://med-dev.prefrontal.health',
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',

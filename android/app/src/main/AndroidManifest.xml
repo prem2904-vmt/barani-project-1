@@ -22,8 +22,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="lab.prefrontal.health" android:pathPrefix="/o/" />
-                <data android:scheme="https" android:host="lab.prefrontal.health" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/track/" />
             </intent-filter>
         </activity>
 
