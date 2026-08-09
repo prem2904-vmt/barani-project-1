@@ -22,6 +22,8 @@ import { CallOverlayComponent } from "../../shared/components/call-overlay/call-
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
 import { SignalingService } from "../../core/services/signaling.service";
 import { ChatService } from "../../core/services/chat.service";
+import { ChatNotifyService } from "../../core/services/chat-notify.service";
+import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
 // on first shell render (it's @Injectable providedIn root, so the inject()
@@ -493,6 +495,8 @@ export class ShellComponent {
   }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
+  private readonly chatNotify = inject(ChatNotifyService);
+  private readonly platform = inject(PlatformService);
   protected readonly entitlements = inject(TenantEntitlementsService);
   /** Messages module in the tenant's plan — gates the call overlay, people
    *  drawer, and the chat/signaling hub connection (a gated tenant never
@@ -517,13 +521,17 @@ export class ShellComponent {
     // own reconnect via withAutomaticReconnect.
     queueMicrotask(async () => {
       try {
-        // Gated tenant → never open the chat/signaling hubs (no presence, no
-        // incoming calls). Wait for entitlements so we decide on real data.
+        // Wait for entitlements so we decide on real data. The SIGNALING hub
+        // (calls/presence) stays gated on the messages module, but the CHAT
+        // hub always connects: it is also the delivery rail for business
+        // notifications (BusinessNotification → live bell + desktop/browser
+        // OS notifications), which every tenant has regardless of plan.
         await this.entitlements.ensureLoaded().catch(() => undefined);
-        if (!this.entitlements.moduleEnabled('messages')) return;
         const token = await this.auth.getAccessToken();
         if (token) {
-          await this.signaling.connect();
+          if (this.entitlements.moduleEnabled('messages')) {
+            await this.signaling.connect();
+          }
           // Chat connects independently — its own hub, own reconnection.
           await this.chat.connect().catch(() => undefined);
         }
@@ -531,6 +539,16 @@ export class ShellComponent {
         /* hub will retry on next user action */
       }
     });
+
+    // Desktop/browser OS notifications need Notification permission, and
+    // browsers penalise requesting it on load (permanent auto-deny) — so ask
+    // once behind the first user gesture. Native apps have their own push
+    // permission flow (PushService.init) and are left alone.
+    if (!this.platform.isCapacitor() && typeof document !== 'undefined') {
+      document.addEventListener('pointerdown', () => {
+        void this.chatNotify.ensurePermission();
+      }, { once: true, capture: true });
+    }
   }
 
   /** Pages that are themselves top-level landings — no back chip on these. */
