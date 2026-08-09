@@ -272,7 +272,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             <div class="flex items-center gap-2">
               <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
                     style="color: var(--text-secondary);">Dispatched · awaiting arrival</span>
-              <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
+              <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ labCfg.sampleFocused() ? dispatchedTubes().length + ' samples' : dispatchedOrders().length + ' orders' }}</span>
             </div>
             <p class="text-[10.5px] font-mono" style="color: var(--text-muted);">
               Counter staff: log incoming batches as Arrived. Bench tech picks tubes off the arrived queue below.
@@ -280,7 +280,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </div>
         }
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
-          @for (g of dispatchedOrders(); track g.orderId) {
+          @for (g of (labCfg.sampleFocused() ? dispatchedTubes() : dispatchedOrders()); track $index) {
             @if (embedded) {
               <!-- Compact row: avatar + name + Intake button. Sample-focused →
                    Sample ID is the headline, patient demoted below. -->
@@ -919,6 +919,34 @@ export class ReceiveSamplesComponent implements OnInit {
       testLabels: this.uniqueTestNames(o)
     };
   }).filter(g => g.state !== 'received'));
+  /**
+   * Sample-focused intake list: one row per TUBE, not per order. Three tubes
+   * dispatched means three rows and a count of three — the whole point of the
+   * mode. Rows reuse the per-order shape (totalTubes=1 hides the "N tubes"
+   * suffix; state is the TUBE's own), and Intake still calls markArrived on
+   * the order because arrival is a batch event: the courier hands over the
+   * order's tubes together, so sibling rows flip together.
+   */
+  readonly dispatchedTubes = computed(() => this._dispatched().flatMap(o => {
+    const samples = (o.samples ?? []).filter(s =>
+      s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected');
+    return samples.map(sm => ({
+      orderId: o.id,
+      key: o.id + ':' + (sm.id ?? sm.barcode ?? ''),
+      patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+      patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
+      patientMrn: o.patient?.mrn?.trim() || '',
+      patientNameAndAgeSex: o.patient ? formatPatientNameAgeSex(o.patient) : 'Patient',
+      tubeCount: sm.status === 'dispatched' ? 1 : 0,
+      receivedCount: 0,
+      notReadyCount: sm.status === 'dispatched' ? 0 : 1,
+      totalTubes: 1,
+      sampleId: sm.barcode ?? null,
+      state: (sm.status === 'dispatched' ? 'ready' : 'awaiting') as 'ready' | 'awaiting',
+      testLabels: this.uniqueTestNames(o),
+    }));
+  }));
+
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
   protected readonly busy = signal(false);

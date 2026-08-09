@@ -347,7 +347,9 @@ const COUNTERS: CounterSpec[] = [
               }
             </div>
             <p class="pf-mw-pane__meta">
-              {{ rows().length }} items
+              <!-- Sample-focused branches count TUBES — the unit of work on this
+                   screen in that mode — not the tests inside them. -->
+              {{ labCfg.sampleFocused() ? sampleCountIn(rows()) + ' samples' : rows().length + ' items' }}
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
             </p>
           </header>
@@ -378,7 +380,7 @@ const COUNTERS: CounterSpec[] = [
               <span class="pf-dot" [attr.data-level]="bucket.level"></span>
               <h3 class="text-[11px] font-mono uppercase tracking-[0.18em]"
                   style="color: var(--text-secondary);">
-                {{ bucket.level }} · {{ bucket.items.length }}
+                {{ bucket.level }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
               </h3>
             </div>
 
@@ -2563,6 +2565,15 @@ export class MyWorkComponent implements OnInit {
    * can render a status pill instead of an Open button when the whole
    * tube is already entered/validated.
    */
+  /** Distinct tubes among `items` — the count shown in sample-focused mode.
+   *  Same grouping key as tubesIn (subOrder id, falling back to the test id
+   *  for legacy rows) so the badge always matches the rows rendered. */
+  sampleCountIn(items: ReadonlyArray<OrderTest>): number {
+    const ids = new Set<string>();
+    for (const t of items) ids.add(t.subOrder?.id ?? t.id);
+    return ids.size;
+  }
+
   tubesIn(items: Enriched[]): Array<{
     sampleId: string;
     deptName: string;
