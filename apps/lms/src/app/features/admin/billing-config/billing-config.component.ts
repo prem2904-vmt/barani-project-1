@@ -156,7 +156,7 @@ interface GstRow {
                              [ngModel]="gstinFor(b.id)" (ngModelChange)="setGstin(b.id, $event)" />
                     </div>
                     <div class="lg:col-span-3">
-                      <input type="text" class="pf-input w-full" placeholder="State code"
+                      <input type="text" inputmode="numeric" class="pf-input w-full" placeholder="State code"
                              [ngModel]="stateCodeFor(b.id)" (ngModelChange)="setStateCode(b.id, $event)" />
                     </div>
                     <div class="sm:col-span-2 lg:col-span-1 lg:text-right">
@@ -309,7 +309,7 @@ interface GstRow {
             </div>
             <div>
               <label class="pf-label">Account number</label>
-              <input type="text" class="pf-input" placeholder="0123456789" autocapitalize="none" spellcheck="false"
+              <input type="text" inputmode="numeric" class="pf-input" placeholder="0123456789" autocapitalize="none" spellcheck="false"
                      [ngModel]="config().bankAccountNumber || ''"
                      (ngModelChange)="patch({ bankAccountNumber: $event })" />
             </div>
@@ -355,8 +355,8 @@ interface GstRow {
             <div><label class="pf-label">Lab name</label><input class="pf-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
             <div><label class="pf-label">GSTIN</label><input class="pf-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
             <div class="col-span-1 sm:col-span-2"><label class="pf-label">Address</label><input class="pf-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></div>
-            <div><label class="pf-label">Phone</label><input class="pf-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
-            <div><label class="pf-label">Email</label><input class="pf-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
+            <div><label class="pf-label">Phone</label><input type="tel" class="pf-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
+            <div><label class="pf-label">Email</label><input type="email" autocapitalize="none" class="pf-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
             <div><label class="pf-label">Document type</label>
               <select class="pf-input" [ngModel]="tpl().documentMode" (ngModelChange)="patchTpl({ documentMode: $event })">
                 <option value="auto">Auto (by tax)</option>

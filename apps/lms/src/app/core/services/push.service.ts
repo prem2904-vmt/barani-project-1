@@ -50,6 +50,12 @@ export class PushService {
       const authed = !!this.auth.user();
       const hasToken = !!(this.appToken() || this.voipToken());
       if (authed && hasToken) void this.postTokensToBackend();
+      // Logout→login in the same app session: unregister() dropped the OS
+      // registration and cleared the tokens, and init() is a once-only guard —
+      // so without this, push stays dead until the app is force-quit. Listeners
+      // are still wired from init(); re-running register() mints a fresh token
+      // which flows through the 'registration' listener → postTokensToBackend.
+      else if (authed && this._initialised) void this.reactivate();
     });
   }
 
@@ -291,13 +297,35 @@ export class PushService {
     }
   }
 
+  /** Re-arm OS push registration after unregister(). Permission was already
+   *  granted (or not) in init(); we only redo the registration step. */
+  private _reactivating = false;
+  private async reactivate(): Promise<void> {
+    if (this._reactivating || !this.platform.isCapacitor()) return;
+    this._reactivating = true;
+    try {
+      const status = await PushNotifications.checkPermissions();
+      if (status.receive !== 'granted') return;
+      await PushNotifications.register();
+      try { await CallKitVoip.register(); } catch { /* iOS only */ }
+    } catch (err) {
+      console.warn('[push] reactivate failed', err);
+    } finally {
+      this._reactivating = false;
+    }
+  }
+
   /** Called on logout — server deletes the row so we stop receiving
-   *  pushes for this device. */
+   *  pushes for this device. Scoped to THIS device's token: deleting all of
+   *  the user's rows would silence their other devices (phone logout must
+   *  not kill the tablet's pushes). */
   async unregister(): Promise<void> {
     if (!this.platform.isCapacitor()) return;
+    const tok = this.appToken();
     try {
       await PushNotifications.unregister();
-      await firstValueFrom(this.api.delete('/api/devices/me'));
+      await firstValueFrom(this.api.delete(
+        `/api/devices/me${tok ? `?appToken=${encodeURIComponent(tok)}` : ''}`));
     } catch { /* non-fatal */ }
     this.appToken.set(null);
     this.voipToken.set(null);
@@ -357,9 +385,16 @@ export class PushService {
         break;
       }
       default:
-        // Unknown payload — show as a generic toast so it's visible during
-        // development without throwing.
-        if (title || body) this.toasts.info(`${title ?? ''} ${body ?? ''}`.trim());
+        // The catalog has ~40 business types and only the ones above get a
+        // dedicated screen. A TAP on anything else must still land somewhere
+        // meaningful: open the notification bell so the tapped item is visible
+        // (double-dispatch covers a cold start where the bell mounts late).
+        if (opened) {
+          window.dispatchEvent(new CustomEvent('pf-open-bell'));
+          setTimeout(() => window.dispatchEvent(new CustomEvent('pf-open-bell')), 1500);
+        } else if (title || body) {
+          this.toasts.info(`${title ?? ''} ${body ?? ''}`.trim());
+        }
     }
   }
 

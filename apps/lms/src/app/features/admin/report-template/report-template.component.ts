@@ -103,11 +103,11 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <div class="space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div><label class="pf-label">Phone</label>
-                        <input type="text" class="pf-input"
+                        <input type="tel" class="pf-input"
                                [ngModel]="tpl().phone"
                                (ngModelChange)="patch({ phone: $event })" /></div>
                       <div><label class="pf-label">Email</label>
-                        <input type="text" class="pf-input"
+                        <input type="email" autocapitalize="none" class="pf-input"
                                [ngModel]="tpl().email"
                                (ngModelChange)="patch({ email: $event })" /></div>
                     </div>

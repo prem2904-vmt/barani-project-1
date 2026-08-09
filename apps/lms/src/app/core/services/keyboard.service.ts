@@ -99,6 +99,11 @@ export class KeyboardService {
       // Capture phase so we see focus changes on any nested editable.
       window.addEventListener('focusin', (e) => this.onFocusIn(e), true);
       window.addEventListener('focusout', () => this.onFocusOut(), true);
+
+      // Tap-outside dismissal (see onPointerDown/onPointerUp).
+      window.addEventListener('pointerdown', (e) => this.onPointerDown(e), true);
+      window.addEventListener('pointerup', (e) => this.onPointerUp(e), true);
+      window.addEventListener('pointercancel', () => { this.tapCandidate = false; }, true);
     });
 
     void this.wireCapacitor();
@@ -161,6 +166,62 @@ export class KeyboardService {
       return !noKeyboard.has(input.type);
     }
     return false;
+  }
+
+  // ── Tap-outside dismissal ──────────────────────────────────────────────
+  // WKWebView (and Android WebView) never dismiss the soft keyboard when the
+  // user taps empty space — unlike every native app. So: a genuine TAP (not a
+  // scroll drag) on anything that is neither an editable nor an interactive
+  // control blurs the focused field and hides the keyboard. Matters most on
+  // iPad, where the keyboard otherwise squats over half the work area.
+  private tapCandidate = false;
+  private tapX = 0;
+  private tapY = 0;
+
+  /** Movement beyond this is a scroll/drag, not a tap — leave the keyboard. */
+  private static readonly TAP_SLOP_PX = 12;
+
+  private onPointerDown(e: PointerEvent): void {
+    this.tapCandidate = false;
+    if (!this.visible()) return;
+    const target = e.target as Element | null;
+    if (!target || this.keepsKeyboard(target)) return;
+    this.tapCandidate = true;
+    this.tapX = e.clientX;
+    this.tapY = e.clientY;
+  }
+
+  private onPointerUp(e: PointerEvent): void {
+    if (!this.tapCandidate) return;
+    this.tapCandidate = false;
+    if (Math.hypot(e.clientX - this.tapX, e.clientY - this.tapY) > KeyboardService.TAP_SLOP_PX) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && this.isEditable(active)) active.blur();
+    void this.hideNativeKeyboard();
+  }
+
+  /**
+   * Taps that must NOT dismiss: another editable (focus hop), and interactive
+   * controls that act on the focused field — send/save buttons, chips, pickers,
+   * labels (which focus their input). `data-keep-keyboard` is the escape hatch
+   * for any custom widget that needs the exemption.
+   */
+  private keepsKeyboard(target: Element): boolean {
+    return !!target.closest(
+      'input, textarea, select, button, a[href], label, [contenteditable="true"], ' +
+      '[role="button"], [role="option"], [role="menuitem"], [role="tab"], ' +
+      '[role="listbox"], [role="combobox"], [data-keep-keyboard]'
+    );
+  }
+
+  private async hideNativeKeyboard(): Promise<void> {
+    if (!this.platform.isCapacitor()) return;
+    try {
+      const { Keyboard } = await import('@capacitor/keyboard');
+      await Keyboard.hide();
+    } catch {
+      // Plugin missing (web/electron) — blur alone closes the keyboard there.
+    }
   }
 
   // ── (c) @capacitor/keyboard ────────────────────────────────────────────
