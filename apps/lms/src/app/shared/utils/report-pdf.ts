@@ -199,6 +199,12 @@ interface ReportSnapshot {
      *  test id + name and are compiled into ONE panel under that name. */
     packageTestId?: string | null;
     packageName?: string | null;
+    /** Bundle type of packageTestId ('profile'|'package'); null on legacy
+     *  snapshots, which then keep the old group-by-bundle behaviour. */
+    packageType?: string | null;
+    /** Nearest enclosing PROFILE the leaf came through (package members). */
+    profileTestId?: string | null;
+    profileName?: string | null;
     /** Specimen / sample type — pulled from TestEntity.Parameters JSON
      *  during snapshot build. Rendered in the continuous results table's
      *  Specimen column (once, on the test's first parameter row). */
@@ -249,7 +255,7 @@ const BARCODE_H = 26;
  *  following line's ascent — 6pt alone let the timestamps print over the bars. */
 const BARCODE_GAP = 14;
 let MARGIN_TOP = 28;
-let MARGIN_BOTTOM = 150; // reserves room for the 3-column sig block + disclaimer band
+let MARGIN_BOTTOM = 150; // table floor — the band signatures are pulled DOWN into (see FOOTER_RESERVE)
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
@@ -588,11 +594,8 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const tests = snap.tests ?? [];
   const tabular: typeof tests = [];
   const special: typeof tests = [];
-  /** Profile id → one of its member rows, for every profile that was ordered. */
-  const orderedProfiles = new Map<string, (typeof tests)[number]>();
   for (const t of tests) {
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
-    if (t.packageTestId) orderedProfiles.set(t.packageTestId, t);
     // A test ordered THROUGH a profile never prints its own narrative notes —
     // the profile's print instead (see the merge below) — so its layout can't
     // pull it out of the columnar table. Without this, a member that merely
@@ -624,13 +627,24 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
-    const pkg = t.packageTestId ?? null;
+    // The panel a member compiles under is the BENCH bundle: its nearest
+    // PROFILE. A package's name never appears on a report — a package is
+    // billing vocabulary; the report speaks in profiles and individual tests.
+    // So a package's direct members print standalone, its profile members
+    // compile under the profile, and only legacy snapshots (no packageType)
+    // keep the old group-by-ordered-bundle behaviour.
+    const legacy = t.packageType == null;
+    const pkg = t.profileTestId
+      ?? (t.packageType === 'profile' ? t.packageTestId : null)
+      ?? (legacy ? t.packageTestId : null)
+      ?? null;
+    const pkgName = t.profileTestId ? (t.profileName || t.packageName) : t.packageName;
     if (!pkg) { groups.push(g); continue; }
     let merged = byPkg.get(pkg);
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: t.packageName || g.testName, method: undefined, rows: [] };
+      merged = { ...g, testName: pkgName || g.testName, method: undefined, rows: [] };
       byPkg.set(pkg, merged);
       groups.push(merged);
       // NOTES FOLLOW WHAT WAS ORDERED: the profile was ordered, so the
@@ -638,7 +652,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       // (Order a member on its own and it keeps its notes — the same test
       // reads differently depending on how it was ordered.)
       const pkgNotes = (resolvedLayouts[pkg]
-        ? buildPanelGroup({ ...t, testId: pkg, name: t.packageName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
+        ? buildPanelGroup({ ...t, testId: pkg, name: pkgName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
         : []).filter(r => r.kind === 'note');
       profileNotes.set(pkg, pkgNotes);
     }
@@ -661,11 +675,20 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // notes editor writes) render once under the profile's name, after the
   // table — the same place a standalone test's narrative goes. Profiles have
   // no row of their own in the snapshot, so stand one in from a member.
-  for (const [pkg, member] of orderedProfiles) {
+  const benchBundles = new Map<string, (typeof tests)[number]>();
+  for (const t of tests) {
+    const legacy = t.packageType == null;
+    const b = t.profileTestId
+      ?? (t.packageType === 'profile' ? t.packageTestId : null)
+      ?? (legacy ? t.packageTestId : null);
+    if (b && !benchBundles.has(b)) benchBundles.set(b, t);
+  }
+  for (const [pkg, member] of benchBundles) {
     const pl = resolvedLayouts[pkg];
     if (!pl?.sections.some(s => s.isVisible && s.type !== 'grid')) continue;
-    special.push({ ...member, testId: pkg, packageTestId: null,
-                   name: member.packageName || pl.testName || '' });
+    special.push({ ...member, testId: pkg, packageTestId: null, profileTestId: null,
+                   name: (member.profileTestId === pkg ? member.profileName : member.packageName)
+                         || pl.testName || '' });
   }
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
@@ -740,10 +763,11 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     // floating directly under the last result row with a blank half-page
     // beneath it. Anchor to the bottom, but never pull the block UP into
     // content: a long report that already reaches this far keeps flowing.
-    // Exactly SIG_BLOCK_H above the footer reserve: the block then ends ON
-    // the reserve line. A single point lower trips drawInlineSignatures' own
-    // page-break guard and orphans the signatures onto a blank page.
-    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - SIG_BLOCK_H);
+    // Ends flush on the footer band — directly above the disclaimer line.
+    // Height comes from the block itself: 1-3 signatories are one row,
+    // 4-7 wrap 3-up into more rows, and the anchor rises to fit them so the
+    // LAST row still lands on the footer band.
+    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - signatureBlockHeight(finalSigs.sigs));
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
@@ -1918,7 +1942,19 @@ function renderContinuousTable(
     // department defers its signatures to after the End-of-Report marker.
     if (sigs?.length) {
       if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
-      else y = drawInlineSignatures(doc, sigs, y, practice);
+      else {
+        // Sign-off sits at the FOOT of the department's last page, directly
+        // above the footer strip — not floating under the last row with a
+        // blank half-page beneath (the page-2 bug in REPORT-49289714).
+        const anchored = Math.max(y, A4.h - FOOTER_RESERVE - signatureBlockHeight(sigs));
+        y = drawInlineSignatures(doc, sigs, anchored, practice);
+        // The signatures close this department's page; the next department
+        // opens clean rather than squeezing under a sign-off. When the theme
+        // already breaks per department, ITS break at the loop top is the one
+        // and only feed — adding ours too produced a fully blank page
+        // (REPORT-49289714-2 page 3).
+        if (rendered < order.length - 1 && !theme.departmentPageBreak) y = newPage(doc, practice);
+      }
     }
     rendered++;
   }
@@ -1931,6 +1967,11 @@ function renderContinuousTable(
  *  never be orphaned onto a page of their own. */
 /** One signature row: 12pt lead + 74pt of image/name/title/reg. */
 const SIG_BLOCK_H = 86;
+/** The page's REAL footer band: hairline at h-30, generated-on at h-18, the
+ *  disclaimer stacking up to ≈h-58. Signatures anchor to THIS — anchoring to
+ *  MARGIN_BOTTOM (the 150pt table floor) parked them ~100pt above the
+ *  disclaimer with a dead band beneath, which is not how a lab report ends. */
+const FOOTER_RESERVE = 64;
 
 function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
   const n = Math.min(sigs?.length ?? 0, 7);
@@ -1959,9 +2000,10 @@ function drawInlineSignatures(
   const list = all;
   if (list.length === 0) return startY;
   let y = startY + 12;
-  // The block spans 74pt below y; only break when it genuinely cannot fit in
-  // the reserved footer band (callers pre-reserve, so this rarely fires).
-  if (y + 74 > A4.h - MARGIN_BOTTOM) { y = newPage(doc, practice) + 6; }
+  // The block spans 74pt below y; signatures live INSIDE the table's bottom
+  // reserve by design, so only break when the block would collide with the
+  // actual footer strip (disclaimer + generated-on).
+  if (y + 74 > A4.h - FOOTER_RESERVE) { y = newPage(doc, practice) + 6; }
   const colW = (A4.w - 2 * MARGIN_X) / list.length;
   const baseY = y + 30;
   list.forEach((s, i) => {

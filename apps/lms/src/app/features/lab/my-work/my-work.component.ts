@@ -2610,7 +2610,9 @@ export class MyWorkComponent implements OnInit {
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
       return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
-    });
+    // Sequence by sample number — the queue reads 26034, 26035, 26036, not the
+    // insertion order the grouping map happened to preserve.
+    }).sort((a, b) => (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
   }
 
   /**

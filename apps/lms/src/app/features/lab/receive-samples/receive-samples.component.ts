@@ -308,7 +308,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   </span>
                 } @else {
                   <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
-                          (click)="markArrived(g.orderId)">Intake</button>
+                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)">Intake</button>
                 }
               </li>
             } @else {
@@ -385,13 +385,13 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     </div>
                     @switch (g.state) {
                       @case ('ready') {
-                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
                                       class="w-full sm:w-auto">
                           Mark Arrived
                         </pf-touch-btn>
                       }
                       @case ('partial') {
-                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
                                       class="w-full sm:w-auto">
                           Mark Arrived ({{ g.tubeCount }})
                         </pf-touch-btn>
@@ -932,6 +932,7 @@ export class ReceiveSamplesComponent implements OnInit {
       s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected');
     return samples.map(sm => ({
       orderId: o.id,
+      sampleDbId: sm.id ?? null,
       key: o.id + ':' + (sm.id ?? sm.barcode ?? ''),
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
       patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
@@ -945,7 +946,9 @@ export class ReceiveSamplesComponent implements OnInit {
       state: (sm.status === 'dispatched' ? 'ready' : 'awaiting') as 'ready' | 'awaiting',
       testLabels: this.uniqueTestNames(o),
     }));
-  }));
+  // Sequence by sample number — tubes land in the intake as 1, 2, 3, not in
+  // whatever order the orders happened to arrive from the API.
+  }).sort((a, b) => (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
@@ -1036,7 +1039,10 @@ export class ReceiveSamplesComponent implements OnInit {
   refresh() {
     this.api.get<OrderSample[]>('/api/samples/in-transit').subscribe({
       next: l => {
-        this._inTransit.set(l ?? []);
+        // Sequence the intake queue by sample number (1, 2, 3 — not the
+        // API's arrival order, which read 3, 1, 2 to the tech).
+        this._inTransit.set([...(l ?? [])].sort((a, b) =>
+          (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true })));
         this._selectedIds.set(new Set());
       }
     });
@@ -1137,11 +1143,23 @@ export class ReceiveSamplesComponent implements OnInit {
     this.previewPackage();
   }
 
-  markArrived(orderId: string) {
+  /** Template-side narrowing: the dispatched list is per-ORDER rows in patient
+   *  mode and per-TUBE rows in sample mode; only the latter carry sampleDbId. */
+  asTube(g: unknown): { sampleDbId?: string | null } {
+    return g as { sampleDbId?: string | null };
+  }
+
+  markArrived(orderId: string, sampleId?: string) {
     const order = this._dispatched().find(o => o.id === orderId);
     if (!order) return;
     this.busy.set(true);
-    this.api.patch<{ arrived: number }>(`/api/orders/${orderId}/arrive`, {}).subscribe({
+    // sampleId → intake ONE tube (sample-focused rows are per-tube, and
+    // selecting tube 2 must not receive tubes 1 and 3). Absent → the original
+    // whole-order arrival used by patient-focused rows.
+    const url = sampleId
+      ? `/api/orders/${orderId}/arrive?sampleId=${sampleId}`
+      : `/api/orders/${orderId}/arrive`;
+    this.api.patch<{ arrived: number }>(url, {}).subscribe({
       next: r => {
         this.busy.set(false);
         const n = r?.arrived ?? 0;

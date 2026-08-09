@@ -29,6 +29,10 @@ const SUBSCRIPTS: Readonly<Record<string, string>> = {
  *  – (U+2013) and — (U+2014) ARE in cp1252 and are deliberately left alone. */
 const OTHER: Readonly<Record<string, string>> = {
   'α': 'alpha', 'β': 'beta', 'γ': 'gamma', 'δ': 'delta', 'κ': 'kappa', 'λ': 'lambda',
+  // GREEK SMALL MU (U+03BC) → MICRO SIGN (U+00B5, in cp1252). Units typed or
+  // imported with the Greek letter rendered as garbage ("¼L" on reports —
+  // HEM00010's μL was exactly this); visually identical, different codepoint.
+  'μ': 'µ',
   'Α': 'Alpha', 'Β': 'Beta', 'Γ': 'Gamma', 'Δ': 'Delta',
   '≥': '>=', '≤': '<=', '≠': '!=', '≈': '~', '∞': 'inf', '−': '-',
   '‐': '-', '‑': '-', '‒': '-', '⁄': '/', '′': "'", '″': '"',
@@ -79,6 +83,12 @@ const SUP_MARKER = /\^([0-9+-]+)/g;
 export function splitSuperscriptRuns(text: string): Array<{ t: string; sup?: boolean }> {
   const out: Array<{ t: string; sup?: boolean }> = [];
   let last = 0;
+  // matchAll CLONES the regex but COPIES its lastIndex — so a preceding
+  // hasSuperscript() call on the same string left the scan starting PAST the
+  // first ^marker, no runs matched, and the whole caret string drew as one
+  // flat run. That is why reports kept printing ×10^12/L despite the raised-
+  // digit engine being wired up and firing.
+  SUP_MARKER.lastIndex = 0;
   for (const m of text.matchAll(SUP_MARKER)) {
     const i = m.index ?? 0;
     if (i > last) out.push({ t: text.slice(last, i) });
@@ -90,8 +100,12 @@ export function splitSuperscriptRuns(text: string): Array<{ t: string; sup?: boo
 }
 
 export function hasSuperscript(text: string): boolean {
+  // .test() on a /g regex ADVANCES lastIndex; reset on both sides so this
+  // probe can never poison a later split (and vice versa).
   SUP_MARKER.lastIndex = 0;
-  return SUP_MARKER.test(text);
+  const hit = SUP_MARKER.test(text);
+  SUP_MARKER.lastIndex = 0;
+  return hit;
 }
 
 /** Width of `text` with its superscript runs rendered smaller. */
