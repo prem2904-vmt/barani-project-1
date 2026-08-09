@@ -17,6 +17,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -1593,11 +1594,19 @@ export class ValidateResultComponent implements OnInit {
       params = blob.parameters ?? [];
     } catch { return []; }
 
+    // Pick each parameter's band for THIS patient's sex/age — same resolver
+    // as result entry and the report, so the pathologist reviews against the
+    // exact range the flag was computed with (the old `[0]` shortcut showed
+    // whatever band happened to be listed first).
+    const patient = t.subOrder?.order?.patient;
+    const sex = normalizeSex(patient?.sex);
+    const ageYears = typeof patient?.age === 'number' ? patient.age : null;
+
     return params.map(p => {
       const v = snap.values![p.name];
       const n = Number(v);
       const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
-      const r = (p.referenceRanges ?? [])[0];
+      const r = selectReferenceRange(p.referenceRanges ?? [], sex, ageYears);
       let flag: Flag = 'normal';
       if (isNum) {
         if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
