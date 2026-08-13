@@ -1,0 +1,1093 @@
+<!-- Full-width container matching FD/collect screens — was centered
+     to 880px which left huge empty gutters on lab terminals. -->
+<section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
+  <header class="pf-sre__hdr pf-sre__hdr--sticky">
+    <!-- App-wide standard back chevron. Sits BEFORE the title and shows at
+         ALL widths; the legacy .pf-sre__back pill is suppressed everywhere
+         via CSS so there is exactly ONE back affordance per viewport. -->
+    @if (navBack.showBack()) {
+      <button
+        type="button"
+        class="pf-hdr-back shrink-0 inline-flex items-center justify-center"
+        (click)="navBack.back()"
+        aria-label="Go back"
+      >
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      </button>
+    }
+    <button
+      type="button"
+      class="pf-sre__back"
+      (click)="back()"
+      aria-label="Back"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+      <span class="pf-sre__back-txt">Back</span>
+    </button>
+    @if (sample(); as s) {
+      <div class="pf-sre__hdr-title">
+        <!-- Sample-focused header: the Sample ID (tube barcode) is the primary
+             identity; the patient is demoted to a small secondary line. -->
+        <p class="pf-sre__eyebrow">
+          {{ s.department?.code ?? "Tube" }} · {{ logicalCount() }} test{{
+            logicalCount() === 1 ? "" : "s"
+          }}
+          on this tube
+        </p>
+        <h1 class="pf-sre__title">{{ s.barcode || "—" }}</h1>
+        <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
+        <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
+        @if (headerChips().length) {
+          <div class="pf-sre__chips">
+            @for (c of headerChips(); track $index) {
+              <span class="pf-sre__chip">{{ c }}</span>
+            }
+          </div>
+        }
+      </div>
+    }
+    <!-- Signed-in technician (right of header): name + medical
+         registration ID (dash until the user adds one in My signature). -->
+    <span class="pf-sre__tech" title="Signed-in technician">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+      <span class="pf-sre__tech-name">{{ techName() }}</span>
+      <span class="pf-sre__tech-reg" title="Registration ID"
+        >Reg: {{ techRegId() }}</span
+      >
+    </span>
+    <!-- Background autosave indicator (manual Save draft still available). -->
+    @if (autosaving()) {
+      <span class="pf-sre__autosave"
+        ><span class="pf-sre__autosave-dot"></span>Saving…</span
+      >
+    } @else if (lastSavedLabel(); as l) {
+      <span class="pf-sre__autosave"
+        ><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span
+        >{{ l }}</span
+      >
+    }
+    <span class="pf-sre__view" role="group" aria-label="Result view">
+      <button
+        type="button"
+        class="pf-sre__view-btn"
+        [class.pf-sre__view-btn--on]="viewMode() === 'grid'"
+        (click)="setViewMode('grid')"
+        aria-label="Grid view"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+        </svg>
+        Grid
+      </button>
+      <button
+        type="button"
+        class="pf-sre__view-btn"
+        [class.pf-sre__view-btn--on]="viewMode() === 'form'"
+        (click)="setViewMode('form')"
+        aria-label="Form view"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="4" width="18" height="5" rx="1" />
+          <rect x="3" y="11" width="18" height="5" rx="1" />
+          <rect x="3" y="18" width="18" height="3" rx="1" />
+        </svg>
+        Form
+      </button>
+    </span>
+    <!-- Phone: the primary action moves into the header as an icon (top-
+         right) so the bottom is free. Submitted-and-awaiting state flips it
+         to an undo. Hidden >=641px (which uses the bottom action bar). -->
+    @if (hasReopenable() && !hasWritable()) {
+      <button
+        type="button"
+        class="pf-sre__hdr-action"
+        [disabled]="submitting()"
+        (click)="reopenSample()"
+        aria-label="Undo submit & edit"
+        title="Undo submit & edit"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5" />
+        </svg>
+      </button>
+    } @else {
+      @if (hasWritable()) {
+        <button
+          type="button"
+          class="pf-sre__hdr-action pf-sre__hdr-action--draft"
+          [disabled]="submitting() || savingDraft()"
+          (click)="saveDraft()"
+          aria-label="Save draft"
+          title="Save draft"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+            />
+            <path d="M17 21v-8H7v8M7 3v5h8" />
+          </svg>
+        </button>
+      }
+      <button
+        type="button"
+        class="pf-sre__hdr-action pf-sre__hdr-action--go"
+        [disabled]="submitting() || savingDraft() || !hasWritable()"
+        (click)="submitAll()"
+        aria-label="Submit all results"
+        title="Submit all results"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      </button>
+    }
+  </header>
+
+  <!-- Trendogram: offer to embed serial-result trend charts in the report.
+       Shown only when this patient has repeat tests. Persists on the order,
+       so it applies when the report generates on validation. -->
+  @if (trendEligible().length > 0) {
+    <div class="pf-sre__trend">
+      <label class="pf-sre__trend-toggle">
+        <input
+          type="checkbox"
+          [checked]="trendogramOn()"
+          (change)="toggleTrendogram()"
+        />
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 3v18h18" />
+          <path d="M7 14l4-4 3 3 5-6" />
+        </svg>
+        <span
+          >Include Trendogram in report
+          <em
+            >{{ trendEligible().length }} repeat test{{
+              trendEligible().length === 1 ? "" : "s"
+            }}
+            · trend charts</em
+          >
+        </span>
+      </label>
+      @if (trendogramOn()) {
+        <select
+          class="pf-sre__trend-sel"
+          [value]="trendogramDuration()"
+          (change)="setTrendDuration($any($event.target).value)"
+        >
+          <option value="5">Last 5 tests</option>
+          <option value="10">Last 10 tests</option>
+          <option value="3m">Last 3 months</option>
+          <option value="6m">Last 6 months</option>
+          <option value="all">All time</option>
+        </select>
+      }
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="pf-sre__msg flex justify-center py-10">
+      <pf-loading-logo
+        size="xl"
+        color="purple"
+        [showDna]="true"
+        [showText]="true"
+        text="Loading sample…"
+      ></pf-loading-logo>
+    </div>
+  } @else if (!sample()) {
+    <p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p>
+  } @else {
+    <div class="pf-sre__scroll">
+      <!-- Top-of-screen banner when one or more tests on this tube
+         were sent back. Lists the affected tests + the pathologist's
+         reason so the tech sees the why before scrolling into the
+         entry sections. -->
+      @if (rejectedTests().length > 0) {
+        <div class="pf-sre__reject-banner">
+          <div class="pf-sre__reject-banner-head">
+            <span class="pf-sre__reject-icon" aria-hidden="true">↻</span>
+            <span class="pf-sre__reject-title">
+              Sent back for re-entry · {{ rejectedTests().length }} test{{
+                rejectedTests().length === 1 ? "" : "s"
+              }}
+            </span>
+          </div>
+          <ul class="pf-sre__reject-list">
+            @for (r of rejectedTests(); track r.id) {
+              <li class="pf-sre__reject-item">
+                <span class="pf-sre__reject-test">{{
+                  r.test?.name ?? "Test"
+                }}</span>
+                <span class="pf-sre__reject-reason">{{
+                  r.rejectionReason || "(no reason given)"
+                }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      @for (blk of entryBlocks(); track blk.key) {
+        @if (blk.kind === "card" || viewMode() !== "grid") {
+          <!-- Classic cards: multi-parameter/culture/schema-less tests, and
+             the whole form view. -->
+          <ng-container
+            *ngTemplateOutlet="
+              testCard;
+              context: { $implicit: blk.tests, member: false }
+            "
+          ></ng-container>
+        } @else {
+          <!-- FLAT block: one column-header strip, then a plain sequence of
+             rows. A profile shows its name once above (Profile → test,
+             test, test…); plain tests need no header at all — the row's
+             Parameter column already names the test. -->
+          <section class="pf-sre__test pf-sre__flat">
+            @if (blk.title) {
+              <header class="pf-sre__flat-hdr">
+                <h2 class="pf-sre__profile-name">{{ blk.title }}</h2>
+                <span class="pf-sre__profile-count"
+                  >{{ blk.tests.length }} tests</span
+                >
+              </header>
+            }
+            <div class="pf-sre__grid-wrap">
+              <table class="pf-sre__grid">
+                <thead>
+                  <tr>
+                    <th class="pf-sre__gc-param">Parameter</th>
+                    <th class="pf-sre__gc-result">Result</th>
+                    <th class="pf-sre__gc-unit">Unit</th>
+                    <th class="pf-sre__gc-range">Reference range</th>
+                    <th class="pf-sre__gc-method">Method</th>
+                    <th class="pf-sre__gc-note"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (t of blk.tests; track t.id) {
+                    @if (t.status === "re_entry" && t.rejectionReason) {
+                      <tr class="pf-sre__grow-reject">
+                        <td colspan="6">
+                          <strong>Pathologist note:</strong>
+                          {{ t.rejectionReason }}
+                        </td>
+                      </tr>
+                    }
+                    @if (parametersFor(t).length > 1) {
+                      <!-- Multi-parameter member inside a profile: one slim
+                         sub-label row, then its parameter rows. -->
+                      <tr class="pf-sre__gsub">
+                        <td colspan="6">{{ t.test?.name ?? "Test" }}</td>
+                      </tr>
+                    }
+                    @for (
+                      p of parametersFor(t);
+                      track p.name;
+                      let idx = $index
+                    ) {
+                      <tr
+                        class="pf-sre__grow"
+                        [class.pf-sre__grow--flagged]="
+                          hasOpenComment(t.id, p.name)
+                        "
+                      >
+                        <td class="pf-sre__gc-param">
+                          <span class="pf-sre__gname"
+                            >{{
+                              parametersFor(t).length > 1
+                                ? p.title || p.name
+                                : t.test?.name || p.title || p.name
+                            }}
+                            @if (hasOpenComment(t.id, p.name)) {
+                              <span
+                                class="pf-sre__param-flag"
+                                title="Pathologist commented"
+                              >
+                                ↻</span
+                              >
+                            }
+                          </span>
+                        </td>
+                        <td class="pf-sre__gc-result">
+                          <ng-container
+                            *ngTemplateOutlet="
+                              resultInput;
+                              context: { t, p }
+                            "
+                          ></ng-container>
+                          @if (p.unit) {
+                            <span
+                              class="pf-sre__gunit-inline"
+                              aria-hidden="true"
+                              >{{ p.unit }}</span
+                            >
+                          }
+                        </td>
+                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
+                        <td class="pf-sre__gc-range">
+                          {{ refLabelFor(p) || "—" }}
+                        </td>
+                        <td class="pf-sre__gc-method">
+                          {{ methodologyOf(p) }}
+                        </td>
+                        <td class="pf-sre__gc-note">
+                          @if (idx === 0) {
+                            @if (t.status === "re_entry") {
+                              <span
+                                class="pf-sre__gdot pf-sre__gdot--rejected"
+                                title="Re-entry needed"
+                              ></span>
+                            } @else if (
+                              t.status === "entered" ||
+                              t.status === "validated"
+                            ) {
+                              <span
+                                class="pf-sre__gdot pf-sre__gdot--done"
+                                title="Entered"
+                              ></span>
+                            }
+                            <button
+                              type="button"
+                              class="pf-sre__gnote press"
+                              tabindex="-1"
+                              [class.pf-sre__gnote--has]="
+                                commentsFor(t.id, null).length > 0
+                              "
+                              (click)="toggleOverall(t.id)"
+                              title="Note on this test"
+                            >
+                              ✎
+                            </button>
+                          }
+                        </td>
+                      </tr>
+                      @if (
+                        commentsFor(t.id, p.name).length > 0 ||
+                        hasOpenComment(t.id, p.name)
+                      ) {
+                        <tr class="pf-sre__grow-comments">
+                          <td colspan="6">
+                            <pf-comment-thread
+                              [comments]="commentsFor(t.id, p.name)"
+                              currentRole="tech"
+                              [composeLabel]="'Add note on this parameter'"
+                              (add)="
+                                addParameterComment(
+                                  t.id,
+                                  p.name,
+                                  $event.body,
+                                  $event.type
+                                )
+                              "
+                              (reply)="
+                                replyToParameter(
+                                  t.id,
+                                  p.name,
+                                  $event.parentId,
+                                  $event.body
+                                )
+                              "
+                            >
+                            </pf-comment-thread>
+                          </td>
+                        </tr>
+                      }
+                    }
+                    @if (
+                      isOverallOpen(t.id) ||
+                      commentsFor(t.id, null).length > 0
+                    ) {
+                      <tr class="pf-sre__grow-comments">
+                        <td colspan="6">
+                          <pf-comment-thread
+                            [comments]="commentsFor(t.id, null)"
+                            currentRole="tech"
+                            (add)="
+                              addOverallComment(
+                                t.id,
+                                $event.body,
+                                $event.type
+                              )
+                            "
+                            (reply)="
+                              replyToOverall(
+                                t.id,
+                                $event.parentId,
+                                $event.body
+                              )
+                            "
+                          >
+                          </pf-comment-thread>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+      }
+
+      <!-- Shared result-input control (grid tables): one definition, used by
+         both the flat block rows and the classic card grid. -->
+      <ng-template #resultInput let-t="t" let-p="p">
+        @switch (inputKindFor(p)) {
+          @case ("number") {
+            <input
+              type="text"
+              inputmode="decimal"
+              class="pf-sre__ginput pf-sre__ginput--num"
+              [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [ngModel]="getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown)="allowOnlyNumbers($event)"
+              (keydown.enter)="onEnterKey($event)"
+            />
+          }
+          @case ("select") {
+            <select
+              class="pf-sre__ginput"
+              [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [ngModel]="getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown.enter)="onEnterKey($event)"
+            >
+              <option value="">—</option>
+              @for (o of p.options ?? []; track o) {
+                <option [value]="o">{{ o }}</option>
+              }
+            </select>
+          }
+          @case ("textarea") {
+            <textarea
+              class="pf-sre__ginput pf-sre__ginput--ta"
+              rows="1"
+              [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [ngModel]="getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown.enter)="onEnterKey($event)"
+            ></textarea>
+          }
+          @case ("checkbox") {
+            <input
+              type="checkbox"
+              class="pf-sre__cb"
+              [ngModel]="!!getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown.enter)="onEnterKey($event)"
+            />
+          }
+          @case ("date") {
+            <input
+              type="date"
+              class="pf-sre__ginput"
+              [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [ngModel]="getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown.enter)="onEnterKey($event)"
+            />
+          }
+          @default {
+            <input
+              type="text"
+              class="pf-sre__ginput pf-sre__ginput--num"
+              [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [ngModel]="getValue(t.id, p.name)"
+              (ngModelChange)="setValue(t.id, p.name, $event)"
+              (keydown.enter)="onEnterKey($event)"
+            />
+          }
+        }
+      </ng-template>
+
+      <ng-template #testCard let-cardTests let-member="member">
+        @for (t of cardTests; track t.id) {
+          <section
+            class="pf-sre__test"
+            [class.pf-sre__test--member]="member"
+            [class.pf-sre__test--done]="
+              t.status === 'entered' || t.status === 'validated'
+            "
+            [class.pf-sre__test--rejected]="t.status === 're_entry'"
+          >
+            <header class="pf-sre__test-hdr">
+              <h2 class="pf-sre__test-name">
+                {{ t.test?.name ?? "Test" }}
+              </h2>
+              @if (t.status === "re_entry") {
+                <span class="pf-sre__test-pill pf-sre__test-pill--rejected"
+                  >Re-entry needed</span
+                >
+              } @else if (
+                t.status === "entered" || t.status === "validated"
+              ) {
+                <span class="pf-sre__test-pill">Entered</span>
+              }
+              <!-- Compact "+ Note" pill at the right edge of the header.
+               Replaces the full-width "Add Overall Observation" button
+               that used to consume a vertical slot above the params. -->
+              @if (commentsFor(t.id, null).length > 0) {
+                <button
+                  type="button"
+                  class="pf-sre__note-btn pf-sre__note-btn--has"
+                  (click)="toggleOverall(t.id)"
+                  [attr.aria-expanded]="
+                    isOverallOpen(t.id) ||
+                    commentsFor(t.id, null).length > 0
+                  "
+                >
+                  Notes ({{ commentsFor(t.id, null).length }})
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="pf-sre__note-btn"
+                  (click)="toggleOverall(t.id)"
+                  [attr.aria-expanded]="isOverallOpen(t.id)"
+                >
+                  {{ isOverallOpen(t.id) ? "× Close note" : "+ Note" }}
+                </button>
+              }
+            </header>
+            <!-- Per-test rejection reason — repeats the banner info but
+             right next to the inputs the tech is about to edit, so
+             they don't have to scroll back up to remember WHY. -->
+            @if (t.status === "re_entry" && t.rejectionReason) {
+              <p class="pf-sre__test-reject-reason">
+                <strong>Pathologist note:</strong> {{ t.rejectionReason }}
+              </p>
+            }
+
+            <!-- Overall conversation thread for THIS test — comments
+             with parameterName == null. Rendered only when the tech
+             toggles it open via the "+ Note" header pill, OR when
+             the test already has overall comments (existing
+             conversation must always be visible). -->
+            @if (
+              isOverallOpen(t.id) || commentsFor(t.id, null).length > 0
+            ) {
+              <div class="pf-sre__test-comments">
+                <pf-comment-thread
+                  [comments]="commentsFor(t.id, null)"
+                  currentRole="tech"
+                  (add)="addOverallComment(t.id, $event.body, $event.type)"
+                  (reply)="
+                    replyToOverall(t.id, $event.parentId, $event.body)
+                  "
+                >
+                </pf-comment-thread>
+              </div>
+            }
+
+            @if (isCultureTest(t)) {
+              <!-- Microbiology Culture & Sensitivity: structured organism +
+               antibiotic (zone / S-I-R) entry, replacing the flat grid. -->
+              <pf-culture-entry
+                [value]="cultureValueFor(t)"
+                (valueChange)="setCulture(t.id, $event)"
+              ></pf-culture-entry>
+            } @else if (parametersFor(t).length === 0) {
+              <p class="pf-sre__test-empty">
+                No parameter schema — this test has no inputs.
+              </p>
+            } @else if (viewMode() === "grid") {
+              <!-- Grid view: mirrors the report PDF column structure so the
+               tech enters results in the same shape they'll appear in
+               the patient report. Toggle in the page header switches
+               back to the legacy form view. -->
+              <div class="pf-sre__grid-wrap">
+                <table class="pf-sre__grid">
+                  <thead>
+                    <tr>
+                      <th class="pf-sre__gc-param">Parameter</th>
+                      <th class="pf-sre__gc-result">Result</th>
+                      <th class="pf-sre__gc-unit">Unit</th>
+                      <th class="pf-sre__gc-range">Reference range</th>
+                      <th class="pf-sre__gc-method">Method</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (
+                      p of parametersFor(t);
+                      track p.name;
+                      let idx = $index
+                    ) {
+                      <tr
+                        class="pf-sre__grow"
+                        [class.pf-sre__grow--flagged]="
+                          hasOpenComment(t.id, p.name)
+                        "
+                      >
+                        <td class="pf-sre__gc-param">
+                          <span class="pf-sre__gidx">{{ idx + 1 }}</span>
+                          <span class="pf-sre__gname"
+                            >{{ p.title || p.name }}
+                            @if (hasOpenComment(t.id, p.name)) {
+                              <span
+                                class="pf-sre__param-flag"
+                                title="Pathologist commented"
+                              >
+                                ↻</span
+                              >
+                            }
+                          </span>
+                        </td>
+                        <td class="pf-sre__gc-result">
+                          @switch (inputKindFor(p)) {
+                            @case ("number") {
+                              <input
+                                type="text"
+                                inputmode="decimal"
+                                class="pf-sre__ginput pf-sre__ginput--num"
+                                [class.pf-sre__input--flagged]="
+                                  hasOpenComment(t.id, p.name)
+                                "
+                                [ngModel]="getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown)="allowOnlyNumbers($event)"
+                                (keydown.enter)="onEnterKey($event)"
+                              />
+                            }
+                            @case ("select") {
+                              <select
+                                class="pf-sre__ginput"
+                                [class.pf-sre__input--flagged]="
+                                  hasOpenComment(t.id, p.name)
+                                "
+                                [ngModel]="getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown.enter)="onEnterKey($event)"
+                              >
+                                <option value="">—</option>
+                                @for (o of p.options ?? []; track o) {
+                                  <option [value]="o">{{ o }}</option>
+                                }
+                              </select>
+                            }
+                            @case ("textarea") {
+                              <textarea
+                                class="pf-sre__ginput pf-sre__ginput--ta"
+                                rows="1"
+                                [class.pf-sre__input--flagged]="
+                                  hasOpenComment(t.id, p.name)
+                                "
+                                [ngModel]="getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown.enter)="onEnterKey($event)"
+                              ></textarea>
+                            }
+                            @case ("checkbox") {
+                              <input
+                                type="checkbox"
+                                class="pf-sre__cb"
+                                [ngModel]="!!getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown.enter)="onEnterKey($event)"
+                              />
+                            }
+                            @case ("date") {
+                              <input
+                                type="date"
+                                class="pf-sre__ginput"
+                                [class.pf-sre__input--flagged]="
+                                  hasOpenComment(t.id, p.name)
+                                "
+                                [ngModel]="getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown.enter)="onEnterKey($event)"
+                              />
+                            }
+                            @default {
+                              <input
+                                type="text"
+                                class="pf-sre__ginput pf-sre__ginput--num"
+                                [class.pf-sre__input--flagged]="
+                                  hasOpenComment(t.id, p.name)
+                                "
+                                [ngModel]="getValue(t.id, p.name)"
+                                (ngModelChange)="
+                                  setValue(t.id, p.name, $event)
+                                "
+                                (keydown.enter)="onEnterKey($event)"
+                              />
+                            }
+                          }
+                          <!-- Phone only (CSS-gated): the dropped UNIT column re-shown
+                           as a small inline suffix beside the result input. Reuses
+                           the same p.unit value rendered in the UNIT column above. -->
+                          @if (p.unit) {
+                            <span
+                              class="pf-sre__gunit-inline"
+                              aria-hidden="true"
+                              >{{ p.unit }}</span
+                            >
+                          }
+                        </td>
+                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
+                        <td class="pf-sre__gc-range">
+                          {{ refLabelFor(p) || "—" }}
+                        </td>
+                        <td class="pf-sre__gc-method">
+                          {{ methodologyOf(p) }}
+                        </td>
+                      </tr>
+                      @if (
+                        commentsFor(t.id, p.name).length > 0 ||
+                        hasOpenComment(t.id, p.name)
+                      ) {
+                        <tr class="pf-sre__grow-comments">
+                          <td colspan="5">
+                            <pf-comment-thread
+                              [comments]="commentsFor(t.id, p.name)"
+                              currentRole="tech"
+                              [composeLabel]="'Add note on this parameter'"
+                              (add)="
+                                addParameterComment(
+                                  t.id,
+                                  p.name,
+                                  $event.body,
+                                  $event.type
+                                )
+                              "
+                              (reply)="
+                                replyToParameter(
+                                  t.id,
+                                  p.name,
+                                  $event.parentId,
+                                  $event.body
+                                )
+                              "
+                            >
+                            </pf-comment-thread>
+                          </td>
+                        </tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            } @else {
+              <div class="pf-sre__params">
+                @for (p of parametersFor(t); track p.name) {
+                  <!-- Two siblings inside a wrapper <div>: the <label>
+                   (input + label + hint) and the comment-thread.
+                   Previously the thread sat INSIDE the <label>,
+                   and clicks on Reply / Send / Add got stolen by
+                   the label's "focus the input" behavior — buttons
+                   worked on validator side (in <div>) but not here. -->
+                  <div
+                    class="pf-sre__param-wrap"
+                    [class.pf-sre__param-wrap--flagged]="
+                      hasOpenComment(t.id, p.name)
+                    "
+                  >
+                    <label class="pf-sre__param">
+                      <span class="pf-sre__param-label">
+                        {{ p.title || p.name }}
+                        @if (p.unit) {
+                          <span class="pf-sre__unit">({{ p.unit }})</span>
+                        }
+                        @if (hasOpenComment(t.id, p.name)) {
+                          <span
+                            class="pf-sre__param-flag"
+                            title="Pathologist commented on this parameter"
+                            >↻</span
+                          >
+                        }
+                      </span>
+                      @switch (inputKindFor(p)) {
+                        @case ("number") {
+                          <input
+                            type="text"
+                            inputmode="decimal"
+                            class="pf-sre__input pf-sre__input--num"
+                            [class.pf-sre__input--flagged]="
+                              hasOpenComment(t.id, p.name)
+                            "
+                            [ngModel]="getValue(t.id, p.name)"
+                            (ngModelChange)="setValue(t.id, p.name, $event)"
+                            (keydown)="allowOnlyNumbers($event)"
+                            (keydown.enter)="onEnterKey($event)"
+                          />
+                        }
+                        @case ("textarea") {
+                          <textarea
+                            class="pf-sre__input pf-sre__input--ta"
+                            rows="2"
+                            [class.pf-sre__input--flagged]="
+                              hasOpenComment(t.id, p.name)
+                            "
+                            [ngModel]="getValue(t.id, p.name)"
+                            (ngModelChange)="setValue(t.id, p.name, $event)"
+                            (keydown.enter)="onEnterKey($event)"
+                          ></textarea>
+                        }
+                        @case ("select") {
+                          <div
+                            class="pf-sre__select-wrap"
+                            [class.pf-sre__input--flagged]="
+                              hasOpenComment(t.id, p.name)
+                            "
+                          >
+                            <pf-select
+                              [options]="[
+                                { value: '', label: '—' },
+                                ...(p.options ?? []).map((o) => ({
+                                  value: o,
+                                  label: o,
+                                })),
+                              ]"
+                              [value]="getValue(t.id, p.name)"
+                              (valueChange)="setValue(t.id, p.name, $event)"
+                            >
+                            </pf-select>
+                          </div>
+                        }
+                        @case ("checkbox") {
+                          <input
+                            type="checkbox"
+                            class="pf-sre__cb"
+                            [ngModel]="!!getValue(t.id, p.name)"
+                            (ngModelChange)="setValue(t.id, p.name, $event)"
+                            (keydown.enter)="onEnterKey($event)"
+                          />
+                        }
+                        @case ("date") {
+                          <input
+                            type="date"
+                            class="pf-sre__input"
+                            [class.pf-sre__input--flagged]="
+                              hasOpenComment(t.id, p.name)
+                            "
+                            [ngModel]="getValue(t.id, p.name)"
+                            (ngModelChange)="setValue(t.id, p.name, $event)"
+                            (keydown.enter)="onEnterKey($event)"
+                          />
+                        }
+                        @default {
+                          <input
+                            type="text"
+                            class="pf-sre__input pf-sre__input--num"
+                            [class.pf-sre__input--flagged]="
+                              hasOpenComment(t.id, p.name)
+                            "
+                            [ngModel]="getValue(t.id, p.name)"
+                            (ngModelChange)="setValue(t.id, p.name, $event)"
+                            (keydown.enter)="onEnterKey($event)"
+                          />
+                        }
+                      }
+                      @if (
+                        p.normalValue ||
+                        p.criticalLow != null ||
+                        p.criticalHigh != null
+                      ) {
+                        <span class="pf-sre__hint">
+                          @if (p.normalValue) {
+                            Normal: {{ p.normalValue }}
+                          }
+                          @if (p.criticalLow != null) {
+                            · Crit&lt; {{ p.criticalLow }}
+                          }
+                          @if (p.criticalHigh != null) {
+                            · Crit&gt; {{ p.criticalHigh }}
+                          }
+                        </span>
+                      }
+                    </label>
+
+                    <!-- Per-parameter conversation thread, OUTSIDE the
+                     label so its Reply / Send / Add buttons work. -->
+                    @if (
+                      commentsFor(t.id, p.name).length > 0 ||
+                      hasOpenComment(t.id, p.name)
+                    ) {
+                      <div class="pf-sre__param-comments">
+                        <pf-comment-thread
+                          [comments]="commentsFor(t.id, p.name)"
+                          currentRole="tech"
+                          [composeLabel]="'Add note on this parameter'"
+                          (add)="
+                            addParameterComment(
+                              t.id,
+                              p.name,
+                              $event.body,
+                              $event.type
+                            )
+                          "
+                          (reply)="
+                            replyToParameter(
+                              t.id,
+                              p.name,
+                              $event.parentId,
+                              $event.body
+                            )
+                          "
+                        >
+                        </pf-comment-thread>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </section>
+        }
+      </ng-template>
+    </div>
+
+    <footer class="pf-sre__footer">
+      @if (hasReopenable()) {
+        <!-- Submitted, awaiting validation — pull it back to edit + resubmit.
+             Every reopen is recorded in the result's audit trail. -->
+        <button
+          type="button"
+          class="pf-sre__reopen"
+          [disabled]="submitting()"
+          (click)="reopenSample()"
+        >
+          {{ submitting() ? "Reopening…" : "↺ Undo submit & edit" }}
+        </button>
+      }
+      <!-- Save partial work and come back later (tube stays in_progress). -->
+      @if (hasWritable()) {
+        <button
+          type="button"
+          class="pf-sre__draft"
+          [disabled]="submitting() || savingDraft()"
+          (click)="saveDraft()"
+        >
+          {{ savingDraft() ? "Saving…" : "Save draft" }}
+        </button>
+      }
+      <button
+        type="button"
+        class="pf-sre__submit"
+        [disabled]="submitting() || savingDraft() || !hasWritable()"
+        (click)="submitAll()"
+      >
+        {{
+          submitting()
+            ? "Submitting…"
+            : hasReopenable() && !hasWritable()
+              ? "Submitted — awaiting validation"
+              : "Submit All Results"
+        }}
+      </button>
+    </footer>
+
+    @if (lastFlags().length > 0) {
+      <ul class="pf-sre__flags">
+        @for (f of lastFlags(); track f.label) {
+          <li class="pf-sre__flag" [class.pf-sre__flag--crit]="f.critical">
+            <strong>{{ f.label }}</strong
+            >{{ f.note ? " · " + f.note : "" }}
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

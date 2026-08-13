@@ -532,12 +532,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         }
                         @case ('duration') {
                           <div class="pf-param__duration">
-                            <input type="number"
+                            <input type="text"
                                    inputmode="numeric"
                                    class="pf-param__input pf-param__input--num"
                                    [value]="durationValueOf(p.name).value ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setDurationValue(p.name, { value: toNumOrNull(asInput($event)) })"
+                                   (keydown)="allowOnlyNumbers($event)"
                                    placeholder="0" />
                             <pf-select
                               [options]="durationUnitsFor(p).map(u => ({ value: u, label: u }))"
@@ -549,12 +550,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         @case ('size') {
                           <div class="pf-param__size">
                             @for (i of sizeIndexesFor(p); track i) {
-                              <input type="number"
+                              <input type="text"
                                      inputmode="decimal"
                                      class="pf-param__input pf-param__input--num"
                                      [value]="sizeValueOf(p.name).values[i] ?? ''"
                                      (focus)="setActive(p.name)"
                                      (input)="setSizeValueAt(p.name, i, toNumOrNull(asInput($event)))"
+                                     (keydown)="allowOnlyNumbers($event)"
                                      placeholder="—"/>
                             }
                             <pf-select
@@ -2690,6 +2692,43 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   setViewMode(mode: 'grid' | 'cards') {
     this._viewMode.set(mode);
     try { localStorage.setItem('pf-result-view', mode); } catch { /* no-op */ }
+  }
+
+  /** Restricts keydown events for numeric parameters to valid numbers (digits 0-9, decimal point, minus) and navigation keys, preventing letter input. */
+  allowOnlyNumbers(event: KeyboardEvent) {
+    const key = event.key;
+    if (
+      [
+        'Backspace',
+        'Tab',
+        'Enter',
+        'Escape',
+        'Delete',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Home',
+        'End',
+      ].includes(key) ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const target = event.target as HTMLInputElement | null;
+    const val = target?.value || '';
+
+    if (key === '.' && !val.includes('.')) {
+      return;
+    }
+    if (key === '-' && !val.includes('-')) {
+      return;
+    }
+    if (!/^[0-9]$/.test(key)) {
+      event.preventDefault();
+    }
   }
 
   private readonly _paramsBlob = computed<TestParametersBlob | null>(() => {
