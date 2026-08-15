@@ -21,6 +21,7 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { describeAllRanges } from '../../../shared/utils/reference-range';
@@ -144,6 +145,9 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
         title="Test Master"
         subtitle="Master catalogue of tests, profiles and packages — filter, and edit prices inline.">
         <div actions class="flex flex-wrap items-center gap-2 justify-end">
+          <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" (pressed)="restoreDefaults()">
+            {{ restoring() ? 'Restoring…' : 'Restore to default' }}
+          </pf-touch-btn>
           @if (dirtyCount() > 0) {
             <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
             <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
@@ -410,6 +414,7 @@ export class TestsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
   private readonly theme = inject(ThemeService);
+  private readonly dialog = inject(DialogService);
 
   readonly views: { value: TestType; label: string }[] = [
     { value: 'individual', label: 'Individual' },
@@ -422,6 +427,38 @@ export class TestsComponent implements OnInit {
   private readonly _depts = signal<DeptRecord[]>([]);
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
+  readonly restoring = signal(false);
+
+  /**
+   * Replace the tenant's whole catalogue with a fresh clone of the platform
+   * default. One explicit danger-toned confirmation — the backend guarantees
+   * patient data survives (tests used by orders/bills are parked, never
+   * deleted), but the catalogue itself cannot be brought back.
+   */
+  protected async restoreDefaults(): Promise<void> {
+    const ok = await this.dialog.confirm({
+      title: 'Restore the default Test Master?',
+      message: 'Your entire catalogue — tests, profiles, packages, prices and reference-range edits — is replaced with the platform default. Tests already used by orders or bills are kept for history but deactivated; everything else is deleted, and all prices reset to 0. This cannot be undone.',
+      confirmLabel: 'Restore to default',
+      cancelLabel: 'Keep my catalogue',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.restoring.set(true);
+    this.api.post<{ deleted: number; parked: number; cloned: number }>('/api/tests/restore-defaults', {}).subscribe({
+      next: r => {
+        this.restoring.set(false);
+        this._dirty.set(new Map());
+        this.toasts.success(`Catalogue restored — ${r.cloned} default tests loaded (${r.deleted} removed, ${r.parked} archived).`);
+        this.loadTests();
+        this.loadDepartments();
+      },
+      error: () => {
+        this.restoring.set(false);
+        this.toasts.error('Restore failed — nothing was changed.');
+      }
+    });
+  }
 
   /** Pending edits keyed by the row's REAL test id (`data.id`), each a map of
    *  `{ field: newValue }` merged across cells. Flushed by `saveAll()`. */
