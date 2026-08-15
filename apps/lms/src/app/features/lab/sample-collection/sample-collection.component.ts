@@ -23,6 +23,7 @@ import { PrinterService } from '../../../core/printer/printer.service';
 import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { printLabelOnly } from '../../../shared/utils/print-label';
+import { SeriesState, countdownLabel, dueClockLabel, offsetLabel, seriesState, sortForCollection } from '../../../shared/utils/series-schedule';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -327,16 +328,40 @@ interface OrderGroup {
           <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
 
           <div class="pf-drawer__tubes">
-            @for (s of g.samples; track s.id) {
+            @for (s of orderedSamples(g); track s.id) {
               <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
                    list (a floating popover). A div, not <button>, so the hold /
                    pointer handling is clean. -->
               <div class="pf-tube" role="button" tabindex="0"
                    [class.pf-tube--done]="s.status !== 'pending'"
                    [class.pf-tube--holding]="holdingId() === s.id"
+                   [class.pf-tube--locked]="tubeState(s).kind === 'locked'"
+                   [class.pf-tube--due]="tubeState(s).kind === 'due'"
+                   [class.pf-tube--missed]="tubeState(s).kind === 'missed'"
+                   [class.pf-tube--inert]="dispatchSelect() !== null && s.status !== 'collected'"
+                   [class.pf-tube--selected]="!!dispatchSelect()?.has(s.id)"
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
                    (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
-                   (click)="onVialClick(s, $event)" (keydown.enter)="toggleCollected(s)">
+                   (click)="onVialClick(s, $event)" (keydown.enter)="onVialClick(s, $event)">
+                <!-- Missed-draw badge: red ✕ overlay in the card's top-right
+                     (visual only — the tube stays server-pending and can be
+                     reopened with a double-tap). -->
+                @if (tubeState(s).kind === 'missed') {
+                  <span class="pf-tube__missedmark" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                  </span>
+                }
+                <!-- Partial-dispatch selection mode: collected tubes show a
+                     selection ring (check fills in when selected). -->
+                @if (dispatchSelect() !== null && s.status === 'collected') {
+                  <span class="pf-tube__selectmark" [class.pf-tube__selectmark--on]="!!dispatchSelect()?.has(s.id)" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 12 4 4L19 6"/>
+                    </svg>
+                  </span>
+                }
                 @if (container(s).kind !== 'vacutainer') {
                   <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
                        lid. Urine cups fill amber; sterile jars (body fluid,
@@ -544,7 +569,11 @@ interface OrderGroup {
                 }
 
                 <div class="pf-tube__body">
-                  <p class="pf-tube__label">{{ tube(s).label }}</p>
+                  <p class="pf-tube__label">{{ tube(s).label }}
+                    @if (captionOffset(s); as off) {
+                      <span class="pf-tube__offset">{{ off }}</span>
+                    }
+                  </p>
                   @if (showTubeDept()) {
                     <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
                   }
@@ -564,7 +593,29 @@ interface OrderGroup {
                       @else { Dispatched }
                     </span>
                   } @else {
-                    <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
+                    <!-- Pending: series tubes carry their schedule state;
+                         normal tubes keep the classic "Tap when drawn". -->
+                    @switch (tubeState(s).kind) {
+                      @case ('anchor') {
+                        <span class="pf-tube__stamp pf-tube__stamp--pending">First draw</span>
+                      }
+                      @case ('locked') {
+                        @if (tubeState(s).reason === 'awaiting-anchor') {
+                          <span class="pf-tube__stamp pf-tube__stamp--series">After first draw</span>
+                        } @else {
+                          <span class="pf-tube__stamp pf-tube__stamp--series">Due {{ tubeState(s).dueAt | date:'HH:mm' }} · −{{ countdown(tubeState(s).msUntilDue) }}</span>
+                        }
+                      }
+                      @case ('due') {
+                        <span class="pf-tube__stamp pf-tube__stamp--due">Due now</span>
+                      }
+                      @case ('missed') {
+                        <span class="pf-tube__stamp pf-tube__stamp--missed">Missed · double-tap to override</span>
+                      }
+                      @default {
+                        <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
+                      }
+                    }
                   }
                 </div>
               </div>
@@ -572,6 +623,27 @@ interface OrderGroup {
           </div>
 
           <footer class="pf-drawer__foot">
+            @if (dispatchSelect(); as sel) {
+              <!-- Partial-dispatch selection mode: pick collected tubes, then
+                   send just those to the lab. Everything else in the footer is
+                   parked until Cancel / confirm. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text" (click)="cancelPartialDispatch()"
+                      aria-label="Cancel" data-label="Cancel">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+                <span class="pf-btn__text">Cancel</span>
+              </button>
+              <span class="pf-drawer__remaining">Tap collected tubes to select</span>
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text" (click)="confirmPartialDispatch(g)"
+                      [disabled]="sel.size === 0 || dispatching()"
+                      [attr.aria-label]="'Dispatch ' + sel.size" [attr.data-label]="'Dispatch ' + sel.size">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + sel.size }}</span>
+              </button>
+            } @else {
             @if (isDispatched(g)) {
               <button type="button" class="pf-btn pf-btn-ghost" (click)="undispatchOrder(g)" [disabled]="dispatching()">
                 {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
@@ -648,12 +720,23 @@ interface OrderGroup {
                 </svg>
                 <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch' }}</span>
               </button>
+            } @else if (canPartialDispatch(g)) {
+              <!-- Some tubes drawn, more still to come (series schedules) —
+                   hand just the drawn tubes to the lab. The whole-order
+                   Dispatch above stays the all-collected path. -->
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial" (click)="startPartialDispatch(g)"
+                      aria-label="Dispatch tubes" data-label="Dispatch tubes">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">Dispatch tubes…</span>
+              </button>
             }
             <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
-                    (click)="close()" [disabled]="g.collected < g.totalVials"
-                    [attr.aria-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'"
-                    [attr.data-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'">
-              @if (g.collected < g.totalVials) {
+                    (click)="close()" [disabled]="doneDisabled(g)"
+                    [attr.aria-label]="doneLabel(g)"
+                    [attr.data-label]="doneLabel(g)">
+              @if (doneDisabled(g)) {
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m17 13 2 2 4-4"/>
                 </svg>
@@ -662,8 +745,9 @@ interface OrderGroup {
                   <path d="m5 12 4 4L19 6"/>
                 </svg>
               }
-              <span class="pf-btn__text">{{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}</span>
+              <span class="pf-btn__text">{{ doneLabel(g) }}</span>
             </button>
+            }
           </footer>
 
           <!-- Tube labels for printing. Hidden on screen; the global
@@ -1971,6 +2055,121 @@ interface OrderGroup {
     :host-context(html.pf-collect-immersive) .pf-drawer__foot {
       padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
+
+    /* ─── Repetitive mode (series draws) ─────────────────────────────────
+       Modifier classes only — normal tubes never receive any of these, so
+       the classic card is untouched. */
+    /* Locked (awaiting the anchor draw, or not yet due): dimmed but still
+       tappable — the tap explains itself with a toast. */
+    .pf-tube--locked { opacity: 0.45; }
+    /* Due now: green attention ring, mirroring the --done treatment. */
+    .pf-tube--due {
+      border-color: rgba(16, 185, 129, 0.55);
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2), 0 14px 40px rgba(16, 185, 129, 0.14);
+    }
+    /* Missed window (visual only — override reopens it). */
+    .pf-tube--missed { border-color: rgba(244, 63, 94, 0.5); }
+    .pf-tube__missedmark {
+      position: absolute; top: 10px; right: 10px;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(244, 63, 94, 0.92); color: #fff;
+      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
+      z-index: 2;
+    }
+    /* Offset chip beside the container name ("+30 min" / "+2 h"). */
+    .pf-tube__offset {
+      display: inline-block; vertical-align: 2px;
+      margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 10px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.05em;
+      color: var(--violet-text);
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      white-space: nowrap;
+    }
+    /* Series status pills on the card. */
+    .pf-tube__stamp--series {
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      border-color: var(--glass-border);
+    }
+    .pf-tube__stamp--due {
+      color: var(--green-text);
+      background: rgba(16, 185, 129, 0.14);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .pf-tube__stamp--missed {
+      color: var(--rose-text, #fb7185);
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.4);
+    }
+
+    /* ─── Partial dispatch (selection mode) ────────────────────────────── */
+    /* Non-collected tubes are inert while selecting. */
+    .pf-tube--inert { opacity: 0.35; }
+    .pf-tube--selected {
+      border-color: rgba(139, 92, 246, 0.6);
+      box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.3), 0 14px 40px rgba(139, 92, 246, 0.16);
+    }
+    .pf-tube__selectmark {
+      position: absolute; top: 10px; left: 10px;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: transparent;
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.35);
+      z-index: 2;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .pf-tube__selectmark--on {
+      color: #fff;
+      background: var(--color-violet-500, #8b5cf6);
+      border-color: var(--color-violet-500, #8b5cf6);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    }
+    /* The partial-dispatch trigger sits right of the "N remaining" note,
+       which already carries margin-left:auto — don't double-push. */
+    .pf-drawer__foot .pf-btn--partial { margin-left: 0; }
+
+    /* Phone footer collapses buttons to icon squares; the selection-mode
+       pair must keep their text ("Dispatch N" carries the count). */
+    @media (max-width: 640px) {
+      .pf-drawer__foot .pf-btn--keep-text {
+        width: auto;
+        min-width: 46px;
+        padding: 0 14px;
+        gap: 8px;
+      }
+      .pf-drawer__foot .pf-btn--keep-text .pf-btn__text { display: inline; }
+    }
+
+    /* Light-mode tuning for the series/selection chrome. */
+    :host-context([data-theme="light"]) .pf-tube__stamp--series {
+      color: #64748b;
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp--due {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp--missed {
+      color: #be123c;
+      background: rgba(244, 63, 94, 0.08);
+      border-color: rgba(244, 63, 94, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__offset {
+      color: #6d28d9;
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(124, 58, 237, 0.28);
+    }
+    :host-context([data-theme="light"]) .pf-tube__selectmark {
+      background: rgba(15, 23, 42, 0.04);
+      border-color: rgba(15, 23, 42, 0.3);
+    }
 `]
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
@@ -2100,9 +2299,26 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         }
       });
     });
+
+    // Repetitive mode: a 1 Hz clock drives the "not due" countdowns and the
+    // due/missed transitions. It runs ONLY while the open drawer holds
+    // pending series tubes — normal orders never tick, and the interval is
+    // cleared the moment the drawer closes or the last series tube is drawn.
+    effect(() => {
+      const g = this.activeGroup();
+      const needsClock = !!g && g.samples.some(s => s.repeatOffsetMin != null && s.status === 'pending');
+      if (needsClock && this._clock == null) {
+        this.nowMs.set(Date.now());
+        this._clock = setInterval(() => this.nowMs.set(Date.now()), 1000);
+      } else if (!needsClock && this._clock != null) {
+        clearInterval(this._clock);
+        this._clock = null;
+      }
+    });
   }
 
   ngOnDestroy() {
+    if (this._clock != null) { clearInterval(this._clock); this._clock = null; }
     this.detachTeleport();
     // Leaving the screen with a drawer still open must not strand the immersive
     // flag on <html> — that would hide the chrome on the next screen too.
@@ -2202,6 +2418,166 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (!id) return null;
     return this.groups().find(g => g.orderId === id) ?? null;
   });
+
+  // ─── Repetitive mode (Phase 3) ────────────────────────────────────────
+  /** Wall clock, ticked at 1 Hz by the constructor effect ONLY while the
+   *  open drawer contains pending series tubes. */
+  readonly nowMs = signal(Date.now());
+  private _clock: ReturnType<typeof setInterval> | null = null;
+  /** Client-side override: locked 'not-due' tubes force-unlocked by 4 rapid
+   *  taps — they render (and collect) as 'due'. */
+  readonly earlyUnlocked = signal<Set<string>>(new Set());
+  /** Client-side override: 'missed' tubes reopened by a double-tap — they
+   *  render (and collect) as 'due'. */
+  readonly reopened = signal<Set<string>>(new Set());
+  /** Per-sample rapid-tap tracker for the two override gestures. */
+  private readonly _taps = new Map<string, { count: number; lastTs: number }>();
+  /** 4 taps, each ≤1.5s after the previous, unlock a 'not-due' tube. */
+  private static readonly EARLY_UNLOCK_TAPS = 4;
+  private static readonly EARLY_UNLOCK_GAP_MS = 1500;
+  /** Double-tap within 400ms reopens a 'missed' tube. */
+  private static readonly REOPEN_TAP_MS = 400;
+
+  /** Series state per sample of the ACTIVE group, memoized per clock tick /
+   *  data change so the template can call tubeState() freely. Overrides
+   *  (early unlock / reopen) are applied here, converting to 'due'. */
+  private readonly _tubeStates = computed<Map<string, SeriesState>>(() => {
+    const map = new Map<string, SeriesState>();
+    const g = this.activeGroup();
+    if (!g) return map;
+    const now = this.nowMs();
+    const early = this.earlyUnlocked();
+    const reopened = this.reopened();
+    for (const s of g.samples) {
+      let st = seriesState(s, g.samples, now);
+      if (st.kind === 'locked' && st.reason === 'not-due' && early.has(s.id)) {
+        st = { kind: 'due', dueAt: st.dueAt };
+      } else if (st.kind === 'missed' && reopened.has(s.id)) {
+        st = { kind: 'due', dueAt: st.dueAt };
+      }
+      map.set(s.id, st);
+    }
+    return map;
+  });
+
+  /** The tube's series state ('normal' for every non-series tube — all the
+   *  pre-existing template branches key off that). */
+  tubeState(s: OrderSample): SeriesState {
+    return this._tubeStates().get(s.id) ?? { kind: 'normal' };
+  }
+
+  /** Drawer order: normal tubes first (existing order), then series tubes by
+   *  (series, ascending offset). */
+  orderedSamples(g: OrderGroup): OrderSample[] {
+    return sortForCollection(g.samples);
+  }
+
+  /** Caption chip beside the container name. Offsets >0 always show
+   *  ("+30 min"); the anchor shows "First draw" only once it's no longer
+   *  pending (while pending, the status pill already says it). */
+  captionOffset(s: OrderSample): string | null {
+    const off = s.repeatOffsetMin;
+    if (off == null) return null;
+    if (off > 0) return offsetLabel(off);
+    return s.status !== 'pending' ? 'First draw' : null;
+  }
+
+  /** Live "m:ss" countdown for the locked-not-due pill. */
+  countdown(msUntilDue: number | undefined): string {
+    return countdownLabel(msUntilDue ?? 0);
+  }
+
+  hasSeries(g: OrderGroup): boolean {
+    return g.samples.some(s => s.repeatOffsetMin != null);
+  }
+
+  /** Footer Done gate. Non-series groups keep the exact legacy rule (every
+   *  vial drawn). Series groups block only on tubes collectable RIGHT NOW
+   *  ('normal' | 'anchor' | 'due') — locked future offsets and missed
+   *  windows don't hold the collector hostage in the drawer. */
+  doneDisabled(g: OrderGroup): boolean {
+    if (!this.hasSeries(g)) return g.collected < g.totalVials;
+    return g.samples.some(s => {
+      if (s.status !== 'pending') return false;
+      const k = this.tubeState(s).kind;
+      return k === 'normal' || k === 'anchor' || k === 'due';
+    });
+  }
+
+  doneLabel(g: OrderGroup): string {
+    if (this.doneDisabled(g)) return 'Collect all to finish';
+    if (this.hasSeries(g) && g.samples.some(s => s.status === 'pending')) return 'Done for now';
+    return 'Done';
+  }
+
+  /** Clear all per-drawer client-side series/dispatch state (overrides, tap
+   *  trackers, selection mode) — called on drawer open and close. */
+  private resetSeriesOverrides(): void {
+    this._taps.clear();
+    if (this.earlyUnlocked().size) this.earlyUnlocked.set(new Set());
+    if (this.reopened().size) this.reopened.set(new Set());
+    this.dispatchSelect.set(null);
+  }
+
+  // ─── Partial dispatch (Phase 4) ───────────────────────────────────────
+  /** Non-null while selection mode is active: the set of sample ids chosen
+   *  for a partial dispatch. */
+  readonly dispatchSelect = signal<Set<string> | null>(null);
+
+  private collectedCount(g: OrderGroup): number {
+    return g.samples.filter(s => s.status === 'collected').length;
+  }
+
+  /** "Dispatch tubes…" shows when the workflow has a dispatch step, the user
+   *  may dispatch, there's no payment hold, and the order is PARTIALLY
+   *  collected (≥1 tube 'collected' but not every tube drawn) — the
+   *  all-collected case keeps the classic whole-order Dispatch button. */
+  canPartialDispatch(g: OrderGroup): boolean {
+    return this.dispatchStep() && this.canDispatch() && !g.paymentHold
+      && !this.isDispatched(g)
+      && this.collectedCount(g) > 0
+      && g.collected < g.totalVials;
+  }
+
+  /** Enter selection mode with every currently-collected tube pre-selected
+   *  (the overwhelmingly common intent: "send what I've drawn so far"). */
+  startPartialDispatch(g: OrderGroup): void {
+    this.dispatchSelect.set(new Set(
+      g.samples.filter(s => s.status === 'collected').map(s => s.id)));
+  }
+
+  cancelPartialDispatch(): void {
+    this.dispatchSelect.set(null);
+  }
+
+  /** Dispatch the selected tubes one by one (PATCH /api/samples/{id}/dispatch),
+   *  optimistically flipping each to 'dispatched' and rolling back on error.
+   *  STAYS in the drawer — the _returnTo navigation is exclusive to the
+   *  whole-order dispatchOrder() path. */
+  async confirmPartialDispatch(g: OrderGroup): Promise<void> {
+    const sel = this.dispatchSelect();
+    if (!sel || sel.size === 0 || this._dispatching()) return;
+    const ids = g.samples.filter(s => sel.has(s.id) && s.status === 'collected').map(s => s.id);
+    if (ids.length === 0) { this.dispatchSelect.set(null); return; }
+    this._dispatching.set(true);
+    let ok = 0;
+    let firstError: string | null = null;
+    for (const id of ids) {
+      // Optimistic flip; sequential PATCH; roll back this tube on failure.
+      this._pending.update(list => list.map(x => x.id === id ? { ...x, status: 'dispatched' } : x));
+      try {
+        await firstValueFrom(this.api.patch(`/api/samples/${id}/dispatch`, {}));
+        ok++;
+      } catch (e) {
+        this._pending.update(list => list.map(x => x.id === id ? { ...x, status: 'collected' } : x));
+        if (!firstError) firstError = ApiError.from(e).message;
+      }
+    }
+    if (ok > 0) this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} dispatched to lab`);
+    if (firstError) this.toasts.error(firstError);
+    this.dispatchSelect.set(null);
+    this._dispatching.set(false);
+  }
 
   async ngOnInit() {
     // Per-branch label config (size + code) for direct-to-printer label print.
@@ -2314,10 +2690,63 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.peekId.set(null); // release hides the peek
   }
 
-  /** The vial's click: suppress it when a long-press just peeked, otherwise
-   *  it's a normal tap → collect. */
+  /** The vial's click: suppress it when a long-press just peeked; in
+   *  partial-dispatch selection mode taps only toggle collected tubes; on a
+   *  locked/missed series tube the tap runs the override gesture counters;
+   *  otherwise ('normal' | 'anchor' | 'due') the FIRST tap collects exactly
+   *  as it always has. */
   onVialClick(s: OrderSample, ev: Event): void {
     if (this._longPressFired) { this._longPressFired = false; ev.preventDefault(); ev.stopPropagation(); return; }
+
+    // Selection mode: taps toggle membership of collected tubes; every
+    // other tube is inert until Cancel / confirm.
+    if (this.dispatchSelect() !== null) {
+      if (s.status !== 'collected') return;
+      this.dispatchSelect.update(set => {
+        const next = new Set(set);
+        if (next.has(s.id)) next.delete(s.id); else next.add(s.id);
+        return next;
+      });
+      return;
+    }
+
+    const st = this.tubeState(s);
+
+    if (st.kind === 'locked') {
+      if (st.reason === 'awaiting-anchor') {
+        this.toasts.info('Draw the first tube of this series first');
+        return;
+      }
+      // Not due yet: 4 rapid taps (≤1.5s between taps) force-unlock early.
+      const now = Date.now();
+      const t = this._taps.get(s.id);
+      const count = t && now - t.lastTs <= SampleCollectionComponent.EARLY_UNLOCK_GAP_MS ? t.count + 1 : 1;
+      this._taps.set(s.id, { count, lastTs: now });
+      if (count >= SampleCollectionComponent.EARLY_UNLOCK_TAPS) {
+        this._taps.delete(s.id);
+        this.earlyUnlocked.update(set => new Set(set).add(s.id));
+        this.toasts.success('Unlocked early — tap to collect');
+      } else if (count === 1) {
+        this.toasts.info(`Not due yet — ${dueClockLabel(st.dueAt ?? now)} (tap 4× to override)`);
+      }
+      return;
+    }
+
+    if (st.kind === 'missed') {
+      // Double-tap (≤400ms) reopens the missed window.
+      const now = Date.now();
+      const t = this._taps.get(s.id);
+      if (t && now - t.lastTs <= SampleCollectionComponent.REOPEN_TAP_MS) {
+        this._taps.delete(s.id);
+        this.reopened.update(set => new Set(set).add(s.id));
+        this.toasts.success('Missed draw reopened — tap to collect');
+      } else {
+        this._taps.set(s.id, { count: 1, lastTs: now });
+      }
+      return;
+    }
+
+    this._taps.delete(s.id);
     this.toggleCollected(s);
   }
 
@@ -2337,12 +2766,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return any ? Math.round(sum * 10) / 10 : null;
   }
 
-  openOrder(id: string) { this._openOrderId.set(id); }
+  openOrder(id: string) {
+    this.resetSeriesOverrides();
+    this._openOrderId.set(id);
+  }
 
   /** Open a specific order's collection drawer (e.g. from a scanned order QR).
    *  Best-effort merges the order's samples in case they aren't in the pending
    *  list (already collected / different lifecycle). */
   async openOrderById(id: string) {
+    this.resetSeriesOverrides();
     this._openOrderId.set(id);
     this.scanValue.set('');
     try {
@@ -2364,6 +2797,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
   }
   close() {
+    this.resetSeriesOverrides();
     this._openOrderId.set(null);
     // Deep-linked from another screen (FD "Collect Sample") — return there
     // rather than leaving the user on an unrelated queue.

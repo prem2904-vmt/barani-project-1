@@ -56,6 +56,12 @@ export interface OrderSample {
   receivedBy?: string;
   rejectedReason?: string;
   rejectionCount: number;
+  /** Repetitive mode: minutes after the series' anchor draw this tube is due
+   *  (0 = the anchor itself). Null/absent = not a series tube. */
+  repeatOffsetMin?: number | null;
+  /** The profile test that generated this repeat series — groups the tube
+   *  with its series siblings on the same order. */
+  repeatProfileTestId?: string | null;
   /** When a tech scan-verified this tube (queue claim-by-scan or My-Work
    *  pick-scan; barcode matched server-side). While scanVerifiedBy is the
    *  current tech, My Work opens the tube without demanding a re-scan. */

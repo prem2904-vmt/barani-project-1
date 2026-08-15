@@ -205,6 +205,10 @@ interface ReportSnapshot {
     /** Nearest enclosing PROFILE the leaf came through (package members). */
     profileTestId?: string | null;
     profileName?: string | null;
+    /** Timed-series time point (minutes from the first draw) — set when the
+     *  test was drawn as one point of a repetitive profile. Disambiguates the
+     *  SAME test repeated across time points inside one profile block. */
+    repeatOffsetMin?: number | null;
     /** Specimen / sample type — pulled from TestEntity.Parameters JSON
      *  during snapshot build. Rendered in the continuous results table's
      *  Specimen column (once, on the test's first parameter row). */
@@ -624,6 +628,35 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const byPkg = new Map<string, PanelGroup>();
   /** Profile id → the profile's OWN note rows, appended after its members. */
   const profileNotes = new Map<string, PanelRowData[]>();
+  // Timed-series disambiguation: within one profile block, the SAME test can
+  // legitimately repeat across time points (OGTT: Glucose at 0/60/120). Only
+  // then does the row name gain a " (60 min)" suffix — self-naming members
+  // ("OGTT – 30 Minutes") stay untouched. Pre-pass counts names per bundle.
+  const seriesDupNames = new Map<string, Set<string>>();
+  {
+    const counts = new Map<string, Map<string, number>>();
+    for (const t of tabular) {
+      if (t.repeatOffsetMin == null) continue;
+      const legacy = t.packageType == null;
+      const b = t.profileTestId
+        ?? (t.packageType === 'profile' ? t.packageTestId : null)
+        ?? (legacy ? t.packageTestId : null);
+      if (!b) continue;
+      const key = (t.name ?? '').trim().toUpperCase();
+      const m = counts.get(b) ?? new Map<string, number>();
+      m.set(key, (m.get(key) ?? 0) + 1);
+      counts.set(b, m);
+    }
+    for (const [b, m] of counts) {
+      const dups = new Set([...m].filter(([, n]) => n > 1).map(([k]) => k));
+      if (dups.size) seriesDupNames.set(b, dups);
+    }
+  }
+  const seriesSuffix = (t: (typeof tabular)[number], bundle: string | null): string => {
+    if (t.repeatOffsetMin == null || !bundle) return '';
+    return seriesDupNames.get(bundle)?.has((t.name ?? '').trim().toUpperCase())
+      ? ` (${t.repeatOffsetMin} min)` : '';
+  };
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
@@ -658,9 +691,23 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     }
     // Drop the member's OWN notes — they belong to it only when ordered alone.
     const memberRows = g.rows.filter(r => r.kind !== 'note');
+    const suffix = seriesSuffix(t, pkg);
+    if (memberRows.length === 0 && t.repeatOffsetMin != null) {
+      // A missed/unresulted series time point still occupies its row in the
+      // schedule — the clinician must SEE that the point exists and was not
+      // measured, not wonder whether it was ever ordered.
+      merged.rows.push({ kind: 'param', name: `${g.testName}${suffix}`, result: '—' });
+      continue;
+    }
     if (memberRows.length === 1 && memberRows[0].kind === 'param') {
       // Single-analyte member → one row named after the member test.
-      merged.rows.push({ ...memberRows[0], name: (memberRows[0].name ?? '').trim() || g.testName });
+      merged.rows.push({ ...memberRows[0],
+        name: (((memberRows[0].name ?? '').trim() || g.testName) + suffix) });
+    } else if (suffix) {
+      // Multi-analyte series member: every row carries the time point, else
+      // the repeated analytes are indistinguishable inside the block.
+      merged.rows.push(...memberRows.map(r =>
+        r.kind === 'param' ? { ...r, name: `${(r.name ?? '').trim()}${suffix}` } : r));
     } else {
       merged.rows.push(...memberRows);
     }

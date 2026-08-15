@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -132,6 +133,22 @@ function newFieldId(): string {
   return `fld_${Date.now().toString(36)}_${fieldCounter}`;
 }
 
+/** One draw in a REPETITIVE profile's timed series. The same testId may appear
+ *  in several rows (OGTT = Glucose at 0/60/120 min) — `key` keeps @for tracking
+ *  and drag-drop stable across duplicates. Never serialised. */
+interface MemberRow {
+  key: string;
+  testId: string;
+  /** Minutes from the first draw. First group is always 0 (rebased on edit). */
+  offsetMin: number;
+}
+
+let rowCounter = 0;
+function newRowKey(): string {
+  rowCounter += 1;
+  return `row_${Date.now().toString(36)}_${rowCounter}`;
+}
+
 @Component({
   selector: 'pf-test-editor',
   standalone: true,
@@ -150,7 +167,8 @@ function newFieldId(): string {
     TouchButtonComponent,
     TestLayoutEditorComponent,
     TestNotesEditorComponent,
-    TestConsumablesComponent
+    TestConsumablesComponent,
+    DragDropModule
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -774,19 +792,99 @@ function newFieldId(): string {
               <h3 class="section-title">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h3>
               <p class="pf-picker-sub">
                 @if (d.type === 'profile') {
-                  Pick the individual tests included in this profile.
+                  @if (repetitive()) {
+                    Tick a test to add a draw — tick the SAME test again for a repeat draw (e.g. Glucose at 0 / 60 / 120 min).
+                  } @else {
+                    Pick the individual tests included in this profile.
+                  }
                 } @else {
                   Pick the tests and profiles included in this package.
                 }
               </p>
             </div>
+            @if (d.type === 'profile') {
+              <!-- Repetitive = a TIMED SERIES profile (GTT/OGTT-style): the same
+                   member list, but every row carries a minutes-from-first-draw
+                   offset and duplicates are legitimate. -->
+              <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="repetitive()">
+                <input type="checkbox"
+                       [checked]="repetitive()"
+                       (change)="setRepetitive($any($event.target).checked)" />
+                <span>Repetitive (timed series)</span>
+              </label>
+            }
             <span class="pf-picker-summary" [class.pf-picker-summary--on]="packageItems().length > 0">
               <strong>{{ packageItems().length }}</strong>
-              {{ packageItems().length === 1 ? 'member' : 'members' }}
+              @if (repetitiveActive()) {
+                {{ packageItems().length === 1 ? 'draw' : 'draws' }}
+              } @else {
+                {{ packageItems().length === 1 ? 'member' : 'members' }}
+              }
               <span class="pf-picker-summary__sep">·</span>
               <strong>{{ packageMembersTotal() | inr }}</strong>
             </span>
           </div>
+
+          @if (repetitiveActive()) {
+            <!-- ── The timed series: the AUTHORED order of draws ─────────
+                 Rows sharing an offset render inside ONE "time point" card
+                 (they're drawn together and get the same offsetMin). Drag a
+                 row into another card to move it there; edit any row's offset
+                 to split it out into its own time point; the pin merges a row
+                 into the time point ABOVE it. The first group is always the
+                 0-minute draw — offsets rebase so the earliest draw reads 0. -->
+            @if (memberGroups().length === 0) {
+              <p class="pf-series-empty">
+                No draws yet — tick tests below to build the series.
+              </p>
+            } @else {
+              <div class="pf-series" cdkDropListGroup>
+                @for (g of memberGroups(); track g.offsetMin; let gi = $index; let gFirst = $first) {
+                  <div class="pf-tp">
+                    <div class="pf-tp__hdr">
+                      @if (gFirst) {
+                        <span class="pf-tp__badge pf-tp__badge--first">First draw</span>
+                      } @else {
+                        <span class="pf-tp__badge">+{{ g.offsetMin }} min</span>
+                      }
+                      <span class="pf-tp__count">{{ g.rows.length }} {{ g.rows.length === 1 ? 'test' : 'tests' }}</span>
+                    </div>
+                    <ul class="pf-tp__list" cdkDropList
+                        [cdkDropListData]="gi"
+                        (cdkDropListDropped)="dropSeriesRow($event)">
+                      @for (r of g.rows; track r.key) {
+                        <li class="pf-tp-row" cdkDrag>
+                          <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true">⠿</span>
+                          <span class="pf-tp-row__name">{{ memberName(r.testId) }}</span>
+                          <label class="pf-tp-row__off">
+                            <input type="number" inputmode="numeric" min="0" step="5"
+                                   class="pf-input pf-input--compact pf-tp-row__num"
+                                   title="Minutes from the first draw"
+                                   [value]="r.offsetMin"
+                                   (change)="setRowOffset(r.key, $any($event.target).value)" />
+                            <span class="pf-tp-row__unit">min</span>
+                          </label>
+                          @if (!gFirst) {
+                            <button type="button" class="pf-tp-row__btn press"
+                                    title="Pin — merge this draw into the time point above"
+                                    (click)="pinRow(r.key)">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 17v5"/>
+                                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+                              </svg>
+                            </button>
+                          }
+                          <button type="button" class="pf-tp-row__btn pf-tp-row__btn--danger press"
+                                  title="Remove this draw"
+                                  (click)="removeSeriesRow(r.key)">✕</button>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+              </div>
+            }
+          }
 
           <div class="pf-picker-toolbar">
             @if (d.type === 'package') {
@@ -1040,6 +1138,103 @@ function newFieldId(): string {
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.4);
       color: var(--text-primary);
+    }
+
+    /* ── Repetitive (timed series) profiles ── */
+    /* Pill toggle in the picker head — same chip language as the summary. */
+    .pf-rep-toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      font-size: 12.5px; font-weight: 600;
+      white-space: nowrap;
+      border-radius: 9999px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .pf-rep-toggle:hover { border-color: rgba(168, 85, 247, 0.45); }
+    .pf-rep-toggle--on {
+      background: rgba(168, 85, 247, 0.14);
+      border-color: rgba(168, 85, 247, 0.5);
+      color: var(--text-primary);
+    }
+    .pf-rep-toggle input[type="checkbox"] { width: 15px; height: 15px; accent-color: #a855f7; flex-shrink: 0; }
+
+    .pf-series-empty {
+      margin: 0 0 16px;
+      padding: 18px 12px;
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--text-tertiary);
+      border: 1px dashed var(--glass-border);
+      border-radius: 12px;
+    }
+    .pf-series { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+
+    /* One "time point" card = every draw sharing an offsetMin. */
+    .pf-tp {
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 8px 10px 10px;
+    }
+    .pf-tp__hdr { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; }
+    .pf-tp__badge {
+      padding: 2px 10px;
+      font-size: 10.5px; font-weight: 800;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      border-radius: 9999px;
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: var(--violet-text, #c4b5fd);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-tp__badge--first {
+      background: rgba(52, 211, 153, 0.12);
+      border-color: rgba(52, 211, 153, 0.4);
+      color: #34d399;
+    }
+    .pf-tp__count { font-size: 11px; color: var(--text-tertiary); }
+    .pf-tp__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-height: 8px; }
+
+    .pf-tp-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+    }
+    .pf-tp-row__grip { cursor: grab; color: var(--text-tertiary); flex-shrink: 0; user-select: none; }
+    .pf-tp-row__name {
+      flex: 1 1 auto; min-width: 0;
+      font-size: 13px; font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-tp-row__off { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .pf-tp-row__num { width: 64px; text-align: right; margin-bottom: 0; }
+    .pf-tp-row__unit { font-size: 11px; color: var(--text-tertiary); }
+    .pf-tp-row__btn {
+      width: 28px; height: 28px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--glass-border);
+      background: transparent;
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+    .pf-tp-row__btn:hover { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.5); }
+    .pf-tp-row__btn--danger:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.5); }
+
+    /* CDK drag ghosts for series rows */
+    .cdk-drag-preview.pf-tp-row { opacity: 0.9; }
+    .pf-tp__list .cdk-drag-placeholder { opacity: 0.25; }
+    .pf-tp__list.cdk-drop-list-dragging .pf-tp-row { transition: transform 200ms ease; }
+
+    @media (pointer: coarse) {
+      .pf-tp-row__btn { width: 36px; height: 36px; }
     }
 
     /* Toolbar: pill filter + search on one row (wraps on narrow widths). */
@@ -1731,8 +1926,118 @@ export class TestEditorComponent implements OnInit {
   // key holding test ids. The picker reads/writes this signal which
   // serialise into `parametersJson` at save time.
   private readonly _packageItems = signal<string[]>([]);
-  readonly packageItems = this._packageItems.asReadonly();
   readonly packageQuery = signal('');
+
+  // ── Repetitive (timed series) profile state ─────────────────
+  // A repetitive profile is an ORDERED series of draws: each row is one test
+  // performance carrying a minutes-from-first-draw offset, and the same test
+  // may appear in several rows (OGTT = Glucose at 0/60/120). When repetitive
+  // is ON, `_memberRows` is the source of truth and the plain `_packageItems`
+  // list (the non-repetitive path) is kept in sync as the DISTINCT ids so
+  // flipping the toggle never loses members.
+  readonly repetitive = signal(false);
+  private readonly _memberRows = signal<MemberRow[]>([]);
+  /** Repetitive semantics only apply while the draft IS a profile — packages
+   *  and individuals always take the classic `_packageItems` path. */
+  readonly repetitiveActive = computed(() => this._draft().type === 'profile' && this.repetitive());
+  /** Effective member ids: row-per-draw when repetitive (duplicates included —
+   *  each draw is one performed test), else the classic distinct-id list. */
+  readonly packageItems = computed<string[]>(() =>
+    this.repetitiveActive() ? this._memberRows().map(r => r.testId) : this._packageItems());
+
+  /** Rows bucketed into "time point" cards. Rows are ALWAYS normalized (sorted
+   *  by offset, earliest rebased to 0), so consecutive runs == offset groups. */
+  readonly memberGroups = computed<{ offsetMin: number; rows: MemberRow[] }[]>(() => {
+    const groups: { offsetMin: number; rows: MemberRow[] }[] = [];
+    for (const r of this._memberRows()) {
+      const last = groups[groups.length - 1];
+      if (last && last.offsetMin === r.offsetMin) last.rows.push(r);
+      else groups.push({ offsetMin: r.offsetMin, rows: [r] });
+    }
+    return groups;
+  });
+
+  /** Sort rows into series order and rebase so the earliest draw is minute 0.
+   *  Array.prototype.sort is stable, so authored order within a time point is
+   *  preserved. Removing the whole first draw shifts the rest back (OGTT minus
+   *  its 0-min draw: 60/120 → 0/60), keeping "minutes from FIRST draw" honest. */
+  private normalizeRows(rows: MemberRow[]): MemberRow[] {
+    if (rows.length === 0) return rows;
+    const sorted = rows.slice().sort((a, b) => a.offsetMin - b.offsetMin);
+    const min = sorted[0].offsetMin;
+    return min === 0 ? sorted : sorted.map(r => ({ ...r, offsetMin: r.offsetMin - min }));
+  }
+
+  /** Single write path for the series — normalizes, then mirrors the distinct
+   *  ids into `_packageItems` so the non-repetitive path never goes stale. */
+  private setRows(rows: MemberRow[]) {
+    const normalized = this.normalizeRows(rows);
+    this._memberRows.set(normalized);
+    this._packageItems.set([...new Set(normalized.map(r => r.testId))]);
+  }
+
+  /** Flip the series mode. ON reconciles rows with the ticked members (kept
+   *  rows preserve their offsets; new ids join the first draw); OFF collapses
+   *  the rows back to a distinct member list. */
+  setRepetitive(on: boolean) {
+    this.repetitive.set(on);
+    if (on) {
+      const ids = this._packageItems();
+      const wanted = new Set(ids);
+      const rows = this._memberRows().filter(r => wanted.has(r.testId));
+      const have = new Set(rows.map(r => r.testId));
+      for (const id of ids) {
+        if (!have.has(id)) rows.push({ key: newRowKey(), testId: id, offsetMin: 0 });
+      }
+      this._memberRows.set(this.normalizeRows(rows));
+    } else {
+      this._packageItems.set([...new Set(this._memberRows().map(r => r.testId))]);
+    }
+  }
+
+  /** Picker-catalog name for a series row (rows store ids only). */
+  memberName(testId: string): string {
+    return this._memberById().get(testId)?.name ?? '(unknown test)';
+  }
+
+  /** Commit a row's edited offset (on change, not per-keystroke, so the group
+   *  re-sort doesn't yank the input mid-typing). Editing is how a draw SPLITS
+   *  out of a time point — set a new offset and it becomes its own group. */
+  setRowOffset(key: string, raw: unknown) {
+    const n = Number(raw);
+    const offsetMin = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+    this.setRows(this._memberRows().map(r => r.key === key ? { ...r, offsetMin } : r));
+  }
+
+  /** Pin = merge this draw into the time point ABOVE its own. */
+  pinRow(key: string) {
+    const groups = this.memberGroups();
+    const gi = groups.findIndex(g => g.rows.some(r => r.key === key));
+    if (gi <= 0) return; // first group has nothing above it
+    const target = groups[gi - 1].offsetMin;
+    this.setRows(this._memberRows().map(r => r.key === key ? { ...r, offsetMin: target } : r));
+  }
+
+  removeSeriesRow(key: string) {
+    this.setRows(this._memberRows().filter(r => r.key !== key));
+  }
+
+  /** Drag-drop between/within time-point cards. Each card is a cdkDropList
+   *  carrying its GROUP INDEX as data; a dropped row adopts the destination
+   *  group's offset (the simple, predictable rule). */
+  dropSeriesRow(ev: CdkDragDrop<number>) {
+    const from = ev.previousContainer.data;
+    const to = ev.container.data;
+    if (from === to && ev.previousIndex === ev.currentIndex) return;
+    const groups = this.memberGroups().map(g => ({ offsetMin: g.offsetMin, rows: g.rows.slice() }));
+    const src = groups[from];
+    const dst = groups[to];
+    if (!src || !dst) return;
+    const [moved] = src.rows.splice(ev.previousIndex, 1);
+    if (!moved) return;
+    dst.rows.splice(ev.currentIndex, 0, { ...moved, offsetMin: dst.offsetMin });
+    this.setRows(groups.flatMap(g => g.rows));
+  }
 
   /** All individual tests in the catalog — feeds the package picker. */
   private readonly _allIndividualTests = signal<Test[]>([]);
@@ -1776,10 +2081,11 @@ export class TestEditorComponent implements OnInit {
   });
 
   /** Sum of the prices of ALL picked members (tests AND profiles). Helps
-   *  admins set a sensible bundle price below the member total. */
+   *  admins set a sensible bundle price below the member total. Repetitive
+   *  series price EVERY row — each draw is a separately performed test. */
   readonly packageMembersTotal = computed(() => {
     const by = this._memberById();
-    return this._packageItems().reduce((s, id) => s + (by.get(id)?.price ?? 0), 0);
+    return this.packageItems().reduce((s, id) => s + (by.get(id)?.price ?? 0), 0);
   });
 
   /** Group the picker's candidates by dept (profiles cluster under a synthetic
@@ -1813,7 +2119,7 @@ export class TestEditorComponent implements OnInit {
     // there was no way to see what the bundle actually contained without
     // scrolling the whole catalogue. Members still appear in their own
     // department below, so unticking works from either place.
-    const chosen = new Set(this._packageItems());
+    const chosen = new Set(this.packageItems());
     if (chosen.size > 0) {
       const picked = this.pickerSource()
         .filter(t => chosen.has(t.id))
@@ -1823,8 +2129,17 @@ export class TestEditorComponent implements OnInit {
     return out;
   });
 
-  isInPackage(id: string): boolean { return this._packageItems().includes(id); }
+  isInPackage(id: string): boolean { return this.packageItems().includes(id); }
   togglePackageMember(id: string) {
+    if (this.repetitiveActive()) {
+      // Repetitive: every tick APPENDS a draw (duplicates are legitimate — a
+      // repeat draw of the same test). It joins the LAST time point; removal
+      // happens only via the series row's ✕, never by unticking.
+      const rows = this._memberRows();
+      const offsetMin = rows.length > 0 ? rows[rows.length - 1].offsetMin : 0;
+      this.setRows([...rows, { key: newRowKey(), testId: id, offsetMin }]);
+      return;
+    }
     this._packageItems.update(arr => arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
   }
 
@@ -1898,12 +2213,35 @@ export class TestEditorComponent implements OnInit {
         // editor used to write (which the backend read as ZERO members — so
         // packages saved here never exploded at order time).
         const items = Array.isArray(blob.items) ? blob.items : [];
-        this._packageItems.set(items
+        const ids: string[] = items
           .map((it: unknown) => typeof it === 'string' ? it : ((it as { testId?: string })?.testId ?? ''))
-          .filter((id: string) => id.length > 0));
-      } catch { this._packageItems.set([]); }
+          .filter((id: string) => id.length > 0);
+        this._packageItems.set([...new Set(ids)]);
+        // Repetitive profiles additionally carry per-row offsets — rebuild the
+        // ordered series (row order = authored order; offsetMin defaults to 0).
+        if (t.type === 'profile' && blob.repetitive === true) {
+          this.repetitive.set(true);
+          this._memberRows.set(this.normalizeRows(items
+            .map((it: unknown) => {
+              const o = it as { testId?: string; offsetMin?: number };
+              const testId = typeof it === 'string' ? it : (o?.testId ?? '');
+              const n = Number(typeof it === 'string' ? 0 : o?.offsetMin);
+              return { key: newRowKey(), testId, offsetMin: Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0 };
+            })
+            .filter((r: MemberRow) => r.testId.length > 0)));
+        } else {
+          this.repetitive.set(false);
+          this._memberRows.set([]);
+        }
+      } catch {
+        this._packageItems.set([]);
+        this._memberRows.set([]);
+        this.repetitive.set(false);
+      }
     } else {
       this._packageItems.set([]);
+      this._memberRows.set([]);
+      this.repetitive.set(false);
     }
   }
 
@@ -2132,8 +2470,14 @@ export class TestEditorComponent implements OnInit {
         this.toasts.warning('Profile code is required');
         return;
       }
-      if (this._packageItems().length === 0) {
+      if (this.packageItems().length === 0) {
         this.toasts.warning('Add at least one member test to the profile');
+        return;
+      }
+      // A timed series with a single time point is just a plain profile — the
+      // whole point is draws at DIFFERENT offsets (0/60/120…).
+      if (this.repetitive() && new Set(this._memberRows().map(r => r.offsetMin)).size < 2) {
+        this.toasts.warning('A timed series needs at least two time points');
         return;
       }
     }
@@ -2152,8 +2496,18 @@ export class TestEditorComponent implements OnInit {
     // backend exploder (ParsePackageChildIds) and order-create's
     // parsePackageMembers read. The previous plain-string array parsed as zero
     // members, so editor-saved packages silently never exploded at order time.
+    // Repetitive profiles serialise the ORDERED series with offsets — the
+    // shape the backend contract reads: {"repetitive":true,"items":[{"testId",
+    // "offsetMin"}]} with row order = authored order, first group at 0 and
+    // offsets non-decreasing (guaranteed by normalizeRows). Everything else
+    // keeps the classic { items: [{ testId }] } shape byte-for-byte.
     const parametersJson = bundle
-      ? JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) })
+      ? (d.type === 'profile' && this.repetitive()
+          ? JSON.stringify({
+              repetitive: true,
+              items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin }))
+            })
+          : JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) }))
       : (d.parametersJson || undefined);
 
     // Outsourcing: only individual tests can be outsourced. When a vendor is

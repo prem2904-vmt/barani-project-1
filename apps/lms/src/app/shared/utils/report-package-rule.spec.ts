@@ -61,6 +61,38 @@ describe('report never shows a package name', () => {
     expect(s).toContain('COMPLETE BLOOD COUNT');
   });
 
+  it('consolidates a timed series into ONE profile block with (N min) rows', () => {
+    // OGTT: the SAME test drawn at three time points, each its own tube in the
+    // lab — the report compiles them under the profile with time suffixes,
+    // and a missed point still prints (its value renders as a dash).
+    const s = renderText([
+      T('Glucose', { testId: 'a', packageTestId: 'ogtt', packageName: 'OGTT', packageType: 'profile', profileTestId: 'ogtt', profileName: 'Oral Glucose Tolerance', repeatOffsetMin: 0,
+        result: { values: { Glucose: { value: '92', unit: 'mg/dL', range: '70-99' } } } }),
+      T('Glucose', { testId: 'a', packageTestId: 'ogtt', packageName: 'OGTT', packageType: 'profile', profileTestId: 'ogtt', profileName: 'Oral Glucose Tolerance', repeatOffsetMin: 60,
+        result: { values: { Glucose: { value: '148', unit: 'mg/dL', range: '<140' } } } }),
+      T('Glucose', { testId: 'a', packageTestId: 'ogtt', packageName: 'OGTT', packageType: 'profile', profileTestId: 'ogtt', profileName: 'Oral Glucose Tolerance', repeatOffsetMin: 120,
+        status: 'missed', result: null }),
+    ]);
+    // NB: PDF literal strings escape parens — "(0 MIN)" is emitted as
+    // "\(0 MIN\)" — so the assertions match without the brackets.
+    expect(s).toContain('ORAL GLUCOSE TOLERANCE');
+    expect(s).toContain('0 MIN');
+    expect(s).toContain('60 MIN');
+    expect(s).toContain('120 MIN');
+  });
+
+  it('leaves self-naming series members without a suffix', () => {
+    // Distinct member names (v1.1 style: "OGTT – 30 Minutes") need no
+    // disambiguation — suffixing them would just be noise.
+    const s = renderText([
+      T('OGTT Fasting', { testId: 'a', packageTestId: 'ogtt', packageName: 'OGTT', packageType: 'profile', profileTestId: 'ogtt', profileName: 'Oral Glucose Tolerance', repeatOffsetMin: 0 }),
+      T('OGTT One Hour', { testId: 'b', packageTestId: 'ogtt', packageName: 'OGTT', packageType: 'profile', profileTestId: 'ogtt', profileName: 'Oral Glucose Tolerance', repeatOffsetMin: 60 }),
+    ]);
+    expect(s).toContain('OGTT FASTING');
+    expect(s).not.toContain('0 MIN');
+    expect(s).not.toContain('60 MIN');
+  });
+
   it('keeps legacy snapshots (no packageType) on the old grouping', () => {
     // Old snapshots cannot distinguish profile from package; degrading them to
     // ungrouped rows would rewrite existing reports' appearance.
