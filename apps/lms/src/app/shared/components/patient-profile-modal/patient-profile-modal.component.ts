@@ -117,7 +117,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                              (input)="setDraftField('firstName', $any($event.target).value)" />
                     </label>
                     <label>
-                      <span>Father's name</span>
+                      <span>Last name</span>
                       <input class="pf-pp-input" [value]="draft().fathersName"
                              (input)="setDraftField('fathersName', $any($event.target).value)" />
                     </label>

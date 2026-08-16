@@ -117,7 +117,7 @@ const PAGE_SIZE = 20;
 
               <label class="pf-aps-field" style="grid-area: name">
                 <span class="pf-aps-lbl">Patient name</span>
-                <input type="text" class="pf-aps-inp" placeholder="First or father's name"
+                <input type="text" class="pf-aps-inp" placeholder="First or last name"
                        [value]="filters().name"
                        (input)="setFilter('name', $any($event.target).value)" />
               </label>
