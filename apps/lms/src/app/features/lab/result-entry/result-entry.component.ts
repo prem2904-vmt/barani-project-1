@@ -13,6 +13,8 @@ import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shar
 import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
+import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { AuthService } from '../../../core/auth/auth.service';
 import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { CalcContext, ageYearsFromDob, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
@@ -81,7 +83,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     NumPadComponent,
     TileComponent,
     SelectComponent,
-    CultureEntryComponent
+    CultureEntryComponent,
+    EditResultDialogComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -109,6 +112,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
           <!-- Primary & secondary actions right-aligned in the header -->
           <div class="pf-head__actions">
+            @if (canEditResult() && editOrderId()) {
+              <!-- Submitted or signed off already? Pull the work back for correction. -->
+              <button type="button" class="pf-head__btn pf-head__btn--ghost press"
+                      (click)="editDialogOpen.set(true)" aria-label="Edit result">
+                Edit
+              </button>
+            }
             <button type="button" class="pf-head__btn pf-head__btn--ghost press"
                     (click)="rejectSample()" aria-label="Reject sample">
               Reject
@@ -130,6 +140,15 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           </div>
         </div>
       </header>
+
+      @if (editDialogOpen() && editOrderId(); as oid) {
+        <pf-edit-result-dialog
+          [orderId]="oid"
+          title="Send results back for correction"
+          (edited)="onEdited()"
+          (closed)="editDialogOpen.set(false)">
+        </pf-edit-result-dialog>
+      }
 
       <!-- Body: static chrome around a scrolling param list.
            Mobile (<md): single col, FAB opens numpad drawer.
@@ -2762,6 +2781,27 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;
+
+  private readonly auth = inject(AuthService);
+
+  // ── Post-result edit ──────────────────────────────────
+  // edit_result: Lab Technician, Pathologist, Lab Admin — never front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  readonly editDialogOpen = signal(false);
+  /** The dialog acts on the ORDER — read it off this test's sample. */
+  readonly editOrderId = computed(() =>
+    this._ot()?.subOrder?.orderId ?? this._ot()?.subOrder?.order?.id ?? null);
+
+  /** Re-opened work changes this test's status/assignee — reload it. */
+  onEdited() {
+    this.editDialogOpen.set(false);
+    const id = this._ot()?.id;
+    if (!id) return;
+    this.api.get<OrderTest>(`/api/results/${id}`).subscribe({
+      next: t => this._ot.set(t),
+      error: () => { /* the dialog's toast already reported the outcome */ }
+    });
+  }
 
   private readonly _ot = signal<OrderTest | null>(null);
   private readonly _saving = signal(false);

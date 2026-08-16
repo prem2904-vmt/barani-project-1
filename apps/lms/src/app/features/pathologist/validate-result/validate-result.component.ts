@@ -13,6 +13,8 @@ import { CultureResult } from '../../../shared/models/culture.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { AuthService } from '../../../core/auth/auth.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
@@ -57,7 +59,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -77,8 +79,27 @@ interface ValueRow {
           </button>
           <h1 class="pf-head__title">{{ selected()?.test?.name ?? 'Validate' }}</h1>
           <p class="pf-head__sub">{{ subtitleText() }}</p>
+          @if (canEditResult() && editOrderId()) {
+            <!-- Send this order's work back to a technician for correction. -->
+            <button type="button" class="pf-vr-edit press" (click)="editDialogOpen.set(true)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+              </svg>
+              <span>Edit</span>
+            </button>
+          }
         </div>
       </header>
+
+      @if (editDialogOpen() && editOrderId(); as oid) {
+        <pf-edit-result-dialog
+          [orderId]="oid"
+          title="Send results back for correction"
+          (edited)="onEdited()"
+          (closed)="editDialogOpen.set(false)">
+        </pf-edit-result-dialog>
+      }
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
         @if (loading() && !selected()) {
@@ -570,6 +591,20 @@ interface ValueRow {
       flex-wrap: wrap;
       padding: 6px 0 10px;
     }
+    /* "Edit" — hand the work back to a technician. Sits at the end of the
+       header row; its own affordance because .pf-head__back is retired. */
+    .pf-vr-edit {
+      margin-left: auto;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9px;
+      font-size: 12.5px; font-weight: 600;
+      cursor: pointer;
+      color: var(--violet-text, #c4b5fd);
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+    }
+    .pf-vr-edit:hover { background: rgba(168, 85, 247, 0.2); }
     /* Legacy desktop text pill — retired at ALL widths. The single back
        affordance is now the .pf-hdr-back chevron, rendered on every breakpoint. */
     .pf-head__back {
@@ -1443,6 +1478,22 @@ interface ValueRow {
 export class ValidateResultComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
+
+  // ── Post-result edit ──────────────────────────────────
+  // edit_result: Lab Technician, Pathologist, Lab Admin — never front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  readonly editDialogOpen = signal(false);
+  /** The dialog works per ORDER — take it off the loaded test's sample. */
+  readonly editOrderId = computed(() =>
+    this.selected()?.subOrder?.orderId ?? this.selected()?.subOrder?.order?.id ?? null);
+
+  /** Re-opened work leaves the validation queue — reload what this screen
+   *  fetches so the (now empty) state is honest. */
+  onEdited() {
+    this.editDialogOpen.set(false);
+    this.ngOnInit();
+  }
 
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);

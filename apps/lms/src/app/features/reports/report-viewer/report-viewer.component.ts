@@ -19,6 +19,7 @@ import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.compone
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 
 interface ReportData {
@@ -108,7 +109,8 @@ function coerceCellText(raw: unknown): string {
     ChipComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
-    LoadingLogoComponent
+    LoadingLogoComponent,
+    EditResultDialogComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -120,6 +122,19 @@ function coerceCellText(raw: unknown): string {
         [subtitle]="subtitle()">
         @if (report()) {
           <ng-container actions>
+            <!-- Post-result correction: pulls the chosen departments back into
+                 the technicians' My Work (audited, amended report on re-sign). -->
+            @if (canEditResult()) {
+              <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openEditDialog()">
+                <span icon-left aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+                  </svg>
+                </span>
+                <span class="pf-rv-action-label">Edit</span>
+              </pf-touch-btn>
+            }
             <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="print()">
               <span icon-left aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -152,6 +167,15 @@ function coerceCellText(raw: unknown): string {
           </ng-container>
         }
       </pf-screen-header>
+
+      @if (editDialogOpen() && report(); as r) {
+        <pf-edit-result-dialog
+          [orderId]="r.orderId"
+          title="Edit this report's results"
+          (edited)="onEdited()"
+          (closed)="editDialogOpen.set(false)">
+        </pf-edit-result-dialog>
+      }
 
       @if (chatPickerOpen()) {
         <div class="pf-rv-share-backdrop pf-sheet" (click)="closeSharePicker()">
@@ -960,6 +984,27 @@ export class ReportViewerComponent implements OnInit {
   private readonly _tpl = signal<ReportTemplate | null>(null);
   readonly report = this._report.asReadonly();
   readonly tpl = this._tpl.asReadonly();
+
+  // ── Post-result edit ──────────────────────────────────
+  // edit_result is held by Lab Technician, Pathologist and Lab Admin —
+  // deliberately not the front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  readonly editDialogOpen = signal(false);
+
+  openEditDialog() { this.editDialogOpen.set(true); }
+
+  /** The corrected results left this report behind — reload so the viewer
+   *  reflects the new state (and the PDF is rebuilt from fresh data). */
+  onEdited() {
+    this.editDialogOpen.set(false);
+    const id = this._report()?.id;
+    if (!id) return;
+    this._pdfBlob = null;
+    this.api.get<Report>(`/api/reports/${id}`).subscribe({
+      next: r => { this._report.set(r); this.resolveLayouts(); },
+      error: () => { /* the toast from the dialog already told the story */ }
+    });
+  }
 
   // ── Inline PDF view ─────────────────────────────────────
   // The on-screen report is the SAME jsPDF file the Download button
