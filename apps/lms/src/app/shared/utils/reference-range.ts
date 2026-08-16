@@ -97,7 +97,32 @@ export function matchReferenceRange<T extends RangeLike>(
  * Mirrors `ReferenceRangeResolver.DeriveLabel`.
  */
 export function deriveRangeLabel(r: RangeLike): string | null {
-  if (r.label && r.label.trim()) return r.label.trim();
+  const raw = r.label?.trim();
+  const structured = r.min != null || r.max != null;
+  if (raw) {
+    // Unstructured band: the label IS the range statement — verbatim.
+    if (!structured) return raw;
+    // A VALUE token is numeric with no letters ("100–125", "<140", "≥6.5",
+    // "5.7–6.4%") — an ordinal like "2nd" stays a word. A label without
+    // value tokens is a clean name — keep it verbatim.
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    const hasValueToken = tokens.some(t => /\d/.test(t) && !/[a-zA-Z]/.test(t));
+    if (!hasValueToken) return raw;
+    // Value tokens inside a structured band's label = the document clause
+    // the numbers were parsed FROM ("Prediabetes: 100–125") — printing it
+    // next to formatRange duplicated the range. Salvage a crisp 1–2 word
+    // tier name; otherwise fall through to segment/sex/age.
+    const words = tokens
+      .filter(w => /[a-zA-Z]/.test(w))
+      .map(w => w.replace(/^[:;,()]+|[:;,()]+$/g, ''))
+      .filter(w => w.length > 0);
+    if (words.length >= 1 && words.length <= 2) {
+      // Sentence-case the salvage — clauses arrive lowercased ("optimal",
+      // "near optimal") and a report header shouldn't.
+      const salvaged = words.join(' ');
+      return salvaged[0].toUpperCase() + salvaged.slice(1);
+    }
+  }
 
   const rSex = (r.sex && r.sex !== 'any') ? r.sex : parseSegmentSex(r.segment);
   const sexWord = rSex === 'M' ? 'Male' : rSex === 'F' ? 'Female' : null;
@@ -186,9 +211,15 @@ export function describeAllRanges(ranges: readonly RangeLike[] | undefined | nul
   const out: string[] = [];
   for (const r of ranges) {
     const text = formatRange(r);
-    if (!text) continue;
     const label = deriveRangeLabel(r);
-    out.push(label ? `${label} ${text}` : text);
+    if (!text) {
+      // A band with no printable values keeps its line only when it carries
+      // an AUTHORED label (method notes) — a derived qualifier alone
+      // ("Female") would be noise.
+      if (r.label?.trim() && label) out.push(label);
+      continue;
+    }
+    out.push(label ? `${label}: ${text}` : text);
   }
   return out;
 }

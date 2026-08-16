@@ -83,11 +83,11 @@ describe('matchReferenceRange', () => {
 describe('describeAllRanges', () => {
   it('labels every band for the show-them-all case', () => {
     expect(describeAllRanges([M_ADULT, F_ADULT, CHILD]))
-      .toEqual(['Adult Male 13–17', 'Adult Female 12–15', 'Child 11–14']);
+      .toEqual(['Adult Male: 13–17', 'Adult Female: 12–15', 'Child: 11–14']);
   });
 
   it('skips bands that carry no printable values', () => {
-    expect(describeAllRanges([M_ADULT, { sex: 'F' }])).toEqual(['Adult Male 13–17']);
+    expect(describeAllRanges([M_ADULT, { sex: 'F' }])).toEqual(['Adult Male: 13–17']);
   });
 });
 
