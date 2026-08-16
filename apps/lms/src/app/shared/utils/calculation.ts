@@ -383,6 +383,31 @@ function tokenize(src: string): Tok[] | null {
   return toks;
 }
 
+/** Static check for an admin-authored expression: does it parse, and which
+ *  identifiers does it reference? Powers the formula composer's live
+ *  validation — unknown refs are the composer's job to flag (it knows the
+ *  sibling codes), grammar errors are ours. The dry-run assigns a distinct
+ *  prime to each identifier so legitimate formulas can't false-negative on
+ *  a coincidental division by zero (e.g. `A / (B - C)` with all-equal
+ *  stand-in values). */
+export function lintExpr(src: string): { ok: boolean; refs: string[] } {
+  const toks = tokenize(src);
+  if (!toks) return { ok: false, refs: [] };
+  const FNS = new Set(['min', 'max', 'pow']);
+  const refs: string[] = [];
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.k !== 'id') continue;
+    const name = String(t.v);
+    if (FNS.has(name.toLowerCase()) && toks[i + 1]?.k === '(') continue;
+    if (!refs.includes(name)) refs.push(name);
+  }
+  const primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
+  const stand = new Map(refs.map((r, i) => [r, primes[i % primes.length]]));
+  const ok = evalExpr(src, (n) => stand.get(n) ?? null) != null;
+  return { ok, refs };
+}
+
 /** Age in whole-ish years from an ISO date of birth, for the demographic
  *  formulas. Null when the dob is absent/invalid. */
 export function ageYearsFromDob(dob: string | null | undefined, now: Date = new Date()): number | null {

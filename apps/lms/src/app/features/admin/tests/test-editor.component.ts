@@ -22,7 +22,7 @@ import {
   ValidationPatch,
   hasOptions as registryHasOptions
 } from '../../../shared/forms';
-import { parseCalc, CalcDef } from '../../../shared/utils/calculation';
+import { parseCalc, lintExpr, CalcDef } from '../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -897,20 +897,80 @@ function newRowKey(): string {
                data), so any profile that includes such a member computes it
                at result entry automatically — including brand-new custom
                profiles. This card makes that visible while composing. -->
-          @if (calcMembers().length > 0) {
+          @if (d.type === 'profile' && (calcMembers().length > 0 || packageItems().length > 1)) {
             <div class="pf-calc-members">
-              <p class="pf-calc-members__hdr">Auto-calculated in this {{ d.type }}</p>
+              <p class="pf-calc-members__hdr">Auto-calculated in this profile</p>
               @for (m of calcMembers(); track m.id) {
                 <div class="pf-calc-members__row">
                   <span class="pf-calc-members__name">{{ m.name }}</span>
                   <code class="pf-calc-members__f">{{ m.line }}</code>
                   @if (m.gate) { <span class="pf-calc-members__gate">{{ m.gate }}</span> }
+                  <button type="button" class="pf-calc-editlink" (click)="openCalcEditor(m.id)">Edit</button>
                 </div>
               }
+              @if (calcMembers().length === 0) {
+                <p class="pf-calc-members__foot">None yet — pick a member below to receive a formula.</p>
+              }
+
+              @if (calcEdit(); as ce) {
+                <!-- ── Formula composer ─────────────────────────────────
+                     The admin's own math over the profile's member codes.
+                     Saved onto the TARGET member test (kind "expr"), so it
+                     computes in every profile that includes that member. -->
+                <div class="pf-calc-edit">
+                  <div>
+                    <label class="pf-label">Calculated test — receives the value</label>
+                    <select class="pf-input" [ngModel]="ce.targetId"
+                            (ngModelChange)="patchCalcEdit({ targetId: $event })">
+                      @for (opt of calcTargetOptions(); track opt.id) {
+                        <option [value]="opt.id">{{ opt.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div>
+                    <label class="pf-label">Formula — tap a code to insert it</label>
+                    <div class="pf-calc-edit__chips">
+                      @for (c of calcCodeChips(); track c.code) {
+                        <button type="button" class="pf-calc-chipbtn"
+                                [title]="c.name" (click)="appendCalcToken(c.code)">{{ c.code }}</button>
+                      }
+                      <button type="button" class="pf-calc-chipbtn pf-calc-chipbtn--var"
+                              title="Patient age in years" (click)="appendCalcToken('AGE')">AGE</button>
+                    </div>
+                    <input type="text" class="pf-input pf-calc-edit__expr" spellcheck="false"
+                           placeholder="e.g. BIO153 - BIO155 - (BIO154 / 5)"
+                           [ngModel]="ce.expr" (ngModelChange)="patchCalcEdit({ expr: $event })" />
+                  </div>
+                  <div>
+                    <label class="pf-label">Only calculate when — optional gate</label>
+                    <input type="text" class="pf-input" spellcheck="false"
+                           placeholder="e.g. BIO154 <= 400"
+                           [ngModel]="ce.validWhen" (ngModelChange)="patchCalcEdit({ validWhen: $event })" />
+                  </div>
+                  @if (calcEditWarning(); as warn) { <p class="pf-calc-edit__warn">{{ warn }}</p> }
+                  @if (calcEditError(); as err) { <p class="pf-calc-edit__err">{{ err }}</p> }
+                  <div class="pf-calc-edit__actions">
+                    <pf-touch-btn size="sm" variant="ghost" (pressed)="calcEdit.set(null)">Cancel</pf-touch-btn>
+                    @if (calcEditHasExisting()) {
+                      <pf-touch-btn size="sm" variant="ghost" (pressed)="removeCalc()">Remove formula</pf-touch-btn>
+                    }
+                    <pf-touch-btn size="sm"
+                                  [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()"
+                                  (pressed)="saveCalc()">
+                      {{ calcSaving() ? 'Saving…' : 'Save formula' }}
+                    </pf-touch-btn>
+                  </div>
+                </div>
+              } @else {
+                <div class="pf-calc-edit__actions">
+                  <pf-touch-btn size="sm" variant="ghost" (pressed)="openCalcEditor(null)">Compose a formula</pf-touch-btn>
+                </div>
+              }
+
               <p class="pf-calc-members__foot">
-                These fill in by themselves at result entry once their input tests are typed
-                (overridable). The formula travels with the member test — include it in any
-                new profile and the calculation comes along.
+                Calculated members fill in by themselves at result entry once their input tests
+                are typed (always overridable). The formula is saved on the member test itself,
+                so any profile — including a brand-new one — that picks the member computes it.
               </p>
             </div>
           }
@@ -1456,6 +1516,41 @@ function newRowKey(): string {
       font-size: 11px;
       color: var(--text-tertiary, rgba(255,255,255,0.55));
     }
+    .pf-calc-editlink {
+      margin-left: auto;
+      background: none; border: none; cursor: pointer;
+      font-size: 11px; font-weight: 700;
+      color: #c4b5fd;
+      padding: 2px 6px;
+    }
+    .pf-calc-edit {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      background: var(--glass-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .pf-calc-edit__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .pf-calc-chipbtn {
+      cursor: pointer;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 700;
+      background: rgba(167, 139, 250, 0.12);
+      border: 1px solid rgba(167, 139, 250, 0.32);
+      color: #c4b5fd;
+    }
+    .pf-calc-chipbtn--var {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.32);
+      color: #7dd3fc;
+    }
+    .pf-calc-edit__expr { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-calc-edit__err { font-size: 11.5px; color: #fda4af; }
+    .pf-calc-edit__warn { font-size: 11.5px; color: #fcd34d; }
+    .pf-calc-edit__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 
     /* ── Parameter row ── */
     .param-row {
@@ -2172,6 +2267,160 @@ export class TestEditorComponent implements OnInit {
     return (def.kind === 'expr' || def.kind === 'inr') && def.expr
       ? def.expr
       : this.calcKindLabel(def.kind);
+  }
+
+  // ── Formula composer (admin-authored calculations) ─────────────────
+  // The vision: every profile can define its own math — pick which member
+  // receives the value, write the expression over the sibling codes. The
+  // formula is PATCHed onto the target member test (kind "expr"), so the
+  // runtime path is identical to the master-shipped formulas and the math
+  // follows the member into any other profile.
+
+  readonly calcEdit = signal<{ targetId: string; expr: string; validWhen: string } | null>(null);
+  readonly calcSaving = signal(false);
+
+  /** Recognised non-code identifiers: patient age + the lab constants. */
+  private static readonly CALC_VARS = new Set(['AGE', 'ISI', 'MNPT', 'NORMAL_HCT']);
+
+  readonly calcTargetOptions = computed(() => {
+    const byId = this._memberById();
+    return this.packageItems()
+      .map(id => ({ id, name: byId.get(id)?.name ?? '(unknown test)' }));
+  });
+
+  /** Insertable code chips: every OTHER picked member that has a test code. */
+  readonly calcCodeChips = computed(() => {
+    const ce = this.calcEdit();
+    const byId = this._memberById();
+    const out: { code: string; name: string }[] = [];
+    for (const id of this.packageItems()) {
+      if (id === ce?.targetId) continue;
+      const t = byId.get(id);
+      const code = t?.testCode?.trim().toUpperCase();
+      if (t && code && !out.some(c => c.code === code)) out.push({ code, name: t.name });
+    }
+    return out;
+  });
+
+  readonly calcEditHasExisting = computed(() => {
+    const ce = this.calcEdit();
+    return !!ce && !!this.memberCalc(this._memberById().get(ce.targetId));
+  });
+
+  /** Replacing a special master equation (eGFR, RPI…) with plain math is
+   *  legal but worth a heads-up; restore-to-default brings the master back. */
+  readonly calcEditWarning = computed(() => {
+    const ce = this.calcEdit();
+    if (!ce) return null;
+    const def = this.memberCalc(this._memberById().get(ce.targetId));
+    if (def && def.kind !== 'expr' && def.kind !== 'inr')
+      return `This test currently uses the built-in ${this.calcKindLabel(def.kind)} equation — saving replaces it with your formula (Restore to default brings the master equation back).`;
+    return null;
+  });
+
+  readonly calcEditError = computed(() => {
+    const ce = this.calcEdit();
+    if (!ce) return null;
+    if (!ce.targetId) return 'Pick which test receives the calculated value.';
+    const codes = new Set(this.calcCodeChips().map(c => c.code));
+    const check = (src: string, what: string): string | null => {
+      const lint = lintExpr(src);
+      if (!lint.ok) return `The ${what} doesn't parse — check operators and brackets.`;
+      const unknown = lint.refs.filter(r =>
+        !codes.has(r.toUpperCase()) && !TestEditorComponent.CALC_VARS.has(r.toUpperCase()));
+      if (unknown.length > 0)
+        return `Unknown code${unknown.length > 1 ? 's' : ''} in the ${what}: ${unknown.join(', ')} — use the chips above (other members of this profile).`;
+      return null;
+    };
+    if (ce.expr.trim()) {
+      const e = check(ce.expr, 'formula');
+      if (e) return e;
+    }
+    if (ce.validWhen.trim()) {
+      const e = check(ce.validWhen, 'gate');
+      if (e) return e;
+    }
+    return null;
+  });
+
+  openCalcEditor(memberId: string | null) {
+    const ids = this.packageItems();
+    const target = memberId ?? ids[0] ?? '';
+    const def = this.memberCalc(this._memberById().get(target));
+    this.calcEdit.set({
+      targetId: target,
+      expr: def && (def.kind === 'expr' || def.kind === 'inr') ? (def.expr ?? '') : '',
+      validWhen: def?.validWhen ?? '',
+    });
+  }
+
+  patchCalcEdit(p: Partial<{ targetId: string; expr: string; validWhen: string }>) {
+    const ce = this.calcEdit();
+    if (!ce) return;
+    // Switching target re-seeds from that member's existing formula.
+    if (p.targetId && p.targetId !== ce.targetId) { this.openCalcEditor(p.targetId); return; }
+    this.calcEdit.set({ ...ce, ...p });
+  }
+
+  appendCalcToken(token: string) {
+    const ce = this.calcEdit();
+    if (!ce) return;
+    const sep = ce.expr.length === 0 || ce.expr.endsWith(' ') || ce.expr.endsWith('(') ? '' : ' ';
+    this.calcEdit.set({ ...ce, expr: ce.expr + sep + token });
+  }
+
+  saveCalc() {
+    const ce = this.calcEdit();
+    if (!ce || !ce.expr.trim() || this.calcEditError()) return;
+    const target = this._memberById().get(ce.targetId);
+    const refs = lintExpr(ce.expr).refs.concat(ce.validWhen.trim() ? lintExpr(ce.validWhen).refs : []);
+    const allRefs = [...new Set(refs.map(s => s.toUpperCase()))];
+    // Codes are inputs; ISI/MNPT/NORMAL_HCT are lab constants; AGE is
+    // neither — the evaluator supplies it from the patient record.
+    const inputs = allRefs.filter(r => !TestEditorComponent.CALC_VARS.has(r));
+    const constants = allRefs.filter(r => TestEditorComponent.CALC_VARS.has(r) && r !== 'AGE');
+    const def = {
+      kind: 'expr',
+      expr: ce.expr.trim(),
+      inputs,
+      constants,
+      ...(ce.validWhen.trim() ? { validWhen: ce.validWhen.trim() } : {}),
+      unit: target?.unit ?? undefined,
+      note: 'Authored in Test Master (profile formula composer).',
+    };
+    this.calcSaving.set(true);
+    this.api.patch<Test>(`/api/tests/${ce.targetId}`, { calculation: JSON.stringify(def) }).subscribe({
+      next: () => {
+        this._allIndividualTests.update(list =>
+          list.map(t => t.id === ce.targetId ? { ...t, calculation: JSON.stringify(def) } : t));
+        this.calcSaving.set(false);
+        this.calcEdit.set(null);
+        this.toasts.success(`${target?.name ?? 'Test'} now auto-calculates.`);
+      },
+      error: (e) => {
+        this.calcSaving.set(false);
+        this.toasts.error(ApiError.from(e).message);
+      },
+    });
+  }
+
+  removeCalc() {
+    const ce = this.calcEdit();
+    if (!ce) return;
+    this.calcSaving.set(true);
+    this.api.patch<Test>(`/api/tests/${ce.targetId}`, { calculation: '' }).subscribe({
+      next: () => {
+        this._allIndividualTests.update(list =>
+          list.map(t => t.id === ce.targetId ? { ...t, calculation: null } : t));
+        this.calcSaving.set(false);
+        this.calcEdit.set(null);
+        this.toasts.success('Formula removed.');
+      },
+      error: (e) => {
+        this.calcSaving.set(false);
+        this.toasts.error(ApiError.from(e).message);
+      },
+    });
   }
 
   /** The picked members that auto-compute, with their formula lines —

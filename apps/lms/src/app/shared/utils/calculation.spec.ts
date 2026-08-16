@@ -1,4 +1,4 @@
-import { evalExpr, evaluateCalc, parseCalc, ageYearsFromDob, CalcContext } from './calculation';
+import { evalExpr, evaluateCalc, parseCalc, ageYearsFromDob, lintExpr, CalcContext } from './calculation';
 
 const ctxOf = (vals: Record<string, number | null>, extra: Partial<CalcContext> = {}): CalcContext => ({
   value: (r) => vals[r],
@@ -119,6 +119,27 @@ describe('parseCalc', () => {
     expect(parseCalc('{"kind":"clinical_excluded"}')).toBeNull();
     expect(parseCalc('not json')).toBeNull();
     expect(parseCalc(null)).toBeNull();
+  });
+});
+
+describe('lintExpr', () => {
+  it('accepts valid formulas and lists their refs (functions excluded)', () => {
+    expect(lintExpr('BIO153 - BIO155 - (BIO154 / 5)')).toEqual({
+      ok: true, refs: ['BIO153', 'BIO155', 'BIO154'],
+    });
+    expect(lintExpr('pow(HEM106 / MNPT, ISI)')).toEqual({
+      ok: true, refs: ['HEM106', 'MNPT', 'ISI'],
+    });
+  });
+
+  it('rejects grammar errors', () => {
+    expect(lintExpr('BIO153 +').ok).toBe(false);
+    expect(lintExpr('BIO153 $ 2').ok).toBe(false);
+    expect(lintExpr('(BIO153').ok).toBe(false);
+  });
+
+  it('does not false-negative on subtraction inside a divisor', () => {
+    expect(lintExpr('BIO153 / (BIO154 - BIO155)').ok).toBe(true);
   });
 });
 
