@@ -97,4 +97,13 @@ describe('formatRange', () => {
     expect(formatRange({ min: 40 })).toBe('> 40');
     expect(formatRange({ min: 13, max: 17 })).toBe('13–17');
   });
+
+  it('renders inclusive one-sided bounds with their own glyphs', () => {
+    // Op absent = today's strict glyphs (above); an explicit inclusive op
+    // prints ≤/≥ so "140 is still normal" is visible.
+    expect(formatRange({ max: 140, maxOp: 'lte' })).toBe('≤ 140');
+    expect(formatRange({ min: 40, minOp: 'gte' })).toBe('≥ 40');
+    // Two-sided display is unchanged by ops.
+    expect(formatRange({ min: 13, max: 17, minOp: 'gte', maxOp: 'lte' })).toBe('13–17');
+  });
 });

@@ -107,6 +107,12 @@ export interface ReferenceRange {
   segment: string; // e.g. "Male adult", "Female adult", "0-1 yr"
   min?: number | null;
   max?: number | null;
+  // First-class bound comparators. Absent op = backward-compatible defaults:
+  // a two-sided band is inclusive on both bounds (min ≤ v ≤ max is normal),
+  // a one-sided band behaves/renders as strict `<`/`>`. 'lte'/'gte' make the
+  // boundary value normal and print ≤/≥. Mirrors mw `RangeDef.MinOp/MaxOp`.
+  minOp?: 'gt' | 'gte' | null;
+  maxOp?: 'lt' | 'lte' | null;
   unit?: string | null;
   // Structured selectors. When present the backend picks the band by the
   // patient's sex/age instead of parsing the free-text `segment` label.

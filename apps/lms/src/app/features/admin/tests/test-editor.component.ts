@@ -549,14 +549,35 @@ function newRowKey(): string {
                   </label>
                   <label class="flex flex-col gap-0.5 min-w-0">
                     <span class="pf-mini-lbl">Normal min</span>
-                    <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
-                                      [value]="r.min ?? null"
-                                      (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
-                    </pf-number-input>
+                    <div class="flex items-end gap-1">
+                      <!-- Lower-bound comparator. Shown value = the band's
+                           EFFECTIVE op (absent = inclusive ≥ when two-sided,
+                           strict > when one-sided); choosing one stores it
+                           explicitly so the band no longer relies on the
+                           default. -->
+                      <select class="pf-input pf-input--compact w-12 shrink-0"
+                              title="Lower-bound comparator"
+                              [ngModel]="minOpShown(r)"
+                              (ngModelChange)="patchRangeAt(i, $index, { minOp: $event })">
+                        <option value="gt">&gt;</option>
+                        <option value="gte">&ge;</option>
+                      </select>
+                      <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                        [value]="r.min ?? null"
+                                        (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
+                      </pf-number-input>
+                    </div>
                   </label>
                   <label class="flex flex-col gap-0.5 min-w-0">
                     <span class="pf-mini-lbl">Normal max</span>
                     <div class="flex items-end gap-1">
+                      <select class="pf-input pf-input--compact w-12 shrink-0"
+                              title="Upper-bound comparator"
+                              [ngModel]="maxOpShown(r)"
+                              (ngModelChange)="patchRangeAt(i, $index, { maxOp: $event })">
+                        <option value="lt">&lt;</option>
+                        <option value="lte">&le;</option>
+                      </select>
                       <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
                                         [value]="r.max ?? null"
                                         (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
@@ -2383,6 +2404,19 @@ export class TestEditorComponent implements OnInit {
       list.map((p, idx) => idx === i ? { ...p, ...updates } : p)
     );
     this.persistFieldsToDraft();
+  }
+
+  /**
+   * The comparator the band EFFECTIVELY uses on each bound, for the ≥/> and
+   * ≤/< selects. Op absent = the backward-compatible default: a two-sided
+   * band is inclusive on both bounds (min ≤ v ≤ max normal), a one-sided
+   * band is strict `<`/`>`. Picking a value stores it explicitly.
+   */
+  minOpShown(r: ReferenceRange): 'gt' | 'gte' {
+    return r.minOp ?? (r.max != null ? 'gte' : 'gt');
+  }
+  maxOpShown(r: ReferenceRange): 'lt' | 'lte' {
+    return r.maxOp ?? (r.min != null ? 'lte' : 'lt');
   }
 
   /** Patch one reference-range band (by index) of parameter `i`. */

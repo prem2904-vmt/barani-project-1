@@ -17,7 +17,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
-import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { flagAgainst, formatRange, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -36,7 +36,7 @@ interface ParamDef {
   options?: string[];
   criticalLow?: number;
   criticalHigh?: number;
-  referenceRanges?: Array<{ segment: string; min: number; max: number }>;
+  referenceRanges?: RangeLike[];
 }
 
 interface ValueRow {
@@ -1609,18 +1609,26 @@ export class ValidateResultComponent implements OnInit {
       const r = selectReferenceRange(p.referenceRanges ?? [], sex, ageYears);
       let flag: Flag = 'normal';
       if (isNum) {
-        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
+        // Critical is STRICT (< low / > high) — aligned with mw FlagOne,
+        // which used to disagree with the `<=`/`>=` here at the boundary.
+        if ((p.criticalLow != null && n < p.criticalLow) || (p.criticalHigh != null && n > p.criticalHigh)) flag = 'critical';
+        // Shared flag rule (mirrors mw): one-sided bands flag too, ops decide
+        // whether the boundary value is normal.
+        else {
+          const b = flagAgainst(r, n);
+          if (b === 'L' || b === 'H') flag = 'abnormal';
+        }
       }
+      const rangeText = formatRange(r); // handles one-sided bands (no more "undefined–140")
       return {
         name: p.name,
         title: p.title,
         value: v ?? '—',
         numeric: isNum ? n : undefined,
         unit: p.unit,
-        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
-        min: r?.min,
-        max: r?.max,
+        range: rangeText ? `${rangeText}${p.unit ? ' ' + p.unit : ''}` : undefined,
+        min: r?.min ?? undefined,
+        max: r?.max ?? undefined,
         critLow: p.criticalLow,
         critHigh: p.criticalHigh,
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),

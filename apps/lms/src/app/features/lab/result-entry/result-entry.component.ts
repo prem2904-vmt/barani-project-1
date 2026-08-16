@@ -13,7 +13,7 @@ import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shar
 import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
-import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -3127,9 +3127,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
     const r = this.rangeFor(p);
-    if (r && r.min != null && r.max != null) {
+    // Route through the shared formatter so one-sided bands ("< 200",
+    // "≤ 140") get a label too — they used to render blank here.
+    const text = formatRange(r);
+    if (r && text) {
       const seg = r.segment ? this.prettySegment(r.segment) : '';
-      return `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
+      return `${text}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
     }
     if (p.criticalLow !== undefined && p.criticalHigh !== undefined) return `${p.criticalLow}–${p.criticalHigh}`;
     return '';
@@ -3163,12 +3166,13 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (p.criticalLow  !== undefined && v < p.criticalLow)  return { tone: 'critical', label: `Critical · below ${p.criticalLow}` };
     if (p.criticalHigh !== undefined && v > p.criticalHigh) return { tone: 'critical', label: `Critical · above ${p.criticalHigh}` };
 
-    const r = this.rangeFor(p);
-    if (r && r.min != null && r.max != null) {
-      if (v < r.min) return { tone: 'low',  label: 'Low' };
-      if (v > r.max) return { tone: 'high', label: 'High' };
-      return { tone: 'normal', label: 'Normal' };
-    }
+    // Shared flag rule (mirrors mw FlagOne): flags when EITHER bound exists,
+    // so one-sided bands ("< 140", "≥ 40") finally flag instead of passing
+    // everything through silently.
+    const fl = flagAgainst(this.rangeFor(p), v);
+    if (fl === 'L') return { tone: 'low',  label: 'Low' };
+    if (fl === 'H') return { tone: 'high', label: 'High' };
+    if (fl === 'N') return { tone: 'normal', label: 'Normal' };
     return null;
   }
 

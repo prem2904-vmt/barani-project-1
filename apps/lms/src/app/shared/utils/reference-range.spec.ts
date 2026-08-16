@@ -1,4 +1,5 @@
 import {
+  flagAgainst,
   normalizeSex,
   parseSegmentAge,
   parseSegmentSex,
@@ -121,5 +122,43 @@ describe('selectReferenceRange', () => {
       { segment: 'Adult Female', min: 12, max: 15.5, sex: 'F', minAge: 18 }
     ];
     expect(selectReferenceRange(bands, 'F', 30)?.segment).toBe('Adult Female');
+  });
+});
+
+describe('flagAgainst', () => {
+  // The one implementation both result entry and validate-result flag with —
+  // mirrored by mw ResultFlaggingService.FlagOne; the boundary cases below are
+  // duplicated in ResultFlaggingServiceTests on purpose.
+
+  it('flags one-sided bands at all (the latent "< 200 never flags" bug)', () => {
+    expect(flagAgainst({ max: 140 }, 200)).toBe('H');
+    expect(flagAgainst({ max: 140 }, 100)).toBe('N');
+    expect(flagAgainst({ min: 40 }, 30)).toBe('L');
+    expect(flagAgainst({ min: 40 }, 50)).toBe('N');
+  });
+
+  it('treats an op-less one-sided bound as STRICT: 140 against "< 140" is High', () => {
+    expect(flagAgainst({ max: 140 }, 140)).toBe('H');
+    expect(flagAgainst({ min: 40 }, 40)).toBe('L');
+  });
+
+  it('treats an explicit inclusive op as ≤/≥: 140 against "≤ 140" is Normal', () => {
+    expect(flagAgainst({ max: 140, maxOp: 'lte' }, 140)).toBe('N');
+    expect(flagAgainst({ max: 140, maxOp: 'lte' }, 140.1)).toBe('H');
+    expect(flagAgainst({ min: 40, minOp: 'gte' }, 40)).toBe('N');
+    expect(flagAgainst({ min: 40, minOp: 'gte' }, 39.9)).toBe('L');
+  });
+
+  it('keeps op-less two-sided bands inclusive on both bounds (today, unchanged)', () => {
+    expect(flagAgainst({ min: 12, max: 16 }, 12)).toBe('N');
+    expect(flagAgainst({ min: 12, max: 16 }, 16)).toBe('N');
+    expect(flagAgainst({ min: 12, max: 16 }, 11.9)).toBe('L');
+    expect(flagAgainst({ min: 12, max: 16 }, 16.1)).toBe('H');
+  });
+
+  it('returns null when there is no band or no usable bound', () => {
+    expect(flagAgainst(undefined, 5)).toBeNull();
+    expect(flagAgainst(null, 5)).toBeNull();
+    expect(flagAgainst({ segment: 'normal' }, 5)).toBeNull();
   });
 });

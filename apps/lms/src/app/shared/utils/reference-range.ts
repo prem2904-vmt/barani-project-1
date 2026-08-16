@@ -15,6 +15,14 @@ export interface RangeLike {
   segment?: string;
   min?: number | null;
   max?: number | null;
+  /**
+   * First-class bound comparators. Backward-compatible defaults when an op is
+   * ABSENT: a two-sided band stays INCLUSIVE on both bounds (min ≤ v ≤ max is
+   * normal — today's semantics), while a one-sided band renders and flags as
+   * STRICT `<`/`>` (today's glyphs). Mirrors mw `RangeDef.MinOp/MaxOp`.
+   */
+  minOp?: 'gt' | 'gte' | null;
+  maxOp?: 'lt' | 'lte' | null;
   sex?: RangeSex;
   minAge?: number | null;
   maxAge?: number | null;
@@ -132,13 +140,40 @@ const prettify = (s: string): string =>
   s.replace(/[_-]+/g, ' ').split(' ').filter(Boolean)
     .map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 
-/** Band values as display text: "13–17", "< 200", "> 40". */
+/**
+ * Band values as display text: "13–17", "< 200", "> 40", "≤ 140", "≥ 40".
+ * Two-sided display is unchanged by ops; a one-sided bound prints ≤/≥ when its
+ * op is inclusive, else the strict default glyph. Mirrors `Format` (mw).
+ */
 export function formatRange(r: RangeLike | undefined | null): string | null {
   if (!r) return null;
   if (r.min != null && r.max != null) return `${num(r.min)}–${num(r.max)}`;
-  if (r.max != null) return `< ${num(r.max)}`;
-  if (r.min != null) return `> ${num(r.min)}`;
+  if (r.max != null) return `${r.maxOp === 'lte' ? '≤' : '<'} ${num(r.max)}`;
+  if (r.min != null) return `${r.minOp === 'gte' ? '≥' : '>'} ${num(r.min)}`;
   return null;
+}
+
+/**
+ * Flag a numeric value against ONE band — the client mirror of the flagging
+ * rule inside mw `ResultFlaggingService.FlagOne`, shared by result entry and
+ * validate-result so there is exactly one implementation.
+ *
+ * Flags when EITHER bound exists (one-sided bands used to render "< 200" but
+ * never flag). Op-absent defaults: a two-sided band stays inclusive-normal
+ * (min ≤ v ≤ max = 'N'); a one-sided bound is STRICT, so 140 against "< 140"
+ * is 'H'. An explicit inclusive op ('lte'/'gte') moves the boundary value back
+ * into normal. Returns null when there is no band or no usable bound.
+ */
+export function flagAgainst(
+  r: RangeLike | undefined | null,
+  value: number
+): 'L' | 'H' | 'N' | null {
+  if (!r || (r.min == null && r.max == null)) return null;
+  const minInclusive = r.minOp === 'gte' || (r.minOp == null && r.max != null);
+  const maxInclusive = r.maxOp === 'lte' || (r.maxOp == null && r.min != null);
+  if (r.min != null && (minInclusive ? value < r.min : value <= r.min)) return 'L';
+  if (r.max != null && (maxInclusive ? value > r.max : value >= r.max)) return 'H';
+  return 'N';
 }
 
 /**
