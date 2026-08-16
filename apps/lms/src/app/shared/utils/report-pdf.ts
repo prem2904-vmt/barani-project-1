@@ -1719,7 +1719,10 @@ function drawQualifiedRangeCell(
     const qualifier = i > 0;
     doc.setFont(PDF_FONT, 'normal');
     doc.setFontSize(qualifier ? fs * QUAL_SCALE : fs);
-    doc.setTextColor(qualifier ? TEXT_DIM : BLACK);
+    // Uniformly dim — the first band used to print full black, which read
+    // as bold next to the single-band cells' grey (owner: no emphasis in
+    // the reference column).
+    doc.setTextColor(TEXT_DIM);
     if (hasSuperscript(line)) {
       drawTextWithSuperscripts(doc, line, d.cell.x + padL, y, qualifier ? fs * QUAL_SCALE : fs);
     } else {
@@ -2226,7 +2229,7 @@ function renderColumnarTable(
   // Parallel to `body` — carries the arrow indicator to draw in the result
   // column for abnormal rows (jsPDF standard fonts can't render ↑/↓ glyphs,
   // so we draw a small triangle in didDrawCell). null = no arrow on that row.
-  const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string } | null> = [];
+  const bodyMeta: Array<{ arrow: 'up' | 'down'; color: string; text: string; bold: boolean } | null> = [];
   // Cells needing raised-superscript redraw, keyed section:row:col.
   const supCells = new Map<string, SupCell>();
   const qualCells = new Map<string, QualCell>();
@@ -2329,7 +2332,18 @@ function renderColumnarTable(
         return { content: txt, styles };
       });
       body.push(cells);
-      bodyMeta.push((useArrow && hasResultCol) ? { arrow: r.isLow ? 'down' : 'up', color: theme.flagStyle === 'bold_color' ? abnColor : BLACK } : null);
+      // Remember the result text so the arrow can sit right AFTER it — the
+      // result cell is wide, and anchoring the glyph to the cell's far edge
+      // parked it visually beside the Reference column.
+      const resultCellText = hasResultCol
+        ? (cells[vcols.findIndex(vc => vc.hasResult)]?.content ?? '')
+        : '';
+      bodyMeta.push((useArrow && hasResultCol)
+        ? { arrow: r.isLow ? 'down' : 'up',
+            color: theme.flagStyle === 'bold_color' ? abnColor : BLACK,
+            text: String(resultCellText),
+            bold: !isNormal && theme.flagIndicator !== 'none' }
+        : null);
     }
   }
 
@@ -2381,7 +2395,12 @@ function renderColumnarTable(
       const m = bodyMeta[d.row.index];
       if (!m) return;
       const s = 3.2;
-      const cx = d.cell.x + d.cell.width - 9;
+      // Place the glyph just after the printed value (measured in the same
+      // font the cell used), clamped inside the cell.
+      doc.setFont(PDF_FONT, m.bold ? 'bold' : 'normal');
+      doc.setFontSize(9 * theme.fontScale);
+      const tw = doc.getTextWidth(m.text);
+      const cx = Math.min(d.cell.x + 6 + tw + 8, d.cell.x + d.cell.width - 9);
       const cy = d.cell.y + d.cell.height / 2;
       doc.setFillColor(m.color);
       if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
