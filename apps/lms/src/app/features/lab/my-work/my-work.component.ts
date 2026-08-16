@@ -183,8 +183,8 @@ const COUNTERS: CounterSpec[] = [
            the right. Same pattern as the Frontdesk landing splitter so
            the techs see the intake queue and their bench work side by
            side without tab-switching. Single drag handle in the middle. -->
-      <!-- Phone-only (<=640px) single-pane tab control: Intake / My Work /
-           Queue. Hidden above 640px, where all panes lay out together.
+      <!-- Phone-only (<=640px) single-pane tab control: Intake / Queue /
+           My Work / Done. Hidden above 640px, where all panes lay out together.
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
@@ -200,18 +200,18 @@ const COUNTERS: CounterSpec[] = [
                 (click)="setMobileTab('intake')">Intake</button>
         }
         <button type="button" role="tab" class="pf-mtab press"
-                [class.pf-mtab--on]="mobileTab() === 'mywork'"
-                [attr.aria-selected]="mobileTab() === 'mywork'"
-                (click)="setMobileTab('mywork')">
-          My Work
-          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
-        </button>
-        <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'queue'"
                 [attr.aria-selected]="mobileTab() === 'queue'"
                 (click)="setMobileTab('queue')">
           Queue
           <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
+        </button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'mywork'"
+                [attr.aria-selected]="mobileTab() === 'mywork'"
+                (click)="setMobileTab('mywork')">
+          My Work
+          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
         </button>
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'completed'"
@@ -331,18 +331,18 @@ const COUNTERS: CounterSpec[] = [
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
               <button type="button" role="tab" class="pf-mw-tab press"
-                      [class.pf-mw-tab--on]="tab() === 'my_work'"
-                      [attr.aria-selected]="tab() === 'my_work'"
-                      (click)="setTab('my_work')">
-                My Work
-                <span class="pf-mw-tab__count">{{ countFor('my_work') }}</span>
-              </button>
-              <button type="button" role="tab" class="pf-mw-tab press"
                       [class.pf-mw-tab--on]="tab() === 'service_queue'"
                       [attr.aria-selected]="tab() === 'service_queue'"
                       (click)="setTab('service_queue')">
                 Queue
                 <span class="pf-mw-tab__count">{{ countFor('service_queue') }}</span>
+              </button>
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'my_work'"
+                      [attr.aria-selected]="tab() === 'my_work'"
+                      (click)="setTab('my_work')">
+                My Work
+                <span class="pf-mw-tab__count">{{ countFor('my_work') }}</span>
               </button>
               <!-- Work this tech has finished: submitted or since validated. Its
                    Edit action pulls a whole tube back into their own My Work. -->
@@ -2427,9 +2427,12 @@ export class MyWorkComponent implements OnInit {
           this.toasts.success(`${n} result${n === 1 ? '' : 's'} re-opened — back in your My Work`);
           this.loadCompleted();
           this.refreshAllCounts();
-          // Land the tech where the work now is.
+          // The point of re-opening is to correct the values, so go straight
+          // to the tube's RESULT page. My Work is set behind the navigation,
+          // so backing out of the result screen lands on the work it joined.
           this.setTab('my_work');
           if (this.mobileTab() === 'completed') this.mobileTab.set('mywork');
+          this.router.navigate(['/lab/sample', tube.sampleId]);
         },
         error: e => {
           this._reopeningTubeId.set(null);
