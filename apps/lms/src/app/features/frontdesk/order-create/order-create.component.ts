@@ -676,8 +676,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
     });
 
-    // Honor the tenant GST + discount switches in the cart preview (best-effort).
-    this.api.get<{ gstEnabled?: boolean; allowDiscounts?: boolean; maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing').subscribe({
+    // Honor the tenant GST + discount switches in the cart preview. The slim
+    // visibility endpoint is readable by reception — the full /api/config/billing
+    // is admin-gated, so fetching it here 403'd for a receptionist and the
+    // error fallback showed GST in the cart AFTER the admin disabled it.
+    this.api.get<{ gstEnabled?: boolean; allowDiscounts?: boolean; maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing/visibility').subscribe({
       next: c => {
         if (!c) return;
         this.gstEnabled.set(c.gstEnabled !== false);

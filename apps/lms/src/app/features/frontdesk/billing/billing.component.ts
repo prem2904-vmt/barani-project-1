@@ -1941,7 +1941,9 @@ export class BillingComponent implements OnInit, OnChanges {
     });
     this.api.get<any>('/api/config/invoice-template').subscribe({ next: t => this.invoiceTpl.set(t), error: () => {} });
     // Per-role discount caps (Level-1 give_discount / Level-2 override_discount).
-    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing').subscribe({
+    // Slim endpoint: the full config GET is admin-gated, so a receptionist's
+    // fetch 403'd and the caps silently fell back to 100%.
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing/visibility').subscribe({
       next: c => {
         if (typeof c?.maxDiscountPct === 'number') this._maxDiscountPct.set(c.maxDiscountPct);
         if (typeof c?.overrideDiscountPct === 'number') this._overrideDiscountPct.set(c.overrideDiscountPct);
