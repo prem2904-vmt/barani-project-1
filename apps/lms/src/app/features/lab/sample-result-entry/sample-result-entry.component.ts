@@ -8,7 +8,13 @@ import {
   signal,
 } from "@angular/core";
 import { TrendTest } from "../../../shared/utils/trend-chart";
-import { describeAllRanges } from "../../../shared/utils/reference-range";
+import {
+  describeAllRanges,
+  flagAgainst,
+  normalizeSex,
+  selectReferenceRange,
+} from "../../../shared/utils/reference-range";
+import { qualitativeOptionsFor } from "../../../shared/utils/qualitative";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -35,6 +41,13 @@ import { SelectComponent } from "../../../shared/primitives/select.component";
 import { CultureEntryComponent } from "../culture-entry/culture-entry.component";
 import { CultureResult } from "../../../shared/models/culture.model";
 import { formatPatientInfo } from "../../../shared/models/patient.model";
+
+/** Live flag preview beside a numeric input — client mirror only; the
+ *  backend conditions engine still decides the persisted/reported flag. */
+interface LiveFlag {
+  tone: "critical" | "low" | "high" | "normal";
+  label: string;
+}
 
 interface BulkSubmitResponse {
   sample: OrderSample;
@@ -136,6 +149,88 @@ export class SampleResultEntryComponent {
     }
   }
 
+  /** Paste into a numeric field: strip everything that isn't a digit, dot or
+   *  leading minus so "one hundred" or "12 mg/dL" can never land as the raw
+   *  value. A clean numeric paste falls through to the browser default. */
+  onNumericPaste(event: ClipboardEvent, testId: string, paramName: string) {
+    const input = event.target as HTMLInputElement | null;
+    const raw = event.clipboardData?.getData("text") ?? "";
+    let cleaned = raw.replace(/[^0-9.\-]/g, "");
+    const neg = cleaned.startsWith("-");
+    cleaned = cleaned.replace(/-/g, "");
+    const [head, ...rest] = cleaned.split(".");
+    cleaned =
+      (neg ? "-" : "") + head + (rest.length ? "." + rest.join("") : "");
+    if (cleaned === raw) return; // already numeric — let the default paste run
+    event.preventDefault();
+    if (!input) return;
+    let next = cleaned;
+    try {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      next = input.value.slice(0, start) + cleaned + input.value.slice(end);
+    } catch {
+      /* selection API unavailable on this input type — replace wholesale */
+    }
+    input.value = next;
+    this.setValue(testId, paramName, next);
+  }
+
+  // ── Live out-of-range / critical preview ──────────────────────────
+  /** Patient sex/age (from the loaded order) for reference-band selection. */
+  private patientSexAge(): {
+    sex: "M" | "F" | "O" | null;
+    age: number | null;
+  } {
+    const p = this._sample()?.order?.patient;
+    return {
+      sex: normalizeSex(p?.sex),
+      age: typeof p?.age === "number" ? p.age : null,
+    };
+  }
+
+  /** Instant H/L/critical chip as the tech types. Criticals are strict </>;
+   *  in-range flags route through the ONE shared flagAgainst rule with the
+   *  band picked for THIS patient's sex/age. Backend stays source of truth. */
+  flagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
+    if (this.inputKindFor(p) !== "number") return null;
+    const raw = this.getValue(t.id, p.name);
+    if (raw === undefined || raw === null || raw === "") return null;
+    const v = Number(String(raw).trim());
+    if (Number.isNaN(v)) return null;
+    if (p.criticalLow != null && v < p.criticalLow)
+      return { tone: "critical", label: `Critical · below ${p.criticalLow}` };
+    if (p.criticalHigh != null && v > p.criticalHigh)
+      return { tone: "critical", label: `Critical · above ${p.criticalHigh}` };
+    const { sex, age } = this.patientSexAge();
+    const fl = flagAgainst(selectReferenceRange(p.referenceRanges, sex, age), v);
+    if (fl === "L") return { tone: "low", label: "Low" };
+    if (fl === "H") return { tone: "high", label: "High" };
+    if (fl === "N") return { tone: "normal", label: "Normal" };
+    return null;
+  }
+
+  /** Red input treatment — reserved for critical values only. */
+  isCriticalValue(t: OrderTest, p: TestParameter): boolean {
+    return this.flagFor(t, p)?.tone === "critical";
+  }
+
+  /** Softer amber input tint for plain high/low (distinct from critical red). */
+  isOutOfRange(t: OrderTest, p: TestParameter): boolean {
+    const tone = this.flagFor(t, p)?.tone;
+    return tone === "low" || tone === "high";
+  }
+
+  /** A numeric parameter holding a non-parseable value (should be near-
+   *  impossible past the keydown/paste guards, but IME/autofill can slip
+   *  through). Shown as a subtle invalid state and blocks submit. */
+  isInvalidNumber(t: OrderTest, p: TestParameter): boolean {
+    if (this.inputKindFor(p) !== "number") return false;
+    const raw = this.getValue(t.id, p.name);
+    if (raw === undefined || raw === null || raw === "") return false;
+    return Number.isNaN(Number(String(raw).trim()));
+  }
+
   /** Pressing Enter inside any result input field advances focus to the next
    *  result field in DOM sequence (like Tab), skipping edit buttons. */
   onEnterKey(event: Event) {
@@ -146,7 +241,7 @@ export class SampleResultEntryComponent {
     const container = this.host.nativeElement as HTMLElement;
     const inputs = Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb",
+        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb, .pf-sre__select-wrap .pf-dd__trigger",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -167,6 +262,9 @@ export class SampleResultEntryComponent {
       ) {
         next.select();
       }
+      // Keep the freshly-focused field visible so Enter-Enter-Enter walks the
+      // whole tube without the tech ever reaching for the scrollbar.
+      next.scrollIntoView({ block: "nearest" });
     } else if (inputs.length > 0) {
       const submitBtn = container.querySelector<HTMLElement>(".pf-sre__submit");
       if (submitBtn && !submitBtn.hasAttribute("disabled")) {
@@ -624,8 +722,16 @@ export class SampleResultEntryComponent {
       case "date":
         return "date";
       default:
-        return "text";
+        // Qualitative positive/negative-ish parameters (by options OR type)
+        // render as a dropdown, never a free text box.
+        return qualitativeOptionsFor(p) ? "select" : "text";
     }
+  }
+
+  /** Options for a select parameter. Qualitative detection may supply a
+   *  default Positive/Negative-style pair when the schema has none. */
+  selectOptionsFor(p: TestParameter): string[] {
+    return qualitativeOptionsFor(p) ?? p.options ?? [];
   }
 
   /** Grid vs form view — grid is the default (mirrors report PDF columns).
@@ -855,6 +961,21 @@ export class SampleResultEntryComponent {
     const writable = (s.tests ?? []).filter(
       (t) => t.status !== "validated" && t.status !== "entered",
     );
+    // A numeric parameter holding a non-parseable value must never be
+    // submitted as the result — surface which ones and stop.
+    const invalid: string[] = [];
+    for (const t of writable) {
+      for (const p of this.parametersFor(t)) {
+        if (this.isInvalidNumber(t, p)) invalid.push(p.title || p.name);
+      }
+    }
+    if (invalid.length > 0) {
+      this.toasts.warning(
+        `Not a valid number: ${invalid.join(", ")} — fix before submitting`,
+      );
+      this._submitting.set(false);
+      return;
+    }
     const payload = {
       results: writable
         .filter((t) => all[t.id] && Object.keys(all[t.id]).length > 0)

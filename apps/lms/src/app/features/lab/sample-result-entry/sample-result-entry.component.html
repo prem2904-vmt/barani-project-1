@@ -531,11 +531,20 @@
               inputmode="decimal"
               class="pf-sre__ginput pf-sre__ginput--num"
               [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+              [class.pf-sre__input--outr]="isOutOfRange(t, p)"
+              [class.pf-sre__input--crit]="isCriticalValue(t, p)"
+              [class.pf-sre__input--invalid]="isInvalidNumber(t, p)"
               [ngModel]="getValue(t.id, p.name)"
               (ngModelChange)="setValue(t.id, p.name, $event)"
               (keydown)="allowOnlyNumbers($event)"
               (keydown.enter)="onEnterKey($event)"
+              (paste)="onNumericPaste($event, t.id, p.name)"
             />
+            @if (flagFor(t, p); as f) {
+              <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone">{{
+                f.label
+              }}</span>
+            }
           }
           @case ("select") {
             <select
@@ -546,7 +555,7 @@
               (keydown.enter)="onEnterKey($event)"
             >
               <option value="">—</option>
-              @for (o of p.options ?? []; track o) {
+              @for (o of selectOptionsFor(p); track o) {
                 <option [value]="o">{{ o }}</option>
               }
             </select>
@@ -735,13 +744,30 @@
                                 [class.pf-sre__input--flagged]="
                                   hasOpenComment(t.id, p.name)
                                 "
+                                [class.pf-sre__input--outr]="
+                                  isOutOfRange(t, p)
+                                "
+                                [class.pf-sre__input--crit]="
+                                  isCriticalValue(t, p)
+                                "
+                                [class.pf-sre__input--invalid]="
+                                  isInvalidNumber(t, p)
+                                "
                                 [ngModel]="getValue(t.id, p.name)"
                                 (ngModelChange)="
                                   setValue(t.id, p.name, $event)
                                 "
                                 (keydown)="allowOnlyNumbers($event)"
                                 (keydown.enter)="onEnterKey($event)"
+                                (paste)="onNumericPaste($event, t.id, p.name)"
                               />
+                              @if (flagFor(t, p); as f) {
+                                <span
+                                  class="pf-sre__flag-chip"
+                                  [attr.data-tone]="f.tone"
+                                  >{{ f.label }}</span
+                                >
+                              }
                             }
                             @case ("select") {
                               <select
@@ -756,7 +782,7 @@
                                 (keydown.enter)="onEnterKey($event)"
                               >
                                 <option value="">—</option>
-                                @for (o of p.options ?? []; track o) {
+                                @for (o of selectOptionsFor(p); track o) {
                                   <option [value]="o">{{ o }}</option>
                                 }
                               </select>
@@ -907,11 +933,26 @@
                             [class.pf-sre__input--flagged]="
                               hasOpenComment(t.id, p.name)
                             "
+                            [class.pf-sre__input--outr]="isOutOfRange(t, p)"
+                            [class.pf-sre__input--crit]="
+                              isCriticalValue(t, p)
+                            "
+                            [class.pf-sre__input--invalid]="
+                              isInvalidNumber(t, p)
+                            "
                             [ngModel]="getValue(t.id, p.name)"
                             (ngModelChange)="setValue(t.id, p.name, $event)"
                             (keydown)="allowOnlyNumbers($event)"
                             (keydown.enter)="onEnterKey($event)"
+                            (paste)="onNumericPaste($event, t.id, p.name)"
                           />
+                          @if (flagFor(t, p); as f) {
+                            <span
+                              class="pf-sre__flag-chip pf-sre__flag-chip--form"
+                              [attr.data-tone]="f.tone"
+                              >{{ f.label }}</span
+                            >
+                          }
                         }
                         @case ("textarea") {
                           <textarea
@@ -935,7 +976,7 @@
                             <pf-select
                               [options]="[
                                 { value: '', label: '—' },
-                                ...(p.options ?? []).map((o) => ({
+                                ...selectOptionsFor(p).map((o) => ({
                                   value: o,
                                   label: o,
                                 })),

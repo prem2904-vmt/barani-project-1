@@ -14,6 +14,7 @@ import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -277,19 +278,32 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('numeric') {
                                   <input type="number" inputmode="decimal" step="any"
                                          class="pf-rg__input pf-rg__input--num"
+                                         [class.pf-rg__input--outr]="isOutOfRange(p)"
+                                         [class.pf-rg__input--crit]="isParamCritical(p)"
+                                         [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
+                                         (keydown)="allowOnlyNumbers($event)"
                                          (keydown.enter)="advanceFrom(p.name)"
+                                         (paste)="onNumericPaste($event, p.name)"
                                          placeholder="—"/>
                                 }
                                 @case ('dropdown') {
                                   <select class="pf-rg__input pf-rg__select"
                                           [value]="valueOf(p.name) ?? ''"
+                                          [attr.data-param]="p.name"
                                           (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    @for (opt of p.options ?? []; track opt) {
+                                          (change)="setValue(p.name, asSelect($event))"
+                                          (keydown.enter)="advanceFrom(p.name)">
+                                    @if (isQualitative(p)) {
+                                      <!-- Qualitative pos/neg results are optional — offer a real empty choice. -->
+                                      <option value="" [selected]="!valueOf(p.name)">—</option>
+                                    } @else {
+                                      <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
+                                    }
+                                    @for (opt of optionsFor(p); track opt) {
                                       <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
                                     }
                                   </select>
@@ -297,10 +311,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('radio') {
                                   <select class="pf-rg__input pf-rg__select"
                                           [value]="valueOf(p.name) ?? ''"
+                                          [attr.data-param]="p.name"
                                           (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
+                                          (change)="setValue(p.name, asSelect($event))"
+                                          (keydown.enter)="advanceFrom(p.name)">
                                     <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    @for (opt of p.options ?? []; track opt) {
+                                    @for (opt of optionsFor(p); track opt) {
                                       <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
                                     }
                                   </select>
@@ -308,8 +324,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('yesno') {
                                   <select class="pf-rg__input pf-rg__select"
                                           [value]="valueOf(p.name) ?? ''"
+                                          [attr.data-param]="p.name"
                                           (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
+                                          (change)="setValue(p.name, asSelect($event))"
+                                          (keydown.enter)="advanceFrom(p.name)">
                                     <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
                                     <option value="yes" [selected]="valueOf(p.name) === 'yes'">Yes</option>
                                     <option value="no"  [selected]="valueOf(p.name) === 'no'">No</option>
@@ -318,19 +336,24 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('textarea') {
                                   <textarea class="pf-rg__input pf-rg__textarea" rows="1"
                                             [value]="valueOf(p.name) ?? ''"
+                                            [attr.data-param]="p.name"
                                             (focus)="setActive(p.name)"
                                             (input)="setValue(p.name, asInput($event))"
+                                            (keydown.enter)="advanceFrom(p.name)"
                                             placeholder="—"></textarea>
                                 }
                                 @case ('date') {
                                   <input type="date" class="pf-rg__input pf-rg__date"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"/>
+                                         (change)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"/>
                                 }
                                 @case ('phone') {
                                   <input type="tel" inputmode="tel" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
                                          (keydown.enter)="advanceFrom(p.name)"
@@ -339,6 +362,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('email') {
                                   <input type="email" inputmode="email" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
                                          (keydown.enter)="advanceFrom(p.name)"
@@ -347,18 +371,23 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('time') {
                                   <input type="time" class="pf-rg__input pf-rg__date"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"/>
+                                         (change)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"/>
                                 }
                                 @case ('datetime') {
                                   <input type="datetime-local" class="pf-rg__input pf-rg__date"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"/>
+                                         (change)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"/>
                                 }
                                 @default {
                                   <input type="text" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
                                          (keydown.enter)="advanceFrom(p.name)"
@@ -409,10 +438,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
                         @case ('dropdown') {
-                          <div (click)="setActive(p.name)">
+                          <div [attr.data-param]="p.name" (click)="setActive(p.name)">
+                            <!-- Qualitative pos/neg results are optional — prepend a real empty '—' choice. -->
                             <pf-select
                               placeholder="— Choose —"
-                              [options]="(p.options ?? []).map(o => ({ value: o, label: o }))"
+                              [options]="isQualitative(p)
+                                ? [{ value: '', label: '—' }, ...optionsFor(p).map(o => ({ value: o, label: o }))]
+                                : optionsFor(p).map(o => ({ value: o, label: o }))"
                               [value]="valueOf(p.name) ?? ''"
                               (valueChange)="setValue(p.name, $event)">
                             </pf-select>
@@ -463,8 +495,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           <input type="date"
                                  class="pf-param__input pf-param__date"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                                 (change)="setValue(p.name, asInput($event))"
+                                 (keydown.enter)="advanceFrom(p.name)"/>
                         }
                         @case ('section-header') {
                           <h4 class="pf-section-heading">{{ p.title }}</h4>
@@ -501,6 +535,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  inputmode="tel"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
@@ -511,6 +546,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  inputmode="email"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
@@ -520,15 +556,19 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           <input type="time"
                                  class="pf-param__input pf-param__date"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                                 (change)="setValue(p.name, asInput($event))"
+                                 (keydown.enter)="advanceFrom(p.name)"/>
                         }
                         @case ('datetime') {
                           <input type="datetime-local"
                                  class="pf-param__input pf-param__date"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                                 (change)="setValue(p.name, asInput($event))"
+                                 (keydown.enter)="advanceFrom(p.name)"/>
                         }
                         @case ('duration') {
                           <div class="pf-param__duration">
@@ -695,6 +735,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           <input type="text"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
@@ -703,6 +744,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         @case ('textarea') {
                           <textarea class="pf-param__input pf-param__textarea"
                                     [value]="valueOf(p.name) ?? ''"
+                                    [attr.data-param]="p.name"
                                     (focus)="setActive(p.name)"
                                     (input)="setValue(p.name, asArea($event))"
                                     rows="3"
@@ -713,10 +755,15 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                             <input type="text"
                                    inputmode="decimal"
                                    class="pf-param__input pf-param__input--num"
+                                   [class.pf-param__input--outr]="isOutOfRange(p)"
+                                   [class.pf-param__input--crit]="isParamCritical(p)"
+                                   [class.pf-param__input--invalid]="isInvalidNumeric(p)"
                                    [value]="valueOf(p.name) ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setValue(p.name, asInput($event))"
+                                   (keydown)="allowOnlyNumbers($event)"
                                    (keydown.enter)="advanceFrom(p.name)"
+                                   (paste)="onNumericPaste($event, p.name)"
                                    [attr.data-param]="p.name"
                                    #numInput
                                    [placeholder]="'—'"/>
@@ -1332,6 +1379,22 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       font-weight: 600;
       letter-spacing: -0.01em;
     }
+    /* Live value feedback on the INPUT itself (card view). Amber tint for a
+       plain high/low; red is reserved for critical; dashed red for a value
+       that isn't a parseable number. Beats focus/active borders. */
+    .pf-param__input--outr {
+      border-color: rgba(245, 158, 11, 0.55) !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1) !important;
+    }
+    .pf-param__input--crit {
+      border-color: rgba(239, 68, 68, 0.75) !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16) !important;
+    }
+    .pf-param__input--invalid {
+      border-style: dashed !important;
+      border-color: rgba(239, 68, 68, 0.55) !important;
+    }
     .pf-param__unit {
       position: absolute;
       right: 14px;
@@ -1800,6 +1863,21 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       background: rgba(168, 85, 247, 0.1);
     }
     .pf-rg__input--num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Live value feedback on the INPUT itself (grid view) — mirrors the card
+       view: amber = high/low, red = critical, dashed red = not a number. */
+    .pf-rg__input--outr {
+      border-color: rgba(245, 158, 11, 0.55) !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+    }
+    .pf-rg__input--crit {
+      border-color: rgba(239, 68, 68, 0.75) !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14);
+    }
+    .pf-rg__input--invalid {
+      border-style: dashed !important;
+      border-color: rgba(239, 68, 68, 0.55) !important;
+    }
     .pf-rg__select { font-weight: 500; }
     .pf-rg__textarea { resize: vertical; min-height: 32px; }
     .pf-rg__c-unit, .pf-rg__c-range, .pf-rg__c-method {
@@ -2731,6 +2809,32 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     }
   }
 
+  /** Paste into a numeric field: strip everything that isn't a digit, dot or
+   *  leading minus so "one hundred" or "12 mg/dL" can never land as the raw
+   *  value. A clean numeric paste falls through to the browser default. */
+  onNumericPaste(event: ClipboardEvent, name: string) {
+    const input = event.target as HTMLInputElement | null;
+    const raw = event.clipboardData?.getData('text') ?? '';
+    let cleaned = raw.replace(/[^0-9.\-]/g, '');
+    const neg = cleaned.startsWith('-');
+    cleaned = cleaned.replace(/-/g, '');
+    const [head, ...rest] = cleaned.split('.');
+    cleaned = (neg ? '-' : '') + head + (rest.length ? '.' + rest.join('') : '');
+    if (cleaned === raw) return; // already numeric — let the default paste run
+    event.preventDefault();
+    if (!input) return;
+    let next = cleaned;
+    try {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      next = input.value.slice(0, start) + cleaned + input.value.slice(end);
+    } catch {
+      /* selection API unavailable (type=number) — replace wholesale */
+    }
+    input.value = next;
+    this.setValue(name, next);
+  }
+
   private readonly _paramsBlob = computed<TestParametersBlob | null>(() => {
     const raw = this._ot()?.test?.parameters;
     if (!raw) return null;
@@ -3082,7 +3186,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'numeric':
       case 'numeric_with_range':
       case 'number':          return 'numeric';
-      case 'text':            return 'text';
+      // Qualitative positive/negative-ish parameters (by options OR type)
+      // render as a dropdown, never a free text box.
+      case 'text':            return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
       case 'textarea':        return 'textarea';
       case 'voice-text':      return 'voice-text';
       case 'phone':           return 'phone';
@@ -3120,8 +3226,20 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'table':
       case 'recursive':
       case 'recursivePages':  return 'stub';
-      default:                return 'text';
+      default:                return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
     }
+  }
+
+  /** True when the parameter is a qualitative pos/neg-style result — its
+   *  dropdown then carries a real empty '—' choice (these are optional). */
+  isQualitative(p: TestParameter): boolean {
+    return !!qualitativeOptionsFor(p);
+  }
+
+  /** Dropdown options: the schema's own list, or the qualitative default
+   *  pair when only the type marks the field qualitative. */
+  optionsFor(p: TestParameter): string[] {
+    return qualitativeOptionsFor(p) ?? p.options ?? [];
   }
 
   refLabel(p: TestParameter): string {
@@ -3174,6 +3292,26 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (fl === 'H') return { tone: 'high', label: 'High' };
     if (fl === 'N') return { tone: 'normal', label: 'Normal' };
     return null;
+  }
+
+  /** Softer amber input tint for plain high/low (red stays critical-only). */
+  isOutOfRange(p: TestParameter): boolean {
+    const tone = this.flagFor(p)?.tone;
+    return tone === 'low' || tone === 'high';
+  }
+
+  /** A numeric parameter holding a non-parseable value — near-impossible past
+   *  the keydown/paste guards, but IME/autofill can slip through. Shown as a
+   *  subtle invalid state and blocks submit. */
+  isInvalidNumeric(p: TestParameter): boolean {
+    if (this.inputKindFor(p) !== 'numeric') return false;
+    const raw = this._values()[p.name];
+    if (raw === undefined || raw === null || raw === '') return false;
+    return Number.isNaN(Number(String(raw).trim()));
+  }
+
+  private hasInvalidNumeric(): boolean {
+    return this.parameters().some(p => this.isInvalidNumeric(p));
   }
 
   valueOf(name: string | null): string | undefined {
@@ -3544,27 +3682,43 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   advanceFrom(name: string) {
-    // Called from Enter key — prefer the immediate next param (even if filled) if the current is filled.
+    // Called from Enter in ANY input kind. Walk the parameters in document
+    // order (wrapping past the end) and land on the FIRST one that actually
+    // has a focusable input rendered — kinds without a native focus target
+    // (chips, toggles, canvas…) are skipped so Enter never dead-ends.
     const params = this.parameters();
     const idx = params.findIndex(p => p.name === name);
     if (idx < 0) return;
-    const next = params.slice(idx + 1).concat(params.slice(0, idx))
-      .find(p => {
-        const kind = this.inputKindFor(p);
-        return kind === 'numeric' || kind === 'text';
-      });
-    if (!next) return;
-    this._active.set(next.name);
-    this.focusInput(next.name);
+    const candidates = params.slice(idx + 1).concat(params.slice(0, idx));
+    for (const p of candidates) {
+      if (this.isLayoutKind(this.inputKindFor(p))) continue;
+      if (this.focusParam(p.name)) return;
+    }
+  }
+
+  /** Focus the rendered input for a parameter (input/textarea/select, or the
+   *  pf-select trigger inside a data-param wrapper). Scrolls it into view so
+   *  Enter-Enter-Enter feels seamless on the bench iPad. Returns false when
+   *  no focusable element exists for this parameter in the current view. */
+  private focusParam(name: string): boolean {
+    const host = this.host.nativeElement as HTMLElement;
+    const el = host.querySelector(`[data-param="${CSS.escape(name)}"]`) as HTMLElement | null;
+    if (!el) return false;
+    const target = el.matches('input, textarea, select, button, [tabindex]')
+      ? el
+      : el.querySelector<HTMLElement>('input, textarea, select, button, [tabindex]');
+    if (!target) return false;
+    this._active.set(name);
+    target.focus();
+    if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'number')) {
+      target.select();
+    }
+    target.scrollIntoView({ block: 'nearest' });
+    return true;
   }
 
   private focusInput(name: string) {
-    // Try numeric-ref first.
-    const byRef = this.numInputs?.find(r => r.nativeElement.getAttribute('data-param') === name);
-    if (byRef) { byRef.nativeElement.focus(); return; }
-    // Fall back to querying any input with matching data-param.
-    const el = this.host.nativeElement.querySelector(`[data-param="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
-    if (el) el.focus();
+    this.focusParam(name);
   }
 
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
@@ -3580,6 +3734,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (!id || this._saving()) return;
     if (!this.canSubmit()) {
       this.toasts.warning(`Fill all ${this.requiredCount()} required parameters before submit.`);
+      return;
+    }
+    // A numeric parameter holding a non-parseable value must never be
+    // submitted as the result — the input already shows the invalid state.
+    if (this.hasInvalidNumeric()) {
+      this.toasts.warning('One or more numeric results are not valid numbers — fix them before submitting.');
       return;
     }
     this._saving.set(true);

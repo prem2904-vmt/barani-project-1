@@ -935,6 +935,67 @@
   border-color: rgba(239, 68, 68, 0.6) !important;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
+
+/* ── Live out-of-range / critical feedback ─────────────────────────
+ Client-side preview while the tech types; the backend conditions
+ engine still decides the persisted/reported flag. Applies to both
+ the grid (.pf-sre__ginput) and form (.pf-sre__input) numeric inputs. */
+/* Plain high/low → soft amber tint (chip carries the wording). */
+.pf-sre__input--outr {
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+}
+/* Critical → the INPUT itself goes red. Wins over the amber tint and
+ over the open-comment red (declared later + stronger wash). */
+.pf-sre__input--crit {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  background: rgba(239, 68, 68, 0.09) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important;
+}
+/* Non-parseable numeric (slipped past the guards) → subtle dashed red. */
+.pf-sre__input--invalid {
+  border-style: dashed !important;
+  border-color: rgba(239, 68, 68, 0.55) !important;
+}
+/* The live flag chip beside a numeric input. Same tone palette as the
+ result-entry grid flags so both screens read identically. */
+.pf-sre__flag-chip {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.pf-sre__flag-chip[data-tone="low"] {
+  background: rgba(59, 130, 246, 0.16);
+  color: var(--blue-text);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.pf-sre__flag-chip[data-tone="high"] {
+  background: rgba(245, 158, 11, 0.16);
+  color: var(--amber-text);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.pf-sre__flag-chip[data-tone="critical"] {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--red-text);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+.pf-sre__flag-chip[data-tone="normal"] {
+  background: rgba(16, 185, 129, 0.16);
+  color: var(--green-text);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+/* Form view: the chip sits inside the label's column flow — hug the
+ input it belongs to instead of stretching full width. */
+.pf-sre__flag-chip--form {
+  align-self: flex-end;
+  margin-top: 4px;
+}
 .pf-sre__select-wrap {
   border: 1px solid transparent;
   border-radius: 12px;
