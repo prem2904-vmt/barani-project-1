@@ -9,6 +9,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
@@ -28,7 +29,7 @@ import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-pane
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
-type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected';
+type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed';
 type Level = 'urgent' | 'high' | 'normal';
 type Bucket = { level: Level; items: Enriched[] };
 type Enriched = OrderTest & { _level: Level; _remainingMin: number };
@@ -212,6 +213,13 @@ const COUNTERS: CounterSpec[] = [
           Queue
           <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
         </button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'completed'"
+                [attr.aria-selected]="mobileTab() === 'completed'"
+                (click)="setMobileTab('completed')">
+          Done
+          <span class="pf-mtab__count">{{ countFor('completed') }}</span>
+        </button>
       </div>
 
       <div class="pf-mw-split" #mwSplit
@@ -336,6 +344,15 @@ const COUNTERS: CounterSpec[] = [
                 Queue
                 <span class="pf-mw-tab__count">{{ countFor('service_queue') }}</span>
               </button>
+              <!-- Work this tech has finished: submitted or since validated. Its
+                   Edit action pulls a whole tube back into their own My Work. -->
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'completed'"
+                      [attr.aria-selected]="tab() === 'completed'"
+                      (click)="setTab('completed')">
+                Completed
+                <span class="pf-mw-tab__count">{{ countFor('completed') }}</span>
+              </button>
               <!-- Supervisor view: also show tubes other techs already claimed,
                    so stuck work (tech on leave) can be found and delegated. -->
               @if (tab() === 'service_queue') {
@@ -354,6 +371,73 @@ const COUNTERS: CounterSpec[] = [
             </p>
           </header>
           <div class="pf-mw-pane__body">
+      @if (tab() === 'completed') {
+      <!-- ── Completed: this tech's finished tubes, newest first ──────
+           Read-only history with ONE action: Edit re-opens the whole tube
+           (the unit of entry) back into this same tech's My Work after a
+           mandatory reason, which the backend records in the audit trail. -->
+      @if (completedLoading() && completedTubes().length === 0) {
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          @for (i of [0,1,2]; track i) {
+            <pf-tile tone="default" padding="md">
+              <pf-skeleton variant="line" width="55%"></pf-skeleton>
+              <div class="mt-2"><pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton></div>
+            </pf-tile>
+          }
+        </div>
+      } @else if (completedTubes().length === 0) {
+        <pf-tile tone="default" padding="xl">
+          <p class="text-center text-sm" style="color: var(--text-tertiary);">
+            Nothing completed in the last {{ completedDays }} days.
+          </p>
+        </pf-tile>
+      } @else {
+        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          @for (tube of completedTubes(); track tube.sampleId) {
+            <li>
+              <div class="pf-tq pf-tq--done">
+                <span class="pf-tq__cap" aria-hidden="true"></span>
+                <div class="pf-tq__main">
+                  <div class="pf-tq__line">
+                    <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
+                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered'">
+                      {{ tube.status === 'validated' ? 'Validated' : 'Submitted' }}
+                    </span>
+                  </div>
+                  <p class="pf-tq__sub">
+                    <span class="pf-tq__who">{{ tube.patientName }}</span>
+                    @if (tube.patientMeta) {
+                      <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
+                    }
+                    <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                  </p>
+                  <p class="pf-tq__note pf-done__tests">{{ tube.testNames }}</p>
+                </div>
+                <div class="pf-tq__side">
+                  <span class="pf-tq__stat">
+                    {{ tube.completedAt | date:'d MMM, h:mm a' }}
+                    <span class="pf-tq__stat-u">{{ testCount(tube.tests) }} {{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                  </span>
+                  @if (canEditResult()) {
+                    <button type="button" class="pf-tq__act"
+                            [disabled]="reopeningTubeId() === tube.sampleId"
+                            [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
+                            (click)="editCompletedTube(tube)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20h9"/>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                      </svg>
+                      <span class="pf-tq__act-t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+      } @else {
       @if (loading() && rows().length === 0) {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           @for (i of [0,1,2,3]; track i) {
@@ -693,6 +777,7 @@ const COUNTERS: CounterSpec[] = [
         <pf-tile tone="default" padding="xl">
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
+      }
       }
           </div>
         </section>
@@ -1422,6 +1507,12 @@ const COUNTERS: CounterSpec[] = [
     .pf-tq__sep { margin: 0 6px; opacity: 0.45; }
 
     .pf-tq__note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+    /* Completed rows list every test on the tube — cap it at two lines so a
+       12-analyte panel can't stretch the card. */
+    .pf-done__tests {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .pf-tq__note-test { color: #f2555a; font-weight: 600; margin-right: 6px; }
 
     /* Trailing zone — separated by a hairline so it reads as its own control. */
@@ -2011,6 +2102,7 @@ const COUNTERS: CounterSpec[] = [
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly labCfg = inject(BranchLabConfigService);
@@ -2130,7 +2222,7 @@ export class MyWorkComponent implements OnInit {
   // apply inside @media (max-width:640px)), so desktop is untouched.
   // Switching to My Work / Queue reuses the existing setTab() so the
   // right pane loads the matching data — no new fetch logic.
-  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue'>('intake');
+  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue' | 'completed'>('intake');
   protected readonly kpiOpen = signal(false);
 
   // ── Stats popover teleport (phone) ──────────────────────────────
@@ -2172,10 +2264,11 @@ export class MyWorkComponent implements OnInit {
   private readonly _intakeTabGuard = effect(() => {
     if (!this.showLeftPane() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
   });
-  setMobileTab(t: 'intake' | 'mywork' | 'queue') {
+  setMobileTab(t: 'intake' | 'mywork' | 'queue' | 'completed') {
     this.mobileTab.set(t);
     if (t === 'mywork') this.setTab('my_work');
     else if (t === 'queue') this.setTab('service_queue');
+    else if (t === 'completed') this.setTab('completed');
   }
 
   private readonly _counter = signal<CounterSpec['id']>('all');
@@ -2248,8 +2341,102 @@ export class MyWorkComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
-  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0 });
+  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0, completed: 0 });
   countFor(t: Tab): number { return this._counts()[t]; }
+
+  // ── Completed tab ────────────────────────────────────────────
+  // This tech's finished work (status entered/validated, resulted within
+  // the window), fetched lazily from its own endpoint and grouped into
+  // tubes. Kept in its own signal so opening the tab never disturbs the
+  // queue rows the other tabs share.
+  readonly completedDays = 7;
+  private readonly _completed = signal<OrderTest[]>([]);
+  private readonly _completedLoading = signal(false);
+  readonly completedLoading = this._completedLoading.asReadonly();
+  private readonly _reopeningTubeId = signal<string | null>(null);
+  readonly reopeningTubeId = this._reopeningTubeId.asReadonly();
+
+  /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
+   *  front desk never does, so the action simply doesn't render for them. */
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+
+  /** One row per TUBE: the same grouping key the other tabs use
+   *  (subOrder id), plus the patient line, the test names, when it was
+   *  finished and whether it is merely submitted or already validated. */
+  readonly completedTubes = computed(() => {
+    const bySample = new Map<string, OrderTest[]>();
+    for (const t of this._completed()) {
+      const sid = t.subOrder?.id ?? t.id;
+      if (!bySample.has(sid)) bySample.set(sid, []);
+      bySample.get(sid)!.push(t);
+    }
+    return Array.from(bySample.entries()).map(([sampleId, tests]) => {
+      const first = tests[0];
+      const patient = first.subOrder?.order?.patient;
+      const stamps = tests
+        .map(t => t.validatedAt ?? t.resultedAt)
+        .filter((d): d is string => !!d)
+        .map(d => new Date(d).getTime());
+      return {
+        sampleId,
+        tests,
+        barcode: first.subOrder?.barcode ?? '',
+        deptName: first.subOrder?.department?.name ?? first.test?.department?.name ?? '',
+        patientName: patient?.displayName ?? 'Patient',
+        patientMeta: patient ? formatPatientMeta(patient) : '',
+        testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
+        // A tube reads as validated only once every test on it is signed.
+        status: tests.every(t => t.status === 'validated') ? 'validated' : 'entered',
+        completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
+      };
+    }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  });
+
+  private loadCompleted() {
+    this._completedLoading.set(true);
+    this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays}`).subscribe({
+      next: l => {
+        this._completed.set(l ?? []);
+        this._completedLoading.set(false);
+        this._counts.update(c => ({ ...c, completed: this.completedTubes().length }));
+      },
+      error: () => this._completedLoading.set(false)
+    });
+  }
+
+  /** Edit a finished tube: mandatory reason (the app's themed prompt), then
+   *  the backend re-opens every submitted/validated test on it back to THIS
+   *  tech — audited — and we drop the user into My Work where it landed. */
+  async editCompletedTube(tube: { sampleId: string; barcode: string; tests: OrderTest[] }) {
+    const reason = await this.dialog.prompt({
+      title: 'Re-open for editing?',
+      message: `${tube.barcode || tube.sampleId} · ${tube.tests.length} result(s) go back into your My Work. The reason is recorded in the audit trail.`,
+      placeholder: 'e.g. wrong sample, typo in Hb…',
+      multiline: true,
+      required: true,
+      confirmLabel: 'Re-open'
+    });
+    if (!reason || !reason.trim()) return;
+
+    this._reopeningTubeId.set(tube.sampleId);
+    this.api.post<{ reopened: number }>(`/api/results/tube/${tube.sampleId}/reopen-mine`, { reason: reason.trim() })
+      .subscribe({
+        next: res => {
+          this._reopeningTubeId.set(null);
+          const n = res?.reopened ?? tube.tests.length;
+          this.toasts.success(`${n} result${n === 1 ? '' : 's'} re-opened — back in your My Work`);
+          this.loadCompleted();
+          this.refreshAllCounts();
+          // Land the tech where the work now is.
+          this.setTab('my_work');
+          if (this.mobileTab() === 'completed') this.mobileTab.set('mywork');
+        },
+        error: e => {
+          this._reopeningTubeId.set(null);
+          this.toasts.error(ApiError.from(e).message);
+        }
+      });
+  }
 
   readonly buckets = computed<Bucket[]>(() => {
     const enriched: Enriched[] = this.enrich(this._rows());
@@ -2371,6 +2558,9 @@ export class MyWorkComponent implements OnInit {
     // Intake tab embeds the ReceiveSamplesComponent which manages its own
     // data; nothing to fetch here.
     if (this._tab() === 'intake') { this._loading.set(false); return; }
+    // Completed keeps its own list + endpoint; loading it here would
+    // overwrite the queue rows the other tabs render from.
+    if (this._tab() === 'completed') { this._loading.set(false); this.loadCompleted(); return; }
     const url = this.endpointFor(this._tab());
     this._loading.set(true);
     this.api.get<OrderTest[]>(url).subscribe({
@@ -2380,6 +2570,16 @@ export class MyWorkComponent implements OnInit {
   }
 
   private refreshAllCounts() {
+    // Completed has a dedicated endpoint and counts TUBES (its rows), so it
+    // can't ride the endpointFor loop below.
+    if (this._tab() !== 'completed') {
+      this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays}`).subscribe({
+        next: l => {
+          const tubes = new Set((l ?? []).map(t => t.subOrder?.id ?? t.id));
+          this._counts.update(c => ({ ...c, completed: tubes.size }));
+        }
+      });
+    }
     for (const t of ['my_work', 'service_queue', 'rejected'] as Tab[]) {
       this.api.get<OrderTest[]>(this.endpointFor(t)).subscribe({
         next: l => {
