@@ -914,7 +914,12 @@ const OPERATORS = [
       color: var(--text-muted);
       border-bottom: 1px solid rgba(168, 85, 247, 0.25);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.02));
+      /* Long headings ("Reference range") were colliding into their
+         neighbour ("...rangeDescription") — clip inside the cell instead. */
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 0;
       vertical-align: bottom;
     }
     .pf-le-sheet__hdr-param { width: 200px; }

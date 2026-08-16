@@ -855,7 +855,10 @@ function newRowKey(): string {
              individual tests; a package bundles tests AND profiles (exploded
              recursively backend-side). Checkboxes write the selected ids into
              the bundle's member list. The pill filter + search + live summary
-             sit in one toolbar so admins can sanity-check as they tick. -->
+             sit in one toolbar so admins can sanity-check as they tick.
+             NOT on the Report layout section — that tab is the layout and its
+             preview only; a 300-test picker above them buried both. -->
+        @if (section() !== 'layout') {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="pf-picker-head">
             <div class="min-w-0">
@@ -1124,6 +1127,7 @@ function newRowKey(): string {
             </div>
           }
         </pf-tile>
+        }
       }
         <!-- Report layout sits OUTSIDE the type branch: profiles need it too,
              because a profile carries its own notes and those are what print
