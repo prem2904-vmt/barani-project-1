@@ -2143,7 +2143,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
             ...m,
             [s.id]: {
               loading: false,
-              names: ts.map(t => (t.name ?? '').trim()).filter(n => n.length > 0),
+              // This endpoint serializes the ENTITY — OrderTestEntity has no
+              // flat Name; the test name rides on the nested `test` navigation.
+              names: ts.map(t => (t.name || t.test?.name || '').trim()).filter(n => n.length > 0),
               bundleName: t0?.packageName || t0?.profileName || null,
               tests: SERIES_RESULTED.has(s.status) ? this.extractSeriesTests(full) : [],
             },
