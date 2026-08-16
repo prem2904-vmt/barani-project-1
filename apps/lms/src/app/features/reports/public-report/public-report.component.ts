@@ -146,6 +146,19 @@ export class PublicReportComponent {
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
+  constructor() {
+    // Hand-off from the tracking page: the patient already verified there, and
+    // the secret rides along in navigation state — verify silently so "View
+    // report" lands straight on the PDF instead of asking a second time.
+    // (history.state survives only the in-app navigation; a shared/reloaded
+    // link has no state and prompts as usual.)
+    const carried = (history.state as { secret?: unknown } | null)?.secret;
+    if (typeof carried === 'string' && carried.trim()) {
+      this.secret = carried.trim();
+      void this.verify();
+    }
+  }
+
   async verify() {
     if (!this.secret.trim() || this.busy()) return;
     this.busy.set(true); this.error.set(null);

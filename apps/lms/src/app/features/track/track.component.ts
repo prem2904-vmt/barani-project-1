@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import QRCode from 'qrcode';
 import { environment } from '../../../environments/environment';
@@ -74,7 +74,7 @@ interface TrackResult {
           }
 
           @if (result()!.reportReady && (result()!.reportPdfUrl || result()!.reportToken)) {
-            <a class="btn" [href]="result()!.reportPdfUrl || reportUrl(result()!.reportToken!)" target="_blank" rel="noopener">View report</a>
+            <button class="btn" type="button" (click)="openReport()">View report</button>
           } @else {
             <p class="sub" style="margin-top:14px">Your report isn't ready yet. Scan again later.</p>
           }
@@ -144,6 +144,7 @@ interface TrackResult {
 export class TrackComponent {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected secret = '';
   protected readonly busy = signal(false);
@@ -154,7 +155,18 @@ export class TrackComponent {
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
-  reportUrl(reportToken: string) { return `${window.location.origin}/reports/public/${reportToken}`; }
+  /** Same-tab handoff to the report. The patient already verified HERE, so
+   *  the secret rides along in navigation state and the report page verifies
+   *  with it silently — no second prompt, no orphan tab. */
+  openReport() {
+    const r = this.result();
+    if (!r) return;
+    if (r.reportToken) {
+      this.router.navigate(['/reports/public', r.reportToken], { state: { secret: this.secret.trim() } });
+    } else if (r.reportPdfUrl) {
+      window.location.href = r.reportPdfUrl;
+    }
+  }
 
   /** upi://pay deep-link for the "Pay via UPI" button (opens the UPI app). */
   upiHref(): string {
