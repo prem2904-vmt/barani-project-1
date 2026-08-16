@@ -1241,7 +1241,10 @@
         </p>
         @for (row of grp.rows; track row.sampleId) {
         <div class="pf-series__row" [attr.data-state]="row.state">
-          <span class="pf-series__offset">{{ row.offsetLabel }}</span>
+          <span class="pf-series__what">
+            <span class="pf-series__test">{{ row.testLabel }}</span>
+            <span class="pf-series__offset">{{ row.offsetLabel }}</span>
+          </span>
           <span class="pf-series__due">{{ row.dueLabel }}</span>
           @switch (row.state) {
           @case ('collected') {

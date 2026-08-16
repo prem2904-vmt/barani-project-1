@@ -111,6 +111,10 @@ interface SeriesResultTest {
 
 interface SeriesSheetRow {
   sampleId: string;
+  /** What is actually drawn at this time point — the test name(s) on the
+   *  tube. The frontdesk thinks in tests ("OGTT 30 Minutes"), not in
+   *  offsets, so this is the row's headline and the offset is the subtitle. */
+  testLabel: string;
   offsetLabel: string;
   /** Wall-clock due time ("HH:mm") — '—' while the anchor is undrawn. */
   dueLabel: string;
@@ -2054,8 +2058,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           } else state = 'pending'; // awaiting-anchor / rejected fallback
         }
         const res = results[s.id];
+        // Name the DRAW by what's on the tube. One test → its name; several
+        // sharing the time point → the first plus a count, so the row stays
+        // one line. Falls back to the offset phrasing if names never loaded.
+        const names = (s.tests ?? []).map(t => (t.name ?? '').trim()).filter(n => n.length > 0);
+        const uniqueNames = [...new Set(names)];
+        const testLabel = uniqueNames.length === 0
+          ? offsetLabel(s.repeatOffsetMin ?? 0)
+          : uniqueNames.length === 1
+            ? uniqueNames[0]
+            : `${uniqueNames[0]} +${uniqueNames.length - 1}`;
         return {
           sampleId: s.id,
+          testLabel,
           offsetLabel: offsetLabel(s.repeatOffsetMin ?? 0),
           dueLabel: dueMs != null ? dueClockLabel(dueMs) : '—',
           state,
