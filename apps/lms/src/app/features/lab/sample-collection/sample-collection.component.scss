@@ -1,0 +1,1328 @@
+    /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
+     * The page fills the shell's main area exactly: header / KPI strip /
+     * scan strip / section heading are fixed (flex:0 0 auto) and the
+     * pending-queue list (or empty / loading stub) is the ONLY thing that
+     * scrolls, internally. No outer page scroll, no double scrollbars.
+     * The drawer + reject modal are position:fixed siblings of the section
+     * and are unaffected by this flex column. */
+    :host {
+      display: block;
+      height: 100%;
+      min-height: 0;
+    }
+    :host > section {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Fixed (non-scrolling) chrome at the top of the page. */
+    :host > section > pf-kpi-strip,
+    :host > section > pf-screen-header,
+    :host > section > .pf-scan,
+    :host > section > pf-barcode-scanner-modal,
+    :host > section > .pf-sc__section {
+      flex: 0 0 auto;
+    }
+    /* The queue list / empty state / loading stub is the single scroll
+     * region. min-height:0 lets it shrink inside the flex column so the
+     * scrollbar lives here, not on the page. */
+    :host > section > .pf-sc__list,
+    :host > section > .pf-sc__empty,
+    :host > section > .pf-sc__loading {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Scan strip ─────────────────────────────────────────
+     * Designed as the primary action: big icon, bold label, wide input.
+     * A real vacutainer scanner just types the code into the focused field,
+     * so autofocus + (keydown.enter) = Find.  */
+    .pf-scan {
+      display: flex; align-items: stretch; gap: 14px;
+      padding: 14px 16px;
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(168, 85, 247, 0.05));
+      border: 1px solid rgba(139, 92, 246, 0.28);
+      border-radius: 18px;
+      margin: 0 0 24px;
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.07);
+    }
+    .pf-scan__icon-btn {
+      all: unset;
+      cursor: pointer;
+      width: 54px; height: 54px; border-radius: 14px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(124,58,237,0.08));
+      color: var(--violet-text);
+      flex-shrink: 0; align-self: center;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .pf-scan__icon-btn:hover { background: linear-gradient(135deg, rgba(139,92,246,0.32), rgba(124,58,237,0.16)); }
+    .pf-scan__icon-btn:active { transform: scale(0.96); }
+    .pf-scan__icon-btn:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.7); outline-offset: 2px; }
+    .pf-scan__body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-scan__label {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .pf-scan__input {
+      width: 100%; min-width: 0;
+      height: 32px; padding: 0;
+      background: transparent;
+      border: 0;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 16px; font-weight: 600; letter-spacing: 0.02em;
+      outline: none;
+    }
+    .pf-scan__input::placeholder { color: var(--text-muted); font-weight: 400; letter-spacing: 0.06em; }
+
+    .pf-sc__section { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted);
+      margin: 18px 2px 10px;
+    }
+    .pf-sc__empty {
+      padding: 28px; text-align: center;
+      background: var(--glass-bg); border: 1px dashed var(--glass-border);
+      border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
+    }
+    /* Deep-link loading stub — centred loading-logo while the
+       drawer's order fetch resolves. */
+    .pf-sc__loading {
+      display: flex; align-items: center; justify-content: center;
+      padding: 64px 24px;
+      min-height: 60dvh;
+    }
+
+    /* Responsive grid: 1 / 2 / 3 columns depending on width. Matches the
+     * auto-flow pattern used by other pages in the app — fills the whole
+     * viewport with responsive padding coming from Tailwind. */
+    .pf-sc__list {
+      list-style: none; padding: 0; margin: 0;
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (min-width: 768px) {
+      .pf-sc__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .pf-sc__list > li { min-width: 0; }
+    /* Card row: Avatar · Name/meta · Rack of chips · Count · Chevron.
+     * position: relative + overflow: hidden keep inner content (hover
+     * translates, long patient names, large racks) from bleeding into the
+     * card's neighbour in the grid. */
+    .pf-sc__card {
+      all: unset;
+      cursor: pointer;
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      column-gap: 12px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 14px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .pf-sc__card:hover {
+      border-color: rgba(168, 85, 247, 0.45);
+      background: rgba(168, 85, 247, 0.04);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+    }
+    .pf-sc__card:active { transform: scale(0.998); }
+    .pf-sc__card:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.7); outline-offset: 2px; }
+
+    .pf-sc__who { min-width: 0; }
+    .pf-sc__who-name {
+      margin: 0; font-weight: 600; font-size: 14.5px;
+      color: var(--text-primary); text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-sc__who-meta {
+      margin: 2px 0 0; font-size: 11px; color: var(--text-tertiary);
+      text-align: left;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.03em;
+    }
+
+    /* Tube rack: colored chips shaped like little vials inside a holder.
+     * max-width + overflow keep unusually-large orders (>8 vials) from
+     * pushing the count/chevron off the card edge. */
+    .pf-sc__rack {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 5px 7px;
+      border-radius: 10px;
+      background: var(--seg-track);
+      border: 1px solid var(--glass-border);
+      max-width: 120px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .pf-sc__chip {
+      display: inline-block;
+      width: 5px; height: 18px; border-radius: 2px;
+      flex-shrink: 0;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .pf-sc__chip--done { opacity: 0.3; }
+    /* Outsourced vials carry a pink outline so collectors spot the
+       send-out tubes at a glance in the rack. */
+    .pf-sc__chip--out {
+      width: 7px;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1.5px #ec4899;
+    }
+
+    .pf-sc__card-tail { display: inline-flex; align-items: center; gap: 8px; }
+    .pf-sc__count {
+      font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      padding: 4px 9px; border-radius: 999px;
+      background: rgba(168, 85, 247, 0.14); color: var(--violet-text);
+      border: 1px solid rgba(168, 85, 247, 0.28);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .pf-sc__count--progress {
+      background: rgba(245, 158, 11, 0.14); color: var(--amber-text);
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .pf-sc__chev {
+      color: var(--text-muted); opacity: 0.55; flex-shrink: 0;
+      transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    }
+    .pf-sc__card:hover .pf-sc__chev { color: var(--text-primary); opacity: 1; }
+
+    /* ─── Full-screen stage ──────────────────────────────────── */
+    /* z-index 1000 covers the top nav (top-strip ~50, toasts ~100) so the
+     * collection drawer genuinely takes over the viewport; the backdrop is
+     * opaque so the pending queue behind never peeks through. */
+    .pf-drawer {
+      position: fixed;
+      /* Full-bleed from the very top: the shell chrome + the page's own
+         "Sample collection" header are hidden while a drawer is open
+         (html.pf-collect-immersive), so the drawer owns the whole viewport.
+         Pad for the notch on native so the ✕ clears the status bar. */
+      top: 0;
+      padding-top: env(safe-area-inset-top, 0px);
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 1000;
+      background:
+        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.22) 0%, transparent 55%),
+        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.18) 0%, transparent 55%),
+        #04061a;
+      display: flex; flex-direction: column;
+      animation: pf-drawer-fade 0.22s ease both;
+    }
+    @keyframes pf-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+    .pf-drawer__panel {
+      width: 100%;
+      flex: 1 1 auto;
+      display: flex; flex-direction: column;
+      animation: pf-drawer-zoom 0.28s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+      min-height: 0;
+    }
+    @keyframes pf-drawer-zoom { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+    .pf-drawer__head {
+      display: flex; align-items: center; gap: 16px;
+      padding: 28px 48px 20px;
+      width: 100%;
+    }
+    .pf-drawer__close {
+      all: unset; cursor: pointer;
+      width: 40px; height: 40px; border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-secondary);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .pf-drawer__close:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); border-color: rgba(255,255,255,0.18); }
+
+    .pf-drawer__who { flex: 1; min-width: 0; }
+    .pf-drawer__name {
+      margin: 0; font-weight: 700; font-size: 28px; letter-spacing: -0.02em;
+      color: var(--text-primary);
+      background: linear-gradient(180deg, var(--text-primary), rgba(255,255,255,0.6));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .pf-drawer__meta { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
+    /* The order id must be instantly recognizable — primary-dark and bold,
+       never the muted meta grey. */
+    .pf-drawer__meta--order { color: var(--text-primary); font-weight: 700; font-size: 13.5px; }
+
+    .pf-drawer__progress {
+      text-align: right;
+      padding: 10px 18px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      min-width: 120px;
+    }
+    .pf-drawer__progress-num { display: block; font-size: 30px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; line-height: 1; }
+    .pf-drawer__progress-lbl { display: block; margin-top: 4px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.18em; font-weight: 600; }
+
+    .pf-drawer__progressbar {
+      margin: 0 auto;
+      width: calc(100% - 96px);
+      height: 4px; border-radius: 999px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .pf-drawer__progressbar > span {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #a78bfa, #22d3ee);
+      box-shadow: 0 0 14px rgba(45, 212, 191, 0.5);
+      transition: width 0.45s cubic-bezier(0.2, 0.85, 0.3, 1);
+    }
+
+    .pf-drawer__hint {
+      margin: 16px auto 0;
+      padding: 0 48px;
+      font-size: 13px; color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* Tubes sit in a centred track. For 1-4 vials we use flex so they
+     * genuinely centre across the screen instead of hugging the left column
+     * of an auto-fill grid. 5+ wraps naturally. */
+    .pf-drawer__tubes {
+      /* Shrink-wrap to the tube grid's own height (NOT the full drawer) and
+         center it vertically with auto margins — so 1 card sits balanced and
+         many cards form a centered block; on overflow the auto margins collapse
+         and it scrolls from the top (no clipping). Mobile resets this below. */
+      flex: 0 1 auto;
+      margin-block: auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 28px 48px 32px;
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      /* stretch → every card matches the TALLEST card's height, so a row of
+         tubes lines up cleanly instead of sitting at ragged heights. Because the
+         container is content-height (flex:0), stretch grows cards to the tallest
+         sibling, never to the whole drawer. */
+      align-items: stretch;
+      align-content: center;
+      gap: 18px;
+    }
+    .pf-tube { width: min(320px, 100%); }
+
+    .pf-tube {
+      all: unset;
+      position: relative;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      padding: 24px 18px 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      transition: border-color 0.2s ease, transform 0.15s ease, background 0.25s ease, box-shadow 0.25s ease;
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none; /* no iOS callout during the 2s hold-to-peek */
+    }
+    /* Hold-to-peek progress: a bar fills across the bottom of the vial over the
+       2s hold; when full, the test list pops. Also a subtle press-in. */
+    .pf-tube::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube--holding {
+      border-color: rgba(139, 92, 246, 0.55);
+      background: linear-gradient(180deg, rgba(139,92,246,0.10), rgba(139,92,246,0.03));
+    }
+    .pf-tube--holding::after { opacity: 1; animation: pf-hold-fill 2s linear forwards; }
+    @keyframes pf-hold-fill { from { width: 0; } to { width: 100%; } }
+    /* Send every click through to the button itself. Without this, a tap on
+     * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
+     * child element and the parent button only registers the SECOND tap.
+     * Single-tap collection was the whole point of this screen. */
+    .pf-tube > * { pointer-events: none; }
+    .pf-tube::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(80% 60% at 50% 0%, var(--tube-color), transparent 70%);
+      opacity: 0.08;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .pf-tube:hover:not([disabled]) {
+      border-color: rgba(45, 212, 191, 0.55);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(45, 212, 191, 0.15);
+      transform: translateY(-2px);
+    }
+    .pf-tube:hover:not([disabled])::before { opacity: 0.14; }
+    .pf-tube:active:not([disabled]) { transform: translateY(0) scale(0.99); }
+    .pf-tube:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
+    .pf-tube[disabled] { cursor: wait; opacity: 0.75; }
+    .pf-tube--done {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.02));
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.18);
+    }
+    .pf-tube--done::before {
+      background: radial-gradient(80% 60% at 50% 0%, #10b981, transparent 70%);
+      opacity: 0.12;
+    }
+
+    /* ─── Vial illustration ────────────────────────────────── */
+    .pf-vial {
+      /* Scale with viewport height so the tube GROWS to fill a tall desktop
+         drawer instead of stranding at a fixed 280px. width:auto + aspect-ratio
+         keeps the illustration proportional as the height clamps. Tablet/short
+         and mobile breakpoints below override with their own sizes. */
+      height: clamp(260px, 40dvh, 500px);
+      width: auto;
+      aspect-ratio: 88 / 280;
+      flex-shrink: 0;
+      filter: drop-shadow(0 22px 28px rgba(0,0,0,0.55));
+    }
+    /* Urine cup is short and wide — swap the vial's portrait box for a more
+     * squat one so it doesn't get squeezed into a tall-narrow slot. */
+    .pf-vial--cup { height: clamp(220px, 34dvh, 420px); width: auto; aspect-ratio: 150 / 236; }
+    .pf-vial__outline {
+      fill: rgba(255,255,255,0.03);
+      stroke: rgba(255,255,255,0.22);
+      stroke-width: 1.2;
+    }
+    .pf-vial__blood { transition: y 0.75s cubic-bezier(0.25, 0.9, 0.25, 1); }
+    .pf-vial__tick { animation: pf-tick-pop 0.35s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 62px 46px; }
+    @keyframes pf-tick-pop {
+      0%   { transform: scale(0.2); opacity: 0; }
+      60%  { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pf-vial__cap { fill: var(--tube-color); }
+    .pf-vial__cap-rim { fill: rgba(0,0,0,0.22); }
+    .pf-vial__glass {
+      fill: rgba(255,255,255,0.05);
+      stroke: rgba(255,255,255,0.2);
+      stroke-width: 0.8;
+    }
+    .pf-vial__blood {
+      transition: y 0.6s cubic-bezier(0.2, 0.85, 0.3, 1);
+    }
+    .pf-vial__tick { animation: pf-tick-pop 0.3s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 44px 48px; }
+    @keyframes pf-tick-pop {
+      from { transform: scale(0.3); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .pf-tube__body {
+      width: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 3px;
+      min-width: 0;
+      position: relative;
+    }
+    .pf-tube__label {
+      margin: 0;
+      font-weight: 600; font-size: 15px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      text-align: center;
+    }
+    .pf-tube__dept {
+      margin: 0;
+      font-size: 9.5px;
+      color: var(--tube-color, var(--text-tertiary));
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
+      opacity: 0.85;
+    }
+    /* "Hold to see N tests" hint — non-interactive; the hold is handled on the
+       vial itself. */
+    .pf-tube__hint {
+      margin: 10px 0 0;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    /* Floating peek popover — a child of the drawer's own stacking context, so
+       a high local z-index keeps it above the collect content. Fixed = viewport
+       positioned (the drawer has no transform). */
+    /* Manual-mode "Label by hand" sheet — centered card over the drawer. */
+    .pf-wl {
+      position: absolute; inset: 0; z-index: 40;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .pf-wl__panel {
+      width: min(440px, 100%); max-height: 80dvh; overflow-y: auto;
+      background: var(--surface-raised, #16161f); border: 1px solid var(--border-primary, rgba(255,255,255,0.1));
+      border-radius: 16px; padding: 20px;
+    }
+    .pf-wl__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .pf-wl__sub { margin: 4px 0 12px; font-size: 12.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-wl__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pf-wl__row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+    }
+    .pf-wl__dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); }
+    .pf-wl__container { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-secondary); }
+    .pf-wl__code { font-size: 15px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.04em; }
+    .pf-wl__hint { margin: 12px 0 14px; font-size: 12px; color: var(--text-tertiary); }
+    .pf-wl__close { width: 100%; justify-content: center; }
+
+    .pf-tube__peekpop {
+      position: fixed; z-index: 100;
+      width: 260px; max-height: 52dvh; overflow-y: auto;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--bg-elevated, #0f172a);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pf-tube__peekpop-h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-tube__peekpop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .pf-tube__peekpop li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
+    /* Per-tube test list: one row per test, name on the left, its draw
+       volume right-aligned in mono so the numbers line up down the tube. */
+    .pf-tube__testlist {
+      list-style: none;
+      margin: 10px 0 0; padding: 0;
+      width: 100%;
+      display: flex; flex-direction: column;
+      gap: 3px;
+    }
+    .pf-tube__test {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+    .pf-tube__test-name {
+      min-width: 0; text-align: left;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .pf-tube__test-vol {
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+    /* Total draw pill — blood-red so it reads as "this much out of the arm". */
+    .pf-tube__draw {
+      margin: 6px 0 0;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.05em;
+      color: var(--red-text);
+      background: rgba(220, 38, 38, 0.12);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+    }
+    .pf-tube__code {
+      margin: 4px 0 0;
+      font-size: 11.5px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-primary);
+      letter-spacing: 0.06em;
+    }
+    .pf-tube__stamp {
+      margin-top: 10px;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 600;
+      color: var(--green-text);
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.06em;
+    }
+    .pf-tube__stamp--pending {
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      border-color: var(--glass-border);
+    }
+
+    .pf-drawer__foot {
+      display: flex; align-items: center; gap: 12px;
+      padding: 18px 48px 28px;
+      width: 100%;
+      border-top: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
+    }
+    /* Below the xl breakpoint the floating bottom-nav pill is visible and
+       sits over the drawer footer. Push the footer up so the buttons clear
+       the pill. At ≥1280px the nav is hidden and no extra room is needed. */
+    @media (max-width: 1279px) {
+      .pf-drawer__foot {
+        padding-bottom: calc(28px + var(--tab-nav-total-height, 0px));
+      }
+    }
+    .pf-drawer__foot .pf-btn-primary { margin-left: auto; min-width: 140px; }
+    .pf-drawer__remaining {
+      font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      margin-left: auto; margin-right: 8px;
+    }
+    .pf-drawer__done-stamp {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600;
+      color: var(--green-text);
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      margin-left: auto; margin-right: 8px;
+    }
+
+    .hidden { display: none; }
+
+    /* Tube-label print block: never shown on screen (it lives inside the
+       drawer purely so barcode/QR render). The global body.pf-printing-label
+       rule + this @media print flip reveal it only while printing. */
+    .pf-sc-labels { display: none; }
+    @media print { .pf-sc-labels { display: block; } }
+
+    /* Footer action buttons: the inline-SVG icon is hidden everywhere by
+       default so desktop (>=641px) keeps the existing TEXT buttons exactly as
+       before. The phone media query below flips this — text out, icon in. */
+    .pf-drawer__foot .pf-btn__icon { display: none; }
+
+    /* ─── Reject-with-reason modal ─────────────────────────── */
+    .pf-rej {
+      position: fixed; inset: 0; z-index: 1100;
+      background: rgba(4, 6, 18, 0.78);
+      backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      animation: pf-drawer-fade 0.2s ease both;
+    }
+    .pf-rej__panel {
+      width: min(540px, 100%);
+      background: var(--bg-primary, #0a0f1f);
+      border: 1px solid var(--glass-border);
+      border-radius: 22px;
+      padding: 22px 24px 20px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+      animation: pf-drawer-zoom 0.22s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+    }
+    .pf-rej__title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+    .pf-rej__sub { margin: 4px 0 14px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-rej__chips {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    }
+    .pf-rej__chip {
+      all: unset; cursor: pointer;
+      padding: 9px 14px; border-radius: 999px;
+      font-size: 12.5px; font-weight: 600;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .pf-rej__chip:hover { border-color: rgba(244, 114, 182, 0.45); }
+    .pf-rej__chip--on {
+      background: rgba(244, 63, 94, 0.18);
+      border-color: rgba(244, 63, 94, 0.55);
+      color: var(--rose-text);
+    }
+    .pf-rej__label {
+      display: block; margin: 8px 0 4px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .pf-rej__note { width: 100%; resize: vertical; min-height: 48px; }
+    .pf-rej__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+    :host-context([data-theme="light"]) .pf-rej {
+      background: rgba(15, 23, 42, 0.55);
+    }
+    :host-context([data-theme="light"]) .pf-rej__panel {
+      background: var(--bg-card-solid);
+    }
+    :host-context([data-theme="light"]) .pf-rej__chip--on {
+      background: rgba(244, 63, 94, 0.1);
+      color: #be123c;
+    }
+
+    @media (max-width: 640px) {
+      .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
+      .pf-drawer__progressbar { margin: 0 20px; }
+      .pf-drawer__hint { margin: 12px 20px 0; }
+      .pf-drawer__foot { padding: 14px 20px calc(20px + var(--tab-nav-total-height, 0px)); flex-wrap: wrap; }
+      .pf-drawer__name { font-size: 22px; }
+
+      /* ── Compact mobile tiles ──
+       * One tile per row, row-layout inside: a small vial glyph on the
+       * left so the cap colour stays recognisable at a glance, label /
+       * dept / tests in the middle, and a teal "Tap when drawn" pill on
+       * the right that reads as an action target. Each tile is ~96px
+       * tall so a typical 2-3 tube order fits on a single iPhone screen
+       * with no horizontal swipe. iPad / desktop unchanged. */
+      /* A single full-width column. The base layout is flex-wrap +
+         justify-content:center, which just centres a content-sized
+         tile — leaving the tube narrow and clipping the stamp pill.
+         flex-direction:column + the default align-items:stretch makes
+         every tube fill the width with no reliance on width:100%. */
+      .pf-drawer__tubes {
+        padding: 14px 16px 22px;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 10px;
+      }
+
+      /* Full-width row tile: fixed-size vial illustration on the LEFT, a
+         flexible (min-width:0) LEFT-aligned text column on the right. The
+         tile fills the drawer width (see the width-enforcing block lower
+         down) — never a centred ~60% card. */
+      .pf-tube {
+        flex-direction: row;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        width: 100%;
+        text-align: left;
+      }
+      .pf-vial {
+        /* Compact glance icon at a FIXED size on the left — cap colour +
+           fill stay readable while the row height stays thumb-friendly. */
+        width: 44px; height: 132px;
+        flex-shrink: 0;
+        align-self: center;
+      }
+      .pf-vial--cup { width: 74px; height: 108px; }
+
+      .pf-tube__body {
+        flex: 1 1 auto;
+        min-width: 0;          /* allow the body to shrink below its content */
+        align-items: flex-start;
+        text-align: left;
+        gap: 2px;
+      }
+      .pf-tube__label  { font-size: 15px; text-align: left; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* Dept label ("BIOCHEMISTRY") shown IN FULL — it's short, so let it
+         wrap rather than truncate. Trimmed letter-spacing so the common
+         names fit on a single line on the full-width tile. */
+      .pf-tube__dept   {
+        font-size: 9.5px;
+        text-align: left;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        letter-spacing: 0.14em;
+        line-height: 1.4;
+      }
+      /* Test rows tighten up; each name may ellipsis to a single line. */
+      .pf-tube__testlist { margin: 4px 0 0; gap: 2px; }
+      .pf-tube__test { font-size: 12px; }
+      /* Sample barcode is the tube's identity (it replaced the order #) —
+         keep it visible on the compact card, just a notch smaller. */
+      .pf-tube__code { font-size: 10px; margin-top: 3px; }
+
+      /* Action stamp: small teal pill on its own line at the end of the
+         body. It used to be position:absolute, but .pf-tube__body is
+         position:relative — so the stamp anchored INSIDE the body and
+         overlapped the label/dept/tests text. Keeping it in normal flow
+         (left-aligned, below the tests) is overlap-proof. The whole
+         tile is still the click target — the pill just telegraphs it. */
+      /* The status pill ("Tap when drawn" / collected time) sits on its OWN
+         line beneath the text column, LEFT-aligned and sized to its content
+         (not stretched across the tile, not clipped off the right edge). The
+         whole tile remains the tap target — the pill just telegraphs it. */
+      .pf-tube__stamp {
+        position: static;
+        align-self: flex-start;
+        width: auto;
+        max-width: 100%;
+        box-sizing: border-box;
+        justify-content: flex-start;
+        margin-top: 8px;
+        min-height: 30px;
+        padding: 7px 12px;
+        font-size: 10.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        letter-spacing: 0.04em;
+      }
+      .pf-tube__stamp--pending {
+        background: rgba(45, 212, 191, 0.14);
+        border-color: rgba(45, 212, 191, 0.45);
+        color: var(--teal-text);
+      }
+    }
+    /* Tablet (iPad Mini / Air landscape, iPad portrait) and any shorter
+       viewport — collapse the vial tile + paddings so the whole collect
+       drawer fits the viewport in one screen with no internal scroll.
+       Desktop monitors above ~1180px keep the spacious original layout.   */
+    @media (min-width: 641px) and (max-width: 1180px),
+           (min-width: 641px) and (max-height: 820px) {
+      .pf-drawer__head { padding: 14px 28px 10px; }
+      .pf-drawer__name { font-size: 22px; }
+      .pf-drawer__progress { padding: 8px 14px; min-width: 96px; }
+      .pf-drawer__progress-num { font-size: 24px; }
+      .pf-drawer__progressbar { width: calc(100% - 56px); }
+      .pf-drawer__hint { margin: 6px auto 0; padding: 0 28px; font-size: 11.5px; }
+
+      /* Kill the internal scroll. The flex column above already gives this
+         row a finite height; we just need the children to compress. */
+      .pf-drawer__tubes {
+        overflow: hidden;
+        padding: 10px 28px 10px;
+        gap: 12px;
+        align-content: center;
+        flex-wrap: nowrap;
+      }
+
+      .pf-tube {
+        width: min(180px, 100%);
+        flex: 1 1 0;
+        max-width: 220px;
+        padding: 12px 10px 10px;
+        gap: 6px;
+        border-radius: 16px;
+        overflow: visible;          /* let any sub-pixel vial overflow show, no clipping */
+      }
+      /* Heights derived from viewport height so they always fit. The clamp
+         floor stays large enough to read, the ceiling caps growth on tall
+         desktops. Cup is shorter natively so its ceiling is lower. */
+      .pf-vial      { width: 52px;  height: clamp(120px, 24dvh, 180px); }
+      .pf-vial--cup { width: 96px;  height: clamp(110px, 22dvh, 170px); }
+
+      .pf-tube__label { font-size: 12.5px; }
+      .pf-tube__dept  { font-size: 8px; letter-spacing: 0.16em; }
+      .pf-tube__testlist { margin: 3px 0 0; gap: 2px; }
+      .pf-tube__test { font-size: 11px; }
+      .pf-tube__test-vol { font-size: 9.5px; }
+      .pf-tube__draw  { margin: 4px 0 0; font-size: 10px; padding: 2px 8px; }
+      .pf-tube__code  { font-size: 9.5px; }
+      .pf-tube__stamp { padding: 4px 9px; font-size: 9.5px; }
+
+      .pf-drawer__foot {
+        padding: 10px 28px calc(12px + var(--tab-nav-total-height, 0px));
+      }
+      .pf-drawer__foot .pf-btn-primary { min-width: 120px; }
+    }
+
+    /* iPhone SE / iPhone 14 — even tighter padding so the patient name
+       and progress chip both fit in the header without wrapping into a
+       column. The rack max-width also shrinks so 4+ tube chips don't
+       overflow the order card. */
+    @media (max-width: 400px) {
+      .pf-drawer__head { padding: 14px 12px 10px; gap: 10px; }
+      .pf-drawer__progressbar { margin: 0 12px; }
+      .pf-drawer__hint { margin: 10px 12px 0; }
+      .pf-drawer__tubes { padding: 14px 12px 20px; }
+      .pf-drawer__foot { padding: 12px 12px calc(16px + var(--tab-nav-total-height, 0px)); }
+      .pf-drawer__name { font-size: 19px; }
+      .pf-drawer__progress { padding: 8px 12px; min-width: 0; }
+      .pf-drawer__progress-num { font-size: 22px; }
+      .pf-sc__rack { max-width: 96px; }
+    }
+
+    /* ─── Light mode overrides ──────────────────────────────
+     * Dark mode is tuned for deep navy; light mode needs
+     * inverted reflections, softer shadows, and a brighter
+     * backdrop so the vials don't float on a muddy wash. */
+    :host-context([data-theme="light"]) .pf-sc__card {
+      background: var(--bg-card-solid);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    :host-context([data-theme="light"]) .pf-sc__card:hover {
+      background: var(--surface-elevated);
+      box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
+    }
+    :host-context([data-theme="light"]) .pf-sc__rack {
+      background: rgba(15, 23, 42, 0.05);
+    }
+    :host-context([data-theme="light"]) .pf-sc__chip {
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,0.5);
+    }
+    :host-context([data-theme="light"]) .pf-sc__count {
+      background: rgba(124, 58, 237, 0.1);
+      color: #6d28d9;
+      border-color: rgba(124, 58, 237, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-sc__count--progress {
+      background: rgba(245, 158, 11, 0.14);
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    :host-context([data-theme="light"]) .pf-scan {
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.06));
+      border-color: rgba(124, 58, 237, 0.4);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.08);
+    }
+
+    :host-context([data-theme="light"]) .pf-drawer {
+      background:
+        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.12) 0%, transparent 55%),
+        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.1) 0%, transparent 55%),
+        var(--bg-card-solid);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__close {
+      background: rgba(15, 23, 42, 0.03);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__close:hover {
+      background: rgba(15, 23, 42, 0.07);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__name {
+      background: linear-gradient(180deg, var(--text-primary), rgba(15, 23, 42, 0.55));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progress {
+      background: rgba(15, 23, 42, 0.03);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progressbar {
+      background: rgba(15, 23, 42, 0.06);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__progressbar > span {
+      box-shadow: 0 0 10px rgba(45, 212, 191, 0.4);
+    }
+    :host-context([data-theme="light"]) .pf-drawer__foot {
+      background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04));
+    }
+
+    :host-context([data-theme="light"]) .pf-tube {
+      background: linear-gradient(180deg, rgba(246,244,252,0.85), rgba(246,244,252,0.55));
+    }
+    :host-context([data-theme="light"]) .pf-tube::before { opacity: 0.1; }
+    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled]) {
+      box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(45, 212, 191, 0.2);
+    }
+    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled])::before { opacity: 0.16; }
+    :host-context([data-theme="light"]) .pf-tube--done {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(246,244,252,0.7));
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14);
+    }
+
+    /* Vial glass + streak for light mode. Real vacutainers on a white
+     * counter read as darker outlines with lighter internal reflections,
+     * not white ghosts. */
+    :host-context([data-theme="light"]) .pf-vial {
+      filter: drop-shadow(0 14px 22px rgba(15, 23, 42, 0.22));
+    }
+    :host-context([data-theme="light"]) .pf-vial__outline {
+      fill: rgba(255, 255, 255, 0.7);
+      stroke: rgba(15, 23, 42, 0.22);
+    }
+    :host-context([data-theme="light"]) .pf-vial rect[fill*="glass-"],
+    :host-context([data-theme="light"]) .pf-vial path[fill*="glass-"] {
+      opacity: 0.7;
+    }
+
+    :host-context([data-theme="light"]) .pf-tube__stamp--pending {
+      color: #64748b;
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__code {
+      color: #0f172a;
+    }
+    :host-context([data-theme="light"]) .pf-tube__draw {
+      color: #b91c1c;
+      background: rgba(220, 38, 38, 0.08);
+      border-color: rgba(220, 38, 38, 0.28);
+    }
+
+    /* Manual-mode "Label by hand" sheet + hold-to-peek popover follow the
+       screen's theme — they were hard-coded dark and floated as black cards
+       over the light drawer. */
+    :host-context([data-theme="light"]) .pf-wl {
+      background: rgba(15, 23, 42, 0.28);
+    }
+    :host-context([data-theme="light"]) .pf-wl__panel {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.12);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-wl__row {
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-wl__dot {
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+    :host-context([data-theme="light"]) .pf-tube__peekpop {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+    }
+
+    :host-context([data-theme="light"]) .pf-drawer__done-stamp {
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__vial {
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__scan {
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    :host-context([data-theme="light"]) .pf-sc__scan-input {
+      background: var(--bg-input);
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    :host-context([data-theme="light"]) .pf-sc__scan-input:focus {
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2), inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    :host-context([data-theme="light"]) .pf-sc__match {
+      background: rgba(45, 212, 191, 0.1);
+      border-color: rgba(20, 184, 166, 0.5);
+    }
+    :host-context([data-theme="light"]) .pf-sc__vials {
+      background: rgba(15, 23, 42, 0.04);
+    }
+
+    /* ── Mobile vial-tile width — appended last so no earlier rule or
+       cascade quirk can suppress it. Each tile MUST span the full drawer
+       width (like the queue list cards), never a centred ~60% card —
+       otherwise the body squeezes and the stamp pill clips. */
+    @media (max-width: 640px) {
+      .pf-drawer__tubes {
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+      }
+      .pf-drawer__tubes .pf-tube {
+        width: 100% !important;       /* beats base width:min(320px,100%) */
+        max-width: 100% !important;   /* no narrow cap */
+        align-self: stretch !important;
+        margin-left: 0 !important;    /* no auto-centring */
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
+      }
+    }
+
+    /* ─── Cross-platform additive overrides (ADD ONLY — desktop ≥1280px
+       and the existing rules above are untouched) ───────────────────── */
+
+    /* Phone: the scan strip is the icon button + the input body in one row.
+       Tighten padding a touch; typing + Enter (or the icon's camera scanner)
+       does the lookup. Desktop/iPad row layout is unaffected. */
+    @media (max-width: 640px) {
+      .pf-scan {
+        gap: 12px;
+        padding: 14px;
+      }
+      .pf-scan__icon-btn { align-self: center; }
+      .pf-scan__body { flex: 1 1 140px; }
+      /* Header Refresh → icon-only on phones. */
+      .pf-refresh-txt { display: none; }
+
+      /* Loading stub: use dynamic viewport height so it doesn't jump when
+         mobile browser chrome shows/hides. */
+      .pf-sc__loading { min-height: 60dvh; }
+
+      /* The queue grid's minimum track is 400px (auto-fill minmax(400px,1fr)),
+         which is wider than most phones (iPhone SE 375px, iPhone 14 390px) and
+         forces horizontal page overflow. Collapse to a single shrinkable
+         column on phones so the cards fit with no sideways scroll. Tablet /
+         desktop (>=641px) keep the original multi-column auto-fill layout. */
+      .pf-sc__list { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    /* Touch (coarse pointer): make the order-card tap target comfortable and
+       keep the reject chips at a 44px touch height. Pointer-fine desktop is
+       unaffected. */
+    @media (pointer: coarse) {
+      .pf-sc__card { padding-top: 14px; padding-bottom: 14px; }
+      .pf-rej__chip { padding-top: 12px; padding-bottom: 12px; }
+      /* Keep textarea at 16px so iOS Safari doesn't zoom the viewport on
+         focus (the shared .pf-input may set a smaller size). */
+      .pf-rej__note { font-size: 16px; }
+      /* Drawer close button: 40px is below the 44px touch minimum. */
+      .pf-drawer__close { width: 44px; height: 44px; }
+    }
+
+    /* Touch devices with no real hover: neutralise the lift/translate hover
+       states so they don't "stick" after a tap (the card/tube keep their
+       :active + :focus-visible feedback, which is what matters on touch).
+       Desktop with a real pointer keeps the full hover treatment. */
+    @media (hover: none) {
+      .pf-sc__card:hover {
+        border-color: var(--glass-border);
+        background: var(--glass-bg);
+        box-shadow: none;
+      }
+      .pf-tube:hover:not([disabled]) {
+        transform: none;
+        border-color: var(--glass-border);
+        box-shadow: none;
+      }
+      .pf-tube:hover:not([disabled])::before { opacity: 0.08; }
+    }
+
+    /* Capacitor native: the collect drawer is teleported to <body> and is
+       position:fixed with its own top offset (var(--navbar-height)). The
+       global top safe-area is absorbed on body, but this page's own fixed
+       chrome still needs the notch inset so the close button / patient name
+       don't sit under the status bar. Add it only on native. */
+    :host-context(html.cap-native) .pf-drawer {
+      top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top));
+    }
+    :host-context(html.cap-native) .pf-drawer__head {
+      padding-left: calc(48px + env(safe-area-inset-left));
+      padding-right: calc(48px + env(safe-area-inset-right));
+    }
+    @media (max-width: 640px) {
+      :host-context(html.cap-native) .pf-drawer__head {
+        padding-left: calc(20px + env(safe-area-inset-left));
+        padding-right: calc(20px + env(safe-area-inset-right));
+      }
+    }
+
+    /* Phone (<=640px): collapse the footer action buttons to ICON-ONLY squares
+       to save space. Each keeps its full text in aria-label (a11y) and shows a
+       press-and-hold tooltip via data-label + :active::after — no JS/state.
+       The "Undo dispatch" button + status stamps are intentionally left as-is.
+       Desktop (>=641px) is untouched: text buttons, icons display:none. */
+    @media (max-width: 640px) {
+      .pf-drawer__foot .pf-btn {
+        position: relative;          /* anchor for the press tooltip */
+        width: 46px;                 /* >=44px tap target */
+        min-width: 46px;             /* beats .pf-btn-primary's min-width:140px */
+        height: 46px;
+        padding: 0;
+        flex: 0 0 auto;
+        gap: 0;
+      }
+      .pf-drawer__foot .pf-btn__text { display: none; }
+      .pf-drawer__foot .pf-btn__icon { display: inline-flex; }
+
+      /* Press-and-hold tooltip: a small dark pill above the held button. */
+      .pf-drawer__foot .pf-btn[data-label]:active::after {
+        content: attr(data-label);
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        padding: 5px 9px;
+        border-radius: 8px;
+        background: rgba(4, 6, 18, 0.95);
+        border: 1px solid var(--glass-border);
+        color: var(--text-primary);
+        font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      :host-context([data-theme="light"]) .pf-drawer__foot .pf-btn[data-label]:active::after {
+        background: var(--bg-card-solid);
+        color: #0f172a;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       AUTHORITATIVE phone vial-card layout (LAST = wins). Successive passes
+       layered several @media(max-width:640px) blocks; this single block,
+       placed last and scoped under .pf-drawer__tubes (so it out-specifies the
+       base .pf-tube/.pf-vial rules), is the source of truth for the phone tile:
+       a FULL-WIDTH row — fixed vial on the left, left-aligned text column,
+       dept shown in full, status pill on its own line, nothing clipped.
+       >=641px is untouched (gated to <=640). ───────────────────────────── */
+    @media (max-width: 640px) {
+      .pf-drawer__tubes {
+        /* Phone: a top-packed, fill-height scroll list — NOT the desktop
+           content-height + auto-centered grid (undo the base's flex:0/margin). */
+        flex: 1 1 auto !important;
+        margin-block: 0 !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        max-width: 100% !important;
+        gap: 10px !important;
+      }
+      .pf-drawer__tubes .pf-tube {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 14px !important;
+        padding: 14px 16px !important;
+        text-align: left !important;
+      }
+      .pf-drawer__tubes .pf-vial {
+        width: 40px !important;
+        height: 120px !important;
+        flex: 0 0 auto !important;
+      }
+      .pf-drawer__tubes .pf-vial--cup {
+        width: 64px !important;
+        height: 100px !important;
+      }
+      .pf-drawer__tubes .pf-tube__body {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        gap: 2px !important;
+      }
+      .pf-drawer__tubes .pf-tube__dept {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        max-width: 100% !important;
+        letter-spacing: 0.12em !important;
+      }
+      .pf-drawer__tubes .pf-tube__stamp {
+        position: static !important;
+        align-self: flex-start !important;
+        width: auto !important;
+        max-width: 100% !important;
+        justify-content: flex-start !important;
+        margin-top: 8px !important;
+      }
+    }
+
+  
+    /* pf-collect-immersive hides the bottom nav, so the drawer footer's
+       --tab-nav-total-height reserve became ~100px of dead space under the
+       primary CTA. Reclaim it; keep only the safe-area inset. */
+    :host-context(html.pf-collect-immersive) .pf-drawer__foot {
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    /* ─── Repetitive mode (series draws) ─────────────────────────────────
+       Modifier classes only — normal tubes never receive any of these, so
+       the classic card is untouched. */
+    /* Locked (awaiting the anchor draw, or not yet due): dimmed but still
+       tappable — the tap explains itself with a toast. */
+    .pf-tube--locked { opacity: 0.45; }
+    /* Due now: green attention ring, mirroring the --done treatment. */
+    .pf-tube--due {
+      border-color: rgba(16, 185, 129, 0.55);
+      box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2), 0 14px 40px rgba(16, 185, 129, 0.14);
+    }
+    /* Missed window (visual only — override reopens it). */
+    .pf-tube--missed { border-color: rgba(244, 63, 94, 0.5); }
+    .pf-tube__missedmark {
+      position: absolute; top: 10px; right: 10px;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(244, 63, 94, 0.92); color: #fff;
+      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
+      z-index: 2;
+    }
+    /* Offset chip beside the container name ("+30 min" / "+2 h"). */
+    .pf-tube__offset {
+      display: inline-block; vertical-align: 2px;
+      margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 10px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      letter-spacing: 0.05em;
+      color: var(--violet-text);
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      white-space: nowrap;
+    }
+    /* Series status pills on the card. */
+    .pf-tube__stamp--series {
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      border-color: var(--glass-border);
+    }
+    .pf-tube__stamp--due {
+      color: var(--green-text);
+      background: rgba(16, 185, 129, 0.14);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .pf-tube__stamp--missed {
+      color: var(--rose-text, #fb7185);
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.4);
+    }
+
+    /* ─── Partial dispatch (selection mode) ────────────────────────────── */
+    /* Non-collected tubes are inert while selecting. */
+    .pf-tube--inert { opacity: 0.35; }
+    .pf-tube--selected {
+      border-color: rgba(139, 92, 246, 0.6);
+      box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.3), 0 14px 40px rgba(139, 92, 246, 0.16);
+    }
+    .pf-tube__selectmark {
+      position: absolute; top: 10px; left: 10px;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: transparent;
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.35);
+      z-index: 2;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .pf-tube__selectmark--on {
+      color: #fff;
+      background: var(--color-violet-500, #8b5cf6);
+      border-color: var(--color-violet-500, #8b5cf6);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    }
+    /* The partial-dispatch trigger sits right of the "N remaining" note,
+       which already carries margin-left:auto — don't double-push. */
+    .pf-drawer__foot .pf-btn--partial { margin-left: 0; }
+
+    /* Phone footer collapses buttons to icon squares; the selection-mode
+       pair must keep their text ("Dispatch N" carries the count). */
+    @media (max-width: 640px) {
+      .pf-drawer__foot .pf-btn--keep-text {
+        width: auto;
+        min-width: 46px;
+        padding: 0 14px;
+        gap: 8px;
+      }
+      .pf-drawer__foot .pf-btn--keep-text .pf-btn__text { display: inline; }
+    }
+
+    /* Light-mode tuning for the series/selection chrome. */
+    :host-context([data-theme="light"]) .pf-tube__stamp--series {
+      color: #64748b;
+      background: rgba(15, 23, 42, 0.03);
+      border-color: rgba(15, 23, 42, 0.1);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp--due {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__stamp--missed {
+      color: #be123c;
+      background: rgba(244, 63, 94, 0.08);
+      border-color: rgba(244, 63, 94, 0.3);
+    }
+    :host-context([data-theme="light"]) .pf-tube__offset {
+      color: #6d28d9;
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(124, 58, 237, 0.28);
+    }
+    :host-context([data-theme="light"]) .pf-tube__selectmark {
+      background: rgba(15, 23, 42, 0.04);
+      border-color: rgba(15, 23, 42, 0.3);
+    }
