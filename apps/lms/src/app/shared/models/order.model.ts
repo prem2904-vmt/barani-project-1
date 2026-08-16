@@ -86,6 +86,9 @@ export interface OrderTest {
    *  directly: standalone test, or a package's direct member). */
   profileTestId?: string | null;
   profileName?: string | null;
+  /** Test CODE of the nearest profile (annotated by the samples endpoint) —
+   *  picks profile-scoped reference bands at entry. */
+  profileCode?: string | null;
   /** Resolved profile/package name (annotated by the samples endpoint). */
   packageName?: string;
   /** Display sequence within the tube (profile-authored order, never alphabetical). */

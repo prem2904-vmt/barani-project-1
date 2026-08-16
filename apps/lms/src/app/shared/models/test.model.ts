@@ -81,6 +81,10 @@ export interface TestParameter {
     | "numeric_with_range";
   unit?: string;
   options?: string[];
+  /** Code of a shared department option table (Result Option Master). When
+   *  set, the dropdown renders from the LIVE table — options/normalValue here
+   *  are a baked fallback snapshot. */
+  optionTable?: string;
   referenceRanges?: ReferenceRange[];
   normalValue?: string;
   criticalLow?: number;

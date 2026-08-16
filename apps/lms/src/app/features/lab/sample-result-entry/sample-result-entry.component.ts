@@ -29,6 +29,7 @@ import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
+import { OptionTablesService } from '../../../core/services/option-tables.service';
 import { NavBackService } from "../../../core/services/nav-back.service";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
@@ -111,6 +112,7 @@ export class SampleResultEntryComponent {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly optionTablesSvc = inject(OptionTablesService);
   protected readonly formatPatient = formatPatientInfo;
 
   /** Signed-in technician shown on the right of the header. Properly formats
@@ -209,6 +211,7 @@ export class SampleResultEntryComponent {
    *  in-range flags route through the ONE shared flagAgainst rule with the
    *  band picked for THIS patient's sex/age. Backend stays source of truth. */
   flagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
+    if (this.inputKindFor(p) === "select") return this.qualitativeFlagFor(t, p);
     if (this.inputKindFor(p) !== "number") return null;
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || raw === "") return null;
@@ -219,11 +222,43 @@ export class SampleResultEntryComponent {
     if (p.criticalHigh != null && v > p.criticalHigh)
       return { tone: "critical", label: `Critical · above ${p.criticalHigh}` };
     const { sex, age } = this.patientSexAge();
-    const fl = flagAgainst(selectReferenceRange(p.referenceRanges, sex, age), v);
+    const fl = flagAgainst(selectReferenceRange(this.bandsFor(t, p), sex, age), v);
     if (fl === "L") return { tone: "low", label: "Low" };
     if (fl === "H") return { tone: "high", label: "High" };
     if (fl === "N") return { tone: "normal", label: "Normal" };
     return null;
+  }
+
+  /** Profile-scoped bands (body fluids): under a profile, its bands win and
+   *  other profiles' bands drop out; untagged bands stay as generics.
+   *  Standalone, everything passes through — mirrors mw's resolver. */
+  private bandsFor(t: OrderTest, p: TestParameter) {
+    const bands = p.referenceRanges ?? [];
+    const pc = (t.profileCode ?? "").trim().toUpperCase();
+    if (!pc) return bands;
+    const scoped = bands.filter(b => (b.profileCode ?? "").trim().toUpperCase() === pc);
+    if (scoped.length) return scoped;
+    return bands.filter(b => !b.profileCode);
+  }
+
+  /** Dropdown normality: the LIVE option table's normal rows decide (an
+   *  empty normal set means every option is abnormal — e.g. pathogen lists);
+   *  parameters without a table fall back to normalValue, which may name
+   *  several normals joined with "/". Mirrors mw ResultFlaggingService. */
+  private qualitativeFlagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
+    const raw = this.getValue(t.id, p.name);
+    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    let normals = this.optionTablesSvc.normalsFor(p.optionTable);
+    if (normals == null) {
+      const nv = (p.normalValue ?? "").trim();
+      if (!nv) return null;
+      normals = nv.split("/").map(x => x.trim()).filter(Boolean);
+    }
+    const v = String(raw).trim().toLowerCase();
+    const isNormal = normals.some(n => n.toLowerCase() === v);
+    return isNormal
+      ? { tone: "normal", label: "Normal" }
+      : { tone: "high", label: "Abnormal" };
   }
 
   /** Red input treatment — reserved for critical values only. */
@@ -777,6 +812,10 @@ export class SampleResultEntryComponent {
   /** Options for a select parameter. Qualitative detection may supply a
    *  default Positive/Negative-style pair when the schema has none. */
   selectOptionsFor(p: TestParameter): string[] {
+    // A shared department table wins: edits on the department page appear
+    // here immediately, for every test that references the table.
+    const fromTable = this.optionTablesSvc.valuesFor(p.optionTable);
+    if (fromTable && fromTable.length) return fromTable;
     return qualitativeOptionsFor(p) ?? p.options ?? [];
   }
 
@@ -1098,6 +1137,9 @@ export class SampleResultEntryComponent {
   }
 
   async ngOnInit() {
+    // Shared dropdown dictionaries — a parameter's optionTable resolves to
+    // the LIVE department table for both options and normality.
+    void this.optionTablesSvc.ensureLoaded();
     const id = this.route.snapshot.paramMap.get("sampleId");
     if (!id) {
       this._loading.set(false);

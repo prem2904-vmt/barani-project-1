@@ -122,6 +122,10 @@ export interface ReferenceRange {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
+  /** Profile-scoped band (body fluids): only applies when the test is entered
+   *  or reported UNDER the profile with this test code (e.g. CSF analysis).
+   *  Mirrors mw `RangeDef.ProfileCode`. */
+  profileCode?: string | null;
   /** Overrides the name printed under this range on the report. Left blank,
    *  the name is composed from `sex` + the age bounds ("Adult Male"), which
    *  keeps the whole catalogue phrased consistently. */
@@ -240,6 +244,9 @@ export interface FormField {
   validLow?: number | null;
   validHigh?: number | null;
   normalValue?: string | null;
+  /** Shared department option-table code (Result Option Master) feeding this
+   *  field's dropdown; null/absent = the field's own `options` list. */
+  optionTable?: string | null;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

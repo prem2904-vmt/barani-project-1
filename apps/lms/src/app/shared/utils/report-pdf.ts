@@ -2280,7 +2280,10 @@ function renderColumnarTable(
       const abnColor = r.isLow ? theme.abnormalLowColor : theme.abnormalColor;
       // Letter mode appends the flag letter to the result; arrow mode draws a
       // triangle (didDrawCell). 'none' → no glyph/arrow.
-      const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L');
+      // 'A' (qualitative abnormal — e.g. a non-normal dropdown option) gets
+      // the same ▲ treatment as a numeric High: bold + up-triangle after the
+      // result text. Only 'C' keeps its letter — critical must read as text.
+      const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L' || r.flag === 'A');
       const glyph = (r.flag && !useArrow && theme.flagIndicator !== 'none') ? r.flag : '';
       const isFirst = firstParam;
       firstParam = false;

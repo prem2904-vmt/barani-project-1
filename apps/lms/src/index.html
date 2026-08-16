@@ -73,6 +73,27 @@
         }
       })();
     </script>
+    <!-- TEMP: Figma html-to-design capture (dev-only, remove after capturing screens) -->
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    <!-- TEMP: full-page capture — relax the locked-viewport layout so the page flows full-length. Toggle by adding ?figfull=1 -->
+    <style id="figma-capture-fullpage">
+      /* Unlock nested scroll containers so screens flow full-length; clip X to bound width. */
+      html.figfull, html.figfull * { max-height: none !important; }
+      html.figfull, html.figfull body, html.figfull .shell-stack, html.figfull .shell-main,
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; overflow: visible !important; }
+      html.figfull, html.figfull body { overflow-x: clip !important; }
+      html.figfull .pf-chrome { position: static !important; }
+      /* Common inner scroll panels in this app (frontdesk columns, drawers, lists). */
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; max-height: none !important; overflow: visible !important; }
+    </style>
+    <script>
+      // Add ?figfull=1 to any URL to unlock full-page height for capture.
+      if (location.search.indexOf('figfull=1') !== -1 || location.hash.indexOf('figfull=1') !== -1) {
+        document.documentElement.classList.add('figfull');
+      }
+    </script>
   </head>
   <body>
     <app-root></app-root>

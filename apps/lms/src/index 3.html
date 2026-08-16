@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Prefrontal</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0a0a15" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ede8f6" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- 'black-translucent' draws under the iOS status bar so the violet
+         theme bleeds to the very top of the notch — pair with safe-area-
+         inset-top on fixed headers so content sits below the clock. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Prefrontal" />
+    <!-- Disable iOS automatic phone-number detection — false positives on
+         MRN strings (DEL-2605-…) wreck the layout. -->
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Vector PF mark as the favicon. /favicon.svg is a dedicated square
+         badge variant tuned for small sizes; /logo.svg (vertical glyph) is
+         kept around for other parts of the app. The pre-generated PNG /
+         ICO set in /favicon_io is from an old pass (a house glyph) and is
+         deliberately not referenced — the SVG-only setup keeps the right
+         icon everywhere modern browsers render. ?v=2 busts cached copies
+         of the wrong icon on existing sessions. -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3" />
+    <link rel="apple-touch-icon" href="favicon.svg?v=3" />
+    <link rel="mask-icon" href="favicon.svg?v=3" color="#a855f7" />
+    <link rel="manifest" href="favicon_io/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Load the web fonts WITHOUT blocking render. On a cold/throttled launch
+      inside WKWebView (esp. when relaunched by a push) the network process can
+      take several seconds to come up; a render-blocking remote stylesheet
+      starves the local chunk requests and contributes to a blank-screen boot.
+      The media="print"→onload swap fetches the CSS asynchronously; native body
+      text falls back to the system stack until it arrives.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      />
+    </noscript>
+    <!--
+      Apply theme BEFORE Angular boots to prevent flash of wrong theme.
+      Priority: localStorage override > prefers-color-scheme > dark.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('pf-theme');
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+          var resolved =
+            mode === 'system'
+              ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+              : mode;
+          document.documentElement.classList.add(resolved);
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.setAttribute('data-theme-mode', mode);
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-theme-mode', 'system');
+        }
+      })();
+    </script>
+    <!-- TEMP: Figma html-to-design capture (dev-only, remove after capturing screens) -->
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    <!-- TEMP: full-page capture — relax the locked-viewport layout so the page flows full-length. Toggle by adding ?figfull=1 -->
+    <style id="figma-capture-fullpage">
+      /* Unlock nested scroll containers so screens flow full-length; clip X to bound width. */
+      html.figfull, html.figfull * { max-height: none !important; }
+      html.figfull, html.figfull body, html.figfull .shell-stack, html.figfull .shell-main,
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; overflow: visible !important; }
+      html.figfull, html.figfull body { overflow-x: clip !important; }
+      html.figfull .pf-chrome { position: static !important; }
+      /* Common inner scroll panels in this app (frontdesk columns, drawers, lists). */
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; max-height: none !important; overflow: visible !important; }
+    </style>
+    <script>
+      // Add ?figfull=1 to any URL to unlock full-page height for capture.
+      if (location.search.indexOf('figfull=1') !== -1 || location.hash.indexOf('figfull=1') !== -1) {
+        document.documentElement.classList.add('figfull');
+      }
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>

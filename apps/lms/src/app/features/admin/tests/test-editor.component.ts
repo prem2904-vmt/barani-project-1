@@ -5,6 +5,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { OptionTablesService } from '../../../core/services/option-tables.service';
+import { OptionTable } from '../../../shared/models/option-table.model';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../report-template/report-columns-editor.component';
@@ -795,24 +797,51 @@ function newRowKey(): string {
 
                     @if (typeHasOptions(p.type)) {
                       <label class="flex flex-col gap-1 min-w-0">
-                        <span class="pf-mini-lbl">
-                          Options (comma-separated)
-                          @if ((p.options ?? []).length > 0) {
-                            <span class="pf-option-count">{{ (p.options ?? []).length }}</span>
+                        <span class="pf-mini-lbl">Option table (shared)</span>
+                        <select class="pf-input pf-input--compact"
+                                [ngModel]="p.optionTable ?? ''"
+                                (ngModelChange)="onOptionTablePicked(i, $event)">
+                          <option value="">— This test only (type options below) —</option>
+                          @for (t of optionTableChoices(); track t.id) {
+                            <option [value]="t.code">{{ t.name }}</option>
                           }
-                        </span>
-                        <input type="text" class="pf-input pf-input--compact"
-                               [ngModel]="optionsAsString(p)"
-                               (ngModelChange)="onOptionsTyped(i, $event)"
-                               placeholder="Positive, Negative, Equivocal" />
-                        @if ((p.options ?? []).length > 0) {
+                        </select>
+                      </label>
+                      @if (p.optionTable) {
+                        <div class="flex flex-col gap-1 min-w-0">
+                          <span class="pf-mini-lbl">Options — managed by the department table</span>
                           <div class="pf-option-chips">
-                            @for (opt of p.options ?? []; track opt.id) {
-                              <span class="pf-option-chip">{{ opt.label }}</span>
+                            @for (val of tableValues(p.optionTable); track $index) {
+                              <span class="pf-option-chip"
+                                    [class.pf-option-chip--normal]="tableNormals(p.optionTable).includes(val)">{{ val }}</span>
                             }
                           </div>
-                        }
-                      </label>
+                          <a class="text-xs font-bold" style="color: var(--violet-600, #7c3aed);"
+                             [routerLink]="deptLinkFor(p.optionTable)" [fragment]="'t-' + p.optionTable">
+                            Open the department table to modify ↗
+                          </a>
+                        </div>
+                      } @else {
+                        <label class="flex flex-col gap-1 min-w-0">
+                          <span class="pf-mini-lbl">
+                            Options (comma-separated)
+                            @if ((p.options ?? []).length > 0) {
+                              <span class="pf-option-count">{{ (p.options ?? []).length }}</span>
+                            }
+                          </span>
+                          <input type="text" class="pf-input pf-input--compact"
+                                 [ngModel]="optionsAsString(p)"
+                                 (ngModelChange)="onOptionsTyped(i, $event)"
+                                 placeholder="Positive, Negative, Equivocal" />
+                          @if ((p.options ?? []).length > 0) {
+                            <div class="pf-option-chips">
+                              @for (opt of p.options ?? []; track opt.id) {
+                                <span class="pf-option-chip">{{ opt.label }}</span>
+                              }
+                            </div>
+                          }
+                        </label>
+                      }
                     }
 
                     <div class="grid gap-2 sm:grid-cols-2">
@@ -1912,6 +1941,7 @@ function newRowKey(): string {
 export class TestEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  readonly optionTables = inject(OptionTablesService);
   private readonly layoutSvc = inject(ReportLayoutService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
@@ -2828,6 +2858,8 @@ export class TestEditorComponent implements OnInit {
   );
 
   ngOnInit() {
+    // Shared dropdown dictionaries for the option-table picker.
+    void this.optionTables.ensureLoaded();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
@@ -2998,6 +3030,7 @@ export class TestEditorComponent implements OnInit {
       validLow: p.validLow ?? null,
       validHigh: p.validHigh ?? null,
       normalValue: p.normalValue ?? null,
+      optionTable: p.optionTable ?? null,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
         label: label ?? '',
@@ -3005,6 +3038,50 @@ export class TestEditorComponent implements OnInit {
         order: i
       })) ?? null
     };
+  }
+
+  /** Picker choices: this test's department's tables first, then the rest —
+   *  cross-department reuse of generic sets (None/Few/Moderate/Many) is fine. */
+  optionTableChoices(): OptionTable[] {
+    const deptId = this._draft().departmentId || null;
+    return this.optionTables.tables()
+      .filter(t => t.isActive !== false)
+      .slice()
+      .sort((a, b) =>
+        Number((b.departmentId ?? null) === deptId) - Number((a.departmentId ?? null) === deptId)
+        || a.name.localeCompare(b.name));
+  }
+
+  tableValues(code: string): string[] { return this.optionTables.valuesFor(code) ?? []; }
+  tableNormals(code: string): string[] { return this.optionTables.normalsFor(code) ?? []; }
+
+  /** Department page holding a table — the TABLE's own department, falling
+   *  back to this test's. */
+  deptLinkFor(code: string): string[] {
+    const t = this.optionTables.byCode(code);
+    const deptId = t?.departmentId || this._draft().departmentId || '';
+    return ['/admin/tests/department', deptId];
+  }
+
+  /** Selecting a table BAKES a snapshot of its values into the parameter's
+   *  options/normalValue — the live table drives dropdowns + flagging, the
+   *  snapshot keeps reports and older consumers correct as a fallback. */
+  onOptionTablePicked(i: number, code: string) {
+    const clean = (code || '').trim();
+    if (!clean) {
+      this.patchField(i, { optionTable: null });
+      return;
+    }
+    const values = this.tableValues(clean);
+    const normals = this.tableNormals(clean);
+    this.patchField(i, {
+      optionTable: clean,
+      options: values.map((label, ix) => ({
+        id: `opt_${ix}_${label.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
+        label, value: label, order: ix
+      })),
+      normalValue: normals.length ? normals.join(' / ') : null,
+    });
   }
 
   private fieldToLegacy(f: FormField): TestParameter {
@@ -3016,6 +3093,7 @@ export class TestEditorComponent implements OnInit {
       type: legacyType,
       unit: f.unit ?? undefined,
       options: f.options?.map(o => o.label) ?? undefined,
+      optionTable: f.optionTable ?? undefined,
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,
