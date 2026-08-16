@@ -453,9 +453,12 @@ export class TestsComponent implements OnInit {
         this.loadTests();
         this.loadDepartments();
       },
-      error: () => {
+      error: (e: unknown) => {
         this.restoring.set(false);
-        this.toasts.error('Restore failed — nothing was changed.');
+        // Surface the server's reason (e.g. "this is the platform template")
+        // — a bare "failed" sends the admin hunting for a problem that isn't.
+        const msg = (e as ApiError)?.error?.message ?? (e as { message?: string })?.message;
+        this.toasts.error(msg ? `Restore failed — ${msg}` : 'Restore failed — nothing was changed.');
       }
     });
   }
