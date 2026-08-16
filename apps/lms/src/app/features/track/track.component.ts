@@ -33,7 +33,7 @@ interface TrackResult {
         @if (!result()) {
           <h1 class="h1">Track your report</h1>
           <p class="sub">Enter your date of birth or registered phone number to view your status.</p>
-          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (YYYY-MM-DD) or phone" autocomplete="off"/>
+          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (DD/MM), last 4 of phone, or invoice no." autocomplete="off"/>
           @if (error()) { <p class="err">{{ error() }}</p> }
           <button class="btn" [disabled]="busy() || !secret.trim()" (click)="verify()">{{ busy() ? 'Checking…' : 'View status' }}</button>
         } @else {

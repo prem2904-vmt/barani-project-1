@@ -30,8 +30,8 @@ interface PublicReportResult {
         <div class="card">
           <div class="brand">Prefrontal</div>
           <h1 class="h1">View your report</h1>
-          <p class="sub">For your privacy, confirm your date of birth or registered phone number to open the report.</p>
-          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (YYYY-MM-DD) or phone" autocomplete="off"/>
+          <p class="sub">For your privacy, confirm your date of birth (DD/MM), the last 4 digits of your registered phone, or your invoice number to open the report.</p>
+          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (DD/MM), last 4 of phone, or invoice no." autocomplete="off"/>
           @if (error()) { <p class="err">{{ error() }}</p> }
           <button class="btn" [disabled]="busy() || !secret.trim()" (click)="verify()">{{ busy() ? 'Checking…' : 'Open report' }}</button>
         </div>
