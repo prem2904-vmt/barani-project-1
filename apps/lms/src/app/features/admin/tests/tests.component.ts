@@ -173,6 +173,13 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
             {{ v.label }}
           </button>
         }
+        @if (inactiveCount() > 0 || showInactive()) {
+          <label class="pf-tm-inactive-toggle">
+            <input type="checkbox" [checked]="showInactive()"
+                   (change)="showInactive.set(!showInactive())" />
+            Show inactive ({{ inactiveCount() }})
+          </label>
+        }
       </div>
 
       <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
@@ -284,6 +291,10 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
     .pf-tm-tab--active { color: var(--text-primary);
       background: linear-gradient(135deg, rgba(124,58,237,0.22), rgba(168,85,247,0.10));
       box-shadow: inset 0 0 0 1px rgba(168,85,247,0.30); }
+    .pf-tm-inactive-toggle { display: inline-flex; align-items: center; gap: 7px;
+      margin-left: 10px; padding: 0 12px; height: 36px; font-size: 12.5px;
+      color: var(--text-tertiary); cursor: pointer; user-select: none; white-space: nowrap; }
+    .pf-tm-inactive-toggle input { accent-color: #a855f7; width: 15px; height: 15px; cursor: pointer; }
 
     /* Two-panel layout */
     .pf-tm-panels { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
@@ -523,8 +534,19 @@ export class TestsComponent implements OnInit {
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
-  /** All tests of the currently-selected type. */
-  readonly typeTests = computed(() => this._tests().filter(t => t.type === this._type()));
+  /** The catalogue is the ACTIVE set. Inactive rows are history — parked by
+   *  restore-to-default, deactivated by admins — and hide by default so the
+   *  Test Master reads as exactly the working catalogue. The toggle reveals
+   *  them (with their count) for audits and reactivation. */
+  readonly showInactive = signal(false);
+  readonly inactiveCount = computed(() =>
+    this._tests().filter(t => t.type === this._type() && !t.isActive).length);
+
+  /** All tests of the currently-selected type (active-only unless toggled).
+   *  Every downstream view derives from this — grid rows, department counts,
+   *  the profile/package tree — so the filter applies uniformly. */
+  readonly typeTests = computed(() => this._tests().filter(t =>
+    t.type === this._type() && (this.showInactive() || t.isActive)));
 
   /** Quick search across every tab — matches name, code or short name.
    *  On Profiles/Packages a bundle also matches when one of its MEMBERS
@@ -692,7 +714,9 @@ export class TestsComponent implements OnInit {
    *  phone admin doesn't edit; desktop/iPad keep the full set. */
   protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
     if (!this.isPhone) return cols;
-    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'isActive']);
+    // NB: the Status column's id is 'status' (it has no `field`) — the old
+    // 'isActive' entry here never matched anything.
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status']);
     return cols
       .filter(c => !drop.has(String(c.field ?? c.colId ?? '')))
       .map(c => (c.field === 'name' ? { ...c, pinned: 'left' as const, minWidth: 150, maxWidth: 190 } : c));
