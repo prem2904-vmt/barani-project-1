@@ -1172,6 +1172,48 @@ pf-shell main>router-outlet+* {
    can't reach it. These overrides live in the global stylesheet so the
    light-theme treatment lands regardless of where the drawer sits in
    the DOM. */
+/* Sample collection screen ONLY: full-height mobile drawer overrides */
+@media (max-width: 640px) {
+  html.pf-collect-immersive .pf-drawer,
+  html.pf-collect-immersive body > .pf-drawer {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  html.pf-collect-immersive .pf-drawer__panel,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__panel {
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: 1 1 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-radius: 0 !important;
+  }
+  html.pf-collect-immersive .pf-drawer__tubes,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__tubes {
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+  html.pf-collect-immersive .pf-drawer__foot,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__foot {
+    flex: 0 0 auto !important;
+    margin-top: auto !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+  }
+}
+
 html[data-theme="light"] .pf-drawer {
   background:
     radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.10) 0%, transparent 55%),

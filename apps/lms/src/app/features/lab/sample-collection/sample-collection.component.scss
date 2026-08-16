@@ -1198,18 +1198,22 @@
         position: static !important;
         align-self: flex-start !important;
         width: auto !important;
-        max-width: 100% !important;
-        justify-content: flex-start !important;
         margin-top: 8px !important;
+      }
+      .pf-drawer__foot {
+        margin-top: auto !important;
+        padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)) !important;
       }
     }
 
   
-    /* pf-collect-immersive hides the bottom nav, so the drawer footer's
-       --tab-nav-total-height reserve became ~100px of dead space under the
-       primary CTA. Reclaim it; keep only the safe-area inset. */
+    :host-context(html.pf-collect-immersive) .pf-drawer__tubes {
+      flex: 1 1 auto !important;
+      margin-block: 0 !important;
+    }
     :host-context(html.pf-collect-immersive) .pf-drawer__foot {
-      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      margin-top: auto !important;
+      padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)) !important;
     }
 
     /* ─── Repetitive mode (series draws) ─────────────────────────────────
@@ -1325,4 +1329,34 @@
     :host-context([data-theme="light"]) .pf-tube__selectmark {
       background: rgba(15, 23, 42, 0.04);
       border-color: rgba(15, 23, 42, 0.3);
+    }
+
+    /* ─── FULL HEIGHT MOBILE OVERRIDE ─── */
+    @media (max-width: 640px) {
+      .pf-drawer {
+        height: 100vh !important;
+        height: 100dvh !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        padding: 0 !important;
+      }
+      .pf-drawer__panel {
+        height: 100% !important;
+        max-height: 100% !important;
+        flex: 1 1 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+      }
+      .pf-drawer__tubes {
+        flex: 1 1 auto !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+      }
+      .pf-drawer__foot {
+        flex: 0 0 auto !important;
+        margin-top: auto !important;
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+      }
     }
