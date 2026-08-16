@@ -2401,7 +2401,11 @@ function renderColumnarTable(
       doc.setFontSize(9 * theme.fontScale);
       const tw = doc.getTextWidth(m.text);
       const cx = Math.min(d.cell.x + 6 + tw + 8, d.cell.x + d.cell.width - 9);
-      const cy = d.cell.y + d.cell.height / 2;
+      // Align to the FIRST text line, not the cell middle — a multi-band
+      // reference stack makes the row tall, and a centred glyph floated
+      // below "500 mg/dL" instead of sitting beside it.
+      const fs = 9 * theme.fontScale;
+      const cy = d.cell.y + 4 + fs * 0.42;
       doc.setFillColor(m.color);
       if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
       else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
