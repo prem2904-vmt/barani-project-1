@@ -242,18 +242,11 @@ function newRowKey(): string {
               </div>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <!-- Department applies to tests and PROFILES (a dept-scoped bench
-                   bundle — its code is even dept-prefixed). A PACKAGE is a
-                   commercial wrapper spanning departments: it carries none, and
-                   each member routes to its own department at order time
-                   (UAT item 13). -->
-              @if (d.type !== 'package') {
               <div><label class="pf-label">Department</label>
                 <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
                            placeholder="— Select department —"
                            (valueChange)="onDeptPicked($event)"></pf-select>
               </div>
-              }
               <!-- Code shows for individual tests AND profiles (a profile REQUIRES
                    its own unique code). Packages carry no code. -->
               @if (d.type === 'individual' || d.type === 'profile') {
