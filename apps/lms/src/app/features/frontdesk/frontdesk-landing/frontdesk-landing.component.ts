@@ -26,7 +26,9 @@ import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/ap
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
-import { Order } from '../../../shared/models/order.model';
+import { Order, OrderSample } from '../../../shared/models/order.model';
+import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
+import { DialogService } from '../../../core/services/dialog.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
@@ -96,6 +98,36 @@ interface DraftOrder {
 
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
 
+// ── Repetitive mode (series) — schedule-sheet view model ──────────
+/** Sample statuses at/past the lab — the only series time points that can
+ *  already carry entered values worth fetching for the schedule sheet. */
+const SERIES_RESULTED = new Set(['received', 'processing', 'resulted', 'validated', 'completed', 'delivered']);
+
+/** One test's processed values under a collected time-point row. */
+interface SeriesResultTest {
+  name: string;
+  values: Array<{ label: string; value: string; unit: string }>;
+}
+
+interface SeriesSheetRow {
+  sampleId: string;
+  offsetLabel: string;
+  /** Wall-clock due time ("HH:mm") — '—' while the anchor is undrawn. */
+  dueLabel: string;
+  state: 'collected' | 'missed' | 'due' | 'countdown' | 'pending';
+  /** Live "−m:ss" until due — only while state === 'countdown'. */
+  countdown: string;
+  results: SeriesResultTest[] | null;
+  resultsLoading: boolean;
+}
+
+interface SeriesSheetGroup {
+  key: string;
+  name: string;
+  deptCode: string;
+  rows: SeriesSheetRow[];
+}
+
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
@@ -108,6 +140,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
@@ -1054,6 +1087,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
+    if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
     this.closeInvoicePreview();
   }
 
@@ -1851,6 +1885,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  have actually been dispatched / received, show the further-along state.
    *  Past the lab (validated/delivered/etc.) the raw status wins. */
   effectiveStatusLabel(o: Order): string {
+    // A live repeat series (some tubes drawn, timed points still pending)
+    // reads as its own state — the raw order status ('billed'/'collected')
+    // under-describes an OGTT mid-run.
+    if (this.seriesInProgress(o)) return 'Series in progress';
     if (o.status === 'sample_collected' || o.status === 'collected') {
       const ss = this.sampleStatus(o);
       if (ss === 'received') return 'In Lab';
@@ -1921,6 +1959,219 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (samples.every(s => isAtOrPast(s.status, 'collected'))) return 'fully_collected';
     if (samples.some(s => s.status !== 'pending' && s.status !== 'rejected')) return 'partially_collected';
     return 'pending';
+  }
+
+  // ── Repetitive mode (series) — Phase 6: frontdesk visibility ─────
+  /** The order carries at least one timed-repeat tube (OGTT-style series). */
+  isSeriesOrder(o: Order): boolean {
+    return (o.samples ?? []).some(s => s.repeatOffsetMin != null);
+  }
+
+  /** Series tube whose schedule is still live — drives the violet pill.
+   *  'missed' (server-closed) and validated tubes keep their own colours. */
+  isSeriesLive(s: OrderSample): boolean {
+    if (s.repeatOffsetMin == null) return false;
+    return s.status === 'pending' || s.status === 'collected'
+      || s.status === 'dispatched' || s.status === 'in_transit' || s.status === 'received';
+  }
+
+  /** ≥1 series time point still pending while ≥1 tube is already drawn —
+   *  the "Series in progress" chip state. */
+  seriesInProgress(o: Order): boolean {
+    const samples = o.samples ?? [];
+    return samples.some(s => s.repeatOffsetMin != null && s.status === 'pending')
+      && samples.some(s => !!s.status && s.status !== 'pending'
+        && s.status !== 'rejected' && s.status !== 'missed');
+  }
+
+  /** Compact offset suffix for the dept pill — "BIO +30m" / "BIO +2h". */
+  seriesOffsetShort(min: number): string {
+    if (min <= 0) return '1st';
+    if (min % 60 === 0) return `+${min / 60}h`;
+    return `+${min}m`;
+  }
+
+  /** Dept-pill text: code, plus the offset on series tubes. */
+  deptPillLabel(s: OrderSample): string {
+    const code = s.department?.code ?? '?';
+    return s.repeatOffsetMin != null ? `${code} ${this.seriesOffsetShort(s.repeatOffsetMin)}` : code;
+  }
+
+  // ── Series schedule sheet ─────────────────────────────────────────
+  /** Id of the order whose schedule sheet is open (null = closed). */
+  private readonly _seriesSheetId = signal<string | null>(null);
+  /** Snapshot fallback if the order drops out of the today feed mid-view. */
+  private readonly _seriesSheetSnapshot = signal<Order | null>(null);
+  /** 1 s wall clock — ticks only while the sheet is open (cleared on
+   *  close/destroy) so the locked-countdown chips stay live. */
+  private readonly seriesNowMs = signal(Date.now());
+  private seriesClock: ReturnType<typeof setInterval> | null = null;
+  readonly seriesClosing = signal(false);
+  /** Lazily-fetched processed values, keyed by series sample id. */
+  private readonly _seriesResults = signal<Record<string, { loading: boolean; tests: SeriesResultTest[] }>>({});
+
+  /** Full sheet view-model: one group per series (repeatProfileTestId),
+   *  one row per time point sorted by offset. Reads the live today feed so
+   *  a poll/refresh (e.g. after Collect or Close collection) updates the
+   *  open sheet in place. */
+  readonly seriesSheet = computed<{ order: Order; groups: SeriesSheetGroup[]; canClose: boolean } | null>(() => {
+    const id = this._seriesSheetId();
+    if (!id) return null;
+    const order = this._orders().find(o => o.id === id) ?? this._seriesSheetSnapshot();
+    if (!order) return null;
+    const now = this.seriesNowMs();
+    const results = this._seriesResults();
+    const seriesSamples = (order.samples ?? []).filter(s => s.repeatOffsetMin != null);
+
+    const byKey = new Map<string, OrderSample[]>();
+    for (const s of seriesSamples) {
+      const key = s.repeatProfileTestId ?? '';
+      const list = byKey.get(key);
+      if (list) list.push(s); else byKey.set(key, [s]);
+    }
+
+    const groups: SeriesSheetGroup[] = [];
+    for (const [key, samples] of byKey) {
+      samples.sort((a, b) => (a.repeatOffsetMin ?? 0) - (b.repeatOffsetMin ?? 0));
+      const anchor = samples.find(x => x.repeatOffsetMin === 0);
+      const anchorMs = anchor && anchor.status !== 'pending' && anchor.collectedAt
+        ? Date.parse(anchor.collectedAt) : NaN;
+      const rows: SeriesSheetRow[] = samples.map(s => {
+        const dueMs = Number.isNaN(anchorMs) ? null : anchorMs + (s.repeatOffsetMin ?? 0) * 60_000;
+        let state: SeriesSheetRow['state'];
+        let countdown = '';
+        if (s.status === 'missed') {
+          state = 'missed'; // server-closed (Close collection)
+        } else if (s.status !== 'pending' && s.status !== 'rejected') {
+          state = 'collected'; // drawn — dispatched/received/… all count
+        } else {
+          const st = seriesState(s, samples, now);
+          if (st.kind === 'missed') state = 'missed'; // window elapsed (visual)
+          else if (st.kind === 'anchor' || st.kind === 'due') state = 'due';
+          else if (st.kind === 'locked' && st.reason === 'not-due') {
+            state = 'countdown';
+            countdown = '−' + countdownLabel(st.msUntilDue ?? 0);
+          } else state = 'pending'; // awaiting-anchor / rejected fallback
+        }
+        const res = results[s.id];
+        return {
+          sampleId: s.id,
+          offsetLabel: offsetLabel(s.repeatOffsetMin ?? 0),
+          dueLabel: dueMs != null ? dueClockLabel(dueMs) : '—',
+          state,
+          countdown,
+          results: state === 'collected' && res && !res.loading && res.tests.length > 0 ? res.tests : null,
+          resultsLoading: state === 'collected' && !!res?.loading,
+        };
+      });
+      const first = samples[0];
+      const t0 = (first.tests ?? [])[0];
+      groups.push({
+        key,
+        name: t0?.packageName || t0?.profileName || t0?.name || first.department?.name || 'Series',
+        deptCode: first.department?.code ?? '',
+        rows,
+      });
+    }
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+
+    const anyCollected = seriesSamples.some(s => !!s.status && s.status !== 'pending'
+      && s.status !== 'rejected' && s.status !== 'missed');
+    const anyPending = seriesSamples.some(s => s.status === 'pending');
+    return { order, groups, canClose: anyCollected && anyPending };
+  });
+
+  openSeriesSheet(o: Order): void {
+    this._seriesSheetSnapshot.set(o);
+    this._seriesSheetId.set(o.id);
+    this.seriesNowMs.set(Date.now());
+    if (this.seriesClock) clearInterval(this.seriesClock);
+    this.seriesClock = setInterval(() => this.seriesNowMs.set(Date.now()), 1000);
+    this.loadSeriesResults(o);
+  }
+
+  closeSeriesSheet(): void {
+    this._seriesSheetId.set(null);
+    this._seriesSheetSnapshot.set(null);
+    if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
+  }
+
+  /** Fetch processed values for series tubes already past collection —
+   *  one GET /api/samples/{id}/tests per qualifying tube, on sheet open. */
+  private loadSeriesResults(o: Order): void {
+    this._seriesResults.set({});
+    const targets = (o.samples ?? []).filter(s =>
+      s.repeatOffsetMin != null && SERIES_RESULTED.has(s.status));
+    for (const s of targets) {
+      this._seriesResults.update(m => ({ ...m, [s.id]: { loading: true, tests: [] } }));
+      this.api.get<OrderSample>(`/api/samples/${s.id}/tests`).subscribe({
+        next: full => this._seriesResults.update(m => ({
+          ...m, [s.id]: { loading: false, tests: this.extractSeriesTests(full) },
+        })),
+        error: () => this._seriesResults.update(m => ({
+          ...m, [s.id]: { loading: false, tests: [] } })),
+      });
+    }
+  }
+
+  /** Entered/validated values only, parsed from the currentResult snapshot.
+   *  Handles both value shapes: `values: {param: {value, unit}}` and the
+   *  flat `values: {param: value}` (titles/units then come from the test's
+   *  parameter definitions when present). */
+  private extractSeriesTests(sample: OrderSample | null): SeriesResultTest[] {
+    const out: SeriesResultTest[] = [];
+    for (const t of (sample?.tests ?? [])) {
+      if (t.status !== 'entered' && t.status !== 'validated') continue;
+      if (!t.currentResult) continue;
+      let snap: { values?: Record<string, unknown> };
+      try { snap = JSON.parse(t.currentResult); } catch { continue; }
+      if (!snap?.values) continue;
+      let params: Array<{ name: string; title?: string; unit?: string }> = [];
+      try {
+        const blob = JSON.parse(t.test?.parameters ?? '{}') as { parameters?: any[] };
+        params = blob.parameters ?? [];
+      } catch { /* fall back to raw keys */ }
+      const values: SeriesResultTest['values'] = [];
+      for (const [name, raw] of Object.entries(snap.values)) {
+        const isObj = raw !== null && typeof raw === 'object';
+        const v = isObj ? (raw as { value?: unknown }).value : raw;
+        if (v === null || v === undefined || v === '') continue;
+        const p = params.find(x => x.name === name);
+        const unit = (isObj ? (raw as { unit?: string }).unit : undefined) ?? p?.unit ?? '';
+        values.push({ label: p?.title || name, value: String(v), unit });
+      }
+      if (values.length) out.push({ name: t.test?.name || t.name || 'Test', values });
+    }
+    return out;
+  }
+
+  /** Close out the remaining time points: confirm (danger), PATCH
+   *  /close-collection, toast the missed count, refresh the feed. The sheet
+   *  stays open — it re-derives from the refreshed feed, so the closed
+   *  points flip to 'missed' in place. */
+  async closeSeriesCollection(o: Order): Promise<void> {
+    if (this.seriesClosing()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Close collection?',
+      message: 'Pending time points will be reported as missed on the final report. This cannot be undone.',
+      confirmLabel: 'Close collection',
+      cancelLabel: 'Keep collecting',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.seriesClosing.set(true);
+    this.api.patch<{ missed: number }>(`/api/orders/${o.id}/close-collection`, {}).subscribe({
+      next: r => {
+        this.seriesClosing.set(false);
+        const n = r?.missed ?? 0;
+        this.toasts.success(`Collection closed — ${n} time point${n === 1 ? '' : 's'} marked missed`);
+        this.refresh();
+      },
+      error: e => {
+        this.seriesClosing.set(false);
+        this.toasts.error(ApiError.from(e).message);
+      },
+    });
   }
   /** Single-glyph status per tube (used in the FD slim card per-dept pill). */
   sampleGlyph(status: string): string {
@@ -2492,6 +2743,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
   }
   orderTone(o: Order): ChipTone {
+    // Matches the "Series in progress" chip label (effectiveStatusLabel).
+    if (this.seriesInProgress(o)) return 'violet';
     switch (o.status) {
       case 'completed':
       case 'validated':

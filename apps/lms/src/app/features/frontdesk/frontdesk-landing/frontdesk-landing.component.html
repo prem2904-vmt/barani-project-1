@@ -746,13 +746,17 @@
                       <div class="pf-card__depts">
                         @for (s of o.samples; track s.id) {
                         <span class="pf-card__dept"
-                          [class.pf-card__dept--done]="s.status !== 'pending' && s.status !== 'rejected'"
+                          [class.pf-card__dept--done]="s.status !== 'pending' && s.status !== 'rejected' && s.status !== 'missed'"
+                          [class.pf-card__dept--series]="isSeriesLive(s)"
                           [class.pf-card__dept--validated]="isSampleValidated(s)"
+                          [class.pf-card__dept--missed]="s.status === 'missed'"
                           [title]="(s.department?.name ?? '') + ' — ' + (isSampleValidated(s) ? 'validated' : s.status)">
-                          {{ s.department?.code ?? '?' }}
+                          {{ deptPillLabel(s) }}
                           <span class="pf-card__dot"
-                            [class.pf-card__dot--done]="s.status !== 'pending' && s.status !== 'rejected'"
-                            [class.pf-card__dot--validated]="isSampleValidated(s)">●</span>
+                            [class.pf-card__dot--done]="s.status !== 'pending' && s.status !== 'rejected' && s.status !== 'missed'"
+                            [class.pf-card__dot--series]="isSeriesLive(s)"
+                            [class.pf-card__dot--validated]="isSampleValidated(s)"
+                            [class.pf-card__dot--missed]="s.status === 'missed'">●</span>
                         </span>
                         }
                         @if (hasPartialReady(o)) {
@@ -785,6 +789,18 @@
                         } @else if (o.status === 'billed') {
                         <button type="button" class="pf-ghostbtn press" [disabled]="reprintLoading()"
                           (click)="reprintLabels(o)">Reprint Labels</button>
+                        }
+                        @if (isSeriesOrder(o)) {
+                        <!-- Repeat-series orders: schedule sheet with per-time-point state. -->
+                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--series"
+                          (click)="openSeriesSheet(o)" title="Series schedule and time-point status">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 7v5l3 2" />
+                          </svg>
+                          Status
+                        </button>
                         }
                         @if (o.status === 'partially_validated') {
                         <button type="button" class="pf-ghostbtn press" [disabled]="downloadingReport() !== null"
@@ -1196,6 +1212,112 @@
         {{ cancelling() ? 'Cancelling…' : 'Cancel & refund' }}
       </button>
     </div>
+  </div>
+  }
+
+  <!-- Series schedule sheet (repetitive mode) — per-time-point state, live
+       countdowns while open, processed values under collected points. -->
+  @if (seriesSheet(); as sheet) {
+  <div class="pf-drawer-bd" (click)="closeSeriesSheet()"></div>
+  <div class="pf-series" role="dialog" aria-modal="true" aria-label="Series schedule">
+    <header class="pf-series__hdr">
+      <div class="pf-series__hgroup">
+        <h3 class="pf-series__title">Series schedule</h3>
+        <p class="pf-series__sub">{{ sheet.order.patient?.displayName || 'Patient' }} · #{{ sheet.order.id.slice(0, 8) }}</p>
+      </div>
+      <button type="button" class="pf-series__close" (click)="closeSeriesSheet()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" aria-hidden="true">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </header>
+    <div class="pf-series__body">
+      @for (grp of sheet.groups; track grp.key) {
+      <div class="pf-series__grp">
+        <p class="pf-series__grp-name">
+          {{ grp.name }}
+          @if (grp.deptCode) { <span class="pf-series__grp-dept">{{ grp.deptCode }}</span> }
+        </p>
+        @for (row of grp.rows; track row.sampleId) {
+        <div class="pf-series__row" [attr.data-state]="row.state">
+          <span class="pf-series__offset">{{ row.offsetLabel }}</span>
+          <span class="pf-series__due">{{ row.dueLabel }}</span>
+          @switch (row.state) {
+          @case ('collected') {
+          <span class="pf-series__chip pf-series__chip--collected">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m5 12 4 4L19 6" />
+            </svg>
+            Collected
+          </span>
+          }
+          @case ('missed') {
+          <span class="pf-series__chip pf-series__chip--missed">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+            Missed
+          </span>
+          }
+          @case ('due') {
+          <span class="pf-series__chip pf-series__chip--due">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            Due now
+          </span>
+          }
+          @case ('countdown') {
+          <span class="pf-series__chip pf-series__chip--countdown">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            {{ row.countdown }}
+          </span>
+          }
+          @default {
+          <span class="pf-series__chip">Pending</span>
+          }
+          }
+        </div>
+        @if (row.resultsLoading) {
+        <p class="pf-series__loading">Loading values…</p>
+        } @else if (row.results) {
+        <div class="pf-series__results">
+          @for (t of row.results; track $index) {
+          <div class="pf-series__result">
+            <span class="pf-series__result-test">{{ t.name }}</span>
+            <span class="pf-series__result-vals">
+              @for (v of t.values; track $index) {
+              <span class="pf-series__val">
+                @if (t.values.length > 1) { <span class="pf-series__val-label">{{ v.label }}</span> }
+                {{ v.value }}@if (v.unit) { <span class="pf-series__val-unit">{{ v.unit }}</span> }
+              </span>
+              }
+            </span>
+          </div>
+          }
+        </div>
+        }
+        }
+      </div>
+      }
+    </div>
+    @if (sheet.canClose) {
+    <footer class="pf-series__foot">
+      <button type="button" class="pf-series__closecoll press" [disabled]="seriesClosing()"
+        (click)="closeSeriesCollection(sheet.order)">
+        {{ seriesClosing() ? 'Closing…' : 'Close collection' }}
+      </button>
+    </footer>
+    }
   </div>
   }
 
