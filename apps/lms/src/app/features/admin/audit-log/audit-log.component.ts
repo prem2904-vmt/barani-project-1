@@ -172,7 +172,15 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
               @if (expanded() === log.id) {
                 <div class="mt-3 pt-3 border-t" style="border-color: var(--border-subtle);">
                   @if (diff(log).length === 0) {
-                    <p class="text-[12px]" style="color: var(--text-tertiary);">No field-level detail recorded.</p>
+                    <p class="text-[12px]" style="color: var(--text-tertiary);">
+                      @if (log.entityType === 'Auth') {
+                        <!-- Older auth rows predate the event description; a
+                             sign-in has no field diff by nature. -->
+                        Sign-in / security event — there are no record fields to compare.
+                      } @else {
+                        No field-level detail recorded.
+                      }
+                    </p>
                   } @else {
                     <div class="space-y-1.5">
                       @for (d of diff(log); track d.field) {
@@ -330,13 +338,28 @@ export class AuditLogComponent implements OnInit {
     return this.entityTypes.find(e => e.value === t)?.label ?? t.replace(/Entity$/, '');
   }
   actionLabel(a: string): string {
-    return a === 'create' ? 'CREATED' : a === 'update' ? 'UPDATED' : a === 'delete' ? 'DELETED' : a.toUpperCase();
+    switch (a) {
+      case 'create': return 'CREATED';
+      case 'update': return 'UPDATED';
+      case 'delete': return 'DELETED';
+      // Auth events written by AuthController — not entity mutations.
+      case 'login': return 'SIGNED IN';
+      case 'login_failed': return 'SIGN-IN FAILED';
+      case 'password_changed': return 'PASSWORD';
+      case 'pin_changed': return 'PIN CHANGED';
+      case 'pin_failed': return 'PIN FAILED';
+      default: return a.toUpperCase();
+    }
   }
   badgeBg(a: string): string {
-    return a === 'create' ? 'rgba(16,185,129,0.15)' : a === 'delete' ? 'rgba(244,63,94,0.15)' : 'rgba(245,158,11,0.15)';
+    if (a === 'create' || a === 'login') return 'rgba(16,185,129,0.15)';
+    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return 'rgba(244,63,94,0.15)';
+    return 'rgba(245,158,11,0.15)';
   }
   badgeFg(a: string): string {
-    return a === 'create' ? '#10b981' : a === 'delete' ? '#f43f5e' : '#f59e0b';
+    if (a === 'create' || a === 'login') return '#10b981';
+    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return '#f43f5e';
+    return '#f59e0b';
   }
   shortId(id: string): string {
     return id.length > 12 ? id.slice(0, 8) + '…' : id;
