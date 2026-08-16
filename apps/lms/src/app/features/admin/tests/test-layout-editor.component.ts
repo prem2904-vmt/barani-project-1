@@ -20,12 +20,12 @@ import {
   ReportColumn,
   ReportSection,
   ReportSectionType,
-  ResolvedReportLayout,
   ResolvedRow,
   ResolvedSection,
 } from '../../../shared/models/report-layout.model';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ReportPdfPreviewComponent } from '../report-template/report-pdf-preview.component';
 
 const COLOR_TOKENS: Array<{ value: string; label: string; hex: string }> = [
   { value: '',       label: 'Default', hex: '#cbd5e1' },
@@ -58,7 +58,7 @@ const OPERATORS = [
 @Component({
   selector: 'pf-test-layout-editor',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, RouterLink, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, NgTemplateOutlet, RouterLink, SelectComponent, TileComponent, TouchButtonComponent, ReportPdfPreviewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -534,87 +534,17 @@ const OPERATORS = [
                 </div>
               </div>
 
-              @if (previewLoading()) {
-                <p class="pf-le-tip" style="text-align: center; padding: 24px 0;">Resolving…</p>
-              } @else if (preview(); as pv) {
-                <div class="pf-preview-render">
-                  @for (sec of pv.sections; track sec.id) {
-                    <div class="pf-pv-section" [attr.data-type]="sec.type">
-                      @if (sec.label) { <h5 class="pf-pv-label">{{ sec.label }}</h5> }
-
-                      @if (sec.type === 'grid' && sec.rows) {
-                        <table class="pf-pv-table">
-                          <thead>
-                            <tr>
-                              @for (c of pv.columns; track c.id) {
-                                <th [style.width.%]="c.width">{{ c.label }}</th>
-                              }
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (r of sec.rows; track r.id) {
-                              @if (r.isMerged) {
-                                <tr class="pf-pv-row pf-pv-row--merged">
-                                  <td [attr.colspan]="pv.columns.length">{{ r.mergeContent }}</td>
-                                </tr>
-                              } @else {
-                                <tr class="pf-pv-row"
-                                    [style.color]="r.color || null"
-                                    [style.font-weight]="r.isBold ? '700' : null">
-                                  @for (c of pv.columns; track c.id) {
-                                    <td>{{ r.cells[c.name] }}</td>
-                                  }
-                                </tr>
-                              }
-                            }
-                          </tbody>
-                        </table>
-                      }
-
-                      @if (sec.type === 'paragraph') {
-                        <p class="pf-pv-para">{{ sec.content }}</p>
-                      }
-
-                      @if (sec.type === 'image') {
-                        @if (sec.imageUrls && sec.imageUrls.length > 0) {
-                          <div class="pf-pv-images">
-                            @for (u of sec.imageUrls; track u) {
-                              <img [src]="u" alt="" />
-                            }
-                          </div>
-                        } @else {
-                          <p class="pf-pv-empty">No images attached.</p>
-                        }
-                      }
-
-                      @if (sec.type === 'chart' && sec.chart) {
-                        <div class="pf-pv-chart">
-                          <div class="pf-pv-chart__bar">
-                            @for (z of sec.chart.zones; track z.from) {
-                              <span class="pf-pv-chart__zone"
-                                    [style.left.%]="zonePctLeft(sec.chart, z)"
-                                    [style.width.%]="zonePctWidth(sec.chart, z)"
-                                    [style.background]="zoneHex(z.color)"></span>
-                            }
-                            @if (sec.chart.value !== null && sec.chart.value !== undefined) {
-                              <span class="pf-pv-chart__marker"
-                                    [style.left.%]="markerPct(sec.chart)"></span>
-                            }
-                          </div>
-                          <div class="pf-pv-chart__axis">
-                            <span>{{ sec.chart.min }}</span>
-                            <span>{{ sec.chart.value ?? '–' }}</span>
-                            <span>{{ sec.chart.max }}</span>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  }
-                  @if (pv.sections.length === 0) {
-                    <p class="pf-pv-empty">No sections visible for these values.</p>
-                  }
-                </div>
-              }
+              <!-- The EXACT print: same jsPDF pipeline as the patient report,
+                   with the typed sample values driving the engine. Reflects
+                   the SAVED layout (refresh saves the draft first). -->
+              <div class="pf-preview-render pf-preview-render--pdf">
+                <pf-report-pdf-preview
+                  [testId]="testId()"
+                  [parameters]="parameters()"
+                  [values]="sampleValues()"
+                  [refreshToken]="previewToken()">
+                </pf-report-pdf-preview>
+              </div>
             </aside>
           }
         </div>
@@ -1698,8 +1628,8 @@ export class TestLayoutEditorComponent {
   protected readonly saving = signal(false);
 
   protected readonly previewOpen = signal(false);
-  protected readonly previewLoading = signal(false);
-  protected readonly preview = signal<ResolvedReportLayout | null>(null);
+  /** Bumped to re-render the embedded PDF preview drawer. */
+  protected readonly previewToken = signal(0);
   protected readonly sampleValues = signal<Record<string, unknown>>({});
 
   // ── Master-detail UI state ────────────────────────────────
@@ -2830,20 +2760,16 @@ export class TestLayoutEditorComponent {
   async refreshPreview() {
     const id = this.testId();
     if (!id) return;
-    this.previewLoading.set(true);
     try {
       // Save current draft to the server before previewing so the engine sees
-      // the latest sections. Lightweight — same shape we'd persist anyway.
+      // the latest sections (the embedded PDF preview resolves server-side).
       // Skipped if there are no sections yet (draft-empty state).
       if (this.sections().length > 0) {
         await this.layout.saveTestLayout(id, this.reindex(this.sections()));
       }
-      const pv = await this.layout.preview(id, this.sampleValues(), []);
-      this.preview.set(pv);
+      this.previewToken.update(v => v + 1);
     } catch (e: unknown) {
       this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.previewLoading.set(false);
     }
   }
 
@@ -2906,18 +2832,6 @@ export class TestLayoutEditorComponent {
 
   // ───────── Chart preview math (resolved) ──────────────
 
-  zonePctLeft(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number }): number {
-    if (!chart || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((z.from - chart.min) / (chart.max - chart.min)) * 100));
-  }
-  zonePctWidth(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number; to: number }): number {
-    if (!chart || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((z.to - z.from) / (chart.max - chart.min)) * 100));
-  }
-  markerPct(chart: ResolvedReportLayout['sections'][number]['chart']): number {
-    if (!chart || chart.value === null || chart.value === undefined || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((chart.value - chart.min) / (chart.max - chart.min)) * 100));
-  }
   zoneHex(token: string): string {
     if (token === 'red')    return '#fecaca';
     if (token === 'orange') return '#fed7aa';

@@ -66,6 +66,24 @@ export class ReportLayoutService {
     ));
   }
 
+  // ── Per-test column override ────────────────────────────
+
+  /** The test/profile's OWN column override, or columns:null when it
+   *  inherits the department set. */
+  getTestColumns(testId: string): Promise<{ testId: string; columns: ReportColumn[] | null; configured: boolean }> {
+    return firstValueFrom(this.api.get<{ testId: string; columns: ReportColumn[] | null; configured: boolean }>(
+      `/api/report-layout/test/${testId}/columns`
+    ));
+  }
+
+  /** Save the override; null (or empty) reverts to the department columns. */
+  saveTestColumns(testId: string, columns: ReportColumn[] | null): Promise<unknown> {
+    return firstValueFrom(this.api.post<unknown>(
+      `/api/report-layout/test/${testId}/columns`,
+      { columns },
+    ));
+  }
+
   // ── Preview ─────────────────────────────────────────────
 
   /** Run the engine end-to-end. Used by the admin live preview AND the

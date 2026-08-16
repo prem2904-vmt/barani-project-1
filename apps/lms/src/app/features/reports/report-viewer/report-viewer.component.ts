@@ -1122,7 +1122,11 @@ export class ReportViewerComponent implements OnInit {
 
     const gridSections = (layout?.sections ?? []).filter(s => s.isVisible && s.type === 'grid');
     if (gridSections.length > 0) {
-      const cols = layout!.columns;
+      // Union with the department columns (present only when the test has a
+      // column override) so a column the override drops still resolves its
+      // VALUES — the on-screen table's shape is fixed and must never blank
+      // out because the print layout chose fewer columns.
+      const cols = [...layout!.columns, ...(layout!.departmentColumns ?? [])];
       const srcOf = (type: string) => cols.find(c => c.type === type);
       const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
       for (const sec of gridSections) {

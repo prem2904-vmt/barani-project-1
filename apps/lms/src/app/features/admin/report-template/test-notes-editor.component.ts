@@ -11,8 +11,8 @@ import {
   ReportColumn,
   ReportSection,
   ResolvedReportLayout,
-  ResolvedRow,
 } from '../../../shared/models/report-layout.model';
+import { PreviewProfileMember, ReportPdfPreviewComponent } from './report-pdf-preview.component';
 import { Test } from '../../../shared/models/test.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -36,7 +36,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 @Component({
   selector: 'pf-test-notes-editor',
   standalone: true,
-  imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, ReportPdfPreviewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="grid gap-5 {{ hidePreview() ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.3fr_1fr]' }}">
@@ -245,86 +245,29 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
         }
       </pf-tile>
 
-      <!-- ─────────────── RIGHT: live preview ─────────────── -->
+      <!-- ─────────────── RIGHT: live preview ───────────────
+           The EXACT printed output: the same jsPDF pipeline as the patient
+           report, embedded — not an HTML approximation. -->
       @if (!hidePreview()) {
       <aside class="xl:sticky xl:top-4 h-fit">
         <div class="flex items-center justify-between mb-2">
           <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
-             style="color: var(--text-muted);">
-            Live preview {{ previewing() ? '(rendering…)' : '' }}
-          </p>
-          <button type="button" class="pf-link-btn" [disabled]="!selectedTestId() || previewing()"
+             style="color: var(--text-muted);">Live preview</p>
+          <button type="button" class="pf-link-btn" [disabled]="!selectedTestId()"
                   (click)="refreshPreview()">Refresh</button>
         </div>
 
-        <pf-tile tone="default" padding="lg" class="block">
-          @if (!selectedTestId()) {
-            <p class="text-[13px]" style="color: var(--text-tertiary);">
-              Pick a test to preview its resolved report.
-            </p>
-          } @else if (previewError()) {
-            <p class="text-[12.5px]" style="color: #f87171;">{{ previewError() }}</p>
-          } @else if (!preview()) {
-            <p class="text-[13px]" style="color: var(--text-tertiary);">
-              Save or hit Refresh to render a preview with sample values.
-            </p>
-          } @else {
-            <div class="pf-preview">
-              <p class="text-[14px] font-semibold" style="color: var(--text-primary);">
-                {{ preview()!.testName }}
-              </p>
-              @if (preview()!.sampleType) {
-                <p class="text-[11px] italic mb-1" style="color: var(--text-tertiary);">
-                  {{ preview()!.sampleType }}
-                </p>
-              }
-              <p class="text-[11px] mb-3" style="color: var(--text-muted);">
-                {{ preview()!.departmentName }}
-              </p>
-
-              @for (sec of preview()!.sections; track sec.id) {
-                @if (sec.isVisible) {
-                  <div class="pf-prev-sec">
-                    @if (sec.label) {
-                      <p class="pf-prev-sec__label">{{ sec.label }}</p>
-                    }
-
-                    @if (sec.type === 'grid' && sec.rows) {
-                      <table class="pf-prev-table">
-                        <thead>
-                          <tr>
-                            @for (vc of previewVCols(); track vc.id) {
-                              <th [style.width.%]="vc.width">{{ vc.label }}</th>
-                            }
-                          </tr>
-                        </thead>
-                        <tbody>
-                          @for (row of sec.rows; track row.id) {
-                            <tr>
-                              @for (vc of previewVCols(); track vc.id) {
-                                <td [style.color]="row.color || null"
-                                    [style.font-weight]="row.isBold ? '700' : null">
-                                  {{ cellText(row, vc) }}
-                                </td>
-                              }
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    }
-
-                    @if (sec.type === 'paragraph') {
-                      <p class="pf-prev-para">{{ sec.content }}</p>
-                    }
-                  </div>
-                }
-              }
-            </div>
-          }
-        </pf-tile>
+        <pf-report-pdf-preview
+          [testId]="selectedTestId()"
+          [testName]="selectedTest()?.name || ''"
+          [parameters]="paramNames()"
+          [profileMembers]="profileMembers()"
+          [columnsOverride]="columnsOverride()"
+          [refreshToken]="previewToken()">
+        </pf-report-pdf-preview>
 
         <p class="text-[10px] mt-2" style="color: var(--text-tertiary);">
-          Preview runs the layout engine with sample result values for this test's parameters.
+          Rendered by the same PDF engine as the patient report — what you see here is the exact print.
         </p>
       </aside>
       }
@@ -443,6 +386,16 @@ export class TestNotesEditorComponent implements OnInit {
    *  that is already open) instead of its own dropdown. When set, the picker
    *  row is hidden and the catalogue fetch is skipped entirely. */
   readonly fixedTestId = input<string>('');
+  /** Parameter names supplied by the HOST (Test Master has the live form
+   *  fields; the embedded editor has no catalogue). Fixes the empty preview /
+   *  empty Description list for tests with no saved layout. */
+  readonly parameters = input<string[]>([]);
+  /** Profile members from the host — lets a PROFILE preview print exactly as
+   *  the report does (member rows + profile notes + column override). */
+  readonly profileMembers = input<PreviewProfileMember[]>([]);
+  /** LIVE per-test column override from the host's columns editor, previewed
+   *  before it is saved. */
+  readonly columnsOverride = input<ReportColumn[] | null>(null);
 
   private readonly api = inject(ApiService);
   private readonly layout = inject(ReportLayoutService);
@@ -458,36 +411,8 @@ export class TestNotesEditorComponent implements OnInit {
   protected readonly preview = signal<ResolvedReportLayout | null>(null);
   protected readonly previewing = signal(false);
   protected readonly previewError = signal<string>('');
-
-  /** Visual columns for the preview table — consecutive LINKED columns merged
-   *  into one (Result + Unit → "11.4 g/dL"), keeping the first column's header.
-   *  Mirrors the PDF renderer so the preview matches the printed report. */
-  protected readonly previewVCols = computed<{ id: string; label: string; width: number; members: ReportColumn[] }[]>(() => {
-    let cols = (this.preview()?.columns ?? []).slice();
-    // Default-merge an adjacent Result→Unit when no link is configured yet.
-    if (!cols.some(c => c.linkedNext)) {
-      const ri = cols.findIndex(c => c.type === 'result');
-      if (ri >= 0 && cols[ri + 1]?.type === 'unit') {
-        cols = cols.map((c, i) => (i === ri ? { ...c, linkedNext: true } : c));
-      }
-    }
-    const out: { id: string; label: string; width: number; members: ReportColumn[] }[] = [];
-    for (let i = 0; i < cols.length; i++) {
-      const members: ReportColumn[] = [cols[i]];
-      while (cols[i]?.linkedNext && i + 1 < cols.length) { members.push(cols[++i]); }
-      out.push({ id: members[0].id, label: members[0].label, width: members.reduce((s, m) => s + (m.width || 0), 0), members });
-    }
-    return out;
-  });
-
-  /** Merged cell text for a row across a visual column's members. */
-  protected cellText(row: ResolvedRow, vc: { members: ReportColumn[] }): string {
-    return vc.members
-      .map(m => row.cells[m.name])
-      .filter(v => v != null && String(v).trim() !== '')
-      .map(v => String(v).trim())
-      .join(' ');
-  }
+  /** Bumped to re-render the embedded PDF preview (Refresh / after Save). */
+  protected readonly previewToken = signal(0);
 
   /** Default column names a grid row exposes cell templates for. Matches the
    *  default department column set; admins can leave cells blank to fall back
@@ -554,6 +479,8 @@ export class TestNotesEditorComponent implements OnInit {
   /** Parameter names of the selected test (from the test master), used to lay
    *  out the Description-column fields even before any layout exists. */
   protected paramNames(): string[] {
+    const host = this.parameters();
+    if (host.length > 0) return host;
     const t = this.selectedTest();
     const raw = (t as unknown as { parameters?: unknown })?.parameters;
     if (!raw) return this.gridParamNames();
@@ -606,6 +533,8 @@ export class TestNotesEditorComponent implements OnInit {
   }
   /** Parameter names strictly from the test master (for row synthesis). */
   private paramNamesFromTest(): string[] {
+    const host = this.parameters();
+    if (host.length > 0) return host;
     const t = this.selectedTest();
     const raw = (t as unknown as { parameters?: unknown })?.parameters;
     if (!raw) return [];
@@ -779,6 +708,11 @@ export class TestNotesEditorComponent implements OnInit {
         }
       }
     }
+    // Host-supplied parameter names (the embedded Test Master case, where
+    // selectedTest() is empty because the catalogue was never fetched).
+    for (const n of this.parameters()) {
+      if (n && !(n in values)) values[n] = '1.0';
+    }
     // Parameters declared on the test entity (so preview works even before
     // grid rows are added).
     const test = this.selectedTest();
@@ -799,9 +733,12 @@ export class TestNotesEditorComponent implements OnInit {
   async refreshPreview() {
     const testId = this.selectedTestId();
     if (!testId) return;
+    this.previewToken.update(v => v + 1);   // re-render the embedded PDF
     this.previewing.set(true);
     this.previewError.set('');
     try {
+      // Still fetched for cellColumnNames() — the advanced cell-template grid
+      // lists the department's resolved column names.
       const resolved = await this.layout.preview(testId, this.sampleValues(), [], { sex: 'Female', age: 35 });
       this.preview.set(resolved);
     } catch (e: unknown) {

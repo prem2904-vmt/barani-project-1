@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -43,7 +43,10 @@ export interface ColumnsEditorState {
   template: `
     <pf-tile tone="default" padding="lg" class="block">
 
-      <!-- ── Toolbar: department · status · actions ─────────────── -->
+      <!-- ── Toolbar: department · status · actions ───────────────
+           Host-managed mode (Test Master's per-test override) has no
+           department picker and no toolbar — the HOST saves. -->
+      @if (!hostManaged()) {
       <div class="pf-ce-bar">
         <pf-select
           style="width: 230px"
@@ -67,18 +70,25 @@ export interface ColumnsEditorState {
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </div>
+      }
 
       @if (loading()) {
         <div class="flex justify-center py-8">
           <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading…"></pf-loading-logo>
         </div>
-      } @else if (selectedDeptId()) {
+      } @else if (selectedDeptId() || hostManaged()) {
 
         <p class="pf-ce-hint">
-          This strip IS the printed table for <strong>{{ selectedDeptName() }}</strong> — left to right,
-          widths to scale. Drag a card to reorder · tap a card to edit it · tap the
-          <span class="pf-ce-chain-demo">🔗</span> between two cards to merge them into one cell
-          (Result + Unit → "11.4 g/dL").
+          @if (hostManaged()) {
+            This strip IS this record's printed table — left to right. Drag a card to
+            reorder · tap a card to rename it · tap the link between two cards to merge
+            them into one cell (Result + Unit → "11.4 g/dL").
+          } @else {
+            This strip IS the printed table for <strong>{{ selectedDeptName() }}</strong> — left to right,
+            widths to scale. Drag a card to reorder · tap a card to edit it · tap the
+            <span class="pf-ce-chain-demo">🔗</span> between two cards to merge them into one cell
+            (Result + Unit → "11.4 g/dL").
+          }
         </p>
 
         <!-- ── THE STRIP: a live miniature of the report table ───── -->
@@ -92,7 +102,7 @@ export interface ColumnsEditorState {
                  [class.pf-ce-col--linkR]="c.linkedNext && !last"
                  (click)="selectCol(i)">
               <span class="pf-ce-col__label">{{ c.label || '—' }}</span>
-              <span class="pf-ce-col__meta">{{ typeLabel(c.type) }} · {{ c.width }}%</span>
+              <span class="pf-ce-col__meta">{{ typeLabel(c.type) }}@if (!hostManaged()) { · {{ c.width }}% }</span>
               @if (c.locked) { <span class="pf-ce-col__lock" title="Locked value">🔒</span> }
             </div>
             @if (!last) {
@@ -109,7 +119,10 @@ export interface ColumnsEditorState {
           }
         </div>
 
-        <!-- ── Width bar: shares of the printed page width ───────── -->
+        <!-- ── Width bar: shares of the printed page width ─────────
+             Hidden in host-managed mode (pick + order + rename only —
+             widths redistribute proportionally on their own). -->
+        @if (!hostManaged()) {
         <div class="pf-ce-widthbar" aria-hidden="true">
           @for (c of columns(); track c.id; let i = $index) {
             <div class="pf-ce-widthseg" [style.flexGrow]="c.width || 1"
@@ -123,6 +136,14 @@ export interface ColumnsEditorState {
           <button type="button" class="pf-link-btn" (click)="distributeEvenly()">Distribute to 100%</button>
           <button type="button" class="pf-link-btn" (click)="addColumn()">+ Add column</button>
         </div>
+        } @else if (missingSourceCols().length > 0) {
+          <div class="pf-ce-widthrow" style="margin-top: 10px;">
+            <span class="pf-ce-dim">Add back:</span>
+            @for (c of missingSourceCols(); track c.name) {
+              <button type="button" class="pf-link-btn" (click)="addBack(c)">+ {{ c.label || c.name }}</button>
+            }
+          </div>
+        }
 
         <!-- ── Inspector: the ONE selected column's details ──────── -->
         @if (selectedCol(); as sc) {
@@ -130,15 +151,25 @@ export interface ColumnsEditorState {
             <div class="pf-ce-insp-grid">
               <div>
                 <label class="pf-label">Column heading</label>
-                <input type="text" class="pf-input pf-input--compact"
-                       [value]="sc.label ?? ''"
-                       (input)="onLabelInput(selectedIdx()!, $any($event.target).value)" />
+                <!-- Host-managed = RENAME only: patch the label and never
+                     re-derive the machine name, which is the cells[name] storage key —
+                     changing it would orphan every saved cell template. -->
+                @if (hostManaged()) {
+                  <input type="text" class="pf-input pf-input--compact"
+                         [value]="sc.label ?? ''"
+                         (input)="patchCol(selectedIdx()!, { label: $any($event.target).value })" />
+                } @else {
+                  <input type="text" class="pf-input pf-input--compact"
+                         [value]="sc.label ?? ''"
+                         (input)="onLabelInput(selectedIdx()!, $any($event.target).value)" />
+                }
               </div>
               <div>
                 <label class="pf-label">Shows</label>
                 <pf-select size="sm" [options]="typeOptions" [value]="sc.type"
                            (valueChange)="patchCol(selectedIdx()!, { type: $any($event) })"></pf-select>
               </div>
+              @if (!hostManaged()) {
               <div>
                 <label class="pf-label">Width %</label>
                 <div class="pf-ce-step">
@@ -149,6 +180,7 @@ export interface ColumnsEditorState {
                   <button type="button" class="pf-ce-step__btn press" (click)="stepWidth(selectedIdx()!, 1)">+</button>
                 </div>
               </div>
+              }
               <div>
                 <label class="pf-label">Fixed text (lock)</label>
                 <div class="flex items-center gap-2">
@@ -183,7 +215,9 @@ export interface ColumnsEditorState {
           <p class="pf-ce-dim mt-3">Tap a column card to edit it.</p>
         }
 
-        <!-- ── SIGNATORIES: who signs this department's report block ── -->
+        <!-- ── SIGNATORIES: who signs this department's report block ──
+             Department-scoped — not part of a per-test override. -->
+        @if (!hostManaged()) {
         <div class="pf-ce-inspector" style="margin-top: 16px;">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
             <h4 style="margin:0; font-size:14px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
@@ -232,6 +266,7 @@ export interface ColumnsEditorState {
             <button type="button" class="pf-link-btn" (click)="addSig()">+ Add signatory</button>
           }
         </div>
+        }
 
       } @else {
         <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">Select a department to start.</p>
@@ -346,6 +381,45 @@ export class ReportColumnsEditorComponent implements OnInit {
    *  preview can apply them to that department's sample tests immediately. */
   readonly stateChange = output<ColumnsEditorState>();
 
+  /** HOST-MANAGED mode (Test Master's per-test/per-profile column override):
+   *  no department picker, no save toolbar, no signatories, no width knobs —
+   *  pick + order + rename only. The host seeds `initialColumns`, listens to
+   *  `stateChange`, and does the saving itself. `sourceColumns` (the dept set)
+   *  powers the "Add back" chips for re-inserting dropped columns. */
+  readonly hostManaged = input(false);
+  readonly initialColumns = input<ReportColumn[] | null>(null);
+  readonly sourceColumns = input<ReportColumn[]>([]);
+
+  /** Dept columns not currently in the set — offered as "Add back" chips. */
+  protected readonly missingSourceCols = computed<ReportColumn[]>(() => {
+    if (!this.hostManaged()) return [];
+    const have = new Set(this.columns().map(c => c.name));
+    return this.sourceColumns().filter(c => !have.has(c.name));
+  });
+
+  /** Re-insert a dropped department column; widths re-normalize to 100. */
+  addBack(col: ReportColumn) {
+    this.setCols(this.normalizeTo100([...this.columns(), { ...col }]));
+  }
+
+  constructor() {
+    // Host-managed seed: whenever the host hands a new initialColumns array
+    // (opening the editor, or re-seeding after revert), adopt it through the
+    // same normalize pipeline the department load uses. Edits in between are
+    // safe — the effect only fires when the input REFERENCE changes.
+    effect(() => {
+      if (!this.hostManaged()) return;
+      const seed = this.initialColumns();
+      if (!seed) return;
+      const sorted = [...seed]
+        .sort((a, b) => a.order - b.order)
+        .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
+      this.columns.set(this.applyDefaultResultUnitLink(this.ensureNameColumn(sorted)));
+      this.selectedIdx.set(null);
+      this.emitState();
+    });
+  }
+
   protected readonly typeOptions = COLUMN_TYPE_OPTIONS;
   protected readonly departments = signal<Department[]>([]);
   protected readonly selectedDeptId = signal<string>('');
@@ -431,6 +505,7 @@ export class ReportColumnsEditorComponent implements OnInit {
   }
 
   ngOnInit() {
+    if (this.hostManaged()) return;   // host seeds columns; no dept/users fetches
     this.api.get<Array<{ id: string; displayName: string }>>('/api/users/').subscribe({
       next: l => this.users.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
       error: () => { /* users list optional */ },

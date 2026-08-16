@@ -6,6 +6,9 @@ import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { ReportColumn } from '../../../shared/models/report-layout.model';
+import { ColumnsEditorState, ReportColumnsEditorComponent } from '../report-template/report-columns-editor.component';
+import { PreviewProfileMember } from '../report-template/report-pdf-preview.component';
 import { Department } from '../../../shared/models/tenant.model';
 import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
@@ -170,7 +173,7 @@ function newRowKey(): string {
     TestNotesEditorComponent,
     TestConsumablesComponent,
     DragDropModule
-  ],
+  , ReportColumnsEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 mx-auto w-full" style="max-width: 1440px;">
@@ -1144,21 +1147,54 @@ function newRowKey(): string {
                     (click)="layoutView.set('advanced')">Advanced structure</button>
           </div>
 
-          <!-- Read-only: the column structure is a DEPARTMENT-wide setting, so
-               it is shown here for context but edited where it applies to all
-               of the department's tests. -->
-          @if (deptColumnsLabel(); as cols) {
+          <!-- ── Report columns: department default, overridable HERE for
+               this one test/profile (pick + order + rename; widths auto).
+               A profile's override wins for its whole printed block; a
+               test's own override applies when it is ordered standalone. -->
+          @if (!customizingColumns()) {
             <p class="pf-lay-cols">
-              <span class="pf-lay-cols__k">{{ selectedDeptName() || 'This department' }} prints</span>
-              <span class="pf-lay-cols__v">{{ cols }}</span>
-              <a class="pf-lay-cols__a" routerLink="/admin/reports">Change columns</a>
+              <span class="pf-lay-cols__k">Report columns</span>
+              <span class="pf-lay-cols__v">
+                @if (testColumnsOverride(); as o) {
+                  Custom for this {{ d.type === 'individual' ? 'test' : d.type }} — {{ columnsLabel(o) }}
+                } @else {
+                  Uses {{ selectedDeptName() || 'department' }} columns — {{ deptColumnsLabel() || 'defaults' }}
+                }
+              </span>
+              <button type="button" class="pf-lay-cols__a" style="background:none;border:none;cursor:pointer;"
+                      (click)="startCustomizeColumns()">
+                {{ testColumnsOverride() ? 'Edit columns' : 'Customize' }}
+              </button>
             </p>
+          } @else {
+            <div class="pf-lay-colwrap">
+              <pf-report-columns-editor
+                [hostManaged]="true"
+                [initialColumns]="columnsEditorSeed()"
+                [sourceColumns]="deptColumnCfg()"
+                (stateChange)="onColumnsState($event)">
+              </pf-report-columns-editor>
+              <div class="pf-lay-colwrap__actions">
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="cancelCustomizeColumns()">Cancel</pf-touch-btn>
+                @if (testColumnsOverride()) {
+                  <pf-touch-btn size="sm" variant="ghost" [disabled]="columnsSaving()"
+                                (pressed)="revertColumnsToDepartment()">Revert to department</pf-touch-btn>
+                }
+                <pf-touch-btn size="sm" variant="primary" [disabled]="columnsSaving()"
+                              (pressed)="saveColumnsOverride()">
+                  {{ columnsSaving() ? 'Saving…' : 'Save columns' }}
+                </pf-touch-btn>
+              </div>
+            </div>
           }
 
           @if (layoutView() === 'notes') {
             <pf-test-notes-editor class="block"
               [fixedTestId]="d.id || ''"
-              [hidePreview]="false">
+              [hidePreview]="false"
+              [parameters]="parameterNames()"
+              [profileMembers]="previewProfileMembers()"
+              [columnsOverride]="liveColumnsOverride()">
             </pf-test-notes-editor>
           } @else {
             <pf-test-layout-editor class="block"
@@ -1246,6 +1282,8 @@ function newRowKey(): string {
     .pf-lay-switch__btn--on { color: var(--text-primary); background: rgba(139, 92, 246, 0.18); }
 
     /* Read-only department columns context. */
+    .pf-lay-colwrap { margin: 0 0 14px; }
+    .pf-lay-colwrap__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
     .pf-lay-cols { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
       margin: 0 0 14px; padding: 9px 12px; border-radius: 10px;
       background: var(--glass-bg); border: 1px solid var(--glass-border);
@@ -2163,7 +2201,10 @@ export class TestEditorComponent implements OnInit {
   readonly section = this._section.asReadonly();
   setSection(v: TestSection) {
     this._section.set(v);
-    if (v === 'layout' && !this.deptColumns()) this.loadDeptColumns(this._draft().departmentId);
+    if (v === 'layout') {
+      if (this.deptColumnCfg().length === 0) this.loadDeptColumns(this._draft().departmentId);
+      this.loadTestColumns();
+    }
   }
   /** Rail entries. Bundles (profile/package) have no sample, results, layout or
    *  consumables of their own — those belong to their member tests — so the
@@ -2187,21 +2228,112 @@ export class TestEditorComponent implements OnInit {
     // are what print (never the members'). See the notes rule in the renderer.
     return allowed.filter(x => x.value === 'identity' || x.value === 'pricing' || x.value === 'layout');
   });
-  /** Human list of the DEPARTMENT's report columns — read-only context only.
-   *  Editing lives on /admin/reports because one change hits every test in the
-   *  department, which is exactly the blast radius a per-test screen hides. */
-  protected readonly deptColumns = signal<string>('');
-  deptColumnsLabel(): string { return this.deptColumns(); }
+  /** The DEPARTMENT's report columns — the default this test inherits, and
+   *  the seed + "add back" source for the per-test override editor. */
+  protected readonly deptColumnCfg = signal<ReportColumn[]>([]);
+  deptColumnsLabel(): string { return this.columnsLabel(this.deptColumnCfg()); }
 
-  /** Fetch the department's column labels for the read-only strip. Best-effort:
-   *  the strip simply stays hidden when the department has no custom set. */
-  private loadDeptColumns(departmentId: string | null | undefined): void {
-    if (!departmentId) { this.deptColumns.set(''); return; }
-    this.layoutSvc.getDeptColumns(departmentId)
-      .then(res => this.deptColumns.set(
-        (res?.columns ?? []).map(c => c.label || c.name).filter(Boolean).join(' · ')))
-      .catch(() => this.deptColumns.set(''));
+  /** Human "Investigation · Result · …" line for a column set. */
+  columnsLabel(cols: ReportColumn[]): string {
+    return (cols ?? []).map(c => c.label || c.name).filter(Boolean).join(' · ');
   }
+
+  private loadDeptColumns(departmentId: string | null | undefined): void {
+    if (!departmentId) { this.deptColumnCfg.set([]); return; }
+    this.layoutSvc.getDeptColumns(departmentId)
+      .then(res => this.deptColumnCfg.set(res?.columns ?? []))
+      .catch(() => this.deptColumnCfg.set([]));
+  }
+
+  // ── Per-test/per-profile column override (Report layout section) ──
+  // Stored on the test's report-layout row; NULL = inherit the department.
+  // The editor is the SAME strip component /admin/reports uses, in its
+  // host-managed pick + order + rename mode — this card does the saving.
+
+  protected readonly testColumnsOverride = signal<ReportColumn[] | null>(null);
+  protected readonly customizingColumns = signal(false);
+  protected readonly columnsSaving = signal(false);
+  /** Seed handed to the editor when Customize opens (a FRESH array reference
+   *  each time — the editor re-seeds on reference change). */
+  protected readonly columnsEditorSeed = signal<ReportColumn[] | null>(null);
+  /** The editor's live (unsaved) state — drives the preview's columnsOverride
+   *  so column edits show in the exact-PDF preview before Save. */
+  protected readonly liveColumnsState = signal<ReportColumn[] | null>(null);
+  protected readonly liveColumnsOverride = computed<ReportColumn[] | null>(() =>
+    this.customizingColumns() ? this.liveColumnsState() : null);
+
+  private loadTestColumns(): void {
+    const id = this._draft().id;
+    if (!id) { this.testColumnsOverride.set(null); return; }
+    this.layoutSvc.getTestColumns(id)
+      .then(res => this.testColumnsOverride.set(res.configured ? (res.columns ?? null) : null))
+      .catch(() => this.testColumnsOverride.set(null));
+  }
+
+  startCustomizeColumns(): void {
+    const seed = this.testColumnsOverride() ?? this.deptColumnCfg();
+    this.columnsEditorSeed.set(seed.map(c => ({ ...c })));
+    this.liveColumnsState.set(null);
+    this.customizingColumns.set(true);
+  }
+
+  cancelCustomizeColumns(): void {
+    this.customizingColumns.set(false);
+    this.liveColumnsState.set(null);
+  }
+
+  onColumnsState(state: ColumnsEditorState): void {
+    this.liveColumnsState.set(state.columns);
+  }
+
+  async saveColumnsOverride(): Promise<void> {
+    const id = this._draft().id;
+    const cols = this.liveColumnsState() ?? this.columnsEditorSeed();
+    if (!id || !cols || cols.length === 0) return;
+    this.columnsSaving.set(true);
+    try {
+      const payload = cols.map((c, i) => ({ ...c, order: i + 1 }));
+      await this.layoutSvc.saveTestColumns(id, payload);
+      this.testColumnsOverride.set(payload);
+      this.customizingColumns.set(false);
+      this.liveColumnsState.set(null);
+      this.toasts.success('Report columns saved for this ' + (this._draft().type === 'individual' ? 'test' : this._draft().type) + '.');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.columnsSaving.set(false);
+    }
+  }
+
+  async revertColumnsToDepartment(): Promise<void> {
+    const id = this._draft().id;
+    if (!id) return;
+    this.columnsSaving.set(true);
+    try {
+      await this.layoutSvc.saveTestColumns(id, null);
+      this.testColumnsOverride.set(null);
+      this.customizingColumns.set(false);
+      this.liveColumnsState.set(null);
+      this.toasts.success('Reverted to the department columns.');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.columnsSaving.set(false);
+    }
+  }
+
+  /** Members handed to the exact-PDF preview so a PROFILE previews as it
+   *  prints (one row per member, profile notes + column override applied). */
+  readonly previewProfileMembers = computed<PreviewProfileMember[]>(() => {
+    if (this._draft().type === 'individual') return [];
+    const byId = this._memberById();
+    const out: PreviewProfileMember[] = [];
+    for (const id of this.packageItems()) {
+      const t = byId.get(id);
+      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null });
+    }
+    return out;
+  });
 
   private readonly _fields = signal<FormField[]>([]);
   readonly fields = this._fields.asReadonly();

@@ -678,6 +678,19 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
       merged = { ...g, testName: pkgName || g.testName, method: undefined, rows: [] };
+      // Column cascade for the BLOCK: the PROFILE's own override wins for
+      // the whole block; a member's override never leaks into it — the
+      // block falls back to the member's department columns instead.
+      const pkgLayout = resolvedLayouts[pkg];
+      if (pkgLayout?.hasColumnOverride) {
+        merged.columns = pkgLayout.columns;
+        merged.columnsOverridden = true;
+        merged.deptColumns = pkgLayout.departmentColumns ?? undefined;
+      } else {
+        merged.columns = g.columnsOverridden ? (g.deptColumns ?? []) : g.columns;
+        merged.columnsOverridden = undefined;
+        merged.deptColumns = undefined;
+      }
       byPkg.set(pkg, merged);
       groups.push(merged);
       // NOTES FOLLOW WHAT WAS ORDERED: the profile was ordered, so the
@@ -1808,6 +1821,14 @@ interface PanelGroup {
   /** The resolved per-department column layout for this test (incl. linkedNext
    *  merges). Empty ⇒ the renderer falls back to the default layout. */
   columns?: ReportColumn[];
+  /** True when `columns` is the test's OWN override (Test Master → Report
+   *  columns) rather than the department flatten. Cascade rule: a profile's
+   *  override wins for its whole block; a member's override applies only
+   *  when the test is ordered standalone. */
+  columnsOverridden?: boolean;
+  /** The department's columns — present only when overridden, so the profile
+   *  merge can fall back when a member's override must be ignored. */
+  deptColumns?: ReportColumn[];
   specimen?: string;
   method?: string;
   referralLab?: string | null;
@@ -1829,6 +1850,8 @@ function buildPanelGroup(
     testName: t.name ?? layout?.testName ?? 'Test',
     department: (t.department ?? '').trim() || undefined,
     columns: layout?.columns ?? [],
+    columnsOverridden: layout?.hasColumnOverride || undefined,
+    deptColumns: layout?.departmentColumns ?? undefined,
     specimen: ((t.sampleType ?? layout?.sampleType) ?? '').trim() || undefined,
     method: (t.method ?? '').trim() || undefined,
     referralLab: (t.referralLab ?? '').trim() || undefined,
@@ -1838,7 +1861,12 @@ function buildPanelGroup(
 
   const gridSections = (layout?.sections ?? []).filter(s => s.isVisible && s.type === 'grid');
   if (gridSections.length > 0) {
-    const cols = layout!.columns;
+    // Value lookups search override ∪ department columns: a column the
+    // override drops still has its cells resolved (the engine unions them),
+    // and a profile block may render this member against DEPARTMENT columns.
+    // Without an override, departmentColumns is absent and this is exactly
+    // layout.columns — byte-identical behavior.
+    const cols = [...layout!.columns, ...(layout!.departmentColumns ?? [])];
     const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
     for (const sec of gridSections) {
@@ -1983,7 +2011,25 @@ function renderContinuousTable(
     // End-of-Report line when they are the deferred final block) so the table
     // breaks EARLY and the signatures land under the last rows they belong to.
     const reserve = signatureBlockHeight(sigs) + (isLast && deferLastSigs && sigs?.length ? 26 : 0);
-    y = renderColumnarTable(doc, dg, deptColumns(dg), y, practice, dept || null, reserve);
+    // Partition the department's groups into consecutive RUNS sharing an
+    // effective column set — a group with its own column override renders
+    // in its own table run. With zero overrides there is exactly ONE run
+    // whose columns are deptColumns(dg), i.e. the historical single call.
+    const base = deptColumns(dg);
+    const runs: { cols: ReportColumn[]; key: string; groups: PanelGroup[] }[] = [];
+    for (const g of dg) {
+      const cols = g.columnsOverridden && g.columns?.length ? effectiveColumns(g.columns) : base;
+      const key = JSON.stringify(cols);
+      const last = runs[runs.length - 1];
+      if (last && last.key === key) last.groups.push(g);
+      else runs.push({ cols, key, groups: [g] });
+    }
+    for (let ri = 0; ri < runs.length; ri++) {
+      // The signature reserve belongs to the department's LAST run only —
+      // earlier runs may fill their pages fully.
+      const runReserve = ri === runs.length - 1 ? reserve : 0;
+      y = renderColumnarTable(doc, runs[ri].groups, runs[ri].cols, y, practice, dept || null, runReserve);
+    }
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
     // department defers its signatures to after the End-of-Report marker.
@@ -2086,16 +2132,27 @@ function drawInlineSignatures(
   return baseY + 44;
 }
 
-/** Resolve the column layout for one department's groups: the first group's
- *  resolved columns (else the default), guaranteeing an Investigation (name)
- *  lead column so the parameter name always shows. Sorted by order. */
-function deptColumns(groups: PanelGroup[]): ReportColumn[] {
-  const src = groups.find(g => g.columns && g.columns.length)?.columns ?? DEFAULT_RESULT_COLUMNS;
+/** The single pipeline every column source passes through before rendering:
+ *  sort by order, guarantee an Investigation (name) lead column so the
+ *  parameter name always shows, apply the default Result→Unit link. */
+function effectiveColumns(src: ReportColumn[]): ReportColumn[] {
   let cfg = src.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   if (!cfg.some(c => c.type === 'name')) {
     cfg = [{ id: 'rc-name', name: 'name', label: 'Investigation', order: 0, width: 30, type: 'name', locked: false }, ...cfg];
   }
   return applyDefaultResultUnitLink(cfg);
+}
+
+/** Resolve the BASE column layout for one department's groups — the
+ *  department flatten. A group carrying its own per-test override must never
+ *  define its neighbours' table, so the pick is: first NON-overridden group
+ *  with columns → first overridden group's department set → defaults. With
+ *  zero overrides this is exactly the historical first-group-wins pick. */
+function deptColumns(groups: PanelGroup[]): ReportColumn[] {
+  const src = groups.find(g => g.columns && g.columns.length && !g.columnsOverridden)?.columns
+    ?? groups.find(g => g.columnsOverridden && g.deptColumns?.length)?.deptColumns
+    ?? DEFAULT_RESULT_COLUMNS;
+  return effectiveColumns(src);
 }
 
 /** When a column config has NO merges set yet, merge an adjacent Result→Unit by

@@ -224,6 +224,15 @@ export interface ResolvedReportLayout {
    *  each test name, like Drlogy's "CREATININE, SERUM" rendering. */
   sampleType?: string | null;
   columns: ReportColumn[];
+  /** True when `columns` is this test's OWN override (Test Master →
+   *  Report columns) rather than the department set. Drives the render
+   *  cascade: a profile's override wins for its whole block; a member's
+   *  override applies only when the test is ordered standalone. */
+  hasColumnOverride?: boolean;
+  /** The department's columns — present ONLY when hasColumnOverride, so
+   *  the renderer can fall back when a member's override must be ignored
+   *  inside a profile block. */
+  departmentColumns?: ReportColumn[] | null;
   sections: ResolvedSection[];
 }
 
