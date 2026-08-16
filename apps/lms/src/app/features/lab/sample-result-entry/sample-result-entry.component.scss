@@ -990,6 +990,38 @@
   color: var(--green-text);
   border: 1px solid rgba(16, 185, 129, 0.4);
 }
+/* Calculated-field chip: how the value got there. Auto = formula is live,
+ Manual = tech override (clearing the field resumes auto), Not calculable =
+ validity gate failed (Friedewald over TG 400) — never a partial number. */
+.pf-sre__calc-chip {
+  display: inline-block;
+  margin-top: 3px;
+  margin-right: 5px;
+  padding: 1px 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.pf-sre__calc-chip[data-kind="auto"] {
+  background: rgba(139, 92, 246, 0.14);
+  color: var(--violet-text, #a78bfa);
+  border: 1px solid rgba(139, 92, 246, 0.38);
+}
+.pf-sre__calc-chip[data-kind="manual"] {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+.pf-sre__calc-chip[data-kind="na"] {
+  background: transparent;
+  color: var(--text-muted, rgba(255, 255, 255, 0.45));
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
 /* Form view: the chip sits inside the label's column flow — hug the
  input it belongs to instead of stretching full width. */
 .pf-sre__flag-chip--form {

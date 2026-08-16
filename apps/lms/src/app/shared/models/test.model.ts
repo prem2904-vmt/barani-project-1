@@ -49,6 +49,10 @@ export interface Test {
   outsourcedVendorId?: string | null;
   /** Department-at-vendor used for outsourced vial grouping (falls back to departmentId). */
   outsourcedDepartmentId?: string | null;
+  /** Calculated-result definition (JSON CalcDef — see shared/utils/calculation):
+   *  how this test's value derives from sibling results in the same profile
+   *  (VLDL-C = TG/5, eGFR…). Null = conventionally measured. */
+  calculation?: string | null;
   department?: { id: string; name: string; code: string };
   createdAt: string;
 }

@@ -25,6 +25,11 @@ export interface Tenant {
    * 'scan' (default) → QR/barcode camera scanning; 'manual' → no QR, the
    * sample number is shown and typed by hand. Absent/empty = 'scan'. */
   scanMode?: 'scan' | 'manual';
+  /** Lab calculation constants (JSON object string, e.g.
+   * '{"ISI":1.1,"MNPT":12.5,"NORMAL_HCT":45}') feeding calculated-result
+   * formulas (INR reagent properties, RPI anchor). Absent keys fall back to
+   * the shipped defaults in shared/utils/calculation. */
+  calcConstants?: string | null;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;

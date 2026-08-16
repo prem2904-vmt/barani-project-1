@@ -540,6 +540,11 @@
               (keydown.enter)="onEnterKey($event)"
               (paste)="onNumericPaste($event, t.id, p.name)"
             />
+            @if (calcChip(t, p); as c) {
+              <span class="pf-sre__calc-chip" [attr.data-kind]="c.kind">{{
+                c.label
+              }}</span>
+            }
             @if (flagFor(t, p); as f) {
               <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone">{{
                 f.label
@@ -761,6 +766,13 @@
                                 (keydown.enter)="onEnterKey($event)"
                                 (paste)="onNumericPaste($event, t.id, p.name)"
                               />
+                              @if (calcChip(t, p); as c) {
+                                <span
+                                  class="pf-sre__calc-chip"
+                                  [attr.data-kind]="c.kind"
+                                  >{{ c.label }}</span
+                                >
+                              }
                               @if (flagFor(t, p); as f) {
                                 <span
                                   class="pf-sre__flag-chip"
@@ -946,6 +958,13 @@
                             (keydown.enter)="onEnterKey($event)"
                             (paste)="onNumericPaste($event, t.id, p.name)"
                           />
+                          @if (calcChip(t, p); as c) {
+                            <span
+                              class="pf-sre__calc-chip pf-sre__flag-chip--form"
+                              [attr.data-kind]="c.kind"
+                              >{{ c.label }}</span
+                            >
+                          }
                           @if (flagFor(t, p); as f) {
                             <span
                               class="pf-sre__flag-chip pf-sre__flag-chip--form"

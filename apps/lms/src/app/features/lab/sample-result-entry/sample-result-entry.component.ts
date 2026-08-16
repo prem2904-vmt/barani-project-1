@@ -15,6 +15,14 @@ import {
   selectReferenceRange,
 } from "../../../shared/utils/reference-range";
 import { qualitativeOptionsFor } from "../../../shared/utils/qualitative";
+import {
+  CalcContext,
+  CalcDef,
+  ageYearsFromDob,
+  evaluateCalc,
+  parseCalc,
+} from "../../../shared/utils/calculation";
+import { TenantStateService } from "../../../core/services/tenant-state.service";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -65,6 +73,11 @@ function defaultResultParam(): TestParameter {
   return { id: "result", name: "result", title: "Result", type: "text" };
 }
 
+/** Identity of one calculated input field (override tracking). */
+function calcKey(testId: string, paramName: string): string {
+  return `${testId}::${paramName}`;
+}
+
 /**
  * Sample-level result entry. One barcode scan loads ALL tests on the
  * tube; tech enters every value in one screen and submits once. Backend
@@ -95,6 +108,7 @@ export class SampleResultEntryComponent {
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
   private readonly auth = inject(AuthService);
+  private readonly tenantState = inject(TenantStateService);
   protected readonly formatPatient = formatPatientInfo;
 
   /** Signed-in technician shown on the right of the header. Properly formats
@@ -529,6 +543,7 @@ export class SampleResultEntryComponent {
       if (updated) {
         this._sample.set(this.normalizeSample(updated));
         this.prefillValues(updated);
+        this.seedCalcState();
       }
       this.toasts.success("Reopened — edit and submit again");
     } catch (e) {
@@ -798,8 +813,200 @@ export class SampleResultEntryComponent {
       ...all,
       [testId]: { ...(all[testId] ?? {}), [paramName]: v },
     }));
+    // Typing INTO a calculated field is an override (analyzers report some of
+    // these directly); clearing it hands the field back to the formula.
+    // Typing into anything else re-runs the dependent formulas.
+    this.markCalcOverride(testId, paramName, v);
+    this.recomputeCalcFields(calcKey(testId, paramName));
     this.scheduleDraftSave();
     this.scheduleServerAutosave();
+  }
+
+  // ── Calculated results (profile formulas — VLDL = TG/5, eGFR…) ──────
+  // The formula lives on the TEST (test.calculation, document-verbatim from
+  // the master); inputs are sibling tests on this same tube, addressed by
+  // code. The computed value is a PREFILL: it fills the field live while the
+  // tech hasn't typed there, participates in autosave/flags exactly like a
+  // typed value, and steps aside the moment the tech overrides it.
+
+  /** CalcDef per order-test id (only computable kinds parse). */
+  private readonly _calcByTest = computed<Map<string, CalcDef>>(() => {
+    const out = new Map<string, CalcDef>();
+    for (const t of this._sample()?.tests ?? []) {
+      const def = parseCalc(t.test?.calculation);
+      if (def) out.set(t.id, def);
+    }
+    return out;
+  });
+
+  /** Sibling lookup: canonical code → order test on this tube. */
+  private readonly _testByCode = computed<Map<string, OrderTest>>(() => {
+    const out = new Map<string, OrderTest>();
+    for (const t of this._sample()?.tests ?? []) {
+      const code = t.test?.testCode?.trim().toUpperCase();
+      if (code && !out.has(code)) out.set(code, t);
+    }
+    return out;
+  });
+
+  /** Calc fields the tech has taken over (calcKey → manual). */
+  private readonly _calcOverridden = signal<Set<string>>(new Set());
+
+  /** Tenant lab constants (ISI/MNPT/NORMAL_HCT), parsed once per change;
+   *  evaluateCalc falls back to the shipped defaults for missing keys. */
+  private readonly _calcConstants = computed<Record<string, number>>(() => {
+    const raw = this.tenantState.tenant()?.calcConstants;
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(obj))
+        if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+      return out;
+    } catch {
+      return {};
+    }
+  });
+
+  /** The parameter a formula writes into — the test's first numeric one. */
+  private calcTargetParam(t: OrderTest): TestParameter | null {
+    return (
+      this.parametersFor(t).find((p) => this.inputKindFor(p) === "number") ??
+      null
+    );
+  }
+
+  private calcContext(): CalcContext {
+    const byCode = this._testByCode();
+    const consts = this._calcConstants();
+    const patient = this._sample()?.order?.patient;
+    const age =
+      typeof patient?.age === "number"
+        ? patient.age
+        : ageYearsFromDob(patient?.dateOfBirth);
+    const resolveParam = (t: OrderTest, name: string | null) => {
+      if (!name) return this.calcTargetParam(t);
+      const want = name.trim().toLowerCase();
+      return (
+        this.parametersFor(t).find(
+          (p) =>
+            p.name.trim().toLowerCase() === want ||
+            (p.title ?? "").trim().toLowerCase() === want,
+        ) ?? null
+      );
+    };
+    return {
+      value: (ref) => {
+        const sep = ref.indexOf(":");
+        const code = (sep < 0 ? ref : ref.slice(0, sep)).trim().toUpperCase();
+        const param = sep < 0 ? null : ref.slice(sep + 1);
+        const t = byCode.get(code);
+        if (!t) return null;
+        const p = resolveParam(t, param);
+        if (!p) return null;
+        const raw = this.getValue(t.id, p.name);
+        if (raw === undefined || raw === null || raw === "") return null;
+        const v = Number(String(raw).trim());
+        return Number.isFinite(v) ? v : null;
+      },
+      constant: (name) => consts[name],
+      age,
+      sex: patient?.sex ?? null,
+      uln: (code) => {
+        const t = byCode.get(code.trim().toUpperCase());
+        const p = t ? this.calcTargetParam(t) : null;
+        if (!p) return null;
+        const { sex, age: bandAge } = this.patientSexAge();
+        return (
+          selectReferenceRange(p.referenceRanges, sex, bandAge)?.max ?? null
+        );
+      },
+    };
+  }
+
+  private markCalcOverride(testId: string, paramName: string, v: unknown) {
+    const def = this._calcByTest().get(testId);
+    if (!def) return;
+    const target = this.calcTargetParam(
+      (this._sample()?.tests ?? []).find((t) => t.id === testId) ??
+        ({} as OrderTest),
+    );
+    if (!target || target.name !== paramName) return;
+    const key = calcKey(testId, paramName);
+    const next = new Set(this._calcOverridden());
+    if (v === "" || v === null || v === undefined) next.delete(key);
+    else next.add(key);
+    this._calcOverridden.set(next);
+  }
+
+  /** Recompute every non-overridden calculated field from the live values.
+   *  Runs up to three passes so chained formulas settle (Globulin = TP − Alb,
+   *  then A/G = Alb / Globulin) regardless of iteration order. */
+  private recomputeCalcFields(excludeKey?: string) {
+    const defs = this._calcByTest();
+    if (defs.size === 0) return;
+    const tests = this._sample()?.tests ?? [];
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false;
+      const ctx = this.calcContext();
+      for (const [testId, def] of defs) {
+        const t = tests.find((x) => x.id === testId);
+        if (!t || t.status === "validated" || t.status === "entered") continue;
+        const target = this.calcTargetParam(t);
+        if (!target) continue;
+        const key = calcKey(testId, target.name);
+        if (key === excludeKey || this._calcOverridden().has(key)) continue;
+        const res = evaluateCalc(def, ctx);
+        const next = res.value != null ? String(res.value) : "";
+        const cur = String(this.getValue(testId, target.name) ?? "");
+        if (cur === next) continue;
+        this._values.update((all) => ({
+          ...all,
+          [testId]: { ...(all[testId] ?? {}), [target.name]: next },
+        }));
+        changed = true;
+      }
+      if (!changed) break;
+    }
+  }
+
+  /** After prefill/draft restore: a stored value that MATCHES the formula
+   *  keeps auto-updating; one that differs was a deliberate override and
+   *  must survive the reload untouched. */
+  private seedCalcState() {
+    const defs = this._calcByTest();
+    if (defs.size === 0) return;
+    const ctx = this.calcContext();
+    const over = new Set<string>();
+    for (const [testId, def] of defs) {
+      const t = (this._sample()?.tests ?? []).find((x) => x.id === testId);
+      const target = t ? this.calcTargetParam(t) : null;
+      if (!target) continue;
+      const cur = String(this.getValue(testId, target.name) ?? "");
+      if (!cur) continue;
+      const res = evaluateCalc(def, ctx);
+      if (res.value == null || String(res.value) !== cur)
+        over.add(calcKey(testId, target.name));
+    }
+    this._calcOverridden.set(over);
+    this.recomputeCalcFields();
+  }
+
+  /** Chip beside a calculated field: how the current value got there. */
+  calcChip(
+    t: OrderTest,
+    p: TestParameter,
+  ): { kind: "auto" | "manual" | "na"; label: string } | null {
+    const def = this._calcByTest().get(t.id);
+    if (!def) return null;
+    const target = this.calcTargetParam(t);
+    if (!target || target.name !== p.name) return null;
+    if (this._calcOverridden().has(calcKey(t.id, p.name)))
+      return { kind: "manual", label: "Manual" };
+    const res = evaluateCalc(def, this.calcContext());
+    if (res.invalid) return { kind: "na", label: "Not calculable" };
+    if (res.value != null) return { kind: "auto", label: "Calculated" };
+    return { kind: "auto", label: "Auto" };
   }
 
   // ── Local draft persistence ───────────────────────────────────────
@@ -877,6 +1084,10 @@ export class SampleResultEntryComponent {
       // Then overlay any locally-autosaved draft — typing that never
       // reached the server (app killed mid-entry) beats the prefill.
       this.restoreDraft();
+      // Calc fields: stored values that match their formula stay live-updating;
+      // ones that differ were overridden. Needs the tenant for ISI/MNPT.
+      this.tenantState.ensureLoaded();
+      this.seedCalcState();
       await this.loadComments();
     } catch (e) {
       this.toasts.error("Could not load sample");

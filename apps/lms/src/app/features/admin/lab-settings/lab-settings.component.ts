@@ -174,6 +174,40 @@ interface AutoAssignConfig {
         </div>
       </pf-tile>
 
+      <!-- Calculation constants (tenant-wide) — feed calculated results. -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Calculation constants</h3>
+        <p class="pf-ls__hint">
+          Lab-specific numbers used by calculated results during entry.
+          <strong>ISI</strong> and <strong>MNPT</strong> come from your thromboplastin
+          reagent's insert (they drive INR); <strong>Normal HCT</strong> anchors the
+          reticulocyte production index. Leave blank to use the defaults shown.
+        </p>
+        <div class="mt-4 flex flex-wrap items-end gap-4">
+          <label class="block max-w-[130px]">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">ISI</span>
+            <input class="pf-input mt-1" type="number" step="0.01" min="0" placeholder="1.0"
+                   [ngModel]="calcIsi()"
+                   (ngModelChange)="calcIsi.set($event)"
+                   (blur)="saveCalcConstants()" />
+          </label>
+          <label class="block max-w-[150px]">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">MNPT (seconds)</span>
+            <input class="pf-input mt-1" type="number" step="0.1" min="0" placeholder="12.0"
+                   [ngModel]="calcMnpt()"
+                   (ngModelChange)="calcMnpt.set($event)"
+                   (blur)="saveCalcConstants()" />
+          </label>
+          <label class="block max-w-[150px]">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Normal HCT (%)</span>
+            <input class="pf-input mt-1" type="number" step="1" min="1" max="99" placeholder="45"
+                   [ngModel]="calcNormalHct()"
+                   (ngModelChange)="calcNormalHct.set($event)"
+                   (blur)="saveCalcConstants()" />
+          </label>
+        </div>
+      </pf-tile>
+
       <!-- No-scan override (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -794,6 +828,43 @@ export class LabSettingsComponent implements OnInit {
     if (this.scanMode() === v) return;
     this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success(v === 'manual' ? 'Manual entry — scanner hidden on lab screens' : 'Scan mode — QR/barcode scanner shown'); },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  // ── Calculation constants (tenant-wide) ───────────────────────────
+  // ISI/MNPT are thromboplastin-reagent properties (INR); NORMAL_HCT anchors
+  // the reticulocyte production index. Blank = shipped default, so the inputs
+  // hold '' (placeholder shows the default) unless the tenant has set a value.
+  protected readonly calcIsi = signal<number | ''>('');
+  protected readonly calcMnpt = signal<number | ''>('');
+  protected readonly calcNormalHct = signal<number | ''>('');
+  private readonly _ccSync = effect(() => {
+    const raw = this.tenantState.tenant()?.calcConstants;
+    let obj: Record<string, unknown> = {};
+    if (raw) { try { obj = JSON.parse(raw) as Record<string, unknown>; } catch { /* keep blanks */ } }
+    this.calcIsi.set(typeof obj['ISI'] === 'number' ? obj['ISI'] : '');
+    this.calcMnpt.set(typeof obj['MNPT'] === 'number' ? obj['MNPT'] : '');
+    this.calcNormalHct.set(typeof obj['NORMAL_HCT'] === 'number' ? obj['NORMAL_HCT'] : '');
+  });
+
+  /** PATCH only the keys the tenant actually set — blanks fall back to the
+   *  shipped defaults on the entry screens. The server accepts numbers only. */
+  saveCalcConstants() {
+    const out: Record<string, number> = {};
+    const put = (k: string, v: number | '') => {
+      const n = typeof v === 'number' ? v : Number(v);
+      if (v !== '' && Number.isFinite(n) && n > 0) out[k] = n;
+    };
+    put('ISI', this.calcIsi());
+    put('MNPT', this.calcMnpt());
+    put('NORMAL_HCT', this.calcNormalHct());
+    const next = Object.keys(out).length > 0 ? out : null;
+    const cur = this.tenantState.tenant()?.calcConstants ?? null;
+    const curNorm = cur ? JSON.stringify(JSON.parse(cur)) : null;
+    if ((next ? JSON.stringify(next) : null) === curNorm) return;
+    this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success('Calculation constants saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }

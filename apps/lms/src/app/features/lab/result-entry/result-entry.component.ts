@@ -15,6 +15,8 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
+import { CalcContext, ageYearsFromDob, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -394,6 +396,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          placeholder="—"/>
                                 }
                               }
+                              @if (calcChipFor(p); as c) {
+                                <span class="pf-rg__calc" [attr.data-kind]="c.kind">{{ c.label }}</span>
+                              }
                               @if (flagFor(p); as fl) {
                                 <span class="pf-rg__flag" [attr.data-tone]="fl.tone">{{ fl.label }}</span>
                               }
@@ -772,6 +777,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         }
                       }
 
+                      @if (calcChipFor(p); as c) {
+                        <span class="pf-rg__calc" [attr.data-kind]="c.kind">{{ c.label }}</span>
+                      }
                       @if (flagFor(p); as f) {
                         @if (f.tone !== 'critical') {
                           <span class="pf-flag" [attr.data-tone]="f.tone">
@@ -1897,6 +1905,21 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: var(--red-text); border: 1px solid rgba(239, 68, 68, 0.45); }
     .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: var(--green-text); border: 1px solid rgba(16, 185, 129, 0.4); }
 
+    /* Calculated-field chip: Auto = formula live, Manual = tech override,
+       Not calculable = validity gate failed — never a partial number. */
+    .pf-rg__calc {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 8px;
+      font-size: 9.5px; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+    .pf-rg__calc[data-kind='auto']   { background: rgba(139, 92, 246, 0.14); color: var(--violet-text, #a78bfa); border: 1px solid rgba(139, 92, 246, 0.38); }
+    .pf-rg__calc[data-kind='manual'] { background: rgba(148, 163, 184, 0.14); color: var(--text-secondary, rgba(255,255,255,0.7)); border: 1px solid rgba(148, 163, 184, 0.35); }
+    .pf-rg__calc[data-kind='na']     { background: transparent; color: var(--text-muted, rgba(255,255,255,0.45)); border: 1px dashed rgba(148, 163, 184, 0.4); text-transform: none; letter-spacing: 0.02em; }
+
     /* ── Live flag pill ─────────────────────────────────────── */
     .pf-flag {
       display: inline-flex;
@@ -2735,6 +2758,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
   protected readonly scan = inject(ScanService);
+  private readonly tenantState = inject(TenantStateService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;
@@ -3145,6 +3169,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         // Seed the right-rail target with the first numeric param so the pad has something to drive.
         const firstNumeric = this.parameters().find(p => this.inputKindFor(p) === 'numeric');
         if (firstNumeric) this._active.set(firstNumeric.name);
+        // Calculated test → fetch tube siblings and prefill from the formula.
+        this.initCalc();
       },
       error: () => this.toasts.error('Could not load result entry')
     });
@@ -3619,6 +3645,168 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   setValue(name: string, value: string) {
     this.clearServerError(name);
     this._values.update(s => ({ ...s, [name]: value }));
+    // Calculated test: typing into the formula's target field is an override;
+    // clearing it hands the field back to the formula. Typing anywhere else
+    // (a same-test input the formula reads) re-runs the prefill.
+    if (this._calcDef()) {
+      const target = this.calcTargetParam();
+      if (target?.name === name) {
+        this._calcOverridden.set(value !== '' && value != null);
+        if (value === '' || value == null) this.applyCalcPrefill();
+      } else {
+        this.applyCalcPrefill();
+      }
+    }
+  }
+
+  // ── Calculated result (profile formulas — VLDL = TG/5, eGFR…) ────────
+  // This screen holds ONE test, so sibling inputs come from the tube's other
+  // tests: fetched once, values read from their saved result snapshots. The
+  // computed value is a PREFILL — overridable, autosaved like typed input.
+  private readonly _calcDef = computed(() => parseCalc(this._ot()?.test?.calculation));
+  private readonly _calcSiblings = signal<OrderTest[] | null>(null);
+  private readonly _calcOverridden = signal(false);
+
+  private readonly _calcConstants = computed<Record<string, number>>(() => {
+    const raw = this.tenantState.tenant()?.calcConstants;
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(obj))
+        if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+      return out;
+    } catch { return {}; }
+  });
+
+  /** The field the formula writes into — this test's first numeric param. */
+  private calcTargetParam(): TestParameter | null {
+    return this.parameters().find(p => this.inputKindFor(p) === 'numeric') ?? null;
+  }
+
+  /** A sibling's saved value: handles both snapshot shapes
+   *  ({p:{value,unit}} and flat {p:value}); param null → first numeric-ish. */
+  private siblingValue(t: OrderTest, param: string | null): number | null {
+    if (!t.currentResult) return null;
+    let values: Record<string, unknown>;
+    try { values = (JSON.parse(t.currentResult) as { values?: Record<string, unknown> })?.values ?? {}; }
+    catch { return null; }
+    const read = (v: unknown): number | null => {
+      const raw = v != null && typeof v === 'object' ? (v as { value?: unknown }).value : v;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number(String(raw).trim());
+      return Number.isFinite(n) ? n : null;
+    };
+    if (param) {
+      const want = param.trim().toLowerCase();
+      for (const [k, v] of Object.entries(values))
+        if (k.trim().toLowerCase() === want) return read(v);
+      return null;
+    }
+    for (const v of Object.values(values)) {
+      const n = read(v);
+      if (n != null) return n;
+    }
+    return null;
+  }
+
+  private calcContext(): CalcContext {
+    const self = this._ot();
+    const selfCode = self?.test?.testCode?.trim().toUpperCase() ?? null;
+    const siblings = this._calcSiblings() ?? [];
+    const consts = this._calcConstants();
+    const patient = self?.subOrder?.order?.patient;
+    const age = typeof patient?.age === 'number' ? patient.age : ageYearsFromDob(patient?.dateOfBirth);
+    const findSibling = (code: string) =>
+      siblings.find(t => t.test?.testCode?.trim().toUpperCase() === code) ?? null;
+    return {
+      value: ref => {
+        const sep = ref.indexOf(':');
+        const code = (sep < 0 ? ref : ref.slice(0, sep)).trim().toUpperCase();
+        const param = sep < 0 ? null : ref.slice(sep + 1);
+        if (code === selfCode) {
+          // Same-test input (rare): read the live form value.
+          const want = param?.trim().toLowerCase();
+          const p = want
+            ? this.parameters().find(x => x.name.trim().toLowerCase() === want
+                || (x.title ?? '').trim().toLowerCase() === want)
+            : this.calcTargetParam();
+          const raw = p ? this._values()[p.name] : undefined;
+          if (raw === undefined || raw === null || raw === '') return null;
+          const n = Number(String(raw).trim());
+          return Number.isFinite(n) ? n : null;
+        }
+        const t = findSibling(code);
+        return t ? this.siblingValue(t, param) : null;
+      },
+      constant: name => consts[name],
+      age,
+      sex: patient?.sex ?? null,
+      uln: code => {
+        const t = findSibling(code.trim().toUpperCase());
+        const raw = t?.test?.parameters;
+        if (!raw) return null;
+        try {
+          const params = (JSON.parse(raw) as TestParametersBlob).parameters ?? [];
+          const p = params.find(x => (x.referenceRanges?.length ?? 0) > 0);
+          if (!p) return null;
+          const ageRaw = this._ot()?.subOrder?.order?.patient?.age;
+          const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
+          return selectReferenceRange(p.referenceRanges, sex,
+            typeof ageRaw === 'number' ? ageRaw : null)?.max ?? null;
+        } catch { return null; }
+      },
+    };
+  }
+
+  /** Fill the target field from the formula unless the tech has overridden. */
+  private applyCalcPrefill() {
+    const def = this._calcDef();
+    if (!def || this._calcOverridden()) return;
+    const target = this.calcTargetParam();
+    if (!target) return;
+    const res = evaluateCalc(def, this.calcContext());
+    const next = res.value != null ? String(res.value) : '';
+    const cur = String(this._values()[target.name] ?? '');
+    if (cur === next) return;
+    this._values.update(s => ({ ...s, [target.name]: next }));
+  }
+
+  /** After load: fetch tube siblings for the inputs, then decide auto vs
+   *  overridden exactly like the sample screen — a stored value matching the
+   *  formula stays live; a differing one was deliberate. */
+  private initCalc() {
+    const def = this._calcDef();
+    const sampleId = this._ot()?.subOrderId ?? this._ot()?.subOrder?.id;
+    if (!def || !sampleId) return;
+    this.tenantState.ensureLoaded();
+    this.api.get<{ tests?: OrderTest[] }>(`/api/samples/${sampleId}/tests`).subscribe({
+      next: full => {
+        const selfId = this._ot()?.id;
+        this._calcSiblings.set((full?.tests ?? []).filter(t => t.id !== selfId));
+        const target = this.calcTargetParam();
+        const cur = target ? String(this._values()[target.name] ?? '') : '';
+        if (cur) {
+          const res = evaluateCalc(def, this.calcContext());
+          this._calcOverridden.set(res.value == null || String(res.value) !== cur);
+        }
+        this.applyCalcPrefill();
+      },
+      error: () => this._calcSiblings.set([]),
+    });
+  }
+
+  /** Chip beside the calculated field: how the current value got there. */
+  calcChipFor(p: TestParameter): { kind: 'auto' | 'manual' | 'na'; label: string } | null {
+    const def = this._calcDef();
+    if (!def) return null;
+    const target = this.calcTargetParam();
+    if (!target || target.name !== p.name) return null;
+    if (this._calcOverridden()) return { kind: 'manual', label: 'Manual' };
+    const res = evaluateCalc(def, this.calcContext());
+    if (res.invalid) return { kind: 'na', label: 'Not calculable' };
+    if (res.value != null) return { kind: 'auto', label: 'Calculated' };
+    return { kind: 'auto', label: 'Auto' };
   }
 
   setNote(n: string) { this._note.set(n); }

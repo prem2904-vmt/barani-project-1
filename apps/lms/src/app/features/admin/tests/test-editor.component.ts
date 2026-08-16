@@ -423,6 +423,51 @@ function newRowKey(): string {
           </pf-tile>
         }
 
+        <!-- ── Calculated result (master formula, read-only) ──────────
+             The formula ships with the master test master (document-verbatim)
+             and auto-fills this test's field during profile result entry.
+             Shown here so the admin can see WHERE a value comes from; there
+             is no editor — restore-to-default would bring it back anyway. -->
+        @if (section() === 'results' && calcInfo(); as calc) {
+          <pf-tile tone="default" padding="lg" class="block">
+            <div class="flex items-center justify-between">
+              <h3 class="section-title">Calculated result</h3>
+              <span class="text-[11px] text-slate-400">{{ calcKindLabel(calc.kind) }}</span>
+            </div>
+            <div class="mt-3 space-y-2">
+              @if (calc.expr) {
+                <p class="font-mono text-sm text-slate-200 rounded-lg bg-slate-800/60 border border-slate-700/60 px-3 py-2 overflow-x-auto">
+                  {{ d.testCode || 'Value' }} = {{ calc.expr }}
+                </p>
+              }
+              @if (calc.inputs?.length) {
+                <p class="text-xs text-slate-400">
+                  Inputs:
+                  <span class="font-mono text-slate-300">{{ calc.inputs!.join(', ') }}</span>
+                  — sibling tests on the same order supply these during profile entry.
+                </p>
+              }
+              @if (calc.constants?.length) {
+                <p class="text-xs text-slate-400">
+                  Lab constants:
+                  <span class="font-mono text-slate-300">{{ calc.constants!.join(', ') }}</span>
+                  (set under Lab settings → Calculation constants).
+                </p>
+              }
+              @if (calc.validWhen) {
+                <p class="text-xs text-slate-400">
+                  Only calculated when
+                  <span class="font-mono text-slate-300">{{ calc.validWhen }}</span>
+                  — otherwise the entry screen shows “Not calculable”.
+                </p>
+              }
+              @if (calc.note) {
+                <p class="text-xs text-slate-500">{{ calc.note }}</p>
+              }
+            </div>
+          </pf-tile>
+        }
+
         <!-- ── Reference range ────────────────────────────────────────
              Inside Results, between "Result & report" and the analyte details
              — reading unit → normal values → parameters. It is a tile of its
@@ -1731,6 +1776,30 @@ export class TestEditorComponent implements OnInit {
   private readonly _draft = signal<DraftTest>(makeEmptyDraft());
   readonly draft = this._draft.asReadonly();
 
+  /** Parsed test.calculation for the read-only "Calculated result" card.
+   *  Includes documentary kinds (analyzer/assay-specific) — the admin should
+   *  see what the master says even when the engine doesn't compute it. */
+  private readonly _calcInfo = signal<{
+    kind?: string; expr?: string; inputs?: string[]; constants?: string[];
+    validWhen?: string; note?: string; unit?: string;
+  } | null>(null);
+  readonly calcInfo = this._calcInfo.asReadonly();
+
+  /** Friendly name for the special formula kinds. */
+  calcKindLabel(kind: string | undefined): string {
+    switch (kind) {
+      case 'expr': case 'inr': return 'Formula';
+      case 'ckdepi2021_cr': return 'CKD-EPI 2021 (creatinine)';
+      case 'ckdepi2021_cr_cys': return 'CKD-EPI 2021 (creatinine + cystatin C)';
+      case 'rpi': return 'Reticulocyte production index';
+      case 'r_value': return 'AASLD R-value (dynamic ULNs)';
+      case 'analyzer': return 'Analyzer-derived (no LIS calculation)';
+      case 'assay_specific': return 'Assay-specific (no universal formula)';
+      case 'clinical_excluded': return 'Needs clinical inputs (not automated)';
+      default: return 'Calculated';
+    }
+  }
+
   /** The four vacutainer tube colours used for vial grouping. */
   // NABL / standard vacutainer cap colours (order-of-draw). The key is stored
   // on the test as `tubeColor`; the legacy keys red/lavender/grey/blue still
@@ -2206,6 +2275,13 @@ export class TestEditorComponent implements OnInit {
   }
 
   private hydrateFrom(t: Test) {
+    // Master calculated-result definition — display-only (the formulas ship
+    // with the master and survive restore-to-default; there is no editor).
+    try {
+      this._calcInfo.set(t.calculation ? JSON.parse(t.calculation) : null);
+    } catch {
+      this._calcInfo.set(null);
+    }
     this._draft.set({
       id: t.id, name: t.name, type: t.type, flow: t.flow,
       price: t.price, taxSlab: t.taxSlab,
