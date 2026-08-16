@@ -2011,8 +2011,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly seriesNowMs = signal(Date.now());
   private seriesClock: ReturnType<typeof setInterval> | null = null;
   readonly seriesClosing = signal(false);
-  /** Lazily-fetched processed values, keyed by series sample id. */
-  private readonly _seriesResults = signal<Record<string, { loading: boolean; tests: SeriesResultTest[] }>>({});
+  /** Lazily-fetched per-tube detail, keyed by series sample id: the test
+   *  NAMES (every time point — the today feed doesn't carry a sample's
+   *  tests, so the schedule can only name a draw from here) plus the
+   *  processed VALUES (resulted tubes only). */
+  private readonly _seriesResults = signal<Record<string,
+    { loading: boolean; names: string[]; bundleName: string | null; tests: SeriesResultTest[] }>>({});
 
   /** Full sheet view-model: one group per series (repeatProfileTestId),
    *  one row per time point sorted by offset. Reads the live today feed so
@@ -2058,10 +2062,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           } else state = 'pending'; // awaiting-anchor / rejected fallback
         }
         const res = results[s.id];
-        // Name the DRAW by what's on the tube. One test → its name; several
-        // sharing the time point → the first plus a count, so the row stays
-        // one line. Falls back to the offset phrasing if names never loaded.
-        const names = (s.tests ?? []).map(t => (t.name ?? '').trim()).filter(n => n.length > 0);
+        // Name the DRAW by what's on the tube. The today feed carries no
+        // tests, so the names come from the per-tube fetch (res.names); the
+        // feed is still preferred when a caller does supply them. One test →
+        // its name; several sharing the time point → first plus a count, so
+        // the row stays one line. Offset phrasing only until the fetch lands.
+        const feedNames = (s.tests ?? []).map(t => (t.name ?? '').trim()).filter(n => n.length > 0);
+        const names = feedNames.length > 0 ? feedNames : (res?.names ?? []);
         const uniqueNames = [...new Set(names)];
         const testLabel = uniqueNames.length === 0
           ? offsetLabel(s.repeatOffsetMin ?? 0)
@@ -2080,10 +2087,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         };
       });
       const first = samples[0];
+      // Profile name for the group header — feed-first, then the per-tube
+      // fetch (which resolves packageName/profileName), then the department.
       const t0 = (first.tests ?? [])[0];
+      const fetched = results[first.id];
       groups.push({
         key,
-        name: t0?.packageName || t0?.profileName || t0?.name || first.department?.name || 'Series',
+        name: t0?.packageName || t0?.profileName || t0?.name
+          || fetched?.bundleName || first.department?.name || 'Series',
         deptCode: first.department?.code ?? '',
         rows,
       });
@@ -2115,16 +2126,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  one GET /api/samples/{id}/tests per qualifying tube, on sheet open. */
   private loadSeriesResults(o: Order): void {
     this._seriesResults.set({});
-    const targets = (o.samples ?? []).filter(s =>
-      s.repeatOffsetMin != null && SERIES_RESULTED.has(s.status));
+    // EVERY series tube is fetched, not just the resulted ones: the today
+    // feed omits a sample's tests, so this is the only source for naming a
+    // draw ("OGTT – 30 Minutes") on a still-pending time point. Values are
+    // extracted only where results exist (extractSeriesTests filters on
+    // entered/validated), so a pending tube contributes a name and nothing else.
+    const targets = (o.samples ?? []).filter(s => s.repeatOffsetMin != null);
     for (const s of targets) {
-      this._seriesResults.update(m => ({ ...m, [s.id]: { loading: true, tests: [] } }));
+      this._seriesResults.update(m => ({
+        ...m, [s.id]: { loading: true, names: [], bundleName: null, tests: [] } }));
       this.api.get<OrderSample>(`/api/samples/${s.id}/tests`).subscribe({
-        next: full => this._seriesResults.update(m => ({
-          ...m, [s.id]: { loading: false, tests: this.extractSeriesTests(full) },
-        })),
+        next: full => {
+          const ts = full?.tests ?? [];
+          const t0 = ts[0];
+          this._seriesResults.update(m => ({
+            ...m,
+            [s.id]: {
+              loading: false,
+              names: ts.map(t => (t.name ?? '').trim()).filter(n => n.length > 0),
+              bundleName: t0?.packageName || t0?.profileName || null,
+              tests: SERIES_RESULTED.has(s.status) ? this.extractSeriesTests(full) : [],
+            },
+          }));
+        },
         error: () => this._seriesResults.update(m => ({
-          ...m, [s.id]: { loading: false, tests: [] } })),
+          ...m, [s.id]: { loading: false, names: [], bundleName: null, tests: [] } })),
       });
     }
   }
