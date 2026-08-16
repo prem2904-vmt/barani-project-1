@@ -240,7 +240,7 @@ const COUNTERS: CounterSpec[] = [
             <span class="pf-mw-pane__title">Collect</span>
           </header>
           <div class="pf-mw-pane__body">
-            <pf-sample-collection [embedded]="true"></pf-sample-collection>
+            <pf-sample-collection [embedded]="true" (sampleCollected)="onSampleReceived()"></pf-sample-collection>
           </div>
         </section>
         } @else {
@@ -305,7 +305,7 @@ const COUNTERS: CounterSpec[] = [
             </div>
           </header>
           <div class="pf-mw-pane__body">
-            <pf-receive-samples #intakeRef [embedded]="true"></pf-receive-samples>
+            <pf-receive-samples #intakeRef [embedded]="true" (sampleReceived)="onSampleReceived()"></pf-receive-samples>
           </div>
         </section>
         }
@@ -2555,6 +2555,11 @@ export class MyWorkComponent implements OnInit {
     this.tenantState.ensureLoaded();
     if (this.departments().length === 0) this.loadDepartments();
     this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
+  }
+
+  onSampleReceived() {
+    this.refresh();
+    this.refreshAllCounts();
   }
 
   refresh() {
