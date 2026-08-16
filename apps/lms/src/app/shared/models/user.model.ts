@@ -1,9 +1,13 @@
 export interface User {
   id: string;
   tenantId: string;
+  /** Honorific printed before the name ("Dr.", "Mr.", "Mrs.", "Ms.").
+   *  Optional; server DisplayName already includes it. */
+  title?: string | null;
   firstName: string;
   fathersName: string;
-  /** Server computes this. Falls back to `firstName + ' ' + fathersName`. */
+  /** Server computes this (now WITH the title). Falls back to
+   *  `title + firstName + fathersName`. */
   displayName?: string;
   email: string;
   /** Login handle for username-only accounts (blank email). */
@@ -18,12 +22,14 @@ export interface User {
   createdAt: string;
 }
 
+/** Prefers the server displayName (which already carries the title), so the
+ *  manual fallback prefixing here can never double up. */
 export function userDisplayName(
-  u: Pick<User, 'firstName' | 'fathersName' | 'displayName'> | null | undefined
+  u: Pick<User, 'firstName' | 'fathersName' | 'displayName'> & { title?: string | null } | null | undefined
 ): string {
   if (!u) return '';
   if (u.displayName) return u.displayName;
-  return [u.firstName, u.fathersName].filter(Boolean).join(' ');
+  return [u.title, u.firstName, u.fathersName].filter(Boolean).join(' ');
 }
 
 export interface Role {

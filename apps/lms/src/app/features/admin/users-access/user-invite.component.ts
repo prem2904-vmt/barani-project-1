@@ -17,6 +17,8 @@ import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/coun
 interface CreateResult { id: string; username: string; displayName: string; }
 
 interface CreateForm {
+  /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
+  title: string;
   username: string;
   password: string;
   firstName: string;
@@ -56,6 +58,17 @@ interface CreateForm {
           <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Title</label>
+              <select class="pf-input"
+                      [ngModel]="form().title" (ngModelChange)="patch({ title: $event })">
+                <option value="">—</option>
+                <option value="Dr.">Dr.</option>
+                <option value="Mr.">Mr.</option>
+                <option value="Mrs.">Mrs.</option>
+                <option value="Ms.">Ms.</option>
+              </select>
+            </div>
             <div>
               <label class="pf-label">First name</label>
               <input type="text" pfAlpha class="pf-input"
@@ -162,7 +175,7 @@ export class UserInviteComponent implements OnInit {
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
   private readonly _form = signal<CreateForm>({
-    username: '', password: '', firstName: '', fathersName: '', phone: '',
+    username: '', password: '', title: '', firstName: '', fathersName: '', phone: '',
     roleIds: [], branchId: '', subBranchId: ''
   });
   private readonly _saving = signal(false);
@@ -315,6 +328,7 @@ export class UserInviteComponent implements OnInit {
     this.api.post<CreateResult>('/api/users', {
       username: i.username.trim().toLowerCase(),
       password: i.password,
+      title: i.title || undefined,
       firstName: i.firstName || undefined,
       fathersName: i.fathersName || undefined,
       phone: i.phone || undefined,

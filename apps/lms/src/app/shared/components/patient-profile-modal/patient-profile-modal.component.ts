@@ -112,6 +112,11 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                 } @else {
                   <div class="pf-pp-edit-grid">
                     <label>
+                      <span>Title</span>
+                      <pf-select [options]="titleOptions" [value]="draft().title"
+                                 (valueChange)="setDraftField('title', $event)"></pf-select>
+                    </label>
+                    <label>
                       <span>First name</span>
                       <input class="pf-pp-input" [value]="draft().firstName"
                              (input)="setDraftField('firstName', $any($event.target).value)" />
@@ -959,6 +964,16 @@ export class PatientProfileModalComponent {
   private readonly toasts = inject(ToastService);
 
   protected readonly sexOptions = SEX_OPTIONS;
+  /** Honorifics — matches the registration form + server normalizer. */
+  protected readonly titleOptions = [
+    { value: '', label: '—' },
+    { value: 'Mr.', label: 'Mr.' },
+    { value: 'Mrs.', label: 'Mrs.' },
+    { value: 'Ms.', label: 'Ms.' },
+    { value: 'Dr.', label: 'Dr.' },
+    { value: 'Master', label: 'Master' },
+    { value: 'Baby', label: 'Baby' },
+  ];
 
   // Lifecycle: when activeId flips, fetch the profile.
   private readonly _patient = signal<Patient | null>(null);
@@ -966,7 +981,7 @@ export class PatientProfileModalComponent {
   private readonly _loading = signal(false);
   private readonly _saving = signal(false);
   private readonly _editMode = signal(false);
-  private readonly _draft = signal<DraftPatient>({ firstName: '', fathersName: '', dateOfBirth: '', age: '', sex: '' });
+  private readonly _draft = signal<DraftPatient>({ title: '', firstName: '', fathersName: '', dateOfBirth: '', age: '', sex: '' });
   private readonly _pageLimit = signal(PAGE_SIZE);
 
   // Sub-modal state.
@@ -1118,6 +1133,7 @@ export class PatientProfileModalComponent {
     const p = this._patient();
     if (!p) return;
     this._draft.set({
+      title: p.title ?? '',
       firstName: p.firstName ?? '',
       fathersName: p.fathersName ?? '',
       dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
@@ -1159,6 +1175,8 @@ export class PatientProfileModalComponent {
     if (!p || !this.editValid()) return;
     this._saving.set(true);
     const body: Record<string, unknown> = {
+      // "" clears the honorific server-side (NormalizeTitle maps it to null).
+      title: d.title,
       firstName: d.firstName.trim(),
       fathersName: d.fathersName.trim(),
       sex: d.sex || null
@@ -1349,6 +1367,7 @@ export class PatientProfileModalComponent {
 }
 
 interface DraftPatient {
+  title: string;
   firstName: string;
   fathersName: string;
   dateOfBirth: string; // yyyy-MM-dd

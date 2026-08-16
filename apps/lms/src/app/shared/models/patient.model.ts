@@ -5,9 +5,13 @@ export interface Patient {
    * registration; legacy rows (pre-2026-05-16) may have it null. Use
    * `patientMrnLabel(p)` to render with a fallback. */
   mrn?: string;
+  /** Honorific printed before the name ("Mr.", "Mrs.", "Ms.", "Dr.",
+   *  "Master", "Baby"). Optional; server DisplayName already includes it. */
+  title?: string | null;
   firstName: string;
   fathersName: string;
-  /** Server computes this. Falls back to `firstName + ' ' + fathersName` in the helper. */
+  /** Server computes this (now WITH the title). Falls back to
+   *  `title + firstName + fathersName` in the helper. */
   displayName?: string;
   phone?: string;
   email?: string;
@@ -33,13 +37,15 @@ export interface Patient {
   updatedAt?: string;
 }
 
-/** Composes a display name for a patient. Tolerates missing fathersName. */
+/** Composes a display name for a patient. Tolerates missing fathersName.
+ *  Prefers the server displayName (which already carries the title), so the
+ *  manual fallback prefixing here can never double up. */
 export function patientDisplayName(
-  p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName'> | null | undefined
+  p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName'> & { title?: string | null } | null | undefined
 ): string {
   if (!p) return '';
   if (p.displayName) return p.displayName;
-  return [p.firstName, p.fathersName].filter(Boolean).join(' ');
+  return [p.title, p.firstName, p.fathersName].filter(Boolean).join(' ');
 }
 
 /** Renders an MRN with a graceful fallback for legacy NULL-MRN patients. */

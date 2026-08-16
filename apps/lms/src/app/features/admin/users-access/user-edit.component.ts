@@ -16,6 +16,8 @@ import { NumericDirective } from '../../../shared/directives/numeric.directive';
 import { COUNTRY_CODES, getCountryDigitLength, parsePhoneNumber } from '../../../shared/utils/country-codes';
 
 interface EditForm {
+  /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
+  title: string;
   firstName: string;
   fathersName: string;
   phone: string;
@@ -52,6 +54,17 @@ interface EditForm {
         <div class="space-y-3">
           <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Title</label>
+              <select class="pf-input"
+                      [ngModel]="form().title" (ngModelChange)="patch({ title: $event })">
+                <option value="">—</option>
+                <option value="Dr.">Dr.</option>
+                <option value="Mr.">Mr.</option>
+                <option value="Mrs.">Mrs.</option>
+                <option value="Ms.">Ms.</option>
+              </select>
+            </div>
             <div>
               <label class="pf-label">First name</label>
               <input type="text" pfAlpha class="pf-input"
@@ -150,7 +163,7 @@ export class UserEditComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<EditForm>({ firstName: '', fathersName: '', phone: '', roleIds: [], branchId: '', subBranchId: '' });
+  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', roleIds: [], branchId: '', subBranchId: '' });
   private readonly _saving = signal(false);
   private readonly _username = signal('');
   private readonly _loadedName = signal('');
@@ -234,7 +247,7 @@ export class UserEditComponent implements OnInit {
         if (u) {
           this._loadedName.set(u.displayName || u.firstName || u.username || '');
           this._username.set(u.username || '');
-          this._form.update(v => ({ ...v, firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
+          this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
 
           if (u.phone) {
             const parsed = parsePhoneNumber(u.phone);
@@ -326,7 +339,7 @@ export class UserEditComponent implements OnInit {
     this._fieldError.set({});
     // Details first, then roles (full-replace). Both must land for a clean save.
     this.api.patch<User>(`/api/users/${this.id}`, {
-      firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
+      title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
     }).subscribe({
       next: () => {
         this.api.put(`/api/users/${this.id}/roles`, {

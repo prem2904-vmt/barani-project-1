@@ -26,6 +26,8 @@ import { ModalPortalDirective } from '../../shared/directives/modal-portal.direc
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
   id: string;
+  /** Server-composed name (includes the honorific) — preferred for display. */
+  displayName?: string | null;
   firstName: string;
   fathersName: string;
   mrn?: string | null;
@@ -998,7 +1000,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return '—';
   }
   protected patientName(p: PatientLite): string {
-    const n = `${p.firstName ?? ''} ${p.fathersName ?? ''}`.trim();
+    // Prefer the server-composed name so the honorific ("Dr.", "Mrs.") shows.
+    const n = (p.displayName ?? '').trim() || `${p.firstName ?? ''} ${p.fathersName ?? ''}`.trim();
     return n || '(unknown)';
   }
 
