@@ -22,6 +22,7 @@ import {
   ValidationPatch,
   hasOptions as registryHasOptions
 } from '../../../shared/forms';
+import { parseCalc, CalcDef } from '../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -891,6 +892,29 @@ function newRowKey(): string {
             </span>
           </div>
 
+          <!-- ── What this profile computes by itself ──────────────────
+               Formulas live on the MEMBER tests (document-verbatim master
+               data), so any profile that includes such a member computes it
+               at result entry automatically — including brand-new custom
+               profiles. This card makes that visible while composing. -->
+          @if (calcMembers().length > 0) {
+            <div class="pf-calc-members">
+              <p class="pf-calc-members__hdr">Auto-calculated in this {{ d.type }}</p>
+              @for (m of calcMembers(); track m.id) {
+                <div class="pf-calc-members__row">
+                  <span class="pf-calc-members__name">{{ m.name }}</span>
+                  <code class="pf-calc-members__f">{{ m.line }}</code>
+                  @if (m.gate) { <span class="pf-calc-members__gate">{{ m.gate }}</span> }
+                </div>
+              }
+              <p class="pf-calc-members__foot">
+                These fill in by themselves at result entry once their input tests are typed
+                (overridable). The formula travels with the member test — include it in any
+                new profile and the calculation comes along.
+              </p>
+            </div>
+          }
+
           @if (repetitiveActive()) {
             <!-- ── The timed series: the AUTHORED order of draws ─────────
                  Rows sharing an offset render inside ONE "time point" card
@@ -995,6 +1019,10 @@ function newRowKey(): string {
                             <span class="pf-pkg-pick__name">{{ t.name }}</span>
                             @if (t.type === 'profile') {
                               <span class="pf-pkg-badge">Profile</span>
+                            }
+                            @if (memberCalc(t); as def) {
+                              <span class="pf-pkg-badge pf-pkg-badge--calc"
+                                    [title]="'Auto-calculated at result entry: ' + calcLine(def)">ƒ Calculated</span>
                             }
                           </span>
                           <span class="pf-pkg-pick__meta">
@@ -1386,6 +1414,47 @@ function newRowKey(): string {
       background: rgba(56, 189, 248, 0.16);
       border: 1px solid rgba(56, 189, 248, 0.38);
       color: #7dd3fc;
+    }
+    .pf-pkg-badge--calc {
+      background: rgba(167, 139, 250, 0.14);
+      border-color: rgba(167, 139, 250, 0.38);
+      color: #c4b5fd;
+      text-transform: none;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── "Auto-calculated in this profile" summary ── */
+    .pf-calc-members {
+      margin: 10px 0 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(167, 139, 250, 0.07);
+      border: 1px solid rgba(167, 139, 250, 0.22);
+    }
+    .pf-calc-members__hdr {
+      font-size: 11px; font-weight: 800;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: #c4b5fd;
+      margin-bottom: 6px;
+    }
+    .pf-calc-members__row {
+      display: flex; flex-wrap: wrap; align-items: baseline;
+      gap: 4px 10px;
+      padding: 3px 0;
+      font-size: 12.5px;
+    }
+    .pf-calc-members__name { font-weight: 700; color: var(--text-primary, #fff); }
+    .pf-calc-members__f {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11.5px;
+      color: var(--text-secondary, rgba(255,255,255,0.75));
+      overflow-wrap: anywhere;
+    }
+    .pf-calc-members__gate { font-size: 11px; color: var(--text-tertiary, rgba(255,255,255,0.55)); }
+    .pf-calc-members__foot {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-tertiary, rgba(255,255,255,0.55));
     }
 
     /* ── Parameter row ── */
@@ -2089,6 +2158,40 @@ export class TestEditorComponent implements OnInit {
   memberName(testId: string): string {
     return this._memberById().get(testId)?.name ?? '(unknown test)';
   }
+
+  // ── Calculated members (ƒ badge + the profile's auto-calculated card) ──
+
+  /** Computable formula on a picker/member test, or null. */
+  memberCalc(t: { calculation?: string | null } | undefined): CalcDef | null {
+    return t ? parseCalc(t.calculation) : null;
+  }
+
+  /** One-line formula: the expression itself (codes are the admin's
+   *  vocabulary here), or the friendly name of a special kind. */
+  calcLine(def: CalcDef): string {
+    return (def.kind === 'expr' || def.kind === 'inr') && def.expr
+      ? def.expr
+      : this.calcKindLabel(def.kind);
+  }
+
+  /** The picked members that auto-compute, with their formula lines —
+   *  shown while composing so a new profile's behaviour is visible upfront. */
+  readonly calcMembers = computed(() => {
+    const byId = this._memberById();
+    const out: { id: string; name: string; line: string; gate: string | null }[] = [];
+    for (const id of this.packageItems()) {
+      const t = byId.get(id);
+      const def = this.memberCalc(t);
+      if (!t || !def) continue;
+      out.push({
+        id,
+        name: t.name,
+        line: this.calcLine(def),
+        gate: def.validWhen ? `only when ${def.validWhen}` : null,
+      });
+    }
+    return out;
+  });
 
   /** Commit a row's edited offset (on change, not per-keystroke, so the group
    *  re-sort doesn't yank the input mid-typing). Editing is how a draw SPLITS
