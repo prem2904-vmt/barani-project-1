@@ -31,6 +31,7 @@ import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
 import { NavBackService } from "../../../core/services/nav-back.service";
 import { AuthService } from "../../../core/auth/auth.service";
+import { DialogService } from "../../../core/services/dialog.service";
 import {
   OrderSample,
   OrderTest,
@@ -108,6 +109,7 @@ export class SampleResultEntryComponent {
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
   private readonly auth = inject(AuthService);
+  private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
   protected readonly formatPatient = formatPatientInfo;
 
@@ -498,8 +500,15 @@ export class SampleResultEntryComponent {
   }
 
   /** A submitted (awaiting-validation) test exists → can be re-opened to edit. */
+  // A finished tube is editable whether it is merely SUBMITTED or already
+  // SIGNED OFF — scanning a completed sample number must offer Edit either
+  // way. edit_result is held by Lab Technician, Pathologist and Lab Admin.
+  readonly canEditResult = computed(() => this.auth.hasPermission("edit_result"));
   readonly hasReopenable = computed(() =>
-    (this._sample()?.tests ?? []).some((t) => t.status === "entered"),
+    this.canEditResult() &&
+    (this._sample()?.tests ?? []).some(
+      (t) => t.status === "entered" || t.status === "validated",
+    ),
   );
   /** At least one test is in an editable/submittable state. */
   readonly hasWritable = computed(() =>
@@ -530,22 +539,44 @@ export class SampleResultEntryComponent {
     this._values.set(init);
   }
 
-  /** Retrieve & edit a submitted tube: reopen on the server (audited), then
-   *  reload the values so the tech can change them and re-submit. */
+  /** Edit a finished tube: mandatory reason, then the server re-opens every
+   *  submitted/validated result on it back to THIS tech (audited), and the
+   *  values reload editable so they can correct and submit again. Works for a
+   *  signed-off tube too — scanning a completed sample number lands here. */
   async reopenSample() {
     const s = this._sample();
     if (!s || this._submitting()) return;
+
+    const reason = await this.dialog.prompt({
+      title: "Edit this result?",
+      message:
+        "The current values stay in history and the reason is recorded in the audit trail. If a report was already released, an amended one is issued once this is validated again.",
+      placeholder: "e.g. wrong sample, typo in Hb…",
+      multiline: true,
+      required: true,
+      confirmLabel: "Edit",
+    });
+    if (!reason || !reason.trim()) return;
+
     this._submitting.set(true);
     try {
+      await firstValueFrom(
+        this.api.post<{ reopened: number }>(
+          `/api/results/tube/${s.id}/reopen-mine`,
+          { reason: reason.trim() },
+        ),
+      );
+      // Re-fetch rather than trusting the POST's shape — the tube now carries
+      // fresh statuses, assignment and a new result version.
       const updated = await firstValueFrom(
-        this.api.post<OrderSample>(`/api/samples/${s.id}/reopen`, {}),
+        this.api.get<OrderSample>(`/api/samples/${s.id}/tests`),
       );
       if (updated) {
         this._sample.set(this.normalizeSample(updated));
         this.prefillValues(updated);
         this.seedCalcState();
       }
-      this.toasts.success("Reopened — edit and submit again");
+      this.toasts.success("Open for editing — correct the values and submit");
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {

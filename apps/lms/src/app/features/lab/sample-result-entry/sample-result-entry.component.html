@@ -158,8 +158,8 @@
         class="pf-sre__hdr-action"
         [disabled]="submitting()"
         (click)="reopenSample()"
-        aria-label="Undo submit & edit"
-        title="Undo submit & edit"
+        aria-label="Edit result"
+        title="Edit result"
       >
         <svg
           width="20"
@@ -1101,15 +1101,16 @@
 
     <footer class="pf-sre__footer">
       @if (hasReopenable()) {
-        <!-- Submitted, awaiting validation — pull it back to edit + resubmit.
-             Every reopen is recorded in the result's audit trail. -->
+        <!-- Finished tube (submitted OR signed off) — Edit asks for a reason,
+             pulls it back to this tech and unlocks the fields. Every re-open
+             is recorded in the result's audit trail. -->
         <button
           type="button"
           class="pf-sre__reopen"
           [disabled]="submitting()"
           (click)="reopenSample()"
         >
-          {{ submitting() ? "Reopening…" : "↺ Undo submit & edit" }}
+          {{ submitting() ? "Opening…" : "Edit result" }}
         </button>
       }
       <!-- Save partial work and come back later (tube stays in_progress). -->
