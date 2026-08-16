@@ -726,7 +726,16 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   }
   for (const [pkg, member] of benchBundles) {
     const pl = resolvedLayouts[pkg];
-    if (!pl?.sections.some(s => s.isVisible && s.type !== 'grid')) continue;
+    // Only when there is something to PRINT. A visible-but-empty paragraph
+    // (the notes editor saves a blank one freely) used to sail through and
+    // render the profile's name as a big lone heading after the table.
+    const hasNarrative = pl?.sections.some(s =>
+      s.isVisible && s.type !== 'grid' && (
+        (s.type === 'paragraph' && !!s.content?.trim()) ||
+        (s.type === 'image' && (s.imageUrls?.length ?? 0) > 0) ||
+        (s.type === 'chart' && !!s.chart)
+      ));
+    if (!hasNarrative) continue;
     special.push({ ...member, testId: pkg, packageTestId: null, profileTestId: null,
                    name: (member.profileTestId === pkg ? member.profileName : member.packageName)
                          || pl.testName || '' });
