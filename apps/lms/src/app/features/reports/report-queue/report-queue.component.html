@@ -373,6 +373,18 @@
         </div>
 
         <div class="pf-rq-actions">
+          @if (canEditResult() && r.orderId) {
+          <!-- Pull the finished results back for correction (department picker
+               + tech routing + reason live in the shared dialog). -->
+          <button type="button" class="pf-rq-iconbtn" title="Edit results" (click)="openEditDialog(r)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+            <span>Edit</span>
+          </button>
+          }
           <button type="button" class="pf-rq-iconbtn" title="Download PDF" (click)="downloadPdf(r)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -413,4 +425,13 @@
     </div>
     }
   </div>
+
+  @if (editOrderId(); as oid) {
+  <pf-edit-result-dialog
+    [orderId]="oid"
+    title="Edit this report's results"
+    (edited)="onEdited()"
+    (closed)="editOrderId.set(null)">
+  </pf-edit-result-dialog>
+  }
 </section>

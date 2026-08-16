@@ -36,6 +36,7 @@ import {
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
+import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -79,6 +80,7 @@ interface PrelimOrder {
     SkeletonComponent,
     TileComponent,
     TouchButtonComponent,
+    EditResultDialogComponent,
     KpiStripComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -115,6 +117,24 @@ export class ReportQueueComponent implements OnInit {
   readonly filter = this._filter.asReadonly();
   /** Human label for the active filter — shown on phone above the list so the
    *  icon-only filter row reads clearly ("which category am I looking at?"). */
+  // ── Post-result edit ──────────────────────────────────
+  // Same dialog the report viewer uses; the queue is where a finished
+  // report is usually spotted, so the action belongs on the row too.
+  // edit_result: Lab Technician, Pathologist, Lab Admin — not front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission("edit_result"));
+  readonly editOrderId = signal<string | null>(null);
+
+  openEditDialog(r: Report) {
+    if (r.orderId) this.editOrderId.set(r.orderId);
+  }
+
+  /** Corrected work left this report behind — reload the queue so its
+   *  status/rows reflect the re-opened state. */
+  onEdited() {
+    this.editOrderId.set(null);
+    this.refresh();
+  }
+
   readonly activeFilterLabel = computed(
     () =>
       this.filterOptions.find((o) => o.value === this._filter())?.label ??
