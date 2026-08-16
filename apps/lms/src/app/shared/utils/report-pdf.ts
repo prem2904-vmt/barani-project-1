@@ -181,7 +181,7 @@ interface ReportSnapshot {
   };
   type?: string;
   isPartial?: boolean;
-  /** Present only on a corrected re-issue. Drives the "AMENDED" banner. */
+  /** Present only on a corrected re-issue. Audit metadata — deliberately NOT printed on the page. */
   amendment?: {
     isAmended?: boolean;
     reason?: string;
@@ -561,31 +561,12 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   drawLetterhead(doc, practice, template?.logoUrl ?? null);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
-  // ── Amended-report banner ──────────────────────────────────────
-  // A corrected re-issue carries snap.amendment; flag it prominently so the
-  // reader knows this supersedes a previously released report.
+  // No amended-report banner on the printed page (owner's call, 2026-08-16):
+  // the patient-facing document shows only the corrected values and its own
+  // Reported-on time. The amendment trail lives in the data — snap.amendment,
+  // AmendedBy/AmendmentReason on the report row, the result versions and the
+  // order activity — where the audit needs it.
   let cursorY = patientBottom + 14;
-  if (snap.amendment?.isAmended) {
-    const supersededOn = snap.amendment.supersedesReleasedAt
-      ? new Date(snap.amendment.supersedesReleasedAt).toLocaleDateString()
-      : null;
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(FLAG_RED);
-    doc.text(
-      supersededOn
-        ? `AMENDED REPORT — supersedes the report issued on ${supersededOn}`
-        : 'AMENDED REPORT — supersedes a previously issued report',
-      MARGIN_X, cursorY + 10);
-    cursorY += 22;
-    if (snap.amendment.reason) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor('#92400e');
-      doc.text(`Reason: ${snap.amendment.reason}`, MARGIN_X, cursorY + 6);
-      cursorY += 18;
-    }
-  }
 
   // ── Body — ONE continuous results table, grouped by panel/profile ──
   // Each tabular test becomes a bold full-width "panel" header row
