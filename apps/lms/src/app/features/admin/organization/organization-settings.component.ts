@@ -22,6 +22,30 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
         subtitle="Patient ID format and tenant data tools.">
       </pf-screen-header>
 
+      <!-- Organization display NAME — distinct from the login handle below.
+           The page used to show only the handle, so "arun-labs" read as if
+           it were the organization's name (UAT item 16). -->
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-ls__title">Organization name</h3>
+        <p class="pf-ls__hint">
+          The display name shown across the app, on reports and invoices —
+          e.g. "Arun Labs". The lowercase sign-in handle below is separate.
+        </p>
+        <div class="flex flex-wrap items-end gap-3 mt-4">
+          <label class="block grow max-w-md">
+            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Name</span>
+            <input class="pf-input mt-1 w-full" maxlength="80" [ngModel]="orgName()" (ngModelChange)="orgName.set($event)"
+                   placeholder="e.g. Arun Labs" />
+          </label>
+          <button type="button" class="px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style="background: var(--violet-600, #7c3aed);"
+                  [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()"
+                  (click)="saveOrgName()">
+            {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
+          </button>
+        </div>
+      </pf-tile>
+
       <!-- Organization login handle (tenant "username") — OPS-13 -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Organization login handle</h3>
@@ -309,6 +333,25 @@ export class OrganizationSettingsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
 
+  // ── Organization display name ──
+  protected readonly orgName = signal('');
+  protected readonly orgNameOriginal = signal('');
+  protected readonly orgNameSaving = signal(false);
+
+  protected saveOrgName() {
+    const name = this.orgName().trim();
+    if (!name || name === this.orgNameOriginal()) return;
+    this.orgNameSaving.set(true);
+    this.api.patch('/api/tenants/current', { name }).subscribe({
+      next: () => {
+        this.orgNameSaving.set(false);
+        this.orgNameOriginal.set(name);
+        this.toasts.success('Organization name updated — shown after the next sign-in.');
+      },
+      error: e => { this.orgNameSaving.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
   // ── Login handle (tenant slug) — OPS-13 ──
   protected readonly slug = signal('');
   protected readonly slugOriginal = signal('');
@@ -438,7 +481,12 @@ export class OrganizationSettingsComponent implements OnInit {
   ngOnInit() {
     // Current tenant login handle (OPS-13).
     this.api.get<any>('/api/tenants/current').subscribe({
-      next: t => { const s = (t?.slug ?? '').toLowerCase(); this.slug.set(s); this.slugOriginal.set(s); },
+      next: t => {
+        const s = (t?.slug ?? '').toLowerCase();
+        this.slug.set(s); this.slugOriginal.set(s);
+        const n = t?.name ?? '';
+        this.orgName.set(n); this.orgNameOriginal.set(n);
+      },
     });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
