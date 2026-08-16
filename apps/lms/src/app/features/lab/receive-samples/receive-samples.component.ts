@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ScanService } from '../../../core/services/scan.service';
@@ -872,6 +872,7 @@ export class ReceiveSamplesComponent implements OnInit {
    * we don't render two stacked headers.
    */
   @Input() embedded = false;
+  readonly sampleReceived = output<void>();
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -1111,6 +1112,7 @@ export class ReceiveSamplesComponent implements OnInit {
         this.pkgCode.set('');
         this.pkgPreview.set(null);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.pkgBusy.set(false);
@@ -1167,6 +1169,7 @@ export class ReceiveSamplesComponent implements OnInit {
         // intermediate in_transit). TAT starts at this moment.
         this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${n} tube${n === 1 ? '' : 's'} received — TAT clock started`);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.busy.set(false);
@@ -1191,6 +1194,7 @@ export class ReceiveSamplesComponent implements OnInit {
         this.busy.set(false);
         this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${ids.length} tube${ids.length === 1 ? '' : 's'} received — TAT started`);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.busy.set(false);
@@ -1240,7 +1244,7 @@ export class ReceiveSamplesComponent implements OnInit {
     this.busy.set(true);
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
       next: s => this.api.patch<OrderSample>(`/api/samples/${s.id}/receive`).subscribe({
-        next: () => { this.busy.set(false); this.scanValue.set(''); this.toasts.success(`Received ${s.barcode}`); this.refresh(); },
+        next: () => { this.busy.set(false); this.scanValue.set(''); this.toasts.success(`Received ${s.barcode}`); this.refresh(); this.sampleReceived.emit(); },
         error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),
       error: () => { this.busy.set(false); this.toasts.error('Barcode not found'); }
@@ -1249,7 +1253,7 @@ export class ReceiveSamplesComponent implements OnInit {
 
   receiveOne(id: string) {
     this.api.patch<OrderSample>(`/api/samples/${id}/receive`).subscribe({
-      next: () => { this.toasts.success('Received'); this.refresh(); },
+      next: () => { this.toasts.success('Received'); this.refresh(); this.sampleReceived.emit(); },
       error: e => { this.toasts.error(ApiError.from(e).message); }
     });
   }
@@ -1259,7 +1263,7 @@ export class ReceiveSamplesComponent implements OnInit {
     if (ids.length === 0) return;
     this.busy.set(true);
     this.api.post<OrderSample[]>('/api/samples/receive-batch', { sampleIds: ids }).subscribe({
-      next: () => { this.busy.set(false); this.toasts.success(`Received ${ids.length}`); this.refresh(); },
+      next: () => { this.busy.set(false); this.toasts.success(`Received ${ids.length}`); this.refresh(); this.sampleReceived.emit(); },
       error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
@@ -1293,6 +1297,7 @@ export class ReceiveSamplesComponent implements OnInit {
           this.toasts.success(`Received ${s.barcode}`);
           this.seqValue.set('');
           this.refresh();
+          this.sampleReceived.emit();
         },
         error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),

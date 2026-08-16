@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, computed, effect, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -2190,6 +2190,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  host supplies its own pane header, so we suppress our KPI strip + screen
    *  header + outer page padding while keeping the queue + scan + drawer. */
   @Input() embedded = false;
+  readonly sampleCollected = output<void>();
 
   /** Whether this user can dispatch (hand collected tubes to the lab) — needs
    *  the permission AND the workflow to actually include a dispatch step (else
@@ -2573,7 +2574,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         if (!firstError) firstError = ApiError.from(e).message;
       }
     }
-    if (ok > 0) this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} dispatched to lab`);
+    if (ok > 0) {
+      this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} dispatched to lab`);
+      this.sampleCollected.emit();
+    }
     if (firstError) this.toasts.error(firstError);
     this.dispatchSelect.set(null);
     this._dispatching.set(false);
@@ -2969,6 +2973,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       : x));
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
+      next: () => {
+        this.sampleCollected.emit();
+      },
       error: e => {
         // Only roll back if the local state still says 'collected'. If the
         // user has already toggled away (rapid tap-back), respect their newer
