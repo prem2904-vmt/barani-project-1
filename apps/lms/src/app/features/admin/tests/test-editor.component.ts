@@ -22,7 +22,7 @@ import {
   ValidationPatch,
   hasOptions as registryHasOptions
 } from '../../../shared/forms';
-import { parseCalc, lintExpr, CalcDef } from '../../../shared/utils/calculation';
+import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } from '../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -949,6 +949,28 @@ function newRowKey(): string {
                   </div>
                   @if (calcEditWarning(); as warn) { <p class="pf-calc-edit__warn">{{ warn }}</p> }
                   @if (calcEditError(); as err) { <p class="pf-calc-edit__err">{{ err }}</p> }
+
+                  <!-- ── Try it: sample values in, live result out — BEFORE saving ── -->
+                  @if (ce.expr.trim() && !calcEditError() && calcTryRefs().length > 0) {
+                    <div class="pf-calc-try">
+                      <p class="pf-label">Try it — enter sample values and check the result</p>
+                      <div class="pf-calc-try__grid">
+                        @for (ref of calcTryRefs(); track ref.key) {
+                          <label class="pf-calc-try__field">
+                            <span class="pf-calc-try__code" [title]="ref.name">{{ ref.key }}</span>
+                            <input type="number" inputmode="decimal" step="any"
+                                   class="pf-input pf-input--compact"
+                                   [placeholder]="ref.placeholder"
+                                   [ngModel]="calcTryValues()[ref.key] ?? ''"
+                                   (ngModelChange)="setCalcTryValue(ref.key, $event)" />
+                          </label>
+                        }
+                      </div>
+                      <p class="pf-calc-try__out" [class.pf-calc-try__out--na]="calcTryResult().tone !== 'ok'">
+                        {{ calcTryResult().text }}
+                      </p>
+                    </div>
+                  }
                   <div class="pf-calc-edit__actions">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="calcEdit.set(null)">Cancel</pf-touch-btn>
                     @if (calcEditHasExisting()) {
@@ -1551,6 +1573,26 @@ function newRowKey(): string {
     .pf-calc-edit__err { font-size: 11.5px; color: #fda4af; }
     .pf-calc-edit__warn { font-size: 11.5px; color: #fcd34d; }
     .pf-calc-edit__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+    .pf-calc-try {
+      border-top: 1px dashed var(--glass-border, rgba(255,255,255,0.12));
+      padding-top: 10px;
+    }
+    .pf-calc-try__grid {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin: 4px 0 8px;
+    }
+    .pf-calc-try__field { display: flex; flex-direction: column; gap: 2px; width: 110px; }
+    .pf-calc-try__code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 700;
+      color: var(--text-tertiary, rgba(255,255,255,0.55));
+    }
+    .pf-calc-try__out {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px; font-weight: 800;
+      color: #6ee7b7;
+    }
+    .pf-calc-try__out--na { color: var(--text-tertiary, rgba(255,255,255,0.55)); font-weight: 600; font-size: 12px; }
 
     /* ── Parameter row ── */
     .param-row {
@@ -2352,6 +2394,7 @@ export class TestEditorComponent implements OnInit {
       expr: def && (def.kind === 'expr' || def.kind === 'inr') ? (def.expr ?? '') : '',
       validWhen: def?.validWhen ?? '',
     });
+    this.calcTryValues.set({});
   }
 
   patchCalcEdit(p: Partial<{ targetId: string; expr: string; validWhen: string }>) {
@@ -2369,9 +2412,11 @@ export class TestEditorComponent implements OnInit {
     this.calcEdit.set({ ...ce, expr: ce.expr + sep + token });
   }
 
-  saveCalc() {
+  /** The CalcDef the composer's current state would save — shared by Save
+   *  and the try-it preview so what you test is exactly what is stored. */
+  private composerDef(): CalcDef | null {
     const ce = this.calcEdit();
-    if (!ce || !ce.expr.trim() || this.calcEditError()) return;
+    if (!ce || !ce.expr.trim() || this.calcEditError()) return null;
     const target = this._memberById().get(ce.targetId);
     const refs = lintExpr(ce.expr).refs.concat(ce.validWhen.trim() ? lintExpr(ce.validWhen).refs : []);
     const allRefs = [...new Set(refs.map(s => s.toUpperCase()))];
@@ -2379,7 +2424,7 @@ export class TestEditorComponent implements OnInit {
     // neither — the evaluator supplies it from the patient record.
     const inputs = allRefs.filter(r => !TestEditorComponent.CALC_VARS.has(r));
     const constants = allRefs.filter(r => TestEditorComponent.CALC_VARS.has(r) && r !== 'AGE');
-    const def = {
+    return {
       kind: 'expr',
       expr: ce.expr.trim(),
       inputs,
@@ -2388,6 +2433,61 @@ export class TestEditorComponent implements OnInit {
       unit: target?.unit ?? undefined,
       note: 'Authored in Test Master (profile formula composer).',
     };
+  }
+
+  // ── Try-it preview: sample values → live result, before anything saves ──
+
+  readonly calcTryValues = signal<Record<string, string>>({});
+
+  setCalcTryValue(key: string, v: unknown) {
+    this.calcTryValues.update(m => ({ ...m, [key]: String(v ?? '') }));
+  }
+
+  /** Every identifier the current formula (and gate) reads, as try-it input
+   *  fields: member codes named after their tests, AGE, and lab constants
+   *  (placeholder = the shipped default, so leaving one blank uses it). */
+  readonly calcTryRefs = computed(() => {
+    const ce = this.calcEdit();
+    if (!ce?.expr.trim()) return [];
+    const refs = lintExpr(ce.expr).refs.concat(ce.validWhen.trim() ? lintExpr(ce.validWhen).refs : []);
+    const byCode = new Map(this.calcCodeChips().map(c => [c.code, c.name]));
+    const out: { key: string; name: string; placeholder: string }[] = [];
+    for (const r of [...new Set(refs.map(s => s.toUpperCase()))]) {
+      if (r === 'AGE') out.push({ key: 'AGE', name: 'Patient age in years', placeholder: 'years' });
+      else if (TestEditorComponent.CALC_VARS.has(r))
+        out.push({ key: r, name: 'Lab constant (blank = default)', placeholder: String(CALC_CONSTANT_DEFAULTS[r] ?? '') });
+      else out.push({ key: r, name: byCode.get(r) ?? r, placeholder: 'value' });
+    }
+    return out;
+  });
+
+  readonly calcTryResult = computed<{ tone: 'ok' | 'na'; text: string }>(() => {
+    const ce = this.calcEdit();
+    const def = this.composerDef();
+    if (!ce || !def) return { tone: 'na', text: '' };
+    const vals = this.calcTryValues();
+    const num = (k: string): number | null => {
+      const raw = vals[k];
+      if (raw == null || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    };
+    const res = evaluateCalc(def, {
+      value: (ref) => num(ref.toUpperCase()),
+      constant: (n) => num(n) ?? undefined,
+      age: num('AGE'),
+    });
+    if (res.invalid) return { tone: 'na', text: 'Not calculable — the gate condition fails for these values.' };
+    if (res.missing.length > 0) return { tone: 'na', text: `Waiting for: ${res.missing.join(', ')}` };
+    const unit = this._memberById().get(ce.targetId)?.unit;
+    return { tone: 'ok', text: `= ${res.value}${unit ? ' ' + unit : ''}` };
+  });
+
+  saveCalc() {
+    const ce = this.calcEdit();
+    const def = this.composerDef();
+    if (!ce || !def) return;
+    const target = this._memberById().get(ce.targetId);
     this.calcSaving.set(true);
     this.api.patch<Test>(`/api/tests/${ce.targetId}`, { calculation: JSON.stringify(def) }).subscribe({
       next: () => {
