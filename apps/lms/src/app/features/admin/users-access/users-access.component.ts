@@ -65,7 +65,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
       <pf-screen-header
         eyebrow="Admin"
         title="Users & Access"
-        parentRoute="/admin"
         subtitle="Create users, assign roles, and control permissions across your branches.">
         @if (tab() === 'users') {
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openInvite()">

@@ -113,13 +113,16 @@ export class NavBackService {
   }
 
   /**
-   * Navigate back to the section main route.
+   * Navigate back through browser history.
    */
   back(): void {
     // An in-page handler (e.g. close the open chat thread) takes precedence.
     if (this.interceptor && this.interceptor()) return;
 
-    const parent = this.getParentRoute(this.router.url);
-    void this.router.navigateByUrl(parent);
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      this.location.back();
+    } else {
+      void this.router.navigateByUrl('/admin');
+    }
   }
 }

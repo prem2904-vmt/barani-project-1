@@ -7,7 +7,6 @@
       <pf-screen-header class="px-4 md:px-8 pt-6"
         [eyebrow]="'Frontdesk · ' + pageTitle()"
         [title]="pageTitle()"
-        parentRoute="/frontdesk"
         [subtitle]="pageSubtitle()">
         @if (isReadOnly() || patient()) {
           <div actions class="hidden lg:flex items-center gap-3">

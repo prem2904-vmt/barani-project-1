@@ -4,7 +4,6 @@
   <pf-screen-header
     eyebrow="Frontdesk · Post Payment"
     title="Order complete"
-    parentRoute="/frontdesk"
     subtitle="Vial barcodes and receipts generated. Proceed to sample collection.">
     @if (canCollectHere()) {
       <pf-touch-btn actions size="sm" variant="primary" (pressed)="collectSample()">
