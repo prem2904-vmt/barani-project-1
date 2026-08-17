@@ -251,11 +251,15 @@ export class DepartmentPageComponent implements OnInit {
       this.dept.set((depts ?? []).find(d => d.id === this.deptId) ?? null);
       const usage: Record<string, number> = {};
       for (const t of tests ?? []) {
-        const raw = JSON.stringify((t as unknown as { parameters?: unknown }).parameters ?? '');
-        for (const m of raw.matchAll(/"optionTable":"([^"]+)"/g)) {
-          const code = m[1].toUpperCase();
-          usage[code] = (usage[code] ?? 0) + 1;
-        }
+        // Parameters arrives as the raw JSON STRING; re-stringifying it
+        // escaped every quote and the regex never matched — plus seeded
+        // blobs carry a space after the colon. Scan the raw text,
+        // whitespace-tolerant, and count each table once per test.
+        const params = (t as unknown as { parameters?: unknown }).parameters;
+        const raw = typeof params === 'string' ? params : JSON.stringify(params ?? '');
+        const seen = new Set<string>();
+        for (const m of raw.matchAll(/"optionTable"\s*:\s*"([^"]+)"/g)) seen.add(m[1].toUpperCase());
+        for (const code of seen) usage[code] = (usage[code] ?? 0) + 1;
       }
       this.usageByCode.set(usage);
       // #t-CODE deep link from the test editor selects that table directly;
