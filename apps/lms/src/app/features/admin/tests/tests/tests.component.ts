@@ -27,6 +27,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { describeAllRanges } from '../../../../shared/utils/reference-range';
+import { tubeColor } from '../../../../shared/utils/tube-colors';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 
@@ -242,15 +243,7 @@ export class TestsComponent implements OnInit {
   /** Stable row identity keeps expansion state + row animation coherent. */
   readonly getRowId = (p: GetRowIdParams<TestRow>) => p.data._key ?? p.data.id;
 
-  /** Row styling: sets left border accent matching the container tube color. */
-  protected getRowStyle = (params: RowClassParams<TestRow>): RowStyle | undefined => {
-    const key = params.data?.tubeColor ?? '';
-    const hex = key ? TUBE_HEX[key] : undefined;
-    if (hex) {
-      return { borderLeft: `3px solid ${hex}` };
-    }
-    return undefined;
-  };
+  protected getRowStyle = (): RowStyle | undefined => undefined;
 
   private gridApi?: GridApi<TestRow>;
 
@@ -410,19 +403,17 @@ export class TestsComponent implements OnInit {
       return [
         {
           headerName: 'Code', field: 'testCode', editable: true, minWidth: 120, maxWidth: 160, sort: 'asc', pinned: 'left',
+          cellRenderer: this.codeCellRenderer,
           cellStyle: (p) => {
             const isDup = this.isDupCode(p.data);
-            const key = p.data?.tubeColor ?? '';
-            const hex = key ? TUBE_HEX[key] : undefined;
-            const borderLeft = hex ? `3px solid ${hex}` : '';
             if (isDup) {
-              return { backgroundColor: 'rgba(239,68,68,0.28)', color: '#fecaca', fontWeight: '600', borderLeft };
+              return { backgroundColor: 'rgba(239,68,68,0.28)', color: '#fecaca', fontWeight: '600' };
             }
-            return { backgroundColor: '', color: '', fontWeight: '', borderLeft };
+            return { backgroundColor: '', color: '', fontWeight: '' };
           },
           tooltipValueGetter: p => {
-            const label = p.data?.tubeColor ? TUBE_LABEL[p.data.tubeColor] : undefined;
-            return label ? `Container: ${label}` : undefined;
+            const tColor = tubeColor(p.data?.tubeColor);
+            return tColor ? `Container: ${tColor.label}` : undefined;
           },
         },
         { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left' },
@@ -457,7 +448,7 @@ export class TestsComponent implements OnInit {
         cellRenderer: this.nameCellRenderer,
         valueGetter: p => p.data?.name,
       },
-      { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sortable: false, filter: false, sort: null, pinned: 'left' },
+      { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sortable: false, filter: false, sort: null, pinned: 'left', cellRenderer: this.codeCellRenderer },
       {
         headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140, sortable: false, filter: false,
         valueGetter: p => this.kindLabel(p.data),
@@ -473,6 +464,28 @@ export class TestsComponent implements OnInit {
       this.actionsColDef(),
     ];
   });
+
+  private codeCellRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;min-width:0;gap:8px;';
+    if (!params.data) return wrap;
+
+    if (this._type() === 'individual' && params.data.type === 'individual') {
+      const tColor = tubeColor(params.data.tubeColor);
+      if (tColor) {
+        const dot = document.createElement('span');
+        dot.style.cssText = `flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:${tColor.hex};box-sizing:border-box;box-shadow:0 0 0 1px rgba(0,0,0,0.15) inset;`;
+        wrap.appendChild(dot);
+      }
+    }
+
+    const codeSpan = document.createElement('span');
+    codeSpan.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    codeSpan.textContent = params.value ?? params.data.testCode ?? '';
+    wrap.appendChild(codeSpan);
+
+    return wrap;
+  };
 
   private statusColDef(): ColDef<TestRow> {
     return {
