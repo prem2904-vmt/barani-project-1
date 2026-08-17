@@ -244,9 +244,9 @@ export interface FormField {
   validLow?: number | null;
   validHigh?: number | null;
   normalValue?: string | null;
-  /** Shared department option-table code (Result Option Master) feeding this
-   *  field's dropdown; null/absent = the field's own `options` list. */
-  optionTable?: string | null;
+  /** The test's own embedded option table rows ({code, value, normal,
+   *  active}); `options`/`normalValue` derive from it on save. */
+  optionRows?: import('../models/test.model').TestOptionRow[] | null;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

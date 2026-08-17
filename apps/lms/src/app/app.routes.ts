@@ -164,11 +164,6 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
       },
       {
-        path: 'admin/tests/department/:id',
-        canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/department-page.component').then(m => m.DepartmentPageComponent)
-      },
-      {
         path: 'admin/tests/new',
         canActivate: [permissionGuard('manage_tests')],
         loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)

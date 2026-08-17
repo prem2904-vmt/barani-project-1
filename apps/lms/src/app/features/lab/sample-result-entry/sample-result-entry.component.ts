@@ -29,7 +29,6 @@ import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
-import { OptionTablesService } from '../../../core/services/option-tables.service';
 import { NavBackService } from "../../../core/services/nav-back.service";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
@@ -112,7 +111,6 @@ export class SampleResultEntryComponent {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
-  private readonly optionTablesSvc = inject(OptionTablesService);
   protected readonly formatPatient = formatPatientInfo;
 
   /** Signed-in technician shown on the right of the header. Properly formats
@@ -248,8 +246,13 @@ export class SampleResultEntryComponent {
   private qualitativeFlagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || String(raw).trim() === "") return null;
-    let normals = this.optionTablesSvc.normalsFor(p.optionTable);
-    if (normals == null) {
+    // The embedded table's Normal rows decide; normalValue is the fallback
+    // for legacy parameters. No normals configured = not flaggable (e.g.
+    // stone colours, which have no clinical "normal").
+    let normals = (p.optionRows ?? [])
+      .filter(r => r.normal === true && r.active !== false)
+      .map(r => r.value);
+    if (!normals.length) {
       const nv = (p.normalValue ?? "").trim();
       if (!nv) return null;
       normals = nv.split("/").map(x => x.trim()).filter(Boolean);
@@ -812,10 +815,10 @@ export class SampleResultEntryComponent {
   /** Options for a select parameter. Qualitative detection may supply a
    *  default Positive/Negative-style pair when the schema has none. */
   selectOptionsFor(p: TestParameter): string[] {
-    // A shared department table wins: edits on the department page appear
-    // here immediately, for every test that references the table.
-    const fromTable = this.optionTablesSvc.valuesFor(p.optionTable);
-    if (fromTable && fromTable.length) return fromTable;
+    // The test's OWN embedded option table wins (active rows in order);
+    // legacy parameters fall back to their plain options list.
+    const rows = (p.optionRows ?? []).filter(r => r.active !== false && (r.value ?? '').trim());
+    if (rows.length) return rows.map(r => r.value);
     return qualitativeOptionsFor(p) ?? p.options ?? [];
   }
 
@@ -1137,9 +1140,6 @@ export class SampleResultEntryComponent {
   }
 
   async ngOnInit() {
-    // Shared dropdown dictionaries — a parameter's optionTable resolves to
-    // the LIVE department table for both options and normality.
-    void this.optionTablesSvc.ensureLoaded();
     const id = this.route.snapshot.paramMap.get("sampleId");
     if (!id) {
       this._loading.set(false);

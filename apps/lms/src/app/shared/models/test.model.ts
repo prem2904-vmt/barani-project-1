@@ -63,6 +63,18 @@ export interface Test {
 export type { ReferenceRange } from "../forms/form-field.model";
 import type { ReferenceRange } from "../forms/form-field.model";
 
+/** One row of a test's embedded option table. */
+export interface TestOptionRow {
+  /** Catalogue option code (e.g. URO001) — repeated per test on purpose;
+   *  admin-added rows continue the same series automatically. */
+  code?: string | null;
+  value: string;
+  /** Normal (expected) — picking anything else flags abnormal. */
+  normal?: boolean;
+  /** Inactive rows are hidden from the dropdown but kept for history. */
+  active?: boolean;
+}
+
 export interface TestParameter {
   id: string;
   name: string;
@@ -81,10 +93,11 @@ export interface TestParameter {
     | "numeric_with_range";
   unit?: string;
   options?: string[];
-  /** Code of a shared department option table (Result Option Master). When
-   *  set, the dropdown renders from the LIVE table — options/normalValue here
-   *  are a baked fallback snapshot. */
-  optionTable?: string;
+  /** This test's OWN option table (per-test by design — no shared
+   *  dictionaries): full rows with the doc's option code, Normal flag and
+   *  Active flag. `options`/`normalValue` are derived from it on save so
+   *  older readers keep working. */
+  optionRows?: TestOptionRow[];
   referenceRanges?: ReferenceRange[];
   normalValue?: string;
   criticalLow?: number;

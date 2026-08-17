@@ -5,14 +5,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { OptionTablesService } from '../../../core/services/option-tables.service';
-import { OptionTable } from '../../../shared/models/option-table.model';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../report-template/report-columns-editor.component';
 import { PreviewProfileMember } from '../report-template/report-pdf-preview.component';
 import { Department } from '../../../shared/models/tenant.model';
-import { Test, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
+import { Test, TestOptionRow, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import {
@@ -796,52 +794,49 @@ function newRowKey(): string {
                     }
 
                     @if (typeHasOptions(p.type)) {
-                      <label class="flex flex-col gap-1 min-w-0">
-                        <span class="pf-mini-lbl">Option table (shared)</span>
-                        <select class="pf-input pf-input--compact"
-                                [ngModel]="p.optionTable ?? ''"
-                                (ngModelChange)="onOptionTablePicked(i, $event)">
-                          <option value="">— This test only (type options below) —</option>
-                          @for (t of optionTableChoices(); track t.id) {
-                            <option [value]="t.code">{{ t.name }}</option>
-                          }
-                        </select>
-                      </label>
-                      @if (p.optionTable) {
-                        <div class="flex flex-col gap-1 min-w-0">
-                          <span class="pf-mini-lbl">Options — managed by the department table</span>
-                          <div class="pf-option-chips">
-                            @for (val of tableValues(p.optionTable); track $index) {
-                              <span class="pf-option-chip"
-                                    [class.pf-option-chip--normal]="tableNormals(p.optionTable).includes(val)">{{ val }}</span>
-                            }
+                      <div class="flex flex-col gap-1 min-w-0">
+                        <span class="pf-mini-lbl">
+                          Option table — this test only
+                          <span class="pf-option-count">{{ rowsFor(i).length }}</span>
+                        </span>
+                        <div class="pf-otbl">
+                          <div class="pf-otbl-head">
+                            <span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span>
                           </div>
-                          <a class="text-xs font-bold" style="color: var(--violet-600, #7c3aed);"
-                             [routerLink]="deptLinkFor(p.optionTable)" [fragment]="'t-' + p.optionTable">
-                            Open the department table to modify ↗
-                          </a>
-                        </div>
-                      } @else {
-                        <label class="flex flex-col gap-1 min-w-0">
-                          <span class="pf-mini-lbl">
-                            Options (comma-separated)
-                            @if ((p.options ?? []).length > 0) {
-                              <span class="pf-option-count">{{ (p.options ?? []).length }}</span>
-                            }
-                          </span>
-                          <input type="text" class="pf-input pf-input--compact"
-                                 [ngModel]="optionsAsString(p)"
-                                 (ngModelChange)="onOptionsTyped(i, $event)"
-                                 placeholder="Positive, Negative, Equivocal" />
-                          @if ((p.options ?? []).length > 0) {
-                            <div class="pf-option-chips">
-                              @for (opt of p.options ?? []; track opt.id) {
-                                <span class="pf-option-chip">{{ opt.label }}</span>
-                              }
+                          @for (row of rowsFor(i); track $index; let ri = $index) {
+                            <div class="pf-otbl-row">
+                              <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                              <input type="text" class="pf-input pf-input--compact pf-otbl-code"
+                                     [ngModel]="row.code ?? ''"
+                                     (ngModelChange)="patchOptionRow(i, ri, { code: $event })"
+                                     placeholder="—" spellcheck="false" />
+                              <input type="text" class="pf-input pf-input--compact"
+                                     [ngModel]="row.value"
+                                     (ngModelChange)="patchOptionRow(i, ri, { value: $event })"
+                                     placeholder="Option value" />
+                              <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
+                                     (ngModelChange)="patchOptionRow(i, ri, { normal: $event })"
+                                     title="Normal (expected) — anything else flags abnormal" />
+                              <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
+                                     (ngModelChange)="patchOptionRow(i, ri, { active: $event })"
+                                     title="Inactive rows are hidden from the dropdown" />
+                              <span class="flex">
+                                <button type="button" class="px-1 text-sm" [disabled]="ri === 0"
+                                        (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
+                                <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1"
+                                        (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
+                              </span>
+                              <button type="button" class="px-2 text-sm font-bold" style="color: var(--red-600, #dc2626);"
+                                      (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
                             </div>
                           }
-                        </label>
-                      }
+                          <div>
+                            <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                                    style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                    (click)="addOptionRow(i)">+ Add option</button>
+                          </div>
+                        </div>
+                      </div>
                     }
 
                     <div class="grid gap-2 sm:grid-cols-2">
@@ -1828,6 +1823,14 @@ function newRowKey(): string {
       display: flex; flex-wrap: wrap; gap: 4px;
       margin-top: 4px;
     }
+    .pf-otbl { display: grid; gap: 4px; }
+    .pf-otbl-head, .pf-otbl-row { display: grid; grid-template-columns: 22px 96px 1fr auto auto auto auto;
+      align-items: center; gap: 8px; }
+    .pf-otbl-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--text-muted); }
+    .pf-otbl-n { font-size: 11px; color: var(--text-muted); }
+    .pf-otbl-code { font-family: ui-monospace, monospace; font-size: 11px; }
+
     .pf-option-chip {
       display: inline-flex;
       align-items: center;
@@ -1941,7 +1944,6 @@ function newRowKey(): string {
 export class TestEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
-  readonly optionTables = inject(OptionTablesService);
   private readonly layoutSvc = inject(ReportLayoutService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
@@ -2858,8 +2860,6 @@ export class TestEditorComponent implements OnInit {
   );
 
   ngOnInit() {
-    // Shared dropdown dictionaries for the option-table picker.
-    void this.optionTables.ensureLoaded();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
@@ -3030,7 +3030,7 @@ export class TestEditorComponent implements OnInit {
       validLow: p.validLow ?? null,
       validHigh: p.validHigh ?? null,
       normalValue: p.normalValue ?? null,
-      optionTable: p.optionTable ?? null,
+      optionRows: p.optionRows ?? null,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
         label: label ?? '',
@@ -3040,48 +3040,68 @@ export class TestEditorComponent implements OnInit {
     };
   }
 
-  /** Picker choices: this test's department's tables first, then the rest —
-   *  cross-department reuse of generic sets (None/Few/Moderate/Many) is fine. */
-  optionTableChoices(): OptionTable[] {
-    const deptId = this._draft().departmentId || null;
-    return this.optionTables.tables()
-      .filter(t => t.isActive !== false)
-      .slice()
-      .sort((a, b) =>
-        Number((b.departmentId ?? null) === deptId) - Number((a.departmentId ?? null) === deptId)
-        || a.name.localeCompare(b.name));
+  /** The parameter's embedded option rows for editing. Older tests carry
+   *  only options[]/normalValue — synthesize rows from those so every
+   *  dropdown edits the same way; the synthesis persists on next save. */
+  rowsFor(i: number): TestOptionRow[] {
+    const f = this._fields()[i];
+    if (!f) return [];
+    if (f.optionRows && f.optionRows.length) return f.optionRows;
+    const normals = new Set((f.normalValue ?? '').split('/')
+      .map(x => x.trim().toLowerCase()).filter(Boolean));
+    return (f.options ?? []).map(o => ({
+      code: null,
+      value: o.label,
+      normal: normals.has(o.label.trim().toLowerCase()),
+      active: true,
+    }));
   }
 
-  tableValues(code: string): string[] { return this.optionTables.valuesFor(code) ?? []; }
-  tableNormals(code: string): string[] { return this.optionTables.normalsFor(code) ?? []; }
-
-  /** Department page holding a table — the TABLE's own department, falling
-   *  back to this test's. */
-  deptLinkFor(code: string): string[] {
-    const t = this.optionTables.byCode(code);
-    const deptId = t?.departmentId || this._draft().departmentId || '';
-    return ['/admin/tests/department', deptId];
+  patchOptionRow(i: number, ri: number, change: Partial<TestOptionRow>) {
+    const rows = this.rowsFor(i).map((r, ix) => (ix === ri ? { ...r, ...change } : r));
+    this.setOptionRows(i, rows);
   }
 
-  /** Selecting a table BAKES a snapshot of its values into the parameter's
-   *  options/normalValue — the live table drives dropdowns + flagging, the
-   *  snapshot keeps reports and older consumers correct as a fallback. */
-  onOptionTablePicked(i: number, code: string) {
-    const clean = (code || '').trim();
-    if (!clean) {
-      this.patchField(i, { optionTable: null });
-      return;
-    }
-    const values = this.tableValues(clean);
-    const normals = this.tableNormals(clean);
+  /** New rows continue the table's option-code series automatically
+   *  (URO007 → URO008) so the doc's codes stay consistent per test. */
+  addOptionRow(i: number) {
+    const rows = this.rowsFor(i);
+    this.setOptionRows(i, [...rows, { code: this.nextOptionCode(rows), value: '', normal: false, active: true }]);
+  }
+
+  removeOptionRow(i: number, ri: number) {
+    this.setOptionRows(i, this.rowsFor(i).filter((_, ix) => ix !== ri));
+  }
+
+  moveOptionRow(i: number, ri: number, delta: -1 | 1) {
+    const rows = this.rowsFor(i).slice();
+    const j = ri + delta;
+    if (j < 0 || j >= rows.length) return;
+    [rows[ri], rows[j]] = [rows[j], rows[ri]];
+    this.setOptionRows(i, rows);
+  }
+
+  /** Persist rows AND the derived legacy fields in one patch, so
+   *  options/normalValue can never drift from the table. */
+  private setOptionRows(i: number, rows: TestOptionRow[]) {
+    const active = rows.filter(r => r.active !== false && (r.value ?? '').trim());
+    const normals = active.filter(r => r.normal === true).map(r => r.value.trim());
     this.patchField(i, {
-      optionTable: clean,
-      options: values.map((label, ix) => ({
-        id: `opt_${ix}_${label.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
-        label, value: label, order: ix
+      optionRows: rows,
+      options: active.map((r, ix) => ({
+        id: `opt_${ix}_${r.value.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
+        label: r.value.trim(), value: r.value.trim(), order: ix,
       })),
       normalValue: normals.length ? normals.join(' / ') : null,
     });
+  }
+
+  private nextOptionCode(rows: TestOptionRow[]): string | null {
+    for (let ix = rows.length - 1; ix >= 0; ix--) {
+      const m = /^([A-Za-z]+)(\d+)$/.exec((rows[ix].code ?? '').trim());
+      if (m) return m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0');
+    }
+    return null;
   }
 
   private fieldToLegacy(f: FormField): TestParameter {
@@ -3093,7 +3113,7 @@ export class TestEditorComponent implements OnInit {
       type: legacyType,
       unit: f.unit ?? undefined,
       options: f.options?.map(o => o.label) ?? undefined,
-      optionTable: f.optionTable ?? undefined,
+      optionRows: f.optionRows ?? undefined,
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,

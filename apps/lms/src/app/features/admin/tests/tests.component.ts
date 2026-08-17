@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { TubeColorEditorComponent } from './tube-color-editor.component';
 import { PfSelectOption } from '../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import {
   AllCommunityModule,
@@ -136,7 +136,6 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
     AgGridAngular,
     ScreenHeaderComponent,
     TouchButtonComponent,
-    RouterLink,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -214,14 +213,6 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
                   <span class="pf-tm-dept-count">{{ d.count }}</span>
                 </button>
                 @if (d.id) {
-                  <a class="pf-tm-dept-tables" [routerLink]="['/admin/tests/department', d.id]"
-                     [title]="'Open ' + d.name + ' department page — option tables'"
-                     [attr.aria-label]="'Option tables for ' + d.name"
-                     (click)="$event.stopPropagation()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>
-                    </svg>
-                  </a>
                   <button type="button" class="pf-tm-dept-switch" [class.pf-tm-dept-switch--on]="d.isActive"
                           (click)="toggleDept(d)" [attr.aria-pressed]="d.isActive"
                           [title]="d.isActive ? 'Disable department' : 'Enable department'"
@@ -342,9 +333,6 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
     .pf-tm-dept-row { display: flex; align-items: center; gap: 6px; }
     .pf-tm-dept-row .pf-tm-dept { flex: 1; min-width: 0; }
     .pf-tm-dept-row--off .pf-tm-dept { opacity: 0.5; }
-    .pf-tm-dept-tables { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px; border-radius: 8px; color: var(--text-muted); }
-    .pf-tm-dept-tables:hover { color: var(--violet-600, #7c3aed); background: var(--surface-2, #f1f5f9); }
     .pf-tm-dept-switch { flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; padding: 0;
       border: 1px solid var(--glass-border); background: var(--glass-bg); position: relative; cursor: pointer;
       transition: background .15s, border-color .15s; }

@@ -6,7 +6,7 @@ export const environment = {
   production: false,
   // Local dev server → local backend (dotnet run on :5270). Point this back
   // at the deployed API only if you intentionally want the dev UI to drive prod.
-  apiUrl: "https://med-fetch-dev.prefrontal.health",
+  apiUrl: 'http://localhost:5270',
   // Public web origin for patient-facing report links (window.location.origin is
   // capacitor://localhost in the native app, which can't be opened externally).
   reportPublicBaseUrl: "https://lab.prefrontal.health",
