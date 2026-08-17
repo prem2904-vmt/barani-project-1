@@ -47,6 +47,7 @@ interface CreateForm {
       <pf-screen-header
         eyebrow="Admin · Users"
         title="Create user"
+        parentRoute="/admin/users?tab=users"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
@@ -269,7 +270,7 @@ export class UserInviteComponent implements OnInit {
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
-  back() { this.router.navigateByUrl('/admin/users'); }
+  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'users' } }); }
 
   onUsernameChange(v: string) {
     if (this._usernameError()) this._usernameError.set(null);

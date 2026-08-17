@@ -121,15 +121,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 (click)="cancel()" title="Leave without collecting payment">
           Cancel
         </button>
-        <pf-touch-btn actions class="pf-bill-back-desktop" size="sm" variant="ghost" (pressed)="back()"
-                      [title]="paid() ? 'Back' : 'Back to the order to add or remove tests'">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
       </pf-screen-header>
       }
 

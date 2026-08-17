@@ -264,7 +264,7 @@
                     @if (findTest(id); as t) {
                       <div class="pf-readonly-test-card">
                         <div class="min-w-0">
-                          <p class="font-semibold text-sm truncate" [title]="t.name">{{ t.name }}</p>
+                          <p class="font-semibold text-sm truncate" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                           <p class="text-xs text-muted mt-0.5">{{ t.department?.name ?? 'General' }}</p>
                         </div>
                         <span class="font-bold text-sm text-purple-400 shrink-0 ml-4">{{ t.price | inr }}</span>
@@ -356,7 +356,7 @@
                           </svg>
                         </button>
                       </div>
-                      <p class="pf-rail-card__name">{{ t.name }}</p>
+                      <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                       <div class="pf-rail-card__price-row">
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                         @if (t.tatHours) {
@@ -393,7 +393,7 @@
                           </svg>
                         </button>
                       </div>
-                      <p class="pf-rail-card__name">{{ t.name }}</p>
+                      <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                       <div class="pf-rail-card__price-row">
                         <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                         @if (t.tatHours) {
@@ -426,7 +426,7 @@
                           <span class="pf-rail-card__pkg-count">{{ count }} tests</span>
                         }
                       </div>
-                      <p class="pf-rail-card__name">{{ pkg.name }}</p>
+                      <p class="pf-rail-card__name" [title]="testDisplayName(pkg)">{{ testDisplayName(pkg) }}</p>
                       <div class="pf-rail-card__price-row">
                         <span class="pf-rail-card__price">{{ pkg.price | inr }}</span>
                         @if (pkg.tatHours) {
@@ -468,7 +468,7 @@
                                 <span class="pf-rail-card__pkg-count">{{ count }} tests</span>
                               }
                             </div>
-                            <p class="pf-rail-card__name">{{ p.name }}</p>
+                            <p class="pf-rail-card__name" [title]="testDisplayName(p)">{{ testDisplayName(p) }}</p>
                             <div class="pf-rail-card__price-row">
                               <span class="pf-rail-card__price">{{ p.price | inr }}</span>
                               @if (p.tatHours) {
@@ -521,7 +521,7 @@
                                 </svg>
                               </button>
                             </div>
-                            <p class="pf-rail-card__name">{{ t.name }}</p>
+                            <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                             <div class="pf-rail-card__price-row">
                               <span class="pf-rail-card__price">{{ t.price | inr }}</span>
                               @if (t.tatHours) {
@@ -635,7 +635,7 @@
                   [class.pf-cart-row--included]="isCoveredMember(t.id)">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-1.5 flex-wrap">
-                    <p class="pf-cart-name">{{ t.name }}</p>
+                    <p class="pf-cart-name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                     @if (isCollected(t.id)) {
                       <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded border border-emerald-500/25" title="Sample already collected — cannot remove">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -691,7 +691,7 @@
               @for (s of packageSuggestions(); track s.package.id) {
                 <li class="pf-pkg-suggest__row">
                   <div class="min-w-0 flex-1">
-                    <p class="pf-pkg-suggest__name">{{ s.package.name }}</p>
+                    <p class="pf-pkg-suggest__name" [title]="testDisplayName(s.package)">{{ testDisplayName(s.package) }}</p>
                     <p class="pf-pkg-suggest__meta">
                       Includes {{ s.memberCount }} test{{ s.memberCount === 1 ? '' : 's' }}
                       <span class="pf-pkg-suggest__sep">·</span>

@@ -71,18 +71,58 @@ export class NavBackService {
     return u.split('?')[0].split('#')[0].replace(/\/+$/, '');
   }
 
+  /** Compute the main parent route for the current URL instead of raw history pop. */
+  getParentRoute(currentUrl: string): string {
+    const rawUrl = currentUrl || this.router.url;
+    const normUrl = this.norm(rawUrl);
+
+    // Explicit section main route mappings
+    if (normUrl.startsWith('/admin/users') || normUrl.startsWith('/admin/roles')) {
+      if (normUrl.includes('/roles') || rawUrl.includes('tab=roles')) {
+        return '/admin/users?tab=roles';
+      }
+      return '/admin/users?tab=users';
+    }
+    if (normUrl.startsWith('/admin/tests')) {
+      const match = rawUrl.match(/[?&]type=([^&]+)/);
+      if (match) {
+        return `/admin/tests?type=${match[1]}`;
+      }
+      return '/admin/tests';
+    }
+    if (normUrl.startsWith('/frontdesk/')) {
+      return '/frontdesk';
+    }
+    if (normUrl.startsWith('/lab/')) {
+      return '/lab/my-work';
+    }
+    if (normUrl.startsWith('/pathologist/')) {
+      return '/pathologist/pending-validation';
+    }
+    if (normUrl.startsWith('/admin/')) {
+      return '/admin';
+    }
+
+    // Fallback: trim the last route segment
+    const segments = normUrl.split('/').filter(Boolean);
+    if (segments.length > 1) {
+      return '/' + segments.slice(0, -1).join('/');
+    }
+
+    return '/admin';
+  }
+
   /**
-   * Go back through history. On a cold deep-link (no in-app history — e.g. the
-   * app was launched straight onto a secondary route) fall back to the app root
-   * so the user is never stranded on a page they can't leave.
+   * Navigate back through browser history.
    */
   back(): void {
     // An in-page handler (e.g. close the open chat thread) takes precedence.
     if (this.interceptor && this.interceptor()) return;
+
     if (typeof window !== 'undefined' && window.history.length > 1) {
       this.location.back();
     } else {
-      void this.router.navigateByUrl('/');
+      void this.router.navigateByUrl('/admin');
     }
   }
 }

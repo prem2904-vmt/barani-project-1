@@ -161,17 +161,17 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/tests',
         canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
+        loadComponent: () => import('./features/admin/tests/tests/tests.component').then(m => m.TestsComponent)
       },
       {
         path: 'admin/tests/new',
         canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
+        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/tests/:id/edit',
         canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
+        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
       },
       {
         path: 'admin/branches',

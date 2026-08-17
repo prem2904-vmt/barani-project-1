@@ -44,6 +44,7 @@ interface EditForm {
       <pf-screen-header
         eyebrow="Admin · Users"
         [title]="'Edit ' + (loadedName() || 'user')"
+        parentRoute="/admin/users?tab=users"
         subtitle="Update the user's details, roles and branch scope.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
@@ -321,7 +322,7 @@ export class UserEditComponent implements OnInit {
     const keys = Object.keys(p);
     if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
   }
-  back() { this.router.navigateByUrl('/admin/users'); }
+  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'users' } }); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
     this._form.update(v => ({ ...v, roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id] }));

@@ -1,0 +1,934 @@
+<section class="px-4 md:px-8 pt-6 pb-10 mx-auto w-full" style="max-width: 1440px;">
+
+  <pf-screen-header
+    eyebrow="Admin · Tests"
+    [title]="(draft().id ? 'Edit ' : 'Create ') + (draft().type === 'package' ? 'package' : draft().type === 'profile' ? 'profile' : 'test')"
+    [parentRoute]="parentRoute()"
+    [subtitle]="subtitle()">
+    <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="saveTest()">
+      {{ saving() ? 'Saving…' : 'Save' }}
+    </pf-touch-btn>
+  </pf-screen-header>
+
+  @let d = draft();
+
+  <div class="pf-te">
+    <nav class="pf-te__rail" aria-label="Test sections">
+      @for (sec of visibleSections(); track sec.value) {
+        <button type="button" class="pf-te__nav press"
+                [class.pf-te__nav--on]="section() === sec.value"
+                [attr.aria-current]="section() === sec.value ? 'true' : null"
+                (click)="setSection(sec.value)">
+          <span class="pf-te__nav-l">{{ sec.label }}</span>
+          <span class="pf-te__nav-d">{{ sec.desc }}</span>
+        </button>
+      }
+    </nav>
+
+    <div class="pf-te__body">
+
+    @if (section() === 'identity') {
+    <pf-tile tone="default" padding="lg" class="block">
+      <h3 class="section-title">Identity</h3>
+      <div class="space-y-3 mt-4">
+        <div><label class="pf-label">Name</label>
+          <input type="text" class="pf-input"
+                 [class.pf-input--error]="fieldError('name')"
+                 [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" />
+          @if (fieldError('name')) { <p class="pf-field-err">{{ fieldError('name') }}</p> }
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div><label class="pf-label">Type</label>
+            <pf-select [options]="typeOptions" [value]="d.type" (valueChange)="patch({ type: $event })"></pf-select>
+          </div>
+          <div><label class="pf-label">Flow</label>
+            <pf-select [options]="flowOptions" [value]="d.flow" (valueChange)="patch({ flow: $event })"></pf-select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div><label class="pf-label">Department</label>
+            <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
+                       placeholder="— Select department —"
+                       (valueChange)="onDeptPicked($event)"></pf-select>
+          </div>
+          @if (d.type === 'individual' || d.type === 'profile') {
+            <div><label class="pf-label">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
+              <input type="text" class="pf-input"
+                     [class.pf-input--error]="fieldError('testCode')"
+                     [ngModel]="d.testCode"
+                     (ngModelChange)="patch({ testCode: $event })"
+                     [placeholder]="d.type === 'profile' ? 'e.g. LIPID01' : 'e.g. CBC001'" />
+              @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
+            </div>
+          }
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div><label class="pf-label">Short name</label>
+            <input type="text" class="pf-input" [ngModel]="d.shortName"
+                   (ngModelChange)="patch({ shortName: $event })"
+                   placeholder="e.g. CBC" /></div>
+        </div>
+        @if (d.type === 'individual') {
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="pf-label">Sample type</label>
+              <input type="text" class="pf-input" [ngModel]="d.sampleType"
+                     (ngModelChange)="patch({ sampleType: $event })" /></div>
+          </div>
+        }
+        @if (d.type === 'individual') {
+        <div class="mt-1">
+          <label class="pf-label">Tube colour</label>
+          <div class="pf-tube-swatches">
+            @for (c of tubeColors; track c.key) {
+              <button type="button" class="pf-tube" [class.pf-tube--on]="d.tubeColor === c.key"
+                      (click)="patch({ tubeColor: d.tubeColor === c.key ? '' : c.key })"
+                      [attr.aria-pressed]="d.tubeColor === c.key" [title]="c.label">
+                <span class="pf-tube__dot" [style.background]="c.hex"></span>
+                <span class="pf-tube__lbl">{{ c.label }}</span>
+              </button>
+            }
+          </div>
+          <p class="pf-hint mt-1">The vial colour this test is drawn into. Leave unset to use the department's container colour.</p>
+        </div>
+        }
+      </div>
+    </pf-tile>
+    }
+
+    @if (section() === 'pricing') {
+    <pf-tile tone="default" padding="lg" class="block">
+      <h3 class="section-title">Pricing &amp; TAT</h3>
+      <div class="pf-pricing-grid grid grid-cols-3 gap-3 mt-4">
+        <div><label class="pf-label">Price</label>
+          <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
+                           (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
+          @if (fieldError('price')) { <p class="pf-field-err">{{ fieldError('price') }}</p> }
+        </div>
+        <div><label class="pf-label">Tax slab</label>
+          <pf-number-input [value]="d.taxSlab" [min]="0" [max]="50" [step]="0.5" suffix="%"
+                           (valueChange)="patch({ taxSlab: $event ?? 0 })"></pf-number-input>
+        </div>
+        <div><label class="pf-label">TAT</label>
+          <pf-number-input [value]="d.tatHours" [min]="1" [step]="1" suffix="hrs"
+                           (valueChange)="patch({ tatHours: $event ?? 1 })"></pf-number-input>
+        </div>
+      </div>
+    </pf-tile>
+
+    @if (d.type === 'individual') {
+      <pf-tile tone="default" padding="lg" class="block">
+        <details class="pf-te__adv">
+          <summary class="pf-te__adv-s">Outsourcing <span>optional</span></summary>
+        <div class="space-y-3 mt-4">
+          <div><label class="pf-label">Outsource to</label>
+            <pf-select [options]="referralLabOptions()" [value]="d.outsourcedVendorId"
+                       placeholder="— In-house (not outsourced) —"
+                       (valueChange)="patch({ outsourcedVendorId: $event, outsourcedDepartmentId: '' })"></pf-select>
+          </div>
+          @if (isOutsourced()) {
+            <div><label class="pf-label">Department at vendor</label>
+              <pf-select [options]="outsourcedDeptOptions()" [value]="selectedOutsourcedDeptName()"
+                         placeholder="— Same as test department —"
+                         (valueChange)="onOutsourcedDeptPicked($event)"></pf-select>
+              <p class="text-[11px] mt-1" style="color: var(--text-tertiary);">
+                Used to group the outsourced sample into its own vial. Leave blank to use the test's department above.
+              </p>
+            </div>
+          }
+        </div>
+        </details>
+      </pf-tile>
+    }
+    }
+
+    @if (section() === 'sample' && d.type === 'individual') {
+      <pf-tile tone="default" padding="lg" class="block">
+        <h3 class="section-title">Sample &amp; handling</h3>
+        <div class="space-y-3 mt-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="pf-label">Section</label>
+              <input type="text" class="pf-input" [ngModel]="d.section"
+                     (ngModelChange)="patch({ section: $event })"
+                     placeholder="Sub-group under the department" /></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="pf-label">Profile</label>
+              <input type="text" class="pf-input" [ngModel]="d.profile"
+                     (ngModelChange)="patch({ profile: $event })"
+                     placeholder="e.g. LFT, Lipid Profile" /></div>
+            <div><label class="pf-label">Methodology</label>
+              <input type="text" class="pf-input" [ngModel]="d.methodology"
+                     (ngModelChange)="patch({ methodology: $event })"
+                     placeholder="e.g. Photometry" /></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+            <div><label class="pf-label">Sample volume (mL)</label>
+              <pf-number-input [value]="d.sampleVolumeMl" [allowEmpty]="true" [min]="0" [step]="0.5" suffix="mL"
+                               (valueChange)="patch({ sampleVolumeMl: $event ?? null })"></pf-number-input>
+            </div>
+            <div><label class="pf-label">Fasting required</label>
+              <pf-segmented [options]="fastingOptions" [value]="d.fastingRequired" size="md"
+                            (valueChange)="patch({ fastingRequired: $event })"></pf-segmented>
+            </div>
+          </div>
+        </div>
+      </pf-tile>
+    }
+
+    @if (section() === 'results' && d.type === 'individual') {
+      <pf-tile tone="default" padding="lg" class="block">
+        <h3 class="section-title">Result &amp; report</h3>
+        <div class="space-y-3 mt-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="pf-label">Result type</label>
+              <pf-select [options]="resultTypeOptions" [value]="d.resultType"
+                         (valueChange)="patch({ resultType: $event })"></pf-select>
+            </div>
+            <div><label class="pf-label">Unit</label>
+              <input type="text" class="pf-input" [ngModel]="d.unit"
+                     (ngModelChange)="patch({ unit: $event })"
+                     placeholder="e.g. mg/dL" /></div>
+          </div>
+          <div><label class="pf-label">Report format</label>
+            <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
+                       (valueChange)="patch({ reportFormat: $event })"></pf-select>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+            <div><label class="pf-label">Critical low</label>
+              <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
+                               (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
+            </div>
+            <div><label class="pf-label">Critical high</label>
+              <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
+                               (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
+            </div>
+          </div>
+        </div>
+      </pf-tile>
+    }
+
+    @if (section() === 'results' && calcInfo(); as calc) {
+      <pf-tile tone="default" padding="lg" class="block">
+        <div class="flex items-center justify-between">
+          <h3 class="section-title">Calculated result</h3>
+          <span class="text-[11px] text-slate-400">{{ calcKindLabel(calc.kind) }}</span>
+        </div>
+        <div class="mt-3 space-y-2">
+          @if (calc.expr) {
+            <p class="font-mono text-sm text-slate-200 rounded-lg bg-slate-800/60 border border-slate-700/60 px-3 py-2 overflow-x-auto">
+              {{ d.testCode || 'Value' }} = {{ calc.expr }}
+            </p>
+          }
+          @if (calc.inputs?.length) {
+            <p class="text-xs text-slate-400">
+              Inputs:
+              <span class="font-mono text-slate-300">{{ calc.inputs!.join(', ') }}</span>
+              — sibling tests on the same order supply these during profile entry.
+            </p>
+          }
+          @if (calc.constants?.length) {
+            <p class="text-xs text-slate-400">
+              Lab constants:
+              <span class="font-mono text-slate-300">{{ calc.constants!.join(', ') }}</span>
+              (set under Lab settings → Calculation constants).
+            </p>
+          }
+          @if (calc.validWhen) {
+            <p class="text-xs text-slate-400">
+              Only calculated when
+              <span class="font-mono text-slate-300">{{ calc.validWhen }}</span>
+              — otherwise the entry screen shows “Not calculable”.
+            </p>
+          }
+          @if (calc.note) {
+            <p class="text-xs text-slate-500">{{ calc.note }}</p>
+          }
+        </div>
+      </pf-tile>
+    }
+
+    @if (section() === 'results' && d.type === 'individual') {
+      <pf-tile tone="default" padding="lg" class="block">
+        <div class="flex items-center justify-between">
+          <h3 class="section-title">Reference range</h3>
+          @if (numericFields().length > 0) {
+            <span class="text-[11px] text-slate-400">Normal values by sex and age</span>
+          }
+        </div>
+
+        @if (numericFields().length === 0) {
+          <div class="mt-4 rounded-xl border border-dashed border-slate-600/50 p-6 text-center">
+            <p class="text-sm text-slate-300">No reference range set for this test yet.</p>
+            <p class="text-xs text-slate-500 mt-1">
+              Leave it empty for a qualitative test, or add the normal values now.
+            </p>
+            <div class="mt-3">
+              <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">
+                Add a reference range
+              </pf-touch-btn>
+            </div>
+          </div>
+        } @else {
+          <div class="space-y-5 mt-4">
+            @for (p of fields(); let i = $index; track i) {
+              @if (isNumericType(p.type)) {
+                <div class="pf-rr-block">
+                  @if (numericFields().length > 1) {
+                    <div class="flex items-baseline gap-2 mb-2">
+                      <span class="text-sm font-semibold text-slate-100">{{ p.name || 'Unnamed' }}</span>
+                      @if (p.unit) { <span class="text-[11px] text-slate-400">{{ p.unit }}</span> }
+                    </div>
+                  }
+                  @if (!showAdvancedRanges(p)) {
+                    <div class="grid gap-2 grid-cols-2 md:grid-cols-3 items-end">
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Normal min</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="firstBand(p).min ?? null"
+                                          (valueChange)="patchRangeAt(i, 0, { min: $event ?? null })">
+                        </pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Normal max</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="firstBand(p).max ?? null"
+                                          (valueChange)="patchRangeAt(i, 0, { max: $event ?? null })">
+                        </pf-number-input>
+                      </label>
+                      <div class="flex items-end pb-1">
+                        <button type="button"
+                                class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                                (click)="openAdvancedRanges()">
+                          Different by sex or age?
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="pf-mini-lbl">{{ bandsCaption(p) }}</span>
+                    <div class="flex items-center gap-3">
+                      @if (!needsAdvancedRanges(p)) {
+                        <button type="button"
+                                class="text-xs font-medium text-slate-400 hover:text-slate-300"
+                                (click)="closeAdvancedRanges()">Simple</button>
+                      }
+                      <button type="button"
+                              class="text-xs font-medium text-violet-400 hover:text-violet-300"
+                              (click)="addRange(i)">+ Add range</button>
+                    </div>
+                  </div>
+          @for (r of (p.referenceRanges ?? []); track $index) {
+            <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Sex</span>
+                <select class="pf-input pf-input--compact"
+                        [ngModel]="r.sex ?? 'any'"
+                        (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
+                  <option value="any">Any</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Min age</span>
+                <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                  [value]="r.minAge ?? null"
+                                  (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })">
+                </pf-number-input>
+              </label>
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Max age</span>
+                <pf-number-input size="sm" [allowEmpty]="true" [step]="1"
+                                  [value]="r.maxAge ?? null"
+                                  (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })">
+                </pf-number-input>
+              </label>
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Age unit</span>
+                <select class="pf-input pf-input--compact"
+                        [ngModel]="r.ageUnit ?? 'years'"
+                        (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
+                  <option value="years">Years</option>
+                  <option value="months">Months</option>
+                  <option value="days">Days</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Normal min</span>
+                <div class="flex items-end gap-1">
+                  <select class="pf-input pf-input--compact w-12 shrink-0"
+                          title="Lower-bound comparator"
+                          [ngModel]="minOpShown(r)"
+                          (ngModelChange)="patchRangeAt(i, $index, { minOp: $event })">
+                    <option value="gt">&gt;</option>
+                    <option value="gte">&ge;</option>
+                  </select>
+                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                    [value]="r.min ?? null"
+                                    (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })">
+                  </pf-number-input>
+                </div>
+              </label>
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-mini-lbl">Normal max</span>
+                <div class="flex items-end gap-1">
+                  <select class="pf-input pf-input--compact w-12 shrink-0"
+                          title="Upper-bound comparator"
+                          [ngModel]="maxOpShown(r)"
+                          (ngModelChange)="patchRangeAt(i, $index, { maxOp: $event })">
+                    <option value="lt">&lt;</option>
+                    <option value="lte">&le;</option>
+                  </select>
+                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                    [value]="r.max ?? null"
+                                    (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })">
+                  </pf-number-input>
+                  @if ((p.referenceRanges ?? []).length > 1) {
+                    <button type="button" title="Remove range"
+                            class="shrink-0 px-1 text-rose-400 hover:text-rose-300"
+                            (click)="removeRange(i, $index)">×</button>
+                  }
+                </div>
+              </label>
+            </div>
+            <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
+              <span class="pf-mini-lbl">Prints as</span>
+              <input type="text" class="pf-input pf-input--compact"
+                     [ngModel]="r.label ?? ''"
+                     [placeholder]="autoRangeLabel(r)"
+                     (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
+            </label>
+          }
+                  }
+                </div>
+              }
+            }
+          </div>
+        }
+      </pf-tile>
+    }
+
+    @if (d.type === 'individual') {
+
+    @if (section() === 'results') {
+
+  <!-- Parameters -->
+  <pf-tile tone="default" padding="lg" class="block">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="section-title">Parameters ({{ fields().length }})</h3>
+      <pf-touch-btn size="sm" variant="ghost" (pressed)="addParameter()">
+        <span icon-left aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14"/>
+            <path d="M5 12h14"/>
+          </svg>
+        </span>
+        Add parameter
+      </pf-touch-btn>
+    </div>
+
+    @if (fields().length === 0) {
+      <p class="text-[13px]" style="color: var(--text-tertiary);">
+        No parameters yet. Add one to let lab staff enter results.
+      </p>
+    } @else {
+      <ul class="flex flex-col gap-2 list-none p-0 m-0">
+        @for (p of fields(); let i = $index; track p.id) {
+          @let open = expandedParamId() === p.id;
+          <li class="param-row" [class.param-row--open]="open">
+            <button type="button" class="param-row__summary"
+                    (click)="toggleParam(p.id)">
+              <span class="param-row__chev" [class.param-row__chev--open]="open">▸</span>
+              <span class="param-row__name">{{ p.label || 'Untitled parameter' }}</span>
+              <span class="param-row__type-pill">{{ p.type }}</span>
+              @if (paramSummary(p)) {
+                <span class="param-row__meta">{{ paramSummary(p) }}</span>
+              }
+              @if (p.isRequired) {
+                <span class="param-row__pill param-row__pill--req" title="Required">REQ</span>
+              }
+              @if (p.showWhen) {
+                <span class="param-row__pill param-row__pill--cond" title="Conditional visibility">IF</span>
+              }
+              <span class="grow"></span>
+              <span class="param-remove" role="button" aria-label="Remove parameter"
+                    (click)="$event.stopPropagation(); removeField(i)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 6 6 18"/>
+                  <path d="m6 6 12 12"/>
+                </svg>
+              </span>
+            </button>
+
+            @if (open) {
+              <div class="param-row__body">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.2fr_1fr] items-end">
+                  <label class="flex flex-col gap-1 min-w-0">
+                    <span class="pf-mini-lbl">Label</span>
+                    <input type="text" class="pf-input pf-input--compact"
+                           [ngModel]="p.label"
+                           (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
+                  </label>
+                  <label class="flex flex-col gap-1 min-w-0">
+                    <span class="pf-mini-lbl">Type</span>
+                    <pf-field-type-picker
+                      [value]="p.type"
+                      (valueChange)="patchField(i, { type: $event })">
+                    </pf-field-type-picker>
+                  </label>
+                  <label class="flex flex-col gap-1 min-w-0">
+                    <span class="pf-mini-lbl">Unit</span>
+                    <input type="text" class="pf-input pf-input--compact"
+                           [ngModel]="p.unit"
+                           [disabled]="!isNumericType(p.type)"
+                           (ngModelChange)="patchField(i, { unit: $event })"
+                           placeholder="—" />
+                  </label>
+                </div>
+
+                @if (isNumericType(p.type)) {
+                  <div class="param-row__ranges">
+                    <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Critical low</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="p.criticalLow ?? null"
+                                          (valueChange)="patchField(i, { criticalLow: $event ?? undefined })">
+                        </pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Critical high</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="p.criticalHigh ?? null"
+                                          (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })">
+                        </pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Plausible low</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="p.validLow ?? null"
+                                          (valueChange)="patchField(i, { validLow: $event ?? undefined })">
+                        </pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Plausible high</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1"
+                                          [value]="p.validHigh ?? null"
+                                          (valueChange)="patchField(i, { validHigh: $event ?? undefined })">
+                        </pf-number-input>
+                      </label>
+                    </div>
+                  </div>
+                }
+
+                @if (typeHasOptions(p.type)) {
+                  <div class="flex flex-col gap-1 min-w-0">
+                    <span class="pf-mini-lbl">
+                      Option table — this test only
+                      <span class="pf-option-count">{{ rowsFor(i).length }}</span>
+                    </span>
+                    <div class="pf-otbl">
+                      <div class="pf-otbl-head">
+                        <span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span>
+                      </div>
+                      @for (row of rowsFor(i); track $index; let ri = $index) {
+                        <div class="pf-otbl-row">
+                          <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                          <input type="text" class="pf-input pf-input--compact pf-otbl-code"
+                                 [ngModel]="row.code ?? ''"
+                                 (ngModelChange)="patchOptionRow(i, ri, { code: $event })"
+                                 placeholder="—" spellcheck="false" />
+                          <input type="text" class="pf-input pf-input--compact"
+                                 [ngModel]="row.value"
+                                 (ngModelChange)="patchOptionRow(i, ri, { value: $event })"
+                                 placeholder="Option value" />
+                          <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
+                                 (ngModelChange)="patchOptionRow(i, ri, { normal: $event })"
+                                 title="Normal (expected) — anything else flags abnormal" />
+                          <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
+                                 (ngModelChange)="patchOptionRow(i, ri, { active: $event })"
+                                 title="Inactive rows are hidden from the dropdown" />
+                          <span class="flex">
+                            <button type="button" class="px-1 text-sm" [disabled]="ri === 0"
+                                    (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
+                            <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1"
+                                    (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
+                          </span>
+                          <button type="button" class="px-2 text-sm font-bold" style="color: var(--red-600, #dc2626);"
+                                  (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
+                        </div>
+                      }
+                      <div>
+                        <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                                style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                (click)="addOptionRow(i)">+ Add option</button>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <pf-validation-editor
+                    [type]="p.type"
+                    [isRequired]="p.isRequired"
+                    [validation]="p.validation ?? null"
+                    (change)="patchValidation(i, $event)">
+                  </pf-validation-editor>
+
+                  <pf-condition-editor
+                    [peers]="peersFor(i)"
+                    [value]="p.showWhen ?? null"
+                    (valueChange)="patchCondition(i, $event)"
+                    (remove)="patchCondition(i, null)">
+                  </pf-condition-editor>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </pf-tile>
+
+    }
+
+    @if (section() === 'consumables') {
+    @if (d.id) {
+      <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
+    } @else {
+      <pf-tile tone="default" padding="lg" class="block">
+        <p class="text-[13px]" style="color: var(--text-tertiary);">Save the test first, then add the inventory items it consumes here.</p>
+      </pf-tile>
+    }
+    }
+
+    } @else {
+    @if (section() !== 'layout') {
+    <pf-tile tone="default" padding="lg" class="block">
+      <div class="pf-picker-head">
+        <div class="min-w-0">
+          <h3 class="section-title">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h3>
+          <p class="pf-picker-sub">
+            @if (d.type === 'profile') {
+              @if (repetitive()) {
+                Tick a test to add a draw — tick the SAME test again for a repeat draw (e.g. Glucose at 0 / 60 / 120 min).
+              } @else {
+                Pick the individual tests included in this profile.
+              }
+            } @else {
+              Pick the tests and profiles included in this package.
+            }
+          </p>
+        </div>
+        @if (d.type === 'profile') {
+          <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="repetitive()">
+            <input type="checkbox"
+                   [checked]="repetitive()"
+                   (change)="setRepetitive($any($event.target).checked)" />
+            <span>Repetitive (timed series)</span>
+          </label>
+        }
+        <span class="pf-picker-summary" [class.pf-picker-summary--on]="packageItems().length > 0">
+          <strong>{{ packageItems().length }}</strong>
+          @if (repetitiveActive()) {
+            {{ packageItems().length === 1 ? 'draw' : 'draws' }}
+          } @else {
+            {{ packageItems().length === 1 ? 'member' : 'members' }}
+          }
+          <span class="pf-picker-summary__sep">·</span>
+          <strong>{{ packageMembersTotal() | inr }}</strong>
+        </span>
+      </div>
+
+      @if (d.type === 'profile' && (calcMembers().length > 0 || packageItems().length > 1)) {
+        <div class="pf-calc-members">
+          <p class="pf-calc-members__hdr">Auto-calculated in this profile</p>
+          @for (m of calcMembers(); track m.id) {
+            <div class="pf-calc-members__row">
+              <span class="pf-calc-members__name">{{ m.name }}</span>
+              <code class="pf-calc-members__f">{{ m.line }}</code>
+              @if (m.gate) { <span class="pf-calc-members__gate">{{ m.gate }}</span> }
+              <button type="button" class="pf-calc-editlink" (click)="openCalcEditor(m.id)">Edit</button>
+            </div>
+          }
+          @if (calcMembers().length === 0) {
+            <p class="pf-calc-members__foot">None yet — pick a member below to receive a formula.</p>
+          }
+
+          @if (calcEdit(); as ce) {
+            <div class="pf-calc-edit">
+              <div>
+                <label class="pf-label">Calculated test — receives the value</label>
+                <select class="pf-input" [ngModel]="ce.targetId"
+                        (ngModelChange)="patchCalcEdit({ targetId: $event })">
+                  @for (opt of calcTargetOptions(); track opt.id) {
+                    <option [value]="opt.id">{{ opt.name }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="pf-label">Formula — tap a code to insert it</label>
+                <div class="pf-calc-edit__chips">
+                  @for (c of calcCodeChips(); track c.code) {
+                    <button type="button" class="pf-calc-chipbtn"
+                            [title]="c.name" (click)="appendCalcToken(c.code)">{{ c.code }}</button>
+                  }
+                  <button type="button" class="pf-calc-chipbtn pf-calc-chipbtn--var"
+                          title="Patient age in years" (click)="appendCalcToken('AGE')">AGE</button>
+                </div>
+                <input type="text" class="pf-input pf-calc-edit__expr" spellcheck="false"
+                       placeholder="e.g. BIO153 - BIO155 - (BIO154 / 5)"
+                       [ngModel]="ce.expr" (ngModelChange)="patchCalcEdit({ expr: $event })" />
+              </div>
+              <div>
+                <label class="pf-label">Only calculate when — optional gate</label>
+                <input type="text" class="pf-input" spellcheck="false"
+                       placeholder="e.g. BIO154 <= 400"
+                       [ngModel]="ce.validWhen" (ngModelChange)="patchCalcEdit({ validWhen: $event })" />
+              </div>
+              @if (calcEditWarning(); as warn) { <p class="pf-calc-edit__warn">{{ warn }}</p> }
+              @if (calcEditError(); as err) { <p class="pf-calc-edit__err">{{ err }}</p> }
+
+              @if (ce.expr.trim() && !calcEditError() && calcTryRefs().length > 0) {
+                <div class="pf-calc-try">
+                  <p class="pf-label">Try it — enter sample values and check the result</p>
+                  <div class="pf-calc-try__grid">
+                    @for (ref of calcTryRefs(); track ref.key) {
+                      <label class="pf-calc-try__field">
+                        <span class="pf-calc-try__code" [title]="ref.name">{{ ref.key }}</span>
+                        <input type="number" inputmode="decimal" step="any"
+                               class="pf-input pf-input--compact"
+                               [placeholder]="ref.placeholder"
+                               [ngModel]="calcTryValues()[ref.key] ?? ''"
+                               (ngModelChange)="setCalcTryValue(ref.key, $event)" />
+                      </label>
+                    }
+                  </div>
+                  <p class="pf-calc-try__out" [class.pf-calc-try__out--na]="calcTryResult().tone !== 'ok'">
+                    {{ calcTryResult().text }}
+                  </p>
+                </div>
+              }
+              <div class="pf-calc-edit__actions">
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="calcEdit.set(null)">Cancel</pf-touch-btn>
+                @if (calcEditHasExisting()) {
+                  <pf-touch-btn size="sm" variant="ghost" (pressed)="removeCalc()">Remove formula</pf-touch-btn>
+                }
+                <pf-touch-btn size="sm"
+                              [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()"
+                              (pressed)="saveCalc()">
+                  {{ calcSaving() ? 'Saving…' : 'Save formula' }}
+                </pf-touch-btn>
+              </div>
+            </div>
+          } @else {
+            <div class="pf-calc-edit__actions">
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="openCalcEditor(null)">Compose a formula</pf-touch-btn>
+            </div>
+          }
+
+          <p class="pf-calc-members__foot">
+            Calculated members fill in by themselves at result entry once their input tests
+            are typed (always overridable). The formula is saved on the member test itself,
+            so any profile — including a brand-new one — that picks the member computes it.
+          </p>
+        </div>
+      }
+
+      @if (repetitiveActive()) {
+        @if (memberGroups().length === 0) {
+          <p class="pf-series-empty">
+            No draws yet — tick tests below to build the series.
+          </p>
+        } @else {
+          <div class="pf-series" cdkDropListGroup>
+            @for (g of memberGroups(); track g.offsetMin; let gi = $index; let gFirst = $first) {
+              <div class="pf-tp">
+                <div class="pf-tp__hdr">
+                  @if (gFirst) {
+                    <span class="pf-tp__badge pf-tp__badge--first">First draw</span>
+                  } @else {
+                    <span class="pf-tp__badge">+{{ g.offsetMin }} min</span>
+                  }
+                  <span class="pf-tp__count">{{ g.rows.length }} {{ g.rows.length === 1 ? 'test' : 'tests' }}</span>
+                </div>
+                <ul class="pf-tp__list" cdkDropList
+                    [cdkDropListData]="gi"
+                    (cdkDropListDropped)="dropSeriesRow($event)">
+                  @for (r of g.rows; track r.key) {
+                    <li class="pf-tp-row" cdkDrag>
+                      <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true">⠿</span>
+                      <span class="pf-tp-row__name">{{ memberName(r.testId) }}</span>
+                      <label class="pf-tp-row__off">
+                        <input type="number" inputmode="numeric" min="0" step="5"
+                               class="pf-input pf-input--compact pf-tp-row__num"
+                               title="Minutes from the first draw"
+                               [value]="r.offsetMin"
+                               (change)="setRowOffset(r.key, $any($event.target).value)" />
+                        <span class="pf-tp-row__unit">min</span>
+                      </label>
+                      @if (!gFirst) {
+                        <button type="button" class="pf-tp-row__btn press"
+                                title="Pin — merge this draw into the time point above"
+                                (click)="pinRow(r.key)">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 17v5"/>
+                            <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+                          </svg>
+                        </button>
+                      }
+                      <button type="button" class="pf-tp-row__btn pf-tp-row__btn--danger press"
+                              title="Remove this draw"
+                              (click)="removeSeriesRow(r.key)">✕</button>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <div class="pf-picker-toolbar">
+        @if (d.type === 'package') {
+          <pf-segmented [options]="pickFilterOptions" [value]="pickFilter()" size="sm"
+                        (valueChange)="pickFilter.set($event)"></pf-segmented>
+        }
+        <input type="text" class="pf-input pf-picker-search"
+               placeholder="Search by name or department…"
+               [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
+      </div>
+
+      @if (filteredPackageCatalogByDept().length === 0) {
+        <p class="pf-picker-empty">
+          @if (pickerSource().length === 0) {
+            @if (d.type === 'profile') {
+              No individual tests configured yet — create a few tests first, then build the profile.
+            } @else {
+              No tests or profiles configured yet — create a few first, then build the package.
+            }
+          } @else {
+            Nothing matches your filter{{ packageQuery() ? ' "' + packageQuery() + '"' : '' }}.
+          }
+        </p>
+      } @else {
+        <div class="flex flex-col gap-5">
+          @for (group of filteredPackageCatalogByDept(); track group.department) {
+            <div>
+              <div class="pf-pkg-dept-hdr"
+                   [class.pf-pkg-dept-hdr--sel]="group.department === 'Selected'">
+                <span class="pf-pkg-dept-hdr__name">{{ group.department }}</span>
+                <span class="pf-pkg-dept-hdr__count">{{ group.tests.length }}</span>
+              </div>
+              <div class="pf-pick-grid">
+                @for (t of group.tests; track t.id) {
+                  <label class="pf-pkg-pick"
+                         [class.pf-pkg-pick--on]="isInPackage(t.id)">
+                    <input type="checkbox"
+                           [checked]="isInPackage(t.id)"
+                           (change)="togglePackageMember(t.id)" />
+                    <span class="pf-pkg-pick__body">
+                      <span class="pf-pkg-pick__title">
+                        <span class="pf-pkg-pick__name">{{ t.name }}</span>
+                        @if (t.type === 'profile') {
+                          <span class="pf-pkg-badge">Profile</span>
+                        }
+                        @if (memberCalc(t); as def) {
+                          <span class="pf-pkg-badge pf-pkg-badge--calc"
+                                [title]="'Auto-calculated at result entry: ' + calcLine(def)">ƒ Calculated</span>
+                        }
+                      </span>
+                      <span class="pf-pkg-pick__meta">
+                        @if (t.testCode) { <span>{{ t.testCode }}</span><span class="pf-pkg-pick__dot">·</span> }
+                        <span>TAT {{ t.tatHours }}h</span>
+                      </span>
+                    </span>
+                    <span class="pf-pkg-pick__price">{{ t.price | inr }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </pf-tile>
+    }
+  }
+
+    @if (section() === 'layout') {
+    @if (d.id) {
+      <div class="pf-lay-switch">
+        <button type="button" class="pf-lay-switch__btn"
+                [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
+                (click)="layoutView.set('notes')">Notes &amp; description</button>
+        <button type="button" class="pf-lay-switch__btn"
+                [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
+                (click)="layoutView.set('advanced')">Advanced structure</button>
+      </div>
+
+      @if (!customizingColumns()) {
+        <p class="pf-lay-cols">
+          <span class="pf-lay-cols__k">Report columns</span>
+          <span class="pf-lay-cols__v">
+            @if (testColumnsOverride(); as o) {
+              Custom for this {{ d.type === 'individual' ? 'test' : d.type }} — {{ columnsLabel(o) }}
+            } @else {
+              Uses {{ selectedDeptName() || 'department' }} columns — {{ deptColumnsLabel() || 'defaults' }}
+            }
+          </span>
+          <button type="button" class="pf-lay-cols__a" style="background:none;border:none;cursor:pointer;"
+                  (click)="startCustomizeColumns()">
+            {{ testColumnsOverride() ? 'Edit columns' : 'Customize' }}
+          </button>
+        </p>
+      } @else {
+        <div class="pf-lay-colwrap">
+          <pf-report-columns-editor
+            [hostManaged]="true"
+            [initialColumns]="columnsEditorSeed()"
+            [sourceColumns]="deptColumnCfg()"
+            (stateChange)="onColumnsState($event)">
+          </pf-report-columns-editor>
+          <div class="pf-lay-colwrap__actions">
+            <pf-touch-btn size="sm" variant="ghost" (pressed)="cancelCustomizeColumns()">Cancel</pf-touch-btn>
+            @if (testColumnsOverride()) {
+              <pf-touch-btn size="sm" variant="ghost" [disabled]="columnsSaving()"
+                            (pressed)="revertColumnsToDepartment()">Revert to department</pf-touch-btn>
+            }
+            <pf-touch-btn size="sm" variant="primary" [disabled]="columnsSaving()"
+                          (pressed)="saveColumnsOverride()">
+              {{ columnsSaving() ? 'Saving…' : 'Save columns' }}
+            </pf-touch-btn>
+          </div>
+        </div>
+      }
+
+      @if (layoutView() === 'notes') {
+        <pf-test-notes-editor class="block"
+          [fixedTestId]="d.id || ''"
+          [hidePreview]="false"
+          [parameters]="parameterNames()"
+          [profileMembers]="previewProfileMembers()"
+          [columnsOverride]="liveColumnsOverride()">
+        </pf-test-notes-editor>
+      } @else {
+        <pf-test-layout-editor class="block"
+          [testId]="d.id || ''"
+          [departmentId]="d.departmentId || ''"
+          [parameters]="parameterNames()">
+        </pf-test-layout-editor>
+      }
+    } @else {
+      <pf-tile tone="default" padding="lg" class="block">
+        <p class="text-[13px]" style="color: var(--text-tertiary);">
+          <strong style="color: var(--text-secondary);">Report Layout</strong>
+          — save this test first, then come back to this tab to design how the
+          test's results render in the patient report.
+        </p>
+      </pf-tile>
+    }
+    }
+
+    </div>
+  </div>
+</section>

@@ -1,0 +1,626 @@
+/* Admin flag in the header: "Frontdesk collects" toggles whether the
+ * Order tab routes here automatically after save. */
+.pf-collect-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .15s, background .15s;
+}
+.pf-collect-toggle:hover {
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, transparent);
+  background: var(--glass-bg-hover);
+}
+.pf-collect-toggle input {
+  accent-color: var(--color-primary, #7c3aed);
+  width: 15px; height: 15px;
+  cursor: pointer;
+}
+.pf-collect-toggle__hint {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Print invoice button on the header (or icon in the tile) */
+.pf-bill-print-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s;
+}
+.pf-bill-print-icon:hover {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent);
+  color: var(--color-primary, #7c3aed);
+}
+
+/* Barcode & QR badges inside the invoice preview */
+.pf-invoice-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.pf-scanner-tag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  min-width: 0;
+}
+.pf-scanner-tag__code {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.pf-scanner-tag__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pf-scanner-tag__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.pf-scanner-tag__action {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+/* Toolbar buttons (Save draft, Cancel) */
+.pf-toolbar-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all .15s;
+}
+.pf-toolbar-btn:hover:not([disabled]) {
+  background: var(--glass-bg-hover);
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, transparent);
+}
+.pf-toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pf-toolbar-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* Two-column layout */
+.pf-bill-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  .pf-bill-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 1280px) {
+  .pf-bill-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+  }
+}
+
+.pf-bill-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Invoice preview details */
+.pf-bill-no {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-bill-total {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-primary, #7c3aed);
+}
+
+.pf-bill-items {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.pf-bill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.pf-bill-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pf-bill-code {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-bill-amount {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.pf-bill-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--glass-border);
+}
+.pf-bill-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pf-bill-line--total {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  padding-top: 4px;
+}
+.pf-bill-line--discount {
+  margin: 4px 0;
+}
+
+/* Discount row controls */
+.pf-discount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-discount__kind {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+.pf-discount__kind button {
+  width: 28px; height: 26px;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+  transition: all .12s;
+}
+.pf-discount__kind--on {
+  background: var(--color-primary, #7c3aed) !important;
+  color: #ffffff !important;
+}
+.pf-discount__input {
+  width: 72px; height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  font-size: 13.5px; font-weight: 700;
+  text-align: right;
+  outline: none;
+}
+.pf-discount__input:focus {
+  border-color: var(--input-border-focus);
+}
+.pf-discount__input--err {
+  border-color: var(--red-border, #ef4444) !important;
+  color: var(--red-text, #ef4444) !important;
+}
+.pf-discount__resolved {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-text);
+  white-space: nowrap;
+}
+.pf-discount__cap {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: normal;
+}
+.pf-discount__err {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--red-text, #ef4444);
+  font-weight: 600;
+}
+
+.pf-bill-tat-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* Payment modes grid */
+.pf-pay-modes__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.pf-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s;
+}
+.pf-mode:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+.pf-mode--on {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 15%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, transparent) !important;
+  color: var(--color-primary, #7c3aed) !important;
+}
+.pf-mode--compact {
+  padding: 8px 6px;
+  flex-direction: row;
+}
+.pf-mode__label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pf-pay-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 16px 0;
+}
+
+.pf-big-amount {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+/* QR Code frame */
+.pf-qr {
+  padding: 10px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.pf-qr__img {
+  width: 140px; height: 140px;
+  display: block;
+}
+.pf-qr__hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Live indicator pill */
+.pf-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pf-live__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pf-pulse 1.8s infinite;
+}
+@keyframes pf-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Card terminal mockup */
+.pf-card-mock {
+  width: 180px; height: 115px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1e1b4b, #312e81);
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+.pf-card-chip {
+  width: 24px; height: 18px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+.pf-card-pan {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.85);
+}
+.pf-card-foot {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.5);
+}
+
+/* Cash input numpad helper controls */
+.pf-cash2__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-radius: 10px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+}
+.pf-cash2__label { font-size: 12px; color: var(--text-tertiary); font-weight: 600; }
+.pf-cash2__amt { font-size: 18px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.pf-cash2__amt--empty { color: var(--text-muted); }
+
+.pf-cash2__quick { display: flex; gap: 6px; }
+.pf-cash2__quick button {
+  flex: 1; padding: 6px 0; border-radius: 8px; border: 1px solid var(--glass-border);
+  background: var(--glass-bg); color: var(--text-secondary); font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all .12s;
+}
+.pf-cash2__quick button:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+
+.pf-cash2__change {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);
+}
+.pf-cash2__change[data-kind="change"] {
+  background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); color: #10b981;
+}
+.pf-cash2__change[data-kind="exact"] {
+  background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6;
+}
+.pf-cash2__change[data-kind="short"] {
+  background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.3); color: #ef4444;
+}
+
+/* Reference number input */
+.pf-ref-row {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%;
+}
+.pf-ref-row span { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pf-ref-input {
+  width: 100%; padding: 8px 12px; border-radius: 9px;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  color: var(--input-text); font-size: 13px; outline: none;
+}
+.pf-ref-input:focus { border-color: var(--input-border-focus); }
+
+/* Advance payment accordion/strip */
+.pf-adv {
+  width: 100%; margin-top: 12px; padding: 12px; border-radius: 12px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); text-align: left;
+}
+.pf-adv__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pf-adv__title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.pf-adv__opt { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+.pf-adv__row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.pf-adv__cur { font-size: 15px; font-weight: 700; color: var(--text-secondary); }
+.pf-adv__input {
+  flex: 1; padding: 6px 10px; border-radius: 8px;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  color: var(--input-text); font-size: 14px; font-weight: 700; outline: none;
+}
+.pf-adv__tenders { display: flex; gap: 4px; }
+.pf-adv__tender {
+  flex: 1; padding: 5px 0; border-radius: 7px; border: 1px solid var(--glass-border);
+  background: transparent; color: var(--text-tertiary); font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.pf-adv__tender--on {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, transparent);
+  color: var(--color-primary, #7c3aed);
+}
+.pf-adv__hint { margin: 8px 0 0; font-size: 11.5px; color: var(--text-secondary); }
+.pf-adv__hint--muted { color: var(--text-tertiary); }
+
+/* Post-payment dialog modal */
+.pf-pay-modal {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.pf-pay-modal--inline {
+  position: relative; inset: auto; z-index: auto; padding: 0; margin-top: 16px;
+}
+.pf-pay-modal__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(10, 10, 20, 0.65);
+  backdrop-filter: blur(8px);
+}
+.pf-pay-modal__shell {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 420px;
+  padding: 28px 24px;
+  border-radius: 20px;
+  background: var(--bg-card-solid, #ffffff);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  text-align: center;
+}
+.pf-pay-modal__icon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 14px;
+}
+.pf-pay-modal__shell h2 {
+  margin: 0; font-size: 20px; font-weight: 800; color: var(--text-primary);
+}
+.pf-pay-modal__sub {
+  margin: 4px 0 20px; font-size: 13.5px; color: var(--text-secondary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-pay-modal__actions {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pf-pay-modal__btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 44px; border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.pf-pay-modal__btn:hover {
+  background: var(--glass-bg-hover);
+}
+.pf-pay-modal__btn--primary {
+  background: var(--color-primary, #7c3aed);
+  border-color: transparent;
+  color: #ffffff;
+}
+.pf-pay-modal__btn--primary:hover {
+  filter: brightness(1.1);
+}
+
+/* ════════════════════════════════════════════════════════
+ * CROSS-PLATFORM OVERRIDES
+ * ════════════════════════════════════════════════════════ */
+.pf-bill-back-desktop { display: none; }
+
+@media (max-width: 640px) {
+  .pf-discount__input { font-size: 16px; }
+  .pf-wallet-search { font-size: 16px; }
+  .pf-ref-input { font-size: 16px; }
+
+  .pf-bill-col { flex: 0 0 auto; }
+  .pf-bill-tile { flex: 0 0 auto; overflow-y: visible; }
+  .pf-bill-items { overflow-y: visible; flex: 0 0 auto; }
+  .pf-bill-tile--noscroll .pf-pay-body { flex: 0 0 auto; }
+  .pf-wallet-list { overflow-y: visible; }
+
+  .pf-mode--compact { min-height: 56px; }
+  .pf-cash2__quick button { min-height: 44px; }
+  .pf-discount__kind button { width: 34px; height: 34px; }
+  .pf-discount__input { height: 44px; }
+  .pf-wallet-row { min-height: 48px; }
+
+  .pf-pay-modal:not(.pf-pay-modal--inline) {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    padding-top: 24px;
+    padding-bottom: calc(22px + var(--tab-nav-total-height, 0px));
+  }
+  .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell::before {
+    content: '';
+    position: absolute;
+    top: 9px; left: 50%; transform: translateX(-50%);
+    width: 40px; height: 4px;
+    border-radius: 9999px;
+    background: var(--glass-border);
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1279px) {
+  .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (pointer: coarse) {
+  .pf-toolbar-btn,
+  .pf-wallet-change,
+  .pf-refund__chip,
+  .pf-pay-modal__btn { min-height: 44px; }
+  .pf-bill-print-icon { width: 40px; height: 40px; }
+}
+
+@media (hover: none) {
+  .pf-collect-toggle:hover,
+  .pf-mode:not(.pf-mode--on):hover,
+  .pf-toolbar-btn:hover:not([disabled]),
+  .pf-bill-print-icon:hover,
+  .pf-wallet-row:hover,
+  .pf-wallet-change:hover,
+  .pf-pay-modal__btn:hover,
+  .pf-cash2__quick button:hover,
+  .pf-cash-btn:hover { background: var(--glass-bg); }
+}
+
+:host-context(html.cap-native) .pf-pay-modal:not(.pf-pay-modal--inline) {
+  padding-top: calc(5dvh + env(safe-area-inset-top));
+}
+:host-context(html.cap-native) .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+}
+
+@media print {
+  :host { display: block; background: white; }
+  .pf-no-print, pf-screen-header, .pf-discount,
+  .pf-bill-actions, .pf-collect-toggle { display: none !important; }
+  .grid { display: block !important; }
+}
