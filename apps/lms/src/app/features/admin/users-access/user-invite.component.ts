@@ -269,7 +269,7 @@ export class UserInviteComponent implements OnInit {
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
-  back() { this.router.navigateByUrl('/admin/users'); }
+  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'users' } }); }
 
   onUsernameChange(v: string) {
     if (this._usernameError()) this._usernameError.set(null);

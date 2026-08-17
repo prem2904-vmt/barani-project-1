@@ -1,0 +1,147 @@
+<section class="pf-tm px-4 md:px-8 pt-6 pb-10">
+  <pf-screen-header
+    eyebrow="Admin"
+    title="Test Master"
+    subtitle="Master catalogue of tests, profiles and packages — filter, and edit prices inline.">
+    <div actions class="flex flex-wrap items-center gap-2 justify-end">
+      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" (pressed)="restoreDefaults()">
+        {{ restoring() ? 'Restoring…' : 'Restore to default' }}
+      </pf-touch-btn>
+      @if (dirtyCount() > 0) {
+        <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
+        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
+      }
+      <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
+        <span icon-left aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14"/><path d="M5 12h14"/>
+          </svg>
+        </span>
+        Create
+      </pf-touch-btn>
+    </div>
+  </pf-screen-header>
+
+  <!-- View switch -->
+  <div class="pf-tm-tabs mb-4">
+    @for (v of views; track v.value) {
+      <button type="button"
+              class="pf-tm-tab"
+              [class.pf-tm-tab--active]="type() === v.value"
+              (click)="setType(v.value)">
+        {{ v.label }}
+      </button>
+    }
+    @if (inactiveCount() > 0 || showInactive()) {
+      <label class="pf-tm-inactive-toggle">
+        <input type="checkbox" [checked]="showInactive()"
+               (change)="showInactive.set(!showInactive())" />
+        Show inactive ({{ inactiveCount() }})
+      </label>
+    }
+  </div>
+
+  <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
+    <!-- ── LEFT: departments ─────────────────────────────── -->
+    <aside class="pf-tm-side">
+      <div class="pf-tm-side-head">
+        <span>Departments</span>
+        <button type="button" class="pf-tm-side-toggle" (click)="toggleSide()"
+                title="Collapse panel" aria-label="Collapse department panel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+      </div>
+      <ul class="pf-tm-dept-list">
+        <li>
+          <button type="button" class="pf-tm-dept" [class.pf-tm-dept--active]="!selectedDept()"
+                  (click)="selectDept(null)">
+            <span class="pf-tm-dept-name">All</span>
+            <span class="pf-tm-dept-count">{{ typeTests().length }}</span>
+          </button>
+        </li>
+        @for (d of departments(); track d.key) {
+          <li class="pf-tm-dept-row" [class.pf-tm-dept-row--off]="!!d.id && !d.isActive">
+            <button type="button" class="pf-tm-dept" [class.pf-tm-dept--active]="selectedDept() === d.key"
+                    (click)="selectDept(d.key)">
+              <span class="pf-tm-dept-name">
+                {{ d.name }}
+                @if (d.code) { <span class="pf-tm-dept-code">{{ d.code }}</span> }
+              </span>
+              <span class="pf-tm-dept-count">{{ d.count }}</span>
+            </button>
+            @if (d.id) {
+              <a class="pf-tm-dept-tables" [routerLink]="['/admin/tests/department', d.id]"
+                 [title]="'Open ' + d.name + ' department page — option tables'"
+                 [attr.aria-label]="'Option tables for ' + d.name"
+                 (click)="$event.stopPropagation()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>
+                </svg>
+              </a>
+              <button type="button" class="pf-tm-dept-switch" [class.pf-tm-dept-switch--on]="d.isActive"
+                      (click)="toggleDept(d)" [attr.aria-pressed]="d.isActive"
+                      [title]="d.isActive ? 'Disable department' : 'Enable department'"
+                      [attr.aria-label]="(d.isActive ? 'Disable ' : 'Enable ') + d.name">
+                <span class="pf-tm-dept-switch-knob"></span>
+              </button>
+            }
+          </li>
+        }
+        @if (departments().length === 0) {
+          <li class="pf-tm-dept-empty">No departments yet.</li>
+        }
+      </ul>
+    </aside>
+
+    <!-- ── RIGHT: grid ───────────────────────────────────── -->
+    <div class="pf-tm-main">
+      <div class="pf-tm-grid-meta">
+        <div class="pf-tm-meta-left">
+          @if (sideCollapsed()) {
+            <button type="button" class="pf-tm-side-expand" (click)="toggleSide()"
+                    title="Show departments" aria-label="Show department panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              Departments
+            </button>
+          }
+          <span class="pf-tm-count-badge">
+            {{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}
+          </span>
+          <span class="pf-tm-meta-sep">•</span>
+          <span class="pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
+        </div>
+
+        <div class="pf-tm-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input type="text" class="pf-tm-search__input"
+                 [placeholder]="'Search ' + (type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests') + '…'"
+                 [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          @if (search()) {
+            <button type="button" class="pf-tm-search__clear" (click)="search.set('')" aria-label="Clear search">×</button>
+          }
+        </div>
+      </div>
+      <ag-grid-angular
+        [singleClickEdit]="isCoarse"
+        class="pf-tm-grid"
+        [theme]="gridTheme()"
+        [rowData]="rowData()"
+        [columnDefs]="phoneTrim(colDefs())"
+        [defaultColDef]="defaultColDef"
+        [getRowId]="getRowId"
+        [getRowStyle]="getRowStyle"
+        [context]="gridContext"
+        [animateRows]="true"
+        [stopEditingWhenCellsLoseFocus]="true"
+        (gridReady)="onGridReady($event)"
+        (cellValueChanged)="onCellValueChanged($event)">
+      </ag-grid-angular>
+    </div>
+  </div>
+</section>

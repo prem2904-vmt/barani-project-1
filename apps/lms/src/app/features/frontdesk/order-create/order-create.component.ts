@@ -1055,6 +1055,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return t.name.replace(/\s+/g, '').slice(0, 4).toUpperCase();
   }
 
+  testDisplayName(t?: { name: string; shortName?: string | null } | null): string {
+    if (!t) return '';
+    const name = t.name || '';
+    const short = t.shortName?.trim();
+    if (short && short.toLowerCase() !== name.trim().toLowerCase()) {
+      return `${name} (${short})`;
+    }
+    return name;
+  }
+
   getPackageTestCount(pkg: Test): number {
     return parsePackageMembers(pkg.parameters).length;
   }

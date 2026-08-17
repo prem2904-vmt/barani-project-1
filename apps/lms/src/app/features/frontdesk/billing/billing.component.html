@@ -1,0 +1,484 @@
+<section [class]="embedded ? 'pt-1 pb-2' : 'pf-bill-page px-4 md:px-8 lg:px-10 pt-6 pb-10'">
+  @if (!embedded) {
+  <pf-screen-header
+    eyebrow="Frontdesk · Billing"
+    title="Collect payment"
+    [subtitle]="subtitle()">
+    <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
+         after save and raises a billing request instead. Flag is
+         persisted in localStorage via FrontdeskSettingsService. -->
+    <label actions class="pf-collect-toggle"
+           title="When ON, payment is collected at the front desk after each order. When OFF, a separate billing request is raised and the front desk skips this screen.">
+      <input type="checkbox"
+             [checked]="collectsBilling()"
+             (change)="setCollectsBilling($any($event.target).checked)" />
+      <span>Front desk collects payment</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+           class="pf-collect-toggle__hint" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
+        <path d="M12 17h.01"/>
+      </svg>
+    </label>
+    <button actions type="button" class="pf-toolbar-btn pf-no-print"
+            (click)="saveDraft()" [disabled]="paid() || !bill()"
+            title="Save as draft (resume later)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>
+      </svg>
+      Save draft
+    </button>
+    @if (hasDraft()) {
+      <button actions type="button" class="pf-toolbar-btn pf-toolbar-btn--ghost pf-no-print"
+              (click)="discardDraft()" title="Discard saved draft">Discard</button>
+    }
+    <button actions type="button" class="pf-toolbar-btn pf-toolbar-btn--ghost pf-no-print"
+            (click)="cancel()" title="Leave without collecting payment">
+      Cancel
+    </button>
+  </pf-screen-header>
+  }
+
+  @if (bill(); as b) {
+    <div class="pf-bill-grid">
+
+      <!-- LEFT: invoice preview -->
+      <div class="pf-bill-col">
+        <pf-tile tone="default" padding="lg" class="pf-bill-tile">
+          <!-- Header: Invoice Number & Due Amount -->
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <p class="pf-eyebrow">Invoice</p>
+              <p class="pf-bill-no">{{ invoiceNumber() }}</p>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <p class="pf-eyebrow">Due</p>
+                <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
+              </div>
+              <button type="button" class="pf-bill-print-icon pf-no-print"
+                      (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Barcode & QR Code Section -->
+          <div class="pf-invoice-badges mb-6">
+            <!-- Invoice-number barcode (Code128) for counter scanning -->
+            <div class="pf-scanner-tag">
+              <div class="pf-scanner-tag__code">
+                <pf-barcode-display [code]="invoiceNumber()" mode="barcode" [size]="36" [bare]="true" [showValue]="false"></pf-barcode-display>
+              </div>
+              <div class="pf-scanner-tag__meta">
+                <span class="pf-scanner-tag__label">Invoice Barcode</span>
+                <span class="pf-scanner-tag__action">Scan to search</span>
+              </div>
+            </div>
+
+            <!-- Result-tracking QR for the patient's phone -->
+            @if (trackToken() && invoiceTpl()?.showTrackingQr !== false) {
+              <div class="pf-scanner-tag">
+                <div class="pf-scanner-tag__code">
+                  <pf-barcode-display [code]="trackUrl()" mode="qr" [size]="36" [bare]="true" [showValue]="false"></pf-barcode-display>
+                </div>
+                <div class="pf-scanner-tag__meta">
+                  <span class="pf-scanner-tag__label">Patient Portal QR</span>
+                  <span class="pf-scanner-tag__action">Scan to track report</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <ul class="pf-bill-items">
+            @for (item of b.items; track item.id) {
+              <li class="pf-bill-row">
+                <div class="flex flex-col min-w-0">
+                  <span class="pf-bill-name truncate" [title]="item.testName">{{ item.testName }}</span>
+                  @if (item.hsnSacCode) {
+                    <span class="pf-bill-code mt-0.5">{{ item.hsnSacCode }}</span>
+                  }
+                </div>
+                <span class="pf-bill-amount">{{ item.total | inr }}</span>
+              </li>
+            }
+          </ul>
+
+          <div class="pf-bill-totals">
+            <div class="pf-bill-line">
+              <span>Subtotal</span>
+              <span class="tabular-nums">{{ b.subTotal | inr }}</span>
+            </div>
+            @if (b.totalTax > 0) {
+              <div class="pf-bill-line">
+                <span>GST</span>
+                <span class="tabular-nums">{{ b.totalTax | inr }}</span>
+              </div>
+            }
+            <div class="pf-bill-line pf-bill-line--discount">
+              <span>Discount @if (discountCapPct() < 100) { <span class="pf-discount__cap">(max {{ discountCapPct() }}%)</span> }</span>
+              <div class="pf-discount">
+                <div class="pf-discount__kind" role="tablist" aria-label="Discount unit">
+                  <button type="button" role="tab"
+                          [class.pf-discount__kind--on]="discountKind() === 'flat'"
+                          (click)="setDiscountKind('flat')">₹</button>
+                  <button type="button" role="tab"
+                          [class.pf-discount__kind--on]="discountKind() === 'percent'"
+                          (click)="setDiscountKind('percent')">%</button>
+                </div>
+                <input type="number"
+                       inputmode="numeric"
+                       min="0"
+                       step="1"
+                       [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
+                       [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
+                       [value]="discount()"
+                       (input)="setDiscount(asInput($event))"
+                       (keydown)="blockDiscountChars($event)"
+                       class="pf-discount__input"
+                       placeholder="0"/>
+                @if (discountKind() === 'percent' && discountNum() > 0) {
+                  <span class="pf-discount__resolved">−{{ discountNum() | inr }}</span>
+                }
+              </div>
+            </div>
+            @if (discountOverCap()) {
+              <p class="pf-discount__err">Discount {{ discountPct().toFixed(0) }}% exceeds your {{ discountCapPct() }}% limit — reduce it to confirm.</p>
+            }
+            @if (discountError()) {
+              <p class="pf-discount__err">{{ discountError() }}</p>
+            }
+            <div class="pf-bill-line pf-bill-line--total">
+              <span>Total</span>
+              <span class="tabular-nums">{{ fullTotal() | inr }}</span>
+            </div>
+            @if (alreadyPaid() > 0) {
+              <div class="pf-bill-line">
+                <span>Already paid</span>
+                <span class="tabular-nums">− {{ alreadyPaid() | inr }}</span>
+              </div>
+              <div class="pf-bill-line pf-bill-line--total">
+                <span>{{ refundDue() > 0 ? 'Refund due' : 'Balance due' }}</span>
+                <span class="tabular-nums">{{ (refundDue() > 0 ? refundDue() : effectivePayable()) | inr }}</span>
+              </div>
+            }
+          </div>
+
+          @if (refundDue() > 0) {
+            <div class="pf-refund">
+              <p class="pf-refund__title">Overpaid by {{ refundDue() | inr }} — record a refund</p>
+              <div class="pf-refund__modes">
+                @for (m of refundModeDefs; track m.key) {
+                  <button type="button" class="pf-refund__chip" [class.pf-refund__chip--on]="refundMode() === m.key"
+                          (click)="refundMode.set(m.key)">{{ m.label }}</button>
+                }
+              </div>
+              <button type="button" class="pf-refund__btn" [disabled]="refunding()" (click)="doRefund()">
+                {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
+              </button>
+            </div>
+          }
+
+          @if (tatLabel()) {
+            <p class="pf-bill-tat-inline">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+              </svg>
+              {{ tatLabel() }}
+            </p>
+          }
+        </pf-tile>
+      </div>
+
+      <!-- RIGHT: unified payment tile — mode picker on top, the
+           per-mode panel below, and Confirm at the bottom. One
+           box instead of three. Hidden when printing the invoice.
+           Marked --noscroll so contents must fit; the per-mode
+           panel uses flex / smaller controls to stay inside. -->
+      <div class="pf-bill-col pf-no-print">
+        <pf-tile tone="default" padding="lg" class="pf-bill-tile pf-bill-tile--noscroll">
+          <div class="pf-pay-modes">
+            <p class="pf-eyebrow mb-2">Payment mode</p>
+            <div class="pf-pay-modes__grid">
+              @for (m of modes; track m.id) {
+                <button type="button"
+                        (click)="setMode(m.id)"
+                        class="pf-mode pf-mode--compact"
+                        [class.pf-mode--on]="mode() === m.id">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path [attr.d]="m.iconPath"/>
+                  </svg>
+                  <span class="pf-mode__label">{{ m.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+          <div class="pf-pay-divider"></div>
+          <div class="pf-pay-body">
+          @switch (mode()) {
+            @case ('upi') {
+              <div class="flex flex-col items-center text-center py-1 gap-2">
+                <div class="flex flex-col items-center">
+                  <p class="pf-eyebrow mb-0.5">Scan to pay</p>
+                  <p class="pf-big-amount">{{ effectivePayable() | inr }}</p>
+                </div>
+                <div class="pf-qr">
+                  <img class="pf-qr__img" [src]="upiQrUrl()"
+                       alt="Scan to pay via UPI"/>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <p class="pf-qr__hint">prefrontal&#64;upi · Chennai Main</p>
+                  <div class="pf-live-badge">
+                    <span class="pf-live__dot"></span>
+                    <span>Listening for payment…</span>
+                  </div>
+                </div>
+              </div>
+            }
+            @case ('card') {
+              <div class="flex flex-col items-center text-center py-2">
+                <p class="pf-eyebrow mb-1">Tap or insert card</p>
+                <p class="pf-big-amount mb-3">{{ effectivePayable() | inr }}</p>
+                <div class="pf-card-mock">
+                  <span class="pf-card-chip"></span>
+                  <span class="pf-card-wave"></span>
+                  <p class="pf-card-pan">•••• •••• •••• 4242</p>
+                  <p class="pf-card-foot">TAP TO PAY</p>
+                </div>
+                <div class="pf-live-badge mt-4" style="color: var(--color-primary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="pf-spin mr-1">
+                    <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="12"/>
+                  </svg>
+                  Waiting for card…
+                </div>
+              </div>
+            }
+            @case ('cash') {
+              <div class="flex flex-col h-full min-h-0 gap-2">
+                <!-- Enter what the patient handed over; the change to return
+                     is shown prominently. Quick chips: exact, or + a note. -->
+                <div class="pf-cash2__head">
+                  <span class="pf-cash2__label">Cash received</span>
+                  <span class="pf-cash2__amt" [class.pf-cash2__amt--empty]="cashAmountNum() === 0">{{ cashAmountNum() | inr }}</span>
+                </div>
+                <div class="pf-cash2__quick">
+                  <button type="button" (click)="setExactCash()">Exact</button>
+                  @for (n of cashNotes; track n) { <button type="button" (click)="addCash(n)">+{{ n }}</button> }
+                </div>
+                <div class="pf-cash2__change" [attr.data-kind]="cashAmountNum() === 0 ? 'idle' : (changeAmount() > 0 ? 'change' : (changeAmount() === 0 ? 'exact' : 'short'))">
+                  @if (cashAmountNum() === 0) { <span>Enter the amount received · due {{ effectivePayable() | inr }}</span> }
+                  @else if (changeAmount() > 0) { <span>Return to patient</span><strong>{{ changeAbs() | inr }}</strong> }
+                  @else if (changeAmount() === 0) { <span>Exact — no change due</span> }
+                  @else { <span>Short by</span><strong>{{ changeAbs() | inr }}</strong> }
+                </div>
+                <pf-num-pad
+                  [value]="cashAmount()"
+                  [allowDecimal]="false"
+                  [compact]="true"
+                  (valueChange)="setCash($event)"></pf-num-pad>
+              </div>
+            }
+            @case ('wallet') {
+              <div class="flex flex-col h-full min-h-0">
+                @if (selectedVendor(); as v) {
+                  <!-- Selected-vendor card with balance + change link. -->
+                  <div class="pf-wallet-selected">
+                    <div class="min-w-0 flex-1">
+                      <p class="pf-wallet-selected__name">{{ v.name }}</p>
+                      @if (v.code) { <p class="pf-wallet-selected__code">{{ v.code }}</p> }
+                    </div>
+                    @if (showWalletBalance()) {
+                      <div class="text-right">
+                        <!-- Accruing tab: no cap, so we show what the partner
+                             will OWE after this charge, not a "remaining
+                             balance". Never blocks. -->
+                        <p class="pf-eyebrow">Outstanding after</p>
+                        <p class="pf-wallet-selected__bal">
+                          {{ (v.outstanding + effectivePayable()) | walletOutstanding }}
+                        </p>
+                        @if (v.notifyThreshold && (v.outstanding + effectivePayable()) >= v.notifyThreshold) {
+                          <p class="pf-wallet-selected__warn">Over the {{ v.notifyThreshold | inr }} alert threshold</p>
+                        }
+                      </div>
+                    }
+                    <button type="button" class="pf-wallet-change" (click)="clearVendor()">Change</button>
+                  </div>
+                } @else {
+                  <p class="pf-eyebrow mb-2">Choose vendor wallet</p>
+                  <input type="text" class="pf-wallet-search"
+                         [value]="vendorQuery()"
+                         (input)="setVendorQuery(asInput($event))"
+                         placeholder="Search vendor by name or code…"/>
+                  @if (vendors() === null) {
+                    <p class="pf-wallet-empty">
+                      <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                      Loading vendors…
+                    </p>
+                  } @else if (filteredVendors().length === 0) {
+                    <p class="pf-wallet-empty">
+                      @if (vendorQuery().trim()) { No vendors match "{{ vendorQuery() }}". }
+                      @else { No active vendors. Add one in Admin → Vendor wallets. }
+                    </p>
+                  } @else {
+                    <ul class="pf-wallet-list">
+                      @for (v of filteredVendors(); track v.id) {
+                        <li>
+                          <button type="button" class="pf-wallet-row" (click)="selectVendor(v.id)">
+                            <span class="pf-wallet-row__name">
+                              {{ v.name }}
+                              @if (v.code) { <span class="pf-wallet-row__code">{{ v.code }}</span> }
+                            </span>
+                            @if (showWalletBalance()) {
+                              <span class="pf-wallet-row__bal"
+                                    [class.pf-wallet-row__bal--low]="v.outstanding > 0">
+                                {{ v.outstanding | walletOutstanding }}
+                              </span>
+                            }
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                }
+              </div>
+            }
+            @default {
+              <div class="flex flex-col items-center justify-center text-center py-16">
+                <div class="pf-placeholder-icon">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path [attr.d]="currentModeDef()?.iconPath"/>
+                  </svg>
+                </div>
+                <p class="text-[22px] font-semibold" style="color: var(--text-primary);">{{ currentModeDef()?.label }}</p>
+                <p class="text-[13px] mt-2 max-w-[280px]" style="color: var(--text-tertiary);">
+                  @switch (mode()) {
+                    @case ('split')  { Collect each portion on the terminal, then confirm below. }
+                    @case ('later')  { Mark as pending. The balance can be collected anytime before the report is delivered. }
+                    @default { Follow on-screen prompts to complete the payment. }
+                  }
+                </p>
+                @if (mode() === 'later') {
+                  <!-- Advance payment (optional): collect a partial amount now;
+                       the remainder stays outstanding and can be settled later. -->
+                  <div class="pf-adv">
+                    <div class="pf-adv__head">
+                      <span class="pf-adv__title">Advance payment</span>
+                      <span class="pf-adv__opt">optional</span>
+                    </div>
+                    <div class="pf-adv__row">
+                      <span class="pf-adv__cur">₹</span>
+                      <input type="number" inputmode="numeric" min="0" [attr.max]="effectivePayable()"
+                             class="pf-adv__input" [value]="advance()"
+                             (input)="setAdvance(asInput($event))" placeholder="0"/>
+                    </div>
+                    <div class="pf-adv__tenders">
+                      @for (t of advanceModes; track t.id) {
+                        <button type="button" class="pf-adv__tender"
+                                [class.pf-adv__tender--on]="advanceMode() === t.id"
+                                (click)="setAdvanceMode(t.id)">{{ t.label }}</button>
+                      }
+                    </div>
+                    @if (advanceNum() > 0) {
+                      <p class="pf-adv__hint">Collect <strong>{{ advanceNum() | inr }}</strong> now · <strong>{{ (effectivePayable() - advanceNum()) | inr }}</strong> stays outstanding</p>
+                    } @else {
+                      <p class="pf-adv__hint pf-adv__hint--muted">No advance — the full {{ effectivePayable() | inr }} is due on the report.</p>
+                    }
+                  </div>
+                }
+                @if (mode() === 'split') {
+                  <label class="pf-ref-row mt-6">
+                    <span>Reference no.</span>
+                    <input type="text"
+                           [value]="referenceNo()"
+                           (input)="setReferenceNo(asInput($event))"
+                           placeholder="UTR / transaction id"
+                           class="pf-ref-input"/>
+                  </label>
+                }
+              </div>
+            }
+          }
+          </div>
+
+          <pf-touch-btn size="md" variant="primary" [full]="true"
+                        (pressed)="confirm()"
+                        [disabled]="saving() || !canConfirm()"
+                        class="mt-3 block pf-bill-confirm">
+            <span icon-left>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m5 12 4 4L19 6"/>
+              </svg>
+            </span>
+            @if (paid()) { Payment received · {{ effectivePayable() | inr }} }
+            @else if (mode() === 'later') {
+              @if (advanceNum() > 0) { Collect advance · {{ advanceNum() | inr }} }
+              @else { Mark as pay-later · {{ effectivePayable() | inr }} }
+            }
+            @else { Confirm payment · {{ effectivePayable() | inr }} }
+          </pf-touch-btn>
+        </pf-tile>
+      </div>
+
+    </div>
+  } @else {
+    <pf-tile tone="default" padding="xl" class="block">
+      <div class="flex justify-center py-8">
+        <pf-loading-logo size="xl" color="purple" [showDna]="true"
+                         [showText]="true" text="Generating bill…"></pf-loading-logo>
+      </div>
+    </pf-tile>
+  }
+</section>
+
+<!-- ── Post-payment options dialog ─────────────────────────
+     Opens when payment is successfully collected. Reception picks
+     what to do next: print the invoice, send it via WhatsApp, or
+     finish (which routes to the post-payment / sample-collection
+     flow). The pf-no-print class hides it during printing. -->
+@if (paymentDoneOpen()) {
+  <div class="pf-pay-modal pf-no-print" [class.pf-pay-modal--inline]="embedded" role="dialog" aria-modal="true" aria-label="Payment collected">
+    @if (!embedded) {
+      <div class="pf-pay-modal__backdrop" (click)="closePaymentDoneDialog()"></div>
+    }
+    <div class="pf-pay-modal__shell">
+      <div class="pf-pay-modal__icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12l5 5L20 7"/>
+        </svg>
+      </div>
+      <h2>Payment received</h2>
+      <p class="pf-pay-modal__sub">{{ invoiceNumber() }} · {{ effectivePayable() | inr }}</p>
+
+      <div class="pf-pay-modal__actions">
+        <button type="button" class="pf-pay-modal__btn" (click)="printInvoice()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
+          </svg>
+          Print invoice
+        </button>
+        <button type="button" class="pf-pay-modal__btn" (click)="sendOnWhatsApp()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.95.51 3.85 1.48 5.53L2 22l4.7-1.55a9.93 9.93 0 0 0 5.34 1.55h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.02A9.94 9.94 0 0 0 12.04 2zm5.43 13.99c-.23.65-1.34 1.24-1.86 1.32-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.64-.62-2.89-1.31-4.78-4.43-4.92-4.63-.14-.2-1.18-1.62-1.18-3.08 0-1.46.77-2.18 1.04-2.48.27-.3.59-.37.78-.37.2 0 .39.01.56.01.18 0 .42-.07.66.5.23.59.79 2.05.86 2.2.07.14.12.31.02.51-.1.2-.15.31-.29.49-.14.18-.3.4-.43.54-.14.14-.29.31-.13.6.16.3.72 1.18 1.55 1.92 1.07.95 1.97 1.25 2.27 1.4.3.14.47.12.65-.07.18-.2.74-.86.93-1.16.2-.3.39-.25.66-.15.27.1 1.74.82 2.04.97.3.14.5.22.57.34.07.13.07.74-.16 1.39z"/>
+          </svg>
+          Send on WhatsApp
+        </button>
+        <button type="button" class="pf-pay-modal__btn pf-pay-modal__btn--primary" (click)="finishAfterPayment()">
+          Done
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14m-5-6 6 6-6 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+}
