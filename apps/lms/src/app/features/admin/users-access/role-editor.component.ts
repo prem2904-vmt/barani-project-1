@@ -27,6 +27,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       <pf-screen-header
         eyebrow="Admin · Roles"
         [title]="heading()"
+        parentRoute="/admin/users?tab=roles"
         [subtitle]="subtitle()">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}

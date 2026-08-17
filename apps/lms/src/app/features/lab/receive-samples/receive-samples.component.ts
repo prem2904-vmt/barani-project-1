@@ -48,6 +48,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           <pf-screen-header
             eyebrow="Lab intake"
             title="Receive samples"
+            parentRoute="/lab/my-work"
             subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
             <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
               <span icon-left aria-hidden="true">

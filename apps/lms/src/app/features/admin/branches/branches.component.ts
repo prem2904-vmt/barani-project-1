@@ -38,6 +38,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       <pf-screen-header
         eyebrow="Admin"
         title="Branches & Departments"
+        parentRoute="/admin"
         subtitle="Manage collection sites, sub-branches, and their lab departments.">
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewBranch()">
           <span icon-left aria-hidden="true">

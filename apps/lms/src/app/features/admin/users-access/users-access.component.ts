@@ -1,16 +1,25 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import {
+  AllCommunityModule,
+  ColDef,
+  GridApi,
+  ICellRendererParams,
+  ModuleRegistry,
+  colorSchemeDark,
+  colorSchemeLight,
+  themeQuartz,
+} from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
@@ -18,19 +27,37 @@ import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 
+ModuleRegistry.registerModules([AllCommunityModule]);
+
 type Tab = 'users' | 'roles';
+
+const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
+  fontFamily: 'Inter, system-ui, sans-serif',
+  fontSize: 13,
+  rowHeight: 52,
+  headerHeight: 40,
+  borderRadius: 12,
+  accentColor: '#7c3aed',
+});
+
+const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
+  fontFamily: 'Inter, system-ui, sans-serif',
+  fontSize: 13,
+  rowHeight: 52,
+  headerHeight: 40,
+  borderRadius: 12,
+  accentColor: '#a855f7',
+});
 
 @Component({
   selector: 'pf-users-access',
   standalone: true,
   imports: [
     FormsModule,
-    AvatarComponent,
-    ChipComponent,
+    AgGridAngular,
     ScreenHeaderComponent,
     SegmentedComponent,
-    TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -38,6 +65,7 @@ type Tab = 'users' | 'roles';
       <pf-screen-header
         eyebrow="Admin"
         title="Users & Access"
+        parentRoute="/admin"
         subtitle="Create users, assign roles, and control permissions across your branches.">
         @if (tab() === 'users') {
           <pf-touch-btn actions size="sm" variant="primary" (pressed)="openInvite()">
@@ -62,179 +90,62 @@ type Tab = 'users' | 'roles';
         }
       </pf-screen-header>
 
-      <div class="mb-5 pf-tabbar">
-        <pf-segmented
-          [options]="tabOptions"
-          [value]="tab()"
-          size="md"
-          (valueChange)="setTab($event)">
-        </pf-segmented>
+      <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div class="pf-tabbar">
+          <pf-segmented
+            [options]="tabOptions"
+            [value]="tab()"
+            size="md"
+            (valueChange)="setTab($event)">
+          </pf-segmented>
+        </div>
+
+        <div class="flex items-center gap-3 ml-auto">
+          <span class="text-[12px] font-mono" style="color: var(--text-muted);">
+            @if (tab() === 'users') {
+              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
+            } @else {
+              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+            }
+          </span>
+          <input type="text" class="pf-input w-64" placeholder="Search name or username…"
+                 [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+        </div>
       </div>
 
       @if (tab() === 'users') {
-        <div class="mb-4">
-          <input type="text" class="pf-input max-w-md" placeholder="Search name or username…"
-                 [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+        <div class="w-full h-[calc(100vh-240px)] min-h-[420px] rounded-2xl overflow-hidden border shadow-sm"
+             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          <ag-grid-angular
+            style="width: 100%; height: 100%;"
+            [class]="gridTheme()"
+            [rowData]="filteredUsers()"
+            [columnDefs]="userColDefs()"
+            [context]="gridContext"
+            [animateRows]="true"
+            [rowSelection]="'single'">
+          </ag-grid-angular>
         </div>
-
-        @if (filteredUsers().length === 0) {
-          <pf-tile tone="default" padding="xl">
-            <div class="text-center py-6">
-              <p class="text-[14px]" style="color: var(--text-secondary);">No users found.</p>
-            </div>
-          </pf-tile>
-        } @else {
-          <div class="space-y-2.5">
-            @for (u of filteredUsers(); track u.id) {
-              <pf-tile [tone]="u.isActive ? 'default' : 'default'" padding="md">
-                <div class="flex items-center gap-3 flex-wrap md:flex-nowrap pf-user-row">
-                  <pf-avatar [name]="u.displayName" [size]="44"></pf-avatar>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ u.displayName }}</p>
-                      @if (u.isActive) {
-                        <pf-chip tone="emerald" size="sm">Active</pf-chip>
-                      } @else {
-                        <pf-chip tone="default" size="sm">Inactive</pf-chip>
-                      }
-                    </div>
-                    <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
-                      {{ u.username || u.email || 'no login' }} · {{ u.phone || 'no phone' }}
-                    </p>
-                  </div>
-                  <div class="pf-row-actions">
-                    @if (u.isActive) {
-                      @if (canCall(u) && u.authId) {
-                        <pf-touch-btn size="sm" variant="ghost"
-                                      [disabled]="!isOnline(u.authId)"
-                                      [title]="isOnline(u.authId) ? 'Voice call ' + u.displayName : u.displayName + ' is offline'"
-                                      (pressed)="callUser(u)">
-                          <span icon-left aria-hidden="true">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
-                            </svg>
-                          </span>
-                          Call
-                        </pf-touch-btn>
-                      }
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="editUser(u)">Edit</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="resetPassword(u)">Reset password</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivate(u)">Deactivate</pf-touch-btn>
-                    } @else {
-                      <pf-touch-btn size="sm" variant="secondary" (pressed)="reactivate(u)">Reactivate</pf-touch-btn>
-                    }
-                  </div>
-                </div>
-              </pf-tile>
-            }
-          </div>
-        }
       } @else {
-        <div class="mb-4 text-[12px] font-mono" style="color: var(--text-muted);">
-          {{ roles().length }} roles configured
-        </div>
-
-        <div class="space-y-2.5">
-          @for (r of roles(); track r.id) {
-            <pf-tile [tone]="r.isPreSeeded ? 'violet' : 'default'" padding="md">
-              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap pf-role-row">
-                <div class="pf-role-badge" [class.pf-role-seeded]="r.isPreSeeded">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 7h-9"/>
-                    <path d="M14 17H5"/>
-                    <circle cx="17" cy="17" r="3"/>
-                    <circle cx="7" cy="7" r="3"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ r.name }}</p>
-                    @if (r.isPreSeeded) {
-                      <pf-chip tone="violet" size="sm">Pre-seeded</pf-chip>
-                    } @else {
-                      <pf-chip tone="emerald" size="sm">Custom</pf-chip>
-                    }
-                  </div>
-                  <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
-                    Scope: {{ r.scope }}
-                  </p>
-                </div>
-                <div class="pf-row-actions">
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="openRole(r)">Manage permissions</pf-touch-btn>
-                </div>
-              </div>
-            </pf-tile>
-          }
+        <div class="w-full h-[calc(100vh-240px)] min-h-[420px] rounded-2xl overflow-hidden border shadow-sm"
+             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          <ag-grid-angular
+            style="width: 100%; height: 100%;"
+            [class]="gridTheme()"
+            [rowData]="filteredRoles()"
+            [columnDefs]="roleColDefs()"
+            [context]="gridContext"
+            [animateRows]="true"
+            [rowSelection]="'single'">
+          </ag-grid-angular>
         </div>
       }
     </section>
   `,
   styles: [`
-    .pf-role-badge {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      flex-shrink: 0;
-    }
-    .pf-role-seeded {
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(168, 85, 247, 0.1));
-      border-color: rgba(168, 85, 247, 0.35);
-      color: var(--violet-text);
-    }
-
-    /* The action wrapper is transparent to layout by default so desktop/iPad
-       rows render byte-identically (buttons stay direct flex children of the
-       row via display:contents). Only the phone block below turns it into a
-       real flex cluster. */
-    .pf-row-actions { display: contents; }
-
-    /* ── Phone (<=640): additive, scoped to this page only ─────────────
-       Desktop/iPad layout is left byte-for-byte unchanged. */
     @media (max-width: 640px) {
-      /* Search field: 16px min font-size stops iOS focus-zoom. Scoped to
-         this page's search input only — the shared .pf-input primitive is
-         not touched (raised globally would be a styles.scss change). */
-      :host input.pf-input {
-        font-size: 16px;
-      }
-      /* The search input keeps Tailwind's max-w-md on desktop; on phone let
-         it span the row so the field stays comfortably tappable/legible. */
-      :host input.pf-input.max-w-md {
-        max-width: 100%;
-      }
-
-      /* User / role rows wrap on phone (Tailwind flex-wrap). When the action
-         cluster wraps to its own line, make it span the full width and align
-         right so the buttons sit under the text instead of crowding the
-         avatar/badge. Buttons share the row and stay >=44px (sz-sm). */
-      :host .pf-row-actions {
-        width: 100%;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-      /* pf-touch-btn host is inline-block with an internal width:100% button;
-         let each chip size to its label and never overflow the row. */
-      :host .pf-row-actions pf-touch-btn {
-        flex: 0 1 auto;
-        min-width: 0;
-        max-width: 100%;
-      }
-
-      /* The segmented tab bar can be wider than a small phone; let it scroll
-         horizontally on its own rather than pushing the page sideways. */
-      :host .pf-tabbar {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
+      :host input.pf-input { font-size: 16px; }
+      :host .pf-tabbar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
   `]
 })
@@ -243,12 +154,15 @@ export class UsersAccessComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly theme = inject(ThemeService);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
   private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
+
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
   /** Returns true if calling this user makes sense: the Messages module is in
    *  the plan (calls are part of it), the user is active, and not yourself. */
@@ -268,9 +182,6 @@ export class UsersAccessComponent implements OnInit {
       return;
     }
     try {
-      // SignalR addresses users by Supabase sub (== UserEntity.AuthId), not
-      // the prefrontal UserEntity.Id. SubClaimUserIdProvider on the server
-      // registers each connection under its sub claim, so this id matches.
       await this.webrtc.startCall(u.authId, 'admin_internal');
       this.toasts.info(`Ringing ${u.displayName}…`);
     } catch (err) {
@@ -300,6 +211,261 @@ export class UsersAccessComponent implements OnInit {
       : this._users();
   });
 
+  readonly filteredRoles = computed(() => {
+    const s = this._search().toLowerCase();
+    return s
+      ? this._roles().filter(r => r.name.toLowerCase().includes(s) || (r.scope ?? '').toLowerCase().includes(s))
+      : this._roles();
+  });
+
+  private userCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;min-width:0;gap:10px;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    const name = u.displayName || u.firstName || u.username || 'User';
+
+    const avatar = document.createElement('div');
+    avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg, #7c3aed, #a855f7);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;box-shadow:0 2px 6px rgba(124,58,237,0.25);';
+    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    avatar.textContent = initials;
+    wrap.appendChild(avatar);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-weight:600;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.textContent = name;
+    wrap.appendChild(nameSpan);
+
+    return wrap;
+  };
+
+  private userStatusCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    const label = document.createElement('label');
+    label.style.cssText = 'position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!u.isActive;
+    input.style.cssText = 'opacity:0;width:0;height:0;margin:0;';
+
+    const slider = document.createElement('span');
+    slider.style.cssText = `position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:${u.isActive ? '#10b981' : '#9ca3af'};transition:.2s;border-radius:20px;`;
+
+    const dot = document.createElement('span');
+    dot.style.cssText = `position:absolute;content:"";height:14px;width:14px;left:${u.isActive ? '18px' : '3px'};bottom:3px;background-color:white;transition:.2s;border-radius:50%;`;
+
+    slider.appendChild(dot);
+    label.appendChild(input);
+    label.appendChild(slider);
+
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const ctx = params.context as { toggleActive?: (u: User) => void };
+      ctx?.toggleActive?.(u);
+    });
+
+    wrap.appendChild(label);
+    return wrap;
+  };
+
+  private userActionsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    const ctx = params.context as {
+      canCall?: (u: User) => boolean;
+      isOnline?: (authId: string) => boolean;
+      callUser?: (u: User) => void;
+      editUser?: (u: User) => void;
+      resetPassword?: (u: User) => void;
+    };
+
+    if (u.isActive && ctx?.canCall?.(u) && u.authId) {
+      const online = ctx?.isOnline?.(u.authId);
+      const callBtn = document.createElement('button');
+      callBtn.type = 'button';
+      callBtn.style.cssText = `padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:${online ? 'pointer' : 'not-allowed'};color:${online ? '#7c3aed' : 'var(--text-muted)'};display:inline-flex;align-items:center;gap:4px;`;
+      callBtn.disabled = !online;
+      callBtn.title = online ? `Voice call ${u.displayName}` : `${u.displayName} is offline`;
+      callBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg> Call`;
+      callBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx.callUser?.(u); });
+      wrap.appendChild(callBtn);
+    }
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.editUser?.(u); });
+    wrap.appendChild(editBtn);
+
+    const pwdBtn = document.createElement('button');
+    pwdBtn.type = 'button';
+    pwdBtn.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);';
+    pwdBtn.textContent = 'Reset password';
+    pwdBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.resetPassword?.(u); });
+    wrap.appendChild(pwdBtn);
+
+    return wrap;
+  };
+
+  private roleTypeCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
+    if (!params.data) return wrap;
+
+    const r = params.data;
+    const badge = document.createElement('span');
+    if (r.isPreSeeded) {
+      badge.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);color:#7c3aed;line-height:1.2;';
+      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:#7c3aed;display:inline-block;flex-shrink:0;"></span>Pre-seeded';
+    } else {
+      badge.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#059669;line-height:1.2;';
+      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;flex-shrink:0;"></span>Custom';
+    }
+    wrap.appendChild(badge);
+    return wrap;
+  };
+
+  private roleScopeCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;font-size:13px;color:var(--text-secondary);font-weight:500;';
+    if (!params.data) return wrap;
+
+    const scope = params.data.scope;
+    const label = scope ? scope.charAt(0).toUpperCase() + scope.slice(1) : 'Tenant';
+    wrap.textContent = label;
+    return wrap;
+  };
+
+  private roleActionsCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;justify-content:flex-end;width:100%;';
+    if (!params.data) return wrap;
+
+    const r = params.data;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'padding:4px 12px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid var(--border-color, #e5e7eb);background:var(--bg-card);cursor:pointer;color:var(--text-primary);';
+    btn.textContent = 'Manage permissions';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ctx = params.context as { openRole?: (r: Role) => void };
+      ctx?.openRole?.(r);
+    });
+    wrap.appendChild(btn);
+    return wrap;
+  };
+
+  readonly userColDefs = computed<ColDef<User>[]>(() => [
+    {
+      headerName: 'User',
+      colId: 'displayName',
+      field: 'displayName',
+      cellRenderer: this.userCellRenderer,
+      flex: 1.2,
+      minWidth: 220,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Username / Email',
+      colId: 'username',
+      valueGetter: p => p.data?.username || p.data?.email || 'no login',
+      flex: 1,
+      minWidth: 180,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Phone',
+      colId: 'phone',
+      valueGetter: p => p.data?.phone || 'no phone',
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Status',
+      colId: 'status',
+      field: 'isActive',
+      cellRenderer: this.userStatusCellRenderer,
+      width: 100,
+      sortable: true,
+      filter: false,
+    },
+    {
+      headerName: '',
+      colId: 'actions',
+      cellRenderer: this.userActionsCellRenderer,
+      minWidth: 280,
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ]);
+
+  readonly roleColDefs = computed<ColDef<Role>[]>(() => [
+    {
+      headerName: 'Role Name',
+      colId: 'name',
+      field: 'name',
+      flex: 1,
+      minWidth: 200,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Type',
+      colId: 'isPreSeeded',
+      field: 'isPreSeeded',
+      cellRenderer: this.roleTypeCellRenderer,
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Scope',
+      colId: 'scope',
+      field: 'scope',
+      cellRenderer: this.roleScopeCellRenderer,
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: '',
+      colId: 'actions',
+      cellRenderer: this.roleActionsCellRenderer,
+      width: 180,
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ]);
+
+  readonly gridContext = {
+    canCall: (u: User) => this.canCall(u),
+    isOnline: (authId: string) => this.isOnline(authId),
+    callUser: (u: User) => this.callUser(u),
+    editUser: (u: User) => this.editUser(u),
+    resetPassword: (u: User) => this.resetPassword(u),
+    deactivate: (u: User) => this.deactivate(u),
+    reactivate: (u: User) => this.reactivate(u),
+    toggleActive: (u: User) => this.toggleUserActive(u),
+    openRole: (r: Role) => this.openRole(r),
+  };
+
   ngOnInit() {
     this.route.queryParams.subscribe(params => {
       if (params['tab'] === 'roles' || params['tab'] === 'users') {
@@ -309,9 +475,6 @@ export class UsersAccessComponent implements OnInit {
 
     this.api.get<User[]>('/api/users/').subscribe({ next: l => {
       this._users.set(l ?? []);
-      // The users list carries each user's persisted presenceStatus —
-      // seed the presence map so people lists show statuses set before
-      // this session's SignalR connection existed.
       this.presence.seedFromUsers(l ?? []);
     } });
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
@@ -332,6 +495,14 @@ export class UsersAccessComponent implements OnInit {
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
   openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
   editUser(u: User) { this.router.navigate(['/admin/users', u.id, 'edit']); }
+
+  toggleUserActive(u: User) {
+    if (u.isActive) {
+      this.deactivate(u);
+    } else {
+      this.reactivate(u);
+    }
+  }
 
   async reactivate(u: User) {
     const ok = await this.dialog.confirm({
@@ -356,8 +527,6 @@ export class UsersAccessComponent implements OnInit {
       confirmLabel: 'Reset password',
     });
     if (!ok) return;
-    // Readable temp password that satisfies the 8+ char policy; the user is
-    // forced to change it on first login (MustChangePassword set server-side).
     const temp = 'Pf-' + Math.random().toString(36).slice(2, 8) + Math.floor(10 + Math.random() * 89);
     this.api.post(`/api/users/${u.id}/reset-password`, { newPassword: temp }).subscribe({
       next: () => {
@@ -372,8 +541,6 @@ export class UsersAccessComponent implements OnInit {
   }
 
   async deactivate(u: User) {
-    // Destructive, one-click, no undo path in the UI — confirm first (same
-    // pattern as the data-wipe tile).
     const ok = await this.dialog.confirm({
       title: `Deactivate ${u.displayName || u.firstName || 'this user'}?`,
       message: 'They lose access immediately. Their history and assignments are kept.',

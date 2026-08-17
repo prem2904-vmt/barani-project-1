@@ -19,6 +19,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       <pf-screen-header
         eyebrow="Admin"
         title="Organization & Identity"
+        parentRoute="/admin"
         subtitle="Patient ID format and tenant data tools.">
       </pf-screen-header>
 

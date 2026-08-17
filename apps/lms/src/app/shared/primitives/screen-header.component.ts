@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input, inject } from "@angular/core";
+import { Router } from "@angular/router";
 import { NavBackService } from "../../core/services/nav-back.service";
 
 @Component({
@@ -38,11 +39,11 @@ import { NavBackService } from "../../core/services/nav-back.service";
          column if there are many). This restores the inline layout on phone —
          the icons sit beside the title, not on a new line below it. -->
     <header class="flex flex-row items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
-      @if (navBack.showBack() && !noBack) {
+      @if ((parentRoute || navBack.showBack()) && !noBack) {
         <button
           type="button"
           class="pf-hdr-back shrink-0 inline-flex items-center justify-center"
-          (click)="navBack.back()"
+          (click)="onBack()"
           aria-label="Go back"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -90,14 +91,24 @@ import { NavBackService } from "../../core/services/nav-back.service";
 })
 export class ScreenHeaderComponent {
   protected readonly navBack = inject(NavBackService);
+  private readonly router = inject(Router);
 
   @Input() eyebrow: string | null = null;
   @Input() title: string | null = null;
   @Input() subtitle: string | null = null;
+  @Input() parentRoute: string | null = null;
 
   /** Force-hide the back chevron even on a secondary route (rare — for a
    *  screen that is logically a root but doesn't sit on the primary nav). */
   @Input() noBack = false;
+
+  protected onBack(): void {
+    if (this.parentRoute) {
+      void this.router.navigateByUrl(this.parentRoute);
+    } else {
+      this.navBack.back();
+    }
+  }
 
   /**
    * The default slot takes priority — consumers can project rich HTML for the title

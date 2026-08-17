@@ -47,6 +47,7 @@ interface CreateForm {
       <pf-screen-header
         eyebrow="Admin · Users"
         title="Create user"
+        parentRoute="/admin/users?tab=users"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
