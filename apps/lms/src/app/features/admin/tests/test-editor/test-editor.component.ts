@@ -1222,7 +1222,10 @@ export class TestEditorComponent implements OnInit {
     for (const k of Object.keys(p)) this.clearFieldError(k);
   }
 
-  back() { this.router.navigateByUrl('/admin/tests'); }
+  back() {
+    const t = this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual';
+    this.router.navigate(['/admin/tests'], { queryParams: { type: t } });
+  }
 
   saveTest() {
     const d = this._draft();

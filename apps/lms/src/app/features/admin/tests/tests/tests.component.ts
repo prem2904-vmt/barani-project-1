@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { TubeColorEditorComponent } from '../tube-color-editor.component';
 import { PfSelectOption } from '../../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import {
   AllCommunityModule,
@@ -120,6 +120,7 @@ export type TestRow = Test & {
 export class TestsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(ToastService);
   private readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
@@ -636,6 +637,12 @@ export class TestsComponent implements OnInit {
   };
 
   ngOnInit() {
+    this.route.queryParams.subscribe(params => {
+      const t = params['type'];
+      if (t === 'individual' || t === 'profile' || t === 'package') {
+        this._type.set(t);
+      }
+    });
     this.loadTests();
     this.loadDepartments();
   }
@@ -647,6 +654,12 @@ export class TestsComponent implements OnInit {
   setType(t: TestType) {
     this._type.set(t);
     this._selectedDept.set(null);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { type: t },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
   }
 
   selectDept(key: string | null) {
@@ -771,7 +784,7 @@ export class TestsComponent implements OnInit {
   }
 
   editTest(id: string) {
-    this.router.navigate(['/admin/tests', id, 'edit']);
+    this.router.navigate(['/admin/tests', id, 'edit'], { queryParams: { type: this._type() } });
   }
 
   openCreate() {
