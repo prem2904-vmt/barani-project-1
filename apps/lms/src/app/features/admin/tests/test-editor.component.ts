@@ -3098,12 +3098,35 @@ export class TestEditorComponent implements OnInit {
     });
   }
 
+  /** Option-code series (URO…, RES…, SMO…) span MANY tests — URO001–007 is
+   *  urine colour, URO008–011 urine appearance, and so on. A new row must
+   *  take the next number unused ANYWHERE in the catalogue, not just in this
+   *  test, or it would collide with another test's code. Scans every loaded
+   *  test's parameters plus the rows being edited. */
   private nextOptionCode(rows: TestOptionRow[]): string | null {
+    let prefix: string | null = null;
+    let width = 3;
     for (let ix = rows.length - 1; ix >= 0; ix--) {
       const m = /^([A-Za-z]+)(\d+)$/.exec((rows[ix].code ?? '').trim());
-      if (m) return m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0');
+      if (m) { prefix = m[1].toUpperCase(); width = m[2].length; break; }
     }
-    return null;
+    if (!prefix) return null;
+
+    let max = 0;
+    const scan = (code: string | null | undefined) => {
+      const m = /^([A-Za-z]+)(\d+)$/.exec((code ?? '').trim());
+      if (m && m[1].toUpperCase() === prefix) max = Math.max(max, Number(m[2]));
+    };
+    for (const r of rows) scan(r.code);
+    const re = new RegExp('"code"\\s*:\\s*"(' + prefix + '\\d+)"', 'gi');
+    const harvest = (t: Test) => {
+      const params = (t as unknown as { parameters?: unknown }).parameters;
+      const raw = typeof params === 'string' ? params : JSON.stringify(params ?? '');
+      for (const m of raw.matchAll(re)) scan(m[1]);
+    };
+    for (const t of this._allIndividualTests()) harvest(t);
+    for (const t of this._allProfiles?.() ?? []) harvest(t);
+    return prefix + String(max + 1).padStart(width, '0');
   }
 
   private fieldToLegacy(f: FormField): TestParameter {
