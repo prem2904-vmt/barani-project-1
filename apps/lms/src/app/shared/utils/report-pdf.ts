@@ -1690,7 +1690,6 @@ function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void
  * from the full text, so nothing shifts) and repaint it line by line.
  */
 type QualCell = { lines: string[]; styles: Record<string, unknown> };
-const QUAL_SCALE = 0.82;   // qualifier size, relative to the range's own size
 
 function stashQualifiedRangeCell(
   store: Map<string, QualCell>, d: CellHookArg, rangeColIdx: number
@@ -1715,20 +1714,20 @@ function drawQualifiedRangeCell(
   // Vertically centre the whole stack in the cell autotable already sized.
   let y = d.cell.y + (d.cell.height - lh * q.lines.length) / 2 + fs * 0.9;
 
-  q.lines.forEach((line, i) => {
-    const qualifier = i > 0;
+  // Every line is an EQUAL tier from the source sheet (owner's order
+  // 2026-08-17: print the references as authored, aligned) — same size,
+  // same left edge, uniformly dim. The old first-line-bigger treatment was
+  // for "matched value + qualifier" pairs, which no longer print.
+  q.lines.forEach(line => {
     doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(qualifier ? fs * QUAL_SCALE : fs);
-    // Uniformly dim — the first band used to print full black, which read
-    // as bold next to the single-band cells' grey (owner: no emphasis in
-    // the reference column).
+    doc.setFontSize(fs);
     doc.setTextColor(TEXT_DIM);
     if (hasSuperscript(line)) {
-      drawTextWithSuperscripts(doc, line, d.cell.x + padL, y, qualifier ? fs * QUAL_SCALE : fs);
+      drawTextWithSuperscripts(doc, line, d.cell.x + padL, y, fs);
     } else {
       doc.text(line, d.cell.x + padL, y);
     }
-    y += qualifier ? lh * QUAL_SCALE : lh;
+    y += lh;
   });
   doc.setFontSize(fs);
   doc.setTextColor(BLACK);
