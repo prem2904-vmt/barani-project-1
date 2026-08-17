@@ -44,6 +44,7 @@ interface EditForm {
       <pf-screen-header
         eyebrow="Admin · Users"
         [title]="'Edit ' + (loadedName() || 'user')"
+        parentRoute="/admin/users?tab=users"
         subtitle="Update the user's details, roles and branch scope.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}

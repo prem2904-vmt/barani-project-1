@@ -898,6 +898,8 @@ export class TestEditorComponent implements OnInit {
       : 'Define what the lab collects, how it\'s priced, and the parameters captured.'
   );
 
+  readonly parentRoute = computed(() => '/admin/tests?type=' + (this.draft().type || 'individual'));
+
   ngOnInit() {
     void this.optionTables.ensureLoaded();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
