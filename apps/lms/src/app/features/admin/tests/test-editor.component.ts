@@ -3018,7 +3018,9 @@ export class TestEditorComponent implements OnInit {
     return {
       id: p.id || newFieldId(),
       name: p.name,
-      label: p.title,
+      // Catalogue parameters often carry only `name`; falling back keeps the
+      // editor from titling every seeded dropdown "Untitled parameter".
+      label: p.title || p.name,
       type,
       order,
       isRequired: false,
