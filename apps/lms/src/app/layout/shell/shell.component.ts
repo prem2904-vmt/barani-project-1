@@ -484,13 +484,21 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
 
-  /** A scanned order QR / barcode → resolve to an order and open it. The
-   *  backend strips the id out of a full /o/{id} or /track/{token} URL. */
+  /** A scanned QR / barcode → open what it points at. Patient ID cards
+   *  encode the app's /p/{id} route and order QRs /o/{id} — those resolve
+   *  LOCALLY; everything else goes to the order resolver (which also strips
+   *  ids out of /track/{token} URLs). The old version sent every scan to the
+   *  ORDER resolver, so patient ID cards did nothing, silently (OPS-50). */
   onScanOrder(code: string) {
     this.scan.close();
+    const app = /\/(p|o)\/([0-9a-f]{8}-[0-9a-f-]{27,})/i.exec(code);
+    if (app) {
+      this.router.navigate([`/${app[1].toLowerCase()}`, app[2]]);
+      return;
+    }
     this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
       next: r => { if (r?.orderId) this.router.navigate(['/o', r.orderId]); },
-      error: () => { /* no match — silently ignore */ }
+      error: () => this.toasts.warning('Scanned code not recognized — try the order QR or the patient ID card.')
     });
   }
   private readonly signaling = inject(SignalingService);

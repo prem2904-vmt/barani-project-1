@@ -32,6 +32,18 @@ export interface Order {
   samples: OrderSample[];
 }
 
+/** Sibling tube of the same order (annotated by /api/samples/{id}/tests) —
+ *  feeds the entry screen's "Also in this order" rail so multi-tube orders
+ *  (FBS + PPBS) never look like "only the last test is available". */
+export interface SampleSibling {
+  id: string;
+  barcode?: string | null;
+  status?: string | null;
+  repeatOffsetMin?: number | null;
+  tests: string[];
+  hasOpenWork?: boolean;
+}
+
 export interface OrderSample {
   id: string;
   orderId: string;
@@ -70,7 +82,9 @@ export interface OrderSample {
   createdAt: string;
   department?: Department;
   tests: OrderTest[];
-  order?: Order;
+  order?: Order;  /** Other tubes of the same order (see SampleSibling). */
+  siblings?: SampleSibling[] | null;
+
 }
 
 export interface OrderTest {

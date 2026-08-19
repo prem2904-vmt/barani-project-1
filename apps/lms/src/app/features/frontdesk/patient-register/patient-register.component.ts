@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import {
@@ -130,6 +131,7 @@ import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValu
 })
 export class PatientRegisterComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly dialog = inject(DialogService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -362,6 +364,9 @@ export class PatientRegisterComponent implements OnInit {
     }
 
     this.applyHybridDob(body);
+    // Duplicate-confirmation retry: carry the force flag to the API even
+    // though it is not a form field.
+    if ((values as Record<string, unknown>)['force'] === true) body['force'] = true;
     this._saving.set(true);
 
     const pid = this.patientId();
@@ -381,23 +386,50 @@ export class PatientRegisterComponent implements OnInit {
     } else {
       this.api.post<Patient>('/api/patients/', body).subscribe({
         next: patient => {
-          this._saving.set(false);
           this.toasts.success(`Registered ${patient.displayName}`);
           this.values.set({});
-          if (target === 'order') {
-            this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } });
-          } else if (target === 'appointment') {
-            this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } });
-          } else {
-            this.router.navigate(['/frontdesk/patients', patient.id]);
-          }
+          // Navigation must never fail SILENTLY: four duplicates of one
+          // patient were created by re-clicking a form that looked dead
+          // (OPS-49). A guard-blocked or crashed navigation now says so,
+          // and the button stays disabled until the navigation settles.
+          const nav = target === 'order'
+            ? this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } })
+            : target === 'appointment'
+              ? this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } })
+              : this.router.navigate(['/frontdesk/patients', patient.id]);
+          nav.then(ok => {
+            this._saving.set(false);
+            if (!ok) this.toasts.warning(
+              `${patient.displayName} is registered (${patient.mrn ?? 'see search'}) — but the next page could not open. Find them via patient search.`, 8000);
+          }).catch(() => {
+            this._saving.set(false);
+            this.toasts.warning(
+              `${patient.displayName} is registered — but the next page failed to open. Find them via patient search.`, 8000);
+          });
         },
         error: e => {
           this._saving.set(false);
-          this.toasts.error(ApiError.from(e).message);
+          const err = ApiError.from(e);
+          if (err.code === 'duplicate_patient') {
+            void this.confirmDuplicate(err.message, values, target);
+            return;
+          }
+          this.toasts.error(err.message);
         }
       });
     }
+  }
+
+  /** OPS-49: same name + phone already registered — confirm before creating
+   *  a genuine namesake (retries with force=true). */
+  private async confirmDuplicate(message: string, values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
+    const ok = await this.dialog.confirm({
+      title: 'Patient already registered?',
+      message,
+      tone: 'primary',
+    });
+    if (!ok) return;
+    this.savePatient({ ...values, force: true } as WorkflowFormValues, target);
   }
 
   private buildInitialValues(cfg: WorkflowConfig, p: Patient): WorkflowFormValues {

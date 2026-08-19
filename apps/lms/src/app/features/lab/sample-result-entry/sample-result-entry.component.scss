@@ -1504,3 +1504,27 @@
   color: var(--text-primary);
   font-size: 12.5px;
 }
+
+/* ── Sibling tubes of the same order (OPS-51) ─────────────────────── */
+.pf-sre__sibs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px;
+}
+.pf-sre__sibs-lbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.pf-sre__sib {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 1.2;
+  background: var(--surface-2, rgba(127,127,127,.12)); color: var(--text, inherit);
+  border: 1px solid transparent;
+}
+.pf-sre__sib:hover { border-color: var(--violet-500, #8b5cf6); }
+.pf-sre__sib--open { border-color: var(--violet-500, #8b5cf6); }
+.pf-sre__sib-code { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pf-sre__sib-tests {
+  color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+}
+.pf-sre__sib-dot {
+  width: 7px; height: 7px; border-radius: 999px; background: var(--violet-500, #8b5cf6); flex-shrink: 0;
+}

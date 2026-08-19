@@ -67,6 +67,24 @@
             }
           </div>
         }
+        <!-- Sibling tubes of the SAME order (FBS in one tube, PPBS in the
+             next): one tap hops to the other tube's entry screen, so a
+             multi-tube order never reads as "only the last test is here". -->
+        @if (s.siblings?.length) {
+          <div class="pf-sre__sibs">
+            <span class="pf-sre__sibs-lbl">Also in this order:</span>
+            @for (sb of s.siblings; track sb.id) {
+              <button type="button" class="pf-sre__sib"
+                      [class.pf-sre__sib--open]="sb.hasOpenWork"
+                      (click)="openSibling(sb.id)"
+                      [title]="sb.tests.join(', ')">
+                <span class="pf-sre__sib-code">{{ sb.barcode || 'Tube' }}</span>
+                <span class="pf-sre__sib-tests">{{ sb.tests.join(', ') }}</span>
+                @if (sb.hasOpenWork) { <span class="pf-sre__sib-dot"></span> }
+              </button>
+            }
+          </div>
+        }
       </div>
     }
     <!-- Signed-in technician (right of header): name + medical

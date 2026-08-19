@@ -1145,6 +1145,20 @@ export class SampleResultEntryComponent {
       this._loading.set(false);
       return;
     }
+    await this.load(id);
+  }
+
+  /** Switch to a sibling tube of the same order without leaving the screen —
+   *  the route param is snapshot-read, so update the URL and reload state
+   *  in place (OPS-51: FBS/PPBS live in different tubes of one order). */
+  async openSibling(id: string) {
+    await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
+    this._loading.set(true);
+    this._sample.set(null);
+    await this.load(id);
+  }
+
+  private async load(id: string) {
     this.draftKey = `pf-lms.sre-draft.${id}`;
     try {
       const sample = await firstValueFrom(
