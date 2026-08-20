@@ -136,3 +136,54 @@ export async function createOrder(
 
   return { orderId: order.id, patientId: patient.patientId };
 }
+
+export interface CollectedSample {
+  sampleId: string;
+  barcode: string;
+  orderId: string;
+}
+
+/**
+ * Collect the (single) sample on a just-placed order (extracted from
+ * collect.authed.spec.ts — see that spec for the deep-link-mode rationale).
+ * Deep-links straight into the order's collect drawer — the same
+ * navigation the app's own front-desk "Collect Sample" button performs
+ * (order-create.component.ts::collectPaidSample() → router.navigate(['/lab/
+ * collect'], { queryParams: { orderId, from } })) — which sidesteps the
+ * queue screen's camera-scanner requirement entirely (SampleCollection
+ * Component's deepLinkMode). Taps the pending vial, capturing the real
+ * `PATCH /api/samples/{id}/collect` response so callers get the
+ * server-assigned sample id + barcode (needed downstream for dispatch /
+ * receive / result-entry — stage 4). Leaves the browser sitting in the
+ * still-open collect drawer.
+ */
+export async function collectSample(page: Page, orderId: string): Promise<CollectedSample> {
+  await page.goto(`/lab/collect?orderId=${orderId}&from=/frontdesk`);
+
+  const drawer = page.locator('.pf-drawer__panel');
+  await expect(drawer).toBeVisible({ timeout: 15_000 });
+
+  // Exactly one tube (the single BIO108 test ordered), starting pending.
+  const tube = page.locator('.pf-tube');
+  await expect(tube).toHaveCount(1, { timeout: 10_000 });
+  await expect(tube).not.toHaveClass(/pf-tube--done/);
+
+  // Tap the vial — real state change: PATCH /api/samples/{id}/collect
+  // fires and must succeed server-side, not just flip the UI optimistically.
+  const [collectResponse] = await Promise.all([
+    page.waitForResponse(
+      r => /\/api\/samples\/[0-9a-f-]{36}\/collect$/i.test(r.url()) && r.request().method() === 'PATCH',
+    ),
+    tube.click(),
+  ]);
+  expect(collectResponse.ok()).toBe(true);
+  const sampleBody = await collectResponse.json();
+  const sample = sampleBody?.data ?? sampleBody;
+
+  // Real state change: the tube card flips to its collected look and the
+  // drawer's progress counter advances.
+  await expect(tube).toHaveClass(/pf-tube--done/);
+  await expect(page.locator('.pf-drawer__progress-num')).toHaveText('1/1');
+
+  return { sampleId: sample.id, barcode: sample.barcode ?? '', orderId };
+}
