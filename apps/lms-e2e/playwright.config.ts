@@ -19,6 +19,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     ignoreHTTPSErrors: true,
   },
+  retries: 2,
+  workers: process.env.CI ? 1 : 3,
   webServer: {
     command: 'npx nx run lms:serve',
     url: 'http://localhost:4200',

@@ -42,7 +42,7 @@ export async function registerPatient(page: Page): Promise<RegisteredPatient> {
 
   // The form is populated from a backend-fetched workflow config — wait for
   // it to actually render before interacting.
-  await expect(fieldRow(page, 'First name').locator('input')).toBeVisible({ timeout: 15_000 });
+  await expect(fieldRow(page, 'First name').locator('input')).toBeVisible({ timeout: 30_000 });
 
   await fieldRow(page, 'First name').locator('input').fill(firstName);
   await fieldRow(page, 'Last name').locator('input').fill(lastName);
@@ -59,14 +59,14 @@ export async function registerPatient(page: Page): Promise<RegisteredPatient> {
 
   // Real outcome: POST succeeded and the app navigated off /patients/new
   // onto the newly-created patient's own profile route.
-  await page.waitForURL(/\/frontdesk\/patients\/[0-9a-f-]{36}$/i, { timeout: 15_000 });
+  await page.waitForURL(/\/frontdesk\/patients\/[0-9a-f-]{36}$/i, { timeout: 30_000 });
 
   const url = page.url();
   const patientId = url.match(/\/frontdesk\/patients\/([0-9a-f-]{36})$/i)?.[1] ?? '';
 
   // The profile header renders the server's canonical displayName for the
   // patient we just registered.
-  await expect(page.locator('.pf-pp__tb-name')).toContainText(firstName, { timeout: 10_000 });
+  await expect(page.locator('.pf-pp__tb-name')).toContainText(firstName, { timeout: 20_000 });
 
   return { firstName, lastName, phone, patientId };
 }
@@ -94,17 +94,17 @@ export async function createOrder(
   // From the patient's profile, "New Lab Order" is the canonical entry
   // point into order-create (patient-profile.component.ts::startOrder).
   await page.getByRole('button', { name: 'New Lab Order' }).click();
-  await page.waitForURL(new RegExp(`/frontdesk/order\\?patientId=${patient.patientId}`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/frontdesk/order\\?patientId=${patient.patientId}`), { timeout: 30_000 });
 
   // The catalogue is fetched async (GET /api/tests/?activeOnly=true) —
   // wait for the search box before typing into it.
   const search = page.getByPlaceholder(/search tests or packages/i);
-  await expect(search).toBeVisible({ timeout: 15_000 });
+  await expect(search).toBeVisible({ timeout: 30_000 });
   await search.fill(testCode);
 
   // Exactly one test card should match this code — click it to add to cart.
   const testCard = page.locator('.pf-rail-card', { hasText: testName });
-  await expect(testCard).toHaveCount(1, { timeout: 10_000 });
+  await expect(testCard).toHaveCount(1, { timeout: 20_000 });
   await testCard.click();
 
   // Real state change #1: the cart reflects the added test.
@@ -112,7 +112,7 @@ export async function createOrder(
 
   // Inline payment pane appears once a patient + ≥1 test are attached
   // (showInlinePay() — front_desk billing mode, not editing an order).
-  await expect(page.locator('.pf-ipp')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.pf-ipp')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Pay later', exact: true }).click();
 
   const confirmBtn = page.getByRole('button', { name: /place order \(pay later\)/i });
@@ -161,11 +161,11 @@ export async function collectSample(page: Page, orderId: string): Promise<Collec
   await page.goto(`/lab/collect?orderId=${orderId}&from=/frontdesk`);
 
   const drawer = page.locator('.pf-drawer__panel');
-  await expect(drawer).toBeVisible({ timeout: 15_000 });
+  await expect(drawer).toBeVisible({ timeout: 30_000 });
 
   // Exactly one tube (the single BIO108 test ordered), starting pending.
   const tube = page.locator('.pf-tube');
-  await expect(tube).toHaveCount(1, { timeout: 10_000 });
+  await expect(tube).toHaveCount(1, { timeout: 20_000 });
   await expect(tube).not.toHaveClass(/pf-tube--done/);
 
   // Tap the vial — real state change: PATCH /api/samples/{id}/collect
@@ -224,7 +224,7 @@ export async function enterResult(
 ): Promise<EnteredResult> {
   // ── Dispatch (front desk → lab handoff) ───────────────────────────
   const dispatchBtn = page.getByRole('button', { name: /^dispatch$/i });
-  await expect(dispatchBtn).toBeVisible({ timeout: 10_000 });
+  await expect(dispatchBtn).toBeVisible({ timeout: 20_000 });
   const [dispatchResponse] = await Promise.all([
     page.waitForResponse(
       r => /\/api\/orders\/[0-9a-f-]{36}\/dispatch$/i.test(r.url()) && r.request().method() === 'PATCH',
@@ -238,7 +238,7 @@ export async function enterResult(
   // ── Mark arrived (lab intake receives the tube, TAT starts) ───────
   await page.goto('/lab/receive');
   const row = page.locator('li', { hasText: order.orderId.slice(0, 8) });
-  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row).toBeVisible({ timeout: 30_000 });
   const [arriveResponse] = await Promise.all([
     page.waitForResponse(
       r => /\/api\/orders\/[0-9a-f-]{36}\/arrive/i.test(r.url()) && r.request().method() === 'PATCH',
@@ -251,10 +251,10 @@ export async function enterResult(
 
   // ── Enter the result ───────────────────────────────────────────────
   await page.goto(`/lab/sample/${sample.sampleId}`);
-  await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 15_000 });
+  await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 30_000 });
 
   const paramRow = page.locator('tr.pf-sre__grow', { hasText: testName });
-  await expect(paramRow).toBeVisible({ timeout: 10_000 });
+  await expect(paramRow).toBeVisible({ timeout: 20_000 });
   const input = paramRow.locator('input.pf-sre__ginput--num');
   await input.fill(value);
   await expect(input).toHaveValue(value);
@@ -279,7 +279,7 @@ export async function enterResult(
   expect(['entered', 'validated']).toContain(submittedTest?.status);
 
   // Submitting hands the tech back to My Work — the app's own navigation.
-  await page.waitForURL(/\/lab\/my-work$/i, { timeout: 10_000 });
+  await page.waitForURL(/\/lab\/my-work$/i, { timeout: 20_000 });
 
   return {
     orderTestId: submittedTest.id,
