@@ -187,3 +187,108 @@ export async function collectSample(page: Page, orderId: string): Promise<Collec
 
   return { sampleId: sample.id, barcode: sample.barcode ?? '', orderId };
 }
+
+export interface EnteredResult {
+  /** OrderTest id — the row `/api/validation/{id}/validate` acts on. */
+  orderTestId: string;
+  orderId: string;
+  sampleId: string;
+  barcode: string;
+  testCode: string;
+  testName: string;
+  value: string;
+  /** 'entered' (awaiting pathologist validation) or 'validated' (direct-flow
+   *  tests auto-validate on submit unless the branch's "Require validation
+   *  for all results" lab setting is on — see admin/lab-settings). */
+  status: string;
+}
+
+/**
+ * Carry a just-collected sample (flows.collectSample leaves the browser
+ * sitting in its still-open collect drawer) through stage 4 — dispatch →
+ * receive → result entry — to a result-entered order-test. Extracted from
+ * result.authed.spec.ts (see that spec for the deep rationale on why
+ * dispatch/receive are mandatory, real, first-class app actions for Micro
+ * World's active process workflow) so stage-5 specs (validation, report
+ * generation) can reach a clean "entered" state without re-driving this
+ * whole dance inline. Returns the server-assigned order-test id (needed to
+ * validate) alongside the sample identifiers.
+ */
+export async function enterResult(
+  page: Page,
+  order: PlacedOrder,
+  sample: CollectedSample,
+  testCode = 'BIO108',
+  testName = 'Alkaline Phosphatase',
+  value = '85',
+): Promise<EnteredResult> {
+  // ── Dispatch (front desk → lab handoff) ───────────────────────────
+  const dispatchBtn = page.getByRole('button', { name: /^dispatch$/i });
+  await expect(dispatchBtn).toBeVisible({ timeout: 10_000 });
+  const [dispatchResponse] = await Promise.all([
+    page.waitForResponse(
+      r => /\/api\/orders\/[0-9a-f-]{36}\/dispatch$/i.test(r.url()) && r.request().method() === 'PATCH',
+    ),
+    dispatchBtn.click(),
+  ]);
+  expect(dispatchResponse.ok()).toBe(true);
+  const dispatchBody = (await dispatchResponse.json())?.data ?? {};
+  expect(dispatchBody.dispatched).toBe(1);
+
+  // ── Mark arrived (lab intake receives the tube, TAT starts) ───────
+  await page.goto('/lab/receive');
+  const row = page.locator('li', { hasText: order.orderId.slice(0, 8) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  const [arriveResponse] = await Promise.all([
+    page.waitForResponse(
+      r => /\/api\/orders\/[0-9a-f-]{36}\/arrive/i.test(r.url()) && r.request().method() === 'PATCH',
+    ),
+    row.getByRole('button', { name: /mark arrived/i }).click(),
+  ]);
+  expect(arriveResponse.ok()).toBe(true);
+  const arriveBody = (await arriveResponse.json())?.data ?? {};
+  expect(arriveBody.arrived).toBe(1);
+
+  // ── Enter the result ───────────────────────────────────────────────
+  await page.goto(`/lab/sample/${sample.sampleId}`);
+  await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 15_000 });
+
+  const paramRow = page.locator('tr.pf-sre__grow', { hasText: testName });
+  await expect(paramRow).toBeVisible({ timeout: 10_000 });
+  const input = paramRow.locator('input.pf-sre__ginput--num');
+  await input.fill(value);
+  await expect(input).toHaveValue(value);
+
+  const submitBtn = page.getByRole('button', { name: /submit all results/i });
+  await expect(submitBtn).toBeEnabled();
+
+  const [submitResponse] = await Promise.all([
+    page.waitForResponse(
+      r => /\/api\/samples\/[0-9a-f-]{36}\/results$/i.test(r.url()) && r.request().method() === 'POST',
+    ),
+    submitBtn.click(),
+  ]);
+  expect(submitResponse.ok()).toBe(true);
+  const submitBody = (await submitResponse.json())?.data ?? {};
+  expect(submitBody.submitted).toBe(1);
+
+  const submittedTest = submitBody.sample?.tests?.find(
+    (t: { id?: string; test?: { testCode?: string } }) => t.test?.testCode === testCode,
+  );
+  expect(submittedTest?.id).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(['entered', 'validated']).toContain(submittedTest?.status);
+
+  // Submitting hands the tech back to My Work — the app's own navigation.
+  await page.waitForURL(/\/lab\/my-work$/i, { timeout: 10_000 });
+
+  return {
+    orderTestId: submittedTest.id,
+    orderId: order.orderId,
+    sampleId: sample.sampleId,
+    barcode: sample.barcode,
+    testCode,
+    testName,
+    value,
+    status: submittedTest.status,
+  };
+}
