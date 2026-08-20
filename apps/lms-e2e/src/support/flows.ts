@@ -70,3 +70,69 @@ export async function registerPatient(page: Page): Promise<RegisteredPatient> {
 
   return { firstName, lastName, phone, patientId };
 }
+
+export interface PlacedOrder {
+  orderId: string;
+  patientId: string;
+}
+
+/**
+ * Place an order for an already-registered patient (mirrors
+ * order.authed.spec.ts step-for-step) — picks a single real, uniquely-coded
+ * test from the Micro World demo catalogue and pays later, so it doesn't
+ * need to fight the cash num-pad's exact-tender requirement. Leaves the
+ * browser sitting on order-create's post-order summary. Returns the
+ * server-assigned order id so callers (e.g. stage-3 collection) can act on
+ * it directly.
+ */
+export async function createOrder(
+  page: Page,
+  patient: RegisteredPatient,
+  testCode = 'BIO108',
+  testName = 'Alkaline Phosphatase',
+): Promise<PlacedOrder> {
+  // From the patient's profile, "New Lab Order" is the canonical entry
+  // point into order-create (patient-profile.component.ts::startOrder).
+  await page.getByRole('button', { name: 'New Lab Order' }).click();
+  await page.waitForURL(new RegExp(`/frontdesk/order\\?patientId=${patient.patientId}`), { timeout: 15_000 });
+
+  // The catalogue is fetched async (GET /api/tests/?activeOnly=true) —
+  // wait for the search box before typing into it.
+  const search = page.getByPlaceholder(/search tests or packages/i);
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await search.fill(testCode);
+
+  // Exactly one test card should match this code — click it to add to cart.
+  const testCard = page.locator('.pf-rail-card', { hasText: testName });
+  await expect(testCard).toHaveCount(1, { timeout: 10_000 });
+  await testCard.click();
+
+  // Real state change #1: the cart reflects the added test.
+  await expect(page.locator('.pf-cart-name', { hasText: testName })).toBeVisible();
+
+  // Inline payment pane appears once a patient + ≥1 test are attached
+  // (showInlinePay() — front_desk billing mode, not editing an order).
+  await expect(page.locator('.pf-ipp')).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Pay later', exact: true }).click();
+
+  const confirmBtn = page.getByRole('button', { name: /place order \(pay later\)/i });
+  await expect(confirmBtn).toBeEnabled();
+
+  // Capture the real backend response for the order-creation POST — the
+  // load-bearing proof that an order actually got created server-side, not
+  // just that the UI stopped complaining.
+  const [orderResponse] = await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/orders/') && r.request().method() === 'POST'),
+    confirmBtn.click(),
+  ]);
+  expect(orderResponse.ok()).toBe(true);
+  const orderBody = await orderResponse.json();
+  const order = orderBody?.data ?? orderBody;
+  expect(order?.id).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(order?.patientId).toBe(patient.patientId);
+
+  // Real state change #2: the screen locks into its post-order summary.
+  await expect(page.locator('.pf-payment-due-tests')).toContainText('Tests in this Order (1)');
+
+  return { orderId: order.id, patientId: patient.patientId };
+}
