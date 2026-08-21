@@ -31,7 +31,7 @@ export async function login(page: Page): Promise<void> {
   await loginWith(page, { org: c.org, username: c.username, password: c.password });
 }
 
-async function loginWith(page: Page, c: { org: string; username: string; password: string }): Promise<void> {
+export async function loginWith(page: Page, c: { org: string; username: string; password: string }): Promise<void> {
   await page.goto('/login');
   await page.getByPlaceholder(/your organization name/i).fill(c.org);
   await page.getByPlaceholder(/your username/i).fill(c.username);
