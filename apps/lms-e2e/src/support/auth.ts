@@ -45,15 +45,27 @@ async function loginWith(page: Page, c: { org: string; username: string; passwor
 // DemoFlowSeeder — NOT secrets). Org is the tenant NAME 'Micro World'. Each
 // role's mw permission set (RoleSeeder.cs) is the expected-access matrix RBAC
 // specs assert against.
-export type RoleKey = 'receptionist' | 'sampleCollector' | 'labTech' | 'pathologist' | 'manager' | 'admin';
+export type RoleKey =
+  | 'receptionist' | 'billingCounter' | 'sampleCollector' | 'labTech' | 'homeCollection'
+  | 'pathologist' | 'manager' | 'storeKeeper' | 'inventoryManager' | 'admin';
 
+// Two provenances:
+//  - Demo staff seeded by DemoFlowSeeder (email-style login handle, live Supabase acct).
+//  - E2E users created via POST /api/users (username handle, password E2ePass1234) for
+//    the roles the demo seeder never provisioned a working Supabase login for. Created
+//    once by scratchpad/create-role-users.mjs; idempotent (409 username_exists on re-run).
+//    priya (demo Receptionist) has no Supabase account → replaced by recepe2e.
 export const ROLE_CREDS: Record<RoleKey, { org: string; username: string; password: string; role: string }> = {
-  receptionist:    { org: 'Micro World', username: 'priya@apollo.prefrontal',    password: 'Recep@123',    role: 'Receptionist' },
-  sampleCollector: { org: 'Micro World', username: 'ravi@apollo.prefrontal',     password: 'Sample@123',   role: 'Sample Collector' },
-  labTech:         { org: 'Micro World', username: 'muthu@apollo.prefrontal',    password: 'Lab@123',      role: 'Lab Technician' },
-  pathologist:     { org: 'Micro World', username: 'drnithin@apollo.prefrontal', password: 'Path@123',     role: 'Pathologist' },
-  manager:         { org: 'Micro World', username: 'karthik@apollo.prefrontal',  password: 'Manager@123',  role: 'Branch Manager' },
-  admin:           { org: 'Micro World', username: 'labadmin@apollo.prefrontal', password: 'LabAdmin@123', role: 'Lab Admin' },
+  receptionist:     { org: 'Micro World', username: 'recepe2e',                  password: 'E2ePass1234',  role: 'Receptionist' },
+  billingCounter:   { org: 'Micro World', username: 'billinge2e',                password: 'E2ePass1234',  role: 'Billing Counter' },
+  sampleCollector:  { org: 'Micro World', username: 'ravi@apollo.prefrontal',    password: 'Sample@123',   role: 'Sample Collector' },
+  labTech:          { org: 'Micro World', username: 'muthu@apollo.prefrontal',   password: 'Lab@123',      role: 'Lab Technician' },
+  homeCollection:   { org: 'Micro World', username: 'homecolle2e',               password: 'E2ePass1234',  role: 'Home Collection Agent' },
+  pathologist:      { org: 'Micro World', username: 'drnithin@apollo.prefrontal', password: 'Path@123',    role: 'Pathologist' },
+  manager:          { org: 'Micro World', username: 'karthik@apollo.prefrontal', password: 'Manager@123',  role: 'Branch Manager' },
+  storeKeeper:      { org: 'Micro World', username: 'storekpre2e',               password: 'E2ePass1234',  role: 'Store Keeper' },
+  inventoryManager: { org: 'Micro World', username: 'invmgre2e',                 password: 'E2ePass1234',  role: 'Inventory Manager' },
+  admin:            { org: 'Micro World', username: 'labadmin@apollo.prefrontal', password: 'LabAdmin@123', role: 'Lab Admin' },
 };
 
 /** Log in as a specific seeded role. Each RBAC test gets a fresh context, so
