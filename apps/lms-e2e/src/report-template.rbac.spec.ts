@@ -58,6 +58,15 @@ import { loginAs } from './support/auth';
 // runs serially (one worker, registration order).
 test.describe.configure({ mode: 'serial' });
 
+// These are heavy real save+reload+restore round-trips against ONE local
+// backend. Green in isolation, but when the full 17-spec rbac suite runs
+// concurrently they can brush past the 30s default under load contention.
+// Give every test in this file headroom so the suite is stable without leaning
+// on retries. (Isolated runtime is unaffected — this is only a ceiling.)
+test.beforeEach(() => {
+  test.setTimeout(75_000);
+});
+
 const FORBIDDEN_HEADING = /forbidden/i;
 
 async function expectBlocked(page: Page, path: string) {
