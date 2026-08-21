@@ -100,11 +100,13 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
            role="listbox"
            [attr.aria-label]="placeholder">
         @if (!groups?.length) {
-          @for (opt of options; track opt.value) {
+          @for (opt of options; track opt.value; let idx = $index) {
             <button type="button" class="pf-dd__option" role="option"
                     [class.pf-dd__option--active]="isSelected(opt.value)"
+                    [class.pf-dd__option--focused]="idx === focusedIndex()"
                     [attr.aria-selected]="isSelected(opt.value)"
                     [disabled]="opt.disabled ?? false"
+                    (mouseenter)="focusedIndex.set(idx)"
                     (click)="pick(opt, $event)">
               @if (multiple) {
                 <span class="pf-dd__box" [class.pf-dd__box--on]="isSelected(opt.value)" aria-hidden="true">
@@ -119,11 +121,13 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
           @for (g of groups; track g.label; let first = $first) {
             <div class="pf-dd__group" [class.pf-dd__group--first]="first">
               <p class="pf-dd__group-lbl">{{ g.label }}</p>
-              @for (opt of g.options; track opt.value) {
+              @for (opt of g.options; track opt.value; let idx = $index) {
                 <button type="button" class="pf-dd__option" role="option"
                         [class.pf-dd__option--active]="isSelected(opt.value)"
+                        [class.pf-dd__option--focused]="idx === focusedIndex()"
                         [attr.aria-selected]="isSelected(opt.value)"
                         [disabled]="opt.disabled ?? false"
+                        (mouseenter)="focusedIndex.set(idx)"
                         (click)="pick(opt, $event)">
                   @if (multiple) {
                     <span class="pf-dd__box" [class.pf-dd__box--on]="isSelected(opt.value)" aria-hidden="true">
@@ -242,6 +246,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
     .pf-dd__panel--sm .pf-dd__option { padding: 5px 8px; font-size: 12.5px; border-radius: 6px; }
     .pf-dd__option:hover:not(:disabled) { background: rgba(139, 92, 246, 0.07); }
+    .pf-dd__option--focused:not(:disabled) {
+      background: rgba(139, 92, 246, 0.12);
+      outline: 1px dashed var(--color-primary, #7c3aed);
+      outline-offset: -1px;
+    }
     .pf-dd__option--active {
       background: rgba(139, 92, 246, 0.10); color: var(--color-primary, #7c3aed); font-weight: 600;
     }
@@ -292,6 +301,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   readonly isOpen = signal(false);
   readonly panelPos = signal<PanelPos>({ top: 0, left: 0, width: 0, above: false });
+  readonly focusedIndex = signal<number>(-1);
 
   private static readonly PANEL_MAX_H = 252;
   private static readonly GAP = 5;
@@ -357,8 +367,8 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     if (!this.isOpen()) { this.openPanel(); } else { this.closePanel(); }
   }
 
-  pick(opt: PfSelectOption<T>, ev: MouseEvent): void {
-    ev.stopPropagation();
+  pick(opt: PfSelectOption<T>, ev?: Event): void {
+    if (ev) ev.stopPropagation();
     if (opt.disabled) return;
     if (this.multiple) {
       // Toggle membership; keep the panel open so several can be picked at once.
@@ -376,6 +386,8 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   private openPanel(): void {
     this.updatePanelPos();
+    const selIdx = this.allOptions.findIndex((o) => this.isSelected(o.value));
+    this.focusedIndex.set(selIdx >= 0 ? selIdx : 0);
     // Use TemplateRef.createEmbeddedView (not VCR) so no VCR re-anchors the node
     this.panelRef = this.panelTpl.createEmbeddedView(null as unknown as void);
     this.appRef.attachView(this.panelRef);
@@ -386,6 +398,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     if (panelEl) SelectComponent.getOverlayHost().appendChild(panelEl);
     this.isOpen.set(true);
     this.addScrollListeners();
+    this.scrollFocusedIntoView();
   }
 
   private closePanel(): void {
@@ -496,11 +509,76 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   @HostListener('keydown', ['$event'])
   onKey(ev: KeyboardEvent): void {
-    if (ev.key === 'Escape') {
-      this.closePanel();
-    } else if ((ev.key === 'Enter' || ev.key === ' ') && !this.isOpen()) {
-      ev.preventDefault();
-      if (!this.disabled) this.openPanel();
+    if (this.disabled) return;
+
+    if (!this.isOpen()) {
+      if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.openPanel();
+      }
+      return;
     }
+
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.closePanel();
+    } else if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const count = this.allOptions.length;
+      if (count > 0) {
+        const next = (this.focusedIndex() + 1) % count;
+        this.focusedIndex.set(next);
+        this.panelRef?.detectChanges();
+        this.scrollFocusedIntoView();
+      }
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const count = this.allOptions.length;
+      if (count > 0) {
+        const next = (this.focusedIndex() - 1 + count) % count;
+        this.focusedIndex.set(next);
+        this.panelRef?.detectChanges();
+        this.scrollFocusedIntoView();
+      }
+    } else if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const idx = this.focusedIndex();
+      if (idx >= 0 && idx < this.allOptions.length) {
+        this.pick(this.allOptions[idx], ev);
+      } else {
+        this.closePanel();
+      }
+    } else if (ev.key === 'Tab') {
+      this.closePanel();
+    } else if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+      const char = ev.key.toLowerCase();
+      const matchIdx = this.allOptions.findIndex((o) =>
+        o.label.toLowerCase().startsWith(char)
+      );
+      if (matchIdx >= 0) {
+        this.focusedIndex.set(matchIdx);
+        this.panelRef?.detectChanges();
+        this.scrollFocusedIntoView();
+      }
+    }
+  }
+
+  private scrollFocusedIntoView(): void {
+    setTimeout(() => {
+      if (!this.panelRef) return;
+      const panelEl = this.panelRef.rootNodes.find(
+        (n: Node) => n.nodeType === Node.ELEMENT_NODE
+      ) as HTMLElement | undefined;
+      if (!panelEl) return;
+      const focusedOpt = panelEl.querySelector(
+        '.pf-dd__option--focused'
+      ) as HTMLElement | null;
+      focusedOpt?.scrollIntoView({ block: 'nearest' });
+    }, 0);
   }
 }
