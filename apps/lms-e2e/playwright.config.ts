@@ -52,5 +52,12 @@ export default defineConfig({
         storageState: hasStorage ? STORAGE : undefined,
       },
     },
+    // RBAC / multi-role — each test signs in as its own seeded role (no shared
+    // session). Verifies who-can-see/do-what per the role→permission matrix.
+    {
+      name: 'rbac',
+      testMatch: /.*\.rbac\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
   ],
 });
