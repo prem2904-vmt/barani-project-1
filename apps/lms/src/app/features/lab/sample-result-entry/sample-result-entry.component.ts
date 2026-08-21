@@ -223,7 +223,6 @@ export class SampleResultEntryComponent {
     const fl = flagAgainst(selectReferenceRange(this.bandsFor(t, p), sex, age), v);
     if (fl === "L") return { tone: "low", label: "Low" };
     if (fl === "H") return { tone: "high", label: "High" };
-    if (fl === "N") return { tone: "normal", label: "Normal" };
     return null;
   }
 
@@ -260,7 +259,7 @@ export class SampleResultEntryComponent {
     const v = String(raw).trim().toLowerCase();
     const isNormal = normals.some(n => n.toLowerCase() === v);
     return isNormal
-      ? { tone: "normal", label: "Normal" }
+      ? null
       : { tone: "high", label: "Abnormal" };
   }
 
@@ -285,17 +284,36 @@ export class SampleResultEntryComponent {
     return Number.isNaN(Number(String(raw).trim()));
   }
 
-  /** Pressing Enter inside any result input field advances focus to the next
-   *  result field in DOM sequence (like Tab), skipping edit buttons. */
-  onEnterKey(event: Event) {
-    event.preventDefault();
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
+  onSelectChange(testId: string, paramName: string, value: any) {
+    this.setValue(testId, paramName, String(value ?? ''));
+    this.advanceFromSelect(testId, paramName);
+  }
 
+  advanceFromSelect(testId: string, paramName: string) {
     const container = this.host.nativeElement as HTMLElement;
-    const inputs = Array.from(
+    const inputs = this.getAllFocusableInputs(container);
+    const activeTrigger = container.querySelector<HTMLElement>(
+      `[data-sre-param="${testId}::${paramName}"] .pf-dd__trigger`,
+    );
+    if (!activeTrigger) return;
+    const currentIndex = inputs.indexOf(activeTrigger);
+    if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
+      const next = inputs[currentIndex + 1];
+      next.focus();
+      if (
+        next instanceof HTMLInputElement &&
+        (next.type === "text" || next.type === "number")
+      ) {
+        next.select();
+      }
+      next.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
+    return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb, .pf-sre__select-wrap .pf-dd__trigger",
+        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb, .pf-sre__select-wrap .pf-dd__trigger, .pf-sre__gselect .pf-dd__trigger",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -305,6 +323,17 @@ export class SampleResultEntryComponent {
         !el.hasAttribute("disabled")
       );
     });
+  }
+
+  /** Pressing Enter inside any result input field advances focus to the next
+   *  result field in DOM sequence (like Tab), skipping edit buttons. */
+  onEnterKey(event: Event) {
+    event.preventDefault();
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const container = this.host.nativeElement as HTMLElement;
+    const inputs = this.getAllFocusableInputs(container);
 
     const currentIndex = inputs.indexOf(target);
     if (currentIndex >= 0 && currentIndex < inputs.length - 1) {

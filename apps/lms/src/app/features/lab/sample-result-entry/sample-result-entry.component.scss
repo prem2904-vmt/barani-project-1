@@ -63,19 +63,23 @@
   border-bottom: 1px solid rgba(168, 85, 247, 0.4);
 }
 .pf-sre__gc-param {
-  width: 28%;
+  width: 25%;
 }
 .pf-sre__gc-result {
-  width: 22%;
+  width: 20%;
+}
+.pf-sre__gc-flag {
+  width: 10%;
+  text-align: center;
 }
 .pf-sre__gc-unit {
-  width: 12%;
+  width: 10%;
 }
 .pf-sre__gc-range {
-  width: 22%;
+  width: 20%;
 }
 .pf-sre__gc-method {
-  width: 16%;
+  width: 15%;
 }
 .pf-sre__grow td {
   padding: 5px 8px;
@@ -135,6 +139,16 @@
   border-color: #8b5cf6;
   background: rgba(139, 92, 246, 0.05);
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+.pf-sre__gselect {
+  width: 100%;
+}
+.pf-sre__gselect pf-select .pf-dd__trigger {
+  padding: 5px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  min-height: 32px;
 }
 .pf-sre__ginput--num,
 .pf-sre__input--num {
@@ -960,15 +974,18 @@
 /* The live flag chip beside a numeric input. Same tone palette as the
  result-entry grid flags so both screens read identically. */
 .pf-sre__flag-chip {
-  display: inline-block;
-  margin-top: 3px;
-  padding: 1px 8px;
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  padding: 0px 6px;
+  height: 16px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: 9999px;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .pf-sre__flag-chip[data-tone="low"] {
   background: rgba(59, 130, 246, 0.16);
@@ -994,16 +1011,18 @@
  Manual = tech override (clearing the field resumes auto), Not calculable =
  validity gate failed (Friedewald over TG 400) — never a partial number. */
 .pf-sre__calc-chip {
-  display: inline-block;
-  margin-top: 3px;
-  margin-right: 5px;
-  padding: 1px 8px;
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  padding: 0px 6px;
+  height: 16px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: 9999px;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .pf-sre__calc-chip[data-kind="auto"] {
   background: rgba(139, 92, 246, 0.14);

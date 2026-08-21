@@ -27,7 +27,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { describeAllRanges } from '../../../../shared/utils/reference-range';
-import { tubeColor } from '../../../../shared/utils/tube-colors';
+import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 
@@ -35,27 +35,6 @@ import { TouchButtonComponent } from '../../../../shared/primitives/touch-button
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export type TestType = 'individual' | 'profile' | 'package';
-
-/** Standard tube hex swatches for row border accents. */
-const TUBE_HEX: Record<string, string> = {
-  purple: '#8b5cf6',
-  red: '#ef4444',
-  yellow: '#eab308',
-  blue: '#3b82f6',
-  grey: '#64748b',
-  black: '#1e293b',
-  pink: '#ec4899',
-};
-
-const TUBE_LABEL: Record<string, string> = {
-  purple: 'EDTA (K2/K3)',
-  red: 'Serum Clot Activator',
-  yellow: 'SST Gel Separator',
-  blue: 'Sodium Citrate 3.2%',
-  grey: 'Sodium Fluoride / Oxalate',
-  black: 'ESR Sodium Citrate 3.8%',
-  pink: 'EDTA Blood Bank',
-};
 
 /** Sentinel name for tests without a department assignment. */
 const UNASSIGNED = 'Unassigned';
@@ -392,7 +371,7 @@ export class TestsComponent implements OnInit {
 
   protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
     if (!this.isPhone) return cols;
-    const drop = new Set(['shortName', 'section', 'unit', 'tatHours', 'status']);
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status']);
     return cols.filter(c => !drop.has(String(c.field ?? c.colId ?? '')));
   }
 
@@ -419,7 +398,14 @@ export class TestsComponent implements OnInit {
         { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left' },
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
-        { headerName: 'Unit', field: 'unit', editable: true, minWidth: 100 },
+        {
+          headerName: 'Container', field: 'tubeColor', editable: true, minWidth: 160,
+          cellRenderer: this.containerRenderer,
+          cellEditor: TubeColorEditorComponent,
+          cellEditorParams: {
+            choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
+          },
+        },
         {
           headerName: 'Reference range', colId: 'referenceRange',
           field: 'adultReferenceRange', minWidth: 165,
@@ -431,6 +417,7 @@ export class TestsComponent implements OnInit {
             ? 'Sex/age-specific ranges — edit them in the test editor'
             : undefined,
         },
+        { headerName: 'Unit', field: 'unit', editable: true, minWidth: 100 },
         {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
           cellEditor: 'agNumberCellEditor',
@@ -454,11 +441,19 @@ export class TestsComponent implements OnInit {
         valueGetter: p => this.kindLabel(p.data),
       },
       { headerName: 'Short', field: 'shortName', editable: true, minWidth: 110, sortable: false, filter: false },
-      { headerName: 'Unit', field: 'unit', minWidth: 100, sortable: false, filter: false },
+      {
+        headerName: 'Container', field: 'tubeColor', editable: true, minWidth: 160, sortable: false, filter: false,
+        cellRenderer: this.containerRenderer,
+        cellEditor: TubeColorEditorComponent,
+        cellEditorParams: {
+          choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
+        },
+      },
       {
         headerName: 'Reference range', colId: 'referenceRange', minWidth: 150, sortable: false, filter: false,
         valueGetter: p => this.referenceRange(p.data),
       },
+      { headerName: 'Unit', field: 'unit', minWidth: 100, sortable: false, filter: false },
       { ...this.priceColDef(true), sortable: false, filter: false },
       this.statusColDef(),
       this.actionsColDef(),
@@ -469,15 +464,6 @@ export class TestsComponent implements OnInit {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;min-width:0;gap:8px;';
     if (!params.data) return wrap;
-
-    if (this._type() === 'individual' && params.data.type === 'individual') {
-      const tColor = tubeColor(params.data.tubeColor);
-      if (tColor) {
-        const dot = document.createElement('span');
-        dot.style.cssText = `flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:${tColor.hex};box-sizing:border-box;box-shadow:0 0 0 1px rgba(0,0,0,0.15) inset;`;
-        wrap.appendChild(dot);
-      }
-    }
 
     const codeSpan = document.createElement('span');
     codeSpan.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
@@ -552,22 +538,20 @@ export class TestsComponent implements OnInit {
   }
 
   private containerRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
-    const key = params.data?.tubeColor ?? '';
-    const hex = key ? TUBE_HEX[key] : undefined;
-    const label = key ? (TUBE_LABEL[key] ?? key) : '—';
+    const tColor = tubeColor(params.data?.tubeColor);
 
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
 
     const dot = document.createElement('span');
     dot.style.cssText = 'flex:0 0 auto;width:11px;height:11px;border-radius:50%;box-sizing:border-box;background:'
-      + (hex ?? 'transparent')
-      + (hex ? ';' : ';border:1px solid rgba(148,163,184,0.5);');
+      + (tColor ? tColor.hex : 'transparent')
+      + (tColor ? ';' : ';border:1px solid rgba(148,163,184,0.5);');
     wrap.appendChild(dot);
 
     const text = document.createElement('span');
     text.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    text.textContent = label;
+    text.textContent = tColor ? tColor.label : '—';
     wrap.appendChild(text);
     return wrap;
   };

@@ -279,17 +279,19 @@
         </span>
       </label>
       @if (trendogramOn()) {
-        <select
-          class="pf-sre__trend-sel"
+        <pf-select
+          size="sm"
+          [options]="[
+            { value: '5', label: 'Last 5 tests' },
+            { value: '10', label: 'Last 10 tests' },
+            { value: '3m', label: 'Last 3 months' },
+            { value: '6m', label: 'Last 6 months' },
+            { value: 'all', label: 'All time' }
+          ]"
           [value]="trendogramDuration()"
-          (change)="setTrendDuration($any($event.target).value)"
+          (valueChange)="setTrendDuration($event)"
         >
-          <option value="5">Last 5 tests</option>
-          <option value="10">Last 10 tests</option>
-          <option value="3m">Last 3 months</option>
-          <option value="6m">Last 6 months</option>
-          <option value="all">All time</option>
-        </select>
+        </pf-select>
       }
     </div>
   }
@@ -367,8 +369,8 @@
                   <tr>
                     <th class="pf-sre__gc-param">Parameter</th>
                     <th class="pf-sre__gc-result">Result</th>
-                    <th class="pf-sre__gc-unit">Unit</th>
                     <th class="pf-sre__gc-range">Reference range</th>
+                    <th class="pf-sre__gc-unit">Unit</th>
                     <th class="pf-sre__gc-method">Method</th>
                     <th class="pf-sre__gc-note"></th>
                   </tr>
@@ -417,6 +419,20 @@
                               >
                             }
                           </span>
+                          @if (calcChip(t, p); as c) {
+                            <span
+                              class="pf-sre__calc-chip"
+                              [attr.data-kind]="c.kind"
+                              >{{ c.label }}</span
+                            >
+                          }
+                          @if (flagFor(t, p); as f) {
+                            <span
+                              class="pf-sre__flag-chip"
+                              [attr.data-tone]="f.tone"
+                              >{{ f.label }}</span
+                            >
+                          }
                         </td>
                         <td class="pf-sre__gc-result">
                           <ng-container
@@ -433,10 +449,10 @@
                             >
                           }
                         </td>
-                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-range">
                           {{ refLabelFor(p) || "—" }}
                         </td>
+                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
                           {{ methodologyOf(p) }}
                         </td>
@@ -558,30 +574,24 @@
               (keydown.enter)="onEnterKey($event)"
               (paste)="onNumericPaste($event, t.id, p.name)"
             />
-            @if (calcChip(t, p); as c) {
-              <span class="pf-sre__calc-chip" [attr.data-kind]="c.kind">{{
-                c.label
-              }}</span>
-            }
-            @if (flagFor(t, p); as f) {
-              <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone">{{
-                f.label
-              }}</span>
-            }
           }
           @case ("select") {
-            <select
-              class="pf-sre__ginput"
+            <div
+              class="pf-sre__gselect"
               [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-              [ngModel]="getValue(t.id, p.name)"
-              (ngModelChange)="setValue(t.id, p.name, $event)"
-              (keydown.enter)="onEnterKey($event)"
+              [attr.data-sre-param]="t.id + '::' + p.name"
             >
-              <option value="">—</option>
-              @for (o of selectOptionsFor(p); track o) {
-                <option [value]="o">{{ o }}</option>
-              }
-            </select>
+              <pf-select
+                size="sm"
+                [options]="[
+                  { value: '', label: '—' },
+                  ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))
+                ]"
+                [value]="getValue(t.id, p.name)"
+                (valueChange)="onSelectChange(t.id, p.name, $event)"
+              >
+              </pf-select>
+            </div>
           }
           @case ("textarea") {
             <textarea
@@ -726,8 +736,8 @@
                     <tr>
                       <th class="pf-sre__gc-param">Parameter</th>
                       <th class="pf-sre__gc-result">Result</th>
-                      <th class="pf-sre__gc-unit">Unit</th>
                       <th class="pf-sre__gc-range">Reference range</th>
+                      <th class="pf-sre__gc-unit">Unit</th>
                       <th class="pf-sre__gc-method">Method</th>
                     </tr>
                   </thead>
@@ -756,6 +766,20 @@
                               >
                             }
                           </span>
+                          @if (calcChip(t, p); as c) {
+                            <span
+                              class="pf-sre__calc-chip"
+                              [attr.data-kind]="c.kind"
+                              >{{ c.label }}</span
+                            >
+                          }
+                          @if (flagFor(t, p); as f) {
+                            <span
+                              class="pf-sre__flag-chip"
+                              [attr.data-tone]="f.tone"
+                              >{{ f.label }}</span
+                            >
+                          }
                         </td>
                         <td class="pf-sre__gc-result">
                           @switch (inputKindFor(p)) {
@@ -784,38 +808,26 @@
                                 (keydown.enter)="onEnterKey($event)"
                                 (paste)="onNumericPaste($event, t.id, p.name)"
                               />
-                              @if (calcChip(t, p); as c) {
-                                <span
-                                  class="pf-sre__calc-chip"
-                                  [attr.data-kind]="c.kind"
-                                  >{{ c.label }}</span
-                                >
-                              }
-                              @if (flagFor(t, p); as f) {
-                                <span
-                                  class="pf-sre__flag-chip"
-                                  [attr.data-tone]="f.tone"
-                                  >{{ f.label }}</span
-                                >
-                              }
                             }
                             @case ("select") {
-                              <select
-                                class="pf-sre__ginput"
+                              <div
+                                class="pf-sre__gselect"
                                 [class.pf-sre__input--flagged]="
                                   hasOpenComment(t.id, p.name)
                                 "
-                                [ngModel]="getValue(t.id, p.name)"
-                                (ngModelChange)="
-                                  setValue(t.id, p.name, $event)
-                                "
-                                (keydown.enter)="onEnterKey($event)"
+                                [attr.data-sre-param]="t.id + '::' + p.name"
                               >
-                                <option value="">—</option>
-                                @for (o of selectOptionsFor(p); track o) {
-                                  <option [value]="o">{{ o }}</option>
-                                }
-                              </select>
+                                <pf-select
+                                  size="sm"
+                                  [options]="[
+                                    { value: '', label: '—' },
+                                    ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))
+                                  ]"
+                                  [value]="getValue(t.id, p.name)"
+                                  (valueChange)="onSelectChange(t.id, p.name, $event)"
+                                >
+                                </pf-select>
+                              </div>
                             }
                             @case ("textarea") {
                               <textarea
@@ -882,10 +894,10 @@
                             >
                           }
                         </td>
-                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-range">
                           {{ refLabelFor(p) || "—" }}
                         </td>
+                        <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
                           {{ methodologyOf(p) }}
                         </td>
