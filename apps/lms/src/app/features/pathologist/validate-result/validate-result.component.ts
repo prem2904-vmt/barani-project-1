@@ -130,6 +130,90 @@ interface ValueRow {
             }
           </div>
 
+          <!-- ══ Sample panel — every test on this tube, reviewed together ══
+               Shows only for multi-test samples; a single-test sample keeps the
+               original detailed review below. Approve/Reject each test in place,
+               or "Validate all remaining" from the sticky bar. -->
+          @if (sampleTests().length > 1) {
+            <section class="pf-vsample">
+              <div class="pf-vsample__hdr">
+                <div class="min-w-0">
+                  <p class="pf-eyebrow">Sample · {{ sampleDept() }}</p>
+                  <h2 class="pf-vsample__id">{{ sampleLabel() }}</h2>
+                  <p class="pf-vsample__sub">{{ sampleTests().length }} tests on this tube · approve or reject each, then finish</p>
+                </div>
+                <div class="pf-vsample__prog">
+                  <span data-tone="ok">{{ sampleProgress().done }} ✓</span>
+                  @if (sampleProgress().rej) { <span data-tone="rej">{{ sampleProgress().rej }} ✕</span> }
+                  <span data-tone="pending">{{ pendingSampleTests().length }} pending</span>
+                </div>
+              </div>
+
+              <ul class="pf-vsample__list">
+                @for (st of sampleTests(); track st.id) {
+                  @let c = countsFor(st);
+                  <li class="pf-vsample__test" [attr.data-outcome]="outcomeOf(st)"
+                      [class.pf-vsample__test--focused]="selected()?.id === st.id">
+                    <div class="pf-vsample__row">
+                      <button type="button" class="pf-vsample__toggle press" (click)="toggleExpand(st)" [attr.aria-expanded]="isExpanded(st)">
+                        <span class="pf-vsample__chev" [class.pf-vsample__chev--open]="isExpanded(st)">▸</span>
+                        <span class="pf-vsample__name">{{ st.test?.name ?? 'Test' }}</span>
+                      </button>
+                      @if (isCultureFor(st)) {
+                        <span class="pf-vsample__peek">Culture &amp; sensitivity</span>
+                      } @else {
+                        <span class="pf-vsample__peek">
+                          {{ c.total }} params
+                          @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abn</span> }
+                          @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} crit</span> }
+                          @if (!c.abnormal && !c.critical) { <span class="pf-flagtag" data-flag="normal">all normal</span> }
+                        </span>
+                      }
+                      <span class="grow"></span>
+                      @switch (outcomeOf(st)) {
+                        @case ('validated') { <span class="pf-vsample__badge" data-outcome="validated">✓ Validated</span> }
+                        @case ('rejected') { <span class="pf-vsample__badge" data-outcome="rejected">✕ Rejected</span> }
+                        @case ('validating') { <span class="pf-vsample__badge" data-outcome="validating">Working…</span> }
+                        @default {
+                          <button type="button" class="pf-vsample__act pf-vsample__act--reject press" (click)="rejectTest(st)">Reject</button>
+                          <button type="button" class="pf-vsample__act pf-vsample__act--approve press" (click)="approveTest(st)">Approve</button>
+                        }
+                      }
+                    </div>
+
+                    @if (isExpanded(st)) {
+                      @if (st.rejectionReason) {
+                        <div class="pf-reject-banner pf-reject-banner--sm">
+                          <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
+                          <p class="pf-reject-banner__text"><strong>Sent back:</strong> {{ st.rejectionReason }}</p>
+                        </div>
+                      }
+                      @if (isCultureFor(st)) {
+                        <div class="pf-vsample__culture">
+                          <button type="button" class="pf-vsample__inspect press" (click)="focusTest(st)">Open full culture review below ↓</button>
+                        </div>
+                      } @else if (valueRowsFor(st).length === 0) {
+                        <p class="pf-vsample__empty">No values recorded.</p>
+                      } @else {
+                        <div class="pf-vtbl">
+                          <div class="pf-vtbl__head"><span>Parameter</span><span>Value</span><span>Reference</span><span>Flag</span></div>
+                          @for (r of valueRowsFor(st); track r.name) {
+                            <div class="pf-vtbl__row" [attr.data-flag]="r.flag">
+                              <span class="pf-vtbl__name">{{ r.title }}</span>
+                              <span class="pf-vtbl__val">{{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }</span>
+                              <span class="pf-vtbl__ref">{{ r.range ?? '—' }}</span>
+                              <span class="pf-vtbl__flag" [attr.data-flag]="r.flag">{{ flagLabel(r.flag) }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    }
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+
           <!-- Sent-back banner — this result was previously rejected and
                re-entered by the tech. Repeats the rejection reason so the
                validator remembers WHY it was sent back before signing off.
@@ -159,7 +243,7 @@ interface ValueRow {
           </section>
 
           <!-- Microbiology Culture & Sensitivity → structured read-only review -->
-          @if (isCulture()) {
+          @if (isCulture() && sampleTests().length <= 1) {
             @if (cultureResult(); as c) {
               <div class="pf-culture-rev">
                 <div class="pf-culture-rev__meta">
@@ -202,7 +286,7 @@ interface ValueRow {
             }
           }
 
-          @if (!isCulture()) {
+          @if (!isCulture() && sampleTests().length <= 1) {
           <!-- Summary strip: param counts with color-coded cells -->
           @if (valueRows().length > 0) {
             <div class="pf-summary">
@@ -394,8 +478,8 @@ interface ValueRow {
         }
       </div>
 
-      <!-- Sticky validate bar -->
-      @if (selected()) {
+      <!-- Sticky validate bar (single-test sample keeps the original bar) -->
+      @if (selected() && sampleTests().length <= 1) {
         <footer class="pf-stickybar">
           <div class="pf-stickybar__inner">
             @if (editing()) {
@@ -462,6 +546,39 @@ interface ValueRow {
                 <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
               </button>
             }
+          </div>
+        </footer>
+      }
+
+      <!-- Sample-level sticky bar — validate every remaining test at once -->
+      @if (selected() && sampleTests().length > 1) {
+        <footer class="pf-stickybar">
+          <div class="pf-stickybar__inner">
+            <span class="pf-stickybar__meta">
+              @if (hasSampleCritical()) {
+                <span class="pf-stickybar__dot" data-state="critical"></span>
+                <b>Critical</b> in this sample · validation notifies the referring doctor
+              } @else {
+                <span class="pf-stickybar__dot" data-state="ok"></span>
+                {{ sampleProgress().done }} validated · {{ sampleProgress().rej }} rejected · {{ pendingSampleTests().length }} pending
+              }
+            </span>
+            <div class="flex-1"></div>
+            @if (trendEligible().length > 0) {
+              <label class="pf-trend-chk" title="Embed serial-result trend charts in the report">
+                <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+                <span>Trendogram</span>
+              </label>
+            }
+            <button type="button"
+                    class="pf-btn pf-btn--icony"
+                    [class.pf-btn--primary]="!hasSampleCritical()"
+                    [class.pf-btn--danger]="hasSampleCritical()"
+                    [disabled]="saving() || pendingSampleTests().length === 0"
+                    (click)="validateAllRemaining()">
+              <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
+            </button>
           </div>
         </footer>
       }
@@ -1473,6 +1590,67 @@ interface ValueRow {
     @media (max-width: 640px) {
       .pf-summary { grid-template-columns: repeat(2, 1fr); }
     }
+
+    /* ══ Sample panel — all tests on one tube reviewed together ══ */
+    .pf-vsample { margin: 4px 0 14px; border: 1px solid var(--glass-border); border-radius: 16px; background: var(--glass-bg); overflow: hidden; }
+    .pf-vsample__hdr { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--glass-border); }
+    .pf-vsample__id { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); margin: 2px 0 0; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-vsample__sub { font-size: 12px; color: var(--text-tertiary); margin: 2px 0 0; }
+    .pf-vsample__prog { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; font-size: 11.5px; font-weight: 700; }
+    .pf-vsample__prog span { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--glass-border); color: var(--text-secondary); }
+    .pf-vsample__prog span[data-tone='ok'] { color: #84bda6; border-color: rgba(132,189,166,0.4); }
+    .pf-vsample__prog span[data-tone='rej'] { color: var(--red-text, #f87171); border-color: rgba(248,113,113,0.4); }
+    .pf-vsample__prog span[data-tone='pending'] { color: var(--violet-text, #c084fc); border-color: rgba(168,85,247,0.4); }
+
+    .pf-vsample__list { list-style: none; margin: 0; padding: 0; }
+    .pf-vsample__test { border-top: 1px solid var(--glass-border); }
+    .pf-vsample__test:first-child { border-top: 0; }
+    .pf-vsample__test[data-outcome='validated'] { background: rgba(132,189,166,0.06); }
+    .pf-vsample__test[data-outcome='rejected'] { background: rgba(248,113,113,0.06); }
+    .pf-vsample__test--focused { box-shadow: inset 3px 0 0 var(--violet-text, #a855f7); }
+    .pf-vsample__row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
+    .pf-vsample__toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer; padding: 0; min-width: 0; text-align: left; }
+    .pf-vsample__chev { color: var(--text-tertiary); font-size: 11px; transition: transform .15s ease; }
+    .pf-vsample__chev--open { transform: rotate(90deg); }
+    .pf-vsample__name { font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+    .pf-vsample__peek { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); min-width: 0; }
+    .pf-flagtag { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--glass-border); }
+    .pf-flagtag[data-flag='normal'] { color: #84bda6; border-color: rgba(132,189,166,0.35); }
+    .pf-flagtag[data-flag='abnormal'] { color: var(--amber-text, #f5a524); border-color: rgba(245,165,36,0.35); }
+    .pf-flagtag[data-flag='critical'] { color: var(--red-text, #f87171); border-color: rgba(248,113,113,0.4); }
+    .pf-vsample__badge { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+    .pf-vsample__badge[data-outcome='validated'] { color: #84bda6; background: rgba(132,189,166,0.14); }
+    .pf-vsample__badge[data-outcome='rejected'] { color: var(--red-text, #f87171); background: rgba(248,113,113,0.14); }
+    .pf-vsample__badge[data-outcome='validating'] { color: var(--text-tertiary); }
+    .pf-vsample__act { font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; }
+    .pf-vsample__act--reject { background: transparent; border-color: var(--glass-border); color: var(--text-secondary); }
+    .pf-vsample__act--reject:hover { border-color: rgba(248,113,113,0.5); color: var(--red-text, #f87171); }
+    .pf-vsample__act--approve { background: var(--gradient-primary); color: #fff; }
+    .pf-vsample__act--approve:hover { opacity: 0.9; }
+    .pf-vsample__empty, .pf-vsample__culture { padding: 0 14px 12px 32px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-vsample__inspect { background: none; border: 0; color: var(--violet-text, #c084fc); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 0; }
+
+    /* Read-only value table inside an expanded test */
+    .pf-vtbl { margin: 0 14px 12px 32px; border: 1px solid var(--glass-border); border-radius: 10px; overflow: hidden; }
+    .pf-vtbl__head, .pf-vtbl__row { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.4fr) auto; gap: 10px; align-items: center; padding: 7px 12px; }
+    .pf-vtbl__head { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-tertiary); background: rgba(255,255,255,0.02); }
+    .pf-vtbl__row { border-top: 1px solid var(--glass-border); font-size: 12.5px; }
+    .pf-vtbl__name { color: var(--text-secondary); min-width: 0; }
+    .pf-vtbl__val { color: var(--text-primary); font-weight: 600; }
+    .pf-vtbl__val em { font-style: normal; color: var(--text-tertiary); font-size: 11px; margin-left: 2px; }
+    .pf-vtbl__ref { color: var(--text-tertiary); min-width: 0; }
+    .pf-vtbl__flag { font-size: 10.5px; font-weight: 700; text-align: right; }
+    .pf-vtbl__row[data-flag='abnormal'] .pf-vtbl__val, .pf-vtbl__row[data-flag='abnormal'] .pf-vtbl__flag { color: var(--amber-text, #f5a524); }
+    .pf-vtbl__row[data-flag='critical'] .pf-vtbl__val, .pf-vtbl__row[data-flag='critical'] .pf-vtbl__flag { color: var(--red-text, #f87171); }
+    .pf-reject-banner--sm { margin: 0 14px 10px 32px; }
+
+    @media (max-width: 640px) {
+      .pf-vsample__row { flex-wrap: wrap; }
+      .pf-vtbl { margin-left: 14px; }
+      .pf-vtbl__head { display: none; }
+      .pf-vtbl__row { grid-template-columns: 1fr auto; gap: 4px 10px; }
+      .pf-vsample__empty, .pf-vsample__culture, .pf-reject-banner--sm { padding-left: 14px; margin-left: 14px; }
+    }
 `]
 })
 export class ValidateResultComponent implements OnInit {
@@ -1620,6 +1798,119 @@ export class ValidateResultComponent implements OnInit {
   readonly detailRow = this._detailRow.asReadonly();
   setView(v: View) { this._view.set(v); }
 
+  // ── Sample-level validation (all tests on one tube reviewed together) ──
+  /** The full validation queue, kept so we can show every sibling test of the
+   *  focused sample without re-fetching. */
+  private readonly _queue = signal<OrderTest[]>([]);
+  /** Per-test outcome as the pathologist works through the sample. */
+  private readonly _outcome = signal<Record<string, 'pending' | 'validating' | 'validated' | 'rejected'>>({});
+  /** Which test rows are expanded to show their full parameter table. */
+  private readonly _expanded = signal<Set<string>>(new Set());
+
+  /** Stable key identifying the tube/sample a test belongs to. */
+  private sampleKey(t: OrderTest | null | undefined): string {
+    if (!t) return '';
+    return t.subOrder?.id
+      ?? `${t.subOrder?.orderId ?? t.subOrder?.order?.id ?? ''}|${t.test?.department?.id ?? ''}`;
+  }
+
+  /** Every queued test on the same tube as the focused test (self as fallback). */
+  readonly sampleTests = computed<OrderTest[]>(() => {
+    const sel = this._selected();
+    if (!sel) return [];
+    const key = this.sampleKey(sel);
+    const sibs = this._queue().filter(t => this.sampleKey(t) === key);
+    return sibs.length ? sibs : [sel];
+  });
+
+  outcomeOf(t: OrderTest): 'pending' | 'validating' | 'validated' | 'rejected' {
+    return this._outcome()[t.id] ?? 'pending';
+  }
+  isExpanded(t: OrderTest): boolean { return this._expanded().has(t.id); }
+  toggleExpand(t: OrderTest) {
+    this._expanded.update(s => { const n = new Set(s); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; });
+  }
+  /** Focus a test so the detailed review / edit / comments below reflect it. */
+  focusTest(t: OrderTest) { this._selected.set(t); void this.loadComments(); }
+
+  /** Sample header helpers. */
+  readonly sampleLabel = computed(() => {
+    const s = this._selected()?.subOrder;
+    return s?.barcode ?? s?.id?.slice(0, 8) ?? 'Sample';
+  });
+  readonly sampleDept = computed(() => this._selected()?.test?.department?.name ?? '—');
+  readonly pendingSampleTests = computed(() => this.sampleTests().filter(t => this.outcomeOf(t) === 'pending'));
+  readonly sampleProgress = computed(() => {
+    const all = this.sampleTests();
+    const done = all.filter(t => this.outcomeOf(t) === 'validated').length;
+    const rej = all.filter(t => this.outcomeOf(t) === 'rejected').length;
+    return { done, rej, total: all.length };
+  });
+  readonly hasSampleCritical = computed(() => this.sampleTests().some(t => this.countsFor(t).critical > 0));
+
+  approveTest(t: OrderTest) {
+    if (this.outcomeOf(t) !== 'pending') return;
+    this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
+    this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }).subscribe({
+      next: () => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        this.toasts.success(`${t.test?.name ?? 'Test'} validated`);
+        this.finishIfSampleDone();
+      },
+      error: e => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'pending' }));
+        this.toasts.error(ApiError.from(e).message);
+      }
+    });
+  }
+
+  async rejectTest(t: OrderTest) {
+    if (this.outcomeOf(t) !== 'pending') return;
+    const reason = await this.dialog.prompt({
+      title: 'Reject result?',
+      message: `Reject "${t.test?.name}". The lab tech will be notified to re-enter it.`,
+      placeholder: 'Reason for rejection…',
+      multiline: true, required: true, tone: 'danger', confirmLabel: 'Reject result'
+    });
+    if (!reason) return;
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).subscribe({
+      next: () => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'rejected' }));
+        this.toasts.success('Rejected — lab tech notified');
+        this.finishIfSampleDone();
+      },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Bulk-validate every still-pending test in the sample, sequentially. */
+  async validateAllRemaining() {
+    const pending = this.pendingSampleTests();
+    if (pending.length === 0) return;
+    this._saving.set(true);
+    let ok = 0; const failed: string[] = [];
+    for (const t of pending) {
+      this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
+      try {
+        await firstValueFrom(this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }));
+        this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        ok++;
+      } catch (e) {
+        this._outcome.update(m => ({ ...m, [t.id]: 'pending' }));
+        failed.push(t.test?.name ?? 'Test');
+      }
+    }
+    this._saving.set(false);
+    if (failed.length === 0) this.toasts.success(`Validated ${ok} test${ok === 1 ? '' : 's'}`);
+    else this.toasts.warning(`Validated ${ok}; ${failed.length} failed: ${failed.join(', ')}`);
+    this.finishIfSampleDone();
+  }
+
+  /** When no test on the sample is pending, return to the queue. */
+  private finishIfSampleDone() {
+    if (this.pendingSampleTests().length === 0) setTimeout(() => this.back(), 600);
+  }
+
   readonly subtitleText = computed(() => {
     const t = this._selected();
     if (!t) return 'Review the entered result.';
@@ -1628,15 +1919,18 @@ export class ValidateResultComponent implements OnInit {
     return `${name} · ${dept} · review and sign off`;
   });
 
-  readonly snapshot = computed<ResultSnapshot | null>(() => {
-    const raw = this._selected()?.currentResult;
+  private snapshotFor(t: OrderTest | null): ResultSnapshot | null {
+    const raw = t?.currentResult;
     if (!raw) return null;
     try { return JSON.parse(raw) as ResultSnapshot; } catch { return null; }
-  });
+  }
+  readonly snapshot = computed<ResultSnapshot | null>(() => this.snapshotFor(this._selected()));
 
-  readonly valueRows = computed<ValueRow[]>(() => {
-    const t = this._selected();
-    const snap = this.snapshot();
+  readonly valueRows = computed<ValueRow[]>(() => this.valueRowsFor(this._selected()));
+
+  /** Parameter rows for ANY test in the sample (not just the focused one). */
+  valueRowsFor(t: OrderTest | null): ValueRow[] {
+    const snap = this.snapshotFor(t);
     if (!t?.test?.parameters || !snap?.values) return [];
 
     let params: ParamDef[] = [];
@@ -1686,32 +1980,36 @@ export class ValidateResultComponent implements OnInit {
         flag
       };
     });
-  });
+  }
 
-  readonly counts = computed(() => {
-    const rows = this.valueRows();
+  countsFor(t: OrderTest | null) {
+    const rows = this.valueRowsFor(t);
     return {
       total: rows.length,
       normal: rows.filter(r => r.flag === 'normal').length,
       abnormal: rows.filter(r => r.flag === 'abnormal').length,
       critical: rows.filter(r => r.flag === 'critical').length
     };
-  });
+  }
+  readonly counts = computed(() => this.countsFor(this._selected()));
 
   readonly hasCritical = computed(() => this.counts().critical > 0);
 
   // ── Microbiology Culture & Sensitivity (read-only review) ──────────
   /** True when this test is a structured culture — renders the organism +
    *  antibiotic (S/I/R) review instead of the flat parameter cards. */
-  readonly isCulture = computed<boolean>(() => {
-    const raw = this._selected()?.test?.parameters;
+  isCultureFor(t: OrderTest | null): boolean {
+    const raw = t?.test?.parameters;
     if (!raw) return false;
     try { return (JSON.parse(raw) as { microFormat?: string }).microFormat === 'culture_sensitivity'; }
     catch { return false; }
-  });
+  }
+  readonly isCulture = computed<boolean>(() => this.isCultureFor(this._selected()));
   /** The entered culture structure (specimen, organisms, AST, notes). */
-  readonly cultureResult = computed<CultureResult | null>(
-    () => (this.snapshot()?.values as CultureResult) ?? null);
+  cultureResultFor(t: OrderTest | null): CultureResult | null {
+    return (this.snapshotFor(t)?.values as CultureResult) ?? null;
+  }
+  readonly cultureResult = computed<CultureResult | null>(() => this.cultureResultFor(this._selected()));
 
   interpLabel(v?: string): string {
     return v === 'S' ? 'Sensitive' : v === 'R' ? 'Resistant' : v === 'I' ? 'Intermediate' : '—';
@@ -1794,9 +2092,15 @@ export class ValidateResultComponent implements OnInit {
     this.api.get<OrderTest[]>('/api/validation/queue?mine=false').subscribe({
       next: rows => {
         this._loading.set(false);
+        this._queue.set(rows ?? []);
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
-        if (match) void this.loadComments();
+        if (match) {
+          void this.loadComments();
+          // Show every test on this sample expanded by default — the whole point
+          // is to review the tube at once rather than opening tests one by one.
+          this._expanded.set(new Set(this.sampleTests().map(t => t.id)));
+        }
       },
       error: () => this._loading.set(false)
     });

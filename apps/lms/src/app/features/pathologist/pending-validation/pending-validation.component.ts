@@ -108,11 +108,11 @@ interface ResultSnapshot {
             </div>
 
             <div class="space-y-2.5">
-              @for (g of patientGroups(bucket.items); track g.orderId) {
+              @for (g of sampleGroups(bucket.items); track g.key) {
                 <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block">
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                           (click)="openOrder(g)"
-                          [attr.aria-label]="'Validate ' + g.patientName">
+                          [attr.aria-label]="'Validate ' + g.patientName + ' — ' + g.dept + ' sample'">
                     <pf-avatar [name]="g.displayName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
@@ -121,7 +121,7 @@ interface ResultSnapshot {
                         @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                       </div>
                       <p class="pv-grp-meta text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
-                        #{{ g.orderId.slice(0,8) }}
+                        {{ g.dept }} · {{ g.sampleLabel }}
                         @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                       </p>
                     </div>
@@ -313,8 +313,12 @@ export class PendingValidationComponent implements OnInit {
    * The card's TAT level is the most-urgent across all the tests in that
    * order so a single critical test pulls the whole group up.
    */
-  patientGroups(items: Enriched[]): Array<{
-    orderId: string;
+  /** Group the queue by SAMPLE (one tube / department) so a sample with N tests
+   *  is one row — opening it reviews the whole tube at once. */
+  sampleGroups(items: Enriched[]): Array<{
+    key: string;
+    sampleLabel: string;
+    dept: string;
     patientName: string;
     displayName: string;
     items: Enriched[];
@@ -323,17 +327,20 @@ export class PendingValidationComponent implements OnInit {
     remainingMin: number;
     anyCritical: boolean;
   }> {
-    const byOrder = new Map<string, Enriched[]>();
+    const bySample = new Map<string, Enriched[]>();
     for (const t of items) {
-      const oid = t.subOrder?.order?.id ?? t.id;
-      if (!byOrder.has(oid)) byOrder.set(oid, []);
-      byOrder.get(oid)!.push(t);
+      const key = t.subOrder?.id
+        ?? `${t.subOrder?.order?.id ?? t.id}|${t.test?.department?.id ?? ''}`;
+      if (!bySample.has(key)) bySample.set(key, []);
+      bySample.get(key)!.push(t);
     }
     const rank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
-    return Array.from(byOrder.entries()).map(([orderId, group]) => {
+    return Array.from(bySample.entries()).map(([key, group]) => {
       const worst = [...group].sort((a, b) => rank[a._level] - rank[b._level])[0];
       return {
-        orderId,
+        key,
+        sampleLabel: worst.subOrder?.barcode ?? worst.subOrder?.id?.slice(0, 8) ?? '—',
+        dept: worst.test?.department?.name ?? '—',
         patientName: formatPatientInfo(worst.subOrder?.order?.patient),
         displayName: worst.subOrder?.order?.patient?.displayName || 'Patient',
         items: group,
