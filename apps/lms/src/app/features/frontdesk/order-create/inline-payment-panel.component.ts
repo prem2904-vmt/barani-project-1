@@ -10,7 +10,6 @@ import {
 } from "@angular/core";
 import { ApiService } from "../../../core/services/api.service";
 import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
-import { NumPadComponent } from "../../../shared/primitives/num-pad.component";
 
 export type PayMode = "upi" | "card" | "cash" | "wallet" | "split" | "later";
 
@@ -50,7 +49,7 @@ interface ModeDef {
 @Component({
   selector: "pf-inline-payment-panel",
   standalone: true,
-  imports: [NumPadComponent, CurrencyInrPipe],
+  imports: [CurrencyInrPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-ipp">
@@ -154,12 +153,19 @@ interface ModeDef {
                   <span>Short by</span><strong>{{ changeAbs() | inr }}</strong>
                 }
               </div>
-              <pf-num-pad
+              <!-- Cash entry: a native numeric field. On phones/tablets this
+                   brings up the OS number pad (never the full keyboard); on web
+                   the physical keyboard types straight in. Digits only. -->
+              <input
+                class="pf-cash__input"
+                inputmode="numeric"
+                autocomplete="off"
+                enterkeyhint="done"
                 [value]="cash()"
-                [allowDecimal]="false"
-                [compact]="true"
-                (valueChange)="cash.set($event)"
-              ></pf-num-pad>
+                (input)="cash.set(cashDigits($event))"
+                placeholder="Tap to enter amount received"
+                aria-label="Cash received"
+              />
             </div>
           }
           @case ("wallet") {
@@ -465,6 +471,31 @@ interface ModeDef {
         background: rgba(139, 92, 246, 0.12);
         border-color: rgba(139, 92, 246, 0.4);
         color: var(--text-primary);
+      }
+      .pf-cash__input {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+        background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+        color: var(--text-primary);
+        /* 20px keeps iOS from zooming on focus and reads as the primary field. */
+        font-size: 20px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.01em;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        -webkit-appearance: none;
+      }
+      .pf-cash__input::placeholder {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+      }
+      .pf-cash__input:focus {
+        border-color: rgba(139, 92, 246, 0.6);
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
       }
       .pf-cash__change {
         display: flex;
@@ -874,6 +905,12 @@ export class InlinePaymentPanelComponent implements OnInit {
 
   asVal(e: Event): string {
     return (e.target as HTMLInputElement | HTMLSelectElement).value;
+  }
+
+  /** Cash field is whole rupees — keep only digits so the native OS numpad
+   *  (mobile) or the keyboard (web) can't slip in stray characters. */
+  cashDigits(e: Event): string {
+    return (e.target as HTMLInputElement).value.replace(/\D/g, "");
   }
 
   emit() {

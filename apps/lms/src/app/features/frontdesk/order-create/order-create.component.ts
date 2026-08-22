@@ -105,6 +105,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
+  /** TRUE desktop/web only: wide AND a fine pointer (mouse). This is where the
+   *  keyboard-first search dropdown makes sense and the catalog grid stays
+   *  browse-only. A TOUCH device — phone OR iPad (pointer: coarse) — never gets
+   *  the dropdown; there the list/grid just filters as you type (one search). */
+  private static readonly WEB_MQ = '(min-width: 1024px) and (pointer: fine)';
+  readonly isWide = signal(typeof window !== 'undefined' && window.matchMedia(OrderCreateComponent.WEB_MQ).matches);
+  private readonly _wideMql = typeof window !== 'undefined' ? window.matchMedia(OrderCreateComponent.WEB_MQ) : null;
+  private readonly _onWideChange = (e: MediaQueryListEvent) => this.isWide.set(e.matches);
+
   private loadTrendEligible(patientId: string) {
     this.api.get<{ tests: TrendTest[] }>(`/api/patients/${patientId}/lab-trends`).subscribe({
       next: r => {
@@ -347,14 +356,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
+  /** Full-catalogue matches for the current query (individual + profile +
+   *  package) — drives the desktop keyboard dropdown, independent of the browse
+   *  grid so the grid can stay put while the dropdown searches. */
+  readonly searchMatches = computed(() => {
+    const q = this._query().trim();
+    return q ? this.filterTestList(this._tests(), q) : [];
+  });
+
   readonly filteredTests = computed(() => {
     const q = this._query().trim();
-    // A search spans the WHOLE catalogue (individual + profile + package) and
-    // overrides the department pill — searching a package while on Tests still
-    // surfaces it. With no query, show dept-filtered individual tests only.
-    return q
-      ? this.filterTestList(this._tests(), q)
-      : this.filterByDept(this.individualTests());
+    // DESKTOP/WEB (≥1024): the catalog grid is BROWSE-ONLY — the keyboard
+    // dropdown owns search, so the grid never reshuffles and competes with it
+    // (design 1d: "the catalog below never reshuffles while searching").
+    // PHONE/TABLET: no dropdown, so the grid itself narrows to the matches.
+    if (q && !this.isWide()) return this.filterTestList(this._tests(), q);
+    return this.filterByDept(this.individualTests());
   });
 
   /** Sort key: test code, natural/numeric-aware (BIO0002 before BIO0010). */
@@ -668,6 +685,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit() {
+    this._wideMql?.addEventListener('change', this._onWideChange);
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
     // to inactive) must not appear in the picker.
@@ -944,6 +962,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   setPriority(p: Priority) { this._priority.set(p); }
   setQuery(q: string) {
     this._query.set(q);
+    this.activeResult.set(0);
     const queryStr = q.trim();
     if (queryStr !== '') {
       if (this.categoryTab() !== 'all') {
@@ -955,6 +974,36 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
+
+  // ── Keyboard-first search dropdown ──────────────────────────────
+  /** Top matches for the current query, shown in a dropdown under the search
+   *  field for instant keyboard add. Empty when the field is empty. */
+  readonly searchResults = computed<Test[]>(() =>
+    this.isWide() && this._query().trim() ? this.searchMatches().slice(0, 7) : []);
+  /** Highlighted dropdown row (driven by ↑/↓ and hover); Enter adds it. */
+  readonly activeResult = signal(0);
+
+  onSearchArrow(e: Event, dir: number): void {
+    const n = this.searchResults().length;
+    if (n === 0) return;
+    // Stop the browser (and any global arrow-key handler) from scrolling the page
+    // while the dropdown owns ↑/↓.
+    e.preventDefault();
+    e.stopPropagation();
+    this.activeResult.update(i => Math.max(0, Math.min(n - 1, i + dir)));
+  }
+  onSearchEnter(e: Event): void {
+    const list = this.searchResults();
+    if (list.length === 0) return;
+    e.preventDefault();
+    this.addSearchResult(list[Math.min(this.activeResult(), list.length - 1)]);
+  }
+  /** Add a dropdown hit and keep focus for the next query. Adding a test already
+   *  clears the field + refocuses (toggleTest/togglePackage) — "⏎ add & keep typing". */
+  addSearchResult(t: Test): void {
+    this.activeResult.set(0);
+    if (t.type === 'package') this.togglePackage(t); else this.toggleTest(t);
+  }
 
   isSelected(id: string): boolean { return this._selected().includes(id); }
 
@@ -1046,6 +1095,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleCart() { this._cartOpen.update(v => !v); }
   closeCart() { this._cartOpen.set(false); }
+
+  /** Friendly "report ready" estimate for the sticky cart bar (from the cart's
+   *  max TAT): ≈ N day(s) at/over 24h, else ≈ Nh. Empty when nothing's selected. */
+  reportReadyLabel(): string {
+    const h = this.tatHours();
+    if (!h || h <= 0) return '';
+    if (h >= 24) { const d = Math.round(h / 24); return `≈ ${d} day${d === 1 ? '' : 's'}`; }
+    return `≈ ${h}h`;
+  }
 
   shortCode(t: Test): string {
     // Prefer the real test ID / code (e.g. BIO00081) so reception can match it
@@ -1497,7 +1555,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.invoiceBlobUrl) { try { URL.revokeObjectURL(this.invoiceBlobUrl); } catch { /* noop */ } this.invoiceBlobUrl = null; }
     this.invoicePreviewUrl.set(null);
   }
-  ngOnDestroy() { this.closeInvoicePreview(); }
+  ngOnDestroy() {
+    this._wideMql?.removeEventListener('change', this._onWideChange);
+    this.closeInvoicePreview();
+  }
 
   submit() {
     const p = this._patient();

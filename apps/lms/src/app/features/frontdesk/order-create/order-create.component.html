@@ -206,6 +206,10 @@
                      [disabled]="orderLocked()"
                      (input)="setQuery(asInput($event))"
                      (keydown.tab)="onSearchTab($event)"
+                     (keydown.arrowDown)="onSearchArrow($event, 1)"
+                     (keydown.arrowUp)="onSearchArrow($event, -1)"
+                     (keydown.enter)="onSearchEnter($event)"
+                     (keydown.escape)="setQuery('')"
                      placeholder="Search tests or packages — name, code, department…"
                      class="pf-search__input"
                      autofocus/>
@@ -215,6 +219,32 @@
                     <path d="M6 6l12 12M18 6 6 18"/>
                   </svg>
                 </button>
+              }
+
+              <!-- Keyboard-first quick-add dropdown: type → top hits → ⏎ adds the
+                   highlighted one and keeps focus so a whole order is typed fast. -->
+              @if (query().trim() && searchResults().length > 0 && !orderLocked()) {
+                <div class="pf-search-dd" role="listbox" aria-label="Matching tests">
+                  @for (t of searchResults(); track t.id; let i = $index) {
+                    <button type="button" class="pf-search-dd__row"
+                            [class.pf-search-dd__row--active]="i === activeResult()"
+                            [class.pf-search-dd__row--on]="isSelected(t.id)"
+                            (mouseenter)="activeResult.set(i)"
+                            (click)="addSearchResult(t)"
+                            role="option" [attr.aria-selected]="i === activeResult()">
+                      <span class="pf-search-dd__code">{{ shortCode(t) }}</span>
+                      <span class="pf-search-dd__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</span>
+                      @if (t.tatHours) { <span class="pf-search-dd__tat">TAT {{ t.tatHours }}h</span> }
+                      <span class="pf-search-dd__price">{{ t.price | inr }}</span>
+                      <span class="pf-search-dd__add" [class.pf-search-dd__add--on]="isSelected(t.id)">
+                        {{ isSelected(t.id) ? '✓ Added' : (i === activeResult() ? '⏎ Add' : '+ Add') }}
+                      </span>
+                    </button>
+                  }
+                  <div class="pf-search-dd__hint">
+                    <span>↑↓ navigate</span><span>⏎ add &amp; keep typing</span><span>esc close</span>
+                  </div>
+                </div>
               }
             </div>
 
@@ -243,8 +273,12 @@
           <!-- Categorized test picker. Tabs swap the rail content; rail
                itself is one horizontal scroll-snap row. Star = toggle
                favourite (per-user). 'all' falls back to the dept-grouped
-               grid for full catalogue browsing. -->
-          <div>
+               grid for full catalogue browsing.
+               On WEB while searching, the keyboard dropdown IS the result list,
+               so the browse picker hides — one search, not two. It returns the
+               moment the field is cleared. (Touch devices keep the picker: there
+               the picker itself is the search, so it just filters.) -->
+          <div [class.pf-picker--hidden]="isWide() && !!query().trim()">
             @if (orderLocked()) {
               <div class="pf-payment-due-tests">
                 @if (order()?.orderNumber; as onum) {
@@ -580,28 +614,38 @@
 
       </div>
 
-      <!-- Floating cart button — bottom-right, visible on phone + iPad-portrait.
-           Hidden at lg+ where the cart side column is shown. -->
-      <button type="button"
-              class="pf-cart-fab press lg:hidden"
-              [class.pf-cart-fab--open]="cartOpen()"
-              (click)="toggleCart()"
-              [attr.aria-label]="'Cart · ' + selected().length + ' tests'">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-          <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>
-        </svg>
-        @if (selected().length > 0) {
-          <span class="pf-cart-fab__badge">{{ selected().length }}</span>
-        }
-      </button>
+      <!-- Sticky cart BAR (mockup): phone + iPad-portrait. Replaces the floating
+           FAB — shows the running cart and a Review & Pay action that opens the
+           dedicated checkout step (drawer). Hidden at lg+ (persistent cart rail),
+           and while the checkout is already open. -->
+      @if (selected().length > 0 && !cartOpen()) {
+        <div class="pf-cartbar lg:hidden">
+          <button type="button" class="pf-cartbar__inner press" (click)="toggleCart()"
+                  [attr.aria-label]="'Review and pay — ' + selected().length + ' tests'">
+            <span class="pf-cartbar__icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>
+              </svg>
+              <span class="pf-cartbar__badge">{{ selected().length }}</span>
+            </span>
+            <span class="pf-cartbar__info">
+              <span class="pf-cartbar__line1">{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }} · {{ total() | inr }}</span>
+              @if (reportReadyLabel(); as rr) {
+                <span class="pf-cartbar__line2">Report ready in {{ rr }}</span>
+              }
+            </span>
+            <span class="pf-cartbar__cta">{{ showInlinePay() ? 'Review & Pay' : 'Review' }} →</span>
+          </button>
+        </div>
+      }
 
       <!-- Mobile/tablet: cart drawer + backdrop -->
       @if (cartOpen()) {
         <div class="pf-cart-backdrop lg:hidden" (click)="closeCart()"></div>
         <aside class="pf-cart-drawer lg:hidden">
           <header class="pf-cart-drawer__head">
-            <span class="pf-eyebrow">{{ showInlinePay() ? 'Cart & payment' : 'Cart' }}</span>
+            <span class="pf-eyebrow">{{ showInlinePay() ? 'Review & Pay' : 'Cart' }}</span>
             <button type="button" class="pf-cart-drawer__close press" (click)="closeCart()" aria-label="Close cart">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 6l12 12M18 6 6 18"/>

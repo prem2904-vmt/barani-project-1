@@ -18,7 +18,6 @@ import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
-import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -72,7 +71,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   host: { '[class.pf-embedded]': 'embedded' },
   imports: [
     CurrencyInrPipe, WalletOutstandingPipe,
-    NumPadComponent,
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
@@ -361,11 +359,17 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       @else if (changeAmount() === 0) { <span>Exact — no change due</span> }
                       @else { <span>Short by</span><strong>{{ changeAbs() | inr }}</strong> }
                     </div>
-                    <pf-num-pad
+                    <!-- Native numeric field: OS number pad on phones/tablets,
+                         physical keyboard on web — consistent with Order & Payments. -->
+                    <input
+                      class="pf-cash2__input"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      enterkeyhint="done"
                       [value]="cashAmount()"
-                      [allowDecimal]="false"
-                      [compact]="true"
-                      (valueChange)="setCash($event)"></pf-num-pad>
+                      (input)="setCash(cashDigits($event))"
+                      placeholder="Tap to enter amount received"
+                      aria-label="Cash received" />
                   </div>
                 }
                 @case ('wallet') {
@@ -933,6 +937,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-cash2__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
     .pf-cash2__amt { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .pf-cash2__amt--empty { color: var(--text-muted); }
+    .pf-cash2__input { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-primary); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;
+      outline: none; -webkit-appearance: none; transition: border-color .15s ease, box-shadow .15s ease; }
+    .pf-cash2__input::placeholder { font-size: 14px; font-weight: 500; color: var(--text-tertiary, rgba(255,255,255,0.4)); }
+    .pf-cash2__input:focus { border-color: rgba(139,92,246,0.6); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
     .pf-cash2__quick { display: flex; gap: 6px; }
     .pf-cash2__quick button { flex: 1; padding: 8px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
       border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); }
@@ -2061,6 +2070,12 @@ export class BillingComponent implements OnInit, OnChanges {
     });
   }
   setCash(v: string) { this._cash.set(v); }
+
+  /** Cash field is whole rupees — keep only digits so the native OS numpad
+   *  (mobile) or the keyboard (web) can't slip in stray characters. */
+  cashDigits(e: Event): string {
+    return (e.target as HTMLInputElement).value.replace(/\D/g, '');
+  }
   readonly cashNotes = [100, 500, 2000];
   setExactCash() { this._cash.set(String(this.effectivePayable())); }
   addCash(n: number) { this._cash.set(String(this.cashAmountNum() + n)); }

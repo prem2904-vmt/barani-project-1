@@ -128,33 +128,37 @@
 .pf-deptpill--on .pf-deptpill__code { background: rgba(255, 255, 255, 0.22); }
 
 /* ── Horizontal rail of test cards ── */
+/* Catalog list — dense single-line rows on phone/tablet (design "3× density"):
+   one full-width row per test, stacked vertically instead of a horizontal card
+   scroll. Desktop (≥1024) keeps the multi-column card grid from the mockup.
+   Pure layout — no data, colour or binding change. The card's inner wrappers are
+   flattened with `display:contents` so code / name / TAT / price / star line up
+   as one row via `order`, with no template edit needed. */
 .pf-rail {
-  display: flex; gap: 10px;
+  display: flex; flex-direction: column; gap: 6px;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  padding: 6px 4px 14px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+  overflow-x: hidden;
+  padding: 4px 2px 12px;
 }
+.pf-rail-card__title-row { display: contents; }
+.pf-rail-card__price-row { display: contents; }
+.pf-rail-card__title-row > span:first-child { order: 1; flex-shrink: 0; }
+.pf-rail-card__star { order: 5; margin-left: 0; flex-shrink: 0; }
+.pf-rail-card__tat  { order: 3; flex-shrink: 0; }
+.pf-rail-card__price { order: 4; flex-shrink: 0; }
+.pf-rail-card__badge-pkg { order: 1; flex-shrink: 0; }
+.pf-rail-card__pkg-count { order: 3; flex-shrink: 0; }
+
 @media (min-width: 1024px) {
+  /* WEB browse catalog = a grid of the SAME dense rows as phone/tablet, laid
+     2–3 across to use the wide column — not sparse KPI-style cards. Each cell is
+     one scannable line (code · name · TAT · price · ★). Rows flow and the left
+     column scrolls; the cart rail stays put. */
   .pf-rail {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    grid-auto-rows: 140px;
-    gap: 10px;
-    max-height: calc(140px * 2 + 10px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-snap-type: none;
-  }
-  .pf-rail-card {
-    flex: none;
-    align-self: start;
-    min-height: 140px;
-    max-height: 140px;
-    height: 140px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 8px;
   }
   .pf-rail::-webkit-scrollbar { width: 6px; height: auto; }
   .pf-rail::-webkit-scrollbar-track { background: transparent; }
@@ -162,28 +166,19 @@
     background: rgba(168, 85, 247, 0.32); border-radius: 999px;
   }
 }
-.pf-rail::-webkit-scrollbar { height: 6px; }
-.pf-rail::-webkit-scrollbar-track { background: transparent; }
-.pf-rail::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.32); border-radius: 999px;
-}
 
 .pf-rail-card {
   position: relative;
-  flex: 0 0 200px;
-  scroll-snap-align: start;
-  display: flex; flex-direction: column;
-  padding: 5px 8px 0px;
+  flex: none;
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
+  padding: 9px 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: 12px;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.08s;
   overflow: hidden;
-}
-@media (min-width: 640px) {
-  .pf-rail-card { flex: 0 0 220px; }
 }
 .pf-rail-card:not(.pf-rail-card--on):hover { background: var(--glass-bg-hover); border-color: rgba(168, 85, 247, 0.40); }
 .pf-rail-card:active { transform: scale(0.98); }
@@ -260,7 +255,7 @@
   border-radius: 5px;
 }
 .pf-rail-card__title-row {
-  display: flex;
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -281,21 +276,17 @@
   white-space: nowrap;
 }
 .pf-rail-card__name {
+  order: 2;
+  flex: 1 1 auto; min-width: 0;
   margin: 0;
   font-size: 13.5px; font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.25;
-  white-space: normal;
-  overflow: hidden;
-  min-height: 3em;
-  max-height: 3em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pf-rail-card__price-row {
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
   margin-top: 8px;
-  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -457,79 +448,86 @@
 }
 
 /* ── Floating cart button ── */
-.pf-cart-fab {
+/* Sticky cart BAR (mockup) — phone + iPad-portrait; floats just above the
+   bottom-nav pill and spans the width. Replaces the old floating FAB. Tap
+   anywhere → the Review & Pay step. Hidden at lg+ (persistent cart rail). */
+.pf-cartbar {
   position: fixed;
-  right: 16px;
-  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  left: 12px;
+  right: 12px;
+  bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
   z-index: 46;
-  width: 60px;
-  height: 60px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  display: inline-flex;
+}
+.pf-cartbar__inner {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--bg-card-solid, #1c1728);
+  border: 1px solid var(--color-primary, #7c3aed);
+  box-shadow: 0 12px 32px -8px rgba(124, 58, 237, 0.55);
   cursor: pointer;
-  box-shadow:
-    0 14px 36px rgba(124, 58, 237, 0.55),
-    0 0 0 0 rgba(168, 85, 247, 0.45);
-  transition:
-    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.3s ease,
-    background 0.25s ease;
-  animation: pf-cart-breathe 2.6s ease-in-out infinite;
+  text-align: left;
+  transition: transform 0.08s ease;
 }
-@keyframes pf-cart-breathe {
-  0%, 100% {
-    box-shadow:
-      0 14px 36px rgba(124, 58, 237, 0.55),
-      0 0 0 0 rgba(168, 85, 247, 0.45);
-  }
-  50% {
-    box-shadow:
-      0 16px 40px rgba(124, 58, 237, 0.65),
-      0 0 0 12px rgba(168, 85, 247, 0);
-  }
-}
-.pf-cart-fab:hover {
-  box-shadow: 0 18px 42px rgba(124, 58, 237, 0.7);
-  animation-play-state: paused;
-}
-.pf-cart-fab:active { transform: scale(0.93); }
-.pf-cart-fab--open {
-  background: linear-gradient(135deg, #ef4444, #db2777);
-  transform: rotate(45deg);
-  animation: none;
-}
-.pf-cart-fab__badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 9999px;
-  background: #ffffff;
-  color: #7c3aed;
-  font-size: 11.5px;
-  font-weight: 800;
+.pf-cartbar__inner:active { transform: scale(0.99); }
+.pf-cartbar__icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+.pf-cartbar__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
   font-variant-numeric: tabular-nums;
-  border: 2px solid var(--bg-primary);
 }
-.pf-cart-fab--open .pf-cart-fab__badge {
-  transform: rotate(-45deg);
+.pf-cartbar__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .pf-cart-fab { animation: none; }
+.pf-cartbar__line1 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.pf-cartbar__line2 {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.pf-cartbar__cta {
+  flex-shrink: 0;
+  padding: 10px 15px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 @media (min-width: 1024px) {
-  .pf-cart-fab { display: none; }
+  .pf-cartbar { display: none; }
 }
 
 /* ── Patient row ────────────────────────────────────────── */
@@ -729,6 +727,103 @@
   box-shadow: 0 0 0 4px rgba(124, 58, 247, 0.16);
   background-color: var(--glass-bg-hover);
 }
+
+/* Keyboard-first quick-add dropdown (design 1d): type → top hits → ⏎ adds. */
+.pf-search-dd {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-elevated, var(--bg-card-solid, #14141f));
+  border: 1px solid rgba(124, 58, 237, 0.55);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  max-height: 348px;
+  overflow-y: auto;
+}
+.pf-search-dd__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.pf-search-dd__row--active {
+  background: var(--glass-bg-hover);
+  border-color: rgba(124, 58, 237, 0.5);
+}
+.pf-search-dd__row--on { opacity: 0.9; }
+.pf-search-dd__code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pf-search-dd__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-search-dd__tat {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  flex-shrink: 0;
+}
+.pf-search-dd__price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.pf-search-dd__add {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #7c3aed));
+  color: #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pf-search-dd__add--on {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--green-text, #10b981);
+}
+.pf-search-dd__hint {
+  display: flex;
+  gap: 14px;
+  padding: 6px 10px 3px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Web + searching: the dropdown is the whole result list, so the browse picker
+   (tabs + dept chips + grid) is hidden — one search on screen, not two. */
+.pf-picker--hidden { display: none; }
 .pf-search__icon {
   position: absolute;
   left: 14px;
