@@ -1126,9 +1126,9 @@ export class AdminOverviewComponent implements OnInit {
       label: "Organization & Identity",
       href: "/admin/organization",
       g: "org",
-      hint: "Patient ID format · data tools",
+      hint: "Login handle · Patient/Sample/Order ID formats",
       icon: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2",
-      kw: "patient id mrn number format prefix date running number identity wipe patient data danger zone reset delete purge tenant",
+      kw: "patient id mrn number format prefix date running number identity login handle slug sample order id format",
     },
     {
       label: "Appointments & queue",

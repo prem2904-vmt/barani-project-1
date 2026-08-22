@@ -58,7 +58,7 @@ export const ADMIN_NAV: NavItem = {
   href: '/admin',
   iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
              'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z'],
-  permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+  permissions: ['manage_tests', 'manage_users', 'manage_workflows']
 };
 
 /** Canonical permissions that grant the /frontdesk work area (landing +
@@ -69,12 +69,13 @@ export const ADMIN_NAV: NavItem = {
  *  `collect_sample` (which gets its own "Collect" nav entry). */
 export const FRONTDESK_PERMS = [
   'register_patient', 'create_order',
-  // Front desk is also where billing happens and where a branch manager
-  // oversees the counter, so admit those roles too (OPS-10): billing counter
-  // (create_bill / collect_payment) and branch manager (manage_branch). These
-  // are not held by lab techs / pathologists, so it doesn't leak the route to
-  // them.
-  'create_bill', 'collect_payment', 'manage_branch',
+  // Front desk is also where billing happens, so admit the billing counter
+  // (create_bill / collect_payment) too (OPS-10). Deliberately NOT gated on
+  // manage_branch: a Branch Manager holds only read-tier branch perms and has
+  // no front-desk create actions, so the front-desk landing (with its
+  // New-patient / Create-order buttons) would only surface controls that 403
+  // for them — an affordance leak. They oversee via dashboards/queues instead.
+  'create_bill', 'collect_payment',
 ];
 
 /** Landing routes whose real guard is NARROWER than the union of the actions an
@@ -291,7 +292,7 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
     iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+    permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
   {
     // Lab module's own settings hub — lab-specific config lives in the Lab world.
@@ -303,7 +304,7 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
-    permissions: ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches']
+    permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
   {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
@@ -357,7 +358,7 @@ export const MORE_NAV: NavItem[] = [
   },
   {
     id: 'kpis', label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-    permissions: ['manage_tenant', 'manage_branches']
+    permissions: ['manage_tenant']
   },
   {
     id: 'vendors', label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
@@ -370,7 +371,7 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'appts', label: 'Appointments', href: '/admin/appointments',
     iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
-    permissions: ['manage_branches', 'manage_tenant']
+    permissions: ['manage_tenant']
   },
   {
     // Front-desk home-collection assignment — tied to the home_visits action:
@@ -389,6 +390,6 @@ export const MORE_NAV: NavItem[] = [
   },
   {
     id: 'setup', label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
-    permissions: ['manage_branches', 'manage_users']
+    permissions: ['manage_users']
   }
 ];

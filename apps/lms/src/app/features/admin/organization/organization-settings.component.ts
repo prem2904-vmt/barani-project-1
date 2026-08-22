@@ -314,8 +314,6 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
       /* Patient-ID grid: 2 cols can crowd narrow phones — go single column. */
       :host .grid.grid-cols-2 { grid-template-columns: 1fr; }
 
-      /* Danger zone: stack the button full-width below the copy on phone. */
-
       /* Header rows: the title/copy + toggle stay on one row but allow
          the copy to shrink so the toggle never gets pushed off-screen. */
       :host .pf-ls__inline-toggle { align-items: flex-start; }
@@ -356,10 +354,6 @@ export class OrganizationSettingsComponent implements OnInit {
   protected readonly slug = signal('');
   protected readonly slugOriginal = signal('');
   protected readonly slugSaving = signal(false);
-
-  // ── Danger-zone state ──
-  /** Mirrors the backend gate. Hide the danger-zone tile if the user
-   *  doesn't hold manage_tenant — they'd 403 on click anyway. */
 
   // ── Patient-ID format ──
   protected readonly pidEnabled = signal(false);

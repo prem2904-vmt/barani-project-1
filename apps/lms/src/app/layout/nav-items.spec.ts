@@ -44,13 +44,15 @@ describe('ADMIN_NAV', () => {
     expect(ADMIN_NAV.href).toBe('/admin');
   });
 
-  it('requires manage_* permissions', () => {
+  it('requires admin-config manage_* permissions (NOT manage_branches)', () => {
     expect(ADMIN_NAV.permissions).toEqual([
       'manage_tests',
       'manage_users',
       'manage_workflows',
-      'manage_branches',
     ]);
+    // Branch browsing must NOT open the admin shell — a Branch Manager reaches
+    // /admin/branches via its own route, not the admin config hub.
+    expect(ADMIN_NAV.permissions).not.toContain('manage_branches');
   });
 
   it('has a valid iconPath array', () => {
@@ -66,10 +68,12 @@ describe('FRONTDESK_PERMS', () => {
     expect(FRONTDESK_PERMS).toContain('create_order');
   });
 
-  it('includes billing and branch management permissions', () => {
+  it('includes billing permissions but NOT branch management', () => {
     expect(FRONTDESK_PERMS).toContain('create_bill');
     expect(FRONTDESK_PERMS).toContain('collect_payment');
-    expect(FRONTDESK_PERMS).toContain('manage_branch');
+    // manage_branch must NOT grant the front-desk work area — it would only
+    // surface create controls that 403 for a read-tier Branch Manager.
+    expect(FRONTDESK_PERMS).not.toContain('manage_branch');
   });
 
   it('is a non-empty array', () => {
@@ -195,12 +199,13 @@ describe('MORE_NAV', () => {
     expect(uniqueIds.size).toBe(allIds.length);
   });
 
-  it('admin-overview requires manage_* permissions', () => {
+  it('admin-overview requires admin-config manage_* permissions (NOT manage_branches)', () => {
     const adminOverview = MORE_NAV.find((item) => item.id === 'admin-overview');
     expect(adminOverview).toBeDefined();
     expect(adminOverview!.permissions).toEqual(
-      expect.arrayContaining(['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'])
+      expect.arrayContaining(['manage_tests', 'manage_users', 'manage_workflows'])
     );
+    expect(adminOverview!.permissions).not.toContain('manage_branches');
   });
 
   it('module-specific items (opd, ipd, pharmacy) have module entitlement', () => {

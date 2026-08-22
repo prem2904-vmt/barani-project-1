@@ -9,7 +9,13 @@ import { FRONTDESK_PERMS } from './layout/nav-items';
 import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
 
-const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
+// Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
+// KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
+// browsing (see RoleSeeder) held by Branch Managers, who must NOT reach tenant
+// config. Their legit destinations — /admin/branches, /admin/audit,
+// home-collection — are separate routes gated on their own perms and surfaced
+// via the "More" nav, so they need no admin-shell access.
+const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows'];
 const adminGuard = permissionGuard(ADMIN_PERMS);
 
 // Gate for /set-password: must be signed in, and only relevant while a
@@ -70,7 +76,8 @@ export const appRoutes: Route[] = [
       },
 
       // Admin — gated: hidden from nav + blocked at route level if the user
-      // doesn't hold any admin permission (manage_tests/users/workflows/branches).
+      // doesn't hold any admin-config permission (manage_tests/users/workflows).
+      // Branch browsing (manage_branch/es) is NOT an admin-config perm.
       {
         path: 'admin',
         canActivate: [adminGuard],
@@ -190,7 +197,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/lab-settings',
-        canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
+        canActivate: [permissionGuard('manage_lab_settings')],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
@@ -207,12 +214,12 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/organization',
-        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        canActivate: [permissionGuard('manage_tenant')],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
       },
       {
         path: 'admin/billing',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
+        canActivate: [permissionGuard('manage_tenant')],
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },
       {
@@ -240,7 +247,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/notifications',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
+        canActivate: [permissionGuard(['manage_tenant', 'manage_notifications'])],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)
       },
       {
@@ -292,12 +299,12 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/appointments',
-        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        canActivate: [permissionGuard('manage_tenant')],
         loadComponent: () => import('./features/admin/appointments-config/appointments-config.component').then(m => m.AppointmentsConfigComponent)
       },
       {
         path: 'admin/home-collection',
-        canActivate: [permissionGuard(['manage_home_collection', 'manage_branches']), moduleGuard('homeCollection')],
+        canActivate: [permissionGuard('manage_home_collection'), moduleGuard('homeCollection')],
         loadComponent: () => import('./features/admin/home-collection/home-collection-agents.component').then(m => m.HomeCollectionAgentsComponent)
       },
       {

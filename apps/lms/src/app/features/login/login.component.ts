@@ -26,8 +26,10 @@ const ROLE_LANDINGS: Array<{ perm: string; path: string }> = [
 ];
 
 // Any of these perms lets a user into /admin/*. Must stay in sync with
-// ADMIN_PERMS in app.routes.ts.
-const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
+// ADMIN_PERMS in app.routes.ts. Excludes manage_branch(es) — branch browsing
+// is not admin-config access (a Branch Manager reaches /admin/branches via its
+// own route guard, not the admin shell).
+const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows'];
 
 @Component({
   selector: 'pf-login',
