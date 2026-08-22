@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
@@ -7,7 +7,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
 import { ReportColumn } from '../../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
-import { PreviewProfileMember } from '../../report-template/report-pdf-preview.component';
+import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
 import { Test, TestOptionRow, TestParameter, TestParametersBlob } from '../../../../shared/models/test.model';
 import { ReferralLab } from '../../../../shared/models/referral-lab.model';
@@ -26,10 +26,8 @@ import {
 import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } from '../../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
-import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
-import { TileComponent } from '../../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
@@ -147,25 +145,24 @@ function makeEmptyDraft(): DraftTest {
     FormsModule,
     CurrencyInrPipe,
     NumberInputComponent,
-    ScreenHeaderComponent,
     ConditionEditorComponent,
     FieldTypePickerComponent,
     ValidationEditorComponent,
     SegmentedComponent,
     SelectComponent,
-    TileComponent,
     TouchButtonComponent,
     TestLayoutEditorComponent,
     TestNotesEditorComponent,
     TestConsumablesComponent,
     DragDropModule,
-    ReportColumnsEditorComponent
+    ReportColumnsEditorComponent,
+    ReportPdfPreviewComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
   styleUrl: './test-editor.component.scss'
 })
-export class TestEditorComponent implements OnInit {
+export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly layoutSvc = inject(ReportLayoutService);
@@ -315,6 +312,7 @@ export class TestEditorComponent implements OnInit {
   }
 
   private readonly _advancedRanges = signal(false);
+  readonly advancedOpen = this._advancedRanges.asReadonly();
   protected openAdvancedRanges() { this._advancedRanges.set(true); }
   protected closeAdvancedRanges() { this._advancedRanges.set(false); }
 
@@ -381,12 +379,31 @@ export class TestEditorComponent implements OnInit {
 
   private readonly _section = signal<TestSection>('identity');
   readonly section = this._section.asReadonly();
+  /** Single-page layout (redesign): every section renders on ONE scrolling page;
+   *  the rail becomes a scroll-spy / jump nav rather than a tab switcher. */
+  readonly onePage = signal(true);
+
   setSection(v: TestSection) {
     this._section.set(v);
-    if (v === 'layout') {
-      if (this.deptColumnCfg().length === 0) this.loadDeptColumns(this._draft().departmentId);
-      this.loadTestColumns();
+    this.ensureLayoutData();
+  }
+  /** Rail click: highlight + smooth-scroll the section's card into view. */
+  jumpToSection(v: TestSection) {
+    this._section.set(v);
+    this.ensureLayoutData();
+    if (typeof document !== 'undefined') {
+      if (typeof performance !== 'undefined') this._suppressSpyUntil = performance.now() + 700;
+      document.getElementById('sec-' + v)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+  private _layoutLoaded = false;
+  /** The Report-layout columns used to lazy-load on that tab; on one page the
+   *  section is always visible, so load them once (edit mode). */
+  private ensureLayoutData(): void {
+    if (this._layoutLoaded) return;
+    this._layoutLoaded = true;
+    if (this.deptColumnCfg().length === 0) this.loadDeptColumns(this._draft().departmentId);
+    this.loadTestColumns();
   }
   readonly visibleSections = computed<Array<{ value: TestSection; label: string; desc: string }>>(() => {
     const individual = this._draft().type === 'individual';
@@ -505,6 +522,122 @@ export class TestEditorComponent implements OnInit {
 
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
+
+  // ── Editorial redesign: chips, range visual, sentences, publish checklist ──
+
+  /** Glanceable summary chips under the title; clicking scrolls to the field. */
+  readonly metaChips = computed<Array<{ k: string; v: string; sec: TestSection }>>(() => {
+    const d = this._draft();
+    const chips: Array<{ k: string; v: string; sec: TestSection }> = [];
+    chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || '—', sec: 'identity' });
+    chips.push({ k: 'Dept', v: this.selectedDeptName() || '—', sec: 'identity' });
+    if (d.type === 'individual') {
+      const tube = this.tubeColors.find(c => c.key === d.tubeColor)?.label;
+      const sample = [(d.sampleType ?? '').trim(), tube].filter(Boolean).join(' · ');
+      chips.push({ k: 'Sample', v: sample || '—', sec: 'pricing' });
+    }
+    chips.push({ k: 'Price', v: '₹' + (d.price ?? 0).toFixed(2), sec: 'pricing' });
+    chips.push({ k: 'TAT', v: (d.tatHours ?? 0) + ' hrs', sec: 'pricing' });
+    if (d.type === 'individual') {
+      chips.push({ k: 'Fasting', v: d.fastingRequired ? 'Yes' : 'No', sec: 'pricing' });
+    }
+    return chips;
+  });
+
+  /** The first numeric parameter drives the "how it's judged" visual + sentences. */
+  private readonly firstNumericField = computed<FormField | null>(() => this.numericFields()[0] ?? null);
+
+  /** Critical/normal/high band for the visual bar. Null when there's no numeric basis. */
+  readonly judgmentBand = computed<{
+    red: number; green: number; amber: number;
+    lo: number | null; normalMax: number | null; hi: number | null; unit: string;
+  } | null>(() => {
+    const d = this._draft();
+    const p = this.firstNumericField();
+    const band = p ? this.firstBand(p) : null;
+    const lo = d.criticalLow;
+    const hi = d.criticalHigh;
+    const normalMax = band?.max ?? null;
+    if (normalMax == null) return null;         // need a normal upper bound to draw
+    const loV = lo ?? 0;
+    const red = Math.max(loV, 0);
+    const green = Math.max(normalMax - loV, 1);
+    const amber = Math.max(green * 0.6, 1);     // display-only weight (real hi is in the label)
+    return { red, green, amber, lo, normalMax, hi, unit: (p?.unit || d.unit || '') };
+  });
+
+  /** Reference ranges rendered as plain sentences (first numeric parameter). */
+  readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
+    const p = this.firstNumericField();
+    if (!p) return [];
+    const i = this.fields().indexOf(p);
+    const unit = p.unit || this._draft().unit || '';
+    return (p.referenceRanges ?? []).map((r, ri) => {
+      const sex = r.sex && r.sex !== 'any' ? (r.sex === 'M' ? 'Male' : 'Female') : 'Any sex';
+      const age = (r.minAge != null || r.maxAge != null)
+        ? `${r.minAge ?? 0}–${r.maxAge ?? '∞'} ${r.ageUnit ?? 'years'}`
+        : 'any age';
+      const who = `${sex} · ${age} →`;
+      let rule: string;
+      if (r.min == null && r.max == null) {
+        rule = 'no numeric range';
+      } else {
+        const parts: string[] = [];
+        if (r.min != null) parts.push((this.minOpShown(r) === 'gte' ? '≥ ' : '> ') + r.min);
+        if (r.min != null && r.max != null) parts.push('and');
+        if (r.max != null) parts.push((this.maxOpShown(r) === 'lte' ? '≤ ' : '< ') + r.max);
+        rule = parts.join(' ') + (unit ? ' ' + unit : '');
+      }
+      return { who, rule, prints: r.label || this.autoRangeLabel(r), i, ri };
+    });
+  });
+
+  /** "Ready to publish?" checklist — real form state, adapts to test type. */
+  readonly publishChecklist = computed<Array<{ label: string; ok: boolean; action?: TestSection }>>(() => {
+    const d = this._draft();
+    const rows: Array<{ label: string; ok: boolean; action?: TestSection }> = [];
+    const idOk = !!d.name.trim() && !this.fieldError('name') && !this.fieldError('testCode')
+      && !!d.departmentId && (d.price ?? 0) >= 0;
+    rows.push({ label: 'Identity & pricing', ok: idOk, action: idOk ? undefined : 'identity' });
+    if (d.type === 'individual') {
+      rows.push({ label: d.resultType ? 'Result type set' : 'Result type not set',
+                  ok: !!d.resultType, action: d.resultType ? undefined : 'results' });
+      const nf = this.numericFields();
+      const rangesOk = nf.length > 0 && nf.every(f => (f.referenceRanges ?? []).length > 0);
+      rows.push({ label: `Reference ranges${nf.length ? ' (' + nf.length + ')' : ''}`,
+                  ok: rangesOk, action: rangesOk ? undefined : 'results' });
+      const params = this.fields();
+      const paramsOk = params.length > 0 && params.every(p => !!(p.label ?? '').trim());
+      rows.push({ label: `Parameters (${params.length})`,
+                  ok: paramsOk, action: paramsOk ? undefined : 'results' });
+    } else {
+      const n = this.packageItems().length;
+      rows.push({ label: `Members (${n})`, ok: n > 0, action: n > 0 ? undefined : 'results' });
+    }
+    rows.push({ label: 'Report columns', ok: true });
+    return rows;
+  });
+  readonly publishCount = computed(() => {
+    const rows = this.publishChecklist();
+    return { done: rows.filter(r => r.ok).length, total: rows.length };
+  });
+  readonly publishReady = computed(() => {
+    const c = this.publishCount();
+    return c.done === c.total;
+  });
+
+  /** Unsaved-changes hint (no autosave). Cleared on fresh hydrate. */
+  readonly dirty = signal(false);
+
+  /** Debounced token so the embedded live preview re-renders after edits settle. */
+  private readonly _previewToken = signal(0);
+  readonly previewToken = this._previewToken.asReadonly();
+  private _previewTimer: ReturnType<typeof setTimeout> | null = null;
+  private bumpPreview(): void {
+    this.dirty.set(true);
+    if (this._previewTimer) clearTimeout(this._previewTimer);
+    this._previewTimer = setTimeout(() => this._previewToken.update(v => v + 1), 700);
+  }
 
   private readonly _packageItems = signal<string[]>([]);
   readonly packageQuery = signal('');
@@ -922,6 +1055,32 @@ export class TestEditorComponent implements OnInit {
     }
   }
 
+  /** Scroll-spy: highlight the rail item whose section card is at the top. */
+  private _spy: IntersectionObserver | null = null;
+  private _suppressSpyUntil = 0;
+  ngAfterViewInit(): void {
+    if (typeof IntersectionObserver === 'undefined' || typeof document === 'undefined') return;
+    this._spy = new IntersectionObserver(entries => {
+      // Ignore spy updates briefly after a click-jump so the tap wins.
+      if (performance.now() < this._suppressSpyUntil) return;
+      const onScreen = entries.filter(e => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      const top = onScreen[0]?.target?.id;
+      if (top && top.startsWith('sec-')) this._section.set(top.slice(4) as TestSection);
+    }, { rootMargin: '-96px 0px -60% 0px', threshold: 0 });
+    // Anchors render/re-render with data; observe on the next frame and re-scan lazily.
+    const scan = () => {
+      if (!this._spy) return;
+      for (const el of Array.from(document.querySelectorAll('[id^="sec-"]'))) this._spy.observe(el);
+    };
+    requestAnimationFrame(scan);
+    setTimeout(scan, 400);
+  }
+  ngOnDestroy(): void {
+    this._spy?.disconnect(); this._spy = null;
+    if (this._previewTimer) { clearTimeout(this._previewTimer); this._previewTimer = null; }
+  }
+
   private hydrateFrom(t: Test) {
     try {
       this._calcInfo.set(t.calculation ? JSON.parse(t.calculation) : null);
@@ -978,6 +1137,11 @@ export class TestEditorComponent implements OnInit {
       this._memberRows.set([]);
       this.repetitive.set(false);
     }
+    // One-page layout: the Report-layout card is always visible, so its columns
+    // must be loaded up-front rather than on a tab switch.
+    if (this.onePage()) this.ensureLayoutData();
+    this.dirty.set(false);   // fresh load is clean
+    this._previewToken.update(v => v + 1);
   }
 
   isNumericType(t: FormFieldType): boolean {
@@ -1243,6 +1407,7 @@ export class TestEditorComponent implements OnInit {
   patch(p: Partial<DraftTest>) {
     this._draft.update(d => ({ ...d, ...p }));
     for (const k of Object.keys(p)) this.clearFieldError(k);
+    this.bumpPreview();
   }
 
   back() {
