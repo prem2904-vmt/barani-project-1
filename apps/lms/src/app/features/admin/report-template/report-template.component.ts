@@ -4,7 +4,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from 
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
@@ -953,32 +953,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     };
   }
 
-  // ── Signatures (de/serialised as JSON in signaturesJson) ──────
-  readonly signatures = computed<ReportSignature[]>(() => {
-    const raw = this._tpl().signaturesJson;
-    if (!raw || !raw.trim()) return [];
-    try {
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch { return []; }
-  });
-  private setSignatures(arr: ReportSignature[]) {
-    this.patch({ signaturesJson: JSON.stringify(arr) });
-  }
-  addSignature() {
-    if (this.signatures().length >= 3) return;
-    this.setSignatures([...this.signatures(), { name: '', title: '' }]);
-  }
-  removeSignature(i: number) {
-    const next = this.signatures().slice();
-    next.splice(i, 1);
-    this.setSignatures(next);
-  }
-  updateSignature(i: number, patch: Partial<ReportSignature>) {
-    const next = this.signatures().slice();
-    next[i] = { ...next[i], ...patch };
-    this.setSignatures(next);
-  }
+  // (Dead signature-editor UI removed — the "Sign-off & Footer" tab never bound
+  //  add/remove/updateSignature; the PDF renderer reads signaturesJson directly.)
 
   // ── Live preview ─────────────────────────────────────────────
   private readonly _previewUrl = signal<string | null>(null);

@@ -14,7 +14,6 @@ import { ReferralLab } from '../../../../shared/models/referral-lab.model';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import {
   ConditionEditorComponent,
-  FieldOption,
   FieldTypePickerComponent,
   FormField,
   FormFieldType,
@@ -985,26 +984,6 @@ export class TestEditorComponent implements OnInit {
     return t === 'number';
   }
   typeHasOptions(t: FormFieldType): boolean { return registryHasOptions(t); }
-
-  protected optionsAsString(f: FormField): string {
-    const draft = (f as FormField & { _optionsDraft?: string })._optionsDraft;
-    if (typeof draft === 'string') return draft;
-    return (f.options ?? []).map(o => o.label).join(', ');
-  }
-  protected parseOptions(s: string): FieldOption[] {
-    return s.split(',').map(x => x.trim()).filter(Boolean).map((label, i) => ({
-      id: `opt_${i}_${label.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
-      label,
-      value: label,
-      order: i
-    }));
-  }
-  protected onOptionsTyped(i: number, raw: string) {
-    this._fields.update(list => list.map((p, idx) => idx === i
-      ? ({ ...p, _optionsDraft: raw, options: this.parseOptions(raw) } as FormField)
-      : p));
-    this.persistFieldsToDraft();
-  }
 
   deriveName(label: string, currentName: string | undefined): string {
     if (currentName && currentName.trim() && !currentName.startsWith('new_param')) return currentName;
