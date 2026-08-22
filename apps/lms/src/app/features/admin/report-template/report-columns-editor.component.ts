@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -402,21 +402,36 @@ export class ReportColumnsEditorComponent implements OnInit {
     this.setCols(this.normalizeTo100([...this.columns(), { ...col }]));
   }
 
+  /** The initialColumns array reference we've already seeded from — so the seed
+   *  effect adopts a NEW host seed exactly once and never re-seeds on an edit. */
+  private seededRef: ReportColumn[] | null = null;
+
   constructor() {
-    // Host-managed seed: whenever the host hands a new initialColumns array
-    // (opening the editor, or re-seeding after revert), adopt it through the
-    // same normalize pipeline the department load uses. Edits in between are
-    // safe — the effect only fires when the input REFERENCE changes.
+    // Host-managed seed: adopt the host's initialColumns when it hands a
+    // genuinely NEW array (opening the editor, or re-seeding after revert).
+    //
+    // BUG FIX (report-columns discard): the effect's body writes `columns` and
+    // then emits it (emitState reads this.columns()), which made `columns` a
+    // dependency of the effect — so every user edit (setCols → columns.set)
+    // re-fired the effect, re-seeded from initialColumns and silently discarded
+    // the rename/reorder (and re-emitted the seed, clobbering the host's live
+    // state). Fixed two ways, belt-and-suspenders: (1) a REFERENCE guard so we
+    // only seed once per new host array — an edit never changes initialColumns'
+    // reference, so it early-returns; (2) untracked() around the writes+emit so
+    // `columns` isn't tracked as a dependency at all.
     effect(() => {
       if (!this.hostManaged()) return;
       const seed = this.initialColumns();
-      if (!seed) return;
-      const sorted = [...seed]
-        .sort((a, b) => a.order - b.order)
-        .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
-      this.columns.set(this.applyDefaultResultUnitLink(this.ensureNameColumn(sorted)));
-      this.selectedIdx.set(null);
-      this.emitState();
+      if (!seed || seed === this.seededRef) return;
+      this.seededRef = seed;
+      untracked(() => {
+        const sorted = [...seed]
+          .sort((a, b) => a.order - b.order)
+          .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
+        this.columns.set(this.applyDefaultResultUnitLink(this.ensureNameColumn(sorted)));
+        this.selectedIdx.set(null);
+        this.emitState();
+      });
     });
   }
 

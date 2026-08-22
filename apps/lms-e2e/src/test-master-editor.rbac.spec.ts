@@ -251,57 +251,49 @@ test.describe('Test Master editor internals', () => {
     await expect(otRows.nth(1).locator('input[type="checkbox"]').nth(0)).not.toBeChecked();
   });
 
-  test('report columns override for a test — save/reload persists; renaming a column is silently discarded (real bug, documented)', async ({ page }) => {
+  test('report columns override — renaming a column is no longer discarded; the edit reaches Save (bug fixed)', async ({ page }) => {
     await loginAs(page, 'admin');
     await page.goto(`/admin/tests/${mainTest.id}/edit`);
     await page.getByRole('button', { name: /^Report layout\b/ }).click();
 
     await page.getByRole('button', { name: /Customize|Edit columns/ }).click();
 
-    // FINDING (real bug — apps/lms/src/app/features/admin/report-template/
-    // report-columns-editor.component.ts, constructor effect ~L405-420): the
-    // host-managed seed effect that derives `columns` from `initialColumns()`
-    // ALSO calls emitState() → reads this.columns(), so it self-triggers on
-    // every edit (rename/reorder/lock/type-change) and re-derives columns from
-    // the ORIGINAL seed, silently discarding the edit + closing the inspector.
-    // Net effect: "Customize columns" can't persist ANY per-test override edit.
-    // Asserted by the DURABLE outcome (timing-independent): a renamed column
-    // does NOT survive Save + reload — it reverts to the original heading.
+    // Was a real bug (report-columns-editor.component.ts): the host-managed seed
+    // effect emitted this.columns(), making `columns` a dependency, so every
+    // edit re-fired the effect and re-seeded from initialColumns — silently
+    // discarding the rename/reorder AND clobbering the host's live state back to
+    // the department seed before Save read it. FIXED with a seed-REFERENCE guard
+    // (+ the writes/emit untracked) so the seed adopts a new host array exactly
+    // once and never re-runs on an in-progress edit.
+    // Two durable proofs the discard is gone: (1) the renamed card reflects the
+    // edit immediately (pre-fix it snapped back to the seed); (2) the Save POST
+    // body carries the rename (pre-fix it shipped the unedited seed).
     const firstCard = page.locator('.pf-ce-col').first();
-    const originalLabel = (await firstCard.locator('.pf-ce-col__label').innerText()).trim();
     await firstCard.click();
+    const newLabel = `Renamed ${RUN}`;
     const headingInput = page
       .locator('label.pf-label', { hasText: /^Column heading$/ })
       .locator('xpath=following-sibling::input[1]');
-    if (await headingInput.count()) {
-      await headingInput.fill(`Investigation ${RUN}`).catch(() => { /* inspector may self-close (the bug) */ });
-    }
-    test.info().annotations.push({
-      type: 'bug',
-      description: 'Test Master → Report layout → "Customize columns": renaming/reordering/locking a column ' +
-        'is silently discarded. report-columns-editor.component.ts\'s host-managed seed effect (constructor ' +
-        '~L405-420) reads this.columns() via its own emitState(), so the effect self-triggers on every edit ' +
-        'and resets columns to the original seed. Verified DURABLY: a renamed column reverts to its original ' +
-        'heading after Save + reload.',
-    });
+    await expect(headingInput, 'inspector stays open after the fix').toBeVisible({ timeout: 10_000 });
+    await headingInput.fill(newLabel);
+    // BUG-FIX PROOF #1 — the card label reflects the rename immediately and
+    // stays (pre-fix the seed effect snapped it back on the same tick).
+    await expect(firstCard.locator('.pf-ce-col__label')).toHaveText(newLabel, { timeout: 5_000 });
+    await page.waitForTimeout(400);
+    await expect(firstCard.locator('.pf-ce-col__label'), 'rename holds — not re-seeded').toHaveText(newLabel);
 
-    // Save plumbing itself works (POST succeeds for whatever column set survives).
-    const saveBtn = page.getByRole('button', { name: /^Save columns$/ });
-    if (await saveBtn.count()) {
-      const [resp] = await Promise.all([
-        waitApi(page, `/api/report-layout/test/${mainTest.id}/columns`, 'POST').catch(() => null),
-        saveBtn.click().catch(() => {}),
-      ]);
-      if (resp) expect(resp.ok(), 'POST .../columns should succeed').toBeTruthy();
-    }
-
-    // DURABLE bug assertion: reload → reopen the columns editor → the first
-    // column's heading is STILL the original (the rename never persisted).
-    await page.goto(`/admin/tests/${mainTest.id}/edit`);
-    await page.getByRole('button', { name: /^Report layout\b/ }).click();
-    await page.getByRole('button', { name: /Customize|Edit columns/ }).click();
-    await expect(page.locator('.pf-ce-col').first().locator('.pf-ce-col__label'))
-      .toHaveText(originalLabel, { timeout: 10_000 });
+    // BUG-FIX PROOF #2 — the SAVE carries the EDIT, not the seed. Before the
+    // fix the seed effect clobbered the host's live state back to the department
+    // columns before Save read it, so the POST silently shipped the unedited
+    // seed. Now the renamed column is in the POST body → the override persists.
+    // (End-to-end persistence of the saved override — POST → GET round-trip —
+    //  is separately proven in column-editions-flow.rbac.spec.ts.)
+    const [resp] = await Promise.all([
+      waitApi(page, `/api/report-layout/test/${mainTest.id}/columns`, 'POST'),
+      page.getByRole('button', { name: /^Save columns$/ }).click(),
+    ]);
+    expect(resp.ok(), 'POST .../columns should succeed').toBeTruthy();
+    expect(resp.request().postData() ?? '', 'POST body carries the renamed column (edit not discarded)').toContain(newLabel);
   });
 
   test('notes/description editor — description + paragraph saved and reflected (POST .../test/:id)', async ({ page }) => {
