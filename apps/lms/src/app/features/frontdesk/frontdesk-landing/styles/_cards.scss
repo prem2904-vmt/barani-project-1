@@ -358,7 +358,7 @@
 }
 
 .pf-pipeline__node[data-state='done'] {
-  background: #10b981;
+  background: #5c9e86;
   border-color: transparent;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
 }
@@ -583,7 +583,7 @@
 }
 .pf-tabs__btn:not(.pf-tabs__btn--on):hover { color: var(--text-primary); }
 .pf-tabs__btn--on {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: var(--gradient-primary);
   color: #fff;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
 }
@@ -607,9 +607,9 @@
   color: #fff;
 }
 .pf-tabs__count[data-tone='ok'] {
-  background: rgba(16, 185, 129, 0.16);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: var(--green-text);
+  background: rgba(148, 137, 172, 0.14);
+  border-color: rgba(148, 137, 172, 0.30);
+  color: var(--text-secondary);
 }
 .pf-tabs__count[data-tone='warning'] {
   background: rgba(244, 63, 94, 0.22);
@@ -918,9 +918,9 @@
 }
 
 .pf-card__dept--validated {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.30), rgba(34, 211, 238, 0.18));
-  border-color: rgba(16, 185, 129, 0.6);
-  color: #ecfdf5;
+  background: rgba(132, 189, 166, 0.16);
+  border-color: rgba(132, 189, 166, 0.45);
+  color: var(--green-text);
   font-weight: 700;
 }
 
@@ -940,7 +940,7 @@
 }
 
 .pf-card__dot--done {
-  color: #34d399;
+  color: #84bda6;
 }
 
 .pf-card__dot--series {
@@ -948,7 +948,7 @@
 }
 
 .pf-card__dot--validated {
-  color: #67e8f9;
+  color: #84bda6;
 }
 
 .pf-card__dot--missed {
@@ -985,9 +985,9 @@
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(16, 185, 129, 0.18));
-  border: 1px solid rgba(34, 211, 238, 0.45);
-  color: var(--cyan-text);
+  background: rgba(132, 189, 166, 0.14);
+  border: 1px solid rgba(132, 189, 166, 0.38);
+  color: var(--green-text);
 }
 
 /* ── Exception alert chips ───────────────────────────────── */
@@ -1044,7 +1044,7 @@
 }
 
 .pf-alert--ready .pf-alert__dot {
-  background: #10b981;
+  background: #5c9e86;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
 }
 
@@ -1132,7 +1132,7 @@
  * Compact row with avatar, patient name, and Ready/Download or
  * Delivered chip. */
 .pf-card--completed {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #5c9e86;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1225,14 +1225,14 @@
 }
 
 .pf-bulk-bar__btn--primary {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: var(--gradient-primary);
   color: white;
   border-color: transparent;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
 }
 
 .pf-bulk-bar__btn--primary:hover {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: var(--gradient-primary);
   box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
   filter: brightness(1.08);
 }

@@ -378,6 +378,21 @@
                 </svg>
               </header>
 
+              <!-- Weekday strip — click a day to scope Appointments to it -->
+              @if (leftTab() === 'appt') {
+              <div class="pf-daystrip">
+                @for (day of weekDays(); track day.iso) {
+                <button type="button" class="pf-daystrip__day"
+                  [class.pf-daystrip__day--on]="day.selected"
+                  [class.pf-daystrip__day--today]="day.isToday"
+                  (click)="selectApptDay(day.iso)">
+                  <span class="pf-daystrip__dow">{{ day.dow }}</span>
+                  <span class="pf-daystrip__n">{{ day.n }}</span>
+                </button>
+                }
+              </div>
+              }
+
               <!-- APPOINTMENTS LIST -->
               @if (leftTab() === 'appt') {
               @if (visibleAppointments().length === 0) {

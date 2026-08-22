@@ -10,6 +10,48 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+
+  /* Frontdesk redesign — keep the pink/magenta brand gradient as-is; only
+   *  calm the loud emerald green (it was fighting the UI) to a muted sage. */
+  --green-text: #84bda6;
+}
+
+/* ── Weekday strip (Appointments) ─────────────────────────── */
+.pf-daystrip {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 10px;
+}
+.pf-daystrip__day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border, rgba(148, 137, 172, 0.22));
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.pf-daystrip__day:hover { border-color: rgba(168, 85, 247, 0.45); color: var(--text-secondary); }
+.pf-daystrip__dow { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
+.pf-daystrip__n { font-size: 15px; font-weight: 800; color: var(--text-secondary); }
+.pf-daystrip__day--today .pf-daystrip__n { color: var(--text-primary); }
+.pf-daystrip__day--today { border-color: rgba(168, 85, 247, 0.32); }
+.pf-daystrip__day--on {
+  border-color: rgba(168, 85, 247, 0.55);
+  background: rgba(168, 85, 247, 0.14);
+  color: var(--violet-text, #c084fc);
+}
+.pf-daystrip__day--on .pf-daystrip__dow,
+.pf-daystrip__day--on .pf-daystrip__n { color: var(--violet-text, #c084fc); }
+@media (max-width: 480px) {
+  .pf-daystrip { gap: 5px; }
+  .pf-daystrip__day { padding: 6px 2px; border-radius: 10px; }
+  .pf-daystrip__n { font-size: 13px; }
 }
 
 .pf-page__header {

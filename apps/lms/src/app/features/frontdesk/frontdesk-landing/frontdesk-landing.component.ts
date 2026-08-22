@@ -594,6 +594,38 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly apptBounds = computed(() => this.getRangeBounds(this._apptDateRange(), this._apptCustomStart(), this._apptCustomEnd()));
   readonly workBounds = computed(() => this.getRangeBounds(this._workDateRange(), this._workCustomStart(), this._workCustomEnd()));
 
+  /** Mon–Sun strip for the week that contains today. Clicking a day scopes the
+   *  Appointments pane to that single day (reuses the custom-range mechanism). */
+  readonly weekDays = computed<Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }>>(() => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const mondayOffset = (base.getDay() + 6) % 7;   // 0 = Monday
+    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset);
+    const b = this.apptBounds();
+    const singleDay = (b.end - b.start) === 86_400_000;
+    const out: Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + i); d.setHours(0, 0, 0, 0);
+      const ms = d.getTime();
+      out.push({
+        dow: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+        n: d.getDate(),
+        ms,
+        iso: this.toIsoDay(d),
+        isToday: ms === base.getTime(),
+        selected: singleDay && ms === b.start,
+      });
+    }
+    return out;
+  });
+
+  /** Scope the Appointments pane to a single day picked from the weekday strip. */
+  selectApptDay(iso: string) {
+    this._apptCustomStart.set(iso);
+    this._apptCustomEnd.set(iso);
+    this._apptDateRange.set('custom');
+    this.refresh();
+  }
+
   private inApptRange(d: Date | string | undefined): boolean {
     if (!d) return false;
     const when = new Date(d).getTime();
