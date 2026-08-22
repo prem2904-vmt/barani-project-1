@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -418,6 +419,21 @@ const COUNTERS: CounterSpec[] = [
                     {{ tube.completedAt | date:'d MMM, h:mm a' }}
                     <span class="pf-tq__stat-u">{{ testCount(tube.tests) }} {{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
                   </span>
+                  <div class="pf-tq__acts">
+                  @if (tube.status === 'validated') {
+                    <button type="button" class="pf-tq__act pf-tq__act--print"
+                            [disabled]="printingTubeId() === tube.sampleId"
+                            [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
+                            (click)="printCompletedTube(tube)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9V2h12v7"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8" rx="1"/>
+                      </svg>
+                      <span class="pf-tq__act-t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
+                    </button>
+                  }
                   @if (canEditResult()) {
                     <button type="button" class="pf-tq__act"
                             [disabled]="reopeningTubeId() === tube.sampleId"
@@ -431,6 +447,7 @@ const COUNTERS: CounterSpec[] = [
                       <span class="pf-tq__act-t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
                     </button>
                   }
+                  </div>
                 </div>
               </div>
             </li>
@@ -1533,6 +1550,9 @@ const COUNTERS: CounterSpec[] = [
     .pf-tq__stat--done { color: #34d399; align-items: center; }
     .pf-tq__stat--done .pf-tq__stat-u { color: #34d399; opacity: 0.8; }
 
+    /* Print + Edit sit side by side (one row), not stacked. */
+    .pf-tq__acts { display: flex; align-items: center; gap: 8px; }
+
     .pf-tq__act {
       display: inline-flex; align-items: center; justify-content: center; gap: 5px;
       min-height: 30px; padding: 5px 10px;
@@ -2104,6 +2124,7 @@ export class MyWorkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly labCfg = inject(BranchLabConfigService);
   protected readonly scanSvc = inject(ScanService);
@@ -2355,6 +2376,47 @@ export class MyWorkComponent implements OnInit {
   readonly completedLoading = this._completedLoading.asReadonly();
   private readonly _reopeningTubeId = signal<string | null>(null);
   readonly reopeningTubeId = this._reopeningTubeId.asReadonly();
+  private readonly _printingTubeId = signal<string | null>(null);
+  readonly printingTubeId = this._printingTubeId.asReadonly();
+
+  /** Print a completed (validated) tube's report DIRECTLY — build the report PDF
+   *  and open the browser print dialog on it, no navigation to the viewer. */
+  printCompletedTube(tube: { sampleId: string; barcode: string; tests: OrderTest[] }) {
+    const t0 = tube.tests?.[0];
+    const orderId = t0?.subOrder?.orderId ?? t0?.subOrder?.order?.id;
+    if (!orderId) { this.toasts.error('No order found for this sample.'); return; }
+    this._printingTubeId.set(tube.sampleId);
+    this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`).subscribe({
+      next: async rep => {
+        try {
+          if (!rep) { this.toasts.info('Report is not generated yet for this order.'); return; }
+          const url = await buildReportBlobUrl(rep, this.api, this.injector);
+          if (url) this.printBlobUrl(url);
+          else this.toasts.error('Could not build the report to print.');
+        } finally { this._printingTubeId.set(null); }
+      },
+      error: e => { this._printingTubeId.set(null); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  /** Load a PDF blob into a hidden iframe and fire the print dialog on it. Falls
+   *  back to opening the PDF in a new tab if the frame can't be printed. */
+  private printBlobUrl(url: string): void {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        window.open(url, '_blank');
+      }
+      // Give the print job time to read the blob before cleanup.
+      setTimeout(() => { try { URL.revokeObjectURL(url); iframe.remove(); } catch { /* */ } }, 60_000);
+    };
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  }
 
   /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
    *  front desk never does, so the action simply doesn't render for them. */
@@ -2591,7 +2653,10 @@ export class MyWorkComponent implements OnInit {
     for (const t of ['my_work', 'service_queue', 'rejected'] as Tab[]) {
       this.api.get<OrderTest[]>(this.endpointFor(t)).subscribe({
         next: l => {
-          const count = (l ?? []).filter(x => this.matchesTab(x, t)).length;
+          const matched = (l ?? []).filter(x => this.matchesTab(x, t));
+          // Badge must match what the list shows: SAMPLES in sample-focused mode
+          // (the "N samples" label uses sampleCountIn), else individual tests.
+          const count = this.labCfg.sampleFocused() ? this.sampleCountIn(matched) : matched.length;
           this._counts.update(c => ({ ...c, [t]: count }));
         }
       });
