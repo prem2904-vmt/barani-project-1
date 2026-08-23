@@ -57,10 +57,10 @@
 .pf-te-head {
   position: sticky; top: 0; z-index: 20;
   padding-top: 4px; margin: -4px -4px 4px; padding-left: 4px; padding-right: 4px;
-  background: var(--app-bg, var(--surface-0, #0b1020));
+  background: var(--bg-primary, #0a0a15);
 }
 @supports (backdrop-filter: blur(6px)) {
-  .pf-te-head { background: color-mix(in srgb, var(--app-bg, #0b1020) 78%, transparent); backdrop-filter: blur(8px); }
+  .pf-te-head { background: color-mix(in srgb, var(--bg-primary, #0a0a15) 78%, transparent); backdrop-filter: blur(8px); }
 }
 
 /* Subcontracting disclosure details/summary reset */
@@ -75,12 +75,29 @@
 .pf-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
 .pf-mini-lbl { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
 .pf-input {
-  width: 100%; padding: 8px 12px; border-radius: 10px;
+  width: 100%; height: 38px; line-height: 36px; padding: 0 12px; border-radius: 10px;
   background: var(--input-bg); border: 1px solid var(--input-border);
-  color: var(--input-text); font-size: 13px; outline: none; transition: border-color .15s;
+  color: var(--input-text); font-size: 13.5px; outline: none; box-sizing: border-box; transition: border-color .15s, box-shadow .15s;
 }
-.pf-input:focus { border-color: var(--input-border-focus); }
-.pf-input--compact { padding: 5px 8px; font-size: 12px; border-radius: 8px; }
+textarea.pf-input { height: auto; line-height: 1.4; padding: 8px 12px; }
+.pf-input:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+.pf-input--compact { height: 34px; line-height: 32px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
+select.pf-input {
+  cursor: pointer;
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239997b0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  appearance: none;
+  -webkit-appearance: none;
+}
+select.pf-input--compact {
+  padding-right: 20px;
+  background-position: right 6px center;
+}
 .pf-input--error { border-color: var(--red-border, #ef4444); }
 .pf-field-err { font-size: 11.5px; color: var(--red-text, #ef4444); margin-top: 3px; }
 
@@ -547,10 +564,10 @@
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: flex-start; gap: 14px;
   padding: 10px 0 14px; margin-bottom: 6px;
-  background: var(--app-bg, var(--surface-0, #0b1020));
+  background: var(--bg-primary, #0a0a15);
 }
 @supports (backdrop-filter: blur(6px)) {
-  .pf-te2-head { background: color-mix(in srgb, var(--app-bg, #0b1020) 80%, transparent); backdrop-filter: blur(8px); }
+  .pf-te2-head { background: color-mix(in srgb, var(--bg-primary, #0a0a15) 80%, transparent); backdrop-filter: blur(8px); }
 }
 .pf-te2-back {
   width: 34px; height: 34px; border-radius: 10px; margin-top: 6px;
@@ -589,17 +606,29 @@
 .pf-te2-sec__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 @media (max-width: 720px) { .pf-te2-sec { flex-direction: column; gap: 12px; } .pf-te2-sec__label { width: auto; } }
 
-/* Underline field grid */
+/* Unified field grid inputs */
 .pf-te2-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px 24px; }
 .pf-uf { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pf-uf--span { grid-column: 1 / -1; }
 .pf-uf__lbl { font-size: 11px; color: var(--text-tertiary); }
 .pf-uf__in.pf-input {
-  background: transparent; border: 0; border-bottom: 1px solid var(--glass-border);
-  border-radius: 0; padding: 6px 2px 8px; font-size: 13.5px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  height: 38px;
+  line-height: 36px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: var(--input-text);
+  box-sizing: border-box;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-.pf-uf__in.pf-input:focus { border-bottom-color: var(--violet-text, #a855f7); outline: none; box-shadow: none; }
-.pf-uf__in.pf-input--error { border-bottom-color: #ef4444; }
+.pf-uf__in.pf-input:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+  outline: none;
+}
+.pf-uf__in.pf-input--error { border-color: #ef4444; }
 .pf-te2-tube { display: flex; flex-direction: column; gap: 8px; }
 
 .pf-te2-adv { border-top: 1px solid var(--glass-border); padding-top: 12px; }

@@ -214,41 +214,62 @@
 .pf-discount {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .pf-discount__kind {
   display: inline-flex;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  align-items: center;
+  padding: 2.5px;
+  border-radius: 9px;
+  background: var(--input-bg, rgba(20, 20, 40, 0.05));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pf-discount__kind:hover {
+  border-color: rgba(139, 92, 246, 0.45);
 }
 .pf-discount__kind button {
-  width: 28px; height: 26px;
-  border: 0; border-radius: 6px;
+  min-width: 28px;
+  height: 25px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
   background: transparent;
-  color: var(--text-tertiary);
-  font-size: 12px; font-weight: 700;
+  color: var(--text-tertiary, #64748b);
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all .12s;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.pf-discount__kind button:hover:not(.pf-discount__kind--on) {
+  color: var(--text-primary);
+  background: rgba(139, 92, 246, 0.1);
+}
+.pf-discount__kind button.pf-discount__kind--on,
 .pf-discount__kind--on {
-  background: var(--color-primary, #7c3aed) !important;
+  background: linear-gradient(135deg, #7c3aed, #ec4899) !important;
   color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
 }
 .pf-discount__input {
-  width: 72px; height: 32px;
-  padding: 0 8px;
+  width: 76px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 8px;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  color: var(--input-text);
-  font-size: 13.5px; font-weight: 700;
+  background: var(--input-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  color: var(--input-text, var(--text-primary));
+  font-size: 13.5px;
+  font-weight: 700;
   text-align: right;
+  font-variant-numeric: tabular-nums;
   outline: none;
+  transition: all 0.15s ease;
 }
 .pf-discount__input:focus {
-  border-color: var(--input-border-focus);
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2) !important;
 }
 .pf-discount__input--err {
   border-color: var(--red-border, #ef4444) !important;

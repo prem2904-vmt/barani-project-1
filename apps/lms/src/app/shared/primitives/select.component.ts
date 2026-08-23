@@ -149,17 +149,17 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     pf-select .pf-dd { position: relative; width: 100%; }
 
     pf-select .pf-dd__trigger {
-      display: flex; align-items: center; gap: 6px; width: 100%;
-      padding: 0.625rem 0.875rem;
+      display: flex; align-items: center; gap: 6px; width: 100%; height: 38px;
+      padding: 0 12px;
       background: var(--input-bg);
       border: 1px solid var(--input-border);
       color: var(--input-text);
-      border-radius: 12px; font-size: 0.9375rem; font-family: inherit;
-      cursor: pointer; text-align: left; outline: none;
+      border-radius: 10px; font-size: 13.5px; font-family: inherit;
+      cursor: pointer; text-align: left; outline: none; box-sizing: border-box;
       transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
     }
     pf-select .pf-dd--sm .pf-dd__trigger {
-      padding: 0.375rem 0.75rem; font-size: 13px; border-radius: 10px; gap: 4px;
+      height: 34px; padding: 0 10px; font-size: 13px; border-radius: 8px; gap: 4px;
     }
     pf-select .pf-dd__trigger:hover:not(:disabled) { border-color: var(--input-border-focus); }
     pf-select .pf-dd__trigger:focus,

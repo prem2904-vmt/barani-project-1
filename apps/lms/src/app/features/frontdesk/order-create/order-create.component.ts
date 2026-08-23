@@ -1292,7 +1292,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         testIds: this._selected(),
         metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
       }));
-      const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }));
+      const targetAmount = this.total();
+      const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
+        orderId: order.id,
+        discount: this.discountAmount(),
+        tax: this.gst()
+      }));
       // Track the latest bill state so the paid summary reflects the actual
       // amount paid / balance due (the payment endpoint returns the updated bill).
       let latest = bill;
@@ -1303,20 +1308,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           }
         } else if (d.mode === 'wallet') {
           // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
-          // record the bill payment. Without the /charge the vendor balance
-          // never moves — the bug where a wallet-paid NEW order left the vendor
-          // "Settled" with no transaction (the existing-bill path charged; this
-          // one didn't).
+          // record the bill payment.
           if (!d.vendorId) throw new Error('No vendor selected');
+          const payAmt = targetAmount;
           await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-            amount: bill.totalPayable, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
+            amount: payAmt, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
           }));
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: bill.totalPayable, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
+            amount: payAmt, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
           }));
         } else {
+          const payAmt = targetAmount;
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: bill.totalPayable, mode: d.mode, referenceNo: d.referenceNo
+            amount: payAmt, mode: d.mode, referenceNo: d.referenceNo
           }));
         }
       } else if (d.advanceAmount && d.advanceAmount > 0) {
@@ -1326,6 +1330,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
         }));
       }
+
+      if (latest) {
+        const finalPayable = Math.max(latest.totalPayable ?? 0, latest.totalPaid ?? 0, targetAmount);
+        const finalPaid = Math.max(latest.totalPaid ?? 0, (d.mode !== 'later' ? targetAmount : (d.advanceAmount ?? 0)));
+        latest = {
+          ...latest,
+          totalPayable: finalPayable,
+          totalPaid: finalPaid,
+          balance: Math.max(0, finalPayable - finalPaid)
+        };
+      }
+
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
       this._paidBill.set(latest);

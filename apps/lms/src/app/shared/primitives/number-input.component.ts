@@ -74,21 +74,22 @@ export type PfNumberSize = 'sm' | 'md';
       position: relative;
       display: flex;
       align-items: stretch;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      height: 38px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
       overflow: hidden;
+      box-sizing: border-box;
     }
-    .root[data-size='sm'] { border-radius: 12px; }
+    .root[data-size='sm'] { height: 34px; border-radius: 8px; }
     .root:not(.is-disabled):hover {
-      background: var(--glass-bg-hover);
-      border-color: var(--glass-border-hover);
+      border-color: var(--input-border-focus);
     }
     .root.is-focused {
-      border-color: rgba(168, 85, 247, 0.55);
-      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
-      background: var(--glass-bg-hover);
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+      background: var(--input-bg);
     }
     .root.is-disabled { opacity: 0.55; }
 
@@ -99,12 +100,13 @@ export type PfNumberSize = 'sm' | 'md';
       border: none;
       outline: none;
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 13.5px;
+      line-height: 36px;
       font-variant-numeric: tabular-nums;
       padding: 0 12px;
-      height: 44px;
+      height: 36px;
     }
-    .root[data-size='sm'] .field { height: 36px; font-size: 13px; padding: 0 10px; }
+    .root[data-size='sm'] .field { height: 32px; line-height: 32px; font-size: 13px; padding: 0 10px; }
     .field::placeholder { color: var(--text-muted); }
 
     .suffix {
@@ -120,7 +122,7 @@ export type PfNumberSize = 'sm' | 'md';
     .steppers {
       display: flex;
       flex-direction: column;
-      border-left: 1px solid var(--glass-border);
+      border-left: 1px solid var(--input-border);
       width: 22px;
       flex-shrink: 0;
     }
