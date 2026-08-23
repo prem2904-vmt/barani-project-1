@@ -371,7 +371,10 @@
 
 .pf-card__actions {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
   flex-shrink: 0;
 }
 

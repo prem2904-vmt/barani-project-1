@@ -774,12 +774,6 @@
                             [class.pf-card__dot--missed]="s.status === 'missed'">●</span>
                         </span>
                         }
-                        @if (hasPartialReady(o)) {
-                        <span class="pf-card__partial"
-                          title="One or more departments fully validated; others still pending">
-                          ✓ Partial ready · {{ partialReadyLabel(o) }}
-                        </span>
-                        }
                       </div>
                       }
                     </div>
@@ -817,7 +811,7 @@
                           Status
                         </button>
                         }
-                        @if (o.status === 'partially_validated') {
+                        @if (o.status === 'partially_validated' && sampleStatus(o) !== 'partially_collected' && !showCollectOn(o)) {
                         <button type="button" class="pf-ghostbtn press" [disabled]="downloadingReport() !== null"
                           (click)="downloadReport(o)">
                           @if (downloadingReport() === o.id) { Preparing… } @else { Download }
