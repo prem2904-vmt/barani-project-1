@@ -20,16 +20,17 @@
 .pf-daystrip {
   display: flex;
   gap: 8px;
-  padding: 4px 0 10px;
+  padding: 4px 16px 8px;
 }
 .pf-daystrip__day {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 4px;
-  border-radius: 12px;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 12px;
+  border-radius: 10px;
   border: 1px solid var(--glass-border, rgba(148, 137, 172, 0.22));
   background: transparent;
   color: var(--text-tertiary);
@@ -37,8 +38,8 @@
   transition: border-color .15s ease, background .15s ease, color .15s ease;
 }
 .pf-daystrip__day:hover { border-color: rgba(168, 85, 247, 0.45); color: var(--text-secondary); }
-.pf-daystrip__dow { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
-.pf-daystrip__n { font-size: 15px; font-weight: 800; color: var(--text-secondary); }
+.pf-daystrip__dow { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.pf-daystrip__n { font-size: 14px; font-weight: 800; color: var(--text-secondary); line-height: 1; }
 .pf-daystrip__day--today .pf-daystrip__n { color: var(--text-primary); }
 .pf-daystrip__day--today { border-color: rgba(168, 85, 247, 0.32); }
 .pf-daystrip__day--on {
@@ -49,8 +50,8 @@
 .pf-daystrip__day--on .pf-daystrip__dow,
 .pf-daystrip__day--on .pf-daystrip__n { color: var(--violet-text, #c084fc); }
 @media (max-width: 480px) {
-  .pf-daystrip { gap: 5px; }
-  .pf-daystrip__day { padding: 6px 2px; border-radius: 10px; }
+  .pf-daystrip { gap: 4px; padding: 4px 8px 6px; }
+  .pf-daystrip__day { padding: 4px 6px; border-radius: 8px; }
   .pf-daystrip__n { font-size: 13px; }
 }
 
