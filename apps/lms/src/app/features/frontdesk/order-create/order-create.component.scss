@@ -926,6 +926,45 @@
   background: var(--brand, #a855f7);
 }
 
+/* OPS-58 — edit referral on an existing/completed order. */
+.pf-refrow__field--edit { display: flex; align-items: end; }
+.pf-ref-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand, #a855f7);
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.pf-ref-edit-btn svg { flex-shrink: 0; }
+.pf-ref-edit-actions { display: inline-flex; gap: 8px; align-items: center; }
+.pf-ref-edit-save {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--brand, #a855f7);
+  border: 1px solid transparent;
+}
+.pf-ref-edit-save:disabled { opacity: 0.6; }
+.pf-ref-edit-cancel {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--input-border, var(--glass-border));
+}
+
 @media (max-width: 1023px) {
 
   /* Referring fields hidden until the toggle opens them. */

@@ -156,6 +156,24 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly currentBill = signal<Bill | null>(null);
 
   readonly isReadOnly = computed(() => !!this.viewOrderId());
+
+  // ── Referral edit (OPS-58) — the FD can correct/add the referring doctor +
+  //    hospital on an EXISTING order, including after it is completed. The
+  //    order view is otherwise read-only; flipping `referralEditing` re-enables
+  //    just the two referral inputs and shows Save/Cancel. Backend endpoint has
+  //    no status gate, so this stays available on a finished order. ──────────
+  readonly referralEditing = signal(false);
+  readonly referralSaving = signal(false);
+  /** Show the "Edit referral" affordance: viewing an existing (non-cancelled)
+   *  order and the user may modify orders. */
+  readonly canEditReferral = computed(() =>
+    !!this.viewOrderId()
+    && this.auth.hasPermission('modify_order')
+    && this._order()?.status !== 'cancelled');
+  /** The referral inputs are disabled when read-only UNLESS we're editing them. */
+  readonly referralDisabled = computed(() => this.isReadOnly() && !this.referralEditing());
+  /** Referral inputs are interactive when creating OR while editing the referral. */
+  readonly referralInteractive = computed(() => !this.isReadOnly() || this.referralEditing());
   /**
    * The order is finished — its test list must not change any more. Two states
    * reach this: opening an existing order via ?orderId= (isReadOnly), and
@@ -1371,6 +1389,49 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   editThisOrder() {
     const id = this.viewOrderId();
     if (id) this.router.navigate(['/frontdesk/order'], { queryParams: { editOrderId: id } });
+  }
+
+  /** Original referral, captured when the edit begins, so Cancel restores it. */
+  private referralSnapshot: { doctor: string; hospital: string } | null = null;
+  /** Begin editing the referring doctor/hospital on an existing order (OPS-58). */
+  startReferralEdit() {
+    if (!this.canEditReferral()) return;
+    this.referralSnapshot = { doctor: this.refDoctorName(), hospital: this.refHospitalName() };
+    this.refDoctorError.set(null);
+    this.refHospitalError.set(null);
+    this.referralEditing.set(true);
+  }
+  /** Discard referral edits and restore the loaded values. */
+  cancelReferralEdit() {
+    if (this.referralSnapshot) {
+      this.refDoctorName.set(this.referralSnapshot.doctor);
+      this.refHospitalName.set(this.referralSnapshot.hospital);
+    }
+    this.refDoctorSuggestions.set([]);
+    this.refHospitalSuggestions.set([]);
+    this.referralEditing.set(false);
+  }
+  /** Persist the referring doctor + hospital to the existing order. Works after
+   *  completion — the backend endpoint has no status gate. */
+  saveReferral() {
+    const id = this.viewOrderId();
+    if (!id || this.referralSaving()) return;
+    this.referralSaving.set(true);
+    this.api.patch<{ order: Order }>(`/api/orders/${id}/referral`, {
+      refDoctorName: this.refDoctorName().trim() || null,
+      refHospitalName: this.refHospitalName().trim() || null,
+    }).subscribe({
+      next: res => {
+        this.referralSaving.set(false);
+        this.referralEditing.set(false);
+        if (res?.order) this._order.set(res.order);
+        this.toasts.success('Referral updated');
+      },
+      error: () => {
+        this.referralSaving.set(false);
+        this.toasts.error('Could not update the referral');
+      }
+    });
   }
 
   collectPaidSample() {

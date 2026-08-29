@@ -160,12 +160,12 @@
                 <input type="text" class="pf-refdoc__input"
                        [class.pf-input-error]="!!refHospitalError()"
                        [value]="refHospitalName()"
-                       [disabled]="isReadOnly()"
+                       [disabled]="referralDisabled()"
                        (input)="onRefHospitalInput(asInput($event))"
                        (focus)="onRefHospitalFocus()"
                        (blur)="onRefHospitalBlur()"
                        placeholder="Referring hospital (optional)" />
-                @if (refHospitalName() && !isReadOnly()) {
+                @if (refHospitalName() && referralInteractive()) {
                   <button type="button" class="pf-refdoc__clear press"
                           (mousedown)="pickRefHospital('')" aria-label="Clear" tabindex="-1">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -175,7 +175,7 @@
                   </button>
                 }
               </div>
-              @if (!isReadOnly() && refHospitalOpen() && refHospitalSuggestions().length > 0) {
+              @if (referralInteractive() && refHospitalOpen() && refHospitalSuggestions().length > 0) {
                 <div class="pf-refdoc__pop">
                   @for (name of refHospitalSuggestions(); track name) {
                     <button type="button" class="pf-refdoc__pop-item press"
@@ -198,12 +198,12 @@
                 <input type="text" class="pf-refdoc__input"
                        [class.pf-input-error]="!!refDoctorError()"
                        [value]="refDoctorName()"
-                       [disabled]="isReadOnly()"
+                       [disabled]="referralDisabled()"
                        (input)="onRefDoctorInput(asInput($event))"
                        (focus)="onRefDoctorFocus()"
                        (blur)="onRefDoctorBlur()"
                        placeholder="Referring doctor (optional)" />
-                @if (refDoctorName() && !isReadOnly()) {
+                @if (refDoctorName() && referralInteractive()) {
                   <button type="button" class="pf-refdoc__clear press"
                           (mousedown)="pickRefDoctor('')" aria-label="Clear" tabindex="-1">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -213,7 +213,7 @@
                   </button>
                 }
               </div>
-              @if (!isReadOnly() && refDoctorOpen() && refDoctorSuggestions().length > 0) {
+              @if (referralInteractive() && refDoctorOpen() && refDoctorSuggestions().length > 0) {
                 <div class="pf-refdoc__pop">
                   @for (name of refDoctorSuggestions(); track name) {
                     <button type="button" class="pf-refdoc__pop-item press"
@@ -225,6 +225,34 @@
                 <p class="pf-field-error">{{ refDoctorError() }}</p>
               }
             </div>
+
+            <!-- Referral edit (OPS-58): correct/add the referring doctor +
+                 hospital on an existing order, including after completion. -->
+            @if (canEditReferral()) {
+              <div class="pf-refrow__field pf-refrow__field--edit">
+                @if (!referralEditing()) {
+                  <button type="button" class="pf-ref-edit-btn press"
+                          (click)="startReferralEdit()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                    </svg>
+                    <span>Edit referral</span>
+                  </button>
+                } @else {
+                  <div class="pf-ref-edit-actions">
+                    <button type="button" class="pf-ref-edit-save press"
+                            [disabled]="referralSaving()" (click)="saveReferral()">
+                      {{ referralSaving() ? 'Saving…' : 'Save referral' }}
+                    </button>
+                    <button type="button" class="pf-ref-edit-cancel press"
+                            [disabled]="referralSaving()" (click)="cancelReferralEdit()">
+                      Cancel
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           </div>
 
           <!-- Search + Priority on one row (wraps on narrow) -->
