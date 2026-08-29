@@ -681,6 +681,29 @@
   margin: 4px 8px;
 }
 
+/* Branch pick-list (OPS-65) — expands under the Branch row inside the More
+   popover; each row is a real branch the user can switch to. */
+.pf-more-item__chev {
+  margin-left: 8px;
+  color: var(--text-tertiary, #94a3b8);
+  transition: transform 0.18s ease;
+}
+.pf-more-item__chev--open { transform: rotate(180deg); }
+.pf-more-pop .pf-branch-list {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 6px 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.08);
+}
+.pf-more-pop .pf-branch-item {
+  padding-left: 34px;
+  font-size: 13px;
+  justify-content: space-between;
+}
+.pf-more-pop .pf-branch-item--active { color: var(--color-violet-300, #c4b5fd); }
+
 /* ── Presence status (Teams-style presets) ────────────────────────
    Dot: solid per preset; DND-grade (dnd/surgery) carries a white
    dash; Away is a hollow ring. Colors mirror presence.model.ts. */

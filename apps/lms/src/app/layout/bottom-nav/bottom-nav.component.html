@@ -314,17 +314,43 @@
           {{ theme.mode() === 'system' ? 'System' : theme.mode() === 'light' ? 'Light' : 'Dark' }}
         </span>
       </button>
-      <!-- Branch -->
-      <button type="button" role="menuitem" class="pf-more-item press"
-              (click)="onMoreBranch()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-          <circle cx="12" cy="10" r="3"/>
-        </svg>
-        <span>Branch</span>
-        <span class="pf-more-item__val">{{ currentBranch() }}</span>
-      </button>
+      <!-- Branch — real list of the user's branches (OPS-65); tap to expand,
+           pick one to switch. Hidden entirely for single-branch users. -->
+      @if (canSwitchBranch()) {
+        <button type="button" role="menuitem" class="pf-more-item press"
+                [attr.aria-expanded]="branchListOpen()"
+                (click)="toggleBranchList()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span>Branch</span>
+          <span class="pf-more-item__val">{{ currentBranch() }}</span>
+          <svg class="pf-more-item__chev" [class.pf-more-item__chev--open]="branchListOpen()"
+               width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+        @if (branchListOpen()) {
+          <div class="pf-branch-list" role="group" aria-label="Available branches">
+            @for (b of branches(); track b.id) {
+              <button type="button" role="menuitem" class="pf-more-item pf-branch-item press"
+                      [class.pf-branch-item--active]="b.id === activeBranchId()"
+                      (click)="selectBranch(b)">
+                <span class="truncate">{{ b.name }}</span>
+                @if (b.id === activeBranchId()) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m5 12 4 4L19 6"/>
+                  </svg>
+                }
+              </button>
+            }
+          </div>
+        }
+      }
       <div class="pf-more-sep"></div>
       <!-- Multi-account -->
       @if (otherAccounts().length) {

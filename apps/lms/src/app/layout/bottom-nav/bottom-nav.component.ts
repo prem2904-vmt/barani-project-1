@@ -8,6 +8,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
+import { BranchRef } from '../../core/auth/mock-user';
 import { LockService } from '../../core/auth/lock.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
@@ -116,27 +117,40 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   });
 
-  /** Branch switcher — the chrome's branch picker folds into the
-   *  account popover. NOTE: this is a UI-only switch, mirroring the
-   *  top-strip's existing mocked branch list (no backend re-scope
-   *  yet). Tapping the Branch row cycles to the next branch. */
-  protected readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
-  private readonly _branch = signal<string>(this.auth.user()?.branchName ?? 'Chennai Main');
-  protected readonly currentBranch = this._branch.asReadonly();
-  protected async onMoreBranch(): Promise<void> {
-    const list = this.branches;
-    const current = this._branch();
-    const i = list.indexOf(current);
-    const nextBranch = list[(i + 1) % list.length];
+  /** Branch switcher — the chrome's branch picker folds into the account
+   *  popover. Parity with the desktop top-strip (OPS-65): the REAL branches
+   *  this user may switch between (from /api/auth/me), shown as a pick-list
+   *  and performing a real re-scope via auth.setActiveBranch — not the old
+   *  hardcoded mock that cycled and never actually switched. */
+  protected readonly branches = computed(() => this.auth.user()?.branches ?? []);
+  /** Show the switcher only when there's more than one branch to pick. */
+  protected readonly canSwitchBranch = computed(() => this.branches().length > 1);
+  protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
+  /** Current active branch name for the row's value label. */
+  protected readonly currentBranch = computed(() =>
+    this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? '');
+  /** Whether the in-popover branch pick-list is expanded. */
+  protected readonly branchListOpen = signal(false);
+
+  /** Toggle the branch pick-list (no-op for single-branch users). */
+  protected toggleBranchList(): void {
+    if (!this.canSwitchBranch()) return;
+    this.branchListOpen.update(v => !v);
+  }
+  /** Pick a branch → confirm → real re-scope. Tapping the active branch just
+   *  collapses the list. */
+  protected async selectBranch(b: BranchRef): Promise<void> {
+    if (b.id === this.activeBranchId()) { this.branchListOpen.set(false); return; }
     const ok = await this.dialog.confirm({
       title: 'Switch active branch?',
-      message: `Are you sure you want to switch the active branch to "${nextBranch}"?`,
+      message: `Are you sure you want to switch the active branch to "${b.name}"?`,
       confirmLabel: 'Yes, switch branch',
       cancelLabel: 'Cancel',
       tone: 'primary'
     });
     if (!ok) return;
-    this._branch.set(nextBranch);
+    this.branchListOpen.set(false);
+    this.auth.setActiveBranch(b.id);
   }
 
   // ─── Presence status picker ───────────────────────────────────────
