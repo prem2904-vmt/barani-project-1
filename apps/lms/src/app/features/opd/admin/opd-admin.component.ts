@@ -2,9 +2,17 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 
+interface OpdTile {
+  title: string;
+  href: string;
+  subtitle: string;
+  iconPath: string;
+}
+
 /**
- * OPD admin landing (/admin/opd). Tiles for the OPD configuration surfaces —
- * Doctors (per-doctor consultation fee) and OPD Settings (follow-up policy).
+ * OPD module settings hub (/admin/opd). Mirrors the Lab Settings hub so the
+ * theme carries across modules — Doctors (per-doctor consultation fee) and OPD
+ * Settings (follow-up policy). Each future module ships its own equivalent hub.
  */
 @Component({
   selector: 'pf-opd-admin',
@@ -12,53 +20,76 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
   imports: [RouterLink, ScreenHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
-      <pf-screen-header class="px-4 md:px-8 pt-6"
-        [eyebrow]="'Admin'" [title]="'OPD'" [subtitle]="'Outpatient department configuration'"
-        parentRoute="/admin">
+    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      <pf-screen-header
+        eyebrow="OPD"
+        title="OPD Settings"
+        subtitle="Outpatient department configuration — doctors, consultation fees and follow-up policy.">
       </pf-screen-header>
 
-      <div class="px-4 md:px-8 lg:px-10 max-w-screen-xl mx-auto w-full pf-opd__grid">
-        <a routerLink="/admin/opd/doctors" class="pf-opd__tile press">
-          <div class="pf-opd__icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      <div class="pf-lsh">
+        @for (t of tiles; track t.href) {
+          <a [routerLink]="t.href" class="pf-lsh__tile press">
+            <span class="pf-lsh__ic">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path [attr.d]="t.iconPath"></path>
+              </svg>
+            </span>
+            <span class="pf-lsh__text">
+              <span class="pf-lsh__t">{{ t.title }}</span>
+              <span class="pf-lsh__s">{{ t.subtitle }}</span>
+            </span>
+            <svg class="pf-lsh__chev" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6"></path>
             </svg>
-          </div>
-          <div>
-            <h3 class="pf-opd__title">Doctors</h3>
-            <p class="pf-opd__sub">Consultation fee per doctor, department &amp; specialisation.</p>
-          </div>
-        </a>
-
-        <a routerLink="/admin/opd/settings" class="pf-opd__tile press">
-          <div class="pf-opd__icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </div>
-          <div>
-            <h3 class="pf-opd__title">OPD Settings</h3>
-            <p class="pf-opd__sub">Follow-up policy (tiered discounts on repeat visits).</p>
-          </div>
-        </a>
+          </a>
+        }
       </div>
     </section>
   `,
   styles: [`
-    .pf-opd__grid { margin-top: 14px; display: grid; gap: 14px;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-    .pf-opd__tile { display: flex; gap: 14px; align-items: flex-start; padding: 18px;
-      border-radius: 16px; text-decoration: none; color: inherit;
-      background: var(--glass-bg, rgba(255,255,255,0.04));
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); transition: border-color .15s, background .15s; }
-    .pf-opd__tile:hover { border-color: color-mix(in srgb, var(--brand, #a855f7) 45%, transparent);
-      background: color-mix(in srgb, var(--brand, #a855f7) 6%, transparent); }
-    .pf-opd__icon { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center; color: var(--brand, #a855f7);
-      background: color-mix(in srgb, var(--brand, #a855f7) 14%, transparent); }
-    .pf-opd__title { font-size: 15px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
-    .pf-opd__sub { font-size: 13px; color: var(--text-tertiary, #64748b); margin-top: 2px; }
+    .pf-lsh {
+      display: grid; gap: 14px; margin-top: 8px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+    .pf-lsh__tile {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 18px; border-radius: 16px; text-decoration: none;
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+      background: var(--bg-card, rgba(255,255,255,0.03));
+      transition: border-color .15s, transform .1s, background .15s;
+    }
+    .pf-lsh__tile:hover { border-color: rgba(168,85,247,.4); background: rgba(255,255,255,0.05); }
+    .pf-lsh__tile:active { transform: scale(.99); }
+    .pf-lsh__ic {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; flex-shrink: 0;
+      color: var(--violet-text); background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
+    }
+    .pf-lsh__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pf-lsh__t { font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }
+    .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
+    .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+      .pf-lsh { grid-template-columns: 1fr; gap: 8px; }
+      .pf-lsh__tile { flex-direction: row; align-items: center; gap: 14px; padding: 13px 14px; }
+      .pf-lsh__ic { width: 36px; height: 36px; margin-bottom: 0; }
+      .pf-lsh__text { flex: 1; }
+      .pf-lsh__s { font-size: 12px; }
+      .pf-lsh__chev { display: block; }
+    }
   `],
 })
-export class OpdAdminComponent {}
+export class OpdAdminComponent {
+  readonly tiles: OpdTile[] = [
+    { title: 'Doctors', href: '/admin/opd/doctors',
+      subtitle: 'Consultation fee per doctor, department & specialisation',
+      iconPath: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z' },
+    { title: 'OPD Settings', href: '/admin/opd/settings',
+      subtitle: 'Follow-up policy — tiered discounts on repeat visits',
+      iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 4.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.83 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.91 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
+  ];
+}

@@ -1,8 +1,30 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import {
+  AllCommunityModule,
+  ColDef,
+  CellValueChangedEvent,
+  GetRowIdParams,
+  ModuleRegistry,
+  colorSchemeDark,
+  colorSchemeLight,
+  themeQuartz,
+} from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
+  fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, rowHeight: 44, headerHeight: 40,
+  borderRadius: 12, accentColor: '#7c3aed',
+});
+const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
+  fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, rowHeight: 44, headerHeight: 40,
+  borderRadius: 12, accentColor: '#a855f7',
+});
 
 interface DoctorRow {
   id: string;
@@ -14,21 +36,19 @@ interface DoctorRow {
 }
 
 /**
- * OPD → Doctors (admin). A Test-Master-style grid of the tenant's doctors with
- * an editable per-doctor consultation fee. The fee is per doctor (a specialist
- * and a junior charge differently); it auto-fills the consult screen when the
- * front desk picks that doctor. Batch-edits fees inline and saves the changed
- * rows via PATCH /api/doctors/{id}.
+ * OPD → Doctors (admin). Same AG-Grid + theme as Test Master, so the look
+ * carries across the app. Editable per-doctor consultation fee; edited rows are
+ * batch-saved via PATCH /api/doctors/{id}.
  */
 @Component({
   selector: 'pf-doctors-admin',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent],
+  imports: [AgGridAngular, ScreenHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
-      <pf-screen-header class="px-4 md:px-8 pt-6"
-        [eyebrow]="'OPD'" [title]="'Doctors'" [subtitle]="'Consultation fee per doctor'"
+    <section class="pf-da px-4 md:px-8 pt-6 pb-10">
+      <pf-screen-header
+        eyebrow="OPD" title="Doctors" subtitle="Consultation fee per doctor"
         parentRoute="/admin/opd">
         <div actions>
           <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" (click)="save()">
@@ -37,93 +57,88 @@ interface DoctorRow {
         </div>
       </pf-screen-header>
 
-      <div class="px-4 md:px-8 lg:px-10 max-w-screen-xl mx-auto w-full">
-        @if (loading()) {
-          <p class="pf-da__muted">Loading doctors…</p>
-        } @else if (rows().length === 0) {
-          <div class="pf-da__empty">
-            <p>No doctors yet.</p>
-            <p class="pf-da__muted">Create a user with a Doctor-type role — they'll appear here.</p>
-          </div>
-        } @else {
-          <div class="pf-da__table" role="table">
-            <div class="pf-da__row pf-da__row--head" role="row">
-              <span>Doctor</span><span>Department</span><span>Specialisation</span><span class="pf-da__fee-h">Consultation fee (₹)</span>
-            </div>
-            @for (r of rows(); track r.id) {
-              <div class="pf-da__row" role="row">
-                <span class="pf-da__name">{{ r.name }}</span>
-                <span class="pf-da__muted">{{ r.department || '—' }}</span>
-                <span class="pf-da__muted">{{ r.specializations.length ? r.specializations.join(', ') : '—' }}</span>
-                <span>
-                  <input type="number" min="0" class="pf-da__fee"
-                         [ngModel]="r.fee" (ngModelChange)="setFee(r.id, $event)" />
-                </span>
-              </div>
-            }
-          </div>
-        }
-      </div>
+      @if (!loading() && rowData().length === 0) {
+        <div class="pf-da__empty">
+          <p class="pf-da__empty-t">No doctors yet</p>
+          <p class="pf-da__muted">Create a user with a Doctor-type role — they'll appear here.</p>
+        </div>
+      } @else {
+        <ag-grid-angular
+          class="pf-da-grid"
+          [theme]="gridTheme()"
+          [rowData]="rowData()"
+          [columnDefs]="colDefs"
+          [defaultColDef]="defaultColDef"
+          [getRowId]="getRowId"
+          [animateRows]="true"
+          [singleClickEdit]="true"
+          [stopEditingWhenCellsLoseFocus]="true"
+          (cellValueChanged)="onCellValueChanged($event)">
+        </ag-grid-angular>
+      }
     </section>
   `,
   styles: [`
     .pf-da__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700;
       color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-da__save:disabled { opacity: .5; cursor: default; }
-    .pf-da__muted { color: var(--text-tertiary, #64748b); font-size: 13px; }
-    .pf-da__empty { padding: 32px; text-align: center; border-radius: 14px;
+    .pf-da-grid { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 420px; margin-top: 8px; }
+    .pf-da__empty { margin-top: 16px; padding: 32px; text-align: center; border-radius: 14px;
       border: 1px dashed var(--glass-border, rgba(255,255,255,0.14)); }
-    .pf-da__table { margin-top: 12px; border-radius: 14px; overflow: hidden;
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); }
-    .pf-da__row { display: grid; grid-template-columns: 1.4fr 1fr 1.6fr 160px; gap: 12px;
-      align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06)); }
-    .pf-da__row:last-child { border-bottom: 0; }
-    .pf-da__row--head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-      color: var(--text-tertiary, #64748b); background: rgba(148,163,184,0.06); }
-    .pf-da__fee-h { text-align: right; }
-    .pf-da__name { font-weight: 600; color: var(--text-primary, #e2e8f0); }
-    .pf-da__fee { width: 100%; padding: 8px 10px; border-radius: 8px; text-align: right; font-size: 14px;
-      color: var(--text-primary, #e2e8f0); background: var(--input-bg, rgba(255,255,255,0.03));
-      border: 1px solid var(--input-border, var(--glass-border, rgba(255,255,255,0.14))); }
+    .pf-da__empty-t { font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-da__muted { color: var(--text-tertiary, #64748b); font-size: 13px; margin-top: 4px; }
   `],
 })
 export class DoctorsAdminComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly theme = inject(ThemeService);
 
-  readonly rows = signal<DoctorRow[]>([]);
+  readonly rowData = signal<DoctorRow[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
   private readonly _dirty = signal<Set<string>>(new Set());
   readonly dirty = computed(() => this._dirty().size > 0);
 
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly getRowId = (p: GetRowIdParams<DoctorRow>) => p.data.id;
+
+  readonly defaultColDef: ColDef<DoctorRow> = { sortable: true, resizable: true, flex: 1, minWidth: 120 };
+  readonly colDefs: ColDef<DoctorRow>[] = [
+    { field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 160 },
+    { field: 'department', headerName: 'Department', valueFormatter: p => p.value || '—' },
+    { headerName: 'Specialisation', flex: 1.6, minWidth: 180,
+      valueGetter: p => p.data?.specializations?.length ? p.data.specializations.join(', ') : '—' },
+    { field: 'fee', headerName: 'Consultation fee (₹)', editable: true, width: 190, flex: 0,
+      cellClass: 'pf-da-fee', type: 'numericColumn',
+      valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
+      valueFormatter: p => '₹' + (p.value ?? 0) },
+  ];
+
   constructor() {
     this.api.get<DoctorRow[]>('/api/doctors').subscribe({
-      next: docs => { this.rows.set((docs ?? []).map(d => ({ ...d, fee: d.fee ?? 0 }))); this.loading.set(false); },
+      next: docs => { this.rowData.set((docs ?? []).map(d => ({ ...d, fee: d.fee ?? 0 }))); this.loading.set(false); },
       error: () => { this.loading.set(false); this.toasts.error('Could not load doctors'); },
     });
   }
 
-  setFee(id: string, v: number) {
-    const n = Number(v);
-    const fee = Number.isFinite(n) && n >= 0 ? n : 0;
-    this.rows.update(rs => rs.map(r => r.id === id ? { ...r, fee } : r));
-    this._dirty.update(s => new Set(s).add(id));
+  onCellValueChanged(e: CellValueChangedEvent<DoctorRow>) {
+    if (e.data?.id) this._dirty.update(s => new Set(s).add(e.data.id));
   }
 
   save() {
-    const changed = this.rows().filter(r => this._dirty().has(r.id));
+    const changed = this.rowData().filter(r => this._dirty().has(r.id));
     if (!changed.length || this.saving()) return;
     this.saving.set(true);
     let done = 0, failed = 0;
     for (const r of changed) {
       this.api.patch(`/api/doctors/${r.id}`, { fee: r.fee }).subscribe({
-        next: () => { if (++done + failed === changed.length) this.finishSave(failed); },
-        error: () => { failed++; if (done + failed === changed.length) this.finishSave(failed); },
+        next: () => { if (++done + failed === changed.length) this.finish(failed); },
+        error: () => { failed++; if (done + failed === changed.length) this.finish(failed); },
       });
     }
   }
-  private finishSave(failed: number) {
+  private finish(failed: number) {
     this.saving.set(false);
     this._dirty.set(new Set());
     if (failed) this.toasts.error(`${failed} fee(s) failed to save`);
