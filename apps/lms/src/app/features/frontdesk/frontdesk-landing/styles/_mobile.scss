@@ -233,7 +233,8 @@
     max-height: calc(100dvh - 28px);
   }
   .pf-inv-preview {
-    height: min(92dvh, 1040px);
+    /* Fill the space under the navbar (base rule pins the top below it). */
+    height: calc(100dvh - var(--navbar-height, 4rem) - 24px);
   }
   /* ── Invoice (Cash Bill) preview: CONTAIN the A4 page inside the phone.
         The PDF iframe renders the page at its intrinsic 794×1123 CSS px, which
