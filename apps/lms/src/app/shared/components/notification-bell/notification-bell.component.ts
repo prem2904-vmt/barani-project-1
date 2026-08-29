@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Notification } from '../../models/user.model';
+import { NotifRoute, notificationRoute } from './notification-route';
 
 type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 
@@ -53,7 +56,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
                 <button type="button"
                         class="pf-bell-row"
                         [class.is-unread]="!n.isRead"
-                        (click)="markRead(n)">
+                        (click)="onRow(n)">
                   <span class="pf-type-icon" [attr.data-tone]="toneFor(n.type)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <g [innerHTML]="pathFor(n.type)"></g>
@@ -71,6 +74,9 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
                       {{ n.createdAt | date:'shortTime' }} · {{ typeLabel(n.type) }}
                     </p>
                   </div>
+                  @if (linkFor(n)) {
+                    <svg class="pf-bell-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  }
                 </button>
               }
             }
@@ -220,6 +226,8 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-bell-row.is-unread:hover {
       background: linear-gradient(90deg, rgba(124, 58, 237, 0.1), var(--bg-hover) 60%);
     }
+    .pf-bell-chev { flex-shrink: 0; align-self: center; color: var(--text-muted); opacity: 0.6; }
+    .pf-bell-row:hover .pf-bell-chev { opacity: 1; color: var(--text-secondary); }
 
     .pf-type-icon {
       display: inline-flex;
@@ -270,6 +278,8 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 export class NotificationBellComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
 
   private readonly _items = signal<Notification[]>([]);
   private readonly _open = signal(false);
@@ -316,6 +326,23 @@ export class NotificationBellComponent implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape() { if (this._open()) this._open.set(false); }
+
+  /** Tap a notification: mark it read and, when it points at something with a
+   *  screen, jump there (OPS-60). Falls back to just marking read. */
+  onRow(n: Notification) {
+    this.markRead(n);
+    const link = this.linkFor(n);
+    if (link) {
+      this._open.set(false);
+      this.router.navigate(link.commands, link.queryParams ? { queryParams: link.queryParams } : {});
+    }
+  }
+
+  /** Navigation target for a notification, or null when there's no dedicated
+   *  screen (see notificationRoute). */
+  linkFor(n: Notification): NotifRoute | null {
+    return notificationRoute(n.type, n.referenceType, n.referenceId, this.auth.hasPermission('validate_result'));
+  }
 
   markRead(n: Notification) {
     if (n.isRead) return;
