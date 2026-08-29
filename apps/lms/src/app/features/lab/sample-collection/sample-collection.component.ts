@@ -54,6 +54,7 @@ import {
   seriesState,
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
+import { countCollected, isOrderDispatched } from "./dispatch-state";
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -401,10 +402,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  kept offering Dispatch after everything was already dispatched. Matches
    *  the per-tube "Dispatched" badge, which uses the same rule. */
   isDispatched(g: OrderGroup): boolean {
-    return (
-      g.samples.length > 0 &&
-      g.samples.every((s) => s.status !== "pending" && s.status !== "collected")
-    );
+    return isOrderDispatched(g.samples);
   }
 
   /** Mark every collected tube on this order as dispatched to the lab. */
@@ -755,7 +753,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly dispatchSelect = signal<Set<string> | null>(null);
 
   collectedCount(g: OrderGroup): number {
-    return g.samples.filter((s) => s.status === "collected").length;
+    return countCollected(g.samples);
   }
 
   /** "Dispatch tubes…" shows when the workflow has a dispatch step, the user
