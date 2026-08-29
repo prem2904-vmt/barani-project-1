@@ -1,66 +1,91 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ConsultBuilderComponent } from '../consult-builder/consult-builder.component';
-import { ConsultDoctor, ConsultDraft } from '../../../shared/opd/consult';
+import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { Patient, formatPatientInfo } from '../../../shared/models/patient.model';
+import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ConsultDoctor, ConsultDraft } from '../../../shared/opd/consult';
 
 /**
- * OPD consult screen (slice — SHELL). The separate, non-lab screen the "new
- * order" fork routes to when the user is working in OPD. Hosts the consult
- * builder; persistence (as an Order with Module='opd') and the branch doctor
- * list come in later slices. Fully self-contained — imports nothing from the
- * lab feature.
+ * OPD consult screen. The separate, non-lab screen the "new order" fork routes
+ * to when the user is working in OPD. Deliberately MIRRORS the lab order-create
+ * frame (screen header → patient + referring controls row → left work area →
+ * right cart/fee rail) so it reads as the same app screen — but it imports
+ * nothing from the lab feature and never touches order-create.
+ *
+ * The consultation content (doctor + fee) is the seam the owner is specifying;
+ * persistence (as an Order with Module='opd') + the branch doctor list arrive
+ * in later slices. Reuses the copied order-create stylesheet for an exact frame.
  */
 @Component({
   selector: 'pf-consult-page',
   standalone: true,
-  imports: [ConsultBuilderComponent],
+  imports: [FormsModule, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="pf-consult-page">
-      <header class="pf-consult-page__head">
-        <button type="button" class="pf-consult-page__back press" (click)="back()" aria-label="Back">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <div>
-          <p class="pf-consult-page__eyebrow">OPD</p>
-          <h1 class="pf-consult-page__title">Consultation</h1>
-        </div>
-      </header>
-
-      <div class="pf-consult-page__body">
-        <pf-consult-builder [doctors]="doctors()" (added)="onAdded($event)"></pf-consult-builder>
-      </div>
-    </section>
-  `,
-  styles: [`
-    .pf-consult-page { max-width: 620px; margin: 0 auto; padding: 20px 16px 40px; }
-    .pf-consult-page__head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-    .pf-consult-page__back { width: 38px; height: 38px; display: inline-flex; align-items: center;
-      justify-content: center; border-radius: 10px; color: var(--text-secondary, #cbd5e1);
-      background: var(--glass-bg, rgba(255,255,255,0.05));
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.14)); cursor: pointer; }
-    .pf-consult-page__eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; color: var(--brand, #a855f7); }
-    .pf-consult-page__title { font-size: 22px; font-weight: 800; color: var(--text-primary, #e2e8f0); }
-    .pf-consult-page__body { padding: 16px; border-radius: 16px;
-      background: var(--glass-bg, rgba(255,255,255,0.04));
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); }
-  `],
+  templateUrl: './consult-page.component.html',
+  styleUrl: './consult-page.component.scss',
 })
 export class ConsultPageComponent {
+  private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
 
-  /** Doctors for this branch — empty until the doctor onboarding slice lands. */
-  readonly doctors = signal<ConsultDoctor[]>([]);
-  readonly patientId = this.route.snapshot.queryParamMap.get('patientId');
+  protected readonly formatPatient = formatPatientInfo;
 
-  onAdded(draft: ConsultDraft) {
+  private readonly _patient = signal<Patient | null>(null);
+  readonly patient = this._patient.asReadonly();
+  readonly isChangingPatient = signal(false);
+
+  /** Doctors pickable at the current branch — empty until the doctor-onboarding
+   *  slice lands. */
+  readonly doctors = signal<ConsultDoctor[]>([]);
+  readonly doctorId = signal<string | null>(null);
+  readonly fee = signal<number>(0);
+
+  readonly total = computed(() => this.fee());
+  readonly canSubmit = computed(() => !!this._patient() && !!this.doctorId());
+
+  constructor() {
+    // Deep-link: ?patientId= (from the fork / a patient's "New order") pre-fills
+    // the patient. Best-effort — the search still works if the fetch fails.
+    const pid = this.route.snapshot.queryParamMap.get('patientId');
+    if (pid) {
+      this.api.get<Patient>(`/api/patients/${pid}`).subscribe({
+        next: p => { if (p) this._patient.set(p); },
+        error: () => { /* silent — user can search */ },
+      });
+    }
+  }
+
+  attachPatient(p: Patient) {
+    if (!p) return;
+    this._patient.set(p);
+    this.isChangingPatient.set(false);
+  }
+  changePatient() { this.isChangingPatient.set(true); }
+  cancelChangePatient() { this.isChangingPatient.set(false); }
+
+  onDoctor(id: string) { this.doctorId.set(id || null); }
+  onFee(raw: string) {
+    const n = Number(raw);
+    this.fee.set(Number.isFinite(n) && n >= 0 ? n : 0);
+  }
+
+  submit() {
+    if (!this.canSubmit()) return;
+    const doc = this.doctors().find(d => d.id === this.doctorId()) ?? null;
+    const draft: ConsultDraft = {
+      doctorId: this.doctorId(),
+      doctorName: doc?.name ?? null,
+      fee: this.fee(),
+      procedures: [],
+    };
     // Persistence (Order with Module='opd') arrives in a later slice.
-    this.toasts.info(`Consultation with ${draft.doctorName} captured — saving comes next.`);
+    this.toasts.info(`Consultation captured (₹${draft.fee}) — saving comes next.`);
     this.back();
   }
 
