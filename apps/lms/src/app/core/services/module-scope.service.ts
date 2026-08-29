@@ -33,24 +33,28 @@ export class ModuleScopeService {
   });
 
   /**
-   * DEV-ONLY local preview of the OPD flow. When running a dev build
-   * (`isDevMode()`), setting `localStorage['pf.opdPreview']='1'` and reloading
-   * forces OPD usable so the front-desk fork / consult screen can be exercised
-   * WITHOUT any tenant/RBAC/DB change. `isDevMode()` is false in every
-   * production build, so this is permanently inert for real users. Read once at
-   * construction — set the flag then reload to toggle.
+   * DEV-ONLY local preview of the OPD flow. On a dev build (`isDevMode()`),
+   * `localStorage['pf.opdPreview']='1'` forces OPD usable so the front-desk fork
+   * / consult screen can be exercised WITHOUT any tenant/RBAC/DB change. Read
+   * LIVE (each call) so it takes effect without a reload. `isDevMode()` is false
+   * in every production build, so this is permanently inert for real users.
    */
-  private readonly _opdPreview = (() => {
+  private opdPreview(): boolean {
     try { return isDevMode() && localStorage.getItem('pf.opdPreview') === '1'; }
     catch { return false; }
-  })();
+  }
 
-  readonly labUsable = computed(() =>
-    canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab')));
-  readonly opdUsable = computed(() =>
-    this._opdPreview
-    || canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd')));
+  labUsable(): boolean {
+    return canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab'));
+  }
+  opdUsable(): boolean {
+    return this.opdPreview()
+      || canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd'));
+  }
 
-  /** What the front-desk cart should open. `'lab'` unless OPD is truly usable. */
-  readonly mode = computed<CartMode>(() => cartMode(this.labUsable(), this.opdUsable()));
+  /** What the front-desk cart should open. `'lab'` unless OPD is truly usable.
+   *  A method (not a memoised signal) so the dev preview flag is honoured live. */
+  mode(): CartMode {
+    return cartMode(this.labUsable(), this.opdUsable());
+  }
 }
