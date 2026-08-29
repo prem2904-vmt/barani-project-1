@@ -339,7 +339,7 @@
                                           [ngModel]="minOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { minOp: $event })">
                                     <option value="gt">&gt;</option><option value="gte">&ge;</option>
                                   </select>
-                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="r.min ?? null"
+                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="min value" [value]="r.min ?? null"
                                                     (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })"></pf-number-input>
                                 </div>
                               </label>
@@ -350,7 +350,7 @@
                                           [ngModel]="maxOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { maxOp: $event })">
                                     <option value="lt">&lt;</option><option value="lte">&le;</option>
                                   </select>
-                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="r.max ?? null"
+                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="max value" [value]="r.max ?? null"
                                                     (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })"></pf-number-input>
                                   @if ((p.referenceRanges ?? []).length > 1) {
                                     <button type="button" title="Remove range" class="shrink-0 px-1 c-red"
