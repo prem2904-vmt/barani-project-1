@@ -3,15 +3,23 @@ import { HttpClient } from '@angular/common/http';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { ImageEditorComponent } from '../../../shared/components/image-editor/image-editor.component';
 
 /** Small reusable image-upload tile used by the report-template editor
  *  for the lab logo, NABL badge, and signature scans. POSTs the file to
- *  /api/uploads/image, then emits the returned URL via (urlChange). */
+ *  /api/uploads/image, then emits the returned URL via (urlChange).
+ *
+ *  Raster picks (PNG/JPG/WEBP) open the crop + resize editor first (OPS-14);
+ *  SVG is vector and uploads untouched. */
 @Component({
   selector: 'pf-image-upload',
   standalone: true,
+  imports: [ImageEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (editFile()) {
+      <pf-image-editor [file]="editFile()" (applied)="onEdited($event)" (cancelled)="editFile.set(null)"></pf-image-editor>
+    }
     <div class="pf-image-drop">
       <div class="pf-image-thumb">
         @if (url) {
@@ -76,6 +84,8 @@ export class ImageUploadComponent {
   @Output() urlChange = new EventEmitter<string>();
 
   readonly uploading = signal<boolean>(false);
+  /** The raster file currently open in the crop/resize editor (OPS-14). */
+  readonly editFile = signal<File | null>(null);
 
   /** Prepend the API base URL when the stored value is a server-relative
    *  path (i.e. starts with "/uploads/…"). Absolute http(s) URLs pass
@@ -89,7 +99,7 @@ export class ImageUploadComponent {
 
   clear() { this.urlChange.emit(''); }
 
-  async onPick(ev: Event) {
+  onPick(ev: Event) {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -98,10 +108,27 @@ export class ImageUploadComponent {
       this.toasts.error('File too large — max 5 MB');
       return;
     }
+    // SVG is vector — it can't be canvas-cropped, so upload it untouched.
+    // Raster images open the crop/resize editor first (OPS-14).
+    const isSvg = /svg/i.test(file.type) || /\.svg$/i.test(file.name);
+    if (isSvg) { void this.uploadFile(file, file.name); return; }
+    this.editFile.set(file);
+  }
+
+  /** Editor applied → upload the cropped/resized blob. */
+  onEdited(blob: Blob) {
+    const f = this.editFile();
+    this.editFile.set(null);
+    const isJpeg = /jpe?g$/i.test(f?.type ?? '') || /jpe?g$/i.test(f?.name ?? '');
+    const base = (f?.name ?? 'image').replace(/\.[^.]+$/, '');
+    void this.uploadFile(blob, `${base}.${isJpeg ? 'jpg' : 'png'}`);
+  }
+
+  private async uploadFile(data: Blob, filename: string) {
     this.uploading.set(true);
     try {
       const fd = new FormData();
-      fd.append('file', file, file.name);
+      fd.append('file', data, filename);
       const baseUrl = this.platform.getApiUrl();
       const resp = await this.http.post<{ success: boolean; data?: { url: string }; message?: string }>(
         `${baseUrl}/api/uploads/image`, fd).toPromise();
