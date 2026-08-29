@@ -11,6 +11,8 @@ interface Stage { key: string; label: string; done: boolean; }
 interface TrackResult {
   org?: string; patient?: string; status?: string; rejected?: boolean;
   timeline?: Stage[]; reportReady?: boolean; reportToken?: string; reportPdfUrl?: string;
+  // True when the report is finished at the lab but withheld pending payment.
+  reportReadyAwaitingPayment?: boolean;
   // Payment (only present when there's a balance + the lab configured UPI).
   balanceDue?: number; invoiceNumber?: string; upiVpa?: string; upiPayeeName?: string;
 }
@@ -75,6 +77,8 @@ interface TrackResult {
 
           @if (result()!.reportReady && (result()!.reportPdfUrl || result()!.reportToken)) {
             <button class="btn" type="button" (click)="openReport()">View report</button>
+          } @else if (result()!.reportReadyAwaitingPayment) {
+            <p class="sub" style="margin-top:14px">Your report is ready. A balance of ₹{{ result()!.balanceDue }} is pending — please pay it (via UPI above, or at the front desk) to unlock and collect your report.</p>
           } @else {
             <p class="sub" style="margin-top:14px">Your report isn't ready yet. Scan again later.</p>
           }
