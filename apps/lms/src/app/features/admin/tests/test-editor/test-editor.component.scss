@@ -101,6 +101,15 @@ select.pf-input--compact {
 .pf-input--error { border-color: var(--red-border, #ef4444); }
 .pf-field-err { font-size: 11.5px; color: var(--red-text, #ef4444); margin-top: 3px; }
 
+/* Reference-range bound cell: fixed-width comparator + flexible value box.
+   The scoped `.pf-input { width: 100% }` (0,2,0) outranks Tailwind's `.w-12`,
+   so without this the comparator <select> ate the whole column and squeezed the
+   value <pf-number-input> to ~0 width. `.pf-rr-bound select.pf-input` is (0,2,1)
+   and wins; the value box then flexes to fill the remaining space. */
+.pf-rr-bound { display: flex; align-items: flex-end; gap: 4px; }
+.pf-rr-bound select.pf-input { width: 3.25rem; min-width: 3.25rem; flex: 0 0 auto; }
+.pf-rr-bound pf-number-input { flex: 1 1 auto; min-width: 0; }
+
 /* Reference range block */
 .pf-rr-block {
   padding: 12px; border-radius: 12px;

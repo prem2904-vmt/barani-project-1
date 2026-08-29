@@ -334,8 +334,8 @@
                               </label>
                               <label class="flex flex-col gap-0.5 min-w-0">
                                 <span class="pf-mini-lbl">Normal min</span>
-                                <div class="flex items-end gap-1">
-                                  <select class="pf-input pf-input--compact w-12 shrink-0" title="Lower-bound comparator"
+                                <div class="flex items-end gap-1 pf-rr-bound">
+                                  <select class="pf-input pf-input--compact shrink-0" title="Lower-bound comparator"
                                           [ngModel]="minOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { minOp: $event })">
                                     <option value="gt">&gt;</option><option value="gte">&ge;</option>
                                   </select>
@@ -345,8 +345,8 @@
                               </label>
                               <label class="flex flex-col gap-0.5 min-w-0">
                                 <span class="pf-mini-lbl">Normal max</span>
-                                <div class="flex items-end gap-1">
-                                  <select class="pf-input pf-input--compact w-12 shrink-0" title="Upper-bound comparator"
+                                <div class="flex items-end gap-1 pf-rr-bound">
+                                  <select class="pf-input pf-input--compact shrink-0" title="Upper-bound comparator"
                                           [ngModel]="maxOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { maxOp: $event })">
                                     <option value="lt">&lt;</option><option value="lte">&le;</option>
                                   </select>
