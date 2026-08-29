@@ -41,6 +41,17 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
                  [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
                  placeholder="e.g. Billing Supervisor" />
           @if (nameError()) { <p class="text-[12px] mt-1" style="color: var(--danger, #ef4444);">{{ nameError() }}</p> }
+
+          <!-- Role type (OPD build): 'Doctor' reveals the doctor-details
+               section in Create User for anyone given this role. -->
+          <label class="pf-label" style="margin-top: 14px;">Role type</label>
+          <select class="pf-input" [ngModel]="roleType()" (ngModelChange)="roleType.set($event)">
+            <option value="general">General</option>
+            <option value="doctor">Doctor</option>
+          </select>
+          <p class="text-[12px] mt-1" style="color: var(--text-muted);">
+            Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.
+          </p>
         </pf-tile>
       } @else if (editing()?.isPreSeeded) {
         <pf-tile tone="violet" padding="md" class="block mb-4">
@@ -194,6 +205,8 @@ export class RoleEditorComponent implements OnInit {
   private readonly _nameError = signal<string | null>(null);
 
   readonly newRoleName = signal('');
+  /** Role type for a new role (OPD build): 'general' | 'doctor'. */
+  readonly roleType = signal<'general' | 'doctor'>('general');
   readonly nameError = this._nameError.asReadonly();
   readonly editing = this._editing.asReadonly();
   readonly permissions = this._permissions.asReadonly();
@@ -285,7 +298,7 @@ export class RoleEditorComponent implements OnInit {
       if (this._allRoles().some(r => r.name.trim().toLowerCase() === name.toLowerCase())) {
         this._saving.set(false); this._nameError.set(`A role named "${name}" already exists.`); return;
       }
-      this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids }).subscribe({
+      this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids, kind: this.roleType() === 'doctor' ? 'doctor' : null }).subscribe({
         next: r => { this._saving.set(false); this.toasts.success(`Role ${r.name} created`); this.back(); },
         error: e => {
           this._saving.set(false);

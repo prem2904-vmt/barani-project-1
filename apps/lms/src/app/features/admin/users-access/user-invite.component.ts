@@ -13,6 +13,8 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { AlphaDirective } from '../../../shared/directives/alpha.directive';
 import { NumericDirective } from '../../../shared/directives/numeric.directive';
 import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/country-codes';
+import { OPD_DEPARTMENTS, SPECIALIZATION_SUGGESTIONS } from '../../../shared/opd/medical-catalog';
+import { hasDoctorRole } from '../../../shared/opd/doctor-role';
 
 interface CreateResult { id: string; username: string; displayName: string; }
 
@@ -138,6 +140,63 @@ interface CreateForm {
               Pick one or more roles — the user gets the combined permissions of all selected roles.
             </p>
           </div>
+
+          <!-- Doctor details (OPD build) — appears only when a doctor-type role
+               is ticked; all fields optional. -->
+          @if (isDoctorSelected()) {
+            <div class="pf-doc">
+              <h3 class="pf-doc__title">Doctor details</h3>
+
+              <div>
+                <label class="pf-label">Medical Registration No.</label>
+                <input type="text" class="pf-input" [ngModel]="doctorReg()" (ngModelChange)="doctorReg.set($event)"
+                       placeholder="NMC / State Medical Council reg. no." />
+              </div>
+
+              <div>
+                <label class="pf-label">Department</label>
+                <input type="text" class="pf-input" list="pf-opd-depts" [ngModel]="doctorDept()"
+                       (ngModelChange)="doctorDept.set($event)" placeholder="e.g. General Medicine (or type your own)" />
+                <datalist id="pf-opd-depts">
+                  @for (d of departments; track d) { <option [value]="d"></option> }
+                </datalist>
+              </div>
+
+              <div>
+                <label class="pf-label">Specialisation(s)</label>
+                @if (doctorSpecs().length) {
+                  <div class="pf-tags">
+                    @for (s of doctorSpecs(); track s) {
+                      <span class="pf-tag">{{ s }}<button type="button" (click)="removeSpec(s)" aria-label="Remove">×</button></span>
+                    }
+                  </div>
+                }
+                <input type="text" class="pf-input" list="pf-opd-specs" [ngModel]="specDraft()"
+                       (ngModelChange)="specDraft.set($event)"
+                       (keydown.enter)="$event.preventDefault(); addSpec(specDraft())"
+                       placeholder="Type a specialisation, press Enter…" />
+                <datalist id="pf-opd-specs">
+                  @for (s of specSuggestions; track s) { <option [value]="s"></option> }
+                </datalist>
+              </div>
+
+              <div>
+                <label class="pf-label">Procedures / surgeries</label>
+                @if (doctorProcs().length) {
+                  <div class="pf-tags">
+                    @for (p of doctorProcs(); track p) {
+                      <span class="pf-tag">{{ p }}<button type="button" (click)="removeProc(p)" aria-label="Remove">×</button></span>
+                    }
+                  </div>
+                }
+                <input type="text" class="pf-input" [ngModel]="procDraft()"
+                       (ngModelChange)="procDraft.set($event)"
+                       (keydown.enter)="$event.preventDefault(); addProc(procDraft())"
+                       placeholder="Type a procedure, press Enter…" />
+              </div>
+            </div>
+          }
+
           <div>
             <label class="pf-label">Branch</label>
             <pf-select [options]="scopeOptions()" [value]="scopeValue()"
@@ -166,6 +225,20 @@ interface CreateForm {
     .pf-role-chip input { cursor: pointer; width: 16px; height: 16px; flex: 0 0 auto; }
     .pf-role-chip--on { border-color: var(--brand, #6366f1); background: color-mix(in srgb, var(--brand, #6366f1) 12%, transparent); }
     @media (pointer: coarse) { :host .pf-role-chip { min-height: 44px; } :host .pf-role-chip input { width: 20px; height: 20px; } :host .pf-input { min-height: 44px; } }
+
+    /* Doctor details (OPD build) */
+    .pf-doc { display: flex; flex-direction: column; gap: 14px; padding: 14px;
+      border-radius: 12px; border: 1px dashed var(--brand, #6366f1);
+      background: color-mix(in srgb, var(--brand, #6366f1) 6%, transparent); }
+    .pf-doc__title { font-size: 13px; font-weight: 700; color: var(--brand, #6366f1);
+      text-transform: uppercase; letter-spacing: .04em; }
+    .pf-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .pf-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px;
+      border-radius: 999px; font-size: 12.5px; color: var(--text-primary);
+      background: color-mix(in srgb, var(--brand, #6366f1) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--brand, #6366f1) 35%, transparent); }
+    .pf-tag button { border: 0; background: transparent; color: var(--text-secondary);
+      font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
   `]
 })
 export class UserInviteComponent implements OnInit {
@@ -196,6 +269,25 @@ export class UserInviteComponent implements OnInit {
   readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
     this._roles().map(r => ({ value: r.id, label: r.name }))
   );
+
+  // ── Doctor details (OPD build) — the section appears when a ticked role is a
+  //    doctor-type role (role.kind === 'doctor'). All optional; free-add tags. ──
+  readonly isDoctorSelected = computed(() =>
+    hasDoctorRole(this._roles(), this._form().roleIds));
+
+  readonly doctorReg = signal('');
+  readonly doctorDept = signal('');
+  readonly doctorSpecs = signal<string[]>([]);
+  readonly doctorProcs = signal<string[]>([]);
+  readonly specDraft = signal('');
+  readonly procDraft = signal('');
+  readonly departments = OPD_DEPARTMENTS;
+  readonly specSuggestions = SPECIALIZATION_SUGGESTIONS;
+
+  addSpec(v: string) { const t = v.trim(); if (t && !this.doctorSpecs().includes(t)) this.doctorSpecs.update(a => [...a, t]); this.specDraft.set(''); }
+  removeSpec(t: string) { this.doctorSpecs.update(a => a.filter(x => x !== t)); }
+  addProc(v: string) { const t = v.trim(); if (t && !this.doctorProcs().includes(t)) this.doctorProcs.update(a => [...a, t]); this.procDraft.set(''); }
+  removeProc(t: string) { this.doctorProcs.update(a => a.filter(x => x !== t)); }
 
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {
     const branches = this._branches();
@@ -336,6 +428,13 @@ export class UserInviteComponent implements OnInit {
       roleIds: i.roleIds,
       branchId: i.branchId || undefined,
       subBranchId: i.subBranchId || undefined,
+      // OPD: send the doctor profile only when a doctor role was selected.
+      doctorProfile: this.isDoctorSelected() ? {
+        medicalRegNo: this.doctorReg().trim() || undefined,
+        department: this.doctorDept().trim() || undefined,
+        specializations: this.doctorSpecs(),
+        procedures: this.doctorProcs(),
+      } : undefined,
     }).subscribe({
       next: u => {
         this._saving.set(false);

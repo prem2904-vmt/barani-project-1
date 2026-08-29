@@ -40,6 +40,10 @@ export interface Role {
   isPreSeeded: boolean;
   isActive: boolean;
   createdAt: string;
+  /** Product module scope (OPD build): 'lab' | 'opd' | null. */
+  module?: string | null;
+  /** Role type (OPD build): 'doctor' marks a clinician role; else null/general. */
+  kind?: string | null;
 }
 
 export interface Permission {
