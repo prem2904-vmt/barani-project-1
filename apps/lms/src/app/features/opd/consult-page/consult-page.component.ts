@@ -50,6 +50,13 @@ export class ConsultPageComponent {
   readonly canSubmit = computed(() => !!this._patient() && !!this.doctorId());
 
   constructor() {
+    // Real doctors for the picker — users with a DoctorProfile (captured at user
+    // creation with a doctor-type role).
+    this.api.get<ConsultDoctor[]>('/api/doctors').subscribe({
+      next: docs => this.doctors.set(docs ?? []),
+      error: () => { /* silent — picker just shows "none onboarded" */ },
+    });
+
     // Deep-link: ?patientId= (from the fork / a patient's "New order") pre-fills
     // the patient. Best-effort — the search still works if the fetch fails.
     const pid = this.route.snapshot.queryParamMap.get('patientId');
