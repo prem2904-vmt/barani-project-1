@@ -1,4 +1,4 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, inject, isDevMode } from '@angular/core';
 import { TenantEntitlementsService } from './tenant-entitlements.service';
 import { AuthService } from '../auth/auth.service';
 import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/module-scope';
@@ -10,12 +10,13 @@ import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/mod
  * the user's module scope.
  *
  * PRODUCTION-SAFETY DEFAULTS (OPD is strictly additive):
- *   - lab scope DEFAULTS ON  — everyone works the lab today, so lab must stay
- *     usable and the cart must stay `'lab'` until real scoping is wired.
- *   - opd scope DEFAULTS OFF — OPD stays invisible/inert until a user is
- *     explicitly granted it (a later RBAC-tagging slice sets `setUserScopes`).
- * Net effect right now: `opdUsable` is false everywhere, `mode()` is `'lab'`,
- * and no lab behaviour changes.
+ *   - lab scope DEFAULTS ON  — everyone works the lab today, so lab stays
+ *     usable and the cart stays `'lab'`.
+ *   - opd scope DEFAULTS OFF — OPD is usable only when the user's /me modules
+ *     include 'opd' (role tagged 'opd') AND the tenant has OPD entitled.
+ * So for every existing user `opdUsable` is false, `mode()` is `'lab'`, and no
+ * lab behaviour changes. A dev-only preview flag (below) forces OPD on locally
+ * for testing, inert in production.
  */
 @Injectable({ providedIn: 'root' })
 export class ModuleScopeService {
@@ -31,10 +32,24 @@ export class ModuleScopeService {
     return new Set<ModuleId>(known.length ? known : ['lab']);
   });
 
+  /**
+   * DEV-ONLY local preview of the OPD flow. When running a dev build
+   * (`isDevMode()`), setting `localStorage['pf.opdPreview']='1'` and reloading
+   * forces OPD usable so the front-desk fork / consult screen can be exercised
+   * WITHOUT any tenant/RBAC/DB change. `isDevMode()` is false in every
+   * production build, so this is permanently inert for real users. Read once at
+   * construction — set the flag then reload to toggle.
+   */
+  private readonly _opdPreview = (() => {
+    try { return isDevMode() && localStorage.getItem('pf.opdPreview') === '1'; }
+    catch { return false; }
+  })();
+
   readonly labUsable = computed(() =>
     canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab')));
   readonly opdUsable = computed(() =>
-    canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd')));
+    this._opdPreview
+    || canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd')));
 
   /** What the front-desk cart should open. `'lab'` unless OPD is truly usable. */
   readonly mode = computed<CartMode>(() => cartMode(this.labUsable(), this.opdUsable()));
