@@ -1,5 +1,6 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, inject } from '@angular/core';
 import { TenantEntitlementsService } from './tenant-entitlements.service';
+import { AuthService } from '../auth/auth.service';
 import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/module-scope';
 
 /**
@@ -19,20 +20,21 @@ import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/mod
 @Injectable({ providedIn: 'root' })
 export class ModuleScopeService {
   private readonly entitlements = inject(TenantEntitlementsService);
+  private readonly auth = inject(AuthService);
 
-  /** Modules the current user is scoped to. Safe default: lab only. Real source
-   *  (RBAC module-tagged roles) is wired in a later slice via {@link setUserScopes}. */
-  private readonly _userScopes = signal<ReadonlySet<ModuleId>>(new Set<ModuleId>(['lab']));
-
-  /** Replace the user's module scope (called once RBAC tagging exists). */
-  setUserScopes(scopes: Iterable<ModuleId>): void {
-    this._userScopes.set(new Set(scopes));
-  }
+  /** Modules the current user is scoped to, from /api/auth/me (RBAC role.Module
+   *  ?? 'lab'). Defaults to lab when unloaded or from an older server, so the
+   *  fork stays lab-only. Only the known module ids are honoured. */
+  private readonly userScopes = computed<ReadonlySet<ModuleId>>(() => {
+    const mods = this.auth.user()?.modules ?? ['lab'];
+    const known = mods.filter((m): m is ModuleId => m === 'lab' || m === 'opd');
+    return new Set<ModuleId>(known.length ? known : ['lab']);
+  });
 
   readonly labUsable = computed(() =>
-    canUseModule(this.entitlements.moduleOn('lab'), this._userScopes().has('lab')));
+    canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab')));
   readonly opdUsable = computed(() =>
-    canUseModule(this.entitlements.moduleOn('opd'), this._userScopes().has('opd')));
+    canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd')));
 
   /** What the front-desk cart should open. `'lab'` unless OPD is truly usable. */
   readonly mode = computed<CartMode>(() => cartMode(this.labUsable(), this.opdUsable()));

@@ -17,6 +17,9 @@ export interface CurrentUser {
   permissions: string[];
   /** Branches this user may switch between (from their role grants). */
   branches?: BranchRef[];
+  /** Product modules this user is scoped to (OPD build; role.Module ?? 'lab').
+   *  Defaults to ['lab'] when absent. Drives the front-desk "new order" fork. */
+  modules?: string[];
   /** Whether a quick-switch/unlock PIN is set for this account. */
   hasPin?: boolean;
   /** The user's saved digital signature (PNG data URL), drawn on invoices/

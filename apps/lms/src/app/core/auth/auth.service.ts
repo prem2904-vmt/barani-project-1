@@ -22,6 +22,8 @@ interface MeResponse {
   roles: string[];
   permissions: string[];
   branches?: BranchRef[];
+  /** Product modules this user is scoped to (OPD build); defaults to ["lab"]. */
+  modules?: string[];
   hasPin?: boolean;
   signatureDataUrl?: string;
   /** Medical council / registration number (dash on screens until set). */
@@ -615,6 +617,9 @@ export class AuthService {
         roles: data.roles ?? [],
         permissions: data.permissions ?? [],
         branches: data.branches ?? [],
+        // OPD build: module scope from the backend; older servers omit it →
+        // default ['lab'] so the front-desk fork stays lab-only.
+        modules: data.modules ?? ['lab'],
         hasPin: data.hasPin ?? false,
         signatureDataUrl: data.signatureDataUrl ?? undefined,
         registrationId: data.registrationId ?? undefined
