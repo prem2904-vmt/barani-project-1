@@ -754,4 +754,29 @@ export class ReportQueueComponent implements OnInit {
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }
+
+  /** OPS-59: rebuild this order's final report from the CURRENT report template
+   *  (admin may have changed columns / layout / signatures since it was issued).
+   *  The backend re-snapshots and supersedes the previous final; we then
+   *  re-render and re-archive the PDF so the stored/QR copy matches too. */
+  async regenerate(r: Report) {
+    if (!r.orderId) return;
+    const ok = await this.dialog.confirm({
+      title: "Regenerate report?",
+      message: "Rebuild this report using the current report template. The previous version is replaced.",
+      confirmLabel: "Regenerate",
+      tone: "primary",
+    });
+    if (!ok) return;
+    this.api
+      .post<Report>("/api/reports/generate", { orderId: r.orderId, type: "final" })
+      .subscribe({
+        next: async (r2) => {
+          try { await this.archiveReportPdf(r2); } catch { /* archive is best-effort */ }
+          this.toasts.success("Report regenerated with the latest template");
+          this.refresh();
+        },
+        error: (e) => this.toasts.error(ApiError.from(e).message),
+      });
+  }
 }
