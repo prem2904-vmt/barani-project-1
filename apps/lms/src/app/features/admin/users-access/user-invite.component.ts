@@ -165,27 +165,8 @@ interface CreateForm {
 
               <div>
                 <label class="pf-label">Specialisation(s)</label>
-                @if (doctorSpecs().length) {
-                  <div class="pf-tags">
-                    @for (s of doctorSpecs(); track s) {
-                      <span class="pf-tag">{{ s }}<button type="button" (click)="removeSpec(s)" aria-label="Remove">×</button></span>
-                    }
-                  </div>
-                }
-                <div class="pf-ac">
-                  <input type="text" class="pf-input" [ngModel]="specDraft()"
-                         (ngModelChange)="specDraft.set($event); specOpen.set(true)"
-                         (focus)="specOpen.set(true)" (blur)="specOpen.set(false)"
-                         (keydown.enter)="$event.preventDefault(); addSpec(specDraft())"
-                         placeholder="Type or pick a specialisation…" />
-                  @if (specOpen() && specMatches().length) {
-                    <div class="pf-ac__pop">
-                      @for (s of specMatches(); track s) {
-                        <button type="button" class="pf-ac__item" (mousedown)="$event.preventDefault(); addSpec(s)">{{ s }}</button>
-                      }
-                    </div>
-                  }
-                </div>
+                <pf-select [options]="specOptions()" [multiple]="true" [values]="doctorSpecs()"
+                           placeholder="Select specialisation(s)…" (valuesChange)="doctorSpecs.set($event)"></pf-select>
               </div>
 
               <div>
@@ -299,7 +280,6 @@ export class UserInviteComponent implements OnInit {
   readonly doctorDept = signal('');
   readonly doctorSpecs = signal<string[]>([]);
   readonly doctorProcs = signal<string[]>([]);
-  readonly specDraft = signal('');
   readonly procDraft = signal('');
   readonly specSuggestions = SPECIALIZATION_SUGGESTIONS;
 
@@ -316,19 +296,10 @@ export class UserInviteComponent implements OnInit {
     else { this.deptIsCustom.set(false); this.doctorDept.set(v); }
   }
 
-  // App-styled specialisation autocomplete: NMC suggestions filtered by the
-  // draft, minus what's already chosen. Free-add still works (type + Enter).
-  readonly specOpen = signal(false);
-  readonly specMatches = computed(() => {
-    const q = this.specDraft().trim().toLowerCase();
-    const chosen = new Set(this.doctorSpecs());
-    return this.specSuggestions
-      .filter(s => !chosen.has(s) && (!q || s.toLowerCase().includes(q)))
-      .slice(0, 8);
-  });
+  /** Specialisation uses the same app select as Department, in multi-select mode. */
+  readonly specOptions = computed<PfSelectOption<string>[]>(() =>
+    this.specSuggestions.map(s => ({ value: s, label: s })));
 
-  addSpec(v: string) { const t = v.trim(); if (t && !this.doctorSpecs().includes(t)) this.doctorSpecs.update(a => [...a, t]); this.specDraft.set(''); this.specOpen.set(false); }
-  removeSpec(t: string) { this.doctorSpecs.update(a => a.filter(x => x !== t)); }
   addProc(v: string) { const t = v.trim(); if (t && !this.doctorProcs().includes(t)) this.doctorProcs.update(a => [...a, t]); this.procDraft.set(''); }
   removeProc(t: string) { this.doctorProcs.update(a => a.filter(x => x !== t)); }
 
