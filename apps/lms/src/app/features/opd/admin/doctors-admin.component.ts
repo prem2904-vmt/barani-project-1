@@ -103,7 +103,7 @@ export class DoctorsAdminComponent {
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
   readonly getRowId = (p: GetRowIdParams<DoctorRow>) => p.data.id;
 
-  readonly defaultColDef: ColDef<DoctorRow> = { sortable: true, resizable: true, flex: 1, minWidth: 120 };
+  readonly defaultColDef: ColDef<DoctorRow> = { filter: true, sortable: true, resizable: true, flex: 1, minWidth: 120 };
   readonly colDefs: ColDef<DoctorRow>[] = [
     { field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 160 },
     { field: 'department', headerName: 'Department', valueFormatter: p => p.value || '—' },

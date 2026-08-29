@@ -118,9 +118,9 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/opd/admin/doctors-admin.component').then(m => m.DoctorsAdminComponent)
       },
       {
-        // OPD → Settings (follow-up policy) — real screen ships next; placeholder for now.
-        path: 'admin/opd/settings', canActivate: [adminGuard], data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+        // OPD → Settings: the follow-up policy.
+        path: 'admin/opd/settings', canActivate: [adminGuard],
+        loadComponent: () => import('./features/opd/admin/opd-settings.component').then(m => m.OpdSettingsComponent)
       },
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
