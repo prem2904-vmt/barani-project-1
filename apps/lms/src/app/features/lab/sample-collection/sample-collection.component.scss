@@ -1354,9 +1354,12 @@
         max-height: none !important;
         overflow-y: auto !important;
       }
+      .pf-drawer__progress {
+        display: none !important;
+      }
       .pf-drawer__foot {
         flex: 0 0 auto !important;
         margin-top: auto !important;
-        padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)) !important;
       }
     }

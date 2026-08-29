@@ -479,16 +479,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
-      // Immersive full-screen: while a patient's collection drawer is OPEN the
-      // tube-tapping view owns the whole viewport, so tag <html> to hide the
-      // shell's top chrome + bottom nav (they otherwise paint over/around the
-      // teleported overlay). The queue list (drawer closed) keeps normal chrome.
-      if (typeof document !== "undefined") {
-        document.documentElement.classList.toggle(
-          "pf-collect-immersive",
-          hasDrawer,
-        );
-      }
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -530,11 +520,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._clock = null;
     }
     this.detachTeleport();
-    // Leaving the screen with a drawer still open must not strand the immersive
-    // flag on <html> — that would hide the chrome on the next screen too.
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.remove("pf-collect-immersive");
-    }
   }
 
   private detachTeleport() {
@@ -686,6 +671,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
     return map;
   });
+
+  patientTitle(rawName: string): string {
+    if (!rawName) return '—';
+    const parts = rawName.split('|').map(s => s.trim());
+    return parts[0] || rawName;
+  }
+
+  patientSub(rawName: string): string {
+    if (!rawName) return '';
+    const parts = rawName.split('|').map(s => s.trim());
+    if (parts.length > 1) {
+      return parts.slice(1).join(' · ');
+    }
+    return '';
+  }
 
   /** The tube's series state ('normal' for every non-series tube — all the
    *  pre-existing template branches key off that). */

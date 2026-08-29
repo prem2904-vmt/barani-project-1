@@ -125,14 +125,17 @@
                 <path d="M18 6 6 18M6 6l12 12"/>
               </svg>
             </button>
-            <div class="pf-drawer__who">
-              <p class="pf-drawer__name">{{ g.patientName }}</p>
-              <!-- Order number, not a sample id — the drawer is the whole order;
-                   each tube's own barcode is on its card below. Labelled and
-                   dark so the collector can read it out / write it instantly. -->
-              <p class="pf-drawer__meta pf-drawer__meta--order">Order ID: {{ g.orderNo }}</p>
+            <div class="pf-drawer__who min-w-0">
+              <p class="pf-drawer__name">{{ patientTitle(g.patientName) }}</p>
+              <p class="pf-drawer__meta pf-drawer__meta--order flex items-center gap-1.5 flex-wrap">
+                @if (patientSub(g.patientName); as sub) {
+                  <span class="pf-drawer__sub font-mono font-medium">{{ sub }}</span>
+                  <span class="opacity-40" aria-hidden="true">•</span>
+                }
+                <span>Order ID: {{ g.orderNo }}</span>
+              </p>
             </div>
-            <div class="pf-drawer__progress">
+            <div class="pf-drawer__progress shrink-0">
               <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
               <span class="pf-drawer__progress-lbl">vials drawn</span>
             </div>
