@@ -394,11 +394,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly dispatching = this._dispatching.asReadonly();
 
   /** True once every tube on the order has moved past 'collected' (dispatched
-   *  or further) — used to flip the UI from "collected" to "dispatched". */
+   *  or further) — used to flip the UI from "collected" to "dispatched".
+   *  Defined as "no tube is still pending or awaiting dispatch" rather than a
+   *  fixed done-status whitelist, so a tube in any post-dispatch state
+   *  (received / in-lab / completed …) still counts — otherwise the drawer
+   *  kept offering Dispatch after everything was already dispatched. Matches
+   *  the per-tube "Dispatched" badge, which uses the same rule. */
   isDispatched(g: OrderGroup): boolean {
-    const done = ["dispatched", "picked_up", "received", "completed"];
     return (
-      g.samples.length > 0 && g.samples.every((s) => done.includes(s.status))
+      g.samples.length > 0 &&
+      g.samples.every((s) => s.status !== "pending" && s.status !== "collected")
     );
   }
 
