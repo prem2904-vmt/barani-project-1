@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
@@ -170,6 +171,7 @@ export class PatientProfileComponent implements OnInit {
   protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly orderEntry = inject(OrderEntryService);
   private readonly locationSvc = inject(Location);
   private readonly chat = inject(ChatService);
   private readonly dialog = inject(DialogService);
@@ -551,7 +553,8 @@ export class PatientProfileComponent implements OnInit {
   }
 
   startOrder(p: Patient) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
+    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
+    void this.orderEntry.startNewOrder(p.id);
   }
 
   /** Re-order the same tests from a prior order. Routes through order-create

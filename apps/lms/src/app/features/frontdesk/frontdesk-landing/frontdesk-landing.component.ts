@@ -29,6 +29,7 @@ import { Bill } from '../../../shared/models/bill.model';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
 import { DialogService } from '../../../core/services/dialog.service';
+import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
@@ -145,6 +146,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly orderEntry = inject(OrderEntryService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
@@ -1592,7 +1594,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/patients', o.patientId]);
   }
   newOrderFor(p: Patient) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
+    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
+    void this.orderEntry.startNewOrder(p.id);
+  }
+  /** The "Create order" (+) button — no patient preselected. */
+  newOrder() {
+    void this.orderEntry.startNewOrder();
   }
   bookAppointmentFor(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });

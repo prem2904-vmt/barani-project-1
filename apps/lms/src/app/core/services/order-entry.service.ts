@@ -20,7 +20,10 @@ export class OrderEntryService {
   private readonly scope = inject(ModuleScopeService);
   private readonly dialog = inject(DialogService);
 
-  async startNewOrder(patientId?: string | null): Promise<void> {
+  /** Navigate to the right "new order" screen. Returns the router's navigation
+   *  result so callers that gate UI on it (e.g. the register button's settle
+   *  logic, OPS-49) keep working. */
+  async startNewOrder(patientId?: string | null): Promise<boolean> {
     let target: NavTarget | 'choose' = newOrderTarget(this.scope.mode(), patientId);
     if (target === 'choose') {
       // Both modules usable — ask. (Temporary two-option picker; becomes the
@@ -34,6 +37,6 @@ export class OrderEntryService {
       });
       target = consult ? consultTarget(patientId) : labOrderTarget(patientId);
     }
-    void this.router.navigate(target.commands, target.queryParams ? { queryParams: target.queryParams } : {});
+    return this.router.navigate(target.commands, target.queryParams ? { queryParams: target.queryParams } : {});
   }
 }

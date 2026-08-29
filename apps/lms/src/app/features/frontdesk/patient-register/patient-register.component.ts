@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { OrderEntryService } from '../../../core/services/order-entry.service';
 import {
   WorkflowRendererComponent,
   splitByStorage
@@ -135,6 +136,7 @@ export class PatientRegisterComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly orderEntry = inject(OrderEntryService);
   private readonly route = inject(ActivatedRoute);
 
   private readonly _record = signal<WorkflowConfigRecord | null>(null);
@@ -393,7 +395,7 @@ export class PatientRegisterComponent implements OnInit {
           // (OPS-49). A guard-blocked or crashed navigation now says so,
           // and the button stays disabled until the navigation settles.
           const nav = target === 'order'
-            ? this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: patient.id } })
+            ? this.orderEntry.startNewOrder(patient.id)
             : target === 'appointment'
               ? this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } })
               : this.router.navigate(['/frontdesk/patients', patient.id]);
