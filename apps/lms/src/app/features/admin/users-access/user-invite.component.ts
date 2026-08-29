@@ -155,11 +155,12 @@ interface CreateForm {
 
               <div>
                 <label class="pf-label">Department</label>
-                <input type="text" class="pf-input" list="pf-opd-depts" [ngModel]="doctorDept()"
-                       (ngModelChange)="doctorDept.set($event)" placeholder="e.g. General Medicine (or type your own)" />
-                <datalist id="pf-opd-depts">
-                  @for (d of departments; track d) { <option [value]="d"></option> }
-                </datalist>
+                <pf-select [options]="deptOptions()" [value]="deptSelectValue()"
+                           placeholder="Select a department…" (valueChange)="onDeptChange($event)"></pf-select>
+                @if (deptIsCustom()) {
+                  <input type="text" class="pf-input" style="margin-top: 8px;" [ngModel]="doctorDept()"
+                         (ngModelChange)="doctorDept.set($event)" placeholder="Type the department name" />
+                }
               </div>
 
               <div>
@@ -171,13 +172,10 @@ interface CreateForm {
                     }
                   </div>
                 }
-                <input type="text" class="pf-input" list="pf-opd-specs" [ngModel]="specDraft()"
+                <input type="text" class="pf-input" [ngModel]="specDraft()"
                        (ngModelChange)="specDraft.set($event)"
                        (keydown.enter)="$event.preventDefault(); addSpec(specDraft())"
                        placeholder="Type a specialisation, press Enter…" />
-                <datalist id="pf-opd-specs">
-                  @for (s of specSuggestions; track s) { <option [value]="s"></option> }
-                </datalist>
               </div>
 
               <div>
@@ -281,8 +279,20 @@ export class UserInviteComponent implements OnInit {
   readonly doctorProcs = signal<string[]>([]);
   readonly specDraft = signal('');
   readonly procDraft = signal('');
-  readonly departments = OPD_DEPARTMENTS;
   readonly specSuggestions = SPECIALIZATION_SUGGESTIONS;
+
+  // Department uses the app select (styled) with a trailing "Other" option that
+  // reveals a free-text input — keeps the managed list + add-your-own.
+  readonly deptOptions = computed<PfSelectOption<string>[]>(() => [
+    ...OPD_DEPARTMENTS.map(d => ({ value: d, label: d })),
+    { value: '__custom__', label: 'Other (type below)…' },
+  ]);
+  readonly deptIsCustom = signal(false);
+  readonly deptSelectValue = computed(() => this.deptIsCustom() ? '__custom__' : this.doctorDept());
+  onDeptChange(v: string) {
+    if (v === '__custom__') { this.deptIsCustom.set(true); this.doctorDept.set(''); }
+    else { this.deptIsCustom.set(false); this.doctorDept.set(v); }
+  }
 
   addSpec(v: string) { const t = v.trim(); if (t && !this.doctorSpecs().includes(t)) this.doctorSpecs.update(a => [...a, t]); this.specDraft.set(''); }
   removeSpec(t: string) { this.doctorSpecs.update(a => a.filter(x => x !== t)); }
