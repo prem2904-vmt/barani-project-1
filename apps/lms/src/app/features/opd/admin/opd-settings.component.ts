@@ -1,23 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
 
 type FollowUpMode = 'off' | 'auto' | 'assisted';
 interface FollowUpTier { withinDays: number; discountPercent: number; }
 interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
 
 /**
- * OPD → Settings: the follow-up policy (OPD build). A repeat consultation with
- * the SAME doctor within a tier's window gets that tier's discount. Three modes:
- * Off / Automatic (auto-apply the %) / Assisted (the % is a ceiling the front
- * desk works within). Tiered — multiple (within-days → %) rules.
+ * OPD → Settings: the follow-up policy (OPD build). Mirrors the Lab Settings
+ * page pattern (pf-tile cards + the radio-card "gate") so the theme matches.
+ * A repeat consult with the SAME doctor within a tier's window gets that tier's
+ * discount; modes: Off / Automatic (auto-apply) / Assisted (a ceiling). Tiered.
  */
 @Component({
   selector: 'pf-opd-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -31,24 +32,32 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
         </div>
       </pf-screen-header>
 
-      <div class="pf-os__card">
-        <h3 class="pf-os__h">Follow-up mode</h3>
-        <div class="pf-os__seg" role="group" aria-label="Follow-up mode">
+      <pf-tile tone="default" padding="lg" class="block mb-5">
+        <h3 class="pf-os__title">Follow-up mode</h3>
+        <p class="pf-os__hint">
+          When a patient returns to the same doctor within a tier's window, apply that tier's discount.
+        </p>
+        <div class="pf-os__gate">
           @for (m of MODES; track m.value) {
-            <button type="button" class="pf-os__seg-btn" [class.pf-os__seg-btn--on]="mode() === m.value"
-                    (click)="mode.set(m.value)">{{ m.label }}</button>
+            <button type="button" class="pf-os__gate-opt" [class.pf-os__gate-opt--on]="mode() === m.value"
+                    (click)="mode.set(m.value)">
+              <span class="pf-os__gate-radio"></span>
+              <span class="pf-os__gate-text">
+                <span class="pf-os__gate-t">{{ m.label }}</span>
+                <span class="pf-os__gate-s">{{ m.desc }}</span>
+              </span>
+            </button>
           }
         </div>
-        <p class="pf-os__desc">{{ modeDesc() }}</p>
-      </div>
+      </pf-tile>
 
       @if (mode() !== 'off') {
-        <div class="pf-os__card">
+        <pf-tile tone="default" padding="lg" class="block mb-5">
           <div class="pf-os__row-head">
-            <h3 class="pf-os__h">Tiers</h3>
+            <h3 class="pf-os__title">Tiers</h3>
             <button type="button" class="pf-os__add press" (click)="addTier()">+ Add tier</button>
           </div>
-          <p class="pf-os__desc">A repeat visit to the same doctor within the window gets that tier's discount. The tightest matching window applies.</p>
+          <p class="pf-os__hint">The tightest matching window applies. E.g. within 7 days → 100% off, within 30 days → 50% off.</p>
 
           @if (tiers().length === 0) {
             <p class="pf-os__muted">No tiers yet — add one.</p>
@@ -65,7 +74,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
               <button type="button" class="pf-os__del press" (click)="removeTier($index)" aria-label="Remove">×</button>
             </div>
           }
-        </div>
+        </pf-tile>
       }
     </section>
   `,
@@ -73,48 +82,48 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
     .pf-os__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700;
       color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-os__save:disabled { opacity: .5; cursor: default; }
-    .pf-os__card { margin-top: 14px; padding: 18px; border-radius: 16px;
-      background: var(--bg-card, rgba(255,255,255,0.03)); border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); }
-    .pf-os__h { font-size: 14px; font-weight: 700; color: var(--text-primary, #f8fafc); }
-    .pf-os__seg { display: inline-flex; margin-top: 12px; padding: 4px; border-radius: 12px; gap: 4px;
-      background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); }
-    .pf-os__seg-btn { padding: 8px 18px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
-      color: var(--text-secondary, #cbd5e1); background: transparent; border: 0; }
-    .pf-os__seg-btn--on { color: #fff; background: var(--brand, #a855f7); }
-    .pf-os__desc { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
-    .pf-os__muted { margin-top: 10px; font-size: 13px; color: var(--text-tertiary, #64748b); }
+
+    /* Card title/hint + radio-card gate — copied from the Lab Settings page. */
+    .pf-os__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-os__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-os__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .pf-os__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px;
+      border-radius: 12px; background: var(--glass-bg); border: 1px solid var(--glass-border); cursor: pointer;
+      transition: border-color .15s ease, background .15s ease; }
+    .pf-os__gate-opt:hover { border-color: rgba(124,58,237,0.4); }
+    .pf-os__gate-opt--on { border-color: rgba(124,58,237,0.6); background: rgba(124,58,237,0.06); }
+    .pf-os__gate-radio { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%;
+      border: 2px solid var(--border-input, #cbd5e1); position: relative; transition: border-color .15s ease; }
+    .pf-os__gate-opt--on .pf-os__gate-radio { border-color: var(--color-violet-500, #7c3aed); }
+    .pf-os__gate-opt--on .pf-os__gate-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-violet-500, #7c3aed); }
+    .pf-os__gate-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-os__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-os__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+
     .pf-os__row-head { display: flex; align-items: center; justify-content: space-between; }
+    .pf-os__muted { margin-top: 10px; font-size: 13px; color: var(--text-tertiary); }
     .pf-os__add { padding: 6px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-      color: var(--brand, #a855f7); background: transparent; border: 1px solid rgba(168,85,247,.35); }
-    .pf-os__tier { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .pf-os__tier-txt { font-size: 13px; color: var(--text-secondary, #cbd5e1); }
+      color: var(--color-violet-500, #7c3aed); background: transparent; border: 1px solid rgba(124,58,237,.35); }
+    .pf-os__tier { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .pf-os__tier-txt { font-size: 13px; color: var(--text-secondary); }
     .pf-os__num { width: 74px; padding: 7px 9px; border-radius: 8px; font-size: 14px; text-align: right;
-      color: var(--text-primary, #e2e8f0); background: var(--input-bg, rgba(255,255,255,0.03));
-      border: 1px solid var(--input-border, var(--glass-border, rgba(255,255,255,0.14))); }
+      color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-os__del { margin-left: auto; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 17px;
-      color: var(--text-secondary, #94a3b8); background: transparent; border: 1px solid var(--glass-border, rgba(255,255,255,0.14)); }
+      color: var(--text-secondary); background: transparent; border: 1px solid var(--glass-border); }
   `],
 })
 export class OpdSettingsComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
 
-  readonly MODES: { value: FollowUpMode; label: string }[] = [
-    { value: 'off', label: 'Off' },
-    { value: 'auto', label: 'Automatic' },
-    { value: 'assisted', label: 'Assisted' },
+  readonly MODES: { value: FollowUpMode; label: string; desc: string }[] = [
+    { value: 'off', label: 'Off', desc: 'No follow-up discount — every visit is billed at the full consultation fee.' },
+    { value: 'auto', label: 'Automatic', desc: 'The matching tier’s discount is applied automatically when the consult is billed.' },
+    { value: 'assisted', label: 'Assisted', desc: 'The matching tier’s discount is a ceiling — the front desk applies any amount up to it.' },
   ];
   readonly mode = signal<FollowUpMode>('off');
   readonly tiers = signal<FollowUpTier[]>([]);
   readonly saving = signal(false);
-
-  readonly modeDesc = computed(() => {
-    switch (this.mode()) {
-      case 'auto': return 'The matching tier’s discount is applied automatically when the consult is billed.';
-      case 'assisted': return 'The matching tier’s discount is a ceiling — the front desk applies any amount up to it.';
-      default: return 'No follow-up discount — every visit is billed at the full consultation fee.';
-    }
-  });
 
   constructor() {
     this.api.get<OpdSettings>('/api/opd/settings').subscribe({
