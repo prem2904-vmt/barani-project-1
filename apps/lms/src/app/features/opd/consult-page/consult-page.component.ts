@@ -76,7 +76,12 @@ export class ConsultPageComponent {
   changePatient() { this.isChangingPatient.set(true); }
   cancelChangePatient() { this.isChangingPatient.set(false); }
 
-  onDoctor(id: string) { this.doctorId.set(id || null); }
+  onDoctor(id: string) {
+    this.doctorId.set(id || null);
+    // Auto-fill the doctor's default fee (front desk can still override).
+    const doc = this.doctors().find(d => d.id === id);
+    if (doc && typeof doc.fee === 'number') this.fee.set(doc.fee);
+  }
   onFee(raw: string) {
     const n = Number(raw);
     this.fee.set(Number.isFinite(n) && n >= 0 ? n : 0);

@@ -10,6 +10,8 @@ export interface ConsultDoctor {
   name: string;
   /** Optional department/speciality label shown beside the name. */
   department?: string | null;
+  /** The doctor's default consultation fee — auto-fills the consult (overridable). */
+  fee?: number;
 }
 
 /** A procedure line — placeholder shape; the real catalog arrives later. */

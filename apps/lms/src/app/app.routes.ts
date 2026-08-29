@@ -110,6 +110,16 @@ export const appRoutes: Route[] = [
       // placeholder is visible regardless of entitlement.
       {
         path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
+        loadComponent: () => import('./features/opd/admin/opd-admin.component').then(m => m.OpdAdminComponent)
+      },
+      {
+        // OPD → Doctors: per-doctor consultation-fee grid.
+        path: 'admin/opd/doctors', canActivate: [adminGuard],
+        loadComponent: () => import('./features/opd/admin/doctors-admin.component').then(m => m.DoctorsAdminComponent)
+      },
+      {
+        // OPD → Settings (follow-up policy) — real screen ships next; placeholder for now.
+        path: 'admin/opd/settings', canActivate: [adminGuard], data: { moduleId: 'opd' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
       {
