@@ -172,10 +172,20 @@ interface CreateForm {
                     }
                   </div>
                 }
-                <input type="text" class="pf-input" [ngModel]="specDraft()"
-                       (ngModelChange)="specDraft.set($event)"
-                       (keydown.enter)="$event.preventDefault(); addSpec(specDraft())"
-                       placeholder="Type a specialisation, press Enter…" />
+                <div class="pf-ac">
+                  <input type="text" class="pf-input" [ngModel]="specDraft()"
+                         (ngModelChange)="specDraft.set($event); specOpen.set(true)"
+                         (focus)="specOpen.set(true)" (blur)="specOpen.set(false)"
+                         (keydown.enter)="$event.preventDefault(); addSpec(specDraft())"
+                         placeholder="Type or pick a specialisation…" />
+                  @if (specOpen() && specMatches().length) {
+                    <div class="pf-ac__pop">
+                      @for (s of specMatches(); track s) {
+                        <button type="button" class="pf-ac__item" (mousedown)="$event.preventDefault(); addSpec(s)">{{ s }}</button>
+                      }
+                    </div>
+                  }
+                </div>
               </div>
 
               <div>
@@ -237,6 +247,18 @@ interface CreateForm {
       border: 1px solid color-mix(in srgb, var(--brand, #6366f1) 35%, transparent); }
     .pf-tag button { border: 0; background: transparent; color: var(--text-secondary);
       font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
+
+    /* App-styled autocomplete popover (specialisation suggestions) */
+    .pf-ac { position: relative; }
+    .pf-ac__pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+      max-height: 240px; overflow-y: auto; padding: 4px; border-radius: 12px;
+      background: var(--surface, #0f172a);
+      border: 1px solid var(--glass-border, rgba(255,255,255,0.14));
+      box-shadow: 0 16px 40px rgba(0,0,0,0.45); }
+    .pf-ac__item { display: block; width: 100%; text-align: left; padding: 9px 12px;
+      border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+      font-size: 13.5px; color: var(--text-primary, #e2e8f0); }
+    .pf-ac__item:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.06)); }
   `]
 })
 export class UserInviteComponent implements OnInit {
@@ -294,7 +316,18 @@ export class UserInviteComponent implements OnInit {
     else { this.deptIsCustom.set(false); this.doctorDept.set(v); }
   }
 
-  addSpec(v: string) { const t = v.trim(); if (t && !this.doctorSpecs().includes(t)) this.doctorSpecs.update(a => [...a, t]); this.specDraft.set(''); }
+  // App-styled specialisation autocomplete: NMC suggestions filtered by the
+  // draft, minus what's already chosen. Free-add still works (type + Enter).
+  readonly specOpen = signal(false);
+  readonly specMatches = computed(() => {
+    const q = this.specDraft().trim().toLowerCase();
+    const chosen = new Set(this.doctorSpecs());
+    return this.specSuggestions
+      .filter(s => !chosen.has(s) && (!q || s.toLowerCase().includes(q)))
+      .slice(0, 8);
+  });
+
+  addSpec(v: string) { const t = v.trim(); if (t && !this.doctorSpecs().includes(t)) this.doctorSpecs.update(a => [...a, t]); this.specDraft.set(''); this.specOpen.set(false); }
   removeSpec(t: string) { this.doctorSpecs.update(a => a.filter(x => x !== t)); }
   addProc(v: string) { const t = v.trim(); if (t && !this.doctorProcs().includes(t)) this.doctorProcs.update(a => [...a, t]); this.procDraft.set(''); }
   removeProc(t: string) { this.doctorProcs.update(a => a.filter(x => x !== t)); }
