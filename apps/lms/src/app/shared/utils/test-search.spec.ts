@@ -1,4 +1,4 @@
-import { spellingVariants, matchTestSearch, filterTestList } from './test-search';
+import { spellingVariants, matchTestSearch, filterTestList, scoreTestSearch } from './test-search';
 import { Test } from '../models/test.model';
 
 const testOf = (overrides: Partial<Test> = {}): Test => ({
@@ -165,6 +165,75 @@ describe('matchTestSearch', () => {
   it('does not match partial word outside the field', () => {
     const test = testOf({ name: 'Serum Glucose' });
     expect(matchTestSearch(test, 'xgluc')).toBe(false);
+  });
+
+  // OPS-67: acronym search — "LFT" should surface "Liver Function Test".
+  it('matches an acronym of the name (LFT → Liver Function Test)', () => {
+    const test = testOf({ name: 'Liver Function Test' });
+    expect(matchTestSearch(test, 'lft')).toBe(true);
+    expect(matchTestSearch(test, 'LFT')).toBe(true);
+  });
+
+  it('matches an acronym of a profile name (CBC → Complete Blood Count)', () => {
+    const test = testOf({ name: 'Whole blood panel', profile: 'Complete Blood Count' });
+    expect(matchTestSearch(test, 'cbc')).toBe(true);
+  });
+
+  it('matches an acronym prefix (LF → Liver Function Test)', () => {
+    const test = testOf({ name: 'Liver Function Test' });
+    expect(matchTestSearch(test, 'lf')).toBe(true);
+  });
+
+  it('does not treat a non-matching short query as an acronym', () => {
+    const test = testOf({ name: 'Liver Function Test', code: 'LFT01', profile: null });
+    expect(matchTestSearch(test, 'zzz')).toBe(false);
+  });
+
+  it('leaves normal substring typing unaffected by acronym logic', () => {
+    const test = testOf({ name: 'Liver Function Test' });
+    expect(matchTestSearch(test, 'liver')).toBe(true);
+    expect(matchTestSearch(test, 'function')).toBe(true);
+  });
+
+  // OPS-67 follow-up: fuzzy nearest-match for typos / near-miss codes.
+  it('fuzzy-matches a 1-letter-off acronym (NFT → LFT)', () => {
+    const test = testOf({ name: 'Liver Function Test' });
+    expect(matchTestSearch(test, 'nft')).toBe(true);
+  });
+
+  it('fuzzy-matches a mistyped short name (CBCC → CBC)', () => {
+    const test = testOf({ name: 'Whole blood panel', shortName: 'CBC' });
+    expect(matchTestSearch(test, 'cbcc')).toBe(true);
+  });
+
+  it('fuzzy-matches a typo in a name word (hemoglobn → Hemoglobin)', () => {
+    const test = testOf({ name: 'Hemoglobin' });
+    expect(matchTestSearch(test, 'hemoglobn')).toBe(true);
+  });
+
+  it('does not fuzzy-match something far off', () => {
+    const test = testOf({ name: 'Glucose', code: 'GLU001', profile: null });
+    expect(matchTestSearch(test, 'qwerty')).toBe(false);
+  });
+});
+
+describe('scoreTestSearch ranking', () => {
+  it('scores exact/prefix above substring above fuzzy', () => {
+    const exact = testOf({ shortName: 'LFT' });
+    const substr = testOf({ name: 'Delft glass panel' }); // contains "lft"
+    const fuzzy = testOf({ name: 'Liver Function Test' }); // acronym lft, "nft" is 1 off
+    expect(scoreTestSearch(exact, 'lft')).toBeGreaterThan(scoreTestSearch(substr, 'lft'));
+    expect(scoreTestSearch(fuzzy, 'nft')).toBeGreaterThan(0);
+    expect(scoreTestSearch(exact, 'lft')).toBeGreaterThan(scoreTestSearch(fuzzy, 'nft'));
+  });
+
+  it('ranks the exact match first in filterTestList', () => {
+    const tests = [
+      testOf({ id: 'fuzzy', name: 'Liver Function Test' }), // matches "lft" via acronym
+      testOf({ id: 'exact', shortName: 'LFT', name: 'Some panel' }),
+    ];
+    const result = filterTestList(tests, 'lft');
+    expect(result[0].id).toBe('exact');
   });
 });
 
