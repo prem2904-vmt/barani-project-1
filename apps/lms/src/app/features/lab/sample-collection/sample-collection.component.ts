@@ -749,7 +749,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  for a partial dispatch. */
   readonly dispatchSelect = signal<Set<string> | null>(null);
 
-  private collectedCount(g: OrderGroup): number {
+  collectedCount(g: OrderGroup): number {
     return g.samples.filter((s) => s.status === "collected").length;
   }
 
@@ -782,20 +782,35 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.dispatchSelect.set(null);
   }
 
-  /** Dispatch the selected tubes one by one (PATCH /api/samples/{id}/dispatch),
-   *  optimistically flipping each to 'dispatched' and rolling back on error.
-   *  STAYS in the drawer — the _returnTo navigation is exclusive to the
-   *  whole-order dispatchOrder() path. */
+  /** One-click (OPS-66): dispatch every currently-collected tube — the
+   *  overwhelmingly common series intent, "send what I've drawn so far". No
+   *  intermediate select-then-confirm step; picking a subset stays available
+   *  via startPartialDispatch()/"Choose". */
+  async dispatchCollected(g: OrderGroup): Promise<void> {
+    if (this._dispatching()) return;
+    const ids = g.samples
+      .filter((s) => s.status === "collected")
+      .map((s) => s.id);
+    await this.dispatchSampleIds(g, ids);
+  }
+
+  /** Confirm the tubes chosen in selection mode ("Choose" path). */
   async confirmPartialDispatch(g: OrderGroup): Promise<void> {
     const sel = this.dispatchSelect();
     if (!sel || sel.size === 0 || this._dispatching()) return;
     const ids = g.samples
       .filter((s) => sel.has(s.id) && s.status === "collected")
       .map((s) => s.id);
-    if (ids.length === 0) {
-      this.dispatchSelect.set(null);
-      return;
-    }
+    this.dispatchSelect.set(null);
+    await this.dispatchSampleIds(g, ids);
+  }
+
+  /** Dispatch the given tubes one by one (PATCH /api/samples/{id}/dispatch),
+   *  optimistically flipping each to 'dispatched' and rolling back on error.
+   *  STAYS in the drawer — the _returnTo navigation is exclusive to the
+   *  whole-order dispatchOrder() path. */
+  private async dispatchSampleIds(g: OrderGroup, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
     this._dispatching.set(true);
     let ok = 0;
     let firstError: string | null = null;
@@ -819,7 +834,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.sampleCollected.emit();
     }
     if (firstError) this.toasts.error(firstError);
-    this.dispatchSelect.set(null);
     this._dispatching.set(false);
   }
 

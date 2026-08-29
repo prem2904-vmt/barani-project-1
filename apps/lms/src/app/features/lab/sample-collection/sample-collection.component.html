@@ -538,15 +538,23 @@
                 <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch' }}</span>
               </button>
             } @else if (canPartialDispatch(g)) {
-              <!-- Some tubes drawn, more still to come (series schedules) —
-                   hand just the drawn tubes to the lab. The whole-order
-                   Dispatch above stays the all-collected path. -->
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial" (click)="startPartialDispatch(g)"
-                      aria-label="Dispatch tubes" data-label="Dispatch tubes">
+              <!-- Series, some tubes drawn, more still to come. One click hands
+                   ALL drawn tubes to the lab (OPS-66 — no select-then-confirm).
+                   "Choose" opens tube-by-tube selection for the rare subset. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text" (click)="startPartialDispatch(g)"
+                      aria-label="Choose tubes" data-label="Choose">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                <span class="pf-btn__text">Choose</span>
+              </button>
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial" (click)="dispatchCollected(g)"
+                      [disabled]="dispatching()"
+                      [attr.aria-label]="'Dispatch ' + collectedCount(g)" [attr.data-label]="'Dispatch ' + collectedCount(g)">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
                 </svg>
-                <span class="pf-btn__text">Dispatch tubes…</span>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + collectedCount(g) }}</span>
               </button>
             }
             <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
