@@ -217,6 +217,9 @@ interface ReportSnapshot {
     result?: Record<string, unknown> | null;
     resultedAt?: string;
     validatedAt?: string;
+    /** Tech's overall observation(s) written at result entry (OPS-56) —
+     *  clinical notes rendered as italic lines under the test's rows. */
+    observations?: string[] | null;
     /** NABL accreditation scope for this test. When `false`, the test is
      *  segregated into a separate "Tests not under NABL scope" section
      *  (NABL 133 — non-accredited tests must be separated, not asterisked).
@@ -638,6 +641,17 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     return seriesDupNames.get(bundle)?.has((t.name ?? '').trim().toUpperCase())
       ? ` (${t.repeatOffsetMin} min)` : '';
   };
+  // Tech observations (OPS-56) → italic note rows appended after a test's
+  // parameter rows. Prefixed "Note:" so a clinical remark reads distinctly
+  // from the admin-authored narrative/interpretation paragraphs.
+  const obsRowsFor = (t: (typeof tabular)[number]): PanelRowData[] =>
+    (t.observations ?? [])
+      .map(o => (o ?? '').trim())
+      .filter(Boolean)
+      .map(o => ({ kind: 'note', note: `Note: ${o}` }));
+  // Profile members' observations belong under the profile block; collect them
+  // per bundle and append after the member rows (like profileNotes).
+  const profileObs = new Map<string, PanelRowData[]>();
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
@@ -653,7 +667,14 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       ?? (legacy ? t.packageTestId : null)
       ?? null;
     const pkgName = t.profileTestId ? (t.profileName || t.packageName) : t.packageName;
-    if (!pkg) { groups.push(g); continue; }
+    if (!pkg) { g.rows.push(...obsRowsFor(t)); groups.push(g); continue; }
+    // Stash this member's observations for the profile block (appended below).
+    const memberObs = obsRowsFor(t);
+    if (memberObs.length) {
+      const arr = profileObs.get(pkg) ?? [];
+      arr.push(...memberObs);
+      profileObs.set(pkg, arr);
+    }
     let merged = byPkg.get(pkg);
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
@@ -710,6 +731,11 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   for (const [pkg, notes] of profileNotes) {
     const panel = byPkg.get(pkg);
     if (panel && notes.length) panel.rows.push(...notes);
+  }
+  // Then the members' tech observations (OPS-56), after the notes.
+  for (const [pkg, obs] of profileObs) {
+    const panel = byPkg.get(pkg);
+    if (panel && obs.length) panel.rows.push(...obs);
   }
 
   // The profile's own NARRATIVE notes (the "Interpretation" paragraphs the
