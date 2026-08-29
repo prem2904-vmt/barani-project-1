@@ -2,7 +2,7 @@
      Phone: a horizontally-scrollable strip of nav tabs on the left,
      with Admin (settings wheel) and PF More always pinned to the right.
      iPad rail: a full-height vertical sidebar on the left edge. -->
-<nav class="pf-bottom-nav xl:hidden fixed z-30"
+<nav class="pf-bottom-nav xl:hidden fixed z-[2000]"
      [class.pf-bottom-nav--rail]="railMode()"
      [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
      [class.pf-bottom-nav--min]="minimized() && !railMode()"

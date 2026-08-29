@@ -188,6 +188,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   readonly orderLocked = computed(() => this.isReadOnly() || !!this.paidOrderId());
 
+  readonly isPaymentSettled = computed(() => {
+    if (!!this.paidOrderId()) return true;
+    const bill = this.currentBill();
+    if (this.isReadOnly() && bill) {
+      return (bill.balance ?? 0) <= 0;
+    }
+    return false;
+  });
+
   readonly isPaymentDueMode = computed(() => {
     const bill = this.currentBill();
     return !!this.viewOrderId() && !!bill && bill.balance > 0;

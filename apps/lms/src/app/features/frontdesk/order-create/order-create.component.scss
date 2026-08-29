@@ -2863,13 +2863,52 @@
   }
 }
 
-@media (hover: none) {
+@media (max-width: 1023px), (hover: none) {
   .pf-hdr-btn {
-    padding: 0 14px;
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 9999px;
+    justify-content: center;
+
     > span {
-      max-width: 10rem;
-      margin-left: 0;
-      opacity: 1;
+      display: none !important;
+      max-width: 0 !important;
+      opacity: 0 !important;
+      margin: 0 !important;
+    }
+
+    &:hover,
+    &:focus-visible {
+      padding: 0;
+
+      > span {
+        display: none !important;
+      }
+    }
+  }
+
+  .pf-hdr-btn--collect,
+  .pf-hdr-btn--primary {
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 9999px;
+    justify-content: center;
+
+    > span {
+      display: none !important;
+    }
+
+    &:hover,
+    &:focus-visible {
+      padding: 0;
+
+      > span {
+        display: none !important;
+      }
     }
   }
 }

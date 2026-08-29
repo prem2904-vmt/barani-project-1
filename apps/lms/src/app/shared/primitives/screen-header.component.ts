@@ -38,7 +38,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
          actions stay pinned right and shrink-0 (wrapping within their own
          column if there are many). This restores the inline layout on phone —
          the icons sit beside the title, not on a new line below it. -->
-    <header class="flex flex-row items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+    <header class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
       @if ((parentRoute || navBack.showBack()) && !noBack) {
         <button
           type="button"
@@ -52,7 +52,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
           </svg>
         </button>
       }
-      <div class="min-w-0 flex-1">
+      <div class="min-w-fit max-w-full flex-1">
         <!--
         @if (eyebrow) {
           <p
@@ -64,7 +64,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         }
         -->
         <h1
-          class="text-[20px] md:text-[32px] leading-[1.05] font-semibold tracking-tight break-words"
+          class="text-[20px] md:text-[32px] leading-[1.05] font-semibold tracking-tight break-normal"
           style="color: var(--text-primary);"
         >
           <ng-content></ng-content>
@@ -83,7 +83,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         }
         -->
       </div>
-      <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end max-w-full overflow-x-auto">
+      <div class="flex-1 sm:flex-initial flex items-center gap-2 flex-wrap justify-start sm:justify-end max-w-full">
         <ng-content select="[actions]"></ng-content>
       </div>
     </header>
