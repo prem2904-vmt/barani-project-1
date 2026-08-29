@@ -339,6 +339,12 @@ export const appRoutes: Route[] = [
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
           {
+            // OPD consult screen (separate from lab order-create). Reached only
+            // via the module-scope fork; dormant until OPD is enabled + scoped.
+            path: 'consult',
+            loadComponent: () => import('./features/opd/consult-page/consult-page.component').then(m => m.ConsultPageComponent)
+          },
+          {
             path: 'billing',
             redirectTo: 'order'
           },
