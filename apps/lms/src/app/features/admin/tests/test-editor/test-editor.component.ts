@@ -21,7 +21,8 @@ import {
   ShowWhen,
   ValidationEditorComponent,
   ValidationPatch,
-  hasOptions as registryHasOptions
+  hasOptions as registryHasOptions,
+  getFieldType
 } from '../../../../shared/forms';
 import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } from '../../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
@@ -1168,7 +1169,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private legacyToField(p: TestParameter, order: number): FormField {
-    const type = LEGACY_TYPE_MAP[p.type] ?? 'text';
+    // Prefer a legacy alias (numeric→number, options→select, …); otherwise keep
+    // the stored type when it is already a valid registry type (e.g. CP/micro
+    // params saved as "select" carry optionRows and must render the option
+    // table — mapping an unknown type to "text" would silently hide it).
+    const type = LEGACY_TYPE_MAP[p.type]
+      ?? (getFieldType(p.type as FormFieldType) ? (p.type as FormFieldType) : 'text');
     return {
       id: p.id || newFieldId(),
       name: p.name,

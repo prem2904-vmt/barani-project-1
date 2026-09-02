@@ -51,6 +51,7 @@ export const MODULE_CATALOG: ModuleDef[] = [
       { key: 'reports', label: 'Reports', hint: 'Report generation, templates and delivery.' },
       { key: 'messages', label: 'Messages', hint: 'In-app messaging and calls between staff.' },
       { key: 'homeCollection', label: 'Home Collection', hint: 'Home visit scheduling and field agents.' },
+      { key: 'microbiology', label: 'Microbiology / Culture', hint: 'Culture bench: the multi-stage culture & sensitivity workspace.' },
     ],
   },
   {

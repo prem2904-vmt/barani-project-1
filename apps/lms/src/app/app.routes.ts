@@ -104,6 +104,12 @@ export const appRoutes: Route[] = [
         canActivate: [permissionGuard(['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments']), moduleGuard('lab')],
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
       },
+      {
+        // Microbiology / Culture bench settings (lock timeout, TAT).
+        path: 'admin/microbiology',
+        canActivate: [permissionGuard('manage_lab_settings'), moduleGuard('lab')],
+        loadComponent: () => import('./features/lab/culture-settings/culture-settings.component').then(m => m.CultureSettingsComponent)
+      },
       // Admin settings placeholders for not-yet-built modules — each opens a
       // "coming soon" hub listing that module's planned config, so the module-
       // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
@@ -460,6 +466,13 @@ export const appRoutes: Route[] = [
         path: 'lab/sample/:sampleId',
         canActivate: [permissionGuard(['enter_result', 'edit_result'])],
         loadComponent: () => import('./features/lab/sample-result-entry/sample-result-entry.component').then(m => m.SampleResultEntryComponent)
+      },
+      {
+        // Microbiology culture bench: the staged workspace for one culture case
+        // (Gram → Growth → Identification → AST). Micro-tech only.
+        path: 'lab/culture/:orderTestId',
+        canActivate: [permissionGuard('culture_workbench'), moduleGuard('lab')],
+        loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
       },
 
       // Pathologist — only doctors with validate_result.

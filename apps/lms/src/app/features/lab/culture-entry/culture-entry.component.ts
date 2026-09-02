@@ -182,7 +182,10 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
 `]
 })
 export class CultureEntryComponent implements OnInit {
-  readonly organisms = COMMON_ORGANISMS;
+  /** Optional master-driven organism list (from /api/microbiology/organisms).
+   *  Falls back to the built-in common isolates when not supplied. */
+  @Input() organismNames: string[] | null = null;
+  get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly platform = inject(PlatformService);
 

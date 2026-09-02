@@ -14,6 +14,8 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
+import { CulturePanelComponent } from '../culture-panel/culture-panel.component';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
 import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -54,7 +56,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -221,6 +223,15 @@ const COUNTERS: CounterSpec[] = [
           Done
           <span class="pf-mtab__count">{{ countFor('completed') }}</span>
         </button>
+        @if (showCulture()) {
+          <button type="button" role="tab" class="pf-mtab press"
+                  [class.pf-mtab--on]="mobileTab() === 'culture'"
+                  [attr.aria-selected]="mobileTab() === 'culture'"
+                  (click)="setMobileTab('culture')">
+            Culture Bench
+            <span class="pf-mtab__count">{{ cultureCount() }}</span>
+          </button>
+        }
       </div>
 
       <div class="pf-mw-split" #mwSplit
@@ -327,8 +338,8 @@ const COUNTERS: CounterSpec[] = [
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
-                 [class.pf-mw-pane--solo]="!showLeftPane()"
-                 [class.pf-mobile-hide]="mobileTab() === 'intake'">
+                 [class.pf-mw-pane--solo]="!showLeftPane() && !showCulture()"
+                 [class.pf-mobile-hide]="mobileTab() === 'intake' || mobileTab() === 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
               <button type="button" role="tab" class="pf-mw-tab press"
@@ -798,6 +809,34 @@ const COUNTERS: CounterSpec[] = [
       }
           </div>
         </section>
+
+        <!-- CULTURE BENCH: micro-tech third pane — the multi-stage culture
+             bench, persistent beside the queue (not a tab). Additive; only
+             rendered when the Lab microbiology feature is on AND the user holds
+             culture_workbench. On phones it's the "Culture Bench" mobile tab. -->
+        @if (showCulture()) {
+        <!-- Its own resize handle (desktop only; hidden on phones). -->
+        <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
+             aria-label="Resize Culture Bench"
+             (pointerdown)="onCulturePointerDown($event)"
+             (pointermove)="onCulturePointerMove($event)"
+             (pointerup)="onCulturePointerUp($event)"
+             (pointercancel)="onCulturePointerUp($event)"
+             (lostpointercapture)="onCulturePointerUp($event)">
+          <span class="pf-mw-handle__grip" aria-hidden="true"></span>
+        </div>
+        <section class="pf-mw-pane pf-mw-culture"
+                 [style.--culture-w.px]="cultureWidth()"
+                 [class.pf-mobile-hide]="mobileTab() !== 'culture'">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            <span class="pf-mw-pane__title">Culture Bench</span>
+            <span class="pf-mw-culture__count">{{ cultureCount() }}</span>
+          </header>
+          <div class="pf-mw-pane__body">
+            <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+          </div>
+        </section>
+        }
       </div>
     </section>
 
@@ -912,6 +951,11 @@ const COUNTERS: CounterSpec[] = [
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-secondary);
+    }
+    /* Culture pane header count chip. */
+    .pf-mw-culture__count {
+      margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+      color: var(--violet-text, #7c3aed); background: rgba(124, 58, 237, 0.14);
     }
     /* Lab Intake header — has the title on the left and an inline scan
      * bar on the right (icon + manual-typing input + camera shortcut +
@@ -1075,6 +1119,11 @@ const COUNTERS: CounterSpec[] = [
       .pf-mw-pane:not(:first-of-type) {
         flex: 1 1 0;
         min-width: 0;
+      }
+      /* Culture Bench is the third column — user-resizable via its own drag
+         handle (width persisted in the --culture-w CSS var, desktop only). */
+      .pf-mw-pane.pf-mw-culture {
+        flex: 0 0 var(--culture-w, 340px);
       }
       .pf-mw-handle {
         flex: 0 0 8px;
@@ -2128,6 +2177,14 @@ export class MyWorkComponent implements OnInit {
   private readonly process = inject(ProcessWorkflowService);
   protected readonly labCfg = inject(BranchLabConfigService);
   protected readonly scanSvc = inject(ScanService);
+  private readonly entitlements = inject(TenantEntitlementsService);
+
+  /** The Culture tab is micro-tech only: the Lab "microbiology" feature must be
+   *  on AND the user must hold culture_workbench. A regular tech never sees it. */
+  readonly showCulture = computed(() =>
+    this.entitlements.featureOn('lab', 'microbiology') && this.auth.hasPermission('culture_workbench'));
+  /** Live count for the Culture pill (fed by the culture panel on load). */
+  readonly cultureCount = signal(0);
 
   /** Collect-in-lab: sample collection is placed in the lab work-area, so the
    *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
@@ -2230,6 +2287,44 @@ export class MyWorkComponent implements OnInit {
     this._mwDragging.set(false);
     this.persistMwSplit(this._mwSplitPct());
   }
+
+  // Culture (3rd) pane width — its own drag handle, persisted in px. Consumed
+  // via a CSS var so it only applies in the desktop 3-column layout.
+  private static readonly CULTURE_W_KEY = 'pf.lms.lab.cultureWidth';
+  private readonly _cultureWidth = signal<number>(this.loadCultureWidth());
+  readonly cultureWidth = this._cultureWidth.asReadonly();
+  private _cultureActivePointerId: number | null = null;
+
+  private loadCultureWidth(): number {
+    try {
+      const raw = localStorage.getItem(MyWorkComponent.CULTURE_W_KEY);
+      const n = raw ? Number(raw) : 340;
+      return Number.isFinite(n) && n >= 260 && n <= 680 ? n : 340;
+    } catch { return 340; }
+  }
+  onCulturePointerDown(ev: PointerEvent) {
+    const t = ev.currentTarget as HTMLElement;
+    t.setPointerCapture(ev.pointerId);
+    this._cultureActivePointerId = ev.pointerId;
+    this._mwDragging.set(true);
+    ev.preventDefault();
+  }
+  onCulturePointerMove(ev: PointerEvent) {
+    if (this._cultureActivePointerId !== ev.pointerId) return;
+    const split = (ev.currentTarget as HTMLElement).parentElement;
+    if (!split) return;
+    const rect = split.getBoundingClientRect();
+    // Handle sits to the LEFT of the culture pane → dragging left widens it.
+    this._cultureWidth.set(Math.max(260, Math.min(680, rect.right - ev.clientX)));
+  }
+  onCulturePointerUp(ev: PointerEvent) {
+    if (this._cultureActivePointerId !== ev.pointerId && ev.type !== 'lostpointercapture') return;
+    const t = ev.currentTarget as HTMLElement;
+    if (t.hasPointerCapture(ev.pointerId)) t.releasePointerCapture(ev.pointerId);
+    this._cultureActivePointerId = null;
+    this._mwDragging.set(false);
+    try { localStorage.setItem(MyWorkComponent.CULTURE_W_KEY, String(this._cultureWidth())); } catch { /* ignore */ }
+  }
   readonly counters = COUNTERS;
 
   private readonly _tab = signal<Tab>('my_work');
@@ -2243,7 +2338,7 @@ export class MyWorkComponent implements OnInit {
   // apply inside @media (max-width:640px)), so desktop is untouched.
   // Switching to My Work / Queue reuses the existing setTab() so the
   // right pane loads the matching data — no new fetch logic.
-  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue' | 'completed'>('intake');
+  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue' | 'completed' | 'culture'>('intake');
   protected readonly kpiOpen = signal(false);
 
   // ── Stats popover teleport (phone) ──────────────────────────────
@@ -2285,11 +2380,12 @@ export class MyWorkComponent implements OnInit {
   private readonly _intakeTabGuard = effect(() => {
     if (!this.showLeftPane() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
   });
-  setMobileTab(t: 'intake' | 'mywork' | 'queue' | 'completed') {
+  setMobileTab(t: 'intake' | 'mywork' | 'queue' | 'completed' | 'culture') {
     this.mobileTab.set(t);
     if (t === 'mywork') this.setTab('my_work');
     else if (t === 'queue') this.setTab('service_queue');
     else if (t === 'completed') this.setTab('completed');
+    // 'culture' is a standalone pane, not a queue tab — no setTab.
   }
 
   private readonly _counter = signal<CounterSpec['id']>('all');
