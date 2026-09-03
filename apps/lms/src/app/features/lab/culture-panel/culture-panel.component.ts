@@ -118,7 +118,7 @@ export interface CultureCaseView {
     .pf-cc__tag--warn { color: #b45309; background: rgba(245,158,11,0.16); }
     .pf-cc__day { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
     .pf-cc__sub { font-size: 12.5px; color: var(--text-secondary); }
-    .pf-cc__stages { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+    .pf-cc__stages { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 6px; }
     .pf-cc__stage { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600;
       padding: 2px 8px; border-radius: 999px; color: var(--text-tertiary);
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
