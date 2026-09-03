@@ -30,14 +30,14 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
       <pf-screen-header
-        eyebrow="Microbiology · Culture"
+        [eyebrow]="eyebrow()"
         [title]="c()?.barcode || c()?.sampleId || 'Culture case'"
         [subtitle]="subtitle()"
         parentRoute="/lab/my-work">
         <div actions>
           @if (c()?.caseState === 'awaiting_signout') {
             <span class="pf-cw__await">Awaiting pathologist sign-out</span>
-          } @else {
+          } @else if (!focusStage()) {
             <button type="button" class="pf-cw__signout press" [disabled]="busy()" (click)="submitForSignout()">
               Submit for sign-out
             </button>
@@ -50,7 +50,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
       } @else if (!c()) {
         <pf-tile tone="default" padding="xl"><p class="text-center text-sm" style="color: var(--text-tertiary);">Case not found.</p></pf-tile>
       } @else {
-        @for (s of c()!.stages; track s.key) {
+        @for (s of visibleStages(); track s.key) {
           <pf-tile tone="default" padding="lg" class="block mb-4">
             <div class="pf-cw__head">
               <div class="min-w-0">
@@ -142,14 +142,33 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
 
   private id = '';
 
+  /** The stage the tech came in to work (from ?stage=…) — the entry focuses on
+   *  just this one, styled like the standard result-entry. Null = full case. */
+  readonly focusStage = signal<string | null>(null);
+
   readonly subtitle = computed(() => {
     const c = this.c();
     if (!c) return '';
     return [c.patientName, c.testName, c.departmentName].filter(Boolean).join(' · ');
   });
 
+  /** Only the focused stage when one was picked; otherwise the whole case. */
+  readonly visibleStages = computed(() => {
+    const all = this.c()?.stages ?? [];
+    const key = this.focusStage();
+    if (!key) return all;
+    const one = all.filter(s => s.key === key);
+    return one.length ? one : all;
+  });
+
+  readonly eyebrow = computed(() => {
+    const s = this.visibleStages();
+    return this.focusStage() && s.length === 1 ? `Culture · ${s[0].label}` : 'Microbiology · Culture';
+  });
+
   ngOnInit() {
     this.id = this.route.snapshot.paramMap.get('orderTestId') ?? '';
+    this.focusStage.set(this.route.snapshot.queryParamMap.get('stage'));
     this.load();
     this.api.get<{ name: string }[]>('/api/microbiology/organisms').subscribe({
       next: rows => this.organismNames.set((rows ?? []).map(o => o.name).filter(Boolean)),
@@ -220,7 +239,22 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       valuesJson = notes ? JSON.stringify({ notes }) : null;
       delete this.drafts[s.key];
     }
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/submit`, { valuesJson }), `${s.label} submitted`);
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/submit`, { valuesJson }).subscribe({
+      next: c => {
+        this.busy.set(false);
+        this.toasts.success(`${s.label} submitted`);
+        // Focused single-stage entry → back to the bench to pick the next stage
+        // (mirrors saving a result and returning to the queue).
+        if (this.focusStage()) this.router.navigate(['/lab/my-work']);
+        else if (c) this.c.set(c);
+      },
+      error: (e: { error?: { message?: string } }) => {
+        this.busy.set(false);
+        this.toasts.error(e?.error?.message || 'Could not submit the stage');
+        this.load();
+      },
+    });
   }
 
   submitForSignout() {
