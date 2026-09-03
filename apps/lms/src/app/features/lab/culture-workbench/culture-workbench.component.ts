@@ -61,6 +61,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                       @if (s.state === 'done') { <span class="pf-cse__badge pf-cse__badge--done">Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}</span> }
                       @else if (isMine(s)) { <span class="pf-cse__badge pf-cse__badge--mine">You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
                       @else if (s.state === 'picked') { <span class="pf-cse__badge pf-cse__badge--held">{{ s.holderName || 'in progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
+                      @else if (incubating(s)) { <span class="pf-cse__badge pf-cse__badge--incub">Incubating</span> }
                     </td>
                     <td class="pf-cse__cell">
                       @if (s.state === 'done') {
@@ -81,8 +82,15 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                         </div>
                       } @else if (s.state === 'picked') {
                         <span class="pf-cse__lockmsg">🔒 In progress · {{ s.holderName || 'another tech' }}</span>
+                      } @else if (incubating(s)) {
+                        <span class="pf-cse__incub">⏳ Incubating — ready in {{ incubateReadyIn(s) }}</span>
                       } @else {
-                        <button type="button" class="pf-cse__pick" [disabled]="busy()" (click)="pick(s)">Pick up</button>
+                        <div class="pf-cse__rowact">
+                          @if (requiresIncubation(s.key)) {
+                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="incubate(s)">Inoculate &amp; incubate</button>
+                          }
+                          <button type="button" class="pf-cse__pick" [disabled]="busy()" (click)="pick(s)">Pick up</button>
+                        </div>
                       }
                     </td>
                   </tr>
@@ -147,6 +155,8 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
     .pf-cse__badge--done { color: #15803d; background: rgba(34,197,94,0.14); }
     .pf-cse__badge--mine { color: #7c3aed; background: rgba(124,58,237,0.16); }
     .pf-cse__badge--held { color: #b45309; background: rgba(245,158,11,0.16); }
+    .pf-cse__badge--incub { color: #0e7490; background: rgba(6,182,212,0.16); }
+    .pf-cse__incub { font-size: 12.5px; font-weight: 600; color: #0e7490; }
     .pf-cse__cell { padding: 12px 18px; }
     .pf-cse__done { color: #15803d; font-weight: 600; font-size: 13px; }
     .pf-cse__lockmsg { font-size: 12.5px; font-weight: 600; color: var(--text-tertiary); }
@@ -295,6 +305,28 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
   lockedByOther(s: CultureStageView): boolean {
     return s.state === 'picked' && !this.isMine(s);
+  }
+
+  // ── Incubation ──────────────────────────────────────────────────────────
+  private readonly incubationStages = new Set(['growth', 'identification', 'ast']);
+  requiresIncubation(key: string): boolean { return this.incubationStages.has(key); }
+  /** True while a stage's incubation clock is still running. */
+  incubating(s: CultureStageView): boolean {
+    if (!s.incubateUntil) return false;
+    const t = new Date(s.incubateUntil).getTime();
+    return !Number.isNaN(t) && t > this.now();
+  }
+  /** Live "ready in …" countdown (recomputes as `now` ticks). */
+  incubateReadyIn(s: CultureStageView): string {
+    if (!s.incubateUntil) return '';
+    const ms = new Date(s.incubateUntil).getTime() - this.now();
+    if (ms <= 0) return 'now';
+    const m = Math.floor(ms / 60_000);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+  }
+  incubate(s: CultureStageView) {
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/incubate`, {}));
   }
 
   private run(obs: Observable<CultureCaseView>, ok?: string) {

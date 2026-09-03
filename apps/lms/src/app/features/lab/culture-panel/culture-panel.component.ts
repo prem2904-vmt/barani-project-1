@@ -18,6 +18,8 @@ export interface CultureStageView {
   doneByUserId?: string | null;
   doneByName?: string | null;
   valuesJson?: string | null;
+  /** When set + in the future, the plate is incubating (stage not yet readable). */
+  incubateUntil?: string | null;
 }
 
 /** A culture case row (mirrors the backend CultureCaseDto). */
