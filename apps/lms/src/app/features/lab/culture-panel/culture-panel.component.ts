@@ -51,7 +51,7 @@ export interface CultureCaseView {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && cases().length === 0) {
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="flex flex-col gap-3">
         @for (i of [0,1,2]; track i) {
           <pf-tile tone="default" padding="md">
             <pf-skeleton variant="line" width="45%"></pf-skeleton>
@@ -66,7 +66,7 @@ export interface CultureCaseView {
         </p>
       </pf-tile>
     } @else {
-      <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3 list-none p-0 m-0">
+      <ul class="flex flex-col gap-3 list-none p-0 m-0">
         @for (c of cases(); track c.orderTestId) {
           <li>
             <button type="button" class="pf-cc press" (click)="open(c)">
