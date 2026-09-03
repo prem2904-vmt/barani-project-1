@@ -8,6 +8,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
+import { DelegateModalComponent } from '../my-work/delegate-modal.component';
 import { CultureResult } from '../../../shared/models/culture.model';
 import { CultureCaseView, CultureStageView } from '../culture-panel/culture-panel.component';
 
@@ -25,7 +26,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, CultureEntryComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, CultureEntryComponent, DelegateModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -72,6 +73,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                   <button type="button" class="pf-cw__btn pf-cw__btn--primary press" [disabled]="busy()" (click)="pick(s)">Pick up</button>
                 } @else if (s.state === 'picked' && isMine(s)) {
                   <button type="button" class="pf-cw__btn press" [disabled]="busy()" (click)="drop(s)">Drop</button>
+                  <button type="button" class="pf-cw__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
                   <button type="button" class="pf-cw__btn pf-cw__btn--primary press" [disabled]="busy()" (click)="submit(s)">Submit</button>
                 }
               </div>
@@ -95,6 +97,12 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
         }
       }
     </section>
+
+    @if (delegating(); as ds) {
+      <pf-delegate-modal [testName]="ds.label"
+                         (chose)="doDelegate(ds, $event)"
+                         (cancelled)="delegating.set(null)"></pf-delegate-modal>
+    }
   `,
   styles: [`
     .pf-cw__signout { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
@@ -229,6 +237,27 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
   drop(s: CultureStageView) {
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/drop`, {}));
+  }
+
+  /** Hand this stage to another tech (reuses the shared delegate picker). */
+  readonly delegating = signal<CultureStageView | null>(null);
+  startDelegate(s: CultureStageView) { this.delegating.set(s); }
+  doDelegate(s: CultureStageView, toUserId: string) {
+    this.delegating.set(null);
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/delegate`, { toUserId }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.toasts.success(`${s.label} delegated`);
+        // The stage is no longer mine → back to the bench.
+        if (this.focusStage()) this.router.navigate(['/lab/my-work']); else this.load();
+      },
+      error: (e: { error?: { message?: string } }) => {
+        this.busy.set(false);
+        this.toasts.error(e?.error?.message || 'Could not delegate the stage');
+        this.load();
+      },
+    });
   }
   submit(s: CultureStageView) {
     let valuesJson: string | null;
