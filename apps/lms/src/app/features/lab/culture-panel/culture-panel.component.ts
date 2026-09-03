@@ -96,7 +96,6 @@ export interface CultureCaseView {
                   }
                 </span>
               </span>
-              <span class="pf-cc__go" aria-hidden="true">→</span>
             </button>
           </li>
         }
@@ -104,7 +103,7 @@ export interface CultureCaseView {
     }
   `,
   styles: [`
-    .pf-cc { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    .pf-cc { position: relative; display: flex; align-items: center; width: 100%; text-align: left;
       padding: 12px 14px 12px 18px; border-radius: 14px; cursor: pointer;
       background: var(--bg-card, var(--glass-bg)); border: 1px solid var(--glass-border);
       transition: border-color .15s ease, background .15s ease; }
@@ -127,7 +126,6 @@ export interface CultureCaseView {
     .pf-cc__stage--done { color: #15803d; background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.35); }
     .pf-cc__tick { font-weight: 800; }
     .pf-cc__holder { font-weight: 500; opacity: .85; }
-    .pf-cc__go { flex-shrink: 0; font-size: 18px; color: var(--text-tertiary); }
   `],
 })
 export class CulturePanelComponent implements OnInit {
