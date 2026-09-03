@@ -29,28 +29,85 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
   imports: [FormsModule, ScreenHeaderComponent, TileComponent, CultureEntryComponent, DelegateModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
-      <pf-screen-header
-        [eyebrow]="eyebrow()"
-        [title]="c()?.barcode || c()?.sampleId || 'Culture case'"
-        [subtitle]="subtitle()"
-        parentRoute="/lab/my-work">
-        <div actions>
-          @if (c()?.caseState === 'awaiting_signout') {
-            <span class="pf-cw__await">Awaiting pathologist sign-out</span>
-          } @else if (!focusStage()) {
-            <button type="button" class="pf-cw__signout press" [disabled]="busy()" (click)="submitForSignout()">
-              Submit for sign-out
-            </button>
+    @if (loading()) {
+      <div class="pf-cse__note">Loading…</div>
+    } @else if (!c()) {
+      <div class="pf-cse__note">Case not found.</div>
+    } @else if (focusStage() && stage(); as s) {
+      <!-- ── Single-stage entry — same shape as the standard result-entry ── -->
+      <section class="pf-cse">
+        <header class="pf-cse__hdr">
+          <button type="button" class="pf-cse__back" (click)="back()" aria-label="Back">‹</button>
+          <div class="pf-cse__titles">
+            <div class="pf-cse__eyebrow">{{ (c()!.departmentName || 'Microbiology') }} · {{ s.label }}</div>
+            <div class="pf-cse__id">{{ c()!.barcode || c()!.sampleId || '—' }}</div>
+            <div class="pf-cse__patient">{{ c()!.patientName || '—' }}<span class="pf-cse__mid">·</span>{{ c()!.testName || 'Culture' }}</div>
+          </div>
+          @if (s.state === 'picked' && s.holderName) {
+            <span class="pf-cse__tech"><span class="pf-cse__tech-dot"></span>{{ s.holderName }}
+              @if (elapsed(s); as e) { <span class="pf-cse__held">· {{ e }}</span> }</span>
+          }
+        </header>
+
+        <div class="pf-cse__scroll">
+          @if (s.state === 'picked' && isMine(s)) {
+            @if (s.key === 'ast') {
+              <div class="pf-cse__ast"><pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
+                                                          (valueChange)="astValue.set($event)"></pf-culture-entry></div>
+            } @else {
+              <div class="pf-cse__grid-wrap">
+                <table class="pf-cse__grid">
+                  <thead><tr><th class="pf-cse__th pf-cse__th--param">Parameter</th><th class="pf-cse__th">Result</th></tr></thead>
+                  <tbody>
+                    <tr class="pf-cse__row">
+                      <td class="pf-cse__param">{{ s.label }}</td>
+                      <td class="pf-cse__cell">
+                        <textarea class="pf-cse__input" rows="4" [(ngModel)]="drafts[s.key]" placeholder="Enter findings…"></textarea>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            }
+          } @else if (s.state === 'open') {
+            <div class="pf-cse__msg">
+              <p>This stage isn't picked up yet.</p>
+              <button type="button" class="pf-cse__submit" [disabled]="busy()" (click)="pick(s)">Pick up this stage</button>
+            </div>
+          } @else if (s.state === 'done') {
+            <div class="pf-cse__grid-wrap">
+              <table class="pf-cse__grid">
+                <thead><tr><th class="pf-cse__th pf-cse__th--param">Parameter</th><th class="pf-cse__th">Result</th></tr></thead>
+                <tbody><tr class="pf-cse__row"><td class="pf-cse__param">{{ s.label }}</td>
+                  <td class="pf-cse__cell pf-cse__cell--done">✓ {{ readable(s.valuesJson || '') }}</td></tr></tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="pf-cse__msg"><p>Held by {{ s.holderName || 'another tech' }}.</p></div>
           }
         </div>
-      </pf-screen-header>
 
-      @if (loading()) {
-        <pf-tile tone="default" padding="xl"><p class="text-center text-sm" style="color: var(--text-tertiary);">Loading…</p></pf-tile>
-      } @else if (!c()) {
-        <pf-tile tone="default" padding="xl"><p class="text-center text-sm" style="color: var(--text-tertiary);">Case not found.</p></pf-tile>
-      } @else {
+        @if (s.state === 'picked' && isMine(s)) {
+          <footer class="pf-cse__footer">
+            <button type="button" class="pf-cse__ghost" [disabled]="busy()" (click)="drop(s)">Drop</button>
+            <button type="button" class="pf-cse__ghost" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
+            <button type="button" class="pf-cse__submit" [disabled]="busy()" (click)="submit(s)">Submit result</button>
+          </footer>
+        }
+      </section>
+    } @else {
+      <!-- ── Full case (no stage focused): the staged overview ── -->
+      <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
+        <pf-screen-header [eyebrow]="eyebrow()" [title]="c()?.barcode || c()?.sampleId || 'Culture case'"
+                          [subtitle]="subtitle()" parentRoute="/lab/my-work">
+          <div actions>
+            @if (c()?.caseState === 'awaiting_signout') {
+              <span class="pf-cw__await">Awaiting pathologist sign-out</span>
+            } @else {
+              <button type="button" class="pf-cw__signout press" [disabled]="busy()" (click)="submitForSignout()">Submit for sign-out</button>
+            }
+          </div>
+        </pf-screen-header>
         @for (s of visibleStages(); track s.key) {
           <pf-tile tone="default" padding="lg" class="block mb-4">
             <div class="pf-cw__head">
@@ -60,8 +117,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                   @switch (s.state) {
                     @case ('done') { <span class="c-done">✓ Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}</span> }
                     @case ('picked') {
-                      @if (isMine(s)) { <span class="c-mine">In progress · you</span> }
-                      @else { <span class="c-held">In progress · {{ s.holderName || 'another tech' }}</span> }
+                      @if (isMine(s)) { <span class="c-mine">In progress · you</span> } @else { <span class="c-held">In progress · {{ s.holderName || 'another tech' }}</span> }
                       @if (elapsed(s); as e) { <span class="pf-cw__timer">· held {{ e }}</span> }
                     }
                     @default { <span class="c-open">Open</span> }
@@ -72,39 +128,63 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                 @if (s.state === 'open') {
                   <button type="button" class="pf-cw__btn pf-cw__btn--primary press" [disabled]="busy()" (click)="pick(s)">Pick up</button>
                 } @else if (s.state === 'picked' && isMine(s)) {
-                  <button type="button" class="pf-cw__btn press" [disabled]="busy()" (click)="drop(s)">Drop</button>
-                  <button type="button" class="pf-cw__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                  <button type="button" class="pf-cw__btn pf-cw__btn--primary press" [disabled]="busy()" (click)="submit(s)">Submit</button>
+                  <button type="button" class="pf-cw__btn press" [disabled]="busy()" (click)="submit(s)">Open entry</button>
                 }
               </div>
             </div>
-
-            @if (s.state === 'picked' && isMine(s)) {
-              @if (s.key === 'ast') {
-                <!-- AST stage: the full organism + antibiotic-sensitivity editor
-                     (S/I/R, zones, CLSI auto-interpretation), organism list
-                     driven by the microbiology master. -->
-                <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
-                                  (valueChange)="astValue.set($event)"></pf-culture-entry>
-              } @else {
-                <textarea class="pf-cw__notes" rows="3" [(ngModel)]="drafts[s.key]"
-                          placeholder="Findings for this stage…"></textarea>
-              }
-            } @else if (s.state === 'done' && s.valuesJson) {
-              <pre class="pf-cw__val">{{ readable(s.valuesJson) }}</pre>
-            }
           </pf-tile>
         }
-      }
-    </section>
+      </section>
+    }
 
     @if (delegating(); as ds) {
-      <pf-delegate-modal [testName]="ds.label"
-                         (chose)="doDelegate(ds, $event)"
-                         (cancelled)="delegating.set(null)"></pf-delegate-modal>
+      <pf-delegate-modal [testName]="ds.label" (chose)="doDelegate(ds, $event)" (cancelled)="delegating.set(null)"></pf-delegate-modal>
     }
   `,
   styles: [`
+    .pf-cse__note { padding: 48px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    /* Single-stage entry — mirrors the standard result-entry chrome. */
+    .pf-cse { display: flex; flex-direction: column; min-height: calc(100dvh - 60px); }
+    .pf-cse__hdr { position: sticky; top: 0; z-index: 5; display: flex; align-items: flex-start; gap: 12px;
+      padding: 16px 24px; background: var(--bg-card, #12121a); border-bottom: 1px solid var(--glass-border); }
+    .pf-cse__back { flex-shrink: 0; font-size: 22px; line-height: 1; background: transparent; border: none;
+      color: var(--text-secondary); cursor: pointer; padding: 2px 6px; }
+    .pf-cse__titles { flex: 1; min-width: 0; }
+    .pf-cse__eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-cse__id { font-size: 26px; font-weight: 800; color: var(--text-primary); margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .pf-cse__patient { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .pf-cse__mid { margin: 0 6px; opacity: .6; }
+    .pf-cse__tech { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary); padding: 6px 12px; border-radius: 999px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-cse__tech-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+    .pf-cse__held { font-weight: 500; opacity: .8; }
+
+    .pf-cse__scroll { flex: 1; padding: 22px 24px 96px; }
+    .pf-cse__ast { max-width: 820px; }
+    .pf-cse__grid-wrap { border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; }
+    .pf-cse__grid { width: 100%; border-collapse: collapse; }
+    .pf-cse__th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-tertiary); padding: 13px 18px; background: rgba(124,58,237,0.09); border-bottom: 1px solid var(--glass-border); }
+    .pf-cse__th--param { width: 34%; }
+    .pf-cse__row td { border-bottom: 1px solid var(--glass-border); vertical-align: top; }
+    .pf-cse__param { padding: 16px 18px; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-cse__cell { padding: 12px 18px; }
+    .pf-cse__cell--done { color: #15803d; font-weight: 600; }
+    .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
+      background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
+    .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+    .pf-cse__msg { padding: 40px; text-align: center; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+    .pf-cse__footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px;
+      padding: 14px 24px; background: var(--bg-card, #12121a); border-top: 1px solid var(--glass-border); }
+    .pf-cse__ghost { padding: 11px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-cse__ghost:disabled { opacity: .5; cursor: default; }
+    .pf-cse__submit { flex: 1; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 800; color: #fff; cursor: pointer;
+      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
+    .pf-cse__submit:disabled { opacity: .55; cursor: default; }
+
+    /* Full-case overview (kept). */
     .pf-cw__signout { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cw__signout:disabled { opacity: .5; cursor: default; }
@@ -112,20 +192,14 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
     .pf-cw__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .pf-cw__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-cw__state { margin: 4px 0 0; font-size: 12.5px; }
-    .c-done { color: #15803d; font-weight: 600; }
-    .c-mine { color: #7c3aed; font-weight: 600; }
-    .c-held { color: #b45309; font-weight: 600; }
-    .c-open { color: var(--text-tertiary); }
+    .c-done { color: #15803d; font-weight: 600; } .c-mine { color: #7c3aed; font-weight: 600; }
+    .c-held { color: #b45309; font-weight: 600; } .c-open { color: var(--text-tertiary); }
     .pf-cw__timer { color: var(--text-tertiary); font-weight: 500; }
     .pf-cw__actions { display: flex; gap: 8px; flex-shrink: 0; }
     .pf-cw__btn { padding: 6px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
       color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-cw__btn--primary { color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border-color: transparent; }
     .pf-cw__btn:disabled { opacity: .5; cursor: default; }
-    .pf-cw__notes { width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
-      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; }
-    .pf-cw__val { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; white-space: pre-wrap;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
   `],
 })
 export class CultureWorkbenchComponent implements OnInit, OnDestroy {
@@ -173,6 +247,11 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const s = this.visibleStages();
     return this.focusStage() && s.length === 1 ? `Culture · ${s[0].label}` : 'Microbiology · Culture';
   });
+
+  /** The single focused stage (when arrived via ?stage=…). */
+  readonly stage = computed(() => this.visibleStages()[0] ?? null);
+
+  back() { this.router.navigate(['/lab/my-work']); }
 
   ngOnInit() {
     this.id = this.route.snapshot.paramMap.get('orderTestId') ?? '';
