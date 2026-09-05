@@ -47,6 +47,9 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
               </div>
             </div>
             <div class="pf-cse__hdr-right">
+              @if (techName()) {
+                <span class="pf-cse__tech"><span class="pf-cse__tech-dot"></span>{{ techName() }}</span>
+              }
               @if (cc.caseState === 'awaiting_signout') {
                 <span class="pf-cse__awaitpill">Awaiting sign-out</span>
               } @else if (allDone()) {
@@ -152,7 +155,10 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
     .pf-cse__patient { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
     .pf-cse__pt-name { font-weight: 600; color: var(--text-primary); }
     .pf-cse__mid { margin: 0 6px; opacity: .5; }
-    .pf-cse__hdr-right { flex-shrink: 0; display: flex; align-items: center; }
+    .pf-cse__hdr-right { flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
+    .pf-cse__tech { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary); padding: 6px 12px; border-radius: 999px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-cse__tech-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
     .pf-cse__progresspill { font-size: 12px; font-weight: 700; color: var(--violet-text, #a78bfa);
       padding: 6px 12px; border-radius: 999px; background: rgba(124,58,237,0.14); }
     .pf-cse__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-left: 34px; }
@@ -267,6 +273,8 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     return st.length > 0 && st.every(s => s.state === 'done');
   });
   readonly doneCount = computed(() => (this.c()?.stages ?? []).filter(s => s.state === 'done').length);
+  /** The logged-in tech (shown as the header pill, like the standard entry). */
+  readonly techName = computed(() => this.auth.user()?.displayName ?? '');
   /** 1-based day counter from the case's creation date. */
   readonly dayNo = computed(() => {
     const created = this.c()?.createdAt;
