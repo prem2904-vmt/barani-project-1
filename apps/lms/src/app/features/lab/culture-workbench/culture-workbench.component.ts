@@ -10,6 +10,9 @@ import { DelegateModalComponent } from '../my-work/delegate-modal.component';
 import { CultureResult } from '../../../shared/models/culture.model';
 import { CultureCaseView, CultureStageView } from '../culture-panel/culture-panel.component';
 
+/** A per-user reusable findings template (mirrors the backend TemplateDto). */
+interface ResultTemplate { id: string; scope: string; name: string; body: string; }
+
 /**
  * The CULTURE bench workspace for one case — the staged pipeline
  * (Gram → Growth → Identification → AST) with the per-stage soft lock. Any
@@ -97,8 +100,20 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
                             {{ astOpen() ? 'Hide organism / sensitivity ▴' : ((astSummary() || 'Enter organism + sensitivity') + ' ▾') }}
                           </button>
                         } @else {
-                          <textarea class="pf-cse__input" rows="2" [ngModel]="drafts()[s.key] || ''"
-                                    (ngModelChange)="onDraft(s.key, $event)" placeholder="Enter findings…"></textarea>
+                          <!-- Personal "canned findings" templates for this field. -->
+                          <div class="pf-cse__tpl">
+                            <span class="pf-cse__tpl-lbl">Templates:</span>
+                            @for (t of templatesFor(s.key); track t.id) {
+                              <button type="button" class="pf-cse__tplchip" [title]="t.body"
+                                      (click)="applyTemplate(s.key, t)">{{ t.name }}
+                                <span class="pf-cse__tplx" (click)="deleteTemplate(t, $event)" aria-label="Delete template">×</span>
+                              </button>
+                            }
+                            <button type="button" class="pf-cse__tplsave" [disabled]="!(drafts()[s.key] || '').trim()"
+                                    (click)="saveTemplate(s.key)">+ Save as template</button>
+                          </div>
+                          <textarea class="pf-cse__input" rows="3" [ngModel]="drafts()[s.key] || ''"
+                                    (ngModelChange)="onDraft(s.key, $event)" placeholder="Enter findings… (or load a template above)"></textarea>
                         }
                         <div class="pf-cse__rowact">
                           <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="drop(s)">Drop</button>
@@ -201,6 +216,18 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
     .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+    .pf-cse__tpl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .pf-cse__tpl-lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-cse__tplchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; cursor: pointer;
+      padding: 4px 6px 4px 10px; border-radius: 999px; color: var(--violet-text, #a78bfa);
+      background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.3); }
+    .pf-cse__tplchip:hover { background: rgba(124,58,237,0.2); }
+    .pf-cse__tplx { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%;
+      font-size: 13px; line-height: 1; color: var(--text-tertiary); }
+    .pf-cse__tplx:hover { color: #ef4444; background: rgba(239,68,68,0.15); }
+    .pf-cse__tplsave { font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px;
+      color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
+    .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
     .pf-cse__pick { font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer; padding: 8px 16px; border-radius: 9px;
@@ -275,6 +302,46 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly doneCount = computed(() => (this.c()?.stages ?? []).filter(s => s.state === 'done').length);
   /** The logged-in tech (shown as the header pill, like the standard entry). */
   readonly techName = computed(() => this.auth.user()?.displayName ?? '');
+
+  // ── Personal "canned findings" templates ────────────────────────────────
+  readonly templates = signal<ResultTemplate[]>([]);
+  private templateScope(stageKey: string) { return `culture.${stageKey}`; }
+  templatesFor(stageKey: string): ResultTemplate[] {
+    const scope = this.templateScope(stageKey);
+    return this.templates().filter(t => t.scope === scope);
+  }
+  private loadTemplates() {
+    this.api.get<ResultTemplate[]>('/api/result-templates').subscribe({
+      next: rows => this.templates.set(rows ?? []),
+      error: () => { /* none */ },
+    });
+  }
+  /** Load a template into the findings box (the tech then fills in specifics). */
+  applyTemplate(stageKey: string, t: ResultTemplate) {
+    const existing = (this.drafts()[stageKey] ?? '').trim();
+    const body = existing ? `${existing}\n${t.body}` : t.body;
+    this.onDraft(stageKey, body);
+  }
+  saveTemplate(stageKey: string) {
+    const body = (this.drafts()[stageKey] ?? '').trim();
+    if (!body) return;
+    const name = (window.prompt('Save these findings as a template — name it:') ?? '').trim();
+    if (!name) return;
+    this.api.post<ResultTemplate>('/api/result-templates', { scope: this.templateScope(stageKey), name, body }).subscribe({
+      next: t => {
+        if (t) this.templates.update(list => [...list.filter(x => x.id !== t.id), t]);
+        this.toasts.success(`Template “${name}” saved`);
+      },
+      error: () => this.toasts.error('Could not save template'),
+    });
+  }
+  deleteTemplate(t: ResultTemplate, ev: Event) {
+    ev.stopPropagation();
+    this.api.delete(`/api/result-templates/${t.id}`).subscribe({
+      next: () => this.templates.update(list => list.filter(x => x.id !== t.id)),
+      error: () => this.toasts.error('Could not delete template'),
+    });
+  }
   /** 1-based day counter from the case's creation date. */
   readonly dayNo = computed(() => {
     const created = this.c()?.createdAt;
@@ -319,6 +386,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       error: () => { /* falls back to the built-in common isolates */ },
     });
     this.timer = setInterval(() => this.now.set(Date.now()), 30_000);
+    this.loadTemplates();
   }
 
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
