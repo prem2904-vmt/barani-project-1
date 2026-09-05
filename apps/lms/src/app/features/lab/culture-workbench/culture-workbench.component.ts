@@ -36,17 +36,39 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
            collaboratively (lock per stage, pick inline, notes autosave). ── -->
       <section class="pf-cse">
         <header class="pf-cse__hdr">
-          <button type="button" class="pf-cse__back" (click)="back()" aria-label="Back">‹</button>
-          <div class="pf-cse__titles">
-            <div class="pf-cse__eyebrow">{{ (cc.departmentName || 'Microbiology') }} · Culture &amp; Sensitivity</div>
-            <div class="pf-cse__id">{{ cc.barcode || cc.sampleId || '—' }}</div>
-            <div class="pf-cse__patient">{{ cc.patientName || '—' }}<span class="pf-cse__mid">·</span>{{ cc.testName || 'Culture' }}</div>
+          <div class="pf-cse__hdr-top">
+            <button type="button" class="pf-cse__back" (click)="back()" aria-label="Back">‹</button>
+            <div class="pf-cse__titles">
+              <div class="pf-cse__eyebrow">{{ (cc.departmentName || 'Microbiology') }} · Culture &amp; Sensitivity · Day {{ dayNo() }}</div>
+              <div class="pf-cse__id">{{ cc.barcode || cc.sampleId || cc.testName || 'Culture case' }}</div>
+              <div class="pf-cse__patient">
+                <span class="pf-cse__pt-name">{{ cc.patientName || 'Patient' }}</span>
+                <span class="pf-cse__mid">·</span>{{ cc.testName || 'Culture' }}
+              </div>
+            </div>
+            <div class="pf-cse__hdr-right">
+              @if (cc.caseState === 'awaiting_signout') {
+                <span class="pf-cse__awaitpill">Awaiting sign-out</span>
+              } @else if (allDone()) {
+                <button type="button" class="pf-cse__signout" [disabled]="busy()" (click)="submitForSignout()">Submit for sign-out</button>
+              } @else {
+                <span class="pf-cse__progresspill">{{ doneCount() }} / {{ cc.stages.length }} stages</span>
+              }
+            </div>
           </div>
-          @if (cc.caseState === 'awaiting_signout') {
-            <span class="pf-cse__awaitpill">Awaiting sign-out</span>
-          } @else if (allDone()) {
-            <button type="button" class="pf-cse__signout" [disabled]="busy()" (click)="submitForSignout()">Submit for sign-out</button>
-          }
+          <!-- Stage progress chips (mirrors the standard screen's test chips). -->
+          <div class="pf-cse__chips">
+            @for (s of cc.stages; track s.key) {
+              <span class="pf-cse__chip"
+                    [class.pf-cse__chip--done]="s.state === 'done'"
+                    [class.pf-cse__chip--active]="isMine(s)"
+                    [class.pf-cse__chip--held]="lockedByOther(s)"
+                    [class.pf-cse__chip--incub]="incubating(s)">
+                @if (s.state === 'done') { <span class="pf-cse__chipdot">✓</span> }
+                {{ s.label }}
+              </span>
+            }
+          </div>
         </header>
 
         <div class="pf-cse__scroll">
@@ -119,19 +141,29 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
     .pf-cse__note { padding: 48px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
     /* Single-stage entry — mirrors the standard result-entry chrome. */
     .pf-cse { display: flex; flex-direction: column; min-height: calc(100dvh - 60px); }
-    .pf-cse__hdr { position: sticky; top: 0; z-index: 5; display: flex; align-items: flex-start; gap: 12px;
-      padding: 16px 24px; background: var(--bg-card, #12121a); border-bottom: 1px solid var(--glass-border); }
+    .pf-cse__hdr { position: sticky; top: 0; z-index: 5; padding: 16px 24px 12px;
+      background: var(--bg-card, #12121a); border-bottom: 1px solid var(--glass-border); }
+    .pf-cse__hdr-top { display: flex; align-items: flex-start; gap: 12px; }
     .pf-cse__back { flex-shrink: 0; font-size: 22px; line-height: 1; background: transparent; border: none;
-      color: var(--text-secondary); cursor: pointer; padding: 2px 6px; }
+      color: var(--text-secondary); cursor: pointer; padding: 2px 6px; margin-top: 4px; }
     .pf-cse__titles { flex: 1; min-width: 0; }
     .pf-cse__eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-cse__id { font-size: 26px; font-weight: 800; color: var(--text-primary); margin-top: 2px; font-variant-numeric: tabular-nums; }
-    .pf-cse__patient { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-    .pf-cse__mid { margin: 0 6px; opacity: .6; }
-    .pf-cse__tech { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12.5px; font-weight: 600;
-      color: var(--text-secondary); padding: 6px 12px; border-radius: 999px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-cse__tech-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
-    .pf-cse__held { font-weight: 500; opacity: .8; }
+    .pf-cse__id { font-size: 25px; font-weight: 800; color: var(--text-primary); margin-top: 3px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+    .pf-cse__patient { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+    .pf-cse__pt-name { font-weight: 600; color: var(--text-primary); }
+    .pf-cse__mid { margin: 0 6px; opacity: .5; }
+    .pf-cse__hdr-right { flex-shrink: 0; display: flex; align-items: center; }
+    .pf-cse__progresspill { font-size: 12px; font-weight: 700; color: var(--violet-text, #a78bfa);
+      padding: 6px 12px; border-radius: 999px; background: rgba(124,58,237,0.14); }
+    .pf-cse__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-left: 34px; }
+    .pf-cse__chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 999px; color: var(--text-tertiary);
+      background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-cse__chip--done { color: #34d399; background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.35); }
+    .pf-cse__chip--active { color: #c4b5fd; background: rgba(124,58,237,0.18); border-color: rgba(124,58,237,0.5); }
+    .pf-cse__chip--held { color: #fbbf24; background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.35); }
+    .pf-cse__chip--incub { color: #22d3ee; background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.35); }
+    .pf-cse__chipdot { font-weight: 800; }
 
     .pf-cse__awaitpill { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #b45309;
       padding: 6px 12px; border-radius: 999px; background: rgba(245,158,11,0.14); }
@@ -233,6 +265,15 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly allDone = computed(() => {
     const st = this.c()?.stages ?? [];
     return st.length > 0 && st.every(s => s.state === 'done');
+  });
+  readonly doneCount = computed(() => (this.c()?.stages ?? []).filter(s => s.state === 'done').length);
+  /** 1-based day counter from the case's creation date. */
+  readonly dayNo = computed(() => {
+    const created = this.c()?.createdAt;
+    if (!created) return 1;
+    const start = new Date(created).getTime();
+    if (Number.isNaN(start)) return 1;
+    return Math.max(1, Math.floor((this.now() - start) / 86_400_000) + 1);
   });
   astSummary(): string {
     const m = this.astValue();
