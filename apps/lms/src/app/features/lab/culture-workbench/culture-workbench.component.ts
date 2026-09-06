@@ -56,6 +56,17 @@ interface StageField { name: string; title: string; type: string; options: strin
               @if (techName()) {
                 <span class="pf-cse__tech"><span class="pf-cse__tech-dot"></span>{{ techName() }}</span>
               }
+              <!-- ONE incubation control for the whole case: while a plate is
+                   incubating it shows the countdown; otherwise it inoculates
+                   the next stage that needs it. -->
+              @if (incubatingStage(); as inc) {
+                <span class="pf-cse__incubpill">⏳ {{ inc.label }} · ready in {{ incubateReadyIn(inc) }}</span>
+              } @else if (incubateTarget(); as tgt) {
+                <button type="button" class="pf-cse__incubbtn press" [disabled]="busy()" (click)="incubate(tgt)"
+                        [title]="'Start the incubation clock for ' + tgt.label">
+                  Inoculate &amp; incubate
+                </button>
+              }
               @if (cc.caseState === 'awaiting_signout') {
                 <span class="pf-cse__awaitpill">Awaiting sign-out</span>
               } @else if (allDone()) {
@@ -152,12 +163,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                       } @else if (incubating(s)) {
                         <span class="pf-cse__incub">⏳ Incubating — ready in {{ incubateReadyIn(s) }}</span>
                       } @else {
-                        <div class="pf-cse__rowact">
-                          @if (requiresIncubation(s.key)) {
-                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="incubate(s)">Inoculate &amp; incubate</button>
-                          }
-                          <button type="button" class="pf-cse__pick" [disabled]="busy()" (click)="pick(s)">Pick up</button>
-                        </div>
+                        <button type="button" class="pf-cse__pick" [disabled]="busy()" (click)="pick(s)">Pick up</button>
                       }
                     </td>
                   </tr>
@@ -215,6 +221,12 @@ interface StageField { name: string; title: string; type: string; options: strin
 
     .pf-cse__awaitpill { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #b45309;
       padding: 6px 12px; border-radius: 999px; background: rgba(245,158,11,0.14); }
+    .pf-cse__incubpill { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #0e7490;
+      padding: 6px 12px; border-radius: 999px; background: rgba(6,182,212,0.14); }
+    .pf-cse__incubbtn { flex-shrink: 0; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      padding: 8px 14px; border-radius: 10px; color: #22d3ee; background: rgba(6,182,212,0.10);
+      border: 1px solid rgba(6,182,212,0.4); }
+    .pf-cse__incubbtn:disabled { opacity: .5; cursor: default; }
     .pf-cse__signout { flex-shrink: 0; padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; cursor: pointer; }
     .pf-cse__signout:disabled { opacity: .5; cursor: default; }
@@ -528,6 +540,15 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   incubate(s: CultureStageView) {
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/incubate`, {}));
   }
+  /** The stage whose incubation clock is currently running (one at a time). */
+  readonly incubatingStage = computed(() =>
+    (this.c()?.stages ?? []).find(s => this.incubating(s)) ?? null);
+  /** The next stage the header button would inoculate: first not-done stage
+   *  that needs incubation and isn't already past its clock. */
+  readonly incubateTarget = computed(() => {
+    const stages = this.c()?.stages ?? [];
+    return stages.find(s => s.state === 'open' && this.requiresIncubation(s.key) && !this.incubating(s)) ?? null;
+  });
 
   private run(obs: Observable<CultureCaseView>, ok?: string) {
     this.busy.set(true);
