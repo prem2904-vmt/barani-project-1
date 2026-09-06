@@ -110,11 +110,15 @@ interface StageField { name: string; title: string; type: string; options: strin
                               <label class="pf-cse__field">
                                 <span class="pf-cse__field-lbl">{{ f.title }}</span>
                                 @if (f.options.length) {
-                                  <select class="pf-cse__fselect" [ngModel]="fieldValue(s.key, f.name)"
-                                          (ngModelChange)="setField(s.key, f.name, $event)">
-                                    <option value="">—</option>
-                                    @for (o of f.options; track o) { <option [value]="o">{{ o }}</option> }
-                                  </select>
+                                  <!-- Touch options: tap to pick, tap again to clear. -->
+                                  <span class="pf-cse__opts" role="radiogroup" [attr.aria-label]="f.title">
+                                    @for (o of f.options; track o) {
+                                      <button type="button" class="pf-cse__opt press"
+                                              [class.pf-cse__opt--on]="fieldValue(s.key, f.name) === o"
+                                              [attr.aria-checked]="fieldValue(s.key, f.name) === o" role="radio"
+                                              (click)="toggleField(s.key, f.name, o)">{{ o }}</button>
+                                    }
+                                  </span>
                                 } @else {
                                   <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
                                          (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—" />
@@ -239,13 +243,20 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
-    /* Structured stage fields (component → option-group dropdowns). */
-    .pf-cse__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 14px; }
-    .pf-cse__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    /* Structured stage fields (component → touch option chips). */
+    .pf-cse__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px 18px; }
+    .pf-cse__field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .pf-cse__field-lbl { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
-    .pf-cse__fselect, .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
+    .pf-cse__opts { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-cse__opt { font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 7px 14px; border-radius: 999px;
+      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border);
+      transition: border-color .12s ease, background .12s ease, color .12s ease; }
+    .pf-cse__opt:hover { border-color: rgba(124,58,237,0.45); }
+    .pf-cse__opt--on { color: #fff; background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899));
+      border-color: transparent; }
+    .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
       color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; box-sizing: border-box; }
-    .pf-cse__fselect:focus, .pf-cse__ftext:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+    .pf-cse__ftext:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
     .pf-cse__tpl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .pf-cse__tpl-lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-cse__tplchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -350,6 +361,10 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   setField(stageKey: string, field: string, value: string) {
     this.fieldValues.update(all => ({ ...all, [stageKey]: { ...(all[stageKey] ?? {}), [field]: value } }));
     try { localStorage.setItem(this.draftKey(stageKey) + '.fields', JSON.stringify(this.fieldValues()[stageKey])); } catch { /* ignore */ }
+  }
+  /** Touch option: tap to pick; tapping the picked one again clears it. */
+  toggleField(stageKey: string, field: string, value: string) {
+    this.setField(stageKey, field, this.fieldValue(stageKey, field) === value ? '' : value);
   }
   private loadFieldDrafts(stages: CultureStageView[]) {
     const all: Record<string, Record<string, string>> = {};
