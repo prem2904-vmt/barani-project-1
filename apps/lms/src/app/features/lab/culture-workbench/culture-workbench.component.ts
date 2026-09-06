@@ -13,6 +13,9 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
 
+/** One structured field of a culture stage (from /api/microbiology/stage-schema). */
+interface StageField { name: string; title: string; type: string; options: string[]; }
+
 /**
  * The CULTURE bench workspace for one case — the staged pipeline
  * (Gram → Growth → Identification → AST) with the per-stage soft lock. Any
@@ -99,6 +102,26 @@ interface ResultTemplate { id: string; scope: string; name: string; body: string
                           <button type="button" class="pf-cse__astbtn" (click)="astOpen.set(!astOpen())">
                             {{ astOpen() ? 'Hide organism / sensitivity ▴' : ((astSummary() || 'Enter organism + sensitivity') + ' ▾') }}
                           </button>
+                        } @else if (schemaFor(s.key); as fields) {
+                          <!-- Structured stage: the test's component fields
+                               (e.g. Gram → Pus Cells/QUANTITY, Morphology…). -->
+                          <div class="pf-cse__fields">
+                            @for (f of fields; track f.name) {
+                              <label class="pf-cse__field">
+                                <span class="pf-cse__field-lbl">{{ f.title }}</span>
+                                @if (f.options.length) {
+                                  <select class="pf-cse__fselect" [ngModel]="fieldValue(s.key, f.name)"
+                                          (ngModelChange)="setField(s.key, f.name, $event)">
+                                    <option value="">—</option>
+                                    @for (o of f.options; track o) { <option [value]="o">{{ o }}</option> }
+                                  </select>
+                                } @else {
+                                  <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
+                                         (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—" />
+                                }
+                              </label>
+                            }
+                          </div>
                         } @else {
                           <!-- Personal "canned findings" templates for this field. -->
                           <div class="pf-cse__tpl">
@@ -216,6 +239,13 @@ interface ResultTemplate { id: string; scope: string; name: string; body: string
     .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+    /* Structured stage fields (component → option-group dropdowns). */
+    .pf-cse__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 14px; }
+    .pf-cse__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pf-cse__field-lbl { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
+    .pf-cse__fselect, .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
+      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; box-sizing: border-box; }
+    .pf-cse__fselect:focus, .pf-cse__ftext:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
     .pf-cse__tpl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .pf-cse__tpl-lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-cse__tplchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -303,6 +333,41 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   /** The logged-in tech (shown as the header pill, like the standard entry). */
   readonly techName = computed(() => this.auth.user()?.displayName ?? '');
 
+  // ── Structured stage fields (component → option-group dropdowns) ────────
+  /** stage key → its structured fields (from the tenant's catalog; e.g. gram →
+   *  Gram Stain MIC105 components). Absent key ⇒ free-text findings. */
+  readonly stageSchema = signal<Record<string, StageField[]>>({});
+  /** stage key → { fieldName: value } (draft-persisted like the notes). */
+  readonly fieldValues = signal<Record<string, Record<string, string>>>({});
+
+  schemaFor(stageKey: string): StageField[] | null {
+    const f = this.stageSchema()[stageKey];
+    return f?.length ? f : null;
+  }
+  fieldValue(stageKey: string, field: string): string {
+    return this.fieldValues()[stageKey]?.[field] ?? '';
+  }
+  setField(stageKey: string, field: string, value: string) {
+    this.fieldValues.update(all => ({ ...all, [stageKey]: { ...(all[stageKey] ?? {}), [field]: value } }));
+    try { localStorage.setItem(this.draftKey(stageKey) + '.fields', JSON.stringify(this.fieldValues()[stageKey])); } catch { /* ignore */ }
+  }
+  private loadFieldDrafts(stages: CultureStageView[]) {
+    const all: Record<string, Record<string, string>> = {};
+    for (const s of stages) {
+      try {
+        const raw = localStorage.getItem(this.draftKey(s.key) + '.fields');
+        if (raw) all[s.key] = JSON.parse(raw);
+      } catch { /* ignore */ }
+    }
+    this.fieldValues.set(all);
+  }
+  private loadStageSchema() {
+    this.api.get<Record<string, StageField[]>>('/api/microbiology/stage-schema').subscribe({
+      next: s => this.stageSchema.set(s ?? {}),
+      error: () => { /* stages fall back to free text */ },
+    });
+  }
+
   // ── Personal "canned findings" templates ────────────────────────────────
   readonly templates = signal<ResultTemplate[]>([]);
   private templateScope(stageKey: string) { return `culture.${stageKey}`; }
@@ -373,8 +438,9 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.drafts.set(d);
   }
   private clearDraft(key: string) {
-    try { localStorage.removeItem(this.draftKey(key)); } catch { /* ignore */ }
+    try { localStorage.removeItem(this.draftKey(key)); localStorage.removeItem(this.draftKey(key) + '.fields'); } catch { /* ignore */ }
     this.drafts.update(d => { const n = { ...d }; delete n[key]; return n; });
+    this.fieldValues.update(d => { const n = { ...d }; delete n[key]; return n; });
   }
 
   ngOnInit() {
@@ -387,6 +453,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     });
     this.timer = setInterval(() => this.now.set(Date.now()), 30_000);
     this.loadTemplates();
+    this.loadStageSchema();
   }
 
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
@@ -397,6 +464,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       next: c => {
         this.c.set(c ?? null);
         this.loadDrafts(c?.stages ?? []);
+        this.loadFieldDrafts(c?.stages ?? []);
         // Rehydrate the AST editor from a saved/in-progress result.
         const ast = c?.stages?.find(s => s.key === 'ast');
         if (ast?.valuesJson) { try { this.astValue.set(JSON.parse(ast.valuesJson) as CultureResult); } catch { /* keep empty */ } }
@@ -493,6 +561,14 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     let valuesJson: string | null;
     if (s.key === 'ast') {
       valuesJson = JSON.stringify(this.astValue());
+    } else if (this.schemaFor(s.key)) {
+      // Structured stage: serialize the filled component fields (titled, so the
+      // stored payload and roll-up read naturally).
+      const vals = this.fieldValues()[s.key] ?? {};
+      const fields = (this.schemaFor(s.key) ?? [])
+        .filter(f => (vals[f.name] ?? '').trim())
+        .map(f => ({ name: f.name, title: f.title, value: vals[f.name] }));
+      valuesJson = fields.length ? JSON.stringify({ fields }) : null;
     } else {
       const notes = (this.drafts()[s.key] ?? '').trim();
       valuesJson = notes ? JSON.stringify({ notes }) : null;
@@ -526,6 +602,10 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     try {
       const o = JSON.parse(valuesJson);
       if (o?.notes) return o.notes;
+      if (Array.isArray(o?.fields) && o.fields.length) {
+        return o.fields.map((f: { title?: string; name?: string; value?: string }) =>
+          `${f.title || f.name}: ${f.value}`).join(' · ');
+      }
       if (o?.noGrowth) return 'No growth';
       if (Array.isArray(o?.organisms) && o.organisms.length) {
         return o.organisms.map((g: { name?: string; antibiotics?: unknown[] }) =>
