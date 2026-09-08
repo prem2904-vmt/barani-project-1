@@ -14,7 +14,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
 
 /** One structured field of a culture stage (from /api/microbiology/stage-schema). */
-interface StageField { name: string; title: string; type: string; options: string[]; }
+interface StageField { name: string; title: string; type: string; options: string[]; suggest?: string | null; }
 
 /**
  * The CULTURE bench workspace for one case — the staged pipeline
@@ -137,6 +137,19 @@ interface StageField { name: string; title: string; type: string; options: strin
                                               (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
                                     }
                                   </span>
+                                } @else if (f.suggest === 'organisms') {
+                                  <!-- Organism lookup against the 253-organism master. -->
+                                  <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
+                                         (focus)="ensurePicked(s)"
+                                         (ngModelChange)="setField(s.key, f.name, $event)"
+                                         [attr.list]="'pf-cw-organisms'" placeholder="Type to search organisms…" />
+                                  <datalist id="pf-cw-organisms">
+                                    @for (o of organismNames(); track o) { <option [value]="o"></option> }
+                                  </datalist>
+                                } @else if (f.type === 'textarea') {
+                                  <textarea class="pf-cse__ftext" rows="2" [ngModel]="fieldValue(s.key, f.name)"
+                                            (focus)="ensurePicked(s)"
+                                            (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—"></textarea>
                                 } @else {
                                   <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
                                          (focus)="ensurePicked(s)"
