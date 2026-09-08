@@ -147,13 +147,13 @@ interface StageField { name: string; title: string; type: string; options: strin
                                     @for (o of organismNames(); track o) { <option [value]="o"></option> }
                                   </datalist>
                                 } @else if (f.type === 'textarea') {
-                                  <textarea class="pf-cse__ftext" rows="2" [ngModel]="fieldValue(s.key, f.name)"
+                                  <textarea class="pf-cse__ftext" rows="1" [ngModel]="fieldValue(s.key, f.name)"
                                             (focus)="ensurePicked(s)"
-                                            (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—"></textarea>
+                                            (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…"></textarea>
                                 } @else {
                                   <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
                                          (focus)="ensurePicked(s)"
-                                         (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—" />
+                                         (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…" />
                                 }
                               </label>
                             }
@@ -254,7 +254,8 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__grid { width: 100%; border-collapse: collapse; }
     .pf-cse__th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-tertiary); padding: 13px 18px; background: rgba(124,58,237,0.09); border-bottom: 1px solid var(--glass-border); }
-    .pf-cse__th--param { width: 32%; }
+    /* Slim stage gutter — the RESULT area owns the width. */
+    .pf-cse__th--param { width: 230px; }
     .pf-cse__row td { border-bottom: 1px solid var(--glass-border); vertical-align: top; }
     .pf-cse__row:last-child td { border-bottom: none; }
     /* Another tech holds this stage → grayed out, non-interactive. */
@@ -313,7 +314,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
-    .pf-cse__rowact { display: flex; gap: 8px; margin-top: 8px; }
+    /* Stage actions anchored under the fields with a hairline separator. */
+    .pf-cse__rowact { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; max-width: 900px;
+      border-top: 1px solid var(--glass-border); }
     .pf-cse__ghost { border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
       color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-cse__ghost--sm { padding: 6px 12px; }
