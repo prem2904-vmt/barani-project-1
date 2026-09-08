@@ -108,9 +108,16 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <td class="pf-cse__cell">
                       @if (s.state === 'done') {
                         <span class="pf-cse__done">✓ {{ readable(s.valuesJson || '') || 'Completed' }}</span>
-                      } @else if (isMine(s)) {
+                      } @else if (lockedByOther(s)) {
+                        <!-- Selected by another tech → locked, greyed out. -->
+                        <span class="pf-cse__lockmsg">🔒 {{ s.holderName || 'Another tech' }} is working this stage</span>
+                      } @else if (incubating(s)) {
+                        <span class="pf-cse__incub">⏳ Incubating — ready in {{ incubateReadyIn(s) }}</span>
+                      } @else {
+                        <!-- Mine, or open: editable right away — the first touch
+                             locks the stage to this tech (no Pick up step). -->
                         @if (s.key === 'ast') {
-                          <button type="button" class="pf-cse__astbtn" (click)="astOpen.set(!astOpen())">
+                          <button type="button" class="pf-cse__astbtn" (click)="ensurePicked(s); astOpen.set(!astOpen())">
                             {{ astOpen() ? 'Hide organism / sensitivity ▴' : ((astSummary() || 'Enter organism + sensitivity') + ' ▾') }}
                           </button>
                         } @else if (schemaFor(s.key); as fields) {
@@ -127,11 +134,12 @@ interface StageField { name: string; title: string; type: string; options: strin
                                       <button type="button" class="pf-cse__opt press"
                                               [class.pf-cse__opt--on]="fieldValue(s.key, f.name) === o"
                                               [attr.aria-checked]="fieldValue(s.key, f.name) === o" role="radio"
-                                              (click)="toggleField(s.key, f.name, o)">{{ o }}</button>
+                                              (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
                                     }
                                   </span>
                                 } @else {
                                   <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
+                                         (focus)="ensurePicked(s)"
                                          (ngModelChange)="setField(s.key, f.name, $event)" placeholder="—" />
                                 }
                               </label>
@@ -151,19 +159,16 @@ interface StageField { name: string; title: string; type: string; options: strin
                                     (click)="saveTemplate(s.key)">+ Save as template</button>
                           </div>
                           <textarea class="pf-cse__input" rows="3" [ngModel]="drafts()[s.key] || ''"
+                                    (focus)="ensurePicked(s)"
                                     (ngModelChange)="onDraft(s.key, $event)" placeholder="Enter findings… (or load a template above)"></textarea>
                         }
-                        <div class="pf-cse__rowact">
-                          <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="drop(s)">Drop</button>
-                          <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                          <button type="button" class="pf-cse__go" [disabled]="busy()" (click)="submit(s)">Submit</button>
-                        </div>
-                      } @else if (s.state === 'picked') {
-                        <span class="pf-cse__lockmsg">🔒 In progress · {{ s.holderName || 'another tech' }}</span>
-                      } @else if (incubating(s)) {
-                        <span class="pf-cse__incub">⏳ Incubating — ready in {{ incubateReadyIn(s) }}</span>
-                      } @else {
-                        <button type="button" class="pf-cse__pick" [disabled]="busy()" (click)="pick(s)">Pick up</button>
+                        @if (isMine(s)) {
+                          <div class="pf-cse__rowact">
+                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="drop(s)">Drop</button>
+                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
+                            <button type="button" class="pf-cse__go" [disabled]="busy()" (click)="submit(s)">Submit</button>
+                          </div>
+                        }
                       }
                     </td>
                   </tr>
@@ -283,9 +288,6 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
-    .pf-cse__pick { font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer; padding: 8px 16px; border-radius: 9px;
-      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
-    .pf-cse__pick:disabled { opacity: .5; cursor: default; }
     .pf-cse__rowact { display: flex; gap: 8px; margin-top: 8px; }
     .pf-cse__ghost { border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
       color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
@@ -568,6 +570,23 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
 
   pick(s: CultureStageView) {
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick`, {}));
+  }
+
+  /** Auto-lock on first touch: an open stage is editable right away — the first
+   *  interaction claims it silently. If someone else grabbed it in the
+   *  meantime, the server refuses, we re-sync and the row grays out. */
+  private readonly _picking = new Set<string>();
+  ensurePicked(s: CultureStageView) {
+    if (s.state !== 'open' || this._picking.has(s.key) || this.incubating(s)) return;
+    this._picking.add(s.key);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick`, {}).subscribe({
+      next: c => { this._picking.delete(s.key); if (c) this.c.set(c); },
+      error: (e: { error?: { message?: string } }) => {
+        this._picking.delete(s.key);
+        this.toasts.error(e?.error?.message || 'That stage was just taken by another tech');
+        this.load();
+      },
+    });
   }
   drop(s: CultureStageView) {
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/drop`, {}));
