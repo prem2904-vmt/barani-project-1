@@ -1,8 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, output, signal, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, output, signal, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { ToastService } from '../../../core/services/toast.service';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 
@@ -41,8 +40,10 @@ export interface CultureCaseView {
  * The CULTURE panel — the 4th tab in Lab My Work, shown only to micro-tech
  * users. Culture cases are shared, multi-day, multi-person: each card is one
  * sample ID showing where it is across its stages (Gram → Growth → ID → AST),
- * who currently holds a stage, and how many days it's been running. Opening a
- * card lands in the staged bench workspace.
+ * who currently holds a stage, and how many days it's been running. ONE tap on
+ * a card opens the bench workspace for that case (no per-stage picking here —
+ * the first touch inside the bench locks a stage). A resting plate shows its
+ * live incubation countdown right on the card.
  *
  * Lives beside the existing queue (additive) — the case data comes from
  * GET /api/microbiology/culture-queue; the normal my-work/service queues no
@@ -72,11 +73,11 @@ export interface CultureCaseView {
     } @else {
       <ul class="flex flex-col gap-3 list-none p-0 m-0">
         @for (c of cases(); track c.orderTestId) {
-          @let isOpen = expandedId() === c.orderTestId;
-          <li class="pf-cc" [class.pf-cc--open]="isOpen">
+          @let inc = incubatingStage(c);
+          <li class="pf-cc" [class.pf-cc--incub]="!!inc">
             <span class="pf-cc__cap" aria-hidden="true"></span>
-            <!-- Header: click to expand/collapse (stays on this screen). -->
-            <button type="button" class="pf-cc__hdr press" (click)="toggle(c)" [attr.aria-expanded]="isOpen">
+            <!-- The whole card is the one control: tap → bench workspace. -->
+            <button type="button" class="pf-cc__hdr press" (click)="open(c)" [title]="'Open ' + (c.barcode || c.sampleId || 'case')">
               <span class="pf-cc__main">
                 <span class="pf-cc__line">
                   <span class="pf-cc__id">{{ c.barcode || c.sampleId || '—' }}</span>
@@ -88,35 +89,17 @@ export interface CultureCaseView {
                 <span class="pf-cc__sub">
                   {{ c.patientName || '—' }} · {{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }
                 </span>
-                @if (!isOpen) { <span class="pf-cc__now">Next: {{ currentStageLabel(c) }}</span> }
+                @if (inc) {
+                  <span class="pf-cc__incub">⏳ Incubating · {{ inc.label }} · ready in {{ readyIn(inc) }}</span>
+                } @else if (heldBy(c); as holder) {
+                  <span class="pf-cc__now">{{ currentStageLabel(c) }} · {{ holder }}</span>
+                } @else {
+                  <span class="pf-cc__now">Next: {{ currentStageLabel(c) }}</span>
+                }
               </span>
-              <span class="pf-cc__chev" [class.pf-cc__chev--open]="isOpen" aria-hidden="true">▸</span>
+              <span class="pf-cc__chev" aria-hidden="true">→</span>
             </button>
 
-            <!-- Expanded: the stages — pick one right here to open its entry. -->
-            @if (isOpen) {
-              <div class="pf-cc__stages">
-                @for (s of c.stages; track s.key) {
-                  <button type="button" class="pf-cc__stage"
-                          [class.pf-cc__stage--done]="s.state === 'done'"
-                          [class.pf-cc__stage--picked]="s.state === 'picked'"
-                          [disabled]="busy() || lockedByOther(s)"
-                          [title]="stageTitle(s)"
-                          (click)="pickStage(c, s)">
-                    <span class="pf-cc__stage-l">
-                      @if (s.state === 'done') { <span class="pf-cc__tick">✓</span> }
-                      {{ s.label }}
-                    </span>
-                    <span class="pf-cc__stage-r">
-                      @if (s.state === 'done') { done@if (s.doneByName) { · {{ s.doneByName }} } }
-                      @else if (s.state === 'picked') {
-                        @if (isMine(s)) { Open → } @else { · {{ s.holderName || 'in progress' }} }
-                      } @else { Pick → }
-                    </span>
-                  </button>
-                }
-              </div>
-            }
           </li>
         }
       </ul>
@@ -127,7 +110,10 @@ export interface CultureCaseView {
     .pf-cc { position: relative; display: block; width: 100%; border-radius: 14px; overflow: hidden;
       background: var(--bg-card, var(--glass-bg)); border: 1px solid var(--glass-border);
       transition: border-color .15s ease; }
-    .pf-cc:hover, .pf-cc--open { border-color: rgba(124,58,237,0.45); }
+    .pf-cc:hover { border-color: rgba(124,58,237,0.45); }
+    .pf-cc--incub { border-color: rgba(6,182,212,0.35); }
+    .pf-cc--incub .pf-cc__cap { background: linear-gradient(180deg, #22d3ee, #0e7490); }
+    .pf-cc__incub { font-size: 11.5px; font-weight: 700; color: #22d3ee; margin-top: 2px; font-variant-numeric: tabular-nums; }
     .pf-cc__cap { position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px; border-radius: 4px; z-index: 1;
       background: linear-gradient(180deg, #a855f7, #7c3aed); }
     .pf-cc__hdr { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
@@ -140,39 +126,29 @@ export interface CultureCaseView {
     .pf-cc__day { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
     .pf-cc__sub { font-size: 12.5px; color: var(--text-secondary); }
     .pf-cc__now { font-size: 11.5px; font-weight: 600; color: var(--violet-text, #7c3aed); margin-top: 2px; }
-    .pf-cc__chev { flex-shrink: 0; font-size: 13px; color: var(--text-tertiary); transition: transform .15s ease; }
-    .pf-cc__chev--open { transform: rotate(90deg); }
+    .pf-cc__chev { flex-shrink: 0; font-size: 15px; color: var(--text-tertiary); transition: transform .15s ease, color .15s ease; }
+    .pf-cc:hover .pf-cc__chev { color: var(--violet-text, #7c3aed); transform: translateX(2px); }
 
-    /* Expanded: each stage a full-width, pickable row. */
-    .pf-cc__stages { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 14px 18px; }
-    .pf-cc__stage { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px;
-      font-size: 12.5px; font-weight: 600; padding: 9px 12px; border-radius: 9px; cursor: pointer; text-align: left;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); box-sizing: border-box;
-      transition: border-color .15s ease, background .15s ease; }
-    .pf-cc__stage:not(:disabled):hover { border-color: rgba(124,58,237,0.5); background: rgba(124,58,237,0.06); }
-    .pf-cc__stage:disabled { cursor: default; opacity: .7; }
-    .pf-cc__stage--picked { color: #b45309; background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.35); }
-    .pf-cc__stage--done { color: #15803d; background: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.30); }
-    .pf-cc__stage-l { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-    .pf-cc__stage-r { flex-shrink: 0; font-size: 11.5px; font-weight: 600; opacity: .9; }
-    .pf-cc__tick { font-weight: 800; }
   `],
 })
-export class CulturePanelComponent implements OnInit {
+export class CulturePanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
-  private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
 
   readonly cases = signal<CultureCaseView[]>([]);
   readonly loading = signal(false);
-  readonly busy = signal(false);
-  /** The case whose stages are expanded (accordion — one open at a time). */
-  readonly expandedId = signal<string | null>(null);
+  /** Ticks every 30s so the incubation countdowns on the cards stay live. */
+  private readonly now = signal(Date.now());
+  private timer: ReturnType<typeof setInterval> | null = null;
   /** Emits the live case count so the parent can label the Culture pill. */
   readonly countChange = output<number>();
 
-  ngOnInit() { this.refresh(); }
+  ngOnInit() {
+    this.refresh();
+    this.timer = setInterval(() => this.now.set(Date.now()), 30_000);
+  }
+  ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
 
   refresh() {
     this.loading.set(true);
@@ -187,9 +163,10 @@ export class CulturePanelComponent implements OnInit {
     });
   }
 
-  /** Expand/collapse a case's stages in place — never leaves this pane. */
-  toggle(c: CultureCaseView) {
-    this.expandedId.update(id => id === c.orderTestId ? null : c.orderTestId);
+  /** One tap opens the bench workspace for the case (the bench itself locks a
+   *  stage on first touch — no picking step here). */
+  open(c: CultureCaseView) {
+    this.router.navigate(['/lab/culture', c.orderTestId]);
   }
 
   isMine(s: CultureStageView): boolean {
@@ -199,30 +176,30 @@ export class CulturePanelComponent implements OnInit {
     return s.state === 'picked' && !this.isMine(s);
   }
 
-  /** Pick a stage from THIS pane, then open its result-entry page (like picking
-   *  a test in the lab queue opens result entry). Already-mine stages open
-   *  directly; a stage held by someone else is inert. */
-  pickStage(c: CultureCaseView, s: CultureStageView) {
-    const otId = c.orderTestId;
-    if (this.lockedByOther(s)) return;
-    if (s.state === 'open') {
-      this.busy.set(true);
-      this.api.post(`/api/microbiology/culture/${otId}/stage/${s.key}/pick`, {}).subscribe({
-        next: () => { this.busy.set(false); this.enter(otId, s.key); },
-        error: (e: { error?: { message?: string } }) => {
-          this.busy.set(false);
-          this.toasts.error(e?.error?.message || 'That stage was just picked up by someone else');
-          this.refresh();
-        },
-      });
-    } else {
-      // Picked-by-me or done → just open the entry page.
-      this.enter(otId, s.key);
-    }
+  /** Who holds the case's current stage, for the collapsed line ("You" / name). */
+  heldBy(c: CultureCaseView): string | null {
+    const s = c.stages?.find(x => x.state === 'picked');
+    if (!s) return null;
+    return this.isMine(s) ? 'You' : (s.holderName || 'in progress');
   }
 
-  private enter(orderTestId: string, stageKey: string) {
-    this.router.navigate(['/lab/culture', orderTestId], { queryParams: { stage: stageKey } });
+  /** The stage whose incubation clock is still running (one at a time). */
+  incubatingStage(c: CultureCaseView): CultureStageView | null {
+    const now = this.now();
+    return c.stages?.find(s => {
+      if (!s.incubateUntil) return false;
+      const t = new Date(s.incubateUntil).getTime();
+      return !Number.isNaN(t) && t > now;
+    }) ?? null;
+  }
+  /** Live "ready in …" countdown for a resting plate. */
+  readyIn(s: CultureStageView): string {
+    if (!s.incubateUntil) return '';
+    const ms = new Date(s.incubateUntil).getTime() - this.now();
+    if (ms <= 0) return 'now';
+    const m = Math.floor(ms / 60_000);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
   }
 
   /** Label of the first not-done stage (shown collapsed as "Next: …"). */
@@ -238,9 +215,4 @@ export class CulturePanelComponent implements OnInit {
     return Math.max(1, Math.floor((Date.now() - start) / 86_400_000) + 1);
   }
 
-  stageTitle(s: CultureStageView): string {
-    if (s.state === 'done') return `${s.label} — done${s.doneByName ? ' by ' + s.doneByName : ''}`;
-    if (s.state === 'picked') return `${s.label} — in progress${s.holderName ? ' by ' + s.holderName : ''}`;
-    return `${s.label} — open`;
-  }
 }

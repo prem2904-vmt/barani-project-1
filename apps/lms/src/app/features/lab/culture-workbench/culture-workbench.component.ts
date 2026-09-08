@@ -9,6 +9,8 @@ import { CultureEntryComponent } from '../culture-entry/culture-entry.component'
 import { DelegateModalComponent } from '../my-work/delegate-modal.component';
 import { CultureResult } from '../../../shared/models/culture.model';
 import { CultureCaseView, CultureStageView } from '../culture-panel/culture-panel.component';
+import { OrderTestComment } from '../../../shared/models/comment.model';
+import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -30,7 +32,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent],
+  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
@@ -60,11 +62,11 @@ interface StageField { name: string; title: string; type: string; options: strin
                    incubating it shows the countdown; otherwise it inoculates
                    the next stage that needs it. -->
               @if (incubatingStage(); as inc) {
-                <span class="pf-cse__incubpill">⏳ {{ inc.label }} · ready in {{ incubateReadyIn(inc) }}</span>
+                <span class="pf-cse__incubpill" [title]="'Incubating for ' + inc.label">⏳ Incubating · {{ inc.label }} · ready in {{ incubateReadyIn(inc) }}</span>
               } @else if (incubateTarget(); as tgt) {
                 <button type="button" class="pf-cse__incubbtn press" [disabled]="busy()" (click)="incubate(tgt)"
                         [title]="'Start the incubation clock for ' + tgt.label">
-                  Inoculate &amp; incubate
+                  Inoculate &amp; incubate · {{ tgt.label }}
                 </button>
               }
               @if (cc.caseState === 'awaiting_signout') {
@@ -92,112 +94,171 @@ interface StageField { name: string; title: string; type: string; options: strin
         </header>
 
         <div class="pf-cse__scroll">
-          <div class="pf-cse__grid-wrap">
-            <table class="pf-cse__grid">
-              <thead><tr><th class="pf-cse__th pf-cse__th--param">Stage</th><th class="pf-cse__th">Result</th></tr></thead>
-              <tbody>
-                @for (s of cc.stages; track s.key) {
-                  <tr class="pf-cse__row" [class.pf-cse__row--locked]="lockedByOther(s)">
-                    <td class="pf-cse__param">
-                      <span class="pf-cse__pname">{{ s.label }}</span>
-                      @if (s.state === 'done') { <span class="pf-cse__badge pf-cse__badge--done">Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}</span> }
-                      @else if (isMine(s)) { <span class="pf-cse__badge pf-cse__badge--mine">You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
-                      @else if (s.state === 'picked') { <span class="pf-cse__badge pf-cse__badge--held">{{ s.holderName || 'in progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
-                      @else if (incubating(s)) { <span class="pf-cse__badge pf-cse__badge--incub">Incubating</span> }
-                    </td>
-                    <td class="pf-cse__cell">
-                      @if (s.state === 'done') {
-                        <span class="pf-cse__done">✓ {{ readable(s.valuesJson || '') || 'Completed' }}</span>
-                      } @else if (lockedByOther(s)) {
-                        <!-- Selected by another tech → locked, greyed out. -->
-                        <span class="pf-cse__lockmsg">🔒 {{ s.holderName || 'Another tech' }} is working this stage</span>
-                      } @else if (incubating(s)) {
-                        <span class="pf-cse__incub">⏳ Incubating — ready in {{ incubateReadyIn(s) }}</span>
-                      } @else {
-                        <!-- Mine, or open: editable right away — the first touch
-                             locks the stage to this tech (no Pick up step). -->
-                        @if (s.key === 'ast') {
-                          <button type="button" class="pf-cse__astbtn" (click)="ensurePicked(s); astOpen.set(!astOpen())">
-                            {{ astOpen() ? 'Hide organism / sensitivity ▴' : ((astSummary() || 'Enter organism + sensitivity') + ' ▾') }}
-                          </button>
-                        } @else if (schemaFor(s.key); as fields) {
-                          <!-- Structured stage: the test's component fields
-                               (e.g. Gram → Pus Cells/QUANTITY, Morphology…). -->
-                          <div class="pf-cse__fields">
-                            @for (f of fields; track f.name) {
-                              <label class="pf-cse__field">
-                                <span class="pf-cse__field-lbl">{{ f.title }}</span>
-                                @if (f.options.length) {
-                                  <!-- Touch options: tap to pick, tap again to clear. -->
-                                  <span class="pf-cse__opts" role="radiogroup" [attr.aria-label]="f.title">
-                                    @for (o of f.options; track o) {
-                                      <button type="button" class="pf-cse__opt press"
-                                              [class.pf-cse__opt--on]="fieldValue(s.key, f.name) === o"
-                                              [attr.aria-checked]="fieldValue(s.key, f.name) === o" role="radio"
-                                              (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
-                                    }
-                                  </span>
-                                } @else if (f.suggest === 'organisms') {
-                                  <!-- Organism lookup against the 253-organism master. -->
-                                  <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
-                                         (focus)="ensurePicked(s)"
-                                         (ngModelChange)="setField(s.key, f.name, $event)"
-                                         [attr.list]="'pf-cw-organisms'" placeholder="Type to search organisms…" />
-                                  <datalist id="pf-cw-organisms">
-                                    @for (o of organismNames(); track o) { <option [value]="o"></option> }
-                                  </datalist>
-                                } @else if (f.type === 'textarea') {
-                                  <textarea class="pf-cse__ftext" rows="1" [ngModel]="fieldValue(s.key, f.name)"
-                                            (focus)="ensurePicked(s)"
-                                            (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…"></textarea>
-                                } @else {
-                                  <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
-                                         (focus)="ensurePicked(s)"
-                                         (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…" />
+          <!-- The case as a stack of full-width stage cards (Gram → Growth →
+               ID → AST); each card carries its own header (state + holder +
+               actions) and body. No spreadsheet columns, no numbered rail. -->
+          <div class="pf-cse__flow">
+            @for (s of cc.stages; track s.key) {
+              <div class="pf-stg"
+                   [class.pf-stg--done]="s.state === 'done'"
+                   [class.pf-stg--locked]="lockedByOther(s)"
+                   [class.pf-stg--incub]="incubating(s)"
+                   [class.pf-stg--mine]="isMine(s)">
+                <div class="pf-stg__card">
+                  <header class="pf-stg__hdr">
+                    <div class="pf-stg__titles">
+                      <h3 class="pf-stg__name">{{ s.label }}</h3>
+                      @if (s.state === 'done') { <span class="pf-stg__state c-done">Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}</span> }
+                      @else if (isMine(s)) { <span class="pf-stg__state c-mine">You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
+                      @else if (lockedByOther(s)) { <span class="pf-stg__state c-held">{{ s.holderName || 'In progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
+                      @else if (incubating(s)) { <span class="pf-stg__state c-incub">Ready in {{ incubateReadyIn(s) }}</span> }
+                    </div>
+                    <div class="pf-stg__acts">
+                      <!-- Stage-level note thread (same conversation model as the
+                           standard result entry: tech ↔ validator, per test). -->
+                      <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(s.key).length > 0"
+                              (click)="toggleNote(s.key)" [attr.aria-expanded]="noteOpen(s.key)" title="Note on this stage">✎</button>
+                      @if (s.state !== 'done' && !lockedByOther(s) && requiresIncubation(s.key) && !incubating(s)) {
+                        <button type="button" class="pf-stg__ghost pf-stg__ghost--incub press" [disabled]="busy()" (click)="incubate(s)"
+                                [title]="'Start the incubation clock for ' + s.label">Inoculate &amp; incubate</button>
+                      }
+                      @if (isMine(s) && s.state !== 'done') {
+                        <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="drop(s)">Drop</button>
+                        <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
+                        <button type="button" class="pf-stg__submit press" [disabled]="busy()" (click)="submit(s)">Submit</button>
+                      }
+                    </div>
+                  </header>
+                  @if (noteOpen(s.key) || commentsFor(s.key).length > 0) {
+                    <div class="pf-stg__thread">
+                      <pf-comment-thread [comments]="commentsFor(s.key)" currentRole="tech"
+                                         [composeLabel]="'Add note on ' + s.label"
+                                         (add)="addComment(s.key, $event.body, $event.type)"
+                                         (reply)="replyComment(s.key, $event.parentId, $event.body)"></pf-comment-thread>
+                    </div>
+                  }
+
+                  @if (s.state === 'done') {
+                    <p class="pf-stg__summary">{{ readable(s.valuesJson || '') || 'Completed' }}</p>
+                  } @else if (lockedByOther(s)) {
+                    <p class="pf-stg__lockmsg">{{ s.holderName || 'Another tech' }} is working this stage.</p>
+                  } @else if (incubating(s)) {
+                    <p class="pf-stg__lockmsg">⏳ Incubating — ready in {{ incubateReadyIn(s) }}. This stage unlocks when the clock elapses.</p>
+                  } @else {
+                    <!-- Editable (mine, or open → first touch locks it). -->
+                    @if (s.key === 'ast') {
+                      <button type="button" class="pf-cse__astbtn" (click)="ensurePicked(s); astOpen.set(!astOpen())">
+                        {{ astOpen() ? 'Hide organism / sensitivity ▴' : ((astSummary() || 'Enter organism + sensitivity') + ' ▾') }}
+                      </button>
+                      @if (astOpen()) {
+                        <div class="pf-cse__astwrap">
+                          <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
+                                            (valueChange)="astValue.set($event)"></pf-culture-entry>
+                        </div>
+                      }
+                    } @else if (schemaFor(s.key); as fields) {
+                      <!-- Same-option components collapse into ONE tally matrix
+                           (rows × Nil/Few/Moderate/Many); the rest render as
+                           single segmented rows. -->
+                      @for (g of fieldGroups(s.key); track g.id) {
+                        @if (g.kind === 'matrix') {
+                          <div class="pf-mx" role="group" [style.--mx-cols]="g.options.length">
+                            <div class="pf-mx__row pf-mx__row--head">
+                              <span class="pf-mx__lbl"></span>
+                              @for (o of g.options; track o) { <span class="pf-mx__hopt">{{ o }}</span> }
+                              <span class="pf-mx__hopt"></span>
+                            </div>
+                            @for (f of g.fields; track f.name) {
+                              <div class="pf-mx__row">
+                                <span class="pf-mx__lbl">{{ f.title }}</span>
+                                @for (o of g.options; track o) {
+                                  <button type="button" class="pf-mx__cell press"
+                                          [class.pf-mx__cell--on]="fieldValue(s.key, f.name) === o"
+                                          [attr.aria-label]="f.title + ': ' + o"
+                                          (click)="ensurePicked(s); toggleField(s.key, f.name, o)">
+                                    <span class="pf-mx__dot"></span>
+                                  </button>
                                 }
-                              </label>
+                                <span class="pf-mx__notecell">
+                                  <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(paramKey(s.key, f.name)).length > 0"
+                                          (click)="toggleNote(paramKey(s.key, f.name))" [title]="'Note on ' + f.title">✎</button>
+                                </span>
+                              </div>
+                              @if (noteOpen(paramKey(s.key, f.name)) || commentsFor(paramKey(s.key, f.name)).length > 0) {
+                                <div class="pf-mx__thread">
+                                  <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech"
+                                                     [composeLabel]="'Add note on ' + f.title"
+                                                     (add)="addComment(paramKey(s.key, f.name), $event.body, $event.type)"
+                                                     (reply)="replyComment(paramKey(s.key, f.name), $event.parentId, $event.body)"></pf-comment-thread>
+                                </div>
+                              }
                             }
                           </div>
                         } @else {
-                          <!-- Personal "canned findings" templates for this field. -->
-                          <div class="pf-cse__tpl">
-                            <span class="pf-cse__tpl-lbl">Templates:</span>
-                            @for (t of templatesFor(s.key); track t.id) {
-                              <button type="button" class="pf-cse__tplchip" [title]="t.body"
-                                      (click)="applyTemplate(s.key, t)">{{ t.name }}
-                                <span class="pf-cse__tplx" (click)="deleteTemplate(t, $event)" aria-label="Delete template">×</span>
-                              </button>
+                          @for (f of g.fields; track f.name) {
+                            <label class="pf-cse__field pf-cse__field--noted">
+                              <span class="pf-cse__field-lbl">{{ f.title }}</span>
+                              @if (f.options.length) {
+                                <span class="pf-cse__opts" role="radiogroup" [attr.aria-label]="f.title">
+                                  @for (o of f.options; track o) {
+                                    <button type="button" class="pf-cse__opt press"
+                                            [class.pf-cse__opt--on]="fieldValue(s.key, f.name) === o"
+                                            [attr.aria-checked]="fieldValue(s.key, f.name) === o" role="radio"
+                                            (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
+                                  }
+                                </span>
+                              } @else if (f.suggest === 'organisms') {
+                                <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
+                                       (focus)="ensurePicked(s)"
+                                       (ngModelChange)="setField(s.key, f.name, $event)"
+                                       [attr.list]="'pf-cw-organisms'" placeholder="Type to search organisms…" />
+                                <datalist id="pf-cw-organisms">
+                                  @for (o of organismNames(); track o) { <option [value]="o"></option> }
+                                </datalist>
+                              } @else if (f.type === 'textarea') {
+                                <textarea class="pf-cse__ftext" rows="1" [ngModel]="fieldValue(s.key, f.name)"
+                                          (focus)="ensurePicked(s)"
+                                          (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…"></textarea>
+                              } @else {
+                                <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
+                                       (focus)="ensurePicked(s)"
+                                       (ngModelChange)="setField(s.key, f.name, $event)" placeholder="Optional…" />
+                              }
+                              <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(paramKey(s.key, f.name)).length > 0"
+                                      (click)="$event.preventDefault(); toggleNote(paramKey(s.key, f.name))" [title]="'Note on ' + f.title">✎</button>
+                            </label>
+                            @if (noteOpen(paramKey(s.key, f.name)) || commentsFor(paramKey(s.key, f.name)).length > 0) {
+                              <div class="pf-stg__thread pf-stg__thread--field">
+                                <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech"
+                                                   [composeLabel]="'Add note on ' + f.title"
+                                                   (add)="addComment(paramKey(s.key, f.name), $event.body, $event.type)"
+                                                   (reply)="replyComment(paramKey(s.key, f.name), $event.parentId, $event.body)"></pf-comment-thread>
+                              </div>
                             }
-                            <button type="button" class="pf-cse__tplsave" [disabled]="!(drafts()[s.key] || '').trim()"
-                                    (click)="saveTemplate(s.key)">+ Save as template</button>
-                          </div>
-                          <textarea class="pf-cse__input" rows="3" [ngModel]="drafts()[s.key] || ''"
-                                    (focus)="ensurePicked(s)"
-                                    (ngModelChange)="onDraft(s.key, $event)" placeholder="Enter findings… (or load a template above)"></textarea>
-                        }
-                        @if (isMine(s)) {
-                          <div class="pf-cse__rowact">
-                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="drop(s)">Drop</button>
-                            <button type="button" class="pf-cse__ghost pf-cse__ghost--sm" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                            <button type="button" class="pf-cse__go" [disabled]="busy()" (click)="submit(s)">Submit</button>
-                          </div>
+                          }
                         }
                       }
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-
-          @if (astStage(); as ast) {
-            @if (isMine(ast) && astOpen()) {
-              <div class="pf-cse__astwrap">
-                <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
-                                  (valueChange)="astValue.set($event)"></pf-culture-entry>
+                    } @else {
+                      <div class="pf-cse__tpl">
+                        <span class="pf-cse__tpl-lbl">Templates:</span>
+                        @for (t of templatesFor(s.key); track t.id) {
+                          <button type="button" class="pf-cse__tplchip" [title]="t.body"
+                                  (click)="applyTemplate(s.key, t)">{{ t.name }}
+                            <span class="pf-cse__tplx" (click)="deleteTemplate(t, $event)" aria-label="Delete template">×</span>
+                          </button>
+                        }
+                        <button type="button" class="pf-cse__tplsave" [disabled]="!(drafts()[s.key] || '').trim()"
+                                (click)="saveTemplate(s.key)">+ Save as template</button>
+                      </div>
+                      <textarea class="pf-cse__input" rows="3" [ngModel]="drafts()[s.key] || ''"
+                                (focus)="ensurePicked(s)"
+                                (ngModelChange)="onDraft(s.key, $event)" placeholder="Enter findings… (or load a template above)"></textarea>
+                    }
+                  }
+                </div>
               </div>
             }
-          }
+          </div>
         </div>
       </section>
     }
@@ -249,40 +310,82 @@ interface StageField { name: string; title: string; type: string; options: strin
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; cursor: pointer; }
     .pf-cse__signout:disabled { opacity: .5; cursor: default; }
 
-    .pf-cse__scroll { flex: 1; padding: 22px 24px 60px; }
-    /* Cap + centre the case body so wide monitors don't leave a right void. */
-    .pf-cse__grid-wrap { border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden;
-      max-width: 1280px; margin: 0 auto; }
-    .pf-cse__astwrap, .pf-cse__hdr-inner { max-width: 1280px; margin-left: auto; margin-right: auto; }
-    .pf-cse__grid { width: 100%; border-collapse: collapse; }
-    .pf-cse__th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-      color: var(--text-tertiary); padding: 13px 18px; background: rgba(124,58,237,0.09); border-bottom: 1px solid var(--glass-border); }
-    /* Slim stage gutter — the RESULT area owns the width. */
-    .pf-cse__th--param { width: 230px; }
-    .pf-cse__row td { border-bottom: 1px solid var(--glass-border); vertical-align: top; }
-    .pf-cse__row:last-child td { border-bottom: none; }
-    /* Another tech holds this stage → grayed out, non-interactive. */
-    .pf-cse__row--locked { opacity: .55; }
-    .pf-cse__param { padding: 16px 18px; }
-    .pf-cse__pname { display: block; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-    .pf-cse__badge { display: inline-block; margin-top: 5px; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
-    .pf-cse__badge--done { color: #15803d; background: rgba(34,197,94,0.14); }
-    .pf-cse__badge--mine { color: #7c3aed; background: rgba(124,58,237,0.16); }
-    .pf-cse__badge--held { color: #b45309; background: rgba(245,158,11,0.16); }
-    .pf-cse__badge--incub { color: #0e7490; background: rgba(6,182,212,0.16); }
-    .pf-cse__incub { font-size: 12.5px; font-weight: 600; color: #0e7490; }
-    .pf-cse__cell { padding: 12px 18px; }
-    .pf-cse__done { color: #15803d; font-weight: 600; font-size: 13px; }
-    .pf-cse__lockmsg { font-size: 12.5px; font-weight: 600; color: var(--text-tertiary); }
+    .pf-cse__scroll { flex: 1; padding: 26px 24px 60px; }
+
+    /* ── The case as a stack of glass stage cards. ── */
+    .pf-cse__flow { width: 100%; display: flex; flex-direction: column; }
+    .pf-stg { display: block; }
+    /* State colours flow through the card accent. */
+    .pf-stg__card { min-width: 0; margin-bottom: 18px; padding: 16px 20px 18px; border-radius: 16px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      transition: border-color .25s ease, box-shadow .25s ease, opacity .25s ease; }
+    .pf-stg--mine .pf-stg__card { border-color: rgba(139,92,246,.45); box-shadow: 0 8px 30px rgba(124,58,237,.14); }
+    .pf-stg--done .pf-stg__card { padding-top: 13px; padding-bottom: 13px; }
+    .pf-stg--locked .pf-stg__card { opacity: .62; }
+    .pf-stg--incub .pf-stg__card { border-color: rgba(6,182,212,.35); }
+
+    .pf-stg__hdr { display: flex; align-items: center; gap: 12px; }
+    .pf-stg__titles { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .pf-stg__name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); }
+    .pf-stg__state { font-size: 11px; font-weight: 700; padding: 2.5px 9px; border-radius: 999px; white-space: nowrap; }
+    .pf-stg__state.c-done { color: #34d399; background: rgba(34,197,94,.13); }
+    .pf-stg__state.c-mine { color: #c4b5fd; background: rgba(124,58,237,.16); }
+    .pf-stg__state.c-held { color: #fbbf24; background: rgba(245,158,11,.13); }
+    .pf-stg__state.c-incub { color: #22d3ee; background: rgba(6,182,212,.13); }
+    .pf-stg__acts { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+    /* ✎ note pencil — same affordance as the standard result-entry grid. */
+    .pf-stg__note { width: 28px; height: 28px; border-radius: 8px; font-size: 13px; line-height: 1; cursor: pointer;
+      color: var(--text-tertiary); background: transparent; border: 1px solid var(--glass-border); }
+    .pf-stg__note:hover { color: var(--text-primary); border-color: rgba(124,58,237,.5); }
+    .pf-stg__note--has { color: #fff; background: var(--gradient-primary, linear-gradient(135deg,#a855f7,#ec4899)); border-color: transparent; }
+    .pf-stg__thread { margin: 10px 0 4px; }
+    .pf-stg__thread--field { margin: 0 0 8px 194px; }
+    .pf-stg__ghost--incub { color: #22d3ee; border-color: rgba(6,182,212,.4); background: rgba(6,182,212,.10); }
+    .pf-mx__notecell { display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--glass-border); }
+    .pf-mx__thread { padding: 8px 14px 12px; border-top: 1px solid var(--glass-border); background: rgba(124,58,237,.04); }
+    .pf-stg__ghost { padding: 6px 12px; border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
+      color: var(--text-secondary); background: transparent; border: 1px solid var(--glass-border); }
+    .pf-stg__ghost:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+    .pf-stg__ghost:disabled { opacity: .5; cursor: default; }
+    .pf-stg__submit { padding: 6px 18px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
+      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent;
+      box-shadow: 0 4px 14px rgba(124,58,237,.3); }
+    .pf-stg__submit:disabled { opacity: .5; cursor: default; }
+    .pf-stg__summary { margin: 8px 0 0; font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 1.5; }
+    .pf-stg__lockmsg { margin: 8px 0 0; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-stg__hdr + .pf-cse__field, .pf-stg__hdr + .pf-mx, .pf-stg__hdr + .pf-cse__tpl,
+    .pf-stg__hdr + .pf-cse__astbtn { margin-top: 14px; }
+
+    /* ── Tally matrix: same-option components collapse into one grid —
+       component names down, the shared options across, tap a cell. ── */
+    .pf-mx { display: flex; flex-direction: column; margin-top: 14px; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--glass-border); }
+    .pf-mx__row { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(var(--mx-cols, 4), minmax(64px, 1fr)) 44px;
+      align-items: stretch; }
+    .pf-mx__row + .pf-mx__row { border-top: 1px solid var(--glass-border); }
+    .pf-mx__row--head { background: rgba(124,58,237,.08); }
+    .pf-mx__hopt { display: flex; align-items: center; justify-content: center; padding: 8px 6px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--text-tertiary); text-align: center; }
+    .pf-mx__lbl { display: flex; align-items: center; padding: 9px 14px;
+      font-size: 12.5px; font-weight: 500; color: var(--text-secondary); line-height: 1.3; }
+    .pf-mx__cell { display: flex; align-items: center; justify-content: center; min-height: 40px;
+      cursor: pointer; background: transparent; border: none; border-left: 1px solid var(--glass-border); }
+    .pf-mx__cell:hover .pf-mx__dot { border-color: var(--text-tertiary); transform: scale(1.15); }
+    .pf-mx__dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--glass-border);
+      background: transparent; transition: transform .12s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+    .pf-mx__cell--on .pf-mx__dot { border-color: transparent; transform: scale(1.2);
+      background: var(--gradient-primary, linear-gradient(135deg,#a855f7,#ec4899));
+      box-shadow: 0 2px 10px rgba(124,58,237,.5); }
+
     .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
-    /* Structured stage fields — ONE aligned row per parameter (label gutter on
-       the left, control on the right), mirroring the Parameter|Result table
-       language of the standard entry. No ragged multi-column scatter. */
-    .pf-cse__fields { display: flex; flex-direction: column; gap: 6px; max-width: 900px; }
-    .pf-cse__field { display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; gap: 14px;
-      padding: 4px 0; }
+    /* Non-matrix structured fields — one aligned row per parameter. */
+    .pf-cse__field { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 14px;
+      padding: 5px 0; }
+    .pf-cse__field--noted { grid-template-columns: 180px minmax(0, 1fr) 28px; }
     .pf-cse__field-lbl { font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 1.35; }
     .pf-cse__opts { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 9999px;
       background: var(--glass-bg); border: 1px solid var(--glass-border); justify-self: start;
@@ -298,28 +401,30 @@ interface StageField { name: string; title: string; type: string; options: strin
     /* Free-text fields sit in the same aligned row; keep them modest. */
     .pf-cse__field .pf-cse__ftext { max-width: 520px; }
     @media (max-width: 760px) {
-      .pf-cse__field { grid-template-columns: 1fr; gap: 5px; }
+      .pf-cse__field, .pf-cse__field--noted { grid-template-columns: 1fr; gap: 5px; }
+      .pf-stg__thread--field { margin-left: 0; }
     }
 
-    /* ── Phone (≤640px): stack the STAGE|RESULT table into full-width blocks —
-       stage name becomes a section header, fields flow underneath. Desktop is
-       untouched (mobile-ui convention). ── */
+    /* ── Phone (≤640px): slim the rail, full-bleed cards, comfy tap targets.
+       Desktop is untouched (mobile-ui convention). ── */
     @media (max-width: 640px) {
       .pf-cse__hdr { padding: 12px 14px 10px; }
       .pf-cse__hdr-top { flex-wrap: wrap; }
       .pf-cse__id { font-size: 21px; }
       .pf-cse__hdr-right { width: 100%; order: 3; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
       .pf-cse__chips { padding-left: 0; margin-top: 10px; }
-      .pf-cse__scroll { padding: 14px 12px 48px; }
-      .pf-cse__grid thead { display: none; }
-      .pf-cse__grid, .pf-cse__grid tbody, .pf-cse__row { display: block; width: 100%; }
-      .pf-cse__row td { display: block; width: 100%; border-bottom: none; box-sizing: border-box; }
-      .pf-cse__param { padding: 14px 12px 2px; }
-      .pf-cse__cell { padding: 6px 12px 16px; border-bottom: 1px solid var(--glass-border); }
-      .pf-cse__row:last-child .pf-cse__cell { border-bottom: none; }
+      .pf-cse__scroll { padding: 16px 12px 48px; }
+      .pf-stg__card { padding: 13px 14px 15px; margin-bottom: 14px; border-radius: 14px; }
+      .pf-stg__hdr { flex-wrap: wrap; }
+      .pf-stg__acts { width: 100%; margin-top: 8px; }
+      .pf-stg__submit { margin-left: auto; }
       .pf-cse__opt { height: 36px; padding: 0 13px; }  /* comfy tap targets */
-      .pf-cse__field { padding: 2px 0; }
-      .pf-cse__rowact { flex-wrap: wrap; }
+      .pf-cse__field { grid-template-columns: 1fr; gap: 5px; padding: 4px 0; }
+      .pf-mx__row { grid-template-columns: minmax(94px, 1.1fr) repeat(var(--mx-cols, 4), minmax(44px, 1fr)) 36px; }
+      .pf-mx__lbl { padding: 8px 10px; font-size: 11.5px; }
+      .pf-mx__hopt { font-size: 9px; padding: 7px 3px; }
+      .pf-mx__cell { min-height: 42px; }
+      .pf-mx__dot { width: 16px; height: 16px; }
     }
     .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
       color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; box-sizing: border-box; }
@@ -338,17 +443,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
-    /* Stage actions anchored under the fields with a hairline separator. */
-    .pf-cse__rowact { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; max-width: 900px;
-      border-top: 1px solid var(--glass-border); }
-    .pf-cse__ghost { border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-cse__ghost--sm { padding: 6px 12px; }
-    .pf-cse__ghost:disabled { opacity: .5; cursor: default; }
-    .pf-cse__go { margin-left: auto; padding: 6px 18px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
-      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
-    .pf-cse__go:disabled { opacity: .5; cursor: default; }
-    .pf-cse__astwrap { margin-top: 18px; padding-top: 6px; }
+    .pf-cse__astwrap { margin-top: 14px; }
   `],
 })
 export class CultureWorkbenchComponent implements OnInit, OnDestroy {
@@ -421,6 +516,42 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const f = this.stageSchema()[stageKey];
     return f?.length ? f : null;
   }
+  /**
+   * Groups a stage's fields for rendering: ≥3 consecutive-in-schema fields that
+   * share the exact same option list collapse into ONE tally matrix (rows =
+   * components, columns = the shared options — e.g. Gram's seven QUANTITY
+   * components × Nil/Few/Moderate/Many); everything else renders as its own
+   * segmented row / input. Cached per stage since schemas are static.
+   */
+  fieldGroups(stageKey: string): Array<{ id: string; kind: 'matrix' | 'rows'; options: string[]; fields: StageField[] }> {
+    const cached = this._groupCache[stageKey];
+    if (cached) return cached;
+    const fields = this.stageSchema()[stageKey] ?? [];
+    const bySig = new Map<string, StageField[]>();
+    for (const f of fields) {
+      if (f.options.length >= 2) {
+        const sig = f.options.join('');
+        bySig.set(sig, [...(bySig.get(sig) ?? []), f]);
+      }
+    }
+    const matrixSigs = new Set([...bySig.entries()].filter(([, fs]) => fs.length >= 3).map(([sig]) => sig));
+    const groups: Array<{ id: string; kind: 'matrix' | 'rows'; options: string[]; fields: StageField[] }> = [];
+    for (const f of fields) {
+      const sig = f.options.join('');
+      if (f.options.length >= 2 && matrixSigs.has(sig)) {
+        const existing = groups.find(g => g.kind === 'matrix' && g.options.join('') === sig);
+        if (existing) existing.fields.push(f);
+        else groups.push({ id: 'mx:' + sig, kind: 'matrix', options: f.options, fields: [f] });
+      } else {
+        const last = groups[groups.length - 1];
+        if (last?.kind === 'rows') last.fields.push(f);
+        else groups.push({ id: 'rows:' + groups.length, kind: 'rows', options: [], fields: [f] });
+      }
+    }
+    this._groupCache[stageKey] = groups;
+    return groups;
+  }
+  private _groupCache: Record<string, Array<{ id: string; kind: 'matrix' | 'rows'; options: string[]; fields: StageField[] }>> = {};
   fieldValue(stageKey: string, field: string): string {
     return this.fieldValues()[stageKey]?.[field] ?? '';
   }
@@ -444,7 +575,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
   private loadStageSchema() {
     this.api.get<Record<string, StageField[]>>('/api/microbiology/stage-schema').subscribe({
-      next: s => this.stageSchema.set(s ?? {}),
+      next: s => { this._groupCache = {}; this.stageSchema.set(s ?? {}); },
       error: () => { /* stages fall back to free text */ },
     });
   }
@@ -524,8 +655,42 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.fieldValues.update(d => { const n = { ...d }; delete n[key]; return n; });
   }
 
+  // ── Notes (tech ↔ validator conversation, same model as result entry) ──
+  // One flat list for this order test; the view splits it by parameterName:
+  // `<stage>` for the stage-level thread, `<stage>.<field>` per component.
+  private readonly _comments = signal<OrderTestComment[]>([]);
+  private readonly _noteOpen = signal<Set<string>>(new Set<string>());
+  paramKey(stageKey: string, field: string): string { return `${stageKey}.${field}`; }
+  commentsFor(parameterName: string): OrderTestComment[] {
+    return this._comments().filter(c => c.parameterName === parameterName);
+  }
+  noteOpen(key: string): boolean { return this._noteOpen().has(key); }
+  toggleNote(key: string) {
+    this._noteOpen.update(set => { const n = new Set(set); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }
+  private loadComments() {
+    if (!this.id) return;
+    this.api.get<OrderTestComment[]>(`/api/results/${this.id}/comments`).subscribe({
+      next: list => this._comments.set(list ?? []),
+      error: () => { /* non-fatal — the bench works without notes */ },
+    });
+  }
+  addComment(parameterName: string, body: string, type: 'observation' | 'correction') {
+    this.postComment(parameterName, null, body, type);
+  }
+  replyComment(parameterName: string, parentId: string, body: string) {
+    this.postComment(parameterName, parentId, body, 'observation');
+  }
+  private postComment(parameterName: string, parentId: string | null, body: string, commentType: 'observation' | 'correction') {
+    this.api.post<OrderTestComment>(`/api/results/${this.id}/comments`, { parameterName, parentId, commentType, body }).subscribe({
+      next: () => this.loadComments(),
+      error: (e: { error?: { message?: string } }) => this.toasts.error(e?.error?.message || 'Could not save the note'),
+    });
+  }
+
   ngOnInit() {
     this.id = this.route.snapshot.paramMap.get('orderTestId') ?? '';
+    this.loadComments();
     this.focusStage.set(this.route.snapshot.queryParamMap.get('stage'));
     this.load();
     this.api.get<{ name: string }[]>('/api/microbiology/organisms').subscribe({
@@ -601,7 +766,8 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
    *  that needs incubation and isn't already past its clock. */
   readonly incubateTarget = computed(() => {
     const stages = this.c()?.stages ?? [];
-    return stages.find(s => s.state === 'open' && this.requiresIncubation(s.key) && !this.incubating(s)) ?? null;
+    return stages.find(s => s.state !== 'done' && !this.lockedByOther(s)
+      && this.requiresIncubation(s.key) && !this.incubating(s)) ?? null;
   });
 
   private run(obs: Observable<CultureCaseView>, ok?: string) {
