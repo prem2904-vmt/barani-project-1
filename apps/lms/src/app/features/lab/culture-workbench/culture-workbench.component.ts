@@ -273,17 +273,23 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__input { width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-primary);
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
-    /* Structured stage fields (component → touch option chips). */
-    .pf-cse__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px 18px; }
-    .pf-cse__field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-    .pf-cse__field-lbl { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
-    .pf-cse__opts { display: flex; flex-wrap: wrap; gap: 6px; }
-    .pf-cse__opt { font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 7px 14px; border-radius: 999px;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border);
-      transition: border-color .12s ease, background .12s ease, color .12s ease; }
-    .pf-cse__opt:hover { border-color: rgba(124,58,237,0.45); }
+    /* Structured stage fields — options styled like the app's pf-segmented
+       bar: ONE glass container per field, joined tap targets inside, selected
+       segment gets the gradient + glow. Wraps gracefully for long groups. */
+    .pf-cse__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px 20px; }
+    .pf-cse__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-items: flex-start; }
+    .pf-cse__field-lbl { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .pf-cse__opts { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 18px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .pf-cse__opt { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px;
+      font-size: 12.5px; font-weight: 500; cursor: pointer; border-radius: 9999px; border: none;
+      color: var(--text-tertiary); background: transparent;
+      transition: background .2s ease, color .2s ease, box-shadow .2s ease, transform .08s ease; }
+    .pf-cse__opt:hover { color: var(--text-primary); }
+    .pf-cse__opt:active { transform: scale(.97); }
     .pf-cse__opt--on { color: #fff; background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899));
-      border-color: transparent; }
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35); }
     .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
       color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; box-sizing: border-box; }
     .pf-cse__ftext:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
