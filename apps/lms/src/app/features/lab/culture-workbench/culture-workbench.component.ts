@@ -250,7 +250,10 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__signout:disabled { opacity: .5; cursor: default; }
 
     .pf-cse__scroll { flex: 1; padding: 22px 24px 60px; }
-    .pf-cse__grid-wrap { border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; }
+    /* Cap + centre the case body so wide monitors don't leave a right void. */
+    .pf-cse__grid-wrap { border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden;
+      max-width: 1280px; margin: 0 auto; }
+    .pf-cse__astwrap, .pf-cse__hdr-inner { max-width: 1280px; margin-left: auto; margin-right: auto; }
     .pf-cse__grid { width: 100%; border-collapse: collapse; }
     .pf-cse__th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-tertiary); padding: 13px 18px; background: rgba(124,58,237,0.09); border-bottom: 1px solid var(--glass-border); }
@@ -296,6 +299,27 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__field .pf-cse__ftext { max-width: 520px; }
     @media (max-width: 760px) {
       .pf-cse__field { grid-template-columns: 1fr; gap: 5px; }
+    }
+
+    /* ── Phone (≤640px): stack the STAGE|RESULT table into full-width blocks —
+       stage name becomes a section header, fields flow underneath. Desktop is
+       untouched (mobile-ui convention). ── */
+    @media (max-width: 640px) {
+      .pf-cse__hdr { padding: 12px 14px 10px; }
+      .pf-cse__hdr-top { flex-wrap: wrap; }
+      .pf-cse__id { font-size: 21px; }
+      .pf-cse__hdr-right { width: 100%; order: 3; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+      .pf-cse__chips { padding-left: 0; margin-top: 10px; }
+      .pf-cse__scroll { padding: 14px 12px 48px; }
+      .pf-cse__grid thead { display: none; }
+      .pf-cse__grid, .pf-cse__grid tbody, .pf-cse__row { display: block; width: 100%; }
+      .pf-cse__row td { display: block; width: 100%; border-bottom: none; box-sizing: border-box; }
+      .pf-cse__param { padding: 14px 12px 2px; }
+      .pf-cse__cell { padding: 6px 12px 16px; border-bottom: 1px solid var(--glass-border); }
+      .pf-cse__row:last-child .pf-cse__cell { border-bottom: none; }
+      .pf-cse__opt { height: 36px; padding: 0 13px; }  /* comfy tap targets */
+      .pf-cse__field { padding: 2px 0; }
+      .pf-cse__rowact { flex-wrap: wrap; }
     }
     .pf-cse__ftext { width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 13px;
       color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; box-sizing: border-box; }
