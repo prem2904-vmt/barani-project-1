@@ -3,10 +3,10 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY frontend/package*.json ./
+COPY package*.json ./
 RUN npm ci
 
-COPY frontend/ .
+COPY . .
 
 # Set default API base URL to relative path /api for Nginx proxying
 ENV VITE_API_BASE_URL=/api
@@ -17,7 +17,7 @@ RUN npm run build
 FROM nginx:alpine
 
 # Copy custom Nginx configuration
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built application assets from Stage 1
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -25,4 +25,3 @@ COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
-
