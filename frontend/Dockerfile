@@ -8,8 +8,9 @@ RUN npm ci
 
 COPY . .
 
-# Set default API base URL to relative path /api for Nginx proxying
-ENV VITE_API_BASE_URL=/api
+# Accept VITE_API_BASE_URL build argument (defaults to /api)
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build
 
