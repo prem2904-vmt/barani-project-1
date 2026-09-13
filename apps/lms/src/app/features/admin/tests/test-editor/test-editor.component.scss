@@ -822,3 +822,7 @@ select.pf-input--compact {
 .pf-qr__chip:active { transform: scale(0.96); transition: transform 100ms ease-out; }
 .pf-qr__chip--on { color: #059669; border-color: rgba(16,185,129,.55); background: rgba(16,185,129,.1); }
 .pf-qr__chip--off { opacity: .45; text-decoration: line-through; }
+.pf-qr__row { display: flex; align-items: center; gap: 12px; }
+.pf-qr__summary { flex: 1; font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.5; }
+.pf-qr__editbtn { flex-shrink: 0; padding: 5px 14px; border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--violet-text, #a78bfa); background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.35); }

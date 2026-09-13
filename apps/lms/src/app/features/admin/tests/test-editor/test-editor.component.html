@@ -288,28 +288,43 @@
               }
             </div>
             @if (effRangeMode() === 'qualitative' && qualFields().length) {
-              <!-- Qualitative mode: tap the values that count as expected. -->
+              <!-- The values live in the option group below — no need to
+                   repeat them here. One outcome line; chips appear only
+                   while explicitly editing which values count as normal. -->
               @for (qf of qualFields(); track qf.i) {
                 <div class="pf-qr">
-                  @if (qualFields().length > 1) { <span class="pf-qr__title">{{ qf.title }}</span> }
-                  <div class="pf-qr__chips">
-                    @for (row of rowsFor(qf.i); track row.value) {
-                      <button type="button" class="pf-qr__chip press"
-                              [class.pf-qr__chip--on]="row.normal === true"
-                              [class.pf-qr__chip--off]="row.active === false"
-                              [title]="row.normal === true ? 'Expected (normal) — tap to unmark' : 'Tap to mark as expected (normal)'"
-                              (click)="toggleQualNormal(qf.i, row.value)">
-                        @if (row.normal === true) {
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                        }
-                        {{ row.value }}
-                      </button>
+                  <div class="pf-qr__row">
+                    @if (normalsSummary(qf.i)) {
+                      <p class="pf-qr__summary">
+                        @if (qualFields().length > 1) { <span class="pf-qr__title">{{ qf.title }}: </span> }
+                        Expected value <span class="pf-rr2__qual-normal">{{ normalsSummary(qf.i) }}</span>
+                        <span class="c-mut">— from the option group; anything else flags abnormal.</span>
+                      </p>
+                    } @else {
+                      <p class="pf-qr__summary pf-rb__prints--todo">
+                        @if (qualFields().length > 1) { <span class="pf-qr__title">{{ qf.title }}: </span> }
+                        No expected value marked — nothing prints as the reference.
+                      </p>
                     }
+                    <button type="button" class="pf-qr__editbtn press" (click)="qualEditing.set(!qualEditing())">
+                      {{ qualEditing() ? 'Done' : 'Edit' }}
+                    </button>
                   </div>
-                  @if (normalsSummary(qf.i)) {
-                    <p class="pf-rb__prints">Report prints “{{ normalsSummary(qf.i) }}” as the reference value — anything else flags abnormal.</p>
-                  } @else {
-                    <p class="pf-rb__prints pf-rb__prints--todo">Tap the value(s) that count as normal — nothing prints yet.</p>
+                  @if (qualEditing()) {
+                    <div class="pf-qr__chips">
+                      @for (row of rowsFor(qf.i); track row.value) {
+                        <button type="button" class="pf-qr__chip press"
+                                [class.pf-qr__chip--on]="row.normal === true"
+                                [class.pf-qr__chip--off]="row.active === false"
+                                [title]="row.normal === true ? 'Expected (normal) — tap to unmark' : 'Tap to mark as expected (normal)'"
+                                (click)="toggleQualNormal(qf.i, row.value)">
+                          @if (row.normal === true) {
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                          }
+                          {{ row.value }}
+                        </button>
+                      }
+                    </div>
                   }
                 </div>
               }

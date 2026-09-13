@@ -106,6 +106,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
 
     <ng-template #panelTpl>
       <div class="pf-dd__panel"
+           (mousedown)="$event.preventDefault()"
            [class.pf-dd__panel--sm]="size === 'sm'"
            [class.pf-dd__panel--above]="panelPos().above"
            [style.top.px]="panelPos().top"

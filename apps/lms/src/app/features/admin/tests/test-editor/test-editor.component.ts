@@ -729,6 +729,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     },
   ]);
   readonly rangeModeChoice = signal<'numeric' | 'qualitative' | null>(null);
+  /** Expected-value chips stay hidden (the option group below already shows
+   *  the values) until the user explicitly opens the editor. */
+  readonly qualEditing = signal(false);
   readonly qualFields = computed<Array<{ i: number; title: string }>>(() =>
     this.fields()
       .map((f, i) => ({ f, i }))
