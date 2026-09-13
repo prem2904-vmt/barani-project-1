@@ -30,6 +30,7 @@ import { describeAllRanges } from '../../../../shared/utils/reference-range';
 import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
+import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 
 // AG Grid v33+ requires explicit module registration (once per app).
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -90,6 +91,7 @@ export type TestRow = Test & {
     FormsModule,
     ScreenHeaderComponent,
     TouchButtonComponent,
+    OptionGroupsPanelComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tests.component.html',
@@ -109,6 +111,8 @@ export class TestsComponent implements OnInit {
     { value: 'package',    label: 'Packages' },
   ];
 
+  /** Option-groups view — the shared vocabularies panel replaces the grid. */
+  readonly ogView = signal(false);
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
   private readonly _depts = signal<DeptRecord[]>([]);
@@ -635,6 +639,7 @@ export class TestsComponent implements OnInit {
   }
 
   setType(t: TestType) {
+    this.ogView.set(false);
     this._type.set(t);
     this._selectedDept.set(null);
     this.router.navigate([], {

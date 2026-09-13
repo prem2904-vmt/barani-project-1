@@ -27,11 +27,17 @@
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
-              [class.pf-tm-tab--active]="type() === v.value"
+              [class.pf-tm-tab--active]="!ogView() && type() === v.value"
               (click)="setType(v.value)">
         {{ v.label }}
       </button>
     }
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="ogView()"
+            (click)="ogView.set(true)">
+      Option groups
+    </button>
     @if (inactiveCount() > 0 || showInactive()) {
       <label class="pf-tm-inactive-toggle">
         <input type="checkbox" [checked]="showInactive()"
@@ -41,6 +47,11 @@
     }
   </div>
 
+  @if (ogView()) {
+    <!-- Shared option-group vocabularies, derived live from this tenant's
+         tests — edit once, changes every linked parameter. -->
+    <pf-option-groups-panel></pf-option-groups-panel>
+  } @else {
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
     <!-- ── LEFT: departments ─────────────────────────────── -->
     <aside class="pf-tm-side">
@@ -136,4 +147,5 @@
       </ag-grid-angular>
     </div>
   </div>
+  }
 </section>
