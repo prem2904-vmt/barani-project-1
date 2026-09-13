@@ -729,6 +729,10 @@ select.pf-input--compact {
    band (the app's joined-segment language), no inner boxes, no steppers. ── */
 .pf-rb { display: flex; flex-direction: column; gap: 3px; }
 .pf-rb + .pf-rb { margin-top: 10px; }
+/* The one authored moment: a new band rises in once; nothing else moves. */
+@keyframes pf-rb-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.pf-rb { animation: pf-rb-in .32s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .pf-rb { animation: none; } }
 .pf-rb__bar { display: inline-flex; align-items: stretch; height: 44px; max-width: 100%;
   background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px;
   overflow: hidden; }
@@ -738,28 +742,30 @@ select.pf-input--compact {
   background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
   padding: 0 26px 0 14px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .pf-rb__sel:hover { background-color: rgba(124,58,237,.06); }
+.pf-rb__sel:focus-visible { background-color: rgba(124,58,237,.1); }
 .pf-rb__sel--unit { font-weight: 500; color: var(--text-secondary); }
-.pf-rb__word { align-self: center; font-size: 12px; color: var(--text-tertiary); padding: 0 4px; }
-.pf-rb__word--label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+.pf-rb__word { align-self: center; font-size: 12px; color: var(--text-tertiary, #64748b); padding: 0 4px; }
+.pf-rb__word--label { font-size: 12.5px; font-weight: 500; font-style: italic; color: var(--text-secondary);
   padding: 0 4px 0 14px; }
 .pf-rb__num { width: 4.8rem; border: none; outline: none; background: transparent; text-align: right;
   font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
-  padding: 0 4px; }
+  padding: 0 4px; caret-color: var(--violet-text, #a78bfa); }
+.pf-rb__num:hover { background: rgba(124,58,237,.05); }
 .pf-rb__num--left { text-align: left; }
 .pf-rb__num--age { width: 3.4rem; }
-.pf-rb__num::placeholder { color: var(--text-tertiary); font-weight: 400; }
-.pf-rb__dash { align-self: center; color: var(--text-tertiary); font-size: 13px; }
+.pf-rb__num::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+.pf-rb__dash { align-self: center; color: var(--text-tertiary, #64748b); font-size: 13px; }
 .pf-rb__unit { align-self: center; font-size: 12px; font-weight: 600; color: var(--text-secondary);
   padding: 0 12px 0 4px; }
-.pf-rb__x { border: none; cursor: pointer; padding: 0 12px; color: var(--text-tertiary);
+.pf-rb__x { border: none; cursor: pointer; padding: 0 12px; color: var(--text-tertiary, #64748b);
   background: transparent; border-left: 1px solid var(--glass-border); display: inline-flex; align-items: center; }
 .pf-rb__x:hover { color: #ef4444; background: rgba(239,68,68,.08); }
-.pf-rb__prints { font-size: 11.5px; color: var(--text-tertiary); padding-left: 14px; }
+.pf-rb__prints { font-size: 11.5px; color: var(--text-tertiary, #64748b); padding-left: 14px; }
 .pf-rb__prints--todo { color: #d97706; }
 .pf-rb__actions { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
 .pf-rb__add { padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
   color: var(--violet-text, #a78bfa); background: transparent; border: 1px dashed rgba(124,58,237,.45); }
 .pf-rb__add:hover { background: rgba(124,58,237,.08); }
-.pf-rb__finetune { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary);
+.pf-rb__finetune { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary, #64748b);
   background: none; border: 0; cursor: pointer; padding: 2px 0; text-decoration: underline dotted; }
 .pf-rb__finetune:hover { color: var(--violet-text, #c77dff); }
