@@ -242,7 +242,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       position: absolute;
       pointer-events: auto;
       width: max-content;
-      max-width: min(320px, 90vw);
+      max-width: min(460px, 92vw);
       max-height: 252px;
       overflow-y: auto;
       background: var(--bg-card-solid, #ffffff);
@@ -260,12 +260,13 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
 
     .pf-dd__option {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      width: 100%; padding: 7px 10px; font-size: inherit; font-family: inherit;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 2px 8px; width: 100%; padding: 7px 10px; font-size: inherit; font-family: inherit;
       color: var(--text-primary, #0f172a); background: transparent; border: none;
       border-radius: 8px; cursor: pointer; text-align: left;
       transition: background 0.1s ease; white-space: nowrap;
     }
+    .pf-dd__opt-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .pf-dd__panel--sm .pf-dd__option { padding: 5px 8px; font-size: 12.5px; border-radius: 6px; }
     .pf-dd__option:hover:not(:disabled) { background: rgba(139, 92, 246, 0.07); }
     .pf-dd__option--focused:not(:disabled) {
@@ -287,7 +288,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       background: var(--color-primary, #7c3aed); border-color: var(--color-primary, #7c3aed); color: #fff;
     }
     .pf-dd__opt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .pf-dd__hint { flex-shrink: 0; font-size: 11px; color: var(--text-tertiary, #94a3b8); font-weight: 400; }
+    .pf-dd__hint {
+      flex-basis: 100%; min-width: 0; font-size: 11px; font-weight: 400;
+      color: var(--text-tertiary, #64748b);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
     .pf-dd__group { border-top: 1px solid var(--border-muted, #e2e8f0); margin-top: 2px; padding-top: 2px; }
     .pf-dd__group--first { border-top: 0; margin-top: 0; padding-top: 0; }
