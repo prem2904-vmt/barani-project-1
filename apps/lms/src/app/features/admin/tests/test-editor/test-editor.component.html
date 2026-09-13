@@ -208,26 +208,30 @@
               <pf-select [options]="resultTypeOptions" [value]="d.resultType"
                          (valueChange)="patch({ resultType: $event })"></pf-select>
             </div>
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Unit</label>
-              <input type="text" class="pf-input pf-uf__in" [ngModel]="d.unit"
-                     (ngModelChange)="patch({ unit: $event })" placeholder="e.g. mg/dL" />
-            </div>
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Report format</label>
-              <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
-                         (valueChange)="patch({ reportFormat: $event })"></pf-select>
-            </div>
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Critical low</label>
-              <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
-                               (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
-            </div>
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Critical high</label>
-              <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
-                               (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
-            </div>
+            <!-- Unit, report format and critical bounds are NUMERIC concepts —
+                 a dropdown-result test has no use for them. -->
+            @if (numericFields().length > 0) {
+              <div class="pf-uf">
+                <label class="pf-uf__lbl">Unit</label>
+                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.unit"
+                       (ngModelChange)="patch({ unit: $event })" placeholder="e.g. mg/dL" />
+              </div>
+              <div class="pf-uf">
+                <label class="pf-uf__lbl">Report format</label>
+                <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
+                           (valueChange)="patch({ reportFormat: $event })"></pf-select>
+              </div>
+              <div class="pf-uf">
+                <label class="pf-uf__lbl">Critical low</label>
+                <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
+                                 (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
+              </div>
+              <div class="pf-uf">
+                <label class="pf-uf__lbl">Critical high</label>
+                <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
+                                 (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
+              </div>
+            }
           </div>
 
           <!-- Calculated result (if the test is a formula) -->
