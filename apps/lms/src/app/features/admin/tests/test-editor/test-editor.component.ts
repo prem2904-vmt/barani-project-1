@@ -638,6 +638,48 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   /** Reference ranges rendered as plain sentences (first numeric parameter). */
+  // ── Simplified range editing (HCP-friendly) ─────────────────────────
+  // Doctors think in "who + normal band", not comparators and age units.
+  // Each band edits IN PLACE: sex, a life-stage preset, low/high. The
+  // precise grid stays available for comparator ops / custom print labels.
+  readonly agePresets: ReadonlyArray<{ key: string; label: string; minAge: number | null; maxAge: number | null; ageUnit: 'years' | 'months' | 'days' }> = [
+    { key: 'all',     label: 'All ages',        minAge: null, maxAge: null, ageUnit: 'years' },
+    { key: 'newborn', label: 'Newborn (0–28 d)', minAge: 0,   maxAge: 28,   ageUnit: 'days' },
+    { key: 'infant',  label: 'Infant (< 1 yr)',  minAge: 0,   maxAge: 1,    ageUnit: 'years' },
+    { key: 'child',   label: 'Child (1–12 yr)',  minAge: 1,   maxAge: 12,   ageUnit: 'years' },
+    { key: 'teen',    label: 'Teen (12–18 yr)',  minAge: 12,  maxAge: 18,   ageUnit: 'years' },
+    { key: 'adult',   label: 'Adult (18+)',      minAge: 18,  maxAge: null, ageUnit: 'years' },
+    { key: 'senior',  label: 'Senior (65+)',     minAge: 65,  maxAge: null, ageUnit: 'years' },
+  ];
+  private readonly _customAge = signal<Record<string, boolean>>({});
+
+  rangeAt(i: number, ri: number) { return this.fields()[i]?.referenceRanges?.[ri] ?? null; }
+  addRangeToFirstNumeric() {
+    const p = this.firstNumericField();
+    if (p) this.addRange(this.fields().indexOf(p));
+  }
+  rangeUnitFor(i: number): string { return this.fields()[i]?.unit || this._draft().unit || ''; }
+
+  agePresetFor(i: number, ri: number): string {
+    if (this._customAge()[`${i}:${ri}`]) return 'custom';
+    const r = this.rangeAt(i, ri);
+    if (!r) return 'all';
+    const hit = this.agePresets.find(p =>
+      (p.minAge ?? null) === (r.minAge ?? null)
+      && (p.maxAge ?? null) === (r.maxAge ?? null)
+      && (r.minAge == null && r.maxAge == null ? true : (p.ageUnit === (r.ageUnit ?? 'years'))));
+    return hit?.key ?? 'custom';
+  }
+  setAgePreset(i: number, ri: number, key: string) {
+    if (key === 'custom') {
+      this._customAge.update(m => ({ ...m, [`${i}:${ri}`]: true }));
+      return;
+    }
+    this._customAge.update(m => ({ ...m, [`${i}:${ri}`]: false }));
+    const p = this.agePresets.find(x => x.key === key);
+    if (p) this.patchRangeAt(i, ri, { minAge: p.minAge, maxAge: p.maxAge, ageUnit: p.ageUnit });
+  }
+
   readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
     const p = this.firstNumericField();
     if (!p) return [];
