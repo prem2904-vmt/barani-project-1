@@ -803,3 +803,7 @@ select.pf-input--compact {
   border: 1px solid var(--glass-border, rgba(148,163,184,.25)); }
 .pf-optprev__chip--normal { color: #059669; border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.08); }
 .pf-optprev__chip--off { opacity: .45; text-decoration: line-through; }
+
+/* Qualitative "range" — the Normal-marked options, stated plainly. */
+.pf-rr2__qual { font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.5; }
+.pf-rr2__qual-normal { font-weight: 700; color: #059669; }

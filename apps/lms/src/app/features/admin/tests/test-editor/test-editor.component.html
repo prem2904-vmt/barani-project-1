@@ -281,10 +281,21 @@
               <span class="pf-te2-h">Reference ranges</span>
             </div>
             @if (numericFields().length === 0) {
-              <div class="pf-rr2__empty">
-                <p>No reference range set yet.</p>
-                <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
-              </div>
+              @if (qualitativeNormals().length) {
+                <!-- Qualitative test: the Normal-marked options ARE the range. -->
+                @for (qn of qualitativeNormals(); track qn.title) {
+                  <p class="pf-rr2__qual">
+                    Qualitative result — the expected value is
+                    <span class="pf-rr2__qual-normal">{{ qn.normals }}</span>
+                    <span class="c-mut">(the Normal-marked options above; anything else flags as abnormal).</span>
+                  </p>
+                }
+              } @else {
+                <div class="pf-rr2__empty">
+                  <p>No reference range set yet.</p>
+                  <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
+                </div>
+              }
             } @else {
               @for (s of rangeSentences(); track s.ri) {
                 @if (rangeAt(s.i, s.ri); as r) {

@@ -710,6 +710,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return nav;
   });
 
+  /** For qualitative (dropdown) tests the "reference range" IS the set of
+   *  Normal-marked options — surface that instead of an empty add-a-range
+   *  nudge that reads like missing data. */
+  readonly qualitativeNormals = computed<Array<{ title: string; normals: string }>>(() =>
+    this.fields()
+      .filter(f => this.typeHasOptions(f.type) && !!f.normalValue)
+      .map(f => ({ title: f.label || f.name || 'Result', normals: f.normalValue! })));
+
   readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
     const p = this.firstNumericField();
     if (!p) return [];
