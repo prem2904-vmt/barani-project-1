@@ -170,8 +170,8 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                         [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
                   <span class="pf-og__tcode">{{ t.testCode || '—' }}</span>
                   <span class="pf-og__tname">{{ t.testName }}</span>
-                  @if (t.params.length > 1 || t.params[0] !== g.name) {
-                    <span class="pf-og__tparams">{{ t.params.join(', ') }}</span>
+                  @if (paramsHint(t); as hint) {
+                    <span class="pf-og__tparams">{{ hint }}</span>
                   }
                 </button>
               }
@@ -326,6 +326,14 @@ export class OptionGroupsPanelComponent implements OnInit {
 
   ngOnInit() { this.load(); }
 
+  /** Parameter titles worth showing beside a linked test — only the ones
+   *  that don't just repeat the test's own name (a single-parameter test
+   *  named after its parameter would otherwise read twice). */
+  paramsHint(t: OgTestRef): string | null {
+    const distinct = t.params.filter(p => p.toLowerCase() !== t.testName.toLowerCase());
+    return distinct.length ? distinct.join(', ') : null;
+  }
+
   testsOf(g: OgGroup): OgTestRef[] {
     const byId = new Map<string, OgTestRef>();
     for (const l of g.links) {
@@ -422,7 +430,12 @@ export class OptionGroupsPanelComponent implements OnInit {
 
   private load() {
     this.api.get<OgGroup[]>('/api/option-groups').subscribe({
-      next: gs => this.groups.set(gs ?? []),
+      next: gs => {
+        this.groups.set(gs ?? []);
+        // Default-select the top group (most used) so the side panel is
+        // never an empty "select one" placeholder.
+        if (this.mode() === 'idle' && !this.selected() && gs?.length) this.selected.set(gs[0]);
+      },
       error: () => this.toasts.error('Could not load option groups'),
     });
   }
