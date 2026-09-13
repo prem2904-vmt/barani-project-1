@@ -451,33 +451,78 @@
 
                         @if (typeHasOptions(p.type)) {
                           <div class="flex flex-col gap-1 min-w-0">
-                            <span class="pf-mini-lbl">Option table — this test only <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
-                            <div class="pf-otbl">
-                              <div class="pf-otbl-head"><span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
-                              @for (row of rowsFor(i); track $index; let ri = $index) {
-                                <div class="pf-otbl-row">
-                                  <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                                  <input type="text" class="pf-input pf-input--compact pf-otbl-code" [ngModel]="row.code ?? ''"
-                                         (ngModelChange)="patchOptionRow(i, ri, { code: $event })" placeholder="—" spellcheck="false" />
-                                  <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
-                                         (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
-                                  <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
-                                         (ngModelChange)="patchOptionRow(i, ri, { normal: $event })" title="Normal (expected)" />
-                                  <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
-                                         (ngModelChange)="patchOptionRow(i, ri, { active: $event })" title="Inactive rows are hidden" />
-                                  <span class="flex">
-                                    <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
-                                    <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
-                                  </span>
-                                  <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
-                                </div>
-                              }
-                              <div>
-                                <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                            <span class="pf-mini-lbl">Option group</span>
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <select class="pf-input pf-input--compact" style="max-width: 320px;"
+                                      [ngModel]="groupForField(i)?.code ?? ''"
+                                      (ngModelChange)="$event && applyOptionGroup(i, $event)">
+                                <option value="" disabled>— pick an option group —</option>
+                                @for (og of ogGroups(); track og.code) {
+                                  <option [value]="og.code">{{ og.name }}</option>
+                                }
+                              </select>
+                              @if (optLocked(i) && groupForField(i); as g) {
+                                <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
                                         style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                        (click)="addOptionRow(i)">+ Add option</button>
-                              </div>
+                                        (click)="openGroupEditor(g)">Edit group…</button>
+                              }
+                              @if (!optCustom(i)) {
+                                <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
+                                        style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                        (click)="startCustomOption(i)">+ New option group</button>
+                              }
                             </div>
+
+                            @if (optLocked(i) && groupForField(i); as g) {
+                              <!-- Shared vocabulary → read-only preview. Editing
+                                   the group lives in Option groups (it affects
+                                   every linked test); inline editing only ever
+                                   authors a NEW group. -->
+                              <div class="pf-otbl pf-otbl--ro" aria-disabled="true">
+                                <div class="pf-otbl-head"><span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span></div>
+                                @for (row of rowsFor(i); track $index; let ri = $index) {
+                                  <div class="pf-otbl-row" style="opacity:.7;">
+                                    <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                                    <input type="text" class="pf-input pf-input--compact pf-otbl-code" [value]="row.code ?? '—'" disabled />
+                                    <input type="text" class="pf-input pf-input--compact" [value]="row.value" disabled />
+                                    <input type="checkbox" class="pf-check" [checked]="row.normal === true" disabled />
+                                    <input type="checkbox" class="pf-check" [checked]="row.active !== false" disabled />
+                                  </div>
+                                }
+                              </div>
+                              <p class="text-xs" style="color: var(--text-tertiary, #94a3b8);">
+                                Shared group — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
+                                Changing it in Option groups affects all of them, including this test.
+                              </p>
+                            } @else {
+                              <span class="pf-mini-lbl">New option group — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
+                              <div class="pf-otbl">
+                                <div class="pf-otbl-head"><span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
+                                @for (row of rowsFor(i); track $index; let ri = $index) {
+                                  <div class="pf-otbl-row">
+                                    <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                                    <input type="text" class="pf-input pf-input--compact pf-otbl-code" [ngModel]="row.code ?? ''"
+                                           (ngModelChange)="patchOptionRow(i, ri, { code: $event })" placeholder="—" spellcheck="false" />
+                                    <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
+                                           (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
+                                    <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
+                                           (ngModelChange)="patchOptionRow(i, ri, { normal: $event })" title="Normal (expected)" />
+                                    <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
+                                           (ngModelChange)="patchOptionRow(i, ri, { active: $event })" title="Inactive rows are hidden" />
+                                    <span class="flex">
+                                      <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
+                                      <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
+                                    </span>
+                                    <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
+                                  </div>
+                                }
+                                <div>
+                                  <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                                          style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                          (click)="addOptionRow(i)">+ Add option</button>
+                                </div>
+                              </div>
+                            }
                           </div>
                         }
 

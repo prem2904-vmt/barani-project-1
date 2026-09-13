@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
 import { ApiService } from '../../../../core/services/api.service';
@@ -261,6 +261,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
 export class OptionGroupsPanelComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(ToastService);
   private readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
@@ -432,9 +433,12 @@ export class OptionGroupsPanelComponent implements OnInit {
     this.api.get<OgGroup[]>('/api/option-groups').subscribe({
       next: gs => {
         this.groups.set(gs ?? []);
-        // Default-select the top group (most used) so the side panel is
-        // never an empty "select one" placeholder.
-        if (this.mode() === 'idle' && !this.selected() && gs?.length) this.selected.set(gs[0]);
+        // Deep link (?og=<code>) wins; otherwise default-select the top
+        // group so the side panel is never an empty "select one" placeholder.
+        if (this.mode() === 'idle' && !this.selected() && gs?.length) {
+          const wanted = this.route.snapshot.queryParamMap.get('og');
+          this.selected.set(gs.find(g => g.code === wanted) ?? gs[0]);
+        }
       },
       error: () => this.toasts.error('Could not load option groups'),
     });

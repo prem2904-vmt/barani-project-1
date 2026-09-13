@@ -34,6 +34,15 @@ import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { DialogService } from '../../../../core/services/dialog.service';
+
+/** A shared option-group vocabulary as served by /api/option-groups. */
+interface OgGroupLite {
+  code: string;
+  name: string;
+  values: { code: string | null; value: string; normal: boolean; active: boolean }[];
+  links: { testId: string }[];
+}
 import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../shared/utils/reference-range';
 
 const SELECTED_GROUP = 'Selected';
@@ -171,6 +180,67 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
+  private readonly dialog = inject(DialogService);
+
+  // ── Shared option groups (Test Master → Option groups) ─────────────
+  // A dropdown parameter picks its vocabulary from these; the values render
+  // as a DISABLED preview here. Editing an existing group happens only in
+  // the Option groups tab (it affects every linked test); the inline editor
+  // is reserved for creating a NEW vocabulary for this parameter.
+  readonly ogGroups = signal<OgGroupLite[]>([]);
+  private readonly _customOpt = signal<Record<number, boolean>>({});
+
+  /** The shared group whose value list exactly matches this parameter's rows. */
+  groupForField(i: number): OgGroupLite | null {
+    const rows = this.rowsFor(i);
+    if (!rows.length) return null;
+    const sig = rows.map(r => (r.value ?? '').trim()).join('');
+    return this.ogGroups().find(g =>
+      g.values.map(v => v.value.trim()).join('') === sig) ?? null;
+  }
+  /** True while the user is authoring a NEW vocabulary for this parameter. */
+  optCustom(i: number): boolean { return this._customOpt()[i] === true; }
+  /** Locked = rows match a shared group and we're not in create-new mode. */
+  optLocked(i: number): boolean { return !this.optCustom(i) && this.groupForField(i) !== null; }
+  groupTestCount(g: OgGroupLite): number { return new Set(g.links.map(l => l.testId)).size; }
+
+  applyOptionGroup(i: number, code: string) {
+    const g = this.ogGroups().find(x => x.code === code);
+    if (!g) return;
+    this._customOpt.update(m => ({ ...m, [i]: false }));
+    this.setOptionRows(i, g.values.map(v => ({
+      code: v.code ?? null, value: v.value, normal: v.normal, active: v.active,
+    })));
+  }
+  startCustomOption(i: number) { this._customOpt.update(m => ({ ...m, [i]: true })); }
+  cancelCustomOption(i: number) {
+    this._customOpt.update(m => ({ ...m, [i]: false }));
+    // Snap back to the first shared group if the draft no longer matches one.
+    if (!this.groupForField(i) && this.ogGroups().length) {
+      const rows = this.rowsFor(i);
+      if (rows.length === 0) return;
+    }
+  }
+  /** Editing a shared group is deliberate: confirm the blast radius, then
+   *  hand over to the Option groups tab with the group preselected. */
+  async openGroupEditor(g: OgGroupLite) {
+    const n = this.groupTestCount(g);
+    const ok = await this.dialog.confirm({
+      title: 'Edit this option group?',
+      message: `"${g.name}" is used by ${n} test${n === 1 ? '' : 's'} — including this one. Changes made in Option groups apply to ALL of them. Unsaved edits on this page are kept.`,
+      confirmLabel: 'Open Option groups',
+      cancelLabel: 'Stay here',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.router.navigate(['/admin/tests'], { queryParams: { view: 'option-groups', og: g.code } });
+  }
+  private loadOptionGroups() {
+    this.api.get<OgGroupLite[]>('/api/option-groups').subscribe({
+      next: gs => this.ogGroups.set(gs ?? []),
+      error: () => { /* picker degrades to the inline editor */ },
+    });
+  }
 
   readonly typeOptions: PfSelectOption<'individual' | 'profile' | 'package'>[] = [
     { value: 'individual', label: 'Individual' },
@@ -1029,6 +1099,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly parentRoute = computed(() => '/admin/tests?type=' + (this.draft().type || 'individual'));
 
   ngOnInit() {
+    this.loadOptionGroups();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });

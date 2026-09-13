@@ -629,6 +629,8 @@ export class TestsComponent implements OnInit {
       if (t === 'individual' || t === 'profile' || t === 'package') {
         this._type.set(t);
       }
+      // Deep link from the test editor's "Edit group…" prompt.
+      if (params['view'] === 'option-groups') this.ogView.set(true);
     });
     this.loadTests();
     this.loadDepartments();
