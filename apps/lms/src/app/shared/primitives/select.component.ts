@@ -73,6 +73,20 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </div>
+      } @else if (searchable && isOpen()) {
+        <!-- Combobox: while open, the trigger IS the search field. -->
+        <div class="pf-dd__trigger pf-dd__trigger--combo" role="combobox" aria-expanded="true">
+          <input type="text" class="pf-dd__combox"
+                 [value]="search()" [placeholder]="displayLabel"
+                 (input)="onSearchInput($any($event.target).value)"
+                 (keydown)="onPanelKey($event)"
+                 (click)="$event.stopPropagation()" />
+          <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </div>
       } @else {
         <button type="button"
                 class="pf-dd__trigger"
@@ -99,13 +113,8 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
            [style.min-width.px]="panelPos().width"
            role="listbox"
            [attr.aria-label]="placeholder">
-        @if (searchable && !groups?.length) {
-          <div class="pf-dd__searchwrap">
-            <input type="text" class="pf-dd__search" placeholder="Type to search…"
-                   [value]="search()" (input)="onSearchInput($any($event.target).value)"
-                   (keydown)="onPanelKey($event)" (click)="$event.stopPropagation()" />
-          </div>
-          @if (visibleOpts().length === 0) { <div class="pf-dd__none">No matches</div> }
+        @if (searchable && !groups?.length && visibleOpts().length === 0) {
+          <div class="pf-dd__none">No matches</div>
         }
         @if (!groups?.length) {
           @for (opt of visibleOpts(); track opt.value; let idx = $index) {
@@ -224,18 +233,13 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
 
     /* ── Panel — absolute inside the fixed host = viewport coordinates ─── */
-    .pf-dd__searchwrap {
-      position: sticky; top: 0; z-index: 1; padding: 6px;
-      background: var(--bg-card-solid, #ffffff);
-      border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+    pf-select .pf-dd__trigger--combo { cursor: text; }
+    pf-select .pf-dd__combox {
+      flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+      font-size: inherit; font-family: inherit; color: var(--input-text);
+      caret-color: var(--input-border-focus, #8b5cf6); padding: 0;
     }
-    .pf-dd__search {
-      width: 100%; box-sizing: border-box; height: 32px; padding: 0 10px;
-      font-size: 13px; font-family: inherit; color: var(--input-text);
-      background: var(--input-bg); border: 1px solid var(--input-border);
-      border-radius: 8px; outline: none; caret-color: var(--input-border-focus, #8b5cf6);
-    }
-    .pf-dd__search:focus { border-color: var(--input-border-focus); }
+    pf-select .pf-dd__combox::placeholder { color: var(--text-tertiary, #64748b); }
     .pf-dd__none { padding: 14px 12px; font-size: 12.5px; color: var(--text-tertiary, #64748b); text-align: center; }
 
     .pf-dd__panel {
@@ -477,7 +481,8 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     this.isOpen.set(true);
     this.addScrollListeners();
     if (this.searchable && !this.groups?.length) {
-      setTimeout(() => (panelEl?.querySelector('.pf-dd__search') as HTMLInputElement | null)?.focus(), 0);
+      setTimeout(() =>
+        (this.el.nativeElement.querySelector('.pf-dd__combox') as HTMLInputElement | null)?.focus(), 0);
     }
     this.scrollFocusedIntoView();
   }
