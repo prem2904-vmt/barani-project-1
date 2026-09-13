@@ -57,7 +57,7 @@ interface DeptRecord {
 }
 
 /** AG Grid theme rules matching our dark/light tokens. */
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
+export const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
   fontFamily: 'Inter, system-ui, sans-serif',
   fontSize: 13,
   rowHeight: 44,
@@ -66,7 +66,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
   accentColor: '#7c3aed',
 });
 
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
+export const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
   fontFamily: 'Inter, system-ui, sans-serif',
   fontSize: 13,
   rowHeight: 44,
