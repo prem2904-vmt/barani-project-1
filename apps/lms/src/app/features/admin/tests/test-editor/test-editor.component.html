@@ -548,12 +548,10 @@
                             } @else {
                               <span class="pf-mini-lbl">New option group — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
                               <div class="pf-otbl">
-                                <div class="pf-otbl-head"><span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
+                                <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
                                 @for (row of rowsFor(i); track $index; let ri = $index) {
-                                  <div class="pf-otbl-row">
+                                  <div class="pf-otbl-row pf-otbl-row--nocode">
                                     <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                                    <input type="text" class="pf-input pf-input--compact pf-otbl-code" [ngModel]="row.code ?? ''"
-                                           (ngModelChange)="patchOptionRow(i, ri, { code: $event })" placeholder="—" spellcheck="false" />
                                     <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
                                            (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
                                     <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"

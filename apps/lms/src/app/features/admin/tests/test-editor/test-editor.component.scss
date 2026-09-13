@@ -556,6 +556,7 @@ select.pf-input--compact {
   color: var(--text-muted); }
 .pf-otbl-n { font-size: 11px; color: var(--text-muted); }
 .pf-otbl-code { font-family: ui-monospace, monospace; font-size: 11px; }
+.pf-otbl-head--nocode, .pf-otbl-row--nocode { grid-template-columns: 22px 1fr auto auto auto auto; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    Editorial redesign (v2): chips header · numbered sections · underline
