@@ -729,7 +729,7 @@ select.pf-input--compact {
 
 /* ── Reference ranges as SENTENCE BARS — one seamless glass segment bar per
    band (the app's joined-segment language), no inner boxes, no steppers. ── */
-.pf-rb { display: flex; flex-direction: column; gap: 3px; }
+.pf-rb { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .pf-rb + .pf-rb { margin-top: 10px; }
 /* The one authored moment: a new band rises in once; nothing else moves. */
 @keyframes pf-rb-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -749,12 +749,13 @@ select.pf-input--compact {
 .pf-rb__word { align-self: center; font-size: 12px; color: var(--text-tertiary, #64748b); padding: 0 4px; }
 .pf-rb__word--label { font-size: 12.5px; font-weight: 500; font-style: italic; color: var(--text-secondary);
   padding: 0 4px 0 14px; }
-.pf-rb__num { width: 4.8rem; border: none; outline: none; background: transparent; text-align: right;
+.pf-rb__num { width: 3.6rem; field-sizing: content; min-width: 2.6rem; max-width: 6.5rem;
+  border: none; outline: none; background: transparent; text-align: right;
   font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
   padding: 0 4px; caret-color: var(--violet-text, #a78bfa); }
 .pf-rb__num:hover { background: rgba(124,58,237,.05); }
 .pf-rb__num--left { text-align: left; }
-.pf-rb__num--age { width: 3.4rem; }
+.pf-rb__num--age { width: 3rem; }
 .pf-rb__num::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
 .pf-rb__dash { align-self: center; color: var(--text-tertiary, #64748b); font-size: 13px; }
 .pf-rb__unit { align-self: center; font-size: 12px; font-weight: 600; color: var(--text-secondary);
@@ -762,6 +763,8 @@ select.pf-input--compact {
 .pf-rb__x { border: none; cursor: pointer; padding: 0 12px; color: var(--text-tertiary, #64748b);
   background: transparent; border-left: 1px solid var(--glass-border); display: inline-flex; align-items: center; }
 .pf-rb__x:hover { color: #ef4444; background: rgba(239,68,68,.08); }
+.pf-rb__x:active { transform: scale(0.94); transition: transform 100ms ease-out; }
+.pf-rb__add:active { transform: scale(0.97); transition: transform 100ms ease-out; }
 .pf-rb__prints { font-size: 11.5px; color: var(--text-tertiary, #64748b); padding-left: 14px; }
 .pf-rb__prints--todo { color: #d97706; }
 .pf-rb__actions { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
