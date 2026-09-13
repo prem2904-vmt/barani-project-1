@@ -711,12 +711,34 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   /** For qualitative (dropdown) tests the "reference range" IS the set of
-   *  Normal-marked options — surface that instead of an empty add-a-range
-   *  nudge that reads like missing data. */
-  readonly qualitativeNormals = computed<Array<{ title: string; normals: string }>>(() =>
+   *  Normal-marked options — and it's EDITABLE here: tap values to toggle
+   *  what counts as expected. A switch flips the section between numeric
+   *  bands and qualitative mode when a test carries both kinds. */
+  readonly rangeModeOptions: SegmentedOption<'numeric' | 'qualitative'>[] = [
+    { value: 'numeric', label: 'Numeric range' },
+    { value: 'qualitative', label: 'Expected value' },
+  ];
+  readonly rangeModeChoice = signal<'numeric' | 'qualitative' | null>(null);
+  readonly qualFields = computed<Array<{ i: number; title: string }>>(() =>
     this.fields()
-      .filter(f => this.typeHasOptions(f.type) && !!f.normalValue)
-      .map(f => ({ title: f.label || f.name || 'Result', normals: f.normalValue! })));
+      .map((f, i) => ({ f, i }))
+      .filter(x => this.typeHasOptions(x.f.type) && this.rowsFor(x.i).length > 0)
+      .map(x => ({ i: x.i, title: x.f.label || x.f.name || 'Result' })));
+  readonly effRangeMode = computed<'numeric' | 'qualitative'>(() =>
+    this.rangeModeChoice()
+    ?? (this.numericFields().length ? 'numeric' : this.qualFields().length ? 'qualitative' : 'numeric'));
+
+  /** The expected values, as they'll print on the report. */
+  normalsSummary(i: number): string {
+    return this.rowsFor(i).filter(r => r.normal === true && r.active !== false)
+      .map(r => r.value).join(' / ');
+  }
+  /** Tap a value chip → toggle whether it counts as normal/expected.
+   *  Routes through setOptionRows so options[]/normalValue stay derived. */
+  toggleQualNormal(i: number, value: string) {
+    this.setOptionRows(i, this.rowsFor(i).map(r =>
+      r.value === value ? { ...r, normal: r.normal !== true } : r));
+  }
 
   readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
     const p = this.firstNumericField();

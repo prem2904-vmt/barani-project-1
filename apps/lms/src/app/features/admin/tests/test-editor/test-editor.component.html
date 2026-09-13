@@ -279,23 +279,42 @@
           <div class="pf-rr2">
             <div class="pf-rr2__head">
               <span class="pf-te2-h">Reference ranges</span>
+              @if (qualFields().length && numericFields().length) {
+                <pf-segmented size="sm" [options]="rangeModeOptions" [value]="effRangeMode()"
+                              (valueChange)="rangeModeChoice.set($event)"></pf-segmented>
+              }
             </div>
-            @if (numericFields().length === 0) {
-              @if (qualitativeNormals().length) {
-                <!-- Qualitative test: the Normal-marked options ARE the range. -->
-                @for (qn of qualitativeNormals(); track qn.title) {
-                  <p class="pf-rr2__qual">
-                    Qualitative result — the expected value is
-                    <span class="pf-rr2__qual-normal">{{ qn.normals }}</span>
-                    <span class="c-mut">(the Normal-marked options above; anything else flags as abnormal).</span>
-                  </p>
-                }
-              } @else {
-                <div class="pf-rr2__empty">
-                  <p>No reference range set yet.</p>
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
+            @if (effRangeMode() === 'qualitative' && qualFields().length) {
+              <!-- Qualitative mode: tap the values that count as expected. -->
+              @for (qf of qualFields(); track qf.i) {
+                <div class="pf-qr">
+                  @if (qualFields().length > 1) { <span class="pf-qr__title">{{ qf.title }}</span> }
+                  <div class="pf-qr__chips">
+                    @for (row of rowsFor(qf.i); track row.value) {
+                      <button type="button" class="pf-qr__chip press"
+                              [class.pf-qr__chip--on]="row.normal === true"
+                              [class.pf-qr__chip--off]="row.active === false"
+                              [title]="row.normal === true ? 'Expected (normal) — tap to unmark' : 'Tap to mark as expected (normal)'"
+                              (click)="toggleQualNormal(qf.i, row.value)">
+                        @if (row.normal === true) {
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        }
+                        {{ row.value }}
+                      </button>
+                    }
+                  </div>
+                  @if (normalsSummary(qf.i)) {
+                    <p class="pf-rb__prints">Report prints “{{ normalsSummary(qf.i) }}” as the reference value — anything else flags abnormal.</p>
+                  } @else {
+                    <p class="pf-rb__prints pf-rb__prints--todo">Tap the value(s) that count as normal — nothing prints yet.</p>
+                  }
                 </div>
               }
+            } @else if (numericFields().length === 0) {
+              <div class="pf-rr2__empty">
+                <p>No reference range set yet.</p>
+                <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
+              </div>
             } @else {
               @for (s of rangeSentences(); track s.ri) {
                 @if (rangeAt(s.i, s.ri); as r) {
