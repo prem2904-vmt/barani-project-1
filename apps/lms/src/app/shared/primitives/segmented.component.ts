@@ -3,6 +3,9 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, comput
 export interface SegmentedOption<T = string> {
   value: T;
   label: string;
+  /** Greyed out + unclickable; `hint` explains why (shown as tooltip). */
+  disabled?: boolean;
+  hint?: string;
 }
 
 export type SegmentedSize = 'sm' | 'md';
@@ -16,6 +19,8 @@ export type SegmentedSize = 'sm' | 'md';
       @for (opt of options; track opt.value) {
         <button type="button"
                 [class]="itemClasses(opt.value)"
+                [disabled]="opt.disabled ?? false"
+                [title]="opt.hint || ''"
                 (click)="select(opt.value)">
           {{ opt.label }}
         </button>
@@ -45,8 +50,9 @@ export type SegmentedSize = 'sm' | 'md';
       transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
       cursor: pointer;
     }
-    .seg-item:active { transform: scale(0.97); }
-    .seg-item:hover  { color: var(--text-primary); }
+    .seg-item:active:not(:disabled) { transform: scale(0.97); }
+    .seg-item:hover:not(:disabled)  { color: var(--text-primary); }
+    .seg-item:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .sz-md .seg-item { height: 40px; padding: 0 20px; font-size: 13px; }
     .sz-sm .seg-item { height: 32px; padding: 0 16px; font-size: 12px; }

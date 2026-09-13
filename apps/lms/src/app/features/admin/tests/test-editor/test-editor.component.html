@@ -279,8 +279,11 @@
           <div class="pf-rr2">
             <div class="pf-rr2__head">
               <span class="pf-te2-h">Reference ranges</span>
-              @if (qualFields().length && numericFields().length) {
-                <pf-segmented size="sm" [options]="rangeModeOptions" [value]="effRangeMode()"
+              @if (qualFields().length || numericFields().length) {
+                <!-- Always visible: it STATES the mode. A test's result is
+                     one or the other — the inapplicable side is disabled
+                     with the reason in its tooltip. -->
+                <pf-segmented size="sm" [options]="rangeModeOptions()" [value]="effRangeMode()"
                               (valueChange)="rangeModeChoice.set($event)"></pf-segmented>
               }
             </div>

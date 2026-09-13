@@ -714,10 +714,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  Normal-marked options — and it's EDITABLE here: tap values to toggle
    *  what counts as expected. A switch flips the section between numeric
    *  bands and qualitative mode when a test carries both kinds. */
-  readonly rangeModeOptions: SegmentedOption<'numeric' | 'qualitative'>[] = [
-    { value: 'numeric', label: 'Numeric range' },
-    { value: 'qualitative', label: 'Expected value' },
-  ];
+  readonly rangeModeOptions = computed<SegmentedOption<'numeric' | 'qualitative'>[]>(() => [
+    {
+      value: 'numeric', label: 'Numeric range',
+      disabled: this.numericFields().length === 0,
+      hint: this.numericFields().length ? undefined
+        : "The result is a dropdown — a numeric range can't apply. Add a numeric parameter to enable.",
+    },
+    {
+      value: 'qualitative', label: 'Expected value',
+      disabled: this.qualFields().length === 0,
+      hint: this.qualFields().length ? undefined
+        : 'No dropdown parameter with options — nothing qualitative to mark as expected.',
+    },
+  ]);
   readonly rangeModeChoice = signal<'numeric' | 'qualitative' | null>(null);
   readonly qualFields = computed<Array<{ i: number; title: string }>>(() =>
     this.fields()
