@@ -278,50 +278,55 @@
             } @else {
               @for (s of rangeSentences(); track s.ri) {
                 @if (rangeAt(s.i, s.ri); as r) {
-                  <div class="pf-rband">
-                    <div class="pf-rband__row">
-                      <select class="pf-input pf-input--compact pf-rband__who" [ngModel]="r.sex ?? 'any'"
+                  <div class="pf-rb">
+                    <!-- One seamless sentence-bar: Everyone · All ages · Normal 12.3 – 17.0 g/dL -->
+                    <div class="pf-rb__bar">
+                      <select class="pf-rb__sel" [ngModel]="r.sex ?? 'any'"
                               (ngModelChange)="patchRangeAt(s.i, s.ri, { sex: $event })" title="Who this range applies to">
                         <option value="any">Everyone</option>
                         <option value="M">Men</option>
                         <option value="F">Women</option>
                       </select>
-                      <select class="pf-input pf-input--compact pf-rband__age" [ngModel]="agePresetFor(s.i, s.ri)"
+                      <span class="pf-rb__div"></span>
+                      <select class="pf-rb__sel" [ngModel]="agePresetFor(s.i, s.ri)"
                               (ngModelChange)="setAgePreset(s.i, s.ri, $event)" title="Age group">
                         @for (ap of agePresets; track ap.key) { <option [value]="ap.key">{{ ap.label }}</option> }
                         <option value="custom">Custom ages…</option>
                       </select>
                       @if (agePresetFor(s.i, s.ri) === 'custom') {
-                        <pf-number-input size="sm" [allowEmpty]="true" [step]="1" placeholder="from" [value]="r.minAge ?? null"
-                                          (valueChange)="patchRangeAt(s.i, s.ri, { minAge: $event ?? null })"></pf-number-input>
-                        <span class="pf-rband__sep">to</span>
-                        <pf-number-input size="sm" [allowEmpty]="true" [step]="1" placeholder="any" [value]="r.maxAge ?? null"
-                                          (valueChange)="patchRangeAt(s.i, s.ri, { maxAge: $event ?? null })"></pf-number-input>
-                        <select class="pf-input pf-input--compact" [ngModel]="r.ageUnit ?? 'years'"
+                        <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--age" placeholder="from"
+                               [ngModel]="r.minAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { minAge: toNum($event) })" />
+                        <span class="pf-rb__word">to</span>
+                        <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--age" placeholder="any"
+                               [ngModel]="r.maxAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { maxAge: toNum($event) })" />
+                        <select class="pf-rb__sel pf-rb__sel--unit" [ngModel]="r.ageUnit ?? 'years'"
                                 (ngModelChange)="patchRangeAt(s.i, s.ri, { ageUnit: $event })">
                           <option value="years">yrs</option><option value="months">mo</option><option value="days">days</option>
                         </select>
                       }
-                      <span class="pf-rband__sep pf-rband__sep--normal">normal</span>
-                      <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="low" [value]="r.min ?? null"
-                                        (valueChange)="patchRangeAt(s.i, s.ri, { min: $event ?? null })"></pf-number-input>
-                      <span class="pf-rband__sep">–</span>
-                      <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="high" [value]="r.max ?? null"
-                                        (valueChange)="patchRangeAt(s.i, s.ri, { max: $event ?? null })"></pf-number-input>
-                      @if (rangeUnitFor(s.i)) { <span class="pf-rband__unit">{{ rangeUnitFor(s.i) }}</span> }
-                      <button type="button" class="pf-rangeln__ic" title="Remove range" (click)="removeRange(s.i, s.ri)">✕</button>
+                      <span class="pf-rb__div"></span>
+                      <span class="pf-rb__word pf-rb__word--label">Normal</span>
+                      <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="low"
+                             [ngModel]="r.min" (ngModelChange)="patchRangeAt(s.i, s.ri, { min: toNum($event) })" />
+                      <span class="pf-rb__dash">–</span>
+                      <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="high"
+                             [ngModel]="r.max" (ngModelChange)="patchRangeAt(s.i, s.ri, { max: toNum($event) })" />
+                      @if (rangeUnitFor(s.i)) { <span class="pf-rb__unit">{{ rangeUnitFor(s.i) }}</span> }
+                      <button type="button" class="pf-rb__x" title="Remove this range" (click)="removeRange(s.i, s.ri)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
                     </div>
-                    <!-- Live read-back: exactly what the report will say. -->
-                    <div class="pf-rband__preview">
-                      {{ s.who }} <span class="c-violet">{{ s.rule }}</span>
-                      <span class="c-mut">· prints “{{ s.prints }}”</span>
-                    </div>
+                    @if (r.min != null || r.max != null) {
+                      <div class="pf-rb__prints">Report prints “{{ s.prints }}”</div>
+                    } @else {
+                      <div class="pf-rb__prints pf-rb__prints--todo">Enter the normal limits — nothing prints yet</div>
+                    }
                   </div>
                 }
               }
-              <div class="pf-rband__actions">
-                <button type="button" class="pf-rr2__add" (click)="addRangeToFirstNumeric()">+ Add range for another sex or age group</button>
-                <button type="button" class="pf-rband__finetune" (click)="openAdvancedRanges()"
+              <div class="pf-rb__actions">
+                <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add another group</button>
+                <button type="button" class="pf-rb__finetune" (click)="openAdvancedRanges()"
                         title="Comparators (≥ / >) and custom print labels">Fine-tune…</button>
               </div>
 

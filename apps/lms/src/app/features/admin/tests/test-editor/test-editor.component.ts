@@ -658,6 +658,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const p = this.firstNumericField();
     if (p) this.addRange(this.fields().indexOf(p));
   }
+  /** Loose numeric parse for the borderless sentence-bar inputs. */
+  toNum(v: unknown): number | null {
+    const n = parseFloat(String(v ?? '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
   rangeUnitFor(i: number): string { return this.fields()[i]?.unit || this._draft().unit || ''; }
 
   agePresetFor(i: number, ri: number): string {
