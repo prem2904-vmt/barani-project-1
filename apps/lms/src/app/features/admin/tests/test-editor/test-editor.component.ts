@@ -188,6 +188,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   // the Option groups tab (it affects every linked test); the inline editor
   // is reserved for creating a NEW vocabulary for this parameter.
   readonly ogGroups = signal<OgGroupLite[]>([]);
+  /** Picker options: group name + its values as the searchable hint. */
+  readonly ogGroupOptions = computed<PfSelectOption<string>[]>(() =>
+    this.ogGroups().map(g => ({
+      value: g.code,
+      label: g.name,
+      hint: g.values.map(v => v.value).join(' / '),
+    })));
   private readonly _customOpt = signal<Record<number, boolean>>({});
 
   /** The shared group whose value list exactly matches this parameter's rows. */

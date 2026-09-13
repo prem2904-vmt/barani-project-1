@@ -505,14 +505,11 @@
                           <div class="flex flex-col gap-1 min-w-0">
                             <span class="pf-mini-lbl">Option group</span>
                             <div class="flex items-center gap-2 flex-wrap">
-                              <select class="pf-input pf-input--compact" style="max-width: 320px;"
-                                      [ngModel]="groupForField(i)?.code ?? ''"
-                                      (ngModelChange)="$event && applyOptionGroup(i, $event)">
-                                <option value="" disabled>— pick an option group —</option>
-                                @for (og of ogGroups(); track og.code) {
-                                  <option [value]="og.code">{{ og.name }}</option>
-                                }
-                              </select>
+                              <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
+                                         [options]="ogGroupOptions()" [searchable]="true"
+                                         [value]="groupForField(i)?.code ?? ''"
+                                         placeholder="— pick an option group —"
+                                         (valueChange)="applyOptionGroup(i, $event)"></pf-select>
                               @if (optLocked(i) && groupForField(i); as g) {
                                 <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
                                         style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"

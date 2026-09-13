@@ -99,8 +99,16 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
            [style.min-width.px]="panelPos().width"
            role="listbox"
            [attr.aria-label]="placeholder">
+        @if (searchable && !groups?.length) {
+          <div class="pf-dd__searchwrap">
+            <input type="text" class="pf-dd__search" placeholder="Type to search…"
+                   [value]="search()" (input)="onSearchInput($any($event.target).value)"
+                   (keydown)="onPanelKey($event)" (click)="$event.stopPropagation()" />
+          </div>
+          @if (visibleOpts().length === 0) { <div class="pf-dd__none">No matches</div> }
+        }
         @if (!groups?.length) {
-          @for (opt of options; track opt.value; let idx = $index) {
+          @for (opt of visibleOpts(); track opt.value; let idx = $index) {
             <button type="button" class="pf-dd__option" role="option"
                     [class.pf-dd__option--active]="isSelected(opt.value)"
                     [class.pf-dd__option--focused]="idx === focusedIndex()"
@@ -216,6 +224,20 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
 
     /* ── Panel — absolute inside the fixed host = viewport coordinates ─── */
+    .pf-dd__searchwrap {
+      position: sticky; top: 0; z-index: 1; padding: 6px;
+      background: var(--bg-card-solid, #ffffff);
+      border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+    }
+    .pf-dd__search {
+      width: 100%; box-sizing: border-box; height: 32px; padding: 0 10px;
+      font-size: 13px; font-family: inherit; color: var(--input-text);
+      background: var(--input-bg); border: 1px solid var(--input-border);
+      border-radius: 8px; outline: none; caret-color: var(--input-border-focus, #8b5cf6);
+    }
+    .pf-dd__search:focus { border-color: var(--input-border-focus); }
+    .pf-dd__none { padding: 14px 12px; font-size: 12.5px; color: var(--text-tertiary, #64748b); text-align: center; }
+
     .pf-dd__panel {
       position: absolute;
       pointer-events: auto;
@@ -296,6 +318,13 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   @Input() multiple = false;
   @Input() values: T[] = [];
 
+  /** Searchable mode: a filter box pinned at the top of the panel narrows
+   *  the options as you type (flat options only — grouped selects ignore
+   *  it). Keyboard: arrows navigate the FILTERED list, Enter picks,
+   *  Escape closes. Off by default so every existing select is unchanged. */
+  @Input() searchable = false;
+  readonly search = signal('');
+
   @Output() valueChange = new EventEmitter<T>();
   @Output() valuesChange = new EventEmitter<T[]>();
 
@@ -320,6 +349,50 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   private get allOptions(): PfSelectOption<T>[] {
     return this.groups ? this.groups.flatMap(g => g.options) : this.options;
+  }
+
+  /** Options the panel actually shows — the search filter applied. */
+  visibleOpts(): PfSelectOption<T>[] {
+    const q = this.search().trim().toLowerCase();
+    if (!this.searchable || !q) return this.options;
+    return this.options.filter(o =>
+      o.label.toLowerCase().includes(q) || (o.hint ?? '').toLowerCase().includes(q));
+  }
+  /** The list keyboard navigation walks (filtered when searchable). */
+  private get navOptions(): PfSelectOption<T>[] {
+    return this.searchable && !this.groups?.length ? this.visibleOpts() : this.allOptions;
+  }
+
+  onSearchInput(v: string): void {
+    this.search.set(v);
+    this.focusedIndex.set(0);
+    this.panelRef?.detectChanges();
+  }
+
+  /** Keys typed inside the panel's search box — the panel lives on <body>,
+   *  so the host keydown listener never sees them. */
+  onPanelKey(ev: KeyboardEvent): void {
+    const list = this.navOptions;
+    if (ev.key === 'ArrowDown' && list.length) {
+      ev.preventDefault();
+      this.focusedIndex.set((this.focusedIndex() + 1) % list.length);
+      this.panelRef?.detectChanges();
+      this.scrollFocusedIntoView();
+    } else if (ev.key === 'ArrowUp' && list.length) {
+      ev.preventDefault();
+      this.focusedIndex.set((this.focusedIndex() - 1 + list.length) % list.length);
+      this.panelRef?.detectChanges();
+      this.scrollFocusedIntoView();
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const idx = this.focusedIndex();
+      if (idx >= 0 && idx < list.length) this.pick(list[idx], ev);
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      this.closePanel();
+    } else if (ev.key === 'Tab') {
+      this.closePanel();
+    }
   }
 
   get matched(): boolean {
@@ -398,6 +471,9 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     if (panelEl) SelectComponent.getOverlayHost().appendChild(panelEl);
     this.isOpen.set(true);
     this.addScrollListeners();
+    if (this.searchable && !this.groups?.length) {
+      setTimeout(() => (panelEl?.querySelector('.pf-dd__search') as HTMLInputElement | null)?.focus(), 0);
+    }
     this.scrollFocusedIntoView();
   }
 
@@ -412,6 +488,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       this.panelRef.destroy();
       this.panelRef = undefined;
     }
+    this.search.set('');
     this.isOpen.set(false);
   }
 
@@ -527,7 +604,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     } else if (ev.key === 'ArrowDown') {
       ev.preventDefault();
       ev.stopPropagation();
-      const count = this.allOptions.length;
+      const count = this.navOptions.length;
       if (count > 0) {
         const next = (this.focusedIndex() + 1) % count;
         this.focusedIndex.set(next);
@@ -537,7 +614,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     } else if (ev.key === 'ArrowUp') {
       ev.preventDefault();
       ev.stopPropagation();
-      const count = this.allOptions.length;
+      const count = this.navOptions.length;
       if (count > 0) {
         const next = (this.focusedIndex() - 1 + count) % count;
         this.focusedIndex.set(next);
@@ -548,8 +625,8 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       ev.preventDefault();
       ev.stopPropagation();
       const idx = this.focusedIndex();
-      if (idx >= 0 && idx < this.allOptions.length) {
-        this.pick(this.allOptions[idx], ev);
+      if (idx >= 0 && idx < this.navOptions.length) {
+        this.pick(this.navOptions[idx], ev);
       } else {
         this.closePanel();
       }
