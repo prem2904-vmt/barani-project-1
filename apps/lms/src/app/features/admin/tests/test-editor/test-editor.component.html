@@ -530,16 +530,15 @@
                                    the group lives in Option groups (it affects
                                    every linked test); inline editing only ever
                                    authors a NEW group. -->
-                              <div class="pf-otbl pf-otbl--ro" aria-disabled="true">
-                                <div class="pf-otbl-head"><span></span><span>Code</span><span>Value</span><span>Normal</span><span>Active</span></div>
-                                @for (row of rowsFor(i); track $index; let ri = $index) {
-                                  <div class="pf-otbl-row" style="opacity:.7;">
-                                    <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                                    <input type="text" class="pf-input pf-input--compact pf-otbl-code" [value]="row.code ?? '—'" disabled />
-                                    <input type="text" class="pf-input pf-input--compact" [value]="row.value" disabled />
-                                    <input type="checkbox" class="pf-check" [checked]="row.normal === true" disabled />
-                                    <input type="checkbox" class="pf-check" [checked]="row.active !== false" disabled />
-                                  </div>
+                              <!-- Values only — codes are plumbing, not UI. -->
+                              <div class="pf-optprev">
+                                @for (row of rowsFor(i); track $index) {
+                                  <span class="pf-optprev__chip"
+                                        [class.pf-optprev__chip--normal]="row.normal === true"
+                                        [class.pf-optprev__chip--off]="row.active === false"
+                                        [title]="row.normal === true ? 'Normal (expected) value' : (row.active === false ? 'Inactive — hidden from result entry' : '')">
+                                    {{ row.value }}
+                                  </span>
                                 }
                               </div>
                               <p class="text-xs" style="color: var(--text-tertiary, #64748b);">

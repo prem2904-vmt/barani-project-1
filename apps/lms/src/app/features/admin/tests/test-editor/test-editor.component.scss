@@ -793,3 +793,12 @@ select.pf-input--compact {
   color: var(--text-tertiary, #64748b); cursor: pointer; padding: 2px; vertical-align: middle; border-radius: 6px; }
 .pf-te2-title__edit:hover { color: var(--violet-text, #a78bfa); background: rgba(124,58,237,.08); }
 .pf-publish__dot svg { display: block; }
+
+/* Read-only option-group preview — value chips, same vocabulary as the
+   Option groups tab. Codes are deliberately not shown. */
+.pf-optprev { display: flex; flex-wrap: wrap; gap: 5px; }
+.pf-optprev__chip { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
+  color: var(--text-secondary, #475569); background: var(--glass-bg, rgba(148,163,184,.08));
+  border: 1px solid var(--glass-border, rgba(148,163,184,.25)); }
+.pf-optprev__chip--normal { color: #059669; border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.08); }
+.pf-optprev__chip--off { opacity: .45; text-decoration: line-through; }
