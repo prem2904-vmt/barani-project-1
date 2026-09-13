@@ -685,6 +685,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (p) this.patchRangeAt(i, ri, { minAge: p.minAge, maxAge: p.maxAge, ageUnit: p.ageUnit });
   }
 
+  /** Sticky wayfinding for the long form: one link per visible section,
+   *  with its completion state folded in from the publish checklist. */
+  readonly sectionNav = computed<Array<{ id: TestSection; label: string; ok: boolean }>>(() => {
+    const d = this._draft();
+    const checks = this.publishChecklist();
+    const okFor = (sec: TestSection) => checks.filter(c => c.action === sec).every(c => c.ok);
+    const nav: Array<{ id: TestSection; label: string; ok: boolean }> = [
+      { id: 'identity', label: 'Basics', ok: okFor('identity') },
+      { id: 'pricing', label: 'Pricing & sample', ok: okFor('pricing') && okFor('sample') },
+      { id: 'results', label: d.type === 'individual' ? 'Result & ranges'
+          : d.type === 'profile' ? 'Members' : 'Package members', ok: okFor('results') },
+      { id: 'layout', label: 'Report', ok: okFor('layout') },
+    ];
+    if (d.type === 'individual' && this.canManageInventory())
+      nav.push({ id: 'consumables', label: 'Consumables', ok: okFor('consumables') });
+    return nav;
+  });
+
   readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
     const p = this.firstNumericField();
     if (!p) return [];
