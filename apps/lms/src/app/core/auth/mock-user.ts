@@ -26,6 +26,8 @@ export interface CurrentUser {
    *  reports they sign. Set on My signature; follows the user across stations. */
   signatureDataUrl?: string;
   registrationId?: string;
+  /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
+  isDoctor?: boolean;
 }
 
 export interface BranchRef {

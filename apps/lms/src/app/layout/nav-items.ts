@@ -52,6 +52,17 @@ export interface NavItem {
 // button in the top-strip's right cluster (next to the bell) so it
 // reads as "configure the app" rather than "one of the modules".
 // Non-admin users (no manage_* permission) no longer see it at all.
+/** OPD Consult Room — shown only to users flagged isDoctor (DoctorProfile).
+ *  Appended by the nav shells rather than permission-gated: "is a doctor" is
+ *  profile state, not a permission code. */
+export const DOCTOR_NAV: NavItem = {
+  id: 'doctor',
+  label: 'Consults',
+  href: '/doctor',
+  iconPath: ['M11 2v2', 'M5 2v2', 'M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1',
+             'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
+};
+
 export const ADMIN_NAV: NavItem = {
   id: 'admin',
   label: 'Admin',

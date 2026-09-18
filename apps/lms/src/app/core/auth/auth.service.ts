@@ -28,6 +28,8 @@ interface MeResponse {
   signatureDataUrl?: string;
   /** Medical council / registration number (dash on screens until set). */
   registrationId?: string;
+  /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
+  isDoctor?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -49,6 +51,8 @@ export class AuthService {
   readonly isAuthenticated = computed(() => !!this._user());
   readonly accessToken = computed(() => this._session()?.access_token ?? null);
   readonly permissions = computed(() => this._user()?.permissions ?? []);
+  /** OPD Consult Room gate — the backend flags users with a DoctorProfile. */
+  readonly isDoctor = computed(() => this._user()?.isDoctor ?? false);
 
   // Forced-password-change gate: when true, the app routes to /set-password.
   private readonly _mustChangePassword = signal(false);
@@ -622,7 +626,8 @@ export class AuthService {
         modules: data.modules ?? ['lab'],
         hasPin: data.hasPin ?? false,
         signatureDataUrl: data.signatureDataUrl ?? undefined,
-        registrationId: data.registrationId ?? undefined
+        registrationId: data.registrationId ?? undefined,
+        isDoctor: data.isDoctor ?? false
       });
       this._lastProfileLoadedAt = Date.now();
 

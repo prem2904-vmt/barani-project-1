@@ -20,7 +20,7 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -86,7 +86,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
-  readonly primary = computed(() => this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)))));
+  readonly primary = computed(() => {
+    const items = this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
+    // OPD: doctors get their Consult Room regardless of lab permissions.
+    return this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+  });
 
   /** Guarantee a reachable "Collect" work area for anyone who can draw samples.
    *  The Lab work area intentionally excludes collect_sample, and the

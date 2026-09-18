@@ -475,6 +475,18 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
       },
 
+      // OPD Consult Room — the doctor's day (token queue + room). Access is
+      // profile-based (auth.me.isDoctor) — the backend Forbids non-doctors,
+      // so the route carries no permission guard.
+      {
+        path: 'doctor',
+        loadComponent: () => import('./features/opd/doctor/doctor-queue.component').then(m => m.DoctorQueueComponent)
+      },
+      {
+        path: 'doctor/consult/:id',
+        loadComponent: () => import('./features/opd/doctor/consult-room.component').then(m => m.ConsultRoomComponent)
+      },
+
       // Pathologist — only doctors with validate_result.
       {
         path: 'pathologist',

@@ -89,16 +89,21 @@ export class ConsultPageComponent {
 
   submit() {
     if (!this.canSubmit()) return;
-    const doc = this.doctors().find(d => d.id === this.doctorId()) ?? null;
-    const draft: ConsultDraft = {
-      doctorId: this.doctorId(),
-      doctorName: doc?.name ?? null,
+    const patient = this._patient();
+    if (!patient) return;
+    // Creates the consultation → the doctor's token queue. Billing (Order
+    // Module='opd' + follow-up discount) attaches in the next slice.
+    this.api.post<{ token: number }>('/api/opd/consultations', {
+      patientId: patient.id,
+      doctorUserId: this.doctorId(),
       fee: this.fee(),
-      procedures: [],
-    };
-    // Persistence (Order with Module='opd') arrives in a later slice.
-    this.toasts.info(`Consultation captured (₹${draft.fee}) — saving comes next.`);
-    this.back();
+    }).subscribe({
+      next: c => {
+        this.toasts.success(c?.token ? `Consultation created — token ${c.token}` : 'Consultation created');
+        this.back();
+      },
+      error: () => this.toasts.error('Could not create the consultation'),
+    });
   }
 
   back() { void this.router.navigate(['/frontdesk']); }

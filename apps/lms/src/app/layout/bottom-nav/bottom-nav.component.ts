@@ -20,7 +20,7 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { PushService } from '../../core/services/push.service';
-import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -495,7 +495,11 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
-  readonly primary = computed(() => this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
+  readonly primary = computed(() => {
+    const items = this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)));
+    // OPD: doctors get their Consult Room regardless of lab permissions.
+    return this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+  });
 
   /** Guarantee a reachable "Collect" work area for anyone who can draw samples
    *  (the Lab area excludes collect_sample and the workflow-derived nav omits
