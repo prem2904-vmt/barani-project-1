@@ -247,6 +247,14 @@ interface ValueRow {
                                       }
                                     </div>
                                   }
+                                  @if (cnote(sg) || stageNotes(sg.values)) {
+                                    <!-- Bench notes stay visible while correcting. -->
+                                    <div class="pf-cedit__row">
+                                      <span class="pf-cedit__lbl">Notes</span>
+                                      <textarea class="pf-cstage__editnotes" rows="2" [value]="cnote(sg)"
+                                                (input)="setCnote(sg, $any($event.target).value)"></textarea>
+                                    </div>
+                                  }
                                 </div>
                               } @else if (stageFields(sg.values); as sf) {
                                 @if (sf.length) {
