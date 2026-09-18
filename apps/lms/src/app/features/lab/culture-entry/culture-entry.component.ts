@@ -61,6 +61,18 @@ interface Breakpoint {
         }
 
         @if (organismsOpen() || embedded) {
+          @if ((m().organisms ?? []).length) {
+            <!-- UNIVERSAL entry mode: every organism's table reads in it. -->
+            <div class="ce-modebar">
+              <span class="ce-modebar__lbl">Reading method</span>
+              <span class="ce-abx__mode ce-org__modetgl">
+                <button type="button" [class.ce-abx__mode--on]="mode() === 'zone'"
+                        (click)="setMode('zone')">Zone mm</button>
+                <button type="button" [class.ce-abx__mode--on]="mode() === 'mic'"
+                        (click)="setMode('mic')">MIC µg/mL</button>
+              </span>
+            </div>
+          }
           @for (org of m().organisms ?? []; track oi; let oi = $index) {
           <section class="ce-org">
             <header class="ce-org__head">
@@ -77,13 +89,6 @@ interface Breakpoint {
                 {{ interpretedCount(oi) }}/{{ org.antibiotics.length }} interpreted
               </span>
               <span class="ce-org__spacer"></span>
-              <!-- ONE mode for the whole card: disk zones or dilution MICs. -->
-              <span class="ce-abx__mode ce-org__modetgl">
-                <button type="button" [class.ce-abx__mode--on]="modeOf(oi) === 'zone'"
-                        (click)="setOrgMode(oi, 'zone')">Zone mm</button>
-                <button type="button" [class.ce-abx__mode--on]="modeOf(oi) === 'mic'"
-                        (click)="setOrgMode(oi, 'mic')">MIC µg/mL</button>
-              </span>
               <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
                 <svg icon-left width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -127,7 +132,7 @@ interface Breakpoint {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__namewrap">
                     <span class="ce-abx__name">{{ ab.name }}</span>
-                    @if (micRef(oi, org.name, ab); as m) {
+                    @if (micRef(org.name, ab); as m) {
                       <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
                         MIC µg/mL · <em class="ce-abx__col--s">{{ m.s }}</em> · <em class="ce-abx__col--i">{{ m.i }}</em> · <em class="ce-abx__col--r">{{ m.r }}</em>
                       </span>
@@ -152,7 +157,7 @@ interface Breakpoint {
                   </span>
 
                   <span class="ce-abx__zonewrap">
-                    @if (modeOf(oi) === 'mic') {
+                    @if (mode() === 'mic') {
                       <input type="text" class="ce-abx__zone" inputmode="decimal"
                              [ngModel]="ab.micValue" (ngModelChange)="setMic(oi, abi, $event ?? null)"
                              (keydown.enter)="focusNextZone($event)" placeholder="MIC" />
@@ -348,6 +353,9 @@ interface Breakpoint {
     .ce-abx__mode--on { color: var(--violet-text, #a78bfa) !important; background: rgba(124,58,237,.16) !important; }
     .ce-org__modetgl { flex-shrink: 0; }
     .ce-org__modetgl button { padding: 6px 11px; font-size: 10.5px; }
+    .ce-modebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 4px; }
+    .ce-modebar__lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--text-tertiary, #64748b); }
     .ce-abx__zone { width: 74px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
       border-radius: 10px; background: var(--input-bg); border: 1px solid var(--input-border);
       color: var(--input-text); outline: none; font-variant-numeric: tabular-nums;
@@ -650,7 +658,7 @@ export class CultureEntryComponent implements OnInit {
     const name = this._m().organisms?.[i]?.name;
     if (!ab) return;
     let interp: 'S' | 'I' | 'R' | '' = '';
-    if (this.modeOf(i) === 'mic') {
+    if (this.mode() === 'mic') {
       // MIC: S when value ≤ the S threshold, R when ≥ the R threshold.
       const b = this.effectiveRow(name, ab.name);
       const v = this.num(ab.micValue);
@@ -742,20 +750,21 @@ export class CultureEntryComponent implements OnInit {
     const b = this.effectiveRow(orgName, ab.name);
     return !!b && (!!b.micS || !!b.micR);
   }
-  /** The CARD's entry mode — one toggle governs every row. */
-  modeOf(i: number): 'zone' | 'mic' {
-    return this._m().organisms?.[i]?.astMode === 'mic' ? 'mic' : 'zone';
+  /** The UNIVERSAL entry mode — one toggle at the top governs everything. */
+  mode(): 'zone' | 'mic' {
+    return this._m().astMode === 'mic' ? 'mic' : 'zone';
   }
-  setOrgMode(i: number, mode: 'zone' | 'mic') {
-    this.updateOrg(i, o => ({ ...o, astMode: mode }));
-    (this._m().organisms?.[i]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(i, abi));
+  setMode(mode: 'zone' | 'mic') {
+    this.patch({ astMode: mode });
+    (this._m().organisms ?? []).forEach((o, oi) =>
+      o.antibiotics.forEach((_, abi) => this.autoInterpret(oi, abi)));
   }
   /** MIC criteria line: in MIC mode wherever criteria exist; in zone mode
    *  only on rows with no zone cutoffs (explains the empty mm boxes). */
-  micRef(i: number, orgName: string | undefined, ab: AstRow): { s: string; i: string; r: string } | null {
+  micRef(orgName: string | undefined, ab: AstRow): { s: string; i: string; r: string } | null {
     const b = this.effectiveRow(orgName, ab.name);
     if (!b || (!b.micS && !b.micR)) return null;
-    const show = this.modeOf(i) === 'mic'
+    const show = this.mode() === 'mic'
       || (b.susceptibleMin == null && ab.sMin == null && ab.rMax == null);
     if (!show) return null;
     return { s: b.micS || '—', i: b.micI || '—', r: b.micR || '—' };

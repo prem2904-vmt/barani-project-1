@@ -16,9 +16,6 @@ export interface AstRow {
 export interface CultureOrganism {
   name: string;
   antibiotics: AstRow[];
-  /** ONE entry mode for the whole card: 'zone' (disk, mm) or 'mic'
-   *  (dilution, µg/mL). Every row reads/interprets in this mode. */
-  astMode?: 'zone' | 'mic' | null;
   /** Relative URL of the AST-plate photo this organism's zones were measured
    *  from (camera measure-assist). Kept as evidence for the validator. */
   plateImageUrl?: string | null;
@@ -45,6 +42,9 @@ export interface PlateMeasurement {
 
 /** Structured Culture & Sensitivity result — stored as the test's `values`. */
 export interface CultureResult {
+  /** UNIVERSAL entry mode for the whole AST section: 'zone' (disk, mm) or
+   *  'mic' (dilution, µg/mL). Every organism's table follows it. */
+  astMode?: 'zone' | 'mic' | null;
   specimen?: string;
   gramStain?: string;
   colonyCount?: string;
