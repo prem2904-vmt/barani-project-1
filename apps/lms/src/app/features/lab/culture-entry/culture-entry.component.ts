@@ -100,56 +100,58 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               }
             </header>
 
-            <!-- ONE table per organism: aligned columns, CLSI reference in
-                 its own column, S/I/R auto-filled from the zone yet always
-                 editable in place. -->
+            <!-- Each verdict IS its cutoff: tap the S / I / R cell to set the
+                 result, edit the mm value inside it. The zone auto-highlights
+                 the right cell via CLSI. Rows flow into two columns on wide
+                 screens — no half-empty screen. -->
             <div class="ce-abx">
-              <div class="ce-abx__head" aria-hidden="true">
-                <span>Antimicrobial</span>
-                <span class="ce-abx__col--s">S ≥ mm</span>
-                <span class="ce-abx__col--i">I mm</span>
-                <span class="ce-abx__col--r">R ≤ mm</span>
-                <span>Zone</span><span>Result</span><span></span>
-              </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__name">{{ ab.name }}</span>
-                  <span class="ce-abx__bpv ce-abx__col--s">
+
+                  <span class="ce-abx__cell ce-abx__cell--s" role="button" tabindex="0"
+                        [class.ce-abx__cell--on]="ab.interpretation === 'S'"
+                        [title]="isAuto(oi, abi) && ab.interpretation === 'S' ? 'Auto from zone — tap another cell to override' : 'Susceptible when zone ≥ this'"
+                        (click)="setInterp(oi, abi, 'S')" (keydown.enter)="setInterp(oi, abi, 'S')">
+                    <span class="ce-abx__celllbl">S ≥</span>
                     <input type="number" class="ce-abx__bpin" inputmode="numeric"
                            [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
-                           placeholder="—" title="Susceptible when zone ≥ this (mm) — editable" />
+                           placeholder="—" (click)="$event.stopPropagation()" />
+                    <span class="ce-abx__cellunit">mm</span>
                   </span>
-                  <span class="ce-abx__bpv ce-abx__col--i">{{ effI(org.name, ab) }}</span>
-                  <span class="ce-abx__bpv ce-abx__col--r">
+
+                  <span class="ce-abx__cell ce-abx__cell--i" role="button" tabindex="0"
+                        [class.ce-abx__cell--on]="ab.interpretation === 'I'"
+                        title="Intermediate — the window between the cutoffs"
+                        (click)="setInterp(oi, abi, 'I')" (keydown.enter)="setInterp(oi, abi, 'I')">
+                    <span class="ce-abx__celllbl">I</span>
+                    <span class="ce-abx__iwin">{{ effI(org.name, ab) }}</span>
+                  </span>
+
+                  <span class="ce-abx__cell ce-abx__cell--r" role="button" tabindex="0"
+                        [class.ce-abx__cell--on]="ab.interpretation === 'R'"
+                        [title]="isAuto(oi, abi) && ab.interpretation === 'R' ? 'Auto from zone — tap another cell to override' : 'Resistant when zone ≤ this'"
+                        (click)="setInterp(oi, abi, 'R')" (keydown.enter)="setInterp(oi, abi, 'R')">
+                    <span class="ce-abx__celllbl">R ≤</span>
                     <input type="number" class="ce-abx__bpin" inputmode="numeric"
                            [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
-                           placeholder="—" title="Resistant when zone ≤ this (mm) — editable" />
+                           placeholder="—" (click)="$event.stopPropagation()" />
+                    <span class="ce-abx__cellunit">mm</span>
                   </span>
+
                   <span class="ce-abx__zonewrap">
                     <input type="number" class="ce-abx__zone" inputmode="numeric"
                            [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
-                           (keydown.enter)="focusNextZone($event)" placeholder="—" />
+                           (keydown.enter)="focusNextZone($event)" placeholder="zone" />
                     <span class="ce-abx__unit">mm</span>
                   </span>
-                  <span class="ce-abx__sir">
-                    @for (v of ['S','I','R']; track v) {
-                      <button type="button" class="ce-abx__sirbtn"
-                        [style.borderColor]="ab.interpretation === v ? toneColor(v) : 'var(--border-subtle)'"
-                        [style.color]="ab.interpretation === v ? '#fff' : 'var(--text-secondary)'"
-                        [style.background]="ab.interpretation === v ? toneColor(v) : 'transparent'"
-                        [attr.aria-label]="ab.name + ': ' + v"
-                        (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
-                    }
-                    @if (isAuto(oi, abi) && ab.interpretation) {
-                      <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Tap S/I/R to override.">auto</span>
-                    }
-                  </span>
+
                   <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
                 </div>
               }
+              <!-- The table's last row IS the add action. -->
               <div class="ce-abx__addrow">
-                <pf-select class="ce-org__abxpick" size="sm"
-                           [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
+                <pf-select [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
                            [values]="abxValuesOf(oi)" placeholder="+ Add antibiotic"
                            [triggerLabel]="'+ Add antibiotic'"
                            (valuesChange)="syncAbx(oi, $event)"></pf-select>
@@ -206,15 +208,10 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-org__spacer { flex: 1; }
     .ce-org__abxpick { width: 220px; flex-shrink: 0; }
 
-    /* ── Antibiotic table: one aligned column set, verdict-tinted rows ── */
-    .ce-abx { display: flex; flex-direction: column; gap: 4px; max-width: 1040px; }
-    .ce-abx__head, .ce-abx__row {
-      display: grid; grid-template-columns: minmax(180px, 1fr) 62px 76px 62px 116px 172px 30px;
-      gap: 10px; align-items: center;
-    }
-    .ce-abx__head { padding: 2px 14px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
-      text-transform: uppercase; color: var(--text-tertiary, #64748b); }
-    .ce-abx__row { padding: 7px 14px; border-radius: 12px;
+    /* ── Antibiotic rows: verdict cells carry their own cutoffs ── */
+    .ce-abx { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(620px, 100%), 1fr)); gap: 8px 20px; }
+    .ce-abx__row { display: grid; grid-template-columns: minmax(130px, 1fr) 108px 92px 108px 112px 24px;
+      gap: 8px; align-items: center; padding: 7px 12px; border-radius: 12px;
       border: 1px solid var(--border-subtle); background: var(--glass-bg);
       transition: border-color .15s ease, background .2s ease; }
     .ce-abx__row:hover { border-color: rgba(139,92,246,.45); }
@@ -223,54 +220,60 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
     .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ce-abx__bpv { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
-      text-align: center; white-space: nowrap; }
-    .ce-abx__bpin { width: 54px; height: 32px; text-align: center; font-size: 12.5px; font-weight: 600;
-      border-radius: 8px; background: var(--input-bg); border: 1px solid var(--input-border);
-      color: inherit; outline: none; font-variant-numeric: tabular-nums;
-      -moz-appearance: textfield; appearance: textfield; }
+
+    /* One cell = the verdict AND its cutoff. Tap to pick, type to adjust. */
+    .ce-abx__cell { display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+      height: 40px; border-radius: 10px; border: 1px solid var(--border-subtle); cursor: pointer;
+      background: transparent; user-select: none;
+      transition: background .15s ease, border-color .15s ease, transform .12s cubic-bezier(0.16,1,0.3,1); }
+    .ce-abx__cell:active { transform: scale(0.96); }
+    .ce-abx__cell:hover { border-color: rgba(139,92,246,.45); }
+    .ce-abx__celllbl { font-size: 11px; font-weight: 800; }
+    .ce-abx__cell--s .ce-abx__celllbl { color: #34d399; }
+    .ce-abx__cell--i .ce-abx__celllbl { color: #fbbf24; }
+    .ce-abx__cell--r .ce-abx__celllbl { color: #f87171; }
+    .ce-abx__cellunit { font-size: 10px; font-weight: 600; color: var(--text-tertiary, #64748b); }
+    .ce-abx__iwin { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .ce-abx__cell--s.ce-abx__cell--on { background: #10b981; border-color: #10b981; }
+    .ce-abx__cell--i.ce-abx__cell--on { background: #f59e0b; border-color: #f59e0b; }
+    .ce-abx__cell--r.ce-abx__cell--on { background: #ef4444; border-color: #ef4444; }
+    .ce-abx__cell--on .ce-abx__celllbl, .ce-abx__cell--on .ce-abx__cellunit,
+    .ce-abx__cell--on .ce-abx__iwin, .ce-abx__cell--on .ce-abx__bpin { color: #fff; }
+    .ce-abx__cell--on .ce-abx__bpin::placeholder { color: rgba(255,255,255,.7); }
+
+    /* The cutoff value lives INSIDE its verdict cell — borderless inline. */
+    .ce-abx__bpin { width: 32px; text-align: center; font-size: 13px; font-weight: 700;
+      background: transparent; border: none; outline: none; color: var(--text-primary);
+      font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; padding: 0; }
     .ce-abx__bpin::-webkit-inner-spin-button, .ce-abx__bpin::-webkit-outer-spin-button { display: none; }
-    .ce-abx__bpin:focus { border-color: var(--input-border-focus); }
+    .ce-abx__bpin:focus { box-shadow: inset 0 -2px 0 var(--input-border-focus, #8b5cf6); }
     .ce-abx__bpin::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
-    .ce-abx__addrow { padding: 6px 14px 2px; }
-    .ce-abx__addrow .ce-org__abxpick { width: 240px; }
-    .ce-abx__col--s { color: #34d399; }
-    .ce-abx__col--i { color: #fbbf24; }
-    .ce-abx__col--r { color: #f87171; }
-    .ce-abx__head .ce-abx__col--s, .ce-abx__head .ce-abx__col--i, .ce-abx__head .ce-abx__col--r { text-align: center; }
-    .ce-abx__row .ce-abx__bpv:where(:empty) { color: var(--text-tertiary); }
-    .ce-abx__zonewrap { display: inline-flex; align-items: center; gap: 6px; }
-    .ce-abx__zone { width: 68px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
+
+    .ce-abx__zonewrap { display: inline-flex; align-items: center; gap: 5px; }
+    .ce-abx__zone { width: 74px; height: 40px; text-align: center; font-size: 15px; font-weight: 600;
       border-radius: 10px; background: var(--input-bg); border: 1px solid var(--input-border);
       color: var(--input-text); outline: none; font-variant-numeric: tabular-nums;
       -moz-appearance: textfield; appearance: textfield; }
     .ce-abx__zone::-webkit-inner-spin-button, .ce-abx__zone::-webkit-outer-spin-button { display: none; }
     .ce-abx__zone:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
-    .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+    .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; font-size: 12px; }
     .ce-abx__unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary, #64748b); }
-    .ce-abx__sir { display: inline-flex; align-items: center; gap: 4px; }
-    .ce-abx__sirbtn { width: 34px; height: 32px; border-radius: 9px; border: 1px solid var(--border-subtle);
-      font-size: 12.5px; font-weight: 700; cursor: pointer;
-      transition: transform .12s cubic-bezier(0.16,1,0.3,1), background .15s ease, border-color .15s ease; }
-    .ce-abx__sirbtn:active { transform: scale(0.92); }
-    .ce-abx__auto { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-      color: var(--text-tertiary, #64748b); }
     .ce-abx__x { width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
       color: var(--text-tertiary); background: transparent; font-size: 14px; line-height: 1; }
     .ce-abx__x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
-    .ce-abx__none { margin: 4px 0; font-size: 12px; color: var(--text-tertiary); }
+
+    /* Add-antibiotic AS a row: dashed, full width, same shape as the rows. */
+    .ce-abx__addrow ::ng-deep .pf-dd__trigger { width: 100%; height: 46px; border-style: dashed;
+      background: transparent; color: var(--violet-text, #a78bfa); font-weight: 600; justify-content: center; }
+    .ce-abx__addrow ::ng-deep .pf-dd__trigger .pf-dd__value { flex: none; }
 
     /* ── Phone (additive; desktop untouched) ── */
     @media (max-width: 640px) {
-      :host .ce-abx__head { display: none; }
-      :host .ce-org__abxpick { width: 100%; }
-      :host .ce-abx__row { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      :host .ce-abx__row { display: flex; flex-wrap: wrap; gap: 6px 10px; }
       :host .ce-abx__name { flex-basis: 100%; }
-      :host .ce-abx__bpv { font-size: 11.5px; }
     }
     @media (pointer: coarse) {
-      :host .ce-abx__sirbtn { min-width: 44px; min-height: 44px; }
-      :host .ce-abx__zone { height: 44px; }
+      :host .ce-abx__cell, :host .ce-abx__zone { min-height: 44px; }
     }
 `]
 })
