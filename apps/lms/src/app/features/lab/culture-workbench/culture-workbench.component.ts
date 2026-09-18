@@ -320,11 +320,15 @@ interface StageField { name: string; title: string; type: string; options: strin
 
     .pf-cse__awaitpill { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #b45309;
       padding: 6px 12px; border-radius: 999px; background: rgba(245,158,11,0.14); }
-    .pf-cse__incubpill { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #0e7490;
-      padding: 6px 12px; border-radius: 999px; background: rgba(6,182,212,0.14); }
+    /* Amber = the app's waiting tone; the old dark teal sank into the bar. */
+    .pf-cse__incubpill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; color: #fbbf24; font-variant-numeric: tabular-nums;
+      padding: 6px 12px; border-radius: 999px; background: rgba(245,158,11,0.12);
+      border: 1px solid rgba(245,158,11,0.35); }
+    .pf-cse__incubpill svg { flex-shrink: 0; }
     .pf-cse__incubbtn { flex-shrink: 0; font-size: 12.5px; font-weight: 700; cursor: pointer;
-      padding: 8px 14px; border-radius: 10px; color: #22d3ee; background: rgba(6,182,212,0.10);
-      border: 1px solid rgba(6,182,212,0.4); }
+      padding: 8px 14px; border-radius: 10px; color: #fbbf24; background: rgba(245,158,11,0.10);
+      border: 1px solid rgba(245,158,11,0.4); }
     .pf-cse__incubbtn:disabled { opacity: .5; cursor: default; }
     .pf-cse__signout { flex-shrink: 0; padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; cursor: pointer; }
@@ -462,7 +466,7 @@ interface StageField { name: string; title: string; type: string; options: strin
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__incubwrap { position: relative; display: inline-flex; }
-    .pf-cse__incubpill--done { color: #34d399; border-color: rgba(52,211,153,.45); }
+    .pf-cse__incubpill--done { color: #34d399; border-color: rgba(52,211,153,.45); background: rgba(16,185,129,.1); }
     .pf-cse__incubpop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 230px;
       padding: 12px; border-radius: 12px; background: var(--bg-card-solid, #17131f);
       border: 1px solid var(--input-border-focus, rgba(139,92,246,.35));
