@@ -9,6 +9,11 @@ export interface AstRow {
    *  result — so the report records the cutoffs actually used. */
   sMin?: number | null;
   rMax?: number | null;
+  /** Entry mode: 'zone' (disk diffusion, mm) or 'mic' (dilution, µg/mL).
+   *  Defaults per row: mic when only MIC breakpoints exist, zone otherwise. */
+  mode?: 'zone' | 'mic' | null;
+  /** Measured MIC (µg/mL) — interpreted against the MIC breakpoints. */
+  micValue?: string | null;
 }
 
 export interface CultureOrganism {
