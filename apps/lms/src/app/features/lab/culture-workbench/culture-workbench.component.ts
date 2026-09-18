@@ -103,7 +103,11 @@ interface StageField { name: string; title: string; type: string; options: strin
               @if (cc.caseState === 'awaiting_signout') {
                 <span class="pf-cse__awaitpill">Awaiting sign-out</span>
               } @else if (allDone()) {
-                <button type="button" class="pf-cse__signout" [disabled]="busy()" (click)="submitForSignout()">Submit for sign-out</button>
+                @if (canValidate()) {
+                  <button type="button" class="pf-cse__signout" [disabled]="busy()" (click)="submitAndValidate()">Validate &amp; submit</button>
+                } @else {
+                  <button type="button" class="pf-cse__signout" [disabled]="busy()" (click)="submitForSignout()">Submit for sign-out</button>
+                }
               } @else {
                 <span class="pf-cse__progresspill">{{ doneCount() }} / {{ cc.stages.length }} stages</span>
               }
@@ -177,6 +181,10 @@ interface StageField { name: string; title: string; type: string; options: strin
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="drop(s)">Drop</button>
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
                         <button type="button" class="pf-stg__submit press" [disabled]="busy()" (click)="submit(s)">Submit</button>
+                      }
+                      @if (s.state === 'done' && cc.caseState === 'active') {
+                        <!-- Submitted ≠ sealed: editable until the case leaves for sign-out. -->
+                        <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="reopen(s)">Edit</button>
                       }
                     </div>
                   </header>
@@ -1089,6 +1097,61 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       error: (e: { error?: { message?: string } }) => {
         this.busy.set(false);
         this.toasts.error(e?.error?.message || 'Could not submit the stage');
+        this.load();
+      },
+    });
+  }
+
+  /** Reopen a done stage — values prefill so the tech edits, not re-types. */
+  reopen(s: CultureStageView) {
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/reopen${this.q()}`, {}).subscribe({
+      next: t => {
+        this.busy.set(false);
+        if (t) this.c.set(t);
+        this.prefillFromStage(s.key);
+        this.toasts.success(`${s.label} reopened for editing`);
+      },
+      error: (e: { error?: { message?: string } }) => {
+        this.busy.set(false);
+        this.toasts.error(e?.error?.message || 'Could not reopen the stage');
+        this.load();
+      },
+    });
+  }
+  /** Seed the editable drafts from the stage's submitted values. */
+  private prefillFromStage(stageKey: string) {
+    const st = this.view()?.stages?.find(x => x.key === stageKey);
+    if (!st?.valuesJson) return;
+    try {
+      const o = JSON.parse(st.valuesJson) as { fields?: { name?: string; value?: string }[]; notes?: string; organisms?: unknown };
+      if (stageKey === 'ast') {
+        this.astValue.set(JSON.parse(st.valuesJson) as CultureResult);
+        this.astOpen.set(true);
+        return;
+      }
+      if (Array.isArray(o.fields)) {
+        for (const f of o.fields) if (f.name) this.setField(stageKey, f.name, f.value ?? '');
+      } else if (o.notes) {
+        this.onDraft(stageKey, o.notes);
+      }
+    } catch { /* unreadable payload → start clean */ }
+  }
+
+  /** The tech also validates — one step, no validation-queue detour. The
+   *  backend still enforces the two-person rule (validate_own_result). */
+  canValidate(): boolean { return this.auth.hasPermission('validate_result'); }
+  submitAndValidate() {
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/signout-validate`, {}).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.toasts.success('Validated & signed out');
+        this.router.navigate(['/lab/my-work']);
+      },
+      error: (e: { error?: { message?: string } }) => {
+        this.busy.set(false);
+        this.toasts.error(e?.error?.message || 'Could not validate — it may need a second person.');
         this.load();
       },
     });
