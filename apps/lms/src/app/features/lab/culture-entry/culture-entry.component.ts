@@ -10,7 +10,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
   susceptibleMin: number | null; resistantMax: number | null;
-  shortLabel?: string | null; enabled?: boolean;
+  shortLabel?: string | null; enabled?: boolean; organism?: string | null;
 }
 
 /**
@@ -366,8 +366,6 @@ export class CultureEntryComponent implements OnInit {
   // Camera measure-assist: index of the organism whose plate is being measured.
   readonly measureOrg = signal<number | null>(null);
 
-  // CLSI breakpoints (group|antibiotic → {s,r}) for zone auto-interpretation.
-  private bps = new Map<string, { s: number; r: number }>();
   /** The raw breakpoint rows — the SOURCE of each organism's default panel:
    *  an organism starts with exactly the drugs CLSI can interpret for it. */
   private bpList: Breakpoint[] = [];
@@ -435,14 +433,10 @@ export class CultureEntryComponent implements OnInit {
     });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {
-        // Rows the lab disabled in the Test Master never reach the bench.
-        const enabled = (list ?? []).filter(b => b.enabled !== false);
-        const m = new Map<string, { s: number; r: number }>();
-        for (const b of enabled)
-          if (b.susceptibleMin != null && b.resistantMax != null)
-            m.set(`${b.organismGroup.toLowerCase()}|${b.antibiotic.toLowerCase()}`, { s: b.susceptibleMin, r: b.resistantMax });
-        this.bps = m;
-        this.bpList = enabled;
+        // Keep ALL rows (incl. disabled + organism-pinned) — effective rows
+        // are resolved PER ORGANISM: a row pinned to the isolate outranks its
+        // group row, and only then does the enabled filter apply.
+        this.bpList = list ?? [];
         // Organisms seeded before the breakpoints arrived have empty panels —
         // fill them now that we know which drugs CLSI covers.
         this.backfillClsiPanels();
@@ -552,10 +546,14 @@ export class CultureEntryComponent implements OnInit {
   private clsiPanelFor(orgName: string): string[] {
     const group = this.organismGroup(orgName);
     if (!group) return [];
+    // Per-antibiotic: the organism-pinned row (if any) decides; disabled
+    // rows drop the drug from THIS organism's panel only.
     const names = new Set<string>();
     for (const b of this.bpList)
       if (b.organismGroup.toLowerCase() === group.toLowerCase()) names.add(b.antibiotic);
-    return [...names].sort((a, b) => a.localeCompare(b));
+    return [...names]
+      .filter(n => this.effectiveRow(orgName, n) !== undefined)
+      .sort((a, b) => a.localeCompare(b));
   }
   private clsiRows(orgName: string) {
     // CLSI-covered group → exactly its interpretable drugs. Anything else
@@ -657,10 +655,24 @@ export class CultureEntryComponent implements OnInit {
     return bp ? `CLSI: S ≥ ${bp.s} mm, R ≤ ${bp.r} mm` : 'No CLSI breakpoint — enter S/I/R manually';
   }
 
-  private bpFor(orgName?: string, abName?: string): { s: number; r: number } | undefined {
+  /** The row effective for THIS organism × drug: organism-pinned beats the
+   *  group row; disabled rows yield nothing. */
+  private effectiveRow(orgName?: string, abName?: string): Breakpoint | undefined {
     const group = this.organismGroup(orgName);
     if (!group || !abName) return undefined;
-    return this.bps.get(`${group.toLowerCase()}|${abName.toLowerCase()}`);
+    const g = group.toLowerCase(), a = abName.toLowerCase(), n = (orgName ?? '').trim().toLowerCase();
+    let best: Breakpoint | undefined;
+    for (const b of this.bpList) {
+      if (b.organismGroup.toLowerCase() !== g || b.antibiotic.toLowerCase() !== a) continue;
+      if (b.organism && b.organism.toLowerCase() !== n) continue;
+      if (!best || (!best.organism && b.organism)) best = b;
+    }
+    return best?.enabled === false ? undefined : best;
+  }
+  private bpFor(orgName?: string, abName?: string): { s: number; r: number } | undefined {
+    const b = this.effectiveRow(orgName, abName);
+    return b && b.susceptibleMin != null && b.resistantMax != null
+      ? { s: b.susceptibleMin, r: b.resistantMax } : undefined;
   }
 
   /** Resolve an organism onto a CLSI breakpoint group: the master's Group

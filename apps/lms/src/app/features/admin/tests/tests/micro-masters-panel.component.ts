@@ -32,7 +32,7 @@ interface Breakpoint {
   shortLabel?: string | null; diskLabel?: string | null;
   zoneI?: string | null; zoneSdd?: string | null;
   micS?: string | null; micSdd?: string | null; micI?: string | null; micR?: string | null;
-  urineOnly?: boolean; enabled?: boolean;
+  urineOnly?: boolean; enabled?: boolean; organism?: string | null;
 }
 
 type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
@@ -218,6 +218,7 @@ interface EdModel {
                   </button>
                   <span class="pf-mm__mapname">{{ b.antibiotic }}
                     @if (b.shortLabel) { <span class="pf-mm__short">{{ b.shortLabel }}</span> }
+                    @if (b.organism) { <span class="pf-mm__short" title="Customised for this organism only">this organism</span> }
                   </span>
                   @if (b.susceptibleMin != null && b.resistantMax != null) {
                     <span class="pf-mm__mapbp">
@@ -633,11 +634,22 @@ export class MicroMastersPanelComponent implements OnInit {
       if (l.includes(k)) return 'Enterobacterales';
     return s;
   }
+  /** The rows effective for THIS organism: its group's rows, with any row
+   *  pinned to this organism outranking the group row per antibiotic —
+   *  so a toggle/edit here never leaks to the rest of the group. */
   mappedFor(org: MicroOrganism): Breakpoint[] {
     const g = this.resolveGroup(org).toLowerCase();
-    return this.breakpoints()
-      .filter(b => b.organismGroup.toLowerCase() === g)
-      .sort((a, b) => a.antibiotic.localeCompare(b.antibiotic));
+    const name = org.name.toLowerCase();
+    const candidates = this.breakpoints().filter(b =>
+      b.organismGroup.toLowerCase() === g
+      && (!b.organism || b.organism.toLowerCase() === name));
+    const byAbx = new Map<string, Breakpoint>();
+    for (const b of candidates) {
+      const k = b.antibiotic.toLowerCase();
+      const cur = byAbx.get(k);
+      if (!cur || (!cur.organism && b.organism)) byAbx.set(k, b);
+    }
+    return [...byAbx.values()].sort((a, b) => a.antibiotic.localeCompare(b.antibiotic));
   }
   addableAbx(org: MicroOrganism): PfSelectOption<string>[] {
     const have = new Set(this.mappedFor(org).map(b => b.antibiotic.toLowerCase()));
@@ -674,6 +686,7 @@ export class MicroMastersPanelComponent implements OnInit {
       antibiotic: this.addAbxName(),
       susceptibleMin: this.addS(),
       resistantMax: this.addR(),
+      organism: org.name,          // pinned: this organism's panel alone
     }).subscribe({
       next: () => {
         this.saving.set(false);
@@ -684,11 +697,14 @@ export class MicroMastersPanelComponent implements OnInit {
       error: (e: { message?: string }) => { this.saving.set(false); this.toasts.error(e?.message || 'Could not save the mapping'); },
     });
   }
-  /** Only enabled drugs reach the bench's AST table for this organism. */
+  /** Only enabled drugs reach the bench's AST table for this organism —
+   *  the toggle writes an organism-pinned row, so ONLY this organism moves. */
   toggleMapping(b: Breakpoint) {
+    const org = this.selOrg();
     const next = b.enabled === false;
     this.api.post('/api/microbiology/breakpoints/toggle', {
       organismGroup: b.organismGroup, antibiotic: b.antibiotic, enabled: next,
+      organism: org?.name ?? b.organism ?? null,
     }).subscribe({
       next: () => {
         this.toasts.success(`${b.antibiotic} ${next ? 'enabled' : 'disabled'} for this panel`);
@@ -698,7 +714,8 @@ export class MicroMastersPanelComponent implements OnInit {
     });
   }
   removeMapping(org: MicroOrganism, b: Breakpoint) {
-    this.api.delete(`/api/microbiology/breakpoints?organismGroup=${encodeURIComponent(b.organismGroup)}&antibiotic=${encodeURIComponent(b.antibiotic)}`)
+    const orgQ = b.organism ? `&organism=${encodeURIComponent(b.organism)}` : '';
+    this.api.delete(`/api/microbiology/breakpoints?organismGroup=${encodeURIComponent(b.organismGroup)}&antibiotic=${encodeURIComponent(b.antibiotic)}${orgQ}`)
       .subscribe({
         next: () => { this.toasts.success(`${b.antibiotic} removed`); this.reloadBreakpoints(); },
         error: (e: { message?: string }) => this.toasts.error(e?.message || 'Could not remove the mapping'),
