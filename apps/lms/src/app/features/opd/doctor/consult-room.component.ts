@@ -54,7 +54,7 @@ interface VitalField {
         </div>
       </header>
 
-      <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-28">
+      <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-2">
         @if (c(); as cc) {
           <div class="cr-grid">
             <!-- ══ The patient's story — journey, files, trends ══ -->
@@ -62,77 +62,82 @@ interface VitalField {
               <pf-patient-timeline [patientId]="cc.patientId" [embedded]="true"></pf-patient-timeline>
             </main>
 
-            <!-- ══ The consult ══ -->
+            <!-- ══ The consult — one panel, tabbed ══ -->
             <aside class="cr-rail">
-              <div class="cr-card">
-                <p class="cr-lbl">Vitals</p>
-                <div class="cr-vgrid">
-                  @for (f of vitalFields; track f.key) {
-                    <label class="cr-vfield" [class.cr-vfield--flag]="vitalFlagged(f)">
-                      <span class="cr-vfield__lbl">{{ f.label }}</span>
-                      <span class="cr-vfield__wrap">
-                        <input type="number" inputmode="decimal" class="cr-vfield__in"
-                               [ngModel]="vitals()[f.key]" (ngModelChange)="setVital(f.key, $event)"
-                               [disabled]="readonly()" placeholder="—" />
-                        <em>{{ f.unit }}</em>
-                      </span>
-                    </label>
-                  }
-                </div>
-              </div>
-
-              <div class="cr-card">
-                <label class="cr-lbl" for="cr-complaint">Complaint & findings</label>
-                <textarea id="cr-complaint" class="cr-text" rows="3" [ngModel]="complaint()" (ngModelChange)="complaint.set($event)"
-                          [disabled]="readonly()" placeholder="Chief complaint, duration, examination findings…"></textarea>
-                <label class="cr-lbl cr-lbl--gap" for="cr-diagnosis">Diagnosis</label>
-                <input id="cr-diagnosis" type="text" class="cr-in" [ngModel]="diagnosis()" (ngModelChange)="diagnosis.set($event)"
-                       [disabled]="readonly()" placeholder="Provisional / final diagnosis" />
-              </div>
-
-              <div class="cr-card">
-                <p class="cr-lbl">Prescription</p>
-                @if (rx().length === 0 && readonly()) {
-                  <p class="cr-empty">No drugs prescribed.</p>
+              <div class="cr-tabs" role="tablist" aria-label="Consult sections">
+                @for (t of tabs; track t.key) {
+                  <button type="button" class="cr-tab press" role="tab"
+                          [class.cr-tab--on]="tab() === t.key" [attr.aria-selected]="tab() === t.key"
+                          (click)="tab.set(t.key)">{{ t.label }}</button>
                 }
-                @for (r of rx(); track $index; let i = $index) {
-                  <div class="cr-rx">
-                    <input type="text" class="cr-in cr-rx__drug" [ngModel]="r.drug" (ngModelChange)="setRx(i, 'drug', $event)"
-                           [disabled]="readonly()" placeholder="Drug & strength" [attr.aria-label]="'Drug ' + (i + 1)" />
-                    <div class="cr-rx__row">
-                      <input type="text" class="cr-in cr-rx__dose" [ngModel]="r.dose" (ngModelChange)="setRx(i, 'dose', $event)"
-                             [disabled]="readonly()" placeholder="Dose" aria-label="Dose" />
-                      <pf-select class="cr-rx__freq" size="sm" [options]="freqOpts" [value]="r.frequency"
-                                 placeholder="Frequency" [disabled]="readonly()"
-                                 (valueChange)="setRx(i, 'frequency', $event)"></pf-select>
-                      <input type="number" class="cr-in cr-rx__days" inputmode="numeric" [ngModel]="r.durationDays"
-                             (ngModelChange)="setRx(i, 'durationDays', $event)" [disabled]="readonly()"
-                             placeholder="Days" aria-label="Duration (days)" />
-                      @if (!readonly()) {
-                        <button type="button" class="cr-rx__x press" (click)="removeRx(i)" [attr.aria-label]="'Remove ' + (r.drug || 'drug')">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-                        </button>
+              </div>
+
+              <div class="cr-pane">
+                @switch (tab()) {
+                  @case ('vitals') {
+                    <div class="cr-vgrid">
+                      @for (f of vitalFields; track f.key) {
+                        <label class="cr-vfield" [class.cr-vfield--flag]="vitalFlagged(f)">
+                          <span class="cr-vfield__lbl">{{ f.label }}</span>
+                          <span class="cr-vfield__wrap">
+                            <input type="number" inputmode="decimal" class="cr-vfield__in"
+                                   [ngModel]="vitals()[f.key]" (ngModelChange)="setVital(f.key, $event)"
+                                   [disabled]="readonly()" placeholder="—" />
+                            <em>{{ f.unit }}</em>
+                          </span>
+                        </label>
                       }
                     </div>
-                    <input type="text" class="cr-in cr-rx__note" [ngModel]="r.instructions" (ngModelChange)="setRx(i, 'instructions', $event)"
-                           [disabled]="readonly()" placeholder="Instructions (after food, with water…)" aria-label="Instructions" />
-                  </div>
+                  }
+                  @case ('notes') {
+                    <label class="cr-lbl" for="cr-complaint">Complaint & findings</label>
+                    <textarea id="cr-complaint" class="cr-text" rows="5" [ngModel]="complaint()" (ngModelChange)="complaint.set($event); dirty.set(true)"
+                              [disabled]="readonly()" placeholder="Chief complaint, duration, examination findings…"></textarea>
+                    <label class="cr-lbl cr-lbl--gap" for="cr-diagnosis">Diagnosis</label>
+                    <input id="cr-diagnosis" type="text" class="cr-in" [ngModel]="diagnosis()" (ngModelChange)="diagnosis.set($event); dirty.set(true)"
+                           [disabled]="readonly()" placeholder="Provisional / final diagnosis" />
+                    <label class="cr-lbl cr-lbl--gap" for="cr-advice">Advice</label>
+                    <textarea id="cr-advice" class="cr-text" rows="3" [ngModel]="advice()" (ngModelChange)="advice.set($event); dirty.set(true)"
+                              [disabled]="readonly()" placeholder="Diet, rest, red flags to watch for…"></textarea>
+                  }
+                  @case ('rx') {
+                    @if (rx().length === 0 && readonly()) {
+                      <p class="cr-empty">No drugs prescribed.</p>
+                    }
+                    @for (r of rx(); track $index; let i = $index) {
+                      <div class="cr-rx">
+                        <input type="text" class="cr-in cr-rx__drug" [ngModel]="r.drug" (ngModelChange)="setRx(i, 'drug', $event)"
+                               [disabled]="readonly()" placeholder="Drug & strength" [attr.aria-label]="'Drug ' + (i + 1)" />
+                        <div class="cr-rx__row">
+                          <input type="text" class="cr-in cr-rx__dose" [ngModel]="r.dose" (ngModelChange)="setRx(i, 'dose', $event)"
+                                 [disabled]="readonly()" placeholder="Dose" aria-label="Dose" />
+                          <pf-select class="cr-rx__freq" size="sm" [options]="freqOpts" [value]="r.frequency"
+                                     placeholder="Frequency" [disabled]="readonly()"
+                                     (valueChange)="setRx(i, 'frequency', $event)"></pf-select>
+                          <input type="number" class="cr-in cr-rx__days" inputmode="numeric" [ngModel]="r.durationDays"
+                                 (ngModelChange)="setRx(i, 'durationDays', $event)" [disabled]="readonly()"
+                                 placeholder="Days" aria-label="Duration (days)" />
+                          @if (!readonly()) {
+                            <button type="button" class="cr-rx__x press" (click)="removeRx(i)" [attr.aria-label]="'Remove ' + (r.drug || 'drug')">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                            </button>
+                          }
+                        </div>
+                        <input type="text" class="cr-in cr-rx__note" [ngModel]="r.instructions" (ngModelChange)="setRx(i, 'instructions', $event)"
+                               [disabled]="readonly()" placeholder="Instructions (after food, with water…)" aria-label="Instructions" />
+                      </div>
+                    }
+                    @if (!readonly()) {
+                      <button type="button" class="cr-add press" (click)="addRx()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                        Add drug
+                      </button>
+                    }
+                    <label class="cr-lbl cr-lbl--gap">Follow-up</label>
+                    <pf-select class="cr-follow" [options]="followOpts" [value]="followUp()" [disabled]="readonly()"
+                               (valueChange)="followUp.set($event); dirty.set(true)"></pf-select>
+                  }
                 }
-                @if (!readonly()) {
-                  <button type="button" class="cr-add press" (click)="addRx()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                    Add drug
-                  </button>
-                }
-              </div>
-
-              <div class="cr-card">
-                <label class="cr-lbl" for="cr-advice">Advice</label>
-                <textarea id="cr-advice" class="cr-text" rows="2" [ngModel]="advice()" (ngModelChange)="advice.set($event)"
-                          [disabled]="readonly()" placeholder="Diet, rest, red flags to watch for…"></textarea>
-                <label class="cr-lbl cr-lbl--gap">Follow-up</label>
-                <pf-select class="cr-follow" [options]="followOpts" [value]="followUp()" [disabled]="readonly()"
-                           (valueChange)="followUp.set($event)"></pf-select>
               </div>
             </aside>
           </div>
@@ -187,49 +192,28 @@ interface VitalField {
     .cr-status[data-status='in_consult'] { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.4); }
     :root.dark .cr-status[data-status='waiting'] { color: #fbbf24; }
 
-    .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
-    @media (min-width: 1200px) { .cr-grid { grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; } }
-    .cr-journey { min-width: 0; height: min(74vh, 820px); }
+    /* ONE screen: the grid fills the page body; only the rail pane and the
+       journey's own internals scroll. */
+    .pf-page__body { display: flex; }
+    .cr-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; width: 100%; }
+    .cr-journey { min-width: 0; min-height: 0; }
     .cr-journey pf-patient-timeline { display: block; height: 100%; }
-    @media (max-width: 1199px) { .cr-journey { height: 60vh; } }
-    .cr-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-    @media (min-width: 1200px) { .cr-rail { position: sticky; top: 4px; } }
+    .cr-rail { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-radius: 16px;
+      border: 1px solid var(--glass-border); background: var(--glass-bg); overflow: hidden; }
 
-    .cr-card { padding: 13px 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .cr-tabs { flex: 0 0 auto; display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border-muted); }
+    .cr-tab { flex: 1; height: 32px; border-radius: 9999px; border: 1px solid transparent; background: transparent;
+      color: var(--text-tertiary); font-size: 12.5px; font-weight: 700; cursor: pointer;
+      transition: background .15s, color .15s; }
+    .cr-tab--on { background: var(--gradient-primary); color: #fff; }
+    @media (hover: hover) { .cr-tab:not(.cr-tab--on):hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
+
+    .cr-pane { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; padding-bottom: 84px; }
+
     .cr-lbl { display: block; margin: 0 0 8px; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
-    .cr-lbl--gap { margin-top: 12px; }
+    .cr-lbl--gap { margin-top: 14px; }
     .cr-empty { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
-
-    .cr-vgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
-    .cr-vfield { display: flex; flex-direction: column; gap: 3px; }
-    .cr-vfield__lbl { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
-    .cr-vfield__wrap { display: flex; align-items: center; gap: 6px; }
-    .cr-vfield__in { width: 100%; min-width: 0; padding: 7px 9px; border-radius: 8px; font-size: 13.5px; font-weight: 600;
-      font-variant-numeric: tabular-nums; background: var(--bg-card-solid); border: 1px solid var(--glass-border);
-      color: var(--text-primary); outline: none; }
-    .cr-vfield__in:focus { border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
-    .cr-vfield__wrap em { font-style: normal; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
-    .cr-vfield--flag .cr-vfield__in { border-color: rgba(245, 158, 11, 0.55); color: #d97706; }
-    :root.dark .cr-vfield--flag .cr-vfield__in { color: #fbbf24; }
-
-    .cr-text, .cr-in { width: 100%; padding: 9px 11px; border-radius: 9px; font-size: 13px; background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border); color: var(--text-primary); outline: none; font-family: inherit; }
-    .cr-text { resize: vertical; }
-    .cr-text:focus, .cr-in:focus { border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
-    .cr-text:disabled, .cr-in:disabled, .cr-vfield__in:disabled { opacity: .7; }
-
-    .cr-rx { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; }
-    .cr-rx + .cr-rx { border-top: 1px solid var(--border-muted); }
-    .cr-rx__row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 64px auto; gap: 6px; align-items: center; }
-    .cr-rx__x { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 9999px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; }
-    @media (hover: hover) { .cr-rx__x:hover { color: var(--red-text, #f87171); background: rgba(239, 68, 68, 0.1); } }
-    .cr-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
-      padding: 9px; border-radius: 10px; border: 1px dashed var(--glass-border-hover); background: transparent;
-      color: var(--text-tertiary); font-size: 12.5px; font-weight: 600; cursor: pointer; }
-    @media (hover: hover) { .cr-add:hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
-    .cr-follow { display: block; max-width: 220px; }
 
     .cr-bar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30;
       padding: 0 16px; pointer-events: none; }
@@ -253,6 +237,13 @@ interface VitalField {
     .cr-btn--primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55); }
 
     .cr-missing { padding: 60px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    @media (max-width: 1199px) {
+      .pf-page__body { display: block; overflow-y: auto; }
+      .cr-grid { grid-template-columns: minmax(0, 1fr); }
+      .cr-journey { height: 58vh; }
+      .cr-rail { max-height: none; }
+      .cr-pane { overflow: visible; }
+    }
     @media (max-width: 640px) {
       :host .cr-text, :host .cr-in, :host .cr-vfield__in { font-size: 16px; }
       :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height, 5.75rem) + 150px); }
@@ -274,6 +265,13 @@ export class ConsultRoomComponent implements OnInit {
     const s = this.c()?.status;
     return s === 'done' || s === 'cancelled';
   });
+
+  readonly tabs: Array<{ key: 'vitals' | 'notes' | 'rx'; label: string }> = [
+    { key: 'vitals', label: 'Vitals' },
+    { key: 'notes', label: 'Notes' },
+    { key: 'rx', label: 'Prescription' },
+  ];
+  readonly tab = signal<'vitals' | 'notes' | 'rx'>('vitals');
 
   readonly vitals = signal<Vitals>({});
   readonly complaint = signal('');
