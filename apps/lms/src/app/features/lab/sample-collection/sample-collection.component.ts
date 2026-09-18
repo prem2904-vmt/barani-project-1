@@ -1,5 +1,5 @@
 import { DatePipe } from "@angular/common";
-import {
+import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
@@ -13,10 +13,12 @@ import {
   output,
   signal,
 } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
+import { LiveQueueService } from "../../../core/services/live-queue.service";
 import { ScanService } from "../../../core/services/scan.service";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
@@ -347,6 +349,8 @@ interface OrderGroup {
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly printer = inject(PrinterService);
@@ -841,6 +845,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    // Live queue: refetch when an order is created / a tube changes (no polling).
+    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     // Per-branch label config (size + code) for direct-to-printer label print.
     this.labCfg.ensureLoaded();
     // Load the lab's configured container colours (best-effort — falls back to
