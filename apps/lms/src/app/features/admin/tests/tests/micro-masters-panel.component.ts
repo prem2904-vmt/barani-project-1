@@ -101,6 +101,7 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
                   <span class="pf-mm__mapname">{{ b.antibiotic }}</span>
                   <span class="pf-mm__mapbp">
                     <em class="pf-mm__s">S ≥ {{ b.susceptibleMin }}</em>
+                    <em class="pf-mm__i">I {{ iWindow(b.susceptibleMin, b.resistantMax) }}</em>
                     <em class="pf-mm__r">R ≤ {{ b.resistantMax }}</em>
                   </span>
                   @if (b.tenant) {
@@ -122,6 +123,9 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
               <div class="pf-mm__cutrow">
                 <label class="pf-mm__cut"><span class="pf-mm__s">S ≥</span>
                   <input type="number" class="pf-mm__cutin" [ngModel]="addS()" (ngModelChange)="addS.set($event)" placeholder="mm" /></label>
+                <span class="pf-mm__cut pf-mm__i" title="Intermediate — derived between the cutoffs">
+                  I {{ addS() != null && addR() != null ? iWindow(addS()!, addR()!) : '—' }}
+                </span>
                 <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
                   <input type="number" class="pf-mm__cutin" [ngModel]="addR()" (ngModelChange)="addR.set($event)" placeholder="mm" /></label>
                 <button type="button" class="pf-mm__save" [disabled]="!canAdd() || saving()"
@@ -183,6 +187,7 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
       font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pf-mm__mapbp em { font-style: normal; }
     .pf-mm__s { color: #34d399; }
+    .pf-mm__i { color: #fbbf24; }
     .pf-mm__r { color: #f87171; }
     .pf-mm__lab { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
       color: #a78bfa; border: 1px solid rgba(124,58,237,.4); border-radius: 999px; padding: 1px 7px; }
@@ -345,6 +350,10 @@ export class MicroMastersPanelComponent implements OnInit {
     return this.antibiotics()
       .filter(a => !have.has(a.name.toLowerCase()))
       .map(a => ({ value: a.name, label: a.name, hint: a.abxClass ?? undefined }));
+  }
+  /** The Intermediate window — derived, mm between the cutoffs. */
+  iWindow(s: number, r: number): string {
+    return s - 1 >= r + 1 ? `${r + 1}–${s - 1}` : '—';
   }
   canAdd(): boolean {
     const s = this.addS(), r = this.addR();
