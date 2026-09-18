@@ -391,27 +391,50 @@ export class CultureEntryComponent implements OnInit {
 
   /**
    * Organisms identified upstream (the case's Organism-identification stage).
-   * Each name not already present is appended with the specimen's default
-   * antibiotic panel — so the sensitivity table always mirrors what was
-   * identified. Merge-only: never removes or rewrites rows the tech already
-   * has, and deliberately bypasses the userEdited guard (an identification
-   * made AFTER the tech started on AST must still appear).
+   * RECONCILES the sensitivity cards with the identification: newly
+   * identified organisms are appended with their CLSI panels, and organisms
+   * REMOVED from the identification disappear here too — unless the tech
+   * already entered data on them (zones, verdicts, or a plate photo), which
+   * is never silently discarded. Bypasses the userEdited guard on purpose:
+   * an identification change AFTER the tech started on AST must still land.
    */
   @Input() set seedOrganisms(names: string[] | null | undefined) {
-    if (!names?.length) return;
+    const wanted = (names ?? []).map(n => n.trim()).filter(Boolean);
+    if (!wanted.length) return;                     // cleared upstream → rows stay (remove via ×)
     const cur = this._m();
-    const have = new Set((cur.organisms ?? []).map(o => o.name.trim().toLowerCase()));
-    const missing = names.map(n => n.trim()).filter(n => n && !have.has(n.toLowerCase()));
-    if (!missing.length) return;
-    const next: CultureResult = {
-      ...cur, noGrowth: false,
-      organisms: [...(cur.organisms ?? []), ...missing.map(name => ({
-        name, antibiotics: this.clsiRows(name),
-      }))],
-    };
+    const old = cur.organisms ?? [];
+    const wantedSet = new Set(wanted.map(n => n.toLowerCase()));
+
+    // Drop un-identified organisms with nothing entered; keep touched ones.
+    const keptWithIndex = old
+      .map((o, oi) => ({ o, oi }))
+      .filter(({ o }) => wantedSet.has(o.name.trim().toLowerCase())
+        || o.antibiotics.some(a => a.zoneSize != null || a.interpretation)
+        || !!o.plateImageUrl);
+
+    const have = new Set(keptWithIndex.map(({ o }) => o.name.trim().toLowerCase()));
+    const missing = wanted.filter(n => !have.has(n.toLowerCase()));
+    if (keptWithIndex.length === old.length && !missing.length) return;
+
+    // Re-index the manual S/I/R flags to the surviving organisms' positions.
+    const indexMap = new Map<number, number>();
+    keptWithIndex.forEach(({ oi }, ni) => indexMap.set(oi, ni));
+    const remapped = new Set<string>();
+    for (const key of this.manual) {
+      const [oi, abi] = key.split(':');
+      const ni = indexMap.get(Number(oi));
+      if (ni != null) remapped.add(`${ni}:${abi}`);
+    }
+    this.manual.clear();
+    for (const k of remapped) this.manual.add(k);
+
+    const organisms = [...keptWithIndex.map(({ o }) => o), ...missing.map(name => ({
+      name, antibiotics: this.clsiRows(name),
+    }))];
+    const next: CultureResult = { ...cur, noGrowth: false, organisms };
     this._m.set(next);
     this.valueChange.emit(next);
-    this.organismsOpen.set(true);
+    this.organismsOpen.set(organisms.length > 0);
   }
 
   /** The AST antibiotic vocabulary — names come ONLY from this master. */
