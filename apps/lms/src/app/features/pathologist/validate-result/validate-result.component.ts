@@ -36,6 +36,10 @@ interface CultureStageSnap {
   key: string;
   label: string;
   caseLabel?: string | null;
+  caseId?: string | null;
+  /** Bench provenance — who completed the stage, and when. */
+  doneByName?: string | null;
+  doneAt?: string | null;
   values: Record<string, unknown>;
 }
 
@@ -179,13 +183,27 @@ interface ValueRow {
                           <div><span class="pf-rail-lbl">Gram stain</span><p>{{ cr.gramStain || '—' }}</p></div>
                           <div><span class="pf-rail-lbl">Colony count</span><p>{{ cr.colonyCount || '—' }}</p></div>
                         </div>
-                        <!-- Stage-by-stage bench record: gram smear fields,
-                             growth, identification — and branch stages. -->
+                        @if (cr.noGrowth) {
+                          <p class="pf-culture-growth">No significant growth</p>
+                        }
+
+                        <!-- Stage-by-stage bench record — who did what, when,
+                             with a conversation on every stage and field. -->
                         @for (sg of cultureStagesFor(st); track $index) {
                           <div class="pf-cstage">
                             <h3 class="pf-cstage__name">
                               @if (sg.caseLabel) { <span class="pf-cstage__case">{{ sg.caseLabel }}</span> }
                               {{ sg.label }}
+                              @if (sg.doneByName || sg.doneAt) {
+                                <span class="pf-cstage__who">{{ sg.doneByName || '—' }}@if (sg.doneAt) { · {{ sg.doneAt | date:'MMM d, h:mm a' }} }</span>
+                              }
+                              <span class="grow"></span>
+                              <button type="button" class="pf-prow__cbtn press"
+                                      [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(stageKeyOf(sg))"
+                                      (click)="rowComment(st, stageKeyOf(sg))"
+                                      [attr.aria-label]="'Discuss ' + sg.label + ' with the bench'">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              </button>
                             </h3>
                             @if (sg.key === 'ast') {
                               <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
@@ -193,8 +211,16 @@ interface ValueRow {
                               @if (stageFields(sg.values); as sf) {
                                 @if (sf.length) {
                                   <dl class="pf-cstage__grid">
-                                    @for (f of sf; track f.title) {
-                                      <div><dt>{{ f.title }}</dt><dd>{{ f.value }}</dd></div>
+                                    @for (f of sf; track f.name) {
+                                      <div class="pf-cstage__fld">
+                                        <dt>{{ f.title }}</dt><dd>{{ f.value }}</dd>
+                                        <button type="button" class="pf-prow__cbtn pf-cstage__fbtn press"
+                                                [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(fieldParam(sg, f.name))"
+                                                (click)="rowComment(st, fieldParam(sg, f.name))"
+                                                [attr.aria-label]="'Discuss ' + f.title + ' with the bench'">
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                        </button>
+                                      </div>
                                     }
                                   </dl>
                                 }
@@ -208,20 +234,30 @@ interface ValueRow {
                               }
                               @if (stageNotes(sg.values)) { <p class="pf-cstage__notes">{{ stageNotes(sg.values) }}</p> }
                             }
+                            @if (selected()?.id === st.id && openThreadFor(sg); as th) {
+                              <div class="pf-cstage__thread" (click)="$event.stopPropagation()">
+                                <pf-comment-thread
+                                  [comments]="commentsFor(th.param)"
+                                  currentRole="validator"
+                                  [composeLabel]="'Comment on ' + th.label"
+                                  (add)="addParameterComment(th.param, $event.body, $event.type)"
+                                  (reply)="replyToParameter(th.param, $event.parentId, $event.body)">
+                                </pf-comment-thread>
+                              </div>
+                            }
                           </div>
                         }
 
-                        @if (cr.noGrowth) {
-                          <p class="pf-culture-growth">No significant growth</p>
-                        } @else if ((cr.organisms ?? []).length === 0) {
-                          <p class="pf-culture-empty">No organisms recorded.</p>
-                        } @else {
-                          <div class="pf-cstage">
-                            <h3 class="pf-cstage__name">Antibiotic sensitivity</h3>
-                            <!-- The bench's own AST view, read-only — the validator
-                                 reviews exactly what the tech saw. -->
-                            <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
-                          </div>
+                        @if (!cultureStagesFor(st).length) {
+                          <!-- Legacy snapshot (pre-stage capture): AST only. -->
+                          @if ((cr.organisms ?? []).length) {
+                            <div class="pf-cstage">
+                              <h3 class="pf-cstage__name">Antibiotic sensitivity</h3>
+                              <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
+                            </div>
+                          } @else if (!cr.noGrowth) {
+                            <p class="pf-culture-empty">No organisms recorded.</p>
+                          }
                         }
                       </div>
                     } @else {
@@ -649,6 +685,10 @@ interface ValueRow {
     .pf-cstage__case { padding: 1px 8px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; color: var(--violet-text, #c4b5fd); border: 1px solid rgba(168, 85, 247, 0.4); }
     .pf-cstage__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; margin: 0; }
     .pf-cstage__grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .pf-cstage__who { font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
+    .pf-cstage__fld { position: relative; padding-right: 30px; }
+    .pf-cstage__fbtn { position: absolute; top: -2px; right: 0; width: 26px; height: 26px; }
+    .pf-cstage__thread { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(96, 165, 250, 0.04); border: 1px solid var(--glass-border); }
     .pf-cstage__grid dt { margin: 0; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
     .pf-cstage__grid dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-cstage__orgs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1298,11 +1338,31 @@ export class ValidateResultComponent implements OnInit {
   cultureStagesFor(t: OrderTest | null): CultureStageSnap[] {
     return this.snapshotFor(t)?.stages ?? [];
   }
-  stageFields(v: Record<string, unknown>): Array<{ title: string; value: string }> {
+  stageFields(v: Record<string, unknown>): Array<{ name: string; title: string; value: string }> {
     const f = v?.['fields'];
     if (!Array.isArray(f)) return [];
-    return f.map(x => ({ title: String(x?.title || x?.name || ''), value: String(x?.value ?? '') }))
+    return f.map(x => ({ name: String(x?.name || x?.title || ''), title: String(x?.title || x?.name || ''), value: String(x?.value ?? '') }))
       .filter(x => x.title && x.value);
+  }
+  /** Comment-thread keys — IDENTICAL to the culture workbench's (stage,
+   *  stage#caseId8 for branches, stage.field), so bench and validator see
+   *  one shared conversation per stage/field. */
+  stageKeyOf(sg: CultureStageSnap): string {
+    return sg.caseId ? `${sg.key}#${sg.caseId.slice(0, 8)}` : sg.key;
+  }
+  fieldParam(sg: CultureStageSnap, name: string): string { return this.stageKeyOf(sg) + '.' + name; }
+  /** The open thread belonging to THIS stage (stage-level or one of its fields). */
+  openThreadFor(sg: CultureStageSnap): { param: string; label: string } | null {
+    const open = this.openParamComment();
+    if (!open) return null;
+    const base = this.stageKeyOf(sg);
+    if (open === base) return { param: open, label: sg.label };
+    if (open.startsWith(base + '.')) {
+      const fname = open.slice(base.length + 1);
+      const f = this.stageFields(sg.values).find(x => x.name === fname);
+      return { param: open, label: (f?.title || fname) + ' · ' + sg.label };
+    }
+    return null;
   }
   stageOrganisms(v: Record<string, unknown>): string[] {
     const o = v?.['organisms'];
