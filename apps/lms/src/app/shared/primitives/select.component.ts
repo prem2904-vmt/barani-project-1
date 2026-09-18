@@ -64,7 +64,17 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                 </span>
               }
             </span>
-          } @else {
+          }
+          @if (searchable && isOpen()) {
+            <!-- Multi + searchable: type to filter while the checkbox panel
+                 stays open — pick, keep typing, pick again. -->
+            <input type="text" class="pf-dd__combox pf-dd__combox--multi"
+                   [value]="search()"
+                   [placeholder]="selectedOptions.length ? 'Search…' : placeholder"
+                   (input)="onSearchInput($any($event.target).value)"
+                   (keydown)="onPanelKey($event)"
+                   (click)="$event.stopPropagation()" />
+          } @else if (!selectedOptions.length) {
             <span class="pf-dd__value pf-dd__value--ph">{{ placeholder }}</span>
           }
           <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -241,6 +251,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       caret-color: var(--input-border-focus, #8b5cf6); padding: 0;
     }
     pf-select .pf-dd__combox::placeholder { color: var(--text-tertiary, #64748b); }
+    pf-select .pf-dd__combox--multi { flex: 1 1 120px; min-width: 90px; height: 24px; }
     .pf-dd__none { padding: 14px 12px; font-size: 12.5px; color: var(--text-tertiary, #64748b); text-align: center; }
 
     .pf-dd__panel {
@@ -442,6 +453,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     const next = (this.values ?? []).filter(x => String(x) !== String(opt.value));
     this.values = next;
     this.valuesChange.emit(next);
+    if (this.isOpen()) { this.updatePanelPos(); this.panelRef?.detectChanges(); }
   }
 
   toggle(ev: MouseEvent): void {
@@ -460,6 +472,10 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       const next = has ? cur.filter(x => String(x) !== String(opt.value)) : [...cur, opt.value];
       this.values = next;
       this.valuesChange.emit(next);
+      // Searchable: clear the filter for the next pick, and re-anchor the
+      // panel — the trigger grows as chips wrap.
+      if (this.searchable) { this.search.set(''); this.focusedIndex.set(0); }
+      this.updatePanelPos();
       this.panelRef?.detectChanges();
       return;
     }

@@ -11,6 +11,7 @@ import { CultureResult } from '../../../shared/models/culture.model';
 import { CultureCaseView, CultureStageView } from '../culture-panel/culture-panel.component';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -32,7 +33,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent],
+  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
@@ -209,26 +210,15 @@ interface StageField { name: string; title: string; type: string; options: strin
                                   }
                                 </span>
                               } @else if (f.suggest === 'organisms') {
-                                <!-- Multi-organism: chips + search. The comma-joined
-                                     value feeds the AST stage's per-organism panels. -->
-                                <span class="pf-cse__orgs">
-                                  @for (name of orgList(s.key, f.name); track name) {
-                                    <span class="pf-cse__orgchip">{{ name }}
-                                      <button type="button" class="pf-cse__orgx" (click)="ensurePicked(s); removeOrg(s.key, f.name, name)"
-                                              [attr.aria-label]="'Remove ' + name">×</button>
-                                    </span>
-                                  }
-                                  <input type="text" class="pf-cse__ftext pf-cse__ftext--org" [ngModel]="orgSearch()"
-                                         (focus)="ensurePicked(s)"
-                                         (ngModelChange)="orgSearch.set($event)"
-                                         (change)="addOrg(s.key, f.name)"
-                                         (keydown.enter)="$event.preventDefault(); addOrg(s.key, f.name)"
-                                         [attr.list]="'pf-cw-organisms'"
-                                         [placeholder]="orgList(s.key, f.name).length ? 'Add another organism…' : 'Type to search organisms…'" />
-                                </span>
-                                <datalist id="pf-cw-organisms">
-                                  @for (o of organismNames(); track o) { <option [value]="o"></option> }
-                                </datalist>
+                                <!-- Multi-organism: OUR dropdown (never the native
+                                     datalist) — searchable, checkboxes, stays open
+                                     across picks. The comma-joined value feeds the
+                                     AST stage's per-organism panels. -->
+                                <pf-select style="flex: 1; min-width: 260px; max-width: 520px;" size="sm"
+                                           [options]="organismOptions()" [multiple]="true" [searchable]="true"
+                                           [values]="orgList(s.key, f.name)"
+                                           placeholder="Select organisms…"
+                                           (valuesChange)="ensurePicked(s); setOrgs(s.key, f.name, $event)"></pf-select>
                               } @else if (f.type === 'textarea') {
                                 <textarea class="pf-cse__ftext" rows="1" [ngModel]="fieldValue(s.key, f.name)"
                                           (focus)="ensurePicked(s)"
@@ -459,15 +449,6 @@ interface StageField { name: string; title: string; type: string; options: strin
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
     .pf-cse__astwrap { margin-top: 14px; }
 
-    /* Identification: multi-organism chips + search. */
-    .pf-cse__orgs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-    .pf-cse__orgchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600;
-      padding: 4px 6px 4px 11px; border-radius: 999px; color: var(--violet-text, #a78bfa);
-      background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.35); white-space: nowrap; }
-    .pf-cse__orgx { border: none; background: transparent; color: inherit; cursor: pointer;
-      font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 50%; }
-    .pf-cse__orgx:hover { color: #ef4444; background: rgba(239,68,68,.12); }
-    .pf-cse__ftext--org { flex: 1 1 220px; min-width: 180px; }
   `],
 })
 export class CultureWorkbenchComponent implements OnInit, OnDestroy {
@@ -490,23 +471,22 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly organismNames = signal<string[]>([]);
 
   // ── Multi-organism identification → AST seeding ────────────────────────
-  /** In-progress text of the identification organism search box. */
-  readonly orgSearch = signal('');
-  /** The chips: the comma-joined field value split back into names. */
+  /** The selection: the comma-joined field value split back into names. */
   orgList(stageKey: string, field: string): string[] {
     return (this.fieldValue(stageKey, field) ?? '').split(',').map(s => s.trim()).filter(Boolean);
   }
-  addOrg(stageKey: string, field: string) {
-    const name = this.orgSearch().trim();
-    if (!name) return;
-    const list = this.orgList(stageKey, field);
-    if (!list.some(x => x.toLowerCase() === name.toLowerCase()))
-      this.setField(stageKey, field, [...list, name].join(', '));
-    this.orgSearch.set('');
+  setOrgs(stageKey: string, field: string, names: string[]) {
+    this.setField(stageKey, field, names.join(', '));
   }
-  removeOrg(stageKey: string, field: string, name: string) {
-    this.setField(stageKey, field, this.orgList(stageKey, field).filter(x => x !== name).join(', '));
-  }
+  /** Organism master as dropdown options — plus any already-picked name the
+   *  master no longer carries, so its chip stays visible and removable. */
+  readonly organismOptions = computed<PfSelectOption<string>[]>(() => {
+    const master = this.organismNames();
+    const sel = (this.fieldValues()['identification']?.['organism'] ?? '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const extra = sel.filter(n => !master.some(m => m.toLowerCase() === n.toLowerCase()));
+    return [...extra, ...master].map(n => ({ value: n, label: n }));
+  });
   /**
    * Every organism named in the Organism-identification stage — the live chip
    * draft while the stage is being worked, else the submitted stage values.
