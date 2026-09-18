@@ -123,9 +123,11 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
               <div class="pf-mm__cutrow">
                 <label class="pf-mm__cut"><span class="pf-mm__s">S ≥</span>
                   <input type="number" class="pf-mm__cutin" [ngModel]="addS()" (ngModelChange)="addS.set($event)" placeholder="mm" /></label>
-                <span class="pf-mm__cut pf-mm__i" title="Intermediate — derived between the cutoffs">
-                  I {{ addS() != null && addR() != null ? iWindow(addS()!, addR()!) : '—' }}
-                </span>
+                <label class="pf-mm__cut"><span class="pf-mm__i">I</span>
+                  <input type="text" class="pf-mm__cutin pf-mm__cutin--i"
+                         [value]="addS() != null && addR() != null ? iWindow(addS()!, addR()!) : ''"
+                         (change)="setAddI($any($event.target).value)"
+                         placeholder="a–b" title="Intermediate window (e.g. 14–16) — typing it sets the S and R cutoffs around it" /></label>
                 <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
                   <input type="number" class="pf-mm__cutin" [ngModel]="addR()" (ngModelChange)="addR.set($event)" placeholder="mm" /></label>
                 <button type="button" class="pf-mm__save" [disabled]="!canAdd() || saving()"
@@ -204,6 +206,7 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
       -moz-appearance: textfield; appearance: textfield; }
     .pf-mm__cutin::-webkit-inner-spin-button, .pf-mm__cutin::-webkit-outer-spin-button { display: none; }
     .pf-mm__cutin:focus { border-color: var(--input-border-focus); }
+    .pf-mm__cutin--i { width: 76px; }
     .pf-mm__save { padding: 7px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
     .pf-mm__save:disabled { opacity: .5; cursor: default; }
@@ -354,6 +357,19 @@ export class MicroMastersPanelComponent implements OnInit {
   /** The Intermediate window — derived, mm between the cutoffs. */
   iWindow(s: number, r: number): string {
     return s - 1 >= r + 1 ? `${r + 1}–${s - 1}` : '—';
+  }
+  /** Typing the I window ("14–16", "14-16", or one number) sets the cutoffs
+   *  around it: R ≤ low−1, S ≥ high+1 — same behaviour as the bench table. */
+  setAddI(raw: string) {
+    const t = (raw ?? '').trim();
+    if (!t) { this.addS.set(null); this.addR.set(null); return; }
+    const m = t.match(/^(\d+)\s*[-–—]\s*(\d+)$/) ?? t.match(/^(\d+)$/);
+    if (!m) return;
+    const lo = parseInt(m[1], 10);
+    const hi = m[2] != null ? parseInt(m[2], 10) : lo;
+    const [a, b] = lo <= hi ? [lo, hi] : [hi, lo];
+    this.addR.set(a - 1);
+    this.addS.set(b + 1);
   }
   canAdd(): boolean {
     const s = this.addS(), r = this.addR();
