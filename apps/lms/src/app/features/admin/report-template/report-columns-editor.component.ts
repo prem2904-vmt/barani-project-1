@@ -81,8 +81,10 @@ export interface ColumnsEditorState {
         <p class="pf-ce-hint">
           @if (hostManaged()) {
             This strip IS this record's printed table — left to right. Drag a card to
-            reorder · tap a card to rename it · tap the link between two cards to merge
-            them into one cell (Result + Unit → "11.4 g/dL").
+            reorder · tap a card to rename it, choose what it shows, or delete it ·
+            tap the link between two cards to merge them into one cell (Result + Unit
+            → "11.4 g/dL") · "+ Add column" for a new one. It follows the department's
+            layout until you save an override here.
           } @else {
             This strip IS the printed table for <strong>{{ selectedDeptName() }}</strong> — left to right,
             widths to scale. Drag a card to reorder · tap a card to edit it · tap the
@@ -136,11 +138,14 @@ export interface ColumnsEditorState {
           <button type="button" class="pf-link-btn" (click)="distributeEvenly()">Distribute to 100%</button>
           <button type="button" class="pf-link-btn" (click)="addColumn()">+ Add column</button>
         </div>
-        } @else if (missingSourceCols().length > 0) {
+        } @else {
           <div class="pf-ce-widthrow" style="margin-top: 10px;">
-            <span class="pf-ce-dim">Add back:</span>
-            @for (c of missingSourceCols(); track c.name) {
-              <button type="button" class="pf-link-btn" (click)="addBack(c)">+ {{ c.label || c.name }}</button>
+            <button type="button" class="pf-link-btn" (click)="addColumn()">+ Add column</button>
+            @if (missingSourceCols().length > 0) {
+              <span class="pf-ce-dim">Add back:</span>
+              @for (c of missingSourceCols(); track c.name) {
+                <button type="button" class="pf-link-btn" (click)="addBack(c)">+ {{ c.label || c.name }}</button>
+              }
             }
           </div>
         }
@@ -657,6 +662,7 @@ export class ReportColumnsEditorComponent implements OnInit {
     while (existing.has(name)) name = `new_column_${suffix++}`;
     const newCol: ReportColumn = { id, name, label: 'New column', order: this.columns().length + 1, width: 10, type: 'text', locked: false, lockedValue: null };
     this.setCols(this.normalizeTo100([...this.columns(), newCol]));
+    this.selectedIdx.set(this.columns().length - 1);
   }
 
   removeCol(i: number) {
