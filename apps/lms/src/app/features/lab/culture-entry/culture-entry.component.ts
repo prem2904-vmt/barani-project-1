@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, On
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
-import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement } from '../../../shared/models/culture.model';
+import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -277,6 +277,10 @@ export class CultureEntryComponent implements OnInit {
   /** The raw breakpoint rows — the SOURCE of each organism's default panel:
    *  an organism starts with exactly the drugs CLSI can interpret for it. */
   private bpList: Breakpoint[] = [];
+  /** Organism master: name → its Group column (the real taxonomy, e.g.
+   *  "Enterobacterales", "Coagulase-Negative Staphylococci") — resolved onto
+   *  a breakpoint group instead of guessing from the name. */
+  private orgGroups = new Map<string, string>();
   // Antibiotic rows whose S/I/R was set manually — never auto-overwritten.
   private readonly manual = new Set<string>();
 
@@ -322,6 +326,15 @@ export class CultureEntryComponent implements OnInit {
   readonly abxNames = signal<string[]>([]);
 
   ngOnInit() {
+    this.api.get<{ name: string; group?: string | null }[]>('/api/microbiology/organisms').subscribe({
+      next: rows => {
+        const m = new Map<string, string>();
+        for (const o of rows ?? []) if (o.name) m.set(o.name.trim().toLowerCase(), o.group ?? '');
+        this.orgGroups = m;
+        this.backfillClsiPanels();
+      },
+      error: () => { /* falls back to the name heuristic */ }
+    });
     this.api.get<{ name: string }[]>('/api/microbiology/antibiotics').subscribe({
       next: rows => this.abxNames.set((rows ?? []).map(a => a.name).filter(Boolean)),
       error: () => { /* master unavailable → picker shows an empty-state note */ }
@@ -444,7 +457,12 @@ export class CultureEntryComponent implements OnInit {
     return [...names].sort((a, b) => a.localeCompare(b));
   }
   private clsiRows(orgName: string) {
-    return this.clsiPanelFor(orgName).map(n => ({ name: n, zoneSize: null, interpretation: '' as const }));
+    // CLSI-covered group → exactly its interpretable drugs. Anything else
+    // still gets the curated default panel (manual S/I/R) — a picked organism
+    // must never sit with an empty table.
+    const clsi = this.clsiPanelFor(orgName);
+    const names = clsi.length ? clsi : panelForSpecimen(this._m().specimen);
+    return names.map(n => ({ name: n, zoneSize: null, interpretation: '' as const }));
   }
   /** Fill CLSI panels onto organisms that are still empty (merge-only, and —
    *  like seedOrganisms — without tripping the userEdited guard). */
@@ -452,9 +470,16 @@ export class CultureEntryComponent implements OnInit {
     const cur = this._m();
     let changed = false;
     const orgs = (cur.organisms ?? []).map(o => {
-      if (o.antibiotics.length || !o.name.trim()) return o;
+      if (!o.name.trim()) return o;
+      const clsi = this.clsiPanelFor(o.name);
+      // Upgrade an empty OR untouched default panel once CLSI coverage is known.
+      const untouched = o.antibiotics.every(a => a.zoneSize == null && !a.interpretation);
+      if (o.antibiotics.length && (!clsi.length || !untouched)) return o;
       const rows = this.clsiRows(o.name);
       if (!rows.length) return o;
+      const same = rows.length === o.antibiotics.length
+        && rows.every((r, k) => r.name === o.antibiotics[k]?.name);
+      if (same) return o;
       changed = true;
       return { ...o, antibiotics: rows };
     });
@@ -512,18 +537,28 @@ export class CultureEntryComponent implements OnInit {
     return this.bps.get(`${group.toLowerCase()}|${abName.toLowerCase()}`);
   }
 
-  /** Mirror of the backend organism→group heuristic. */
+  /** Resolve an organism onto a CLSI breakpoint group: the master's Group
+   *  column first (the real taxonomy), the name itself as fallback. */
   private organismGroup(name?: string): string | null {
-    const o = (name ?? '').toLowerCase();
+    const o = (name ?? '').trim().toLowerCase();
     if (!o) return null;
-    if (o.includes('pseudomonas')) return 'Pseudomonas';
-    if (o.includes('acinetobacter')) return 'Acinetobacter';
-    if (o.includes('staphylococc') || o.includes('mrsa') || o.includes('mssa')) return 'Staphylococcus';
-    if (o.includes('enterococc')) return 'Enterococcus';
-    if (o.includes('streptococc')) return 'Streptococcus';
-    for (const g of ['escherichia', 'e.coli', 'e. coli', 'klebsiella', 'proteus', 'enterobacter',
-      'citrobacter', 'serratia', 'salmonella', 'shigella', 'morganella', 'providencia', 'coliform'])
-      if (o.includes(g)) return 'Enterobacterales';
+    return this.normalizeGroup(this.orgGroups.get(o)) ?? this.normalizeGroup(o);
+  }
+  /** Map a group label or organism name onto one of the breakpoint table's
+   *  groups — exact match first, then family keywords. */
+  private normalizeGroup(g?: string | null): string | null {
+    const s = (g ?? '').trim().toLowerCase();
+    if (!s) return null;
+    for (const b of new Set(this.bpList.map(x => x.organismGroup)))
+      if (b.toLowerCase() === s) return b;
+    if (s.includes('staphylococc') || s.includes('mrsa') || s.includes('mssa')) return 'Staphylococcus';
+    if (s.includes('enterococc')) return 'Enterococcus';
+    if (s.includes('streptococc')) return 'Streptococcus';
+    if (s.includes('pseudomon')) return 'Pseudomonas';
+    if (s.includes('acinetobacter')) return 'Acinetobacter';
+    for (const k of ['enterobacterales', 'escherichia', 'e.coli', 'e. coli', 'klebsiella', 'proteus',
+      'enterobacter', 'citrobacter', 'serratia', 'salmonella', 'shigella', 'morganella', 'providencia', 'coliform'])
+      if (s.includes(k)) return 'Enterobacterales';
     return null;
   }
 
