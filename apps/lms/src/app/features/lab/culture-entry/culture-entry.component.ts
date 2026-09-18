@@ -104,19 +104,18 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               }
             </header>
 
-            <!-- Generous strips: drug + its CLSI targets on the left, a big
-                 mm field and the S/I/R verdict on the right. One column on
-                 phones/tabs, two on wide desktops — never a dead gap. -->
+            <!-- ONE table per organism: aligned columns, CLSI reference in
+                 its own column, S/I/R auto-filled from the zone yet always
+                 editable in place. -->
             <div class="ce-abx">
+              <div class="ce-abx__head" aria-hidden="true">
+                <span>Antimicrobial</span><span>CLSI reference</span><span>Zone</span><span>S / I / R</span><span></span>
+              </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
-                  <span class="ce-abx__id">
-                    <span class="ce-abx__name">{{ ab.name }}</span>
-                    @if (bpShort(org.name, ab.name); as h) {
-                      <span class="ce-abx__bp">CLSI · {{ h }}</span>
-                    } @else {
-                      <span class="ce-abx__bp">No breakpoint — set S/I/R by hand</span>
-                    }
+                  <span class="ce-abx__name">{{ ab.name }}</span>
+                  <span class="ce-abx__bp" [class.ce-abx__bp--none]="!bpShort(org.name, ab.name)">
+                    {{ bpShort(org.name, ab.name) || '— manual' }}
                   </span>
                   <span class="ce-abx__zonewrap">
                     <input type="number" class="ce-abx__zone" inputmode="numeric"
@@ -133,13 +132,11 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                         [attr.aria-label]="ab.name + ': ' + v"
                         (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
                     }
-                  </span>
-                  <span class="ce-abx__tail">
                     @if (isAuto(oi, abi) && ab.interpretation) {
                       <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Tap S/I/R to override.">auto</span>
                     }
-                    <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
                   </span>
+                  <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
                 </div>
               } @empty {
                 <p class="ce-abx__none">No antibiotics on this panel yet — pick them from the Antibiotics dropdown.</p>
@@ -196,21 +193,27 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-org__spacer { flex: 1; }
     .ce-org__abxpick { width: 220px; flex-shrink: 0; }
 
-    /* ── Antibiotic strips: generous rows, big mm, verdict-tinted ── */
-    .ce-abx { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 8px 16px; }
-    .ce-abx__row { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: 12px;
+    /* ── Antibiotic table: one aligned column set, verdict-tinted rows ── */
+    .ce-abx { display: flex; flex-direction: column; gap: 4px; max-width: 1040px; }
+    .ce-abx__head, .ce-abx__row {
+      display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(150px, 1fr) 118px 172px 30px;
+      gap: 12px; align-items: center;
+    }
+    .ce-abx__head { padding: 2px 14px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--text-tertiary, #64748b); }
+    .ce-abx__row { padding: 7px 14px; border-radius: 12px;
       border: 1px solid var(--border-subtle); background: var(--glass-bg);
       transition: border-color .15s ease, background .2s ease; }
     .ce-abx__row:hover { border-color: rgba(139,92,246,.45); }
     .ce-abx__row[data-interp="S"] { background: rgba(16,185,129,.06); }
     .ce-abx__row[data-interp="I"] { background: rgba(245,158,11,.06); }
     .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
-    .ce-abx__id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ce-abx__bp { font-size: 10.5px; color: var(--text-tertiary, #64748b); font-variant-numeric: tabular-nums;
+    .ce-abx__bp { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ce-abx__zonewrap { display: inline-flex; align-items: baseline; gap: 5px; flex-shrink: 0; }
+    .ce-abx__bp--none { color: var(--text-tertiary, #64748b); font-size: 11px; }
+    .ce-abx__zonewrap { display: inline-flex; align-items: center; gap: 6px; }
     .ce-abx__zone { width: 68px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
       border-radius: 10px; background: var(--input-bg); border: 1px solid var(--input-border);
       color: var(--input-text); outline: none; font-variant-numeric: tabular-nums;
@@ -219,25 +222,25 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-abx__zone:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
     .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
     .ce-abx__unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary, #64748b); }
-    .ce-abx__sir { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .ce-abx__sir { display: inline-flex; align-items: center; gap: 4px; }
     .ce-abx__sirbtn { width: 34px; height: 32px; border-radius: 9px; border: 1px solid var(--border-subtle);
       font-size: 12.5px; font-weight: 700; cursor: pointer;
       transition: transform .12s cubic-bezier(0.16,1,0.3,1), background .15s ease, border-color .15s ease; }
     .ce-abx__sirbtn:active { transform: scale(0.92); }
-    .ce-abx__tail { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; width: 52px; justify-content: flex-end; }
     .ce-abx__auto { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
       color: var(--text-tertiary, #64748b); }
-    .ce-abx__x { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
+    .ce-abx__x { width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
       color: var(--text-tertiary); background: transparent; font-size: 14px; line-height: 1; }
     .ce-abx__x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
-    .ce-abx__none { grid-column: 1 / -1; margin: 4px 0; font-size: 12px; color: var(--text-tertiary); }
+    .ce-abx__none { margin: 4px 0; font-size: 12px; color: var(--text-tertiary); }
 
     /* ── Phone (additive; desktop untouched) ── */
     @media (max-width: 640px) {
-      :host .ce-abx { grid-template-columns: 1fr; }
+      :host .ce-abx__head { display: none; }
       :host .ce-org__abxpick { width: 100%; }
-      :host .ce-abx__row { flex-wrap: wrap; gap: 8px 12px; }
-      :host .ce-abx__id { flex-basis: 100%; }
+      :host .ce-abx__row { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      :host .ce-abx__name { flex-basis: 100%; }
+      :host .ce-abx__bp { order: 5; flex-basis: 100%; }
     }
     @media (pointer: coarse) {
       :host .ce-abx__sirbtn { min-width: 44px; min-height: 44px; }
