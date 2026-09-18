@@ -154,11 +154,11 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                   <div class="pm-hint-card" (click)="$event.stopPropagation()">
                     <div class="text-sm font-bold mb-2" style="color: var(--text-primary);">Quick guide</div>
                     <ul class="pm-hint-list">
-                      <li>🔍 <b>Pinch / scroll</b> to zoom · two-finger or ✋ to pan</li>
-                      <li>⭕ <b>Drag</b> a circle's centre to move, edge to resize</li>
-                      <li>✨ <b>Double-tap</b> a circle to auto-snap it to the zone edge</li>
-                      <li>💊 <b>Drag an antibiotic</b> from the list onto a circle</li>
-                      <li>❌ Tap the red <b>×</b> on a selected circle to delete</li>
+                      <li><b>Pinch / scroll</b> to zoom · two-finger drag to pan</li>
+                      <li><b>Drag</b> a circle's centre to move, edge to resize</li>
+                      <li><b>Double-tap</b> a circle to auto-snap it to the zone edge</li>
+                      <li><b>Drag an antibiotic</b> from the list onto a circle</li>
+                      <li>Tap the red <b>×</b> on a selected circle to delete</li>
                     </ul>
                     <button type="button" class="pm-btn pm-btn--primary w-full mt-2" (click)="dismissHint()">Got it</button>
                   </div>
@@ -188,7 +188,10 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
 
         @if (mode() === 'calibrate') {
           <div class="pm-controls">
-            <button type="button" class="pm-btn pm-btn--primary w-full mb-2" [disabled]="analyzing()" (click)="autoDetect()">{{ analyzing() ? 'Analyzing…' : '✨ Auto-detect dish + zones' }}</button>
+            <button type="button" class="pm-btn pm-btn--primary w-full mb-2" [disabled]="analyzing()" (click)="autoDetect()">
+              @if (!analyzing()) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg> }
+              {{ analyzing() ? 'Analyzing…' : 'Auto-detect dish + zones' }}
+            </button>
             <div class="text-[11px] text-center mb-2" style="color: var(--text-tertiary);">— or calibrate manually: tap the two rim edges —</div>
             <div class="flex items-center gap-2 mb-2">
               <label class="text-[12px]" style="color: var(--text-secondary);">Dish Ø</label>
@@ -197,7 +200,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
             </div>
             <div class="flex gap-2">
               <button type="button" class="pm-btn pm-btn--ghost flex-1" (click)="resetCalibration()">Re-tap rim</button>
-              <button type="button" class="pm-btn pm-btn--primary flex-1" [disabled]="!calibrated()" (click)="goMeasure()">Measure →</button>
+              <button type="button" class="pm-btn pm-btn--primary flex-1" [disabled]="!calibrated()" (click)="goMeasure()">Measure</button>
             </div>
           </div>
         }
@@ -208,10 +211,13 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
               <span class="text-[11px]" style="color: var(--text-tertiary);">Drag centre to move, edge to resize · <b>double-tap = snap to edge</b> · pinch/scroll to zoom · drag an antibiotic onto a circle.</span>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="pm-btn pm-btn--ghost" (click)="mode.set('calibrate')">← Recalibrate</button>
+              <button type="button" class="pm-btn pm-btn--ghost" (click)="mode.set('calibrate')">Recalibrate</button>
               <button type="button" class="pm-btn pm-btn--ghost" (click)="retake()">Retake</button>
-              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="analyzing()" (click)="autoDetect()">{{ analyzing() ? '…' : '✨ Re-detect' }}</button>
-              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="!hasUnassigned()" (click)="smartFill()">⚡ Smart-fill</button>
+              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="analyzing()" (click)="autoDetect()">
+                @if (!analyzing()) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg> }
+                {{ analyzing() ? '…' : 'Re-detect' }}
+              </button>
+              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="!hasUnassigned()" (click)="smartFill()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg> Smart-fill</button>
               <button type="button" class="pm-btn pm-btn--primary flex-1" [disabled]="busy() || assignedCount() === 0" (click)="apply()">{{ busy() ? 'Saving…' : ('Apply ' + assignedCount() + ' zone' + (assignedCount() === 1 ? '' : 's')) }}</button>
             </div>
           </div>
