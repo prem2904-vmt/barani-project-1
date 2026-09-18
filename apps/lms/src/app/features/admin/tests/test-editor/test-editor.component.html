@@ -562,11 +562,6 @@
                                          [value]="groupForField(i)?.code ?? ''"
                                          placeholder="— pick an option group —"
                                          (valueChange)="applyOptionGroup(i, $event)"></pf-select>
-                              @if (optLocked(i) && groupForField(i); as g) {
-                                <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
-                                        style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                        (click)="openGroupEditor(g)">Edit group…</button>
-                              }
                               @if (!optCustom(i)) {
                                 <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
                                         style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"

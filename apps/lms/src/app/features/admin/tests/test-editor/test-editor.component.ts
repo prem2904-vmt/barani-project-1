@@ -34,7 +34,6 @@ import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
-import { DialogService } from '../../../../core/services/dialog.service';
 
 /** A shared option-group vocabulary as served by /api/option-groups. */
 interface OgGroupLite {
@@ -180,13 +179,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
-  private readonly dialog = inject(DialogService);
 
   // ── Shared option groups (Test Master → Option groups) ─────────────
   // A dropdown parameter picks its vocabulary from these; the values render
-  // as a DISABLED preview here. Editing an existing group happens only in
-  // the Option groups tab (it affects every linked test); the inline editor
-  // is reserved for creating a NEW vocabulary for this parameter.
+  // as a DISABLED preview here. Existing groups are edited ONLY in the
+  // Option groups tab (owner's rule — no edit affordance from inside a
+  // test); the inline editor is reserved for creating a NEW vocabulary.
   readonly ogGroups = signal<OgGroupLite[]>([]);
   /** Picker options: group name + its values as the searchable hint. */
   readonly ogGroupOptions = computed<PfSelectOption<string>[]>(() =>
@@ -227,20 +225,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       const rows = this.rowsFor(i);
       if (rows.length === 0) return;
     }
-  }
-  /** Editing a shared group is deliberate: confirm the blast radius, then
-   *  hand over to the Option groups tab with the group preselected. */
-  async openGroupEditor(g: OgGroupLite) {
-    const n = this.groupTestCount(g);
-    const ok = await this.dialog.confirm({
-      title: 'Edit this option group?',
-      message: `"${g.name}" is used by ${n} test${n === 1 ? '' : 's'} — including this one. Changes made in Option groups apply to ALL of them. Unsaved edits on this page are kept.`,
-      confirmLabel: 'Open Option groups',
-      cancelLabel: 'Stay here',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    this.router.navigate(['/admin/tests'], { queryParams: { view: 'option-groups', og: g.code } });
   }
   private loadOptionGroups() {
     this.api.get<OgGroupLite[]>('/api/option-groups').subscribe({
