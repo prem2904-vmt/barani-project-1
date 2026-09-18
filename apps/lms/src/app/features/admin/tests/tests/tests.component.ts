@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ViewChild, OnInit, computed, inject, signal } from '@angular/core';
 import { TubeColorEditorComponent } from '../tube-color-editor.component';
 import { PfSelectOption } from '../../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
@@ -32,6 +32,7 @@ import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-head
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
+// (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -117,6 +118,8 @@ export class TestsComponent implements OnInit {
   readonly ogView = signal(false);
   /** Microbiology view — specimen/antibiotic/CLSI masters replace the grid. */
   readonly microView = signal(false);
+  @ViewChild(MicroMastersPanelComponent) private microPanel?: MicroMastersPanelComponent;
+  @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
   private readonly _depts = signal<DeptRecord[]>([]);
@@ -786,7 +789,12 @@ export class TestsComponent implements OnInit {
     this.router.navigate(['/admin/tests', id, 'edit'], { queryParams: { type: this._type() } });
   }
 
+  /** The ONE Create button reacts to the active view: a new test on the
+   *  catalogue tabs, a new master row on the Microbiology tab, a new
+   *  vocabulary on Option groups. */
   openCreate() {
+    if (this.microView()) { this.microPanel?.startCreate(); return; }
+    if (this.ogView()) { this.ogPanel?.startCreate(); return; }
     this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._type() } });
   }
 

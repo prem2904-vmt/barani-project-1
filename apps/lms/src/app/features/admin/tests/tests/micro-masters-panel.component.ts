@@ -70,7 +70,6 @@ interface EdModel {
                [ngModel]="query()" (ngModelChange)="query.set($event)" />
         <span class="pf-mm__count">{{ shownCount() }} of {{ totalCount() }} {{ label(section()) }}</span>
         <span class="pf-mm__spacer"></span>
-        <button type="button" class="pf-mm__new press" (click)="startCreate()">+ New {{ singular(section()) }}</button>
         <span class="pf-mm__hint">Lab edits overlay the standards — used by the Culture bench (MIC200 C&amp;S)</span>
       </div>
 
