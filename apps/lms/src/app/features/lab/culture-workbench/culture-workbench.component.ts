@@ -92,6 +92,10 @@ interface StageField { name: string; title: string; type: string; options: strin
                       <button type="button" class="pf-cse__incubgo press" [disabled]="!incubCustom()"
                               (click)="applyIncubation(incubCustom()!)">Set</button>
                     </div>
+                    @if (cc.incubateUntil) {
+                      <button type="button" class="pf-cse__incubstop press" [disabled]="busy()"
+                              (click)="stopIncubation()">Stop incubation</button>
+                    }
                   </div>
                 }
               </span>
@@ -486,6 +490,10 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__incubgo { padding: 7px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
     .pf-cse__incubgo:disabled { opacity: .5; cursor: default; }
+    .pf-cse__incubstop { width: 100%; margin-top: 10px; padding: 7px 12px; border-radius: 9px;
+      font-size: 12px; font-weight: 600; cursor: pointer; color: #f87171;
+      background: transparent; border: 1px dashed rgba(239,68,68,.45); }
+    .pf-cse__incubstop:hover { background: rgba(239,68,68,.08); }
 
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
@@ -846,6 +854,12 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const m = Math.floor(ms / 60_000);
     if (m < 60) return `${m}m`;
     return `${Math.floor(m / 60)}h ${m % 60}m`;
+  }
+  /** Plate taken out — clear the timer. */
+  stopIncubation() {
+    this.incubOpen.set(false);
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate/stop`, {}),
+      'Incubation stopped');
   }
   /** Start or extend the timer by whole hours (preset chip or custom). */
   applyIncubation(hours: number) {
