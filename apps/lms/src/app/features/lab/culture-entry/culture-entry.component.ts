@@ -5,6 +5,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
 interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin: number; resistantMax: number; }
 
@@ -17,48 +18,64 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
 @Component({
   selector: 'pf-culture-entry',
   standalone: true,
-  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent],
+  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-4 pb-6">
-      <!-- Specimen / gram / colony -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      @if (!embedded) {
+        <!-- Specimen / gram / colony — the standalone C&S form. The culture
+             workbench captures these in their own stages, so embedded mode
+             starts at the organisms. -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label class="flex flex-col gap-1">
+            <span class="pf-label">Specimen</span>
+            <input type="text" class="pf-input" [ngModel]="m().specimen" (ngModelChange)="patch({ specimen: $event })" placeholder="e.g. Urine" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="pf-label">Colony count</span>
+            <input type="text" class="pf-input" [ngModel]="m().colonyCount" (ngModelChange)="patch({ colonyCount: $event })" placeholder="e.g. 1,00,000 cfu/ml" />
+          </label>
+          <label class="flex items-center gap-2 mt-6">
+            <input type="checkbox" [checked]="m().noGrowth" (change)="setNoGrowth($any($event.target).checked)" />
+            <span class="text-[13px]" style="color: var(--text-secondary);">No growth</span>
+          </label>
+        </div>
         <label class="flex flex-col gap-1">
-          <span class="pf-label">Specimen</span>
-          <input type="text" class="pf-input" [ngModel]="m().specimen" (ngModelChange)="patch({ specimen: $event })" placeholder="e.g. Urine" />
+          <span class="pf-label">Gram stain</span>
+          <textarea rows="2" class="pf-input" [ngModel]="m().gramStain" (ngModelChange)="patch({ gramStain: $event })"
+            placeholder="e.g. Few pus cells, few gram negative bacilli seen"></textarea>
         </label>
-        <label class="flex flex-col gap-1">
-          <span class="pf-label">Colony count</span>
-          <input type="text" class="pf-input" [ngModel]="m().colonyCount" (ngModelChange)="patch({ colonyCount: $event })" placeholder="e.g. 1,00,000 cfu/ml" />
-        </label>
-        <label class="flex items-center gap-2 mt-6">
-          <input type="checkbox" [checked]="m().noGrowth" (change)="setNoGrowth($any($event.target).checked)" />
-          <span class="text-[13px]" style="color: var(--text-secondary);">No growth</span>
-        </label>
-      </div>
-      <label class="flex flex-col gap-1">
-        <span class="pf-label">Gram stain</span>
-        <textarea rows="2" class="pf-input" [ngModel]="m().gramStain" (ngModelChange)="patch({ gramStain: $event })"
-          placeholder="e.g. Few pus cells, few gram negative bacilli seen"></textarea>
-      </label>
+      }
 
       @if (!m().noGrowth) {
-        <!-- Organisms -->
-        <div class="flex items-center justify-between">
-          <span class="pf-label">Organisms isolated</span>
-          <pf-touch-btn size="sm" variant="secondary" (pressed)="addOrganism()">+ Add organism</pf-touch-btn>
-        </div>
+        @if (!embedded) {
+          <div class="flex items-center justify-between">
+            <span class="pf-label">Organisms isolated</span>
+            <pf-touch-btn size="sm" variant="secondary" (pressed)="addOrganism()">+ Add organism</pf-touch-btn>
+          </div>
+        }
 
-        @if (organismsOpen()) {
+        @if (organismsOpen() || embedded) {
           @for (org of m().organisms ?? []; track oi; let oi = $index) {
-          <div class="rounded-xl border p-3" style="border-color: var(--border-subtle);">
-            <div class="flex flex-wrap items-center gap-2 mb-2">
-              <span class="text-[13px] font-bold" style="color: var(--text-tertiary);">{{ oi + 1 }}.</span>
-              <input type="text" class="pf-input flex-1 min-w-[200px]" list="pf-org-list" [ngModel]="org.name"
-                (ngModelChange)="setOrgName(oi, $event)" placeholder="Organism name" />
-              <pf-touch-btn size="sm" variant="secondary" (pressed)="startAddAb(oi)">
-                + Add antibiotic
-              </pf-touch-btn>
+          <section class="ce-org">
+            <header class="ce-org__head">
+              @if (embedded) {
+                <!-- Identification owns WHICH organisms — here they are read-only. -->
+                <span class="ce-org__name">{{ org.name || 'Organism' }}</span>
+              } @else {
+                <pf-select style="min-width: 230px; max-width: 300px;" size="sm"
+                           [options]="organismOptions()" [searchable]="true"
+                           [value]="org.name" placeholder="Select organism…"
+                           (valueChange)="setOrgName(oi, $event)"></pf-select>
+              }
+              <span class="ce-org__prog" [class.ce-org__prog--done]="interpretedCount(oi) === org.antibiotics.length && org.antibiotics.length > 0">
+                {{ interpretedCount(oi) }}/{{ org.antibiotics.length }} interpreted
+              </span>
+              <span class="ce-org__spacer"></span>
+              <pf-select class="ce-org__abxpick" size="sm"
+                         [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
+                         [values]="abxValuesOf(oi)" placeholder="Antibiotics…"
+                         (valuesChange)="syncAbx(oi, $event)"></pf-select>
               <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
                 <svg icon-left width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -67,96 +84,55 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                 </svg>
                 Measure
               </pf-touch-btn>
-              <pf-touch-btn size="sm" variant="ghost" (pressed)="removeOrganism(org)" title="Remove organism">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 6h18" />
-                  <path d="M8 6V4h8v2" />
-                  <path d="M19 6l-1 14H6L5 6" />
-                  <path d="M10 11v6" />
-                  <path d="M14 11v6" />
-                </svg>
-              </pf-touch-btn>
               @if (org.plateImageUrl) {
                 <a [href]="resolveUrl(org.plateImageUrl)" target="_blank" rel="noopener" class="h-9 w-9 rounded overflow-hidden border"
                   style="border-color: var(--border-subtle);" title="View plate photo">
                   <img [src]="resolveUrl(org.plateImageUrl)" class="h-full w-full object-cover" alt="AST plate" />
                 </a>
               }
-            </div>
+              @if (!embedded) {
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="removeOrganism(org)" title="Remove organism">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                  </svg>
+                </pf-touch-btn>
+              }
+            </header>
 
-            <div class="overflow-x-auto"><table class="w-full text-[12px]">
-              <thead>
-                <tr style="color: var(--text-tertiary);">
-                  <th class="text-left font-semibold pb-1">Antimicrobial</th>
-                  <th class="font-semibold pb-1 w-16">Zone</th>
-                  <th class="font-semibold pb-1 w-28">S / I / R</th>
-                  <th class="w-6"></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (ab of org.antibiotics; track abi; let abi = $index) {
-                  <tr>
-                    <td class="py-0.5">
-                      <!-- Master-controlled vocabulary — names are picked, never typed. -->
-                      <span class="text-[12px] font-medium" style="color: var(--text-primary);">{{ ab.name }}</span>
-                    </td>
-                    <td class="py-0.5 px-1">
-                      <input type="number" class="pf-input pf-input--compact text-center"
-                        [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
-                        [title]="bpHint(org.name, ab.name)" placeholder="mm" />
-                    </td>
-                    <td class="py-0.5">
-                      <div class="flex gap-1 items-center">
-                        @for (v of ['S','I','R']; track v) {
-                          <button type="button" class="flex-1 py-1 rounded-md text-[11px] font-bold border"
-                            [style.borderColor]="ab.interpretation === v ? toneColor(v) : 'var(--border-subtle)'"
-                            [style.color]="ab.interpretation === v ? '#fff' : 'var(--text-secondary)'"
-                            [style.background]="ab.interpretation === v ? toneColor(v) : 'transparent'"
-                            (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
-                        }
-                        @if (isAuto(oi, abi) && ab.interpretation) {
-                          <span class="text-[9px] px-1 rounded" title="Auto-interpreted from the zone (CLSI). Click S/I/R to override."
-                            style="color: var(--text-tertiary);">auto</span>
-                        }
-                      </div>
-                    </td>
-                    <td>
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="removeAb(oi, abi)" title="Remove">
-                        <span style="color: var(--red-text);">×</span>
-                      </pf-touch-btn>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table></div>
-
-            @if (addingAb() === oi) {
-              <!-- Master-only picker: filter the antibiotic master, tap to add.
-                   No free text — the AST vocabulary is the antibiotic table. -->
-              <div class="mt-2 rounded-lg border p-2" style="border-color: var(--border-subtle);">
-                <input type="text" class="pf-input pf-input--compact w-full" [ngModel]="abQuery()"
-                       (ngModelChange)="abQuery.set($event)" placeholder="Search the antibiotic master…" autofocus />
-                <div class="mt-1 max-h-44 overflow-y-auto">
-                  @for (name of abCandidates(oi); track name) {
-                    <button type="button" class="block w-full text-left text-[12px] px-2 py-1.5 rounded-md pf-abx-opt"
-                            (click)="addAbFromMaster(oi, name)">{{ name }}</button>
-                  } @empty {
-                    <div class="text-[11.5px] px-2 py-2" style="color: var(--text-tertiary);">
-                      {{ abxNames().length ? 'No matching antibiotic — or already on the panel.' : 'Antibiotic master unavailable.' }}
-                    </div>
-                  }
+            <!-- Compact multi-column rows — no table, no dead width. -->
+            <div class="ce-abx">
+              @for (ab of org.antibiotics; track abi; let abi = $index) {
+                <div class="ce-abx__row">
+                  <span class="ce-abx__name" [title]="bpHint(org.name, ab.name)">{{ ab.name }}</span>
+                  <input type="number" class="ce-abx__zone"
+                         [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
+                         [title]="bpHint(org.name, ab.name)" placeholder="mm" />
+                  <span class="ce-abx__sir">
+                    @for (v of ['S','I','R']; track v) {
+                      <button type="button" class="ce-abx__sirbtn"
+                        [style.borderColor]="ab.interpretation === v ? toneColor(v) : 'var(--border-subtle)'"
+                        [style.color]="ab.interpretation === v ? '#fff' : 'var(--text-secondary)'"
+                        [style.background]="ab.interpretation === v ? toneColor(v) : 'transparent'"
+                        (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
+                    }
+                    @if (isAuto(oi, abi) && ab.interpretation) {
+                      <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Click S/I/R to override.">auto</span>
+                    }
+                  </span>
+                  <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
                 </div>
-                <button type="button" class="text-[11.5px] mt-1 px-2 py-1" style="color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;"
-                        (click)="addingAb.set(null)">Cancel</button>
-              </div>
-            }
-          </div>
+              } @empty {
+                <p class="ce-abx__none">No antibiotics on this panel yet — pick them from the Antibiotics dropdown.</p>
+              }
+            </div>
+          </section>
           }
         }
-        <datalist id="pf-org-list">
-          @for (o of organisms; track o) { <option [value]="o"></option> }
-        </datalist>
       }
 
       <!-- Notes -->
@@ -189,19 +165,51 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
       }
     </div>
   `,
-  styles: [`.pf-input--compact { padding: 4px 8px; font-size: 12px; }
-    .pf-abx-opt { color: var(--text-secondary); background: transparent; border: none; cursor: pointer; }
-    .pf-abx-opt:hover { color: var(--text-primary); background: rgba(124,58,237,.08); }
+  styles: [`
+    .pf-input--compact { padding: 4px 8px; font-size: 12px; }
+
+    /* ── Per-organism sensitivity card ── */
+    .ce-org { border: 1px solid var(--border-subtle); border-radius: 14px; padding: 12px 14px;
+      background: var(--glass-bg); }
+    .ce-org + .ce-org { margin-top: 10px; }
+    .ce-org__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .ce-org__name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+    .ce-org__prog { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+      color: var(--text-tertiary); border: 1px solid var(--border-subtle); white-space: nowrap;
+      font-variant-numeric: tabular-nums; }
+    .ce-org__prog--done { color: #34d399; border-color: rgba(52,211,153,.4); }
+    .ce-org__spacer { flex: 1; }
+    .ce-org__abxpick { width: 220px; flex-shrink: 0; }
+
+    /* ── Antibiotic rows: responsive multi-column grid, no dead width ── */
+    .ce-abx { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 2px 26px; }
+    .ce-abx__row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 8px; }
+    .ce-abx__row:hover { background: rgba(124,58,237,.05); }
+    .ce-abx__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 12.5px; color: var(--text-primary); }
+    .ce-abx__zone { width: 56px; text-align: center; padding: 4px 4px; font-size: 12px; border-radius: 7px;
+      background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); outline: none;
+      font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+    .ce-abx__zone::-webkit-inner-spin-button, .ce-abx__zone::-webkit-outer-spin-button { display: none; }
+    .ce-abx__zone:focus { border-color: var(--input-border-focus); }
+    .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); }
+    .ce-abx__sir { display: inline-flex; align-items: center; gap: 3px; }
+    .ce-abx__sirbtn { width: 27px; height: 25px; border-radius: 6px; border: 1px solid var(--border-subtle);
+      font-size: 11px; font-weight: 700; cursor: pointer; transition: transform .12s cubic-bezier(0.16,1,0.3,1); }
+    .ce-abx__sirbtn:active { transform: scale(0.94); }
+    .ce-abx__auto { font-size: 9px; color: var(--text-tertiary); }
+    .ce-abx__x { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
+      color: var(--text-tertiary); background: transparent; font-size: 13px; line-height: 1; }
+    .ce-abx__x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
+    .ce-abx__none { grid-column: 1 / -1; margin: 4px 0; font-size: 12px; color: var(--text-tertiary); }
+
     /* ── Phone (additive; desktop untouched) ── */
     @media (max-width: 640px) {
-      /* AST table scrolls sideways instead of crushing the antimicrobial
-         name column; the global 44px button floor otherwise blew the
-         S/I/R triplet out of the row. */
-      :host table { min-width: 520px; }
-      :host .overflow-x-auto, :host [class*='ast'] { -webkit-overflow-scrolling: touch; }
+      :host .ce-abx { grid-template-columns: 1fr; }
+      :host .ce-org__abxpick { width: 100%; }
     }
     @media (pointer: coarse) {
-      :host table button { min-width: 0 !important; min-height: 44px; }
+      :host .ce-abx__sirbtn { min-width: 40px; min-height: 40px; }
     }
 `]
 })
@@ -209,6 +217,9 @@ export class CultureEntryComponent implements OnInit {
   /** Optional master-driven organism list (from /api/microbiology/organisms).
    *  Falls back to the built-in common isolates when not supplied. */
   @Input() organismNames: string[] | null = null;
+  /** Workbench mode: specimen/gram/colony live in their own stages, and the
+   *  organisms come from the Identification stage (read-only labels here). */
+  @Input() embedded = false;
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly platform = inject(PlatformService);
@@ -320,22 +331,40 @@ export class CultureEntryComponent implements OnInit {
     (this._m().organisms?.[i]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(i, abi));
   }
 
-  // ── Master-only antibiotic picker (no free text) ──────────────────
-  /** Index of the organism whose add-antibiotic picker is open. */
-  readonly addingAb = signal<number | null>(null);
-  readonly abQuery = signal('');
-  startAddAb(i: number) { this.addingAb.set(this.addingAb() === i ? null : i); this.abQuery.set(''); }
-  /** Master names matching the query, minus the ones already on this panel. */
-  abCandidates(i: number): string[] {
-    const q = this.abQuery().trim().toLowerCase();
-    const have = new Set((this._m().organisms?.[i]?.antibiotics ?? []).map(a => a.name.trim().toLowerCase()));
-    return this.abxNames()
-      .filter(n => !have.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q)))
-      .slice(0, 12);
+  // ── Master-only antibiotic vocabulary (no free text, our dropdown) ──
+  /** Organism master as dropdown options (standalone mode's name picker). */
+  organismOptions(): PfSelectOption<string>[] {
+    const names = new Set(this.organisms);
+    for (const o of this._m().organisms ?? []) if (o.name.trim()) names.add(o.name.trim());
+    return [...names].map(n => ({ value: n, label: n }));
   }
-  addAbFromMaster(i: number, name: string) {
-    this.updateOrg(i, o => ({ ...o, antibiotics: [...o.antibiotics, { name, zoneSize: null, interpretation: '' }] }));
-    this.abQuery.set('');
+  /** Antibiotic master ∪ this panel's current rows (so a default row whose
+   *  drug left the master still shows checked and removable). */
+  abxOptionsFor(i: number): PfSelectOption<string>[] {
+    const names = new Set(this.abxNames());
+    for (const a of this._m().organisms?.[i]?.antibiotics ?? []) if (a.name.trim()) names.add(a.name.trim());
+    return [...names].map(n => ({ value: n, label: n }));
+  }
+  abxValuesOf(i: number): string[] {
+    return (this._m().organisms?.[i]?.antibiotics ?? []).map(a => a.name);
+  }
+  interpretedCount(i: number): number {
+    return (this._m().organisms?.[i]?.antibiotics ?? []).filter(a => !!a.interpretation).length;
+  }
+  /** The checkbox dropdown IS the panel: checked = row exists. Unchecking
+   *  removes the row (same as ×); checking adds it blank. Existing rows keep
+   *  their zone/interpretation — manual flags are re-indexed by drug name. */
+  syncAbx(i: number, names: string[]) {
+    const org = this._m().organisms?.[i];
+    if (!org) return;
+    const manualByName = new Set(org.antibiotics
+      .filter((_, k) => this.manual.has(`${i}:${k}`))
+      .map(a => a.name.toLowerCase()));
+    org.antibiotics.forEach((_, k) => this.manual.delete(`${i}:${k}`));
+    const byName = new Map(org.antibiotics.map(a => [a.name.toLowerCase(), a]));
+    const next = names.map(n => byName.get(n.toLowerCase()) ?? { name: n, zoneSize: null, interpretation: '' as const });
+    next.forEach((a, k) => { if (manualByName.has(a.name.toLowerCase())) this.manual.add(`${i}:${k}`); });
+    this.updateOrg(i, o => ({ ...o, antibiotics: next }));
   }
   removeAb(i: number, abi: number) {
     this.manual.delete(`${i}:${abi}`);
