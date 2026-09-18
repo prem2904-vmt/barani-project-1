@@ -15,6 +15,7 @@ import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
@@ -29,7 +30,6 @@ interface ResultSnapshot {
 }
 
 type Flag = 'normal' | 'abnormal' | 'critical';
-type View = 'cards' | 'table';
 
 interface ParamDef {
   name: string;
@@ -60,11 +60,11 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, CultureEntryComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, CultureEntryComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
-      <!-- Compact header -->
+      <!-- Slim header — identity only; context lives in the rail. -->
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
           @if (navBack.showBack()) {
@@ -72,24 +72,10 @@ interface ValueRow {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           }
-          <button type="button" class="pf-head__back press" (click)="back()" aria-label="Back">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-            <span class="hidden sm:inline">Back</span>
-          </button>
-          <h1 class="pf-head__title">{{ selected()?.test?.name ?? 'Validate' }}</h1>
-          <p class="pf-head__sub">{{ subtitleText() }}</p>
-          @if (canEditResult() && editOrderId()) {
-            <!-- Send this order's work back to a technician for correction. -->
-            <button type="button" class="pf-vr-edit press" (click)="editDialogOpen.set(true)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-              </svg>
-              <span>Edit</span>
-            </button>
-          }
+          <div class="pf-head__id">
+            <h1 class="pf-head__title">{{ headTitle() }}</h1>
+            <p class="pf-head__sub">{{ subtitleText() }}</p>
+          </div>
         </div>
       </header>
 
@@ -115,352 +101,248 @@ interface ValueRow {
         }
 
         @if (selected(); as t) {
+          <div class="pf-cockpit">
 
-          <!-- Patient + context strip -->
-          <div class="pf-ctx">
-            <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
-            <div class="pf-ctx__id">
-              <p class="pf-ctx__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
-              <p class="pf-ctx__meta">
-                {{ t.test?.department?.name ?? '—' }} ·
-                entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}
-              </p>
-            </div>
-            @if (snapshot()?.flags?.critical) {
-              <pf-chip tone="rose" size="sm">CRITICAL</pf-chip>
-            }
-          </div>
-
-          <!-- ══ Sample panel — every test on this tube, reviewed together ══
-               Shows only for multi-test samples; a single-test sample keeps the
-               original detailed review below. Approve/Reject each test in place,
-               or "Validate all remaining" from the sticky bar. -->
-          @if (sampleTests().length > 1) {
-            <section class="pf-vsample">
-              <div class="pf-vsample__hdr">
-                <div class="min-w-0">
-                  <p class="pf-eyebrow">Sample · {{ sampleDept() }}</p>
-                  <h2 class="pf-vsample__id">{{ sampleLabel() }}</h2>
-                  <p class="pf-vsample__sub">{{ sampleTests().length }} tests on this tube · approve or reject each, then finish</p>
-                </div>
-                <div class="pf-vsample__prog">
-                  <span data-tone="ok">{{ sampleProgress().done }} ✓</span>
-                  @if (sampleProgress().rej) { <span data-tone="rej">{{ sampleProgress().rej }} ✕</span> }
-                  <span data-tone="pending">{{ pendingSampleTests().length }} pending</span>
-                </div>
-              </div>
-
-              <ul class="pf-vsample__list">
-                @for (st of sampleTests(); track st.id) {
-                  @let c = countsFor(st);
-                  <li class="pf-vsample__test" [attr.data-outcome]="outcomeOf(st)"
-                      [class.pf-vsample__test--focused]="selected()?.id === st.id">
-                    <div class="pf-vsample__row">
-                      <button type="button" class="pf-vsample__toggle press" (click)="toggleExpand(st)" [attr.aria-expanded]="isExpanded(st)">
-                        <span class="pf-vsample__chev" [class.pf-vsample__chev--open]="isExpanded(st)">▸</span>
-                        <span class="pf-vsample__name">{{ st.test?.name ?? 'Test' }}</span>
-                      </button>
-                      @if (isCultureFor(st)) {
-                        <span class="pf-vsample__peek">Culture &amp; sensitivity</span>
-                      } @else {
-                        <span class="pf-vsample__peek">
-                          {{ c.total }} params
-                          @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abn</span> }
-                          @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} crit</span> }
-                          @if (!c.abnormal && !c.critical) { <span class="pf-flagtag" data-flag="normal">all normal</span> }
+            <!-- ══ Results column — every test on this tube, full quality ══ -->
+            <main class="pf-cockpit__main">
+              @for (st of sampleTests(); track st.id) {
+                @let c = countsFor(st);
+                <section class="pf-vt" [id]="'vt-' + st.id" [attr.data-outcome]="outcomeOf(st)">
+                  <header class="pf-vt__hdr">
+                    <div class="pf-vt__id">
+                      <h2 class="pf-vt__name">{{ st.test?.name ?? 'Test' }}</h2>
+                      <p class="pf-vt__meta">
+                        @if (isCultureFor(st)) {
+                          Culture &amp; sensitivity
+                        } @else {
+                          {{ c.total }} parameters
+                          @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} critical</span> }
+                          @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abnormal</span> }
+                          @if (!c.abnormal && !c.critical && c.total) { <span class="pf-flagtag" data-flag="normal">all normal</span> }
+                        }
+                      </p>
+                    </div>
+                    <span class="grow"></span>
+                    @switch (outcomeOf(st)) {
+                      @case ('validated') {
+                        <span class="pf-vt__badge" data-outcome="validated">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                          Validated
                         </span>
                       }
-                      <span class="grow"></span>
-                      @switch (outcomeOf(st)) {
-                        @case ('validated') { <span class="pf-vsample__badge" data-outcome="validated">✓ Validated</span> }
-                        @case ('rejected') { <span class="pf-vsample__badge" data-outcome="rejected">✕ Rejected</span> }
-                        @case ('validating') { <span class="pf-vsample__badge" data-outcome="validating">Working…</span> }
-                        @default {
-                          <button type="button" class="pf-vsample__act pf-vsample__act--reject press" (click)="rejectTest(st)">Reject</button>
-                          <button type="button" class="pf-vsample__act pf-vsample__act--approve press" (click)="approveTest(st)">Approve</button>
+                      @case ('rejected') {
+                        <span class="pf-vt__badge" data-outcome="rejected">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          Rejected
+                        </span>
+                      }
+                      @case ('validating') { <span class="pf-vt__badge" data-outcome="validating">Working…</span> }
+                      @default {
+                        @if (sampleTests().length > 1) {
+                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving()" (click)="rejectTest(st)">Reject</button>
+                          <button type="button" class="pf-vt__act pf-vt__act--approve press" [disabled]="saving()" (click)="approveTest(st)">Approve</button>
                         }
                       }
-                    </div>
+                    }
+                  </header>
 
-                    @if (isExpanded(st)) {
-                      @if (st.rejectionReason) {
-                        <div class="pf-reject-banner pf-reject-banner--sm">
-                          <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
-                          <p class="pf-reject-banner__text"><strong>Sent back:</strong> {{ st.rejectionReason }}</p>
+                  @if (st.rejectionReason) {
+                    <!-- Previously sent back — repeat WHY so the validator can
+                         confirm the correction actually addressed it. -->
+                    <div class="pf-reject-banner pf-vt__banner">
+                      <span class="pf-reject-banner__icon" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                      </span>
+                      <p class="pf-reject-banner__text"><strong>Sent back:</strong> {{ st.rejectionReason }}</p>
+                    </div>
+                  }
+
+                  @if (isCultureFor(st)) {
+                    @if (cultureResultFor(st); as cr) {
+                      <div class="pf-vt__culture">
+                        <div class="pf-culture-meta">
+                          <div><span class="pf-rail-lbl">Specimen</span><p>{{ cr.specimen || '—' }}</p></div>
+                          <div><span class="pf-rail-lbl">Gram stain</span><p>{{ cr.gramStain || '—' }}</p></div>
+                          <div><span class="pf-rail-lbl">Colony count</span><p>{{ cr.colonyCount || '—' }}</p></div>
                         </div>
-                      }
-                      @if (isCultureFor(st)) {
-                        <div class="pf-vsample__culture">
-                          <button type="button" class="pf-vsample__inspect press" (click)="focusTest(st)">Open full culture review below ↓</button>
-                        </div>
-                      } @else if (valueRowsFor(st).length === 0) {
-                        <p class="pf-vsample__empty">No values recorded.</p>
-                      } @else {
-                        <div class="pf-vtbl">
-                          <div class="pf-vtbl__head"><span>Parameter</span><span>Value</span><span>Reference</span><span>Flag</span></div>
-                          @for (r of valueRowsFor(st); track r.name) {
-                            <div class="pf-vtbl__row" [attr.data-flag]="r.flag">
-                              <span class="pf-vtbl__name">{{ r.title }}</span>
-                              <span class="pf-vtbl__val">{{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }</span>
-                              <span class="pf-vtbl__ref">{{ r.range ?? '—' }}</span>
-                              <span class="pf-vtbl__flag" [attr.data-flag]="r.flag">{{ flagLabel(r.flag) }}</span>
+                        @if (cr.noGrowth) {
+                          <p class="pf-culture-growth">No significant growth</p>
+                        } @else if ((cr.organisms ?? []).length === 0) {
+                          <p class="pf-culture-empty">No organisms recorded.</p>
+                        } @else {
+                          <!-- The bench's own AST view, read-only — the validator
+                               reviews exactly what the tech saw. -->
+                          <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
+                        }
+                      </div>
+                    } @else {
+                      <div class="pf-empty-block">No culture result recorded.</div>
+                    }
+                  } @else if (valueRowsFor(st).length === 0) {
+                    <div class="pf-empty-block">No values recorded.</div>
+                  } @else {
+                    <div class="pf-plist">
+                      <div class="pf-plist__head" aria-hidden="true">
+                        <span>Parameter</span><span>Result</span><span>Within range</span><span>Reference</span><span>Flag</span><span></span>
+                      </div>
+                      @for (r of visibleRowsFor(st); track r.name) {
+                        <div class="pf-prow" [attr.data-flag]="r.flag">
+                          <div class="pf-prow__row" role="button" tabindex="0"
+                               [class.pf-prow__row--static]="isEditingTest(st)"
+                               (click)="!isEditingTest(st) && openDetail(r)"
+                               (keydown.enter)="!isEditingTest(st) && openDetail(r)">
+                            <span class="pf-prow__name">{{ r.title }}</span>
+                            <span class="pf-prow__val">
+                              @if (isEditingTest(st)) {
+                                <input class="pf-prow__editin" [value]="editVal(r.name)"
+                                       (input)="setEditVal(r.name, $any($event.target).value)"
+                                       (click)="$event.stopPropagation()"
+                                       [attr.aria-label]="'New value for ' + r.title" />
+                                @if (r.unit) { <em>{{ r.unit }}</em> }
+                              } @else {
+                                {{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }
+                              }
+                            </span>
+                            <span class="pf-prow__bar">
+                              @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
+                                <div class="pf-rangebar pf-rangebar--mini">
+                                  <div class="pf-rangebar__track">
+                                    @for (z of zonesFor(r); track z.label) {
+                                      <span class="pf-rangebar__zone" [attr.data-tone]="z.tone" [style.flex]="z.weight"></span>
+                                    }
+                                  </div>
+                                  <span class="pf-rangebar__pin" [style.left.%]="pinFor(r)" [attr.data-flag]="r.flag"></span>
+                                </div>
+                              } @else { <span class="pf-prow__dash">—</span> }
+                            </span>
+                            <span class="pf-prow__ref">{{ r.range ?? '—' }}</span>
+                            <span class="pf-prow__flag">
+                              <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
+                                <span class="pf-vcard__chip-dot"></span>
+                                {{ flagLabel(r.flag) }}
+                              </span>
+                            </span>
+                            <button type="button" class="pf-prow__cbtn press"
+                                    [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(r.name)"
+                                    (click)="rowComment(st, r.name); $event.stopPropagation()"
+                                    [attr.aria-label]="'Discuss ' + r.title + ' with the bench'">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </button>
+                          </div>
+                          @if (openParamComment() === r.name && selected()?.id === st.id) {
+                            <div class="pf-prow__thread" (click)="$event.stopPropagation()">
+                              <pf-comment-thread
+                                [comments]="commentsFor(r.name)"
+                                currentRole="validator"
+                                [composeLabel]="'Comment on ' + r.title"
+                                (add)="addParameterComment(r.name, $event.body, $event.type)"
+                                (reply)="replyToParameter(r.name, $event.parentId, $event.body)">
+                              </pf-comment-thread>
                             </div>
                           }
                         </div>
                       }
-                    }
-                  </li>
-                }
-              </ul>
-            </section>
-          }
-
-          <!-- Sent-back banner — this result was previously rejected and
-               re-entered by the tech. Repeats the rejection reason so the
-               validator remembers WHY it was sent back before signing off.
-               Visual pattern mirrors sample-result-entry's reject banner. -->
-          @if (t.rejectionReason) {
-            <div class="pf-reject-banner">
-              <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
-              <p class="pf-reject-banner__text">
-                <strong>Sent back:</strong> {{ t.rejectionReason }}
-              </p>
-            </div>
-          }
-
-          <!-- Validator ↔ tech overall conversation. Bidirectional —
-               tech can post observations ("patient was nervous, two
-               attempts"); validator posts corrections ("recheck
-               platelet count"). Per-parameter comments live below
-               each row in the table view. -->
-          <section class="pf-overall-comments">
-            <p class="pf-eyebrow">Overall conversation</p>
-            <pf-comment-thread
-              [comments]="commentsFor(null)"
-              currentRole="validator"
-              (add)="addOverallComment($event.body, $event.type)"
-              (reply)="replyToOverall($event.parentId, $event.body)">
-            </pf-comment-thread>
-          </section>
-
-          <!-- Microbiology Culture & Sensitivity → structured read-only review -->
-          @if (isCulture() && sampleTests().length <= 1) {
-            @if (cultureResult(); as c) {
-              <div class="pf-culture-rev">
-                <div class="pf-culture-rev__meta">
-                  <div><span class="pf-eyebrow">Specimen</span><p>{{ c.specimen || '—' }}</p></div>
-                  <div><span class="pf-eyebrow">Gram stain</span><p>{{ c.gramStain || '—' }}</p></div>
-                  <div><span class="pf-eyebrow">Colony count</span><p>{{ c.colonyCount || '—' }}</p></div>
-                </div>
-                @if (c.noGrowth) {
-                  <p class="pf-culture-rev__growth">No significant growth</p>
-                } @else if ((c.organisms ?? []).length === 0) {
-                  <p class="pf-culture-rev__empty">No organisms recorded.</p>
-                } @else {
-                  <!-- The bench's own AST view, read-only — the validator
-                       reviews exactly what the tech saw. -->
-                  <pf-culture-entry [embedded]="true" [readonly]="true" [value]="c" />
-                }
-              </div>
-            } @else {
-              <div class="pf-empty-block">No culture result recorded.</div>
-            }
-          }
-
-          @if (!isCulture() && sampleTests().length <= 1) {
-          <!-- Summary strip: param counts with color-coded cells -->
-          @if (valueRows().length > 0) {
-            <div class="pf-summary">
-              <div class="pf-summary__cell">
-                <span class="pf-summary__num">{{ counts().total }}</span>
-                <span class="pf-summary__lbl">Parameters</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="normal">
-                <span class="pf-summary__num">{{ counts().normal }}</span>
-                <span class="pf-summary__lbl">Normal</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="abnormal">
-                <span class="pf-summary__num">{{ counts().abnormal }}</span>
-                <span class="pf-summary__lbl">Abnormal</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="critical">
-                <span class="pf-summary__num">{{ counts().critical }}</span>
-                <span class="pf-summary__lbl">Critical</span>
-              </div>
-            </div>
-          }
-
-          <!-- Parameters header with view toggle -->
-          <div class="pf-params-head">
-            <p class="pf-eyebrow m-0">Parameters</p>
-            <div class="pf-view-toggle" role="group">
-              <button type="button"
-                      class="pf-view-toggle__btn"
-                      [class.pf-view-toggle__btn--on]="view() === 'cards'"
-                      (click)="setView('cards')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                  <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
-                Cards
-              </button>
-              <button type="button"
-                      class="pf-view-toggle__btn"
-                      [class.pf-view-toggle__btn--on]="view() === 'table'"
-                      (click)="setView('table')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-                </svg>
-                Table
-              </button>
-            </div>
-          </div>
-
-          <!-- CARDS VIEW -->
-          @if (view() === 'cards') {
-            @if (valueRows().length === 0) {
-              <div class="pf-empty-block">No values recorded.</div>
-            } @else {
-              <ul class="pf-cards">
-                @for (r of valueRows(); track r.name) {
-                  <li>
-                    <button type="button"
-                            class="pf-vcard press"
-                            [attr.data-flag]="r.flag"
-                            (click)="openDetail(r)">
-                      <header class="pf-vcard__hdr">
-                        <span class="pf-vcard__name">{{ r.title }}</span>
-                        <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
-                          <span class="pf-vcard__chip-dot"></span>
-                          {{ flagLabel(r.flag) }}
-                        </span>
-                      </header>
-
-                      <div class="pf-vcard__value">
-                        <span class="pf-vcard__num">{{ r.value ?? '—' }}</span>
-                        @if (r.unit) { <span class="pf-vcard__unit">{{ r.unit }}</span> }
-                      </div>
-
-                      <!-- Range visualization — muted rail, highlighted normal zone, value pin. -->
-                      @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
-                        <div class="pf-rangebar">
-                          <div class="pf-rangebar__track">
-                            @for (z of zonesFor(r); track z.label) {
-                              <span class="pf-rangebar__zone"
-                                    [attr.data-tone]="z.tone"
-                                    [style.flex]="z.weight"></span>
-                            }
-                          </div>
-                          <span class="pf-rangebar__pin"
-                                [style.left.%]="pinFor(r)"
-                                [attr.data-flag]="r.flag"
-                                [attr.title]="r.value">
-                          </span>
-                          <div class="pf-rangebar__scale">
-                            <span>{{ r.min ?? r.critLow ?? '—' }}</span>
-                            <span class="pf-rangebar__scale-mid">normal</span>
-                            <span>{{ r.max ?? r.critHigh ?? '—' }}</span>
-                          </div>
-                        </div>
+                      @if (hiddenNormals(st) > 0) {
+                        <button type="button" class="pf-plist__more press" (click)="toggleNormals(st)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                          Show {{ hiddenNormals(st) }} normal {{ hiddenNormals(st) === 1 ? 'parameter' : 'parameters' }}
+                        </button>
+                      } @else if (canCollapseNormals(st)) {
+                        <button type="button" class="pf-plist__more press" (click)="toggleNormals(st)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                          Hide normal parameters
+                        </button>
                       }
-
-                      <p class="pf-vcard__range">
-                        @if (r.range) { Normal · {{ r.range }} }
-                        @else if (!r.isNumeric) { categorical }
-                        @else { no range }
-                      </p>
-                    </button>
-                  </li>
-                }
-              </ul>
-            }
-          }
-
-          <!-- TABLE VIEW -->
-          @if (view() === 'table') {
-            @if (valueRows().length === 0) {
-              <div class="pf-empty-block">No values recorded.</div>
-            } @else {
-              <div class="pf-table">
-                <div class="pf-table__head">
-                  <span>Parameter</span>
-                  <span>Value</span>
-                  <span>Range</span>
-                  <span>Where</span>
-                  <span>Flag</span>
-                </div>
-                @for (r of valueRows(); track r.name) {
-                  <button type="button"
-                          class="pf-table__row press"
-                          [class.pf-table__row--has-comments]="hasOpenComment(r.name)"
-                          [attr.data-flag]="r.flag"
-                          (click)="toggleParamComment(r.name); $event.stopPropagation()">
-                    <span class="pf-table__name">
-                      {{ r.title }}
-                      @if (hasOpenComment(r.name)) {
-                        <span class="pf-table__comment-flag" title="Open comment">💬</span>
-                      }
-                    </span>
-                    <span class="pf-table__value">
-                      {{ r.value ?? '—' }} @if (r.unit) { <em class="pf-table__unit">{{ r.unit }}</em> }
-                    </span>
-                    <span class="pf-table__range">{{ r.range ?? '—' }}</span>
-                    <span class="pf-table__where">
-                      @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
-                        <div class="pf-rangebar pf-rangebar--mini">
-                          <div class="pf-rangebar__track">
-                            @for (z of zonesFor(r); track z.label) {
-                              <span class="pf-rangebar__zone"
-                                    [attr.data-tone]="z.tone"
-                                    [style.flex]="z.weight"></span>
-                            }
-                          </div>
-                          <span class="pf-rangebar__pin"
-                                [style.left.%]="pinFor(r)"
-                                [attr.data-flag]="r.flag"></span>
-                        </div>
-                      } @else { — }
-                    </span>
-                    <span>
-                      <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
-                        <span class="pf-vcard__chip-dot"></span>
-                        {{ flagLabel(r.flag) }}
-                      </span>
-                    </span>
-                  </button>
-                  @if (openParamComment() === r.name) {
-                    <div class="pf-table__row-comments" (click)="$event.stopPropagation()">
-                      <p class="pf-eyebrow pf-table__row-comments-label">{{ r.title }} · conversation</p>
-                      <pf-comment-thread
-                        [comments]="commentsFor(r.name)"
-                        currentRole="validator"
-                        [composeLabel]="'Comment on this parameter'"
-                        (add)="addParameterComment(r.name, $event.body, $event.type)"
-                        (reply)="replyToParameter(r.name, $event.parentId, $event.body)">
-                      </pf-comment-thread>
                     </div>
                   }
-                }
-              </div>
-            }
-          }
-          }
+                </section>
+              }
+            </main>
 
-          <!-- Clinical comment -->
-          <section class="pf-comment">
-            <label class="pf-eyebrow pf-comment__label">
-              Clinical comment <span class="pf-comment__optional">(optional)</span>
-            </label>
-            <textarea class="pf-comment__input"
-                      [value]="comment()"
-                      (input)="onComment($event)"
-                      placeholder="Notes for the report or the follow-up team…"></textarea>
-          </section>
+            <!-- ══ Context rail — always in view while reviewing ══ -->
+            <aside class="pf-cockpit__rail">
+              <div class="pf-rail-card">
+                <div class="pf-railpat">
+                  <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
+                  <div class="pf-railpat__id">
+                    <p class="pf-railpat__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
+                    <p class="pf-railpat__meta">{{ t.test?.department?.name ?? '—' }} · {{ sampleLabel() }}</p>
+                  </div>
+                  @if (hasSampleCritical()) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
+                </div>
+                <p class="pf-railpat__entered">Entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}</p>
+              </div>
+
+              @if (sampleTests().length > 1) {
+                <div class="pf-rail-card">
+                  <p class="pf-rail-lbl">This tube · {{ sampleProgress().done }}/{{ sampleProgress().total }} validated</p>
+                  <ul class="pf-checklist">
+                    @for (st of sampleTests(); track st.id) {
+                      <li>
+                        <button type="button" class="pf-checklist__item press" [attr.data-outcome]="outcomeOf(st)"
+                                [class.pf-checklist__item--focus]="selected()?.id === st.id"
+                                (click)="scrollToTest(st)">
+                          <span class="pf-checklist__ic" aria-hidden="true">
+                            @switch (outcomeOf(st)) {
+                              @case ('validated') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> }
+                              @case ('rejected') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> }
+                              @default { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> }
+                            }
+                          </span>
+                          <span class="pf-checklist__name">{{ st.test?.name ?? 'Test' }}</span>
+                          <span class="pf-checklist__hint">
+                            @if (isCultureFor(st)) { C&amp;S }
+                            @else {
+                              @let cc = countsFor(st);
+                              @if (cc.critical) { {{ cc.critical }} crit }
+                              @else if (cc.abnormal) { {{ cc.abnormal }} abn }
+                              @else { ok }
+                            }
+                          </span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <div class="pf-rail-card">
+                <p class="pf-rail-lbl">Bench conversation@if (sampleTests().length > 1) { · {{ t.test?.name }} }</p>
+                <pf-comment-thread
+                  [comments]="commentsFor(null)"
+                  currentRole="validator"
+                  (add)="addOverallComment($event.body, $event.type)"
+                  (reply)="replyToOverall($event.parentId, $event.body)">
+                </pf-comment-thread>
+              </div>
+
+              <div class="pf-rail-card">
+                <label class="pf-rail-lbl" for="pf-clinical-note">Clinical comment · printed on the report</label>
+                <textarea id="pf-clinical-note" class="pf-comment__input"
+                          [value]="comment()"
+                          (input)="onComment($event)"
+                          placeholder="Notes for the report or the follow-up team…"></textarea>
+              </div>
+
+              @if (trendEligible().length > 0) {
+                <div class="pf-rail-card">
+                  <label class="pf-trendrow">
+                    <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+                    <span>Trendogram in the report</span>
+                  </label>
+                  @if (trendogramOn()) {
+                    <pf-select class="pf-trendsel" [options]="trendDurations"
+                               [value]="trendogramDuration()" (valueChange)="setTrendDuration($event)"></pf-select>
+                  }
+                </div>
+              }
+            </aside>
+          </div>
         }
       </div>
 
-      <!-- Sticky validate bar (single-test sample keeps the original bar) -->
-      @if (selected() && sampleTests().length <= 1) {
+      <!-- Sticky verdict bar — one primary action, secondary in More. -->
+      @if (selected()) {
         <footer class="pf-stickybar">
           <div class="pf-stickybar__inner">
             @if (editing()) {
@@ -475,91 +357,86 @@ interface ValueRow {
               </button>
             } @else {
               <span class="pf-stickybar__meta">
-                @if (hasCritical()) {
+                @if (sampleTests().length > 1) {
+                  @if (hasSampleCritical()) {
+                    <span class="pf-stickybar__dot" data-state="critical"></span>
+                    <b>Critical</b> in this sample · validating notifies the referring doctor
+                  } @else {
+                    <span class="pf-stickybar__dot" data-state="ok"></span>
+                    {{ sampleProgress().done }} validated · {{ sampleProgress().rej }} rejected · {{ pendingSampleTests().length }} pending
+                  }
+                } @else if (hasCritical()) {
                   <span class="pf-stickybar__dot" data-state="critical"></span>
-                  <b>Critical</b> · validation will notify referring doctor
+                  <b>Critical</b> · validating notifies the referring doctor
                 } @else {
                   <span class="pf-stickybar__dot" data-state="ok"></span>
                   Ready to validate
                 }
               </span>
               <div class="flex-1"></div>
-              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
-                <span class="pf-btn-label">Reject</span>
-              </button>
-              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reassign()" aria-label="Reassign">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
-                <span class="pf-btn-label">Reassign</span>
-              </button>
-              @if (!isCulture()) {
-                <!-- Culture values are a structured object; editing them as flat
-                     fields would corrupt the shape. The validator rejects for
-                     re-entry instead, which reopens the structured tech screen. -->
-                <button type="button" class="pf-btn pf-btn--secondary pf-btn--icony press" (click)="startEdit()" aria-label="Edit values">
-                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                  <span class="pf-btn-label">Edit values</span>
+
+              @if (hasMoreActions()) {
+                <div class="pf-more">
+                  <button type="button" class="pf-btn pf-btn--ghost press" (click)="moreOpen.set(!moreOpen())"
+                          aria-haspopup="menu" [attr.aria-expanded]="moreOpen()">
+                    More
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                  </button>
+                  @if (moreOpen()) {
+                    <div class="pf-more__bd" (click)="moreOpen.set(false)"></div>
+                    <div class="pf-more__menu" role="menu">
+                      @if (sampleTests().length <= 1) {
+                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); reassign()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
+                          Reassign to another pathologist
+                        </button>
+                        @if (!isCulture()) {
+                          <!-- Culture values are a structured object; editing them as
+                               flat fields would corrupt the shape. Reject instead. -->
+                          <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startEdit()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            Edit values myself
+                          </button>
+                        }
+                      }
+                      @if (canEditResult() && editOrderId()) {
+                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); editDialogOpen.set(true)">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                          Send back for correction
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (sampleTests().length > 1) {
+                <button type="button"
+                        class="pf-btn pf-btn--icony"
+                        [class.pf-btn--primary]="!hasSampleCritical()"
+                        [class.pf-btn--danger]="hasSampleCritical()"
+                        [disabled]="saving() || pendingSampleTests().length === 0"
+                        (click)="validateAllRemaining()">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
+                </button>
+              } @else {
+                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+                  <span class="pf-btn-label">Reject</span>
+                </button>
+                <button type="button"
+                        class="pf-btn pf-btn--icony"
+                        [class.pf-btn--primary]="!hasCritical()"
+                        [class.pf-btn--danger]="hasCritical()"
+                        [disabled]="saving() || (!isCulture() && valueRows().length === 0)"
+                        (click)="validate()"
+                        [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
                 </button>
               }
-              @if (trendEligible().length > 0) {
-                <label class="pf-trend-chk" title="Embed serial-result trend charts in the report">
-                  <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
-                  <span>Trendogram</span>
-                  @if (trendogramOn()) {
-                    <select (click)="$event.stopPropagation()" [value]="trendogramDuration()" (change)="setTrendDuration($any($event.target).value)">
-                      <option value="5">Last 5</option>
-                      <option value="10">Last 10</option>
-                      <option value="3m">3 mo</option>
-                      <option value="6m">6 mo</option>
-                      <option value="all">All</option>
-                    </select>
-                  }
-                </label>
-              }
-              <button type="button"
-                      class="pf-btn pf-btn--icony"
-                      [class.pf-btn--primary]="!hasCritical()"
-                      [class.pf-btn--danger]="hasCritical()"
-                      [disabled]="saving() || (!isCulture() && valueRows().length === 0)"
-                      (click)="validate()"
-                      [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
-              </button>
             }
-          </div>
-        </footer>
-      }
-
-      <!-- Sample-level sticky bar — validate every remaining test at once -->
-      @if (selected() && sampleTests().length > 1) {
-        <footer class="pf-stickybar">
-          <div class="pf-stickybar__inner">
-            <span class="pf-stickybar__meta">
-              @if (hasSampleCritical()) {
-                <span class="pf-stickybar__dot" data-state="critical"></span>
-                <b>Critical</b> in this sample · validation notifies the referring doctor
-              } @else {
-                <span class="pf-stickybar__dot" data-state="ok"></span>
-                {{ sampleProgress().done }} validated · {{ sampleProgress().rej }} rejected · {{ pendingSampleTests().length }} pending
-              }
-            </span>
-            <div class="flex-1"></div>
-            @if (trendEligible().length > 0) {
-              <label class="pf-trend-chk" title="Embed serial-result trend charts in the report">
-                <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
-                <span>Trendogram</span>
-              </label>
-            }
-            <button type="button"
-                    class="pf-btn pf-btn--icony"
-                    [class.pf-btn--primary]="!hasSampleCritical()"
-                    [class.pf-btn--danger]="hasSampleCritical()"
-                    [disabled]="saving() || pendingSampleTests().length === 0"
-                    (click)="validateAllRemaining()">
-              <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
-            </button>
           </div>
         </footer>
       }
@@ -570,7 +447,6 @@ interface ValueRow {
         <aside class="pf-drawer" role="dialog" aria-modal="true">
           <header class="pf-drawer__hdr">
             <div class="min-w-0 flex-1">
-              <p class="pf-eyebrow">Parameter</p>
               <h2 class="pf-drawer__title">{{ r.title }}</h2>
             </div>
             <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
@@ -585,27 +461,19 @@ interface ValueRow {
           </header>
 
           <div class="pf-drawer__body">
-            <!-- Big value display -->
             <div class="pf-drawer__value">
               <span class="pf-drawer__num">{{ r.value ?? '—' }}</span>
               @if (r.unit) { <span class="pf-drawer__unit">{{ r.unit }}</span> }
             </div>
 
-            <!-- Big range bar -->
             @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
               <div class="pf-rangebar pf-rangebar--lg">
                 <div class="pf-rangebar__track">
                   @for (z of zonesFor(r); track z.label) {
-                    <span class="pf-rangebar__zone"
-                          [attr.data-tone]="z.tone"
-                          [style.flex]="z.weight"></span>
+                    <span class="pf-rangebar__zone" [attr.data-tone]="z.tone" [style.flex]="z.weight"></span>
                   }
                 </div>
-                <span class="pf-rangebar__pin"
-                      [style.left.%]="pinFor(r)"
-                      [attr.data-flag]="r.flag">
-                </span>
-                <!-- Zone labels along the bottom -->
+                <span class="pf-rangebar__pin" [style.left.%]="pinFor(r)" [attr.data-flag]="r.flag"></span>
                 <div class="pf-rangebar__labels">
                   @for (tick of ticksFor(r); track tick.label) {
                     <span class="pf-rangebar__tick" [style.left.%]="tick.pos">
@@ -616,9 +484,7 @@ interface ValueRow {
               </div>
             }
 
-            <!-- Reference ranges -->
             <section class="pf-drawer__sec">
-              <p class="pf-eyebrow mb-2">Reference</p>
               <dl class="pf-drawer__meta">
                 <div>
                   <dt>Normal range</dt>
@@ -639,10 +505,8 @@ interface ValueRow {
               </dl>
             </section>
 
-            <!-- Flag explanation -->
             @if (r.flag !== 'normal') {
               <section class="pf-drawer__sec pf-drawer__sec--alert" [attr.data-flag]="r.flag">
-                <p class="pf-eyebrow mb-2">Why flagged</p>
                 <p class="pf-drawer__why">{{ flagExplanation(r) }}</p>
               </section>
             }
@@ -650,309 +514,128 @@ interface ValueRow {
         </aside>
       }
     </section>
-  `,
+    `,
   styles: [`
     /* ── WORK page: non-scroll app layout ─────────────────────
        The PAGE itself never scrolls. :host fills the shell's main
-       area (shell-main is flex:1; min-height:0; overflow-y:auto, so
-       a height:100% child fits exactly). The screen header is fixed
-       (flex:0 0 auto); the SCROLL happens inside .pf-page__body. The
-       validate bar is a position:fixed overlay that floats above the
-       body, so it stays out of the flex flow. */
+       area; the screen header is fixed (flex:0 0 auto); the SCROLL
+       happens inside .pf-page__body. The verdict bar is a
+       position:fixed overlay floating above the body. */
     :host { display: block; height: 100%; overflow: hidden; }
     .pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-
-    /* ── Culture & Sensitivity read-only review ─────────────── */
-    .pf-culture-rev { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
-    .pf-culture-rev__meta { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
-    .pf-culture-rev__meta p { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .pf-culture-rev__growth { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-secondary); }
-    .pf-culture-rev__empty { margin: 0; font-size: 13px; color: var(--text-tertiary); }
-    .pf-culture-rev__org { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .pf-culture-rev__org-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
-    .pf-culture-rev__ast { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .pf-culture-rev__ast th { text-align: left; font-weight: 700; font-size: 10.5px; letter-spacing: 0.06em;
-      text-transform: uppercase; color: var(--text-tertiary); padding: 4px 6px; border-bottom: 1px solid var(--glass-border); }
-    .pf-culture-rev__ast td { padding: 5px 6px; border-bottom: 1px solid var(--glass-border); color: var(--text-secondary); }
-    .pf-culture-rev__ast tr:last-child td { border-bottom: 0; }
-    .pf-culture-rev__note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
-    .pf-culture-rev__note .pf-eyebrow { margin-right: 6px; }
     .pf-page__header { flex: 0 0 auto; }
-    /* Internal scroll region: this is the ONLY scroll on the page. */
     .pf-page__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: 4px; -webkit-overflow-scrolling: touch; }
 
-    /* ── Compact page header (same shape as other screens) ─── */
-    .pf-head {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      padding: 6px 0 10px;
-    }
-    /* "Edit" — hand the work back to a technician. Sits at the end of the
-       header row; its own affordance because .pf-head__back is retired. */
-    .pf-vr-edit {
-      margin-left: auto;
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
-      border-radius: 9px;
-      font-size: 12.5px; font-weight: 600;
-      cursor: pointer;
-      color: var(--violet-text, #c4b5fd);
-      background: rgba(168, 85, 247, 0.12);
-      border: 1px solid rgba(168, 85, 247, 0.32);
-    }
-    .pf-vr-edit:hover { background: rgba(168, 85, 247, 0.2); }
-    /* Legacy desktop text pill — retired at ALL widths. The single back
-       affordance is now the .pf-hdr-back chevron, rendered on every breakpoint. */
-    .pf-head__back {
-      display: none;
-      align-items: center;
-      gap: 4px;
-      height: 32px;
-      padding: 0 10px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      font-size: 12.5px;
-      font-weight: 500;
-      cursor: pointer;
-      align-self: center;
-    }
-    .pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-    .pf-head__title {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-      line-height: 1.1;
-    }
+    /* ── Compact page header ─────────────────────────────────── */
+    .pf-head { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; }
+    .pf-head__id { min-width: 0; flex: 1; }
+    .pf-head__title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.15; }
     @media (min-width: 768px) { .pf-head__title { font-size: 26px; } }
-    .pf-head__sub {
-      margin: 0;
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      flex: 1;
-      min-width: 0;
+    .pf-head__sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .pf-hdr-back { width: 38px; height: 38px; margin-left: -8px; border-radius: 11px; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform: scale(0.9); background: var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
+
+    .pf-empty-block { padding: 40px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+
+    /* ── Cockpit: results + always-visible context rail ──────── */
+    .pf-cockpit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (min-width: 1100px) { .pf-cockpit { grid-template-columns: minmax(0, 1fr) 344px; gap: 20px; } }
+    .pf-cockpit__main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .pf-cockpit__rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    @media (min-width: 1100px) { .pf-cockpit__rail { position: sticky; top: 4px; } }
+
+    /* ── Test section ────────────────────────────────────────── */
+    .pf-vt { border-radius: 16px; border: 1px solid var(--glass-border); background: var(--glass-bg); overflow: hidden; }
+    .pf-vt[data-outcome='validated'] { border-color: rgba(16, 185, 129, 0.3); }
+    .pf-vt[data-outcome='rejected']  { border-color: rgba(239, 68, 68, 0.32); }
+    .pf-vt__hdr { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; flex-wrap: wrap; }
+    .pf-vt__id { min-width: 0; }
+    .pf-vt__name { margin: 0; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-vt__meta { margin: 3px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pf-flagtag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 9999px; font-size: 10px; font-weight: 700; border: 1px solid transparent; }
+    .pf-flagtag[data-flag='normal']   { color: #10b981; border-color: rgba(16, 185, 129, 0.28); }
+    .pf-flagtag[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
+    .pf-flagtag[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
+    :root.dark .pf-flagtag[data-flag='normal']   { color: #34d399; }
+    :root.dark .pf-flagtag[data-flag='abnormal'] { color: #fbbf24; }
+    :root.dark .pf-flagtag[data-flag='critical'] { color: #fca5a5; }
+
+    .pf-vt__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-family: 'JetBrains Mono', ui-monospace, monospace; border: 1px solid transparent; }
+    .pf-vt__badge[data-outcome='validated']  { color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.08); }
+    .pf-vt__badge[data-outcome='rejected']   { color: #dc2626; border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); }
+    .pf-vt__badge[data-outcome='validating'] { color: var(--text-tertiary); border-color: var(--glass-border); }
+    :root.dark .pf-vt__badge[data-outcome='validated'] { color: #34d399; }
+    :root.dark .pf-vt__badge[data-outcome='rejected']  { color: #fca5a5; }
+
+    .pf-vt__act { height: 30px; padding: 0 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: transparent; transition: background .15s, color .15s, border-color .15s; }
+    .pf-vt__act:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pf-vt__act--approve { color: #10b981; border-color: rgba(16, 185, 129, 0.4); }
+    .pf-vt__act--reject  { color: var(--text-tertiary); }
+    :root.dark .pf-vt__act--approve { color: #34d399; }
+    @media (hover: hover) {
+      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(16, 185, 129, 0.12); }
+      .pf-vt__act--reject:hover:not(:disabled)  { background: rgba(239, 68, 68, 0.1); color: var(--red-text, #f87171); }
     }
 
-    .pf-eyebrow {
-      margin: 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .pf-vt__banner { margin: 0 16px 10px; }
+    .pf-vt__culture { padding: 4px 16px 16px; }
 
-    .pf-empty-block {
-      padding: 40px 0;
-      text-align: center;
-      font-size: 13px;
-      color: var(--text-tertiary);
-    }
-
-    /* ── Sent-back banner (previously rejected, now re-entered) ─
-       Visual pattern copied from sample-result-entry's reject banner. */
-    .pf-reject-banner {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04));
-      border: 1px solid rgba(239, 68, 68, 0.34);
-    }
-    .pf-reject-banner__icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px;
-      border-radius: 9999px;
-      background: rgba(239, 68, 68, 0.22);
-      color: var(--red-text);
-      font-size: 13px; font-weight: 700;
-      flex-shrink: 0;
-    }
-    .pf-reject-banner__text {
-      margin: 0;
-      font-size: 13px; line-height: 1.4;
-      color: var(--text-secondary);
-    }
+    /* ── Sent-back banner ────────────────────────────────────── */
+    .pf-reject-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04)); border: 1px solid rgba(239, 68, 68, 0.34); }
+    .pf-reject-banner__icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22); color: var(--red-text); flex-shrink: 0; }
+    .pf-reject-banner__text { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
     .pf-reject-banner__text strong { color: var(--red-text); margin-right: 4px; }
 
-    /* ── Patient context strip ─────────────────────────────── */
-    .pf-ctx {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 12px;
-    }
-    .pf-ctx__id { min-width: 0; flex: 1; }
-    .pf-ctx__name {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .pf-ctx__meta {
-      margin: 2px 0 0;
-      font-size: 11.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-tertiary);
-    }
+    /* ── Culture meta strip ──────────────────────────────────── */
+    .pf-culture-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .pf-culture-meta p { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-culture-growth { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-secondary); }
+    .pf-culture-empty { margin: 0; font-size: 13px; color: var(--text-tertiary); }
 
-    /* ── Summary strip — neutral cells, only number colored ── */
-    .pf-summary {
+    /* ── Parameter list — one view, attention-first ──────────── */
+    .pf-plist { border-top: 1px solid var(--border-muted); }
+    .pf-plist__head, .pf-prow__row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 0;
-      padding: 4px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 16px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(110px, 1.1fr) minmax(0, 1fr) 96px 36px;
+      gap: 12px; align-items: center; padding: 10px 16px;
     }
-    .pf-summary__cell {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      padding: 10px 14px;
-      position: relative;
-    }
-    .pf-summary__cell + .pf-summary__cell::before {
-      content: '';
-      position: absolute;
-      left: 0; top: 20%; bottom: 20%;
-      width: 1px;
-      background: var(--border-muted);
-    }
-    .pf-summary__num {
-      font-size: 22px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      line-height: 1;
-      letter-spacing: -0.02em;
-    }
-    .pf-summary__cell[data-tone='normal']   .pf-summary__num { color: #10b981; }
-    .pf-summary__cell[data-tone='abnormal'] .pf-summary__num { color: #d97706; }
-    .pf-summary__cell[data-tone='critical'] .pf-summary__num { color: #dc2626; }
-    :root.dark .pf-summary__cell[data-tone='normal']   .pf-summary__num { color: #34d399; }
-    :root.dark .pf-summary__cell[data-tone='abnormal'] .pf-summary__num { color: #fbbf24; }
-    :root.dark .pf-summary__cell[data-tone='critical'] .pf-summary__num { color: #fca5a5; }
-    .pf-summary__lbl {
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .pf-plist__head { padding: 9px 16px; background: rgba(0, 0, 0, 0.1); border-bottom: 1px solid var(--border-muted); }
+    .pf-plist__head > span { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+    .pf-prow + .pf-prow { border-top: 1px solid var(--border-muted); }
+    .pf-prow__row { cursor: pointer; transition: background .15s; color: var(--text-primary); font-size: 13px; }
+    .pf-prow__row--static { cursor: default; }
+    .pf-prow__row:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.6); outline-offset: -2px; border-radius: 8px; }
+    @media (hover: hover) { .pf-prow__row:not(.pf-prow__row--static):hover { background: var(--glass-bg-hover); } }
+    .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+    .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+    .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
+    .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; }
+    .pf-prow__dash { color: var(--text-muted); }
+    .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      font-variant-numeric: tabular-nums; background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
+    .pf-prow__editin:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
 
-    /* ── Params header + view toggle ───────────────────────── */
-    .pf-params-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-      padding: 0 4px;
-    }
-    .pf-view-toggle {
-      display: inline-flex;
-      padding: 3px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      gap: 2px;
-    }
-    .pf-view-toggle__btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 28px;
-      padding: 0 12px;
-      border: none;
-      background: transparent;
-      color: var(--text-tertiary);
-      font-size: 11px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-radius: 9999px;
-      cursor: pointer;
-      transition: color 0.15s, background 0.15s;
-    }
-    .pf-view-toggle__btn:hover { color: var(--text-primary); }
-    .pf-view-toggle__btn--on {
-      background: var(--bg-card-solid);
-      color: var(--text-primary);
-      border: 1px solid var(--glass-border-hover);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    }
+    .pf-prow__cbtn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;
+      border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; position: relative; transition: color .15s, background .15s; }
+    @media (hover: hover) { .pf-prow__cbtn:hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
+    .pf-prow__cbtn--live { color: var(--violet-text, #c4b5fd); }
+    .pf-prow__cbtn--live::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 9999px; background: #a855f7; }
 
-    /* ── Parameter cards ───────────────────────────────────── */
-    .pf-cards {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-    @media (min-width: 768px) { .pf-cards { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); } }
+    .pf-prow__thread { padding: 12px 16px 14px 32px; background: rgba(96, 165, 250, 0.04); border-top: 1px solid var(--glass-border); }
 
-    /* Cards: all neutral. Flag signal lives ONLY in the chip + pin. Sleek. */
-    .pf-vcard {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.08s;
-    }
-    .pf-vcard:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); }
-    .pf-vcard:active { transform: scale(0.996); }
+    .pf-plist__more { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;
+      border: none; border-top: 1px solid var(--border-muted); background: transparent; color: var(--text-tertiary);
+      font-size: 12px; font-weight: 600; cursor: pointer; transition: color .15s, background .15s; }
+    @media (hover: hover) { .pf-plist__more:hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
 
-    .pf-vcard__hdr {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .pf-vcard__name {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    /* Single source of color: the flag chip. Subtle dot + text, no heavy fills. */
-    .pf-vcard__chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      font-weight: 700;
-      background: transparent;
-      border: 1px solid transparent;
-    }
+    /* ── Flag chips (shared with drawer) ─────────────────────── */
+    .pf-vcard__chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700;
+      background: transparent; border: 1px solid transparent; }
     .pf-vcard__chip--lg { font-size: 11px; padding: 5px 12px; }
     .pf-vcard__chip-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
     .pf-vcard__chip[data-flag='normal']   { color: #10b981; border-color: rgba(16, 185, 129, 0.28); }
@@ -962,258 +645,68 @@ interface ValueRow {
     :root.dark .pf-vcard__chip[data-flag='abnormal'] { color: #fbbf24; }
     :root.dark .pf-vcard__chip[data-flag='critical'] { color: #fca5a5; }
 
-    .pf-vcard__value {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    /* Value text is ALWAYS neutral — the flag info is conveyed by the chip + pin. */
-    .pf-vcard__num {
-      font-size: 30px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-    .pf-vcard__unit {
-      font-size: 13px;
-      color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-    .pf-vcard__range {
-      margin: 0;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
-
-    /* ── Range bar ──
-       Layout: a full-width rail represents the possible value span.
-       - The whole rail is muted (means "full scale, mostly unused area").
-       - The NORMAL zone (between min and max) is filled with the theme accent
-         so the eye immediately sees "this is the good range".
-       - The pin sits at the value's actual position. Its color reflects the
-         flag (mint = in range, amber = outside normal, red = critical).
-       - A 3-part scale below labels: normal-min · "normal" · normal-max. */
-    .pf-rangebar {
-      position: relative;
-      width: 100%;
-      padding: 6px 0 0;
-    }
-    .pf-rangebar__track {
-      display: flex;
-      height: 8px;
-      border-radius: 9999px;
-      overflow: hidden;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-rangebar__zone {
-      display: block;
-      height: 100%;
-      background: transparent;
-    }
-    .pf-rangebar__zone[data-tone='normal'] {
-      background: var(--gradient-primary);
-      opacity: 0.82;
-    }
-    .pf-rangebar__pin {
-      position: absolute;
-      top: 4px;
-      transform: translateX(-50%);
-      width: 14px;
-      height: 14px;
-      pointer-events: none;
-    }
-    .pf-rangebar__pin::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 9999px;
-      background: var(--text-primary);
-      border: 2px solid var(--bg-card-solid);
-    }
+    /* ── Range bar ───────────────────────────────────────────── */
+    .pf-rangebar { position: relative; width: 100%; padding: 6px 0 0; }
+    .pf-rangebar__track { display: flex; height: 8px; border-radius: 9999px; overflow: hidden; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-rangebar__zone { display: block; height: 100%; background: transparent; }
+    .pf-rangebar__zone[data-tone='normal'] { background: var(--gradient-primary); opacity: 0.82; }
+    .pf-rangebar__pin { position: absolute; top: 4px; transform: translateX(-50%); width: 14px; height: 14px; pointer-events: none; }
+    .pf-rangebar__pin::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: var(--text-primary); border: 2px solid var(--bg-card-solid); }
     .pf-rangebar__pin[data-flag='critical']::before { background: #dc2626; }
     .pf-rangebar__pin[data-flag='abnormal']::before { background: #d97706; }
     .pf-rangebar__pin[data-flag='normal']::before   { background: #10b981; }
     :root.dark .pf-rangebar__pin[data-flag='critical']::before { background: #ef4444; }
     :root.dark .pf-rangebar__pin[data-flag='abnormal']::before { background: #f59e0b; }
     :root.dark .pf-rangebar__pin[data-flag='normal']::before   { background: #34d399; }
-
-    .pf-rangebar__scale {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 8px;
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-    .pf-rangebar__scale-mid {
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-    }
-
-    /* Mini (table) — drop the scale, keep the bar only */
-    .pf-rangebar--mini { padding: 2px 0 0; min-width: 110px; }
+    .pf-rangebar--mini { padding: 2px 0 0; min-width: 100px; }
     .pf-rangebar--mini .pf-rangebar__track { height: 6px; }
     .pf-rangebar--mini .pf-rangebar__pin   { width: 12px; height: 12px; top: 1px; }
-    .pf-rangebar--mini .pf-rangebar__scale { display: none; }
-
-    /* Large (drawer) */
     .pf-rangebar--lg { padding: 18px 0 0; }
     .pf-rangebar--lg .pf-rangebar__track { height: 12px; }
     .pf-rangebar--lg .pf-rangebar__pin   { width: 20px; height: 20px; top: 16px; }
     .pf-rangebar--lg .pf-rangebar__pin::before { border-width: 3px; }
+    .pf-rangebar__labels { position: relative; margin-top: 10px; height: 14px; }
+    .pf-rangebar__tick { position: absolute; transform: translateX(-50%); font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
 
-    /* Tick labels under drawer bar */
-    .pf-rangebar__labels {
-      position: relative;
-      margin-top: 10px;
-      height: 14px;
-    }
-    .pf-rangebar__tick {
-      position: absolute;
-      transform: translateX(-50%);
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
+    /* ── Context rail ────────────────────────────────────────── */
+    .pf-rail-card { padding: 13px 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-rail-lbl { display: block; margin: 0 0 8px; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+    .pf-railpat { display: flex; align-items: center; gap: 12px; }
+    .pf-railpat__id { min-width: 0; flex: 1; }
+    .pf-railpat__name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-railpat__meta { margin: 2px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); }
+    .pf-railpat__entered { margin: 10px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
 
-    /* ── Table view ───────────────────────────────────────── */
-    .pf-table {
-      border-radius: 14px;
-      border: 1px solid var(--glass-border);
-      background: var(--glass-bg);
-      /* Horizontal scroll fallback below the mobile-area layout breakpoint
-         (767px) so the table stays readable even on the narrowest devices
-         before grid-areas kicks in. */
-      /* One shorthand: horizontal scroll, vertical clip — the previous pair
-         cancelled the overflow-x on the next line, clipping the flag column
-         on iPad portrait instead of scrolling. */
-      overflow: auto hidden;
-    }
-    .pf-table__head, .pf-table__row {
-      display: grid;
-      /* Flag column min-content (was hard 130px) so the cell shrinks to
-         the chip's intrinsic size on narrow tablets and we don't force
-         horizontal scroll on iPad Mini (768px). */
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(100px, 1.4fr) min-content;
-      gap: 12px;
-      padding: 10px 14px;
-      align-items: center;
-    }
-    .pf-table__head {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border-muted);
-      background: rgba(0,0,0,0.1);
-    }
-    .pf-table__head > span {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .pf-table__row {
-      width: 100%;
-      border: none;
-      border-top: 1px solid var(--border-muted);
-      background: transparent;
-      color: var(--text-primary);
-      font-size: 13px;
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .pf-table__row:first-of-type { border-top: 0; }
-    .pf-table__row:hover { background: var(--glass-bg-hover); }
-    /* Neutral value text in table; flag is carried by the chip only. */
-    .pf-table__name { font-weight: 600; }
-    .pf-table__value { font-variant-numeric: tabular-nums; font-weight: 600; }
-    .pf-table__unit { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; margin-left: 4px; }
-    .pf-table__range { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); }
+    .pf-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-checklist__item { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer;
+      text-align: left; color: var(--text-secondary); font-size: 13px; transition: background .15s, border-color .15s, color .15s; }
+    @media (hover: hover) { .pf-checklist__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); } }
+    .pf-checklist__item--focus { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.07); color: var(--text-primary); }
+    .pf-checklist__ic { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+    .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: #10b981; }
+    .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #dc2626; }
+    :root.dark .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: #34d399; }
+    :root.dark .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #fca5a5; }
+    .pf-checklist__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .pf-checklist__hint { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
 
-    @media (max-width: 767px) {
-      .pf-table__head { display: none; }
-      .pf-table__row {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-          'name flag'
-          'value flag'
-          'range flag'
-          'where flag';
-        gap: 4px 12px;
-      }
-      .pf-table__name  { grid-area: name; }
-      .pf-table__value { grid-area: value; }
-      .pf-table__range { grid-area: range; }
-      .pf-table__where { grid-area: where; }
-      .pf-table__row > span:last-child { grid-area: flag; }
-    }
+    .pf-comment__input { width: 100%; min-height: 76px; padding: 10px 12px; border-radius: 10px; background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 13px; outline: none; resize: vertical; font-family: inherit; }
+    .pf-comment__input:focus { border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
 
-    /* ── Comment ──────────────────────────────────────────── */
-    .pf-comment {
-      margin-top: 20px;
-      padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-comment__label { display: block; margin-bottom: 8px; }
-    .pf-comment__optional { text-transform: none; letter-spacing: 0; opacity: 0.6; font-weight: 400; }
-    .pf-comment__input {
-      width: 100%;
-      min-height: 80px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      font-size: 13px;
-      outline: none;
-      resize: vertical;
-      font-family: inherit;
-    }
-    .pf-comment__input:focus {
-      border-color: rgba(168, 85, 247, 0.5);
-      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
-    }
+    .pf-trendrow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+    .pf-trendrow input { accent-color: #a855f7; width: 15px; height: 15px; }
+    .pf-trendsel { display: block; margin-top: 10px; }
 
-    /* ── Sticky validate bar ──────────────────────────────── */
-    .pf-stickybar {
-      position: fixed;
-      left: 0; right: 0;
-      bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
-      z-index: 30;
-      padding: 0 16px;
-      pointer-events: none;
-    }
+    /* ── Sticky verdict bar ──────────────────────────────────── */
+    .pf-stickybar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 0 16px; pointer-events: none; }
     @media (min-width: 1280px) { .pf-stickybar { bottom: 1rem; } }
-    .pf-stickybar__inner {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-radius: 16px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      max-width: 1400px;
-      margin: 0 auto;
-    }
+    .pf-stickybar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
+      background: var(--bg-card-solid); border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
     @media (max-width: 640px) { .pf-stickybar__inner { flex-wrap: wrap; } }
-    .pf-stickybar__meta {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
+    .pf-stickybar__meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
     .pf-stickybar__dot { width: 7px; height: 7px; border-radius: 9999px; }
     .pf-stickybar__dot[data-state='ok']       { background: #10b981; }
     .pf-stickybar__dot[data-state='critical'] { background: #dc2626; animation: pf-pulse 1.8s infinite; }
@@ -1221,416 +714,116 @@ interface ValueRow {
     :root.dark .pf-stickybar__dot[data-state='ok']       { background: #34d399; }
     :root.dark .pf-stickybar__dot[data-state='critical'] { background: #ef4444; }
     :root.dark .pf-stickybar__dot[data-state='edit']     { background: #a78bfa; }
-    @keyframes pf-pulse {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.5; }
-    }
+    @keyframes pf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-    .pf-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 36px;
-      padding: 0 14px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 600;
-      border: 1px solid transparent;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.15s, color 0.15s, box-shadow 0.25s, transform 80ms;
-    }
+    .pf-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 9999px; font-size: 13px;
+      font-weight: 600; border: 1px solid transparent; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, box-shadow .25s, transform 80ms; }
     .pf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pf-btn--ghost {
-      background: transparent;
-      color: var(--text-secondary);
-    }
-    .pf-btn--ghost:hover:not(:disabled) {
-      background: var(--glass-bg-hover);
-      color: var(--text-primary);
-    }
-    .pf-btn--secondary {
-      background: var(--glass-bg);
-      color: var(--text-primary);
-      border-color: var(--glass-border);
-    }
-    .pf-btn--secondary:hover:not(:disabled) { background: var(--glass-bg-hover); }
-    .pf-btn--primary {
-      background: var(--gradient-primary);
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
-    }
-    .pf-btn--primary:hover:not(:disabled) {
-      box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55);
-      transform: translateY(-1px);
-    }
-    .pf-btn--danger {
-      background: linear-gradient(135deg, #ef4444, #db2777);
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4);
-    }
-    .pf-btn--danger:hover:not(:disabled) {
-      box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55);
-    }
+    .pf-btn--ghost { background: transparent; color: var(--text-secondary); }
+    .pf-btn--ghost:hover:not(:disabled) { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-btn--primary { background: var(--gradient-primary); color: #ffffff; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4); }
+    .pf-btn--primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55); transform: translateY(-1px); }
+    .pf-btn--danger { background: linear-gradient(135deg, #ef4444, #db2777); color: #ffffff; box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4); }
+    .pf-btn--danger:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55); }
+    .pf-btn--icony .pf-btn__ic { display: none; }
 
-    /* ── Detail drawer ────────────────────────────────────── */
-    .pf-drawer-bd {
-      position: fixed; inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      backdrop-filter: blur(6px);
-      z-index: 44;
-      animation: pf-fade 0.2s ease both;
-    }
-    .pf-drawer {
-      position: fixed;
-      right: 0;
-      top: var(--navbar-height, 4rem);
-      bottom: 0;
-      width: min(100%, 520px);
-      background: var(--bg-card-solid);
-      border-left: 1px solid var(--glass-border);
-      box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
-      z-index: 45;
-      display: flex;
-      flex-direction: column;
-      animation: pf-drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-    }
-    .pf-drawer__hdr {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      border-bottom: 1px solid var(--border-muted);
-    }
-    .pf-drawer__title {
-      margin: 2px 0 0;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-    }
-    .pf-drawer__close {
-      width: 36px; height: 36px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer;
-    }
-    .pf-drawer__body {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 18px;
-    }
-    .pf-drawer__value {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      padding: 20px 22px;
-      border-radius: 18px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 8px;
-    }
-    .pf-drawer__num {
-      font-size: 46px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      line-height: 1;
-    }
-    .pf-drawer__unit {
-      font-size: 16px;
-      color: var(--text-secondary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
+    /* ── More menu (secondary actions) ───────────────────────── */
+    .pf-more { position: relative; }
+    .pf-more__bd { position: fixed; inset: 0; z-index: 1; }
+    .pf-more__menu { position: absolute; bottom: calc(100% + 10px); right: 0; z-index: 2; min-width: 250px; padding: 6px;
+      border-radius: 14px; background: var(--bg-card-solid); border: 1px solid var(--glass-border);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45); animation: pf-menu-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    .pf-more__item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; border: none;
+      background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+      transition: background .15s, color .15s; }
+    .pf-more__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-more__item svg { flex-shrink: 0; color: var(--text-tertiary); }
+    @keyframes pf-menu-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* ── Detail drawer ───────────────────────────────────────── */
+    .pf-drawer-bd { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(6px); z-index: 44; animation: pf-fade 0.2s ease both; }
+    .pf-drawer { position: fixed; right: 0; top: var(--navbar-height, 4rem); bottom: 0; width: min(100%, 520px); background: var(--bg-card-solid);
+      border-left: 1px solid var(--glass-border); box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5); z-index: 45; display: flex; flex-direction: column;
+      animation: pf-drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    .pf-drawer__hdr { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border-muted); }
+    .pf-drawer__title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); }
+    .pf-drawer__close { width: 36px; height: 36px; border-radius: 9999px; background: var(--glass-bg); border: 1px solid var(--glass-border);
+      color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .pf-drawer__body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
+    .pf-drawer__value { display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; border-radius: 18px; background: var(--glass-bg);
+      border: 1px solid var(--glass-border); margin-bottom: 8px; }
+    .pf-drawer__num { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; }
+    .pf-drawer__unit { font-size: 16px; color: var(--text-secondary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
     .pf-drawer__sec { margin-top: 20px; }
-    .pf-drawer__meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px 18px;
-    }
+    .pf-drawer__meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
     .pf-drawer__meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .pf-drawer__meta dt {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin: 0;
-    }
-    .pf-drawer__meta dd {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
-      font-variant-numeric: tabular-nums;
-    }
-    .pf-drawer__sec--alert {
-      padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-left-width: 3px;
-    }
-    .pf-drawer__sec--alert[data-flag='abnormal'] { border-left-color: #d97706; }
-    .pf-drawer__sec--alert[data-flag='critical'] { border-left-color: #dc2626; }
-    :root.dark .pf-drawer__sec--alert[data-flag='abnormal'] { border-left-color: #fbbf24; }
-    :root.dark .pf-drawer__sec--alert[data-flag='critical'] { border-left-color: #fca5a5; }
-    .pf-drawer__why {
-      margin: 0;
-      font-size: 13px;
-      color: var(--text-primary);
-      line-height: 1.5;
-    }
-
+    .pf-drawer__meta dt { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+    .pf-drawer__meta dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-drawer__sec--alert { padding: 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-drawer__sec--alert[data-flag='abnormal'] { border-color: rgba(245, 158, 11, 0.4); }
+    .pf-drawer__sec--alert[data-flag='critical'] { border-color: rgba(239, 68, 68, 0.45); }
+    .pf-drawer__why { margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.5; }
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    /* ── Validator ↔ tech conversation surfaces ─────────────────── */
-    .pf-overall-comments {
-      margin: 16px 0 20px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-overall-comments .pf-eyebrow { margin-bottom: 8px; }
-
-    /* Per-row inline comment thread (table view). Sits between the
-       tapped row and the next, indented + soft-bordered so the
-       conversation visually belongs to that row. */
-    .pf-table__row--has-comments .pf-table__name { color: var(--red-text); font-weight: 600; }
-    .pf-table__comment-flag { margin-left: 6px; font-size: 12px; }
-    .pf-table__row-comments {
-      grid-column: 1 / -1;
-      padding: 12px 16px 14px 32px;
-      background: rgba(96, 165, 250, 0.04);
-      border-top: 1px solid var(--glass-border);
-      border-bottom: 1px solid var(--glass-border);
-    }
-    .pf-table__row-comments-label { margin: 0 0 8px; }
-
-    /* Phones (<640px): tighten the new comment surfaces and the
-       overall section so they don't dominate the screen. */
-    @media (max-width: 639px) {
-      .pf-overall-comments {
-        margin: 12px 0 16px;
-        padding: 12px 14px;
-      }
-      .pf-table__row-comments {
-        padding: 10px 14px 12px 14px;
-      }
-      .pf-table__comment-flag { font-size: 11px; }
-    }
-
-    /* ════════════════════════════════════════════════════════════
-       CROSS-PLATFORM ADDITIVE OVERRIDES (scoped to :host)
-       Desktop-web >=1280px is untouched: every rule below is gated
-       behind a sub-desktop @media query, a touch/coarse-pointer
-       query, or a platform host-context. No base rule is edited.
-       ════════════════════════════════════════════════════════════ */
-
-    /* Non-scroll WORK page: :host stays height:100% on ALL sizes so it
-       fits the shell's main scroll host exactly (no outer page scroll,
-       no double scrollbars). The internal scroll lives in .pf-page__body,
-       whose min-height:0 lets it shrink and scroll on short mobile
-       viewports. (Prior sweep set 100dvh here — that fights the
-       non-scroll model and is intentionally removed.) */
-
-    /* Action-bar icons are phone-only — desktop keeps text labels (no icon). */
-    .pf-btn--icony .pf-btn__ic { display: none; }
-
-    /* ── Standard app-wide back chevron (before the title) ──
-       The single back affordance at ALL widths (web, iPad, phone). The legacy
-       text pill is retired everywhere, and .pf-head centers the row so this
-       38px chevron lines up vertically with the title on every breakpoint. */
-    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
-    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
-    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-
     /* ── Phone (<=640px) ─────────────────────────────────────── */
     @media (max-width: 640px) {
-      /* Stop iOS auto-zoom on focus: form text >=16px on phones. */
       :host .pf-comment__input { font-size: 16px; }
-
-      /* Drop the header description on phone — it squeezes into a thin column
-         next to the long title and reads as broken. Title is enough. */
       :host .pf-head__sub { display: none; }
-
-      /* Validate-bar actions → icon-only on phone. Show the glyph, hide the
-         text label, make each a square 44px tap target. Cancel/Save (edit
-         mode) keep their text — they aren't .pf-btn--icony. */
       :host .pf-btn--icony .pf-btn-label { display: none; }
       :host .pf-btn--icony .pf-btn__ic { display: inline-block; }
-      :host .pf-btn--icony {
-        width: 44px; min-width: 44px; height: 44px;
-        padding: 0;
-        display: inline-flex; align-items: center; justify-content: center;
-      }
-
-      /* The sticky validate bar wraps to multiple rows on phones (status
-         line on its own row + Reject/Reassign/Edit/Validate buttons), so
-         the base pb-32 (128px) on the scroll body isn't enough to clear
-         it — the trailing clinical-comment textarea hides behind the
-         floating bar. Reserve the bar's offset (~tab-nav) plus its wrapped
-         height so the last field is always reachable above it. */
+      :host .pf-btn--icony { width: 44px; min-width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
       :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height) + 150px); }
-
-      /* Patient context strip lets the CRITICAL chip wrap under the
-         identity block instead of squeezing the name. */
-      :host .pf-ctx { flex-wrap: wrap; }
-
-      /* Culture meta grid: 3 cols is too tight on a phone. */
-      :host .pf-culture-rev__meta { grid-template-columns: 1fr; }
-
-      /* Detail drawer becomes a full-width bottom sheet on phones. */
-      :host .pf-drawer {
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        max-height: 88dvh;
-        border-left: none;
-        border-top: 1px solid var(--glass-border);
-        border-radius: 18px 18px 0 0;
-        animation: pf-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-      }
-      /* Sheet body clears the home-indicator safe area. */
+      :host .pf-culture-meta { grid-template-columns: 1fr; }
+      :host .pf-railpat { flex-wrap: wrap; }
+      :host .pf-drawer { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 88dvh; border-left: none;
+        border-top: 1px solid var(--glass-border); border-radius: 18px 18px 0 0; animation: pf-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       :host .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
-
-      /* Drawer meta to single column so labels/values don't crush. */
       :host .pf-drawer__meta { grid-template-columns: 1fr; }
-
-      /* Sticky bar: when buttons wrap, give the status line its own row. */
       :host .pf-stickybar__meta { width: 100%; }
     }
     @keyframes pf-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    /* ── iPad / tablet (641–1279px) ──────────────────────────── */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      /* Use the extra width: 2-up parameter cards rather than the
-         auto-fill min that can leave a lonely single column. */
-      :host .pf-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Parameter rows stack on narrow screens (grid-areas, no h-scroll). */
+    @media (max-width: 767px) {
+      .pf-plist__head { display: none; }
+      .pf-plist__head, .pf-prow__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          'name  cbtn'
+          'value flag'
+          'bar   bar'
+          'ref   ref';
+        gap: 5px 12px;
+      }
+      .pf-prow__name { grid-area: name; }
+      .pf-prow__val  { grid-area: value; }
+      .pf-prow__bar  { grid-area: bar; }
+      .pf-prow__ref  { grid-area: ref; }
+      .pf-prow__flag { grid-area: flag; justify-self: end; }
+      .pf-prow__cbtn { grid-area: cbtn; justify-self: end; }
     }
 
-    /* ── Touch sizing (coarse pointer, any platform) ─────────── */
+    /* ── Touch sizing (coarse pointer) ───────────────────────── */
     @media (pointer: coarse) {
-      :host .pf-head__back { min-height: 44px; }
-      /* >=44px hit area (was 40px) — the toggle visually stays pill-sized
-         via line-height, but the tap target meets the touch minimum. */
-      :host .pf-view-toggle__btn { min-height: 44px; }
       :host .pf-btn { min-height: 44px; }
+      :host .pf-vt__act { min-height: 40px; }
+      :host .pf-prow__cbtn { width: 38px; height: 38px; }
       :host .pf-drawer__close { width: 44px; height: 44px; }
+      :host .pf-more__item { min-height: 44px; }
     }
 
-    /* ── Hover-only affordances gated to real hover devices ──── */
-    @media (hover: hover) {
-      :host .pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-      :host .pf-vcard:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); }
-      :host .pf-view-toggle__btn:hover { color: var(--text-primary); }
-      :host .pf-table__row:hover { background: var(--glass-bg-hover); }
-    }
-
-    /* On touch devices the un-gated base :hover rules above can "stick"
-       after a tap (hover persists until the next tap elsewhere). Reset
-       them on coarse/no-hover pointers so tapped cards/rows don't keep a
-       highlighted state. Additive — desktop hover is untouched. */
+    /* Touch devices: neutralize sticky :hover states after a tap. */
     @media (hover: none) {
-      :host .pf-head__back:hover { background: var(--glass-bg); color: var(--text-secondary); }
-      :host .pf-vcard:hover { background: var(--glass-bg); border-color: var(--glass-border); }
-      :host .pf-view-toggle__btn:hover { color: var(--text-tertiary); }
-      :host .pf-view-toggle__btn--on:hover { color: var(--text-primary); }
-      :host .pf-table__row:hover { background: transparent; }
+      :host .pf-btn--ghost:hover:not(:disabled) { background: transparent; color: var(--text-secondary); }
+      :host .pf-more__item:hover { background: transparent; color: var(--text-secondary); }
     }
 
-    /* ── Capacitor native: this page's own fixed chrome must clear
-         the notch / home indicator. Global body insets do not reach
-         position:fixed descendants. ──────────────────────────── */
+    /* ── Capacitor native: fixed chrome clears the notch ─────── */
     :host-context(html.cap-native) .pf-drawer { top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top, 0px)); }
     @media (max-width: 640px) {
       :host-context(html.cap-native) .pf-drawer { top: auto; }
       :host-context(html.cap-native) .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
-    }
-
-    .pf-trend-chk {
-      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-      padding: 7px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
-      color: var(--text-secondary); background: rgba(124,58,237,0.08); border: 1px solid rgba(168,85,247,0.25);
-    }
-    .pf-trend-chk input { width: 15px; height: 15px; accent-color: #7c3aed; }
-    .pf-trend-chk select {
-      background: var(--input-bg, rgba(255,255,255,0.05)); border: 1px solid var(--glass-border);
-      border-radius: 6px; padding: 3px 6px; color: var(--text-primary); font-size: 11.5px;
-    }
-  
-    @media (max-width: 640px) {
-      .pf-summary { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    /* ══ Sample panel — all tests on one tube reviewed together ══ */
-    .pf-vsample { margin: 4px 0 14px; border: 1px solid var(--glass-border); border-radius: 16px; background: var(--glass-bg); overflow: hidden; }
-    .pf-vsample__hdr { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--glass-border); }
-    .pf-vsample__id { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); margin: 2px 0 0; font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .pf-vsample__sub { font-size: 12px; color: var(--text-tertiary); margin: 2px 0 0; }
-    .pf-vsample__prog { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; font-size: 11.5px; font-weight: 700; }
-    .pf-vsample__prog span { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--glass-border); color: var(--text-secondary); }
-    .pf-vsample__prog span[data-tone='ok'] { color: #84bda6; border-color: rgba(132,189,166,0.4); }
-    .pf-vsample__prog span[data-tone='rej'] { color: var(--red-text, #f87171); border-color: rgba(248,113,113,0.4); }
-    .pf-vsample__prog span[data-tone='pending'] { color: var(--violet-text, #c084fc); border-color: rgba(168,85,247,0.4); }
-
-    .pf-vsample__list { list-style: none; margin: 0; padding: 0; }
-    .pf-vsample__test { border-top: 1px solid var(--glass-border); }
-    .pf-vsample__test:first-child { border-top: 0; }
-    .pf-vsample__test[data-outcome='validated'] { background: rgba(132,189,166,0.06); }
-    .pf-vsample__test[data-outcome='rejected'] { background: rgba(248,113,113,0.06); }
-    .pf-vsample__test--focused { box-shadow: inset 3px 0 0 var(--violet-text, #a855f7); }
-    .pf-vsample__row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
-    .pf-vsample__toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer; padding: 0; min-width: 0; text-align: left; }
-    .pf-vsample__chev { color: var(--text-tertiary); font-size: 11px; transition: transform .15s ease; }
-    .pf-vsample__chev--open { transform: rotate(90deg); }
-    .pf-vsample__name { font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
-    .pf-vsample__peek { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); min-width: 0; }
-    .pf-flagtag { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--glass-border); }
-    .pf-flagtag[data-flag='normal'] { color: #84bda6; border-color: rgba(132,189,166,0.35); }
-    .pf-flagtag[data-flag='abnormal'] { color: var(--amber-text, #f5a524); border-color: rgba(245,165,36,0.35); }
-    .pf-flagtag[data-flag='critical'] { color: var(--red-text, #f87171); border-color: rgba(248,113,113,0.4); }
-    .pf-vsample__badge { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
-    .pf-vsample__badge[data-outcome='validated'] { color: #84bda6; background: rgba(132,189,166,0.14); }
-    .pf-vsample__badge[data-outcome='rejected'] { color: var(--red-text, #f87171); background: rgba(248,113,113,0.14); }
-    .pf-vsample__badge[data-outcome='validating'] { color: var(--text-tertiary); }
-    .pf-vsample__act { font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; }
-    .pf-vsample__act--reject { background: transparent; border-color: var(--glass-border); color: var(--text-secondary); }
-    .pf-vsample__act--reject:hover { border-color: rgba(248,113,113,0.5); color: var(--red-text, #f87171); }
-    .pf-vsample__act--approve { background: var(--gradient-primary); color: #fff; }
-    .pf-vsample__act--approve:hover { opacity: 0.9; }
-    .pf-vsample__empty, .pf-vsample__culture { padding: 0 14px 12px 32px; font-size: 12.5px; color: var(--text-tertiary); }
-    .pf-vsample__inspect { background: none; border: 0; color: var(--violet-text, #c084fc); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 0; }
-
-    /* Read-only value table inside an expanded test */
-    .pf-vtbl { margin: 0 14px 12px 32px; border: 1px solid var(--glass-border); border-radius: 10px; overflow: hidden; }
-    .pf-vtbl__head, .pf-vtbl__row { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.4fr) auto; gap: 10px; align-items: center; padding: 7px 12px; }
-    .pf-vtbl__head { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-tertiary); background: rgba(255,255,255,0.02); }
-    .pf-vtbl__row { border-top: 1px solid var(--glass-border); font-size: 12.5px; }
-    .pf-vtbl__name { color: var(--text-secondary); min-width: 0; }
-    .pf-vtbl__val { color: var(--text-primary); font-weight: 600; }
-    .pf-vtbl__val em { font-style: normal; color: var(--text-tertiary); font-size: 11px; margin-left: 2px; }
-    .pf-vtbl__ref { color: var(--text-tertiary); min-width: 0; }
-    .pf-vtbl__flag { font-size: 10.5px; font-weight: 700; text-align: right; }
-    .pf-vtbl__row[data-flag='abnormal'] .pf-vtbl__val, .pf-vtbl__row[data-flag='abnormal'] .pf-vtbl__flag { color: var(--amber-text, #f5a524); }
-    .pf-vtbl__row[data-flag='critical'] .pf-vtbl__val, .pf-vtbl__row[data-flag='critical'] .pf-vtbl__flag { color: var(--red-text, #f87171); }
-    .pf-reject-banner--sm { margin: 0 14px 10px 32px; }
-
-    @media (max-width: 640px) {
-      .pf-vsample__row { flex-wrap: wrap; }
-      .pf-vtbl { margin-left: 14px; }
-      .pf-vtbl__head { display: none; }
-      .pf-vtbl__row { grid-template-columns: 1fr auto; gap: 4px 10px; }
-      .pf-vsample__empty, .pf-vsample__culture, .pf-reject-banner--sm { padding-left: 14px; margin-left: 14px; }
     }
 `]
 })
@@ -1767,7 +960,6 @@ export class ValidateResultComponent implements OnInit {
   private readonly _saving = signal(false);
   private readonly _editing = signal(false);
   private readonly _edits = signal<Record<string, unknown>>({});
-  private readonly _view = signal<View>('cards');
   private readonly _detailRow = signal<ValueRow | null>(null);
 
   readonly selected = this._selected.asReadonly();
@@ -1775,9 +967,7 @@ export class ValidateResultComponent implements OnInit {
   readonly loading = this._loading.asReadonly();
   readonly saving = this._saving.asReadonly();
   readonly editing = this._editing.asReadonly();
-  readonly view = this._view.asReadonly();
   readonly detailRow = this._detailRow.asReadonly();
-  setView(v: View) { this._view.set(v); }
 
   // ── Sample-level validation (all tests on one tube reviewed together) ──
   /** The full validation queue, kept so we can show every sibling test of the
@@ -1785,8 +975,8 @@ export class ValidateResultComponent implements OnInit {
   private readonly _queue = signal<OrderTest[]>([]);
   /** Per-test outcome as the pathologist works through the sample. */
   private readonly _outcome = signal<Record<string, 'pending' | 'validating' | 'validated' | 'rejected'>>({});
-  /** Which test rows are expanded to show their full parameter table. */
-  private readonly _expanded = signal<Set<string>>(new Set());
+  /** Tests whose normal rows are shown (attention-first collapse). */
+  private readonly _shownNormals = signal<Set<string>>(new Set());
 
   /** Stable key identifying the tube/sample a test belongs to. */
   private sampleKey(t: OrderTest | null | undefined): string {
@@ -1807,9 +997,9 @@ export class ValidateResultComponent implements OnInit {
   outcomeOf(t: OrderTest): 'pending' | 'validating' | 'validated' | 'rejected' {
     return this._outcome()[t.id] ?? 'pending';
   }
-  isExpanded(t: OrderTest): boolean { return this._expanded().has(t.id); }
-  toggleExpand(t: OrderTest) {
-    this._expanded.update(s => { const n = new Set(s); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; });
+  showsNormals(t: OrderTest): boolean { return this._shownNormals().has(t.id); }
+  toggleNormals(t: OrderTest) {
+    this._shownNormals.update(s => { const n = new Set(s); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; });
   }
   /** Focus a test so the detailed review / edit / comments below reflect it. */
   focusTest(t: OrderTest) { this._selected.set(t); void this.loadComments(); }
@@ -1828,6 +1018,55 @@ export class ValidateResultComponent implements OnInit {
     return { done, rej, total: all.length };
   });
   readonly hasSampleCritical = computed(() => this.sampleTests().some(t => this.countsFor(t).critical > 0));
+
+  // ── Cockpit helpers ────────────────────────────────────────
+  readonly moreOpen = signal(false);
+  readonly hasMoreActions = computed(() =>
+    this.sampleTests().length <= 1 || !!(this.canEditResult() && this.editOrderId()));
+
+  /** Attention-first: flagged rows always visible; normals collapse behind
+   *  the expander. Editing shows everything — any value may need fixing. */
+  visibleRowsFor(t: OrderTest): ValueRow[] {
+    const rows = this.valueRowsFor(t);
+    if (this.isEditingTest(t) || this.showsNormals(t)) return rows;
+    const flagged = rows.filter(r => r.flag !== 'normal');
+    return flagged.length ? flagged : rows;
+  }
+  hiddenNormals(t: OrderTest): number {
+    return this.valueRowsFor(t).length - this.visibleRowsFor(t).length;
+  }
+  canCollapseNormals(t: OrderTest): boolean {
+    if (!this.showsNormals(t) || this.isEditingTest(t)) return false;
+    const rows = this.valueRowsFor(t);
+    return rows.some(r => r.flag !== 'normal') && rows.some(r => r.flag === 'normal');
+  }
+
+  isEditingTest(t: OrderTest): boolean { return this.editing() && this._selected()?.id === t.id; }
+  editVal(name: string): string {
+    const v = this._edits()[name];
+    return v == null ? '' : String(v);
+  }
+  setEditVal(name: string, v: string) { this._edits.update(e => ({ ...e, [name]: v })); }
+
+  /** Rail checklist → jump to (and focus) that test's section. */
+  scrollToTest(t: OrderTest) {
+    this.focusTest(t);
+    document.getElementById('vt-' + t.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  /** A row's comment affordance follows focus: discussing a sibling test's
+   *  parameter first makes that test the conversation context. */
+  rowComment(t: OrderTest, paramName: string) {
+    if (this._selected()?.id !== t.id) this.focusTest(t);
+    this.toggleParamComment(paramName);
+  }
+
+  readonly trendDurations: PfSelectOption[] = [
+    { value: '5', label: 'Last 5 results' },
+    { value: '10', label: 'Last 10 results' },
+    { value: '3m', label: 'Last 3 months' },
+    { value: '6m', label: 'Last 6 months' },
+    { value: 'all', label: 'All history' },
+  ];
 
   approveTest(t: OrderTest) {
     if (this.outcomeOf(t) !== 'pending') return;
@@ -1892,12 +1131,17 @@ export class ValidateResultComponent implements OnInit {
     if (this.pendingSampleTests().length === 0) setTimeout(() => this.back(), 600);
   }
 
+  readonly headTitle = computed(() => {
+    if (this.sampleTests().length > 1) return `Sample ${this.sampleLabel()}`;
+    return this._selected()?.test?.name ?? 'Validate';
+  });
   readonly subtitleText = computed(() => {
     const t = this._selected();
     if (!t) return 'Review the entered result.';
     const name = t.subOrder?.order?.patient?.displayName ?? '—';
     const dept = t.test?.department?.name ?? '—';
-    return `${name} · ${dept} · review and sign off`;
+    const n = this.sampleTests().length;
+    return n > 1 ? `${name} · ${dept} · ${n} tests on this tube` : `${name} · ${dept} · ${this.sampleLabel()}`;
   });
 
   private snapshotFor(t: OrderTest | null): ResultSnapshot | null {
@@ -1992,13 +1236,6 @@ export class ValidateResultComponent implements OnInit {
   }
   readonly cultureResult = computed<CultureResult | null>(() => this.cultureResultFor(this._selected()));
 
-  interpLabel(v?: string): string {
-    return v === 'S' ? 'Sensitive' : v === 'R' ? 'Resistant' : v === 'I' ? 'Intermediate' : '—';
-  }
-  interpTone(v?: string): string {
-    return v === 'S' ? '#10b981' : v === 'R' ? '#ef4444' : v === 'I' ? '#f59e0b' : 'var(--text-tertiary)';
-  }
-
   // ── Range-bar zone computation ─────────────────────────────
   /** Produce zones (critical-low / low / normal / high / critical-high) with proportional widths. */
   zonesFor(r: ValueRow): Array<{ label: string; tone: string; weight: number }> {
@@ -2076,12 +1313,7 @@ export class ValidateResultComponent implements OnInit {
         this._queue.set(rows ?? []);
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
-        if (match) {
-          void this.loadComments();
-          // Show every test on this sample expanded by default — the whole point
-          // is to review the tube at once rather than opening tests one by one.
-          this._expanded.set(new Set(this.sampleTests().map(t => t.id)));
-        }
+        if (match) void this.loadComments();
       },
       error: () => this._loading.set(false)
     });
@@ -2104,7 +1336,7 @@ export class ValidateResultComponent implements OnInit {
     }
     this._edits.set(seed);
     this._editing.set(true);
-    this.toasts.success('Edit mode — click a parameter to change');
+    this.toasts.success('Edit mode — change values inline, then Save');
   }
 
   cancelEdit() {
