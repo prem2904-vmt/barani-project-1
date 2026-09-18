@@ -55,6 +55,10 @@ interface ValueRow {
   critHigh?: number;
   isNumeric: boolean;
   flag: Flag;
+  /** True when the parameter has a reference (range or critical bounds) —
+   *  only then does a "Normal" verdict mean anything. Referenceless
+   *  categorical values are shown as recorded, not judged. */
+  hasRef: boolean;
 }
 
 @Component({
@@ -118,7 +122,7 @@ interface ValueRow {
                           {{ c.total }} parameters
                           @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} critical</span> }
                           @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abnormal</span> }
-                          @if (!c.abnormal && !c.critical && c.total) { <span class="pf-flagtag" data-flag="normal">all normal</span> }
+                          @if (!c.abnormal && !c.critical && c.total && hasRefRows(st)) { <span class="pf-flagtag" data-flag="normal">all within range</span> }
                         }
                       </p>
                     </div>
@@ -217,10 +221,12 @@ interface ValueRow {
                             </span>
                             <span class="pf-prow__ref">{{ r.range ?? '—' }}</span>
                             <span class="pf-prow__flag">
-                              <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
-                                <span class="pf-vcard__chip-dot"></span>
-                                {{ flagLabel(r.flag) }}
-                              </span>
+                              @if (r.flag !== 'normal' || r.hasRef) {
+                                <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
+                                  <span class="pf-vcard__chip-dot"></span>
+                                  {{ flagLabel(r.flag) }}
+                                </span>
+                              } @else { <span class="pf-prow__dash">—</span> }
                             </span>
                             <button type="button" class="pf-prow__cbtn press"
                                     [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(r.name)"
@@ -296,7 +302,7 @@ interface ValueRow {
                               @let cc = countsFor(st);
                               @if (cc.critical) { {{ cc.critical }} crit }
                               @else if (cc.abnormal) { {{ cc.abnormal }} abn }
-                              @else { ok }
+                              @else { — }
                             }
                           </span>
                         </button>
@@ -449,10 +455,12 @@ interface ValueRow {
             <div class="min-w-0 flex-1">
               <h2 class="pf-drawer__title">{{ r.title }}</h2>
             </div>
-            <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
-              <span class="pf-vcard__chip-dot"></span>
-              {{ flagLabel(r.flag) }}
-            </span>
+            @if (r.flag !== 'normal' || r.hasRef) {
+              <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
+                <span class="pf-vcard__chip-dot"></span>
+                {{ flagLabel(r.flag) }}
+              </span>
+            }
             <button type="button" class="pf-drawer__close press" (click)="closeDetail()" aria-label="Close">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -548,34 +556,31 @@ interface ValueRow {
 
     /* ── Test section ────────────────────────────────────────── */
     .pf-vt { border-radius: 16px; border: 1px solid var(--glass-border); background: var(--glass-bg); overflow: hidden; }
-    .pf-vt[data-outcome='validated'] { border-color: rgba(16, 185, 129, 0.3); }
+    .pf-vt[data-outcome='validated'] { border-color: rgba(168, 85, 247, 0.35); }
     .pf-vt[data-outcome='rejected']  { border-color: rgba(239, 68, 68, 0.32); }
     .pf-vt__hdr { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; flex-wrap: wrap; }
     .pf-vt__id { min-width: 0; }
     .pf-vt__name { margin: 0; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
     .pf-vt__meta { margin: 3px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .pf-flagtag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 9999px; font-size: 10px; font-weight: 700; border: 1px solid transparent; }
-    .pf-flagtag[data-flag='normal']   { color: #10b981; border-color: rgba(16, 185, 129, 0.28); }
+    .pf-flagtag[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--glass-border); }
     .pf-flagtag[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
     .pf-flagtag[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
-    :root.dark .pf-flagtag[data-flag='normal']   { color: #34d399; }
     :root.dark .pf-flagtag[data-flag='abnormal'] { color: #fbbf24; }
     :root.dark .pf-flagtag[data-flag='critical'] { color: #fca5a5; }
 
     .pf-vt__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-family: 'JetBrains Mono', ui-monospace, monospace; border: 1px solid transparent; }
-    .pf-vt__badge[data-outcome='validated']  { color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.08); }
+    .pf-vt__badge[data-outcome='validated']  { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.35); background: rgba(168, 85, 247, 0.08); }
     .pf-vt__badge[data-outcome='rejected']   { color: #dc2626; border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); }
     .pf-vt__badge[data-outcome='validating'] { color: var(--text-tertiary); border-color: var(--glass-border); }
-    :root.dark .pf-vt__badge[data-outcome='validated'] { color: #34d399; }
     :root.dark .pf-vt__badge[data-outcome='rejected']  { color: #fca5a5; }
 
     .pf-vt__act { height: 30px; padding: 0 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: transparent; transition: background .15s, color .15s, border-color .15s; }
     .pf-vt__act:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pf-vt__act--approve { color: #10b981; border-color: rgba(16, 185, 129, 0.4); }
+    .pf-vt__act--approve { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.45); }
     .pf-vt__act--reject  { color: var(--text-tertiary); }
-    :root.dark .pf-vt__act--approve { color: #34d399; }
     @media (hover: hover) {
-      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(16, 185, 129, 0.12); }
+      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(168, 85, 247, 0.14); }
       .pf-vt__act--reject:hover:not(:disabled)  { background: rgba(239, 68, 68, 0.1); color: var(--red-text, #f87171); }
     }
 
@@ -638,10 +643,9 @@ interface ValueRow {
       background: transparent; border: 1px solid transparent; }
     .pf-vcard__chip--lg { font-size: 11px; padding: 5px 12px; }
     .pf-vcard__chip-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
-    .pf-vcard__chip[data-flag='normal']   { color: #10b981; border-color: rgba(16, 185, 129, 0.28); }
+    .pf-vcard__chip[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--glass-border); }
     .pf-vcard__chip[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
     .pf-vcard__chip[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
-    :root.dark .pf-vcard__chip[data-flag='normal']   { color: #34d399; }
     :root.dark .pf-vcard__chip[data-flag='abnormal'] { color: #fbbf24; }
     :root.dark .pf-vcard__chip[data-flag='critical'] { color: #fca5a5; }
 
@@ -654,10 +658,8 @@ interface ValueRow {
     .pf-rangebar__pin::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: var(--text-primary); border: 2px solid var(--bg-card-solid); }
     .pf-rangebar__pin[data-flag='critical']::before { background: #dc2626; }
     .pf-rangebar__pin[data-flag='abnormal']::before { background: #d97706; }
-    .pf-rangebar__pin[data-flag='normal']::before   { background: #10b981; }
     :root.dark .pf-rangebar__pin[data-flag='critical']::before { background: #ef4444; }
     :root.dark .pf-rangebar__pin[data-flag='abnormal']::before { background: #f59e0b; }
-    :root.dark .pf-rangebar__pin[data-flag='normal']::before   { background: #34d399; }
     .pf-rangebar--mini { padding: 2px 0 0; min-width: 100px; }
     .pf-rangebar--mini .pf-rangebar__track { height: 6px; }
     .pf-rangebar--mini .pf-rangebar__pin   { width: 12px; height: 12px; top: 1px; }
@@ -684,9 +686,8 @@ interface ValueRow {
     @media (hover: hover) { .pf-checklist__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); } }
     .pf-checklist__item--focus { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.07); color: var(--text-primary); }
     .pf-checklist__ic { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
-    .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: #10b981; }
+    .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: var(--violet-text, #c4b5fd); }
     .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #dc2626; }
-    :root.dark .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: #34d399; }
     :root.dark .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #fca5a5; }
     .pf-checklist__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .pf-checklist__hint { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
@@ -708,10 +709,9 @@ interface ValueRow {
     @media (max-width: 640px) { .pf-stickybar__inner { flex-wrap: wrap; } }
     .pf-stickybar__meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
     .pf-stickybar__dot { width: 7px; height: 7px; border-radius: 9999px; }
-    .pf-stickybar__dot[data-state='ok']       { background: #10b981; }
+    .pf-stickybar__dot[data-state='ok']       { background: #a855f7; }
     .pf-stickybar__dot[data-state='critical'] { background: #dc2626; animation: pf-pulse 1.8s infinite; }
     .pf-stickybar__dot[data-state='edit']     { background: #8b5cf6; }
-    :root.dark .pf-stickybar__dot[data-state='ok']       { background: #34d399; }
     :root.dark .pf-stickybar__dot[data-state='critical'] { background: #ef4444; }
     :root.dark .pf-stickybar__dot[data-state='edit']     { background: #a78bfa; }
     @keyframes pf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -1032,6 +1032,8 @@ export class ValidateResultComponent implements OnInit {
     const flagged = rows.filter(r => r.flag !== 'normal');
     return flagged.length ? flagged : rows;
   }
+  /** Any row with a real reference — gates the "all within range" tag. */
+  hasRefRows(t: OrderTest): boolean { return this.valueRowsFor(t).some(r => r.hasRef); }
   hiddenNormals(t: OrderTest): number {
     return this.valueRowsFor(t).length - this.visibleRowsFor(t).length;
   }
@@ -1202,7 +1204,8 @@ export class ValidateResultComponent implements OnInit {
         critLow: p.criticalLow,
         critHigh: p.criticalHigh,
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
-        flag
+        flag,
+        hasRef: !!rangeText || p.criticalLow != null || p.criticalHigh != null
       };
     });
   }
