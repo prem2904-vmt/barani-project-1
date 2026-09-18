@@ -1,6 +1,6 @@
 import { CommonModule, DatePipe } from "@angular/common";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
-import {
+import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
   Injector,
@@ -9,9 +9,11 @@ import {
   inject,
   signal,
 } from "@angular/core";
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { environment } from "../../../../environments/environment";
 import { Router } from "@angular/router";
 import { ApiService } from "../../../core/services/api.service";
+import { LiveQueueService } from "../../../core/services/live-queue.service";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
 import { ToastService } from "../../../core/services/toast.service";
@@ -92,6 +94,8 @@ export class ReportQueueComponent implements OnInit {
     return formatPatientInfo(p);
   }
   private readonly api = inject(ApiService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
@@ -429,6 +433,8 @@ export class ReportQueueComponent implements OnInit {
   }
 
   ngOnInit() {
+    // Live: a validation elsewhere can complete an order → its report appears.
+    this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     // Self-healing: ask the backend to generate any missing final
     // reports for orders that are already 'validated' but have no
     // report row yet (e.g. validations done before the
