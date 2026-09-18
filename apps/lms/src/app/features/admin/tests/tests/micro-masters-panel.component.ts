@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
-import { ColDef } from 'ag-grid-community';
+import { ColDef, ValueGetterParams } from 'ag-grid-community';
 import { RowClickedEvent } from 'ag-grid-community';
 import { ApiService } from '../../../../core/services/api.service';
 import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/select.component';
@@ -316,13 +316,24 @@ export class MicroMastersPanelComponent implements OnInit {
         { headerName: 'Reporting', field: 'reportingCategory', minWidth: 130 },
       ];
       default: return [
-        { headerName: 'Organism group', field: 'organismGroup', minWidth: 180, flex: 1, sort: 'asc' },
-        { headerName: 'Antibiotic', field: 'antibiotic', minWidth: 180, flex: 1 },
-        { headerName: 'Disc (µg)', field: 'discContent', minWidth: 100, maxWidth: 120 },
-        { headerName: 'S ≥ (mm)', field: 'susceptibleMin', minWidth: 100, maxWidth: 130 },
-        { headerName: 'R ≤ (mm)', field: 'resistantMax', minWidth: 100, maxWidth: 130 },
-        { headerName: 'Source', field: 'source', minWidth: 120 },
-        { headerName: 'Version', field: 'version', minWidth: 100 },
+        { headerName: 'Organism group', field: 'organismGroup', minWidth: 170, flex: 1.1, sort: 'asc' },
+        { headerName: 'Antibiotic', field: 'antibiotic', minWidth: 200, flex: 1.4 },
+        { headerName: 'Short', field: 'shortLabel', minWidth: 90, maxWidth: 110 },
+        { headerName: 'Disk', field: 'diskLabel', minWidth: 95, maxWidth: 115 },
+        { headerName: 'S ≥ mm', field: 'susceptibleMin', minWidth: 85, maxWidth: 100,
+          cellStyle: { color: '#34d399', fontWeight: '600' } },
+        { headerName: 'I mm', minWidth: 85, maxWidth: 105, cellStyle: { color: '#fbbf24', fontWeight: '600' },
+          valueGetter: (p: ValueGetterParams<Breakpoint>) => p.data?.zoneI
+            ?? (p.data?.susceptibleMin != null && p.data?.resistantMax != null
+                ? this.iWindow(p.data.susceptibleMin, p.data.resistantMax) : '') },
+        { headerName: 'R ≤ mm', field: 'resistantMax', minWidth: 85, maxWidth: 100,
+          cellStyle: { color: '#f87171', fontWeight: '600' } },
+        { headerName: 'MIC S', field: 'micS', minWidth: 85, maxWidth: 110, cellStyle: { color: '#34d399', fontWeight: '500' } },
+        { headerName: 'MIC I', field: 'micI', minWidth: 85, maxWidth: 110, cellStyle: { color: '#fbbf24', fontWeight: '500' } },
+        { headerName: 'MIC R', field: 'micR', minWidth: 85, maxWidth: 110, cellStyle: { color: '#f87171', fontWeight: '500' } },
+        { headerName: 'Urine', field: 'urineOnly', minWidth: 80, maxWidth: 95, cellRenderer: this.yesNo },
+        { headerName: 'Origin', minWidth: 95, maxWidth: 115,
+          valueGetter: (p: ValueGetterParams<Breakpoint>) => p.data?.tenant ? 'Lab' : 'CLSI Ed36' },
       ];
     }
   });
