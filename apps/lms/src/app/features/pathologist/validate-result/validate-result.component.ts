@@ -25,8 +25,18 @@ import { flagAgainst, formatRange, normalizeSex, selectReferenceRange, type Rang
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
+  /** Culture sign-out: every completed bench stage's structured entries
+   *  (gram smear fields, growth notes, identified organisms, branch ASTs). */
+  stages?: CultureStageSnap[];
   note?: string;
   flags?: { critical: boolean; notifications: string[] };
+}
+
+interface CultureStageSnap {
+  key: string;
+  label: string;
+  caseLabel?: string | null;
+  values: Record<string, unknown>;
 }
 
 type Flag = 'normal' | 'abnormal' | 'critical';
@@ -169,14 +179,49 @@ interface ValueRow {
                           <div><span class="pf-rail-lbl">Gram stain</span><p>{{ cr.gramStain || '—' }}</p></div>
                           <div><span class="pf-rail-lbl">Colony count</span><p>{{ cr.colonyCount || '—' }}</p></div>
                         </div>
+                        <!-- Stage-by-stage bench record: gram smear fields,
+                             growth, identification — and branch stages. -->
+                        @for (sg of cultureStagesFor(st); track $index) {
+                          <div class="pf-cstage">
+                            <h3 class="pf-cstage__name">
+                              @if (sg.caseLabel) { <span class="pf-cstage__case">{{ sg.caseLabel }}</span> }
+                              {{ sg.label }}
+                            </h3>
+                            @if (sg.key === 'ast') {
+                              <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
+                            } @else {
+                              @if (stageFields(sg.values); as sf) {
+                                @if (sf.length) {
+                                  <dl class="pf-cstage__grid">
+                                    @for (f of sf; track f.title) {
+                                      <div><dt>{{ f.title }}</dt><dd>{{ f.value }}</dd></div>
+                                    }
+                                  </dl>
+                                }
+                              }
+                              @if (stageOrganisms(sg.values); as so) {
+                                @if (so.length) {
+                                  <div class="pf-cstage__orgs">
+                                    @for (o of so; track o) { <span class="pf-cstage__org">{{ o }}</span> }
+                                  </div>
+                                }
+                              }
+                              @if (stageNotes(sg.values)) { <p class="pf-cstage__notes">{{ stageNotes(sg.values) }}</p> }
+                            }
+                          </div>
+                        }
+
                         @if (cr.noGrowth) {
                           <p class="pf-culture-growth">No significant growth</p>
                         } @else if ((cr.organisms ?? []).length === 0) {
                           <p class="pf-culture-empty">No organisms recorded.</p>
                         } @else {
-                          <!-- The bench's own AST view, read-only — the validator
-                               reviews exactly what the tech saw. -->
-                          <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
+                          <div class="pf-cstage">
+                            <h3 class="pf-cstage__name">Antibiotic sensitivity</h3>
+                            <!-- The bench's own AST view, read-only — the validator
+                                 reviews exactly what the tech saw. -->
+                            <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
+                          </div>
                         }
                       </div>
                     } @else {
@@ -599,6 +644,16 @@ interface ValueRow {
     .pf-culture-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
     .pf-culture-meta p { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-culture-growth { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-secondary); }
+    .pf-cstage { margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.02); }
+    .pf-cstage__name { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .pf-cstage__case { padding: 1px 8px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; color: var(--violet-text, #c4b5fd); border: 1px solid rgba(168, 85, 247, 0.4); }
+    .pf-cstage__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; margin: 0; }
+    .pf-cstage__grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .pf-cstage__grid dt { margin: 0; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+    .pf-cstage__grid dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-cstage__orgs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-cstage__org { padding: 3px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; color: var(--text-primary); border: 1px solid var(--glass-border-hover); background: var(--glass-bg); font-style: italic; }
+    .pf-cstage__notes { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
     .pf-culture-empty { margin: 0; font-size: 13px; color: var(--text-tertiary); }
 
     /* ── Parameter list — one view, attention-first ──────────── */
@@ -1238,6 +1293,25 @@ export class ValidateResultComponent implements OnInit {
     return (this.snapshotFor(t)?.values as CultureResult) ?? null;
   }
   readonly cultureResult = computed<CultureResult | null>(() => this.cultureResultFor(this._selected()));
+
+  /** The bench's stage-by-stage record captured at sign-out. */
+  cultureStagesFor(t: OrderTest | null): CultureStageSnap[] {
+    return this.snapshotFor(t)?.stages ?? [];
+  }
+  stageFields(v: Record<string, unknown>): Array<{ title: string; value: string }> {
+    const f = v?.['fields'];
+    if (!Array.isArray(f)) return [];
+    return f.map(x => ({ title: String(x?.title || x?.name || ''), value: String(x?.value ?? '') }))
+      .filter(x => x.title && x.value);
+  }
+  stageOrganisms(v: Record<string, unknown>): string[] {
+    const o = v?.['organisms'];
+    return Array.isArray(o) ? o.filter((x): x is string => typeof x === 'string') : [];
+  }
+  stageNotes(v: Record<string, unknown>): string {
+    const n = v?.['notes'];
+    return typeof n === 'string' ? n : '';
+  }
 
   // ── Range-bar zone computation ─────────────────────────────
   /** Produce zones (critical-low / low / normal / high / critical-high) with proportional widths. */
