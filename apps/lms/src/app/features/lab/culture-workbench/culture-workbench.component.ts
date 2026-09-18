@@ -154,7 +154,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                   </header>
                   @if (noteOpen(s.key) || commentsFor(s.key).length > 0) {
                     <div class="pf-stg__thread">
-                      <pf-comment-thread [comments]="commentsFor(s.key)" currentRole="tech"
+                      <pf-comment-thread [comments]="commentsFor(s.key)" currentRole="tech" [autoCompose]="true"
                                          [composeLabel]="'Add note on ' + s.label"
                                          (add)="addComment(s.key, $event.body, $event.type)"
                                          (reply)="replyComment(s.key, $event.parentId, $event.body)"></pf-comment-thread>
@@ -208,7 +208,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                               </div>
                               @if (noteOpen(paramKey(s.key, f.name)) || commentsFor(paramKey(s.key, f.name)).length > 0) {
                                 <div class="pf-mx__thread">
-                                  <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech"
+                                  <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech" [autoCompose]="true"
                                                      [composeLabel]="'Add note on ' + f.title"
                                                      (add)="addComment(paramKey(s.key, f.name), $event.body, $event.type)"
                                                      (reply)="replyComment(paramKey(s.key, f.name), $event.parentId, $event.body)"></pf-comment-thread>
@@ -257,7 +257,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                             </label>
                             @if (noteOpen(paramKey(s.key, f.name)) || commentsFor(paramKey(s.key, f.name)).length > 0) {
                               <div class="pf-stg__thread pf-stg__thread--field">
-                                <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech"
+                                <pf-comment-thread [comments]="commentsFor(paramKey(s.key, f.name))" currentRole="tech" [autoCompose]="true"
                                                    [composeLabel]="'Add note on ' + f.title"
                                                    (add)="addComment(paramKey(s.key, f.name), $event.body, $event.type)"
                                                    (reply)="replyComment(paramKey(s.key, f.name), $event.parentId, $event.body)"></pf-comment-thread>

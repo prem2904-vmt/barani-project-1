@@ -322,6 +322,11 @@ export class CommentThreadComponent {
   @Input() currentRole: 'tech' | 'validator' = 'tech';
   @Input() compose: boolean = true;
   @Input() composeLabel: string | null = null;
+  /** Open the compose box immediately on first render (the caller's ✎ click
+   *  IS the intent to write — no second "+ Add note" click). */
+  @Input() set autoCompose(v: boolean) {
+    if (v && this._comments().length === 0) this.openNew();
+  }
 
   @Output() add = new EventEmitter<{ body: string; type: 'observation' | 'correction' }>();
   @Output() reply = new EventEmitter<{ parentId: string; body: string }>();
