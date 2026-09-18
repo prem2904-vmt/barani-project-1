@@ -12,15 +12,18 @@ import { gridThemeDark, gridThemeLight } from './tests.component';
 interface MicroOrganism {
   code: string; name: string; shortName: string | null; group: string | null;
   gram: string | null; significance: string | null; astApplicable: boolean;
+  tenantId?: string | null;
 }
 interface MicroSpecimen {
   code: string; name: string; category: string | null; site: string | null;
   container: string | null; transport: string | null; suitableFor: string | null;
+  tenantId?: string | null;
 }
 interface MicroAntibiotic {
   code: string; name: string; shortName: string | null; abxClass: string | null;
   drugGroup: string | null; astApplicable: boolean; diskDiffusion: boolean;
   micTesting: boolean; reportingCategory: string | null;
+  tenantId?: string | null;
 }
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
@@ -33,6 +36,19 @@ interface Breakpoint {
 }
 
 type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
+
+/** The editor's working copy — a superset of all four masters' fields. */
+interface EdModel {
+  code?: string | null; name?: string; shortName?: string | null; group?: string | null;
+  gram?: string | null; significance?: string | null; astApplicable?: boolean;
+  abxClass?: string | null; drugGroup?: string | null; diskDiffusion?: boolean; micTesting?: boolean;
+  category?: string | null; site?: string | null; container?: string | null;
+  transport?: string | null; suitableFor?: string | null;
+  organismGroup?: string; antibiotic?: string; shortLabel?: string | null; diskLabel?: string | null;
+  susceptibleMin?: number | null; resistantMax?: number | null;
+  micS?: string | null; micI?: string | null; micR?: string | null;
+  urineOnly?: boolean; tenantId?: string | null; tenant?: boolean;
+}
 
 /**
  * Test Master → MICROBIOLOGY. The culture pipeline's reference dictionaries —
@@ -54,7 +70,8 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
                [ngModel]="query()" (ngModelChange)="query.set($event)" />
         <span class="pf-mm__count">{{ shownCount() }} of {{ totalCount() }} {{ label(section()) }}</span>
         <span class="pf-mm__spacer"></span>
-        <span class="pf-mm__hint">Standard reference masters — used by the Culture bench (MIC200 C&amp;S)</span>
+        <button type="button" class="pf-mm__new press" (click)="startCreate()">+ New {{ singular(section()) }}</button>
+        <span class="pf-mm__hint">Lab edits overlay the standards — used by the Culture bench (MIC200 C&amp;S)</span>
       </div>
 
       <div class="pf-mm__cols">
@@ -75,7 +92,7 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
         </aside>
 
         <!-- ── RIGHT: the selected master's grid (+ organism detail) ── -->
-        <div class="pf-mm__split" [class.pf-mm__split--detail]="section() === 'organisms' && selOrg()">
+        <div class="pf-mm__split" [class.pf-mm__split--detail]="editor() || (section() === 'organisms' && selOrg())">
           <div class="pf-mm__grid">
             <ag-grid-angular
               style="width: 100%; height: 62vh;"
@@ -89,14 +106,102 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
             </ag-grid-angular>
           </div>
 
-          @if (section() === 'organisms' && selOrg(); as org) {
+          @if (editor(); as ed) {
+            <aside class="pf-mm__side">
+              <div class="pf-mm__shead">
+                <span class="pf-mm__sname">{{ ed.isNew ? 'New ' + singular(ed.kind) : ed.model.name || ed.model.antibiotic }}</span>
+                <button type="button" class="pf-mm__ghost" (click)="editor.set(null)">Close</button>
+              </div>
+              @if (!ed.isNew) {
+                <div class="pf-mm__smeta">{{ ed.model.tenantId || ed.model.tenant ? 'Lab-authored — editable in place' : 'Standard row — saving creates your lab\u2019s override' }}</div>
+              }
+
+              @if (ed.kind === 'specimens') {
+                <div class="pf-mm__slabel">Specimen</div>
+                <label class="pf-mm__fld"><span>Name</span><input class="pf-mm__in" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-mm__fld"><span>Category</span><input class="pf-mm__in" [ngModel]="ed.model.category" (ngModelChange)="patchEd('category', $event)" /></label>
+                <label class="pf-mm__fld"><span>Site</span><input class="pf-mm__in" [ngModel]="ed.model.site" (ngModelChange)="patchEd('site', $event)" /></label>
+                <label class="pf-mm__fld"><span>Container</span><input class="pf-mm__in" [ngModel]="ed.model.container" (ngModelChange)="patchEd('container', $event)" /></label>
+                <label class="pf-mm__fld"><span>Transport</span><input class="pf-mm__in" [ngModel]="ed.model.transport" (ngModelChange)="patchEd('transport', $event)" /></label>
+                <label class="pf-mm__fld"><span>Suitable for</span><input class="pf-mm__in" [ngModel]="ed.model.suitableFor" (ngModelChange)="patchEd('suitableFor', $event)" /></label>
+              }
+
+              @if (ed.kind === 'antibiotics') {
+                <div class="pf-mm__slabel">Antibiotic</div>
+                <label class="pf-mm__fld"><span>Name</span><input class="pf-mm__in" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-mm__fld"><span>Short</span><input class="pf-mm__in" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
+                <label class="pf-mm__fld"><span>Class</span><input class="pf-mm__in" [ngModel]="ed.model.abxClass" (ngModelChange)="patchEd('abxClass', $event)" /></label>
+                <label class="pf-mm__fld"><span>Group</span><input class="pf-mm__in" [ngModel]="ed.model.drugGroup" (ngModelChange)="patchEd('drugGroup', $event)" /></label>
+                <div class="pf-mm__flags">
+                  <label class="pf-mm__flag"><input type="checkbox" [checked]="ed.model.astApplicable" (change)="patchEd('astApplicable', !ed.model.astApplicable)" /> AST</label>
+                  <label class="pf-mm__flag"><input type="checkbox" [checked]="ed.model.diskDiffusion" (change)="patchEd('diskDiffusion', !ed.model.diskDiffusion)" /> Disk diffusion</label>
+                  <label class="pf-mm__flag"><input type="checkbox" [checked]="ed.model.micTesting" (change)="patchEd('micTesting', !ed.model.micTesting)" /> MIC</label>
+                </div>
+              }
+
+              @if (ed.kind === 'organisms') {
+                <div class="pf-mm__slabel">Organism</div>
+                <label class="pf-mm__fld"><span>Name</span><input class="pf-mm__in" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-mm__fld"><span>Short</span><input class="pf-mm__in" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
+                <label class="pf-mm__fld"><span>Group</span><input class="pf-mm__in" [ngModel]="ed.model.group" (ngModelChange)="patchEd('group', $event)" placeholder="e.g. Enterobacterales" /></label>
+                <label class="pf-mm__fld"><span>Gram</span>
+                  <pf-select size="sm" [options]="gramOptions" [value]="ed.model.gram || ''"
+                             placeholder="Gram stain…" (valueChange)="patchEd('gram', $event)"></pf-select></label>
+                <label class="pf-mm__fld"><span>Significance</span><input class="pf-mm__in" [ngModel]="ed.model.significance" (ngModelChange)="patchEd('significance', $event)" /></label>
+                <div class="pf-mm__flags">
+                  <label class="pf-mm__flag"><input type="checkbox" [checked]="ed.model.astApplicable" (change)="patchEd('astApplicable', !ed.model.astApplicable)" /> AST applicable</label>
+                </div>
+              }
+
+              @if (ed.kind === 'breakpoints') {
+                <div class="pf-mm__slabel">Breakpoint mapping</div>
+                <label class="pf-mm__fld"><span>Organism group</span><input class="pf-mm__in" [ngModel]="ed.model.organismGroup" (ngModelChange)="patchEd('organismGroup', $event)" placeholder="e.g. Enterobacterales" /></label>
+                <label class="pf-mm__fld"><span>Antibiotic</span>
+                  <pf-select size="sm" [options]="abxNameOptions()" [searchable]="true"
+                             [value]="ed.model.antibiotic || ''" placeholder="Pick from the antibiotic master…"
+                             (valueChange)="patchEd('antibiotic', $event)"></pf-select></label>
+                <label class="pf-mm__fld"><span>Short label</span><input class="pf-mm__in" [ngModel]="ed.model.shortLabel" (ngModelChange)="patchEd('shortLabel', $event)" placeholder="e.g. AZA 30" /></label>
+                <label class="pf-mm__fld"><span>Disk</span><input class="pf-mm__in" [ngModel]="ed.model.diskLabel" (ngModelChange)="patchEd('diskLabel', $event)" placeholder="e.g. 30 μg" /></label>
+                <div class="pf-mm__cutrow">
+                  <label class="pf-mm__cut"><span class="pf-mm__s">S ≥</span>
+                    <input type="number" class="pf-mm__cutin" [ngModel]="ed.model.susceptibleMin" (ngModelChange)="patchEd('susceptibleMin', $event)" placeholder="mm" /></label>
+                  <span class="pf-mm__cut pf-mm__i">I {{ ed.model.susceptibleMin != null && ed.model.resistantMax != null ? iWindow(ed.model.susceptibleMin, ed.model.resistantMax) : '—' }}</span>
+                  <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
+                    <input type="number" class="pf-mm__cutin" [ngModel]="ed.model.resistantMax" (ngModelChange)="patchEd('resistantMax', $event)" placeholder="mm" /></label>
+                </div>
+                <div class="pf-mm__cutrow">
+                  <label class="pf-mm__cut"><span class="pf-mm__s">MIC S</span><input class="pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micS" (ngModelChange)="patchEd('micS', $event)" placeholder="≤ n" /></label>
+                  <label class="pf-mm__cut"><span class="pf-mm__i">I</span><input class="pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micI" (ngModelChange)="patchEd('micI', $event)" placeholder="n" /></label>
+                  <label class="pf-mm__cut"><span class="pf-mm__r">R</span><input class="pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micR" (ngModelChange)="patchEd('micR', $event)" placeholder="≥ n" /></label>
+                </div>
+                <div class="pf-mm__flags">
+                  <label class="pf-mm__flag"><input type="checkbox" [checked]="ed.model.urineOnly" (change)="patchEd('urineOnly', !ed.model.urineOnly)" /> Urine isolates only</label>
+                </div>
+              }
+
+              <div class="pf-mm__actions">
+                @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
+                  <button type="button" class="pf-mm__del" (click)="deleteEd()">
+                    {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
+                  </button>
+                }
+                <span class="pf-mm__spacer"></span>
+                <button type="button" class="pf-mm__save" [disabled]="saving() || !edValid()" (click)="saveEd()">
+                  {{ saving() ? 'Saving…' : 'Save' }}
+                </button>
+              </div>
+            </aside>
+          } @else if (section() === 'organisms' && selOrg(); as org) {
             <!-- The organism's AST panel: its mapped antibiotics + cutoffs.
                  Rows come from the breakpoint table (group-resolved); adding
                  one writes a lab (tenant) breakpoint row. -->
             <aside class="pf-mm__side">
               <div class="pf-mm__shead">
                 <span class="pf-mm__sname">{{ org.name }}</span>
-                <button type="button" class="pf-mm__ghost" (click)="selOrg.set(null)">Close</button>
+                <span style="display:inline-flex; gap:6px;">
+                  <button type="button" class="pf-mm__ghost" (click)="startEdit('organisms', org)">Edit</button>
+                  <button type="button" class="pf-mm__ghost" (click)="selOrg.set(null)">Close</button>
+                </span>
               </div>
               <div class="pf-mm__smeta">{{ org.group || 'No group' }}@if (org.gram) { · {{ org.gram }} }</div>
 
@@ -230,6 +335,20 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
       background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
     .pf-mm__save:disabled { opacity: .5; cursor: default; }
     .pf-mm__hint2 { font-size: 11px; color: var(--text-tertiary); margin: 10px 0 0; }
+    .pf-mm__new { padding: 8px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
+      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; white-space: nowrap; }
+    .pf-mm__fld { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px;
+      font-size: 11px; font-weight: 700; color: var(--text-tertiary); }
+    .pf-mm__in { padding: 8px 10px; border-radius: 9px; font-size: 13px; font-weight: 400;
+      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; }
+    .pf-mm__in:focus { border-color: var(--input-border-focus); }
+    .pf-mm__flags { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0 4px; }
+    .pf-mm__flag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+    .pf-mm__actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 10px;
+      border-top: 1px solid var(--glass-border); }
+    .pf-mm__del { padding: 7px 12px; border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
+      color: #f87171; background: transparent; border: 1px dashed rgba(239,68,68,.45); }
+    .pf-mm__del:hover { background: rgba(239,68,68,.08); }
   `],
 })
 export class MicroMastersPanelComponent implements OnInit {
@@ -271,6 +390,7 @@ export class MicroMastersPanelComponent implements OnInit {
     this.section.set(k);
     this.query.set('');
     this.selOrg.set(null);
+    this.editor.set(null);
   }
 
   /** Rows of the active master, filtered by the search box over every column. */
@@ -349,9 +469,114 @@ export class MicroMastersPanelComponent implements OnInit {
   readonly saving = signal(false);
 
   onRowClicked(e: RowClickedEvent) {
-    if (this.section() !== 'organisms') return;
-    this.selOrg.set(e.data as MicroOrganism);
-    this.addAbxName.set(''); this.addS.set(null); this.addR.set(null);
+    if (this.section() === 'organisms') {
+      this.editor.set(null);
+      this.selOrg.set(e.data as MicroOrganism);
+      this.addAbxName.set(''); this.addS.set(null); this.addR.set(null);
+      return;
+    }
+    // Other masters: row click opens the editor on a copy of the row.
+    this.startEdit(this.section(), e.data as EdModel);
+  }
+
+  // ── Create / edit (tenant overlay — the standard is never mutated) ──
+  readonly editor = signal<{ kind: MasterKey; isNew: boolean; model: EdModel } | null>(null);
+  readonly gramOptions: PfSelectOption<string>[] = [
+    'Gram Positive', 'Gram Negative', 'Acid-Fast Bacilli', 'Variable', 'Not Applicable',
+  ].map(g => ({ value: g, label: g }));
+  singular(k: MasterKey): string {
+    return k === 'specimens' ? 'specimen' : k === 'organisms' ? 'organism'
+      : k === 'antibiotics' ? 'antibiotic' : 'breakpoint';
+  }
+  abxNameOptions(): PfSelectOption<string>[] {
+    return this.antibiotics().map(a => ({ value: a.name, label: a.name, hint: a.abxClass ?? undefined }));
+  }
+  startCreate() {
+    this.selOrg.set(null);
+    const kind = this.section();
+    const model: EdModel = kind === 'antibiotics'
+      ? { astApplicable: true, diskDiffusion: true, micTesting: false }
+      : kind === 'organisms' ? { astApplicable: true } : {};
+    this.editor.set({ kind, isNew: true, model });
+  }
+  startEdit(kind: MasterKey, row: EdModel) {
+    this.selOrg.set(null);
+    this.editor.set({ kind, isNew: false, model: { ...row } });
+  }
+  patchEd(field: string, value: unknown) {
+    const ed = this.editor();
+    if (ed) this.editor.set({ ...ed, model: { ...ed.model, [field]: value } as EdModel });
+  }
+  edValid(): boolean {
+    const ed = this.editor();
+    if (!ed) return false;
+    const m = ed.model;
+    if (ed.kind === 'breakpoints') {
+      const s = m.susceptibleMin ?? null, r = m.resistantMax ?? null;
+      const zoneOk = (s == null && r == null) || (s != null && r != null && r >= 1 && s > r);
+      const any = (s != null && r != null) || !!m.micS || !!m.micR;
+      return !!m.organismGroup && !!m.antibiotic && zoneOk && any;
+    }
+    return !!m.name;
+  }
+  /** A standard row exists behind this lab row (delete = revert, not remove). */
+  hasStandard(ed: { kind: MasterKey; model: EdModel }): boolean {
+    return ed.kind === 'breakpoints'
+      ? true   // Ed36 may define the pair; the backend answers precisely on delete
+      : String(ed.model.code ?? '').length > 0 && !String(ed.model.code).includes('-L');
+  }
+  saveEd() {
+    const ed = this.editor();
+    if (!ed || !this.edValid()) return;
+    this.saving.set(true);
+    const m = ed.model;
+    const done = (msg: string) => {
+      this.saving.set(false);
+      this.toasts.success(msg);
+      this.editor.set(null);
+      this.reloadSection(ed.kind);
+    };
+    const fail = (e: { message?: string }) => { this.saving.set(false); this.toasts.error(e?.message || 'Could not save'); };
+    if (ed.kind === 'breakpoints') {
+      this.api.post('/api/microbiology/breakpoints', {
+        organismGroup: m.organismGroup, antibiotic: m.antibiotic,
+        susceptibleMin: m.susceptibleMin ?? null, resistantMax: m.resistantMax ?? null,
+        shortLabel: m.shortLabel ?? null, diskLabel: m.diskLabel ?? null,
+        micS: m.micS ?? null, micI: m.micI ?? null, micR: m.micR ?? null,
+        urineOnly: m.urineOnly === true,
+      }).subscribe({ next: () => done('Breakpoint saved'), error: fail });
+      return;
+    }
+    const path = `/api/microbiology/${ed.kind}`;
+    this.api.post(path, { ...m, code: m.code ?? null }).subscribe({
+      next: () => done(`${this.singular(ed.kind)} saved`), error: fail,
+    });
+  }
+  deleteEd() {
+    const ed = this.editor();
+    if (!ed) return;
+    const m = ed.model;
+    const done = () => { this.toasts.success('Removed — the standard resurfaces where one exists'); this.editor.set(null); this.reloadSection(ed.kind); };
+    const fail = (e: { message?: string }) => this.toasts.error(e?.message || 'Could not remove');
+    if (ed.kind === 'breakpoints') {
+      this.api.delete(`/api/microbiology/breakpoints?organismGroup=${encodeURIComponent(String(m.organismGroup))}&antibiotic=${encodeURIComponent(String(m.antibiotic))}`)
+        .subscribe({ next: done, error: fail });
+      return;
+    }
+    this.api.delete(`/api/microbiology/${ed.kind}/${encodeURIComponent(String(m.code))}`)
+      .subscribe({ next: done, error: fail });
+  }
+  private reloadSection(kind: MasterKey) {
+    if (kind === 'breakpoints') { this.reloadBreakpoints(); return; }
+    const url = kind === 'antibiotics' ? '/api/microbiology/antibiotics?all=true' : `/api/microbiology/${kind}`;
+    this.api.get<never[]>(url).subscribe({
+      next: l => {
+        if (kind === 'specimens') this.specimens.set(l ?? []);
+        else if (kind === 'organisms') this.organisms.set(l ?? []);
+        else this.antibiotics.set(l ?? []);
+      },
+      error: () => { /* stale list stays */ },
+    });
   }
 
   /** The breakpoint group this organism's panel reads from: exact match on
