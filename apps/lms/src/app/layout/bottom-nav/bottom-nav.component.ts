@@ -7,6 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { ModuleScopeService } from '../../core/services/module-scope.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { LockService } from '../../core/auth/lock.service';
@@ -35,6 +36,7 @@ const DRAG_THRESHOLD_PX = 4;
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly moduleScope = inject(ModuleScopeService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
@@ -497,8 +499,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
   readonly primary = computed(() => {
     const items = this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)));
-    // OPD: doctors get their Consult Room regardless of lab permissions.
-    return this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    // OPD: doctors get their Consult Room — but only once the OPD module is
+    // actually usable (tenant entitlement, or the dev preview flag). Keeps the
+    // in-progress consult build invisible on shared environments.
+    return this.auth.isDoctor() && this.moduleScope.opdUsable() ? [...items, DOCTOR_NAV] : items;
   });
 
   /** Guarantee a reachable "Collect" work area for anyone who can draw samples

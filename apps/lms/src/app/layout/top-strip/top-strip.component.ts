@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
+import { ModuleScopeService } from '../../core/services/module-scope.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
 import { LockService } from '../../core/auth/lock.service';
 import { BranchRef } from '../../core/auth/mock-user';
@@ -37,6 +38,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);
+  private readonly moduleScope = inject(ModuleScopeService);
   private readonly lock = inject(LockService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
@@ -88,8 +90,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
   readonly primary = computed(() => {
     const items = this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
-    // OPD: doctors get their Consult Room regardless of lab permissions.
-    return this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    // OPD: doctors get their Consult Room — but only once the OPD module is
+    // actually usable (tenant entitlement, or the dev preview flag). Keeps the
+    // in-progress consult build invisible on shared environments.
+    return this.auth.isDoctor() && this.moduleScope.opdUsable() ? [...items, DOCTOR_NAV] : items;
   });
 
   /** Guarantee a reachable "Collect" work area for anyone who can draw samples.
