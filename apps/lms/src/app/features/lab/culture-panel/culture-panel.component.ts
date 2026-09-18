@@ -31,6 +31,8 @@ export interface CultureCaseView {
   subCultures?: CultureCaseView[] | null;
   /** CASE-LEVEL incubation reference timer (never a lock). */
   incubateUntil?: string | null;
+  /** The ordered test's specimen (picked at billing, editable at the bench). */
+  specimen?: string | null;
   orderTestId: string;
   caseState: string;
   sampleId?: string | null;

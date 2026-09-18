@@ -773,6 +773,19 @@
           } @else if (t.department?.name) {
           <p class="pf-cart-meta">{{ t.department?.name }}</p>
           }
+          @if (isCultureTest(t) && specimenOpts().length) {
+          <!-- Culture tests: the desk picks WHICH specimen this order is for
+               (urine vs pus vs blood) — the bench can refine it later. -->
+          @if (isReadOnly() || isCollected(t.id)) {
+          @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
+          } @else {
+          <div class="pf-cart-spec" (click)="$event.stopPropagation()">
+            <pf-select size="sm" [searchable]="true" [options]="specimenOpts()"
+                       [value]="specimenOf(t.id)" placeholder="Specimen…"
+                       (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+          </div>
+          }
+          }
         </div>
         @if (isCoveredMember(t.id)) {
         <span class="pf-cart-amount pf-cart-amount--included"

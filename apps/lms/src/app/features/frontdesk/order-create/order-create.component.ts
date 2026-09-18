@@ -17,6 +17,7 @@ import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -41,7 +42,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -72,6 +73,28 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _tests = signal<Test[]>([]);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
+  // ── Specimen choice at the desk (culture tests): testId → specimen ──
+  private readonly _specimens = signal<Record<string, string>>({});
+  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  isCultureTest(t: { parameters?: string }): boolean {
+    return (t.parameters ?? '').includes('culture_sensitivity');
+  }
+  specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
+  setSpecimen(id: string, v: string) { this._specimens.update(m => ({ ...m, [id]: v })); }
+  /** Only the chosen specimens for tests still in the cart. */
+  private specimenPayload(): Record<string, string> | null {
+    const sel = new Set(this._selected());
+    const out: Record<string, string> = {};
+    for (const [id, sp] of Object.entries(this._specimens()))
+      if (sel.has(id) && sp) out[id] = sp;
+    return Object.keys(out).length ? out : null;
+  }
+  private loadSpecimens() {
+    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+      error: () => { /* micro module absent — culture tests simply show no picker */ }
+    });
+  }
   private readonly _priority = signal<Priority>('Normal');
 
   // ── Trendogram: offer to embed serial-result trend charts in the report ──
@@ -712,6 +735,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit() {
+    this.loadSpecimens();
     this._wideMql?.addEventListener('change', this._onWideChange);
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
@@ -855,6 +879,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         savedAt: Date.now(),
         priority: this._priority(),
         testIds: this._selected(),
+        specimens: this.specimenPayload(),
         // Snapshot the patient so the front-desk Draft tab can list it without
         // a lookup (the key only carries the id).
         patient: p
@@ -1317,6 +1342,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         source: appointmentId ? 'appointment' : 'walkin',
         collectionType: 'walkin',
         testIds: this._selected(),
+        specimens: this.specimenPayload(),
         metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
       }));
       const targetAmount = this.total();
@@ -1672,7 +1698,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
       this._saving.set(true);
       this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
-        testIds: this._selected(), reason: 'reception edit'
+        testIds: this._selected(),
+        specimens: this.specimenPayload(), reason: 'reception edit'
       }).subscribe({
         next: () => {
           this._saving.set(false);

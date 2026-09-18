@@ -135,6 +135,13 @@ interface StageField { name: string; title: string; type: string; options: strin
             }
             <button type="button" class="pf-cse__branch pf-cse__branch--add" [disabled]="busy()"
                     (click)="newSubculture()">+ Subculture</button>
+            <span class="grow"></span>
+            <!-- The ordered specimen — picked at the billing desk, refinable
+                 here (drives the default antimicrobial panel + the report). -->
+            <span class="pf-cse__speclbl">Specimen</span>
+            <pf-select class="pf-cse__specsel" size="sm" [searchable]="true"
+                       [options]="specimenOpts()" [value]="c()?.specimen ?? ''"
+                       placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
             @if (selCaseId()) {
               <button type="button" class="pf-cse__branch pf-cse__branch--del" [disabled]="busy()"
                       (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
@@ -518,6 +525,9 @@ interface StageField { name: string; title: string; type: string; options: strin
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; }
+    .pf-cse__speclbl { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-muted); margin-left: 8px; }
+    .pf-cse__specsel { min-width: 170px; }
     .pf-cse__branch { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
       font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-secondary);
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
@@ -859,6 +869,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.loadSpecimens();
     this.id = this.route.snapshot.paramMap.get('orderTestId') ?? '';
     this.loadComments();
     this.focusStage.set(this.route.snapshot.queryParamMap.get('stage'));
@@ -894,7 +905,36 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.astValue.set({});
     const ast = v?.stages?.find(s => s.key === 'ast');
     if (ast?.valuesJson) { try { this.astValue.set(JSON.parse(ast.valuesJson) as CultureResult); } catch { /* keep empty */ } }
+    // The ordered specimen flows into the result (panels + report) unless the
+    // AST draft already carries one.
+    const sp = this.c()?.specimen;
+    if (sp && !this.astValue().specimen) this.astValue.update(x => ({ ...x, specimen: sp }));
     this.astOpen.set(false);
+  }
+
+  // ── Specimen (order-test level; desk-picked, bench-editable) ──
+  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  private loadSpecimens() {
+    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+      error: () => { /* list stays empty — the pill still shows the current value */ }
+    });
+  }
+  setSpecimen(v: string) {
+    if (!v || v === (this.c()?.specimen ?? '')) return;
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/specimen`, { specimen: v }).subscribe({
+      next: t => {
+        this.busy.set(false);
+        if (t) this.c.set(t);
+        this.astValue.update(x => ({ ...x, specimen: v }));
+        this.toasts.success(`Specimen set to ${v}`);
+      },
+      error: () => {
+        this.busy.set(false);
+        this.toasts.error('Could not update the specimen');
+      },
+    });
   }
 
   /** Switch branches like git checkout — each keeps its own stages, drafts,
