@@ -217,7 +217,11 @@ interface StageField { name: string; title: string; type: string; options: strin
                             }
                           </div>
                         } @else {
+                          <!-- Fill the width: fields flow into columns; long
+                               inputs (textareas, the organism picker) span. -->
+                          <div class="pf-cse__fgrid">
                           @for (f of g.fields; track f.name) {
+                            <div class="pf-cse__fcell" [class.pf-cse__fcell--wide]="f.type === 'textarea' || f.suggest === 'organisms'">
                             <label class="pf-cse__field pf-cse__field--noted">
                               <span class="pf-cse__field-lbl">{{ f.title }}</span>
                               @if (f.options.length) {
@@ -259,7 +263,9 @@ interface StageField { name: string; title: string; type: string; options: strin
                                                    (reply)="replyComment(paramKey(s.key, f.name), $event.parentId, $event.body)"></pf-comment-thread>
                               </div>
                             }
+                            </div>
                           }
+                          </div>
                         }
                       }
                     } @else {
@@ -411,6 +417,9 @@ interface StageField { name: string; title: string; type: string; options: strin
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
     /* Non-matrix structured fields — one aligned row per parameter. */
+    .pf-cse__fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 0 36px; }
+    .pf-cse__fcell { min-width: 0; }
+    .pf-cse__fcell--wide { grid-column: 1 / -1; }
     .pf-cse__field { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 14px;
       padding: 5px 0; }
     .pf-cse__field--noted { grid-template-columns: 180px minmax(0, 1fr) 28px; }
