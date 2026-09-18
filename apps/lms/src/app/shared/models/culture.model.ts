@@ -17,6 +17,18 @@ export interface CultureOrganism {
   /** Relative URL of the AST-plate photo this organism's zones were measured
    *  from (camera measure-assist). Kept as evidence for the validator. */
   plateImageUrl?: string | null;
+  /** The measure-assist session (calibration + fitted circles, image px) so
+   *  reopening Measure restores every ring instead of starting over. */
+  plateMeasure?: PlateMeasureSession | null;
+}
+
+/** A saved plate-measure session — everything needed to re-edit later. */
+export interface PlateMeasureSession {
+  dishMm: number;
+  /** The two rim calibration points (image px). */
+  calPts: { x: number; y: number }[];
+  /** Fitted circles; abName (not index) so panel reordering can't misassign. */
+  zones: { cx: number; cy: number; r: number; abName: string | null }[];
 }
 
 /** One zone measured off the plate photo, mapped back to an antibiotic row

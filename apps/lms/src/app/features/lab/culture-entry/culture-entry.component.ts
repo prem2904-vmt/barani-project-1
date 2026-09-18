@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, On
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
-import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, panelForSpecimen } from '../../../shared/models/culture.model';
+import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, PlateMeasureSession, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -222,6 +222,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
         <pf-plate-measure
           [antibiotics]="activeAbNames()"
           [existingImageUrl]="activePlateUrl()"
+          [existingSession]="activeSession()"
           [srI]="plateInterpret"
           (applied)="onMeasured($event)"
           (cancel)="measureOrg.set(null)" />
@@ -453,7 +454,10 @@ export class CultureEntryComponent implements OnInit {
       resistancePattern: '', intrinsicResistance: '',
       clinicalNotes: '', infectionControlAdvice: '',
       ...(v ?? {}),
-      organisms: (v?.organisms ?? []).map(o => ({ name: o.name, antibiotics: [...(o.antibiotics ?? [])] }))
+      organisms: (v?.organisms ?? []).map(o => ({
+        name: o.name, antibiotics: [...(o.antibiotics ?? [])],
+        plateImageUrl: o.plateImageUrl ?? null, plateMeasure: o.plateMeasure ?? null,
+      }))
     };
   }
 
@@ -696,14 +700,21 @@ export class CultureEntryComponent implements OnInit {
     const i = this.measureOrg();
     return i == null ? null : this._m().organisms?.[i]?.plateImageUrl;
   }
+  /** The saved measure session of the organism being measured — reopening
+   *  restores every ring instead of starting from a blank plate. */
+  activeSession(): PlateMeasureSession | null {
+    const i = this.measureOrg();
+    return i == null ? null : this._m().organisms?.[i]?.plateMeasure ?? null;
+  }
 
   /** Apply measured zones: each drops into its antibiotic row via setZone, which
    *  fires the CLSI auto-interpretation. The plate photo is kept on the organism. */
-  onMeasured(e: { measurements: PlateMeasurement[]; imageUrl: string | null }) {
+  onMeasured(e: { measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession }) {
     const i = this.measureOrg();
     if (i == null) return;
     for (const meas of e.measurements) this.setZone(i, meas.index, meas.zoneMm);
-    this.updateOrg(i, o => ({ ...o, plateImageUrl: e.imageUrl }));
+    // Keep the photo AND the fitted rings — Measure reopens exactly here.
+    this.updateOrg(i, o => ({ ...o, plateImageUrl: e.imageUrl, plateMeasure: e.session }));
     this.measureOrg.set(null);
   }
 

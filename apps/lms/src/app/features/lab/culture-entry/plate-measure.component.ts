@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { PlateMeasurement } from '../../../shared/models/culture.model';
+import { PlateMeasurement, PlateMeasureSession } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 
 type Pt = { x: number; y: number };
@@ -295,10 +295,13 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
 
   @Input() antibiotics: string[] = [];
   @Input() existingImageUrl?: string | null;
+  /** A previously saved session — restores calibration + every fitted ring so
+   *  reopening Measure edits in place instead of starting over. */
+  @Input() existingSession?: PlateMeasureSession | null;
   /** Live interpretation: maps (antibiotic, zone mm) → S/I/R for colour-coding. */
   @Input() srI?: (antibiotic: string, zoneMm: number) => 'S' | 'I' | 'R' | '';
 
-  @Output() applied = new EventEmitter<{ measurements: PlateMeasurement[]; imageUrl: string | null }>();
+  @Output() applied = new EventEmitter<{ measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession }>();
   @Output() cancel = new EventEmitter<void>();
 
   readonly fullscreen = signal(false);
@@ -357,12 +360,32 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     if (this.existingImageUrl) {
       this.uploadedUrl = this.existingImageUrl;
       this.imageSrc.set(this.resolve(this.existingImageUrl));
-      this.mode.set('calibrate');
+      // Re-fetch the stored photo as a blob — auto-detect and double-tap
+      // refinement POST it, and a reopened session must keep them working.
+      void this.loadExistingBlob(this.existingImageUrl);
+      const s = this.existingSession;
+      if (s?.calPts?.length === 2) {
+        // Restore the whole session: calibration, dish size, every ring and
+        // its antibiotic (matched by NAME — the panel may have been reordered).
+        this.dishMm.set(s.dishMm || 90);
+        this.calPts.set(s.calPts.map(pt => ({ x: pt.x, y: pt.y })));
+        this.zones.set((s.zones ?? []).map(z => {
+          const idx = z.abName ? this.antibiotics.indexOf(z.abName) : -1;
+          return { cx: z.cx, cy: z.cy, r: z.r, abIndex: idx >= 0 ? idx : null, auto: false } as Zone;
+        }));
+        this.mode.set('measure');
+      } else {
+        this.mode.set('calibrate');
+      }
       return;
     }
     if (!this.isNative()) void this.startCamera();
   }
   ngOnDestroy() { this.stopCamera(); try { this.host.nativeElement.remove(); } catch { /* */ } }
+  private async loadExistingBlob(url: string) {
+    try { this.photoBlob = await (await fetch(this.resolve(url))).blob(); }
+    catch { /* offline → auto-detect asks for a fresh photo */ }
+  }
   close() { this.stopCamera(); this.cancel.emit(); }
   onBackdrop(_ev: Event) { /* explicit close only */ }
 
@@ -724,7 +747,15 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     try { if (this.photoBlob && !this.uploadedUrl) this.uploadedUrl = await this.upload(this.photoBlob); }
     catch (e) { this.toasts.error(ApiError.from(e).message); this.busy.set(false); return; }
     const measurements: PlateMeasurement[] = this.zones().filter(z => z.abIndex != null && z.r > 0).map(z => ({ index: z.abIndex as number, zoneMm: this.mmOf(z) }));
-    this.applied.emit({ measurements, imageUrl: this.uploadedUrl });
+    const session: PlateMeasureSession = {
+      dishMm: this.dishMm(),
+      calPts: this.calPts().map(pt => ({ x: pt.x, y: pt.y })),
+      zones: this.zones().filter(z => z.r > 0).map(z => ({
+        cx: z.cx, cy: z.cy, r: z.r,
+        abName: z.abIndex == null ? null : (this.antibiotics[z.abIndex] ?? null),
+      })),
+    };
+    this.applied.emit({ measurements, imageUrl: this.uploadedUrl, session });
     this.busy.set(false);
   }
   private async upload(blob: Blob): Promise<string> {
