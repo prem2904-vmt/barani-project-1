@@ -10,7 +10,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
   susceptibleMin: number | null; resistantMax: number | null;
-  shortLabel?: string | null;
+  shortLabel?: string | null; enabled?: boolean;
 }
 
 /**
@@ -435,12 +435,14 @@ export class CultureEntryComponent implements OnInit {
     });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {
+        // Rows the lab disabled in the Test Master never reach the bench.
+        const enabled = (list ?? []).filter(b => b.enabled !== false);
         const m = new Map<string, { s: number; r: number }>();
-        for (const b of list ?? [])
+        for (const b of enabled)
           if (b.susceptibleMin != null && b.resistantMax != null)
             m.set(`${b.organismGroup.toLowerCase()}|${b.antibiotic.toLowerCase()}`, { s: b.susceptibleMin, r: b.resistantMax });
         this.bps = m;
-        this.bpList = list ?? [];
+        this.bpList = enabled;
         // Organisms seeded before the breakpoints arrived have empty panels —
         // fill them now that we know which drugs CLSI covers.
         this.backfillClsiPanels();

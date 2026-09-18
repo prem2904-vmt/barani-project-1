@@ -32,7 +32,7 @@ interface Breakpoint {
   shortLabel?: string | null; diskLabel?: string | null;
   zoneI?: string | null; zoneSdd?: string | null;
   micS?: string | null; micSdd?: string | null; micI?: string | null; micR?: string | null;
-  urineOnly?: boolean;
+  urineOnly?: boolean; enabled?: boolean;
 }
 
 type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
@@ -207,7 +207,15 @@ interface EdModel {
 
               <div class="pf-mm__slabel">Mapped antibiotics ({{ mappedFor(org).length }})</div>
               @for (b of mappedFor(org); track b.antibiotic) {
-                <div class="pf-mm__map">
+                <div class="pf-mm__map" [class.pf-mm__map--off]="b.enabled === false">
+                  <!-- On the bench = on this switch: only enabled drugs reach
+                       the AST table in result entry. -->
+                  <button type="button" class="pf-mm__sw" [class.pf-mm__sw--on]="b.enabled !== false"
+                          [attr.aria-pressed]="b.enabled !== false"
+                          [title]="b.enabled === false ? 'Disabled — hidden from the AST table. Tap to enable.' : 'Enabled — shown on the AST table. Tap to disable.'"
+                          (click)="toggleMapping(b)">
+                    <span class="pf-mm__swknob"></span>
+                  </button>
                   <span class="pf-mm__mapname">{{ b.antibiotic }}
                     @if (b.shortLabel) { <span class="pf-mm__short">{{ b.shortLabel }}</span> }
                   </span>
@@ -304,6 +312,14 @@ interface EdModel {
       color: var(--text-tertiary); margin: 14px 0 6px; }
     .pf-mm__map { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px;
       border: 1px solid var(--border-subtle); margin-bottom: 5px; }
+    .pf-mm__map--off { opacity: .45; }
+    .pf-mm__map--off .pf-mm__mapname { text-decoration: line-through; }
+    .pf-mm__sw { flex-shrink: 0; width: 32px; height: 18px; border-radius: 999px; cursor: pointer; padding: 2px;
+      background: var(--glass-border); border: 1px solid var(--border-subtle);
+      display: inline-flex; align-items: center; transition: background .15s ease; }
+    .pf-mm__sw--on { background: #10b981; border-color: #10b981; justify-content: flex-end; }
+    .pf-mm__swknob { width: 12px; height: 12px; border-radius: 50%; background: #fff;
+      transition: transform .15s cubic-bezier(0.16,1,0.3,1); }
     .pf-mm__mapname { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-mm__mapbp { display: inline-flex; gap: 8px; font-size: 11.5px; font-weight: 600; font-style: normal;
@@ -666,6 +682,19 @@ export class MicroMastersPanelComponent implements OnInit {
         this.reloadBreakpoints();
       },
       error: (e: { message?: string }) => { this.saving.set(false); this.toasts.error(e?.message || 'Could not save the mapping'); },
+    });
+  }
+  /** Only enabled drugs reach the bench's AST table for this organism. */
+  toggleMapping(b: Breakpoint) {
+    const next = b.enabled === false;
+    this.api.post('/api/microbiology/breakpoints/toggle', {
+      organismGroup: b.organismGroup, antibiotic: b.antibiotic, enabled: next,
+    }).subscribe({
+      next: () => {
+        this.toasts.success(`${b.antibiotic} ${next ? 'enabled' : 'disabled'} for this panel`);
+        this.reloadBreakpoints();
+      },
+      error: (e: { message?: string }) => this.toasts.error(e?.message || 'Could not toggle'),
     });
   }
   removeMapping(org: MicroOrganism, b: Breakpoint) {
