@@ -31,6 +31,7 @@ import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
+import { MicroMastersPanelComponent } from './micro-masters-panel.component';
 
 // AG Grid v33+ requires explicit module registration (once per app).
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -92,6 +93,7 @@ export type TestRow = Test & {
     ScreenHeaderComponent,
     TouchButtonComponent,
     OptionGroupsPanelComponent,
+    MicroMastersPanelComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tests.component.html',
@@ -113,6 +115,8 @@ export class TestsComponent implements OnInit {
 
   /** Option-groups view — the shared vocabularies panel replaces the grid. */
   readonly ogView = signal(false);
+  /** Microbiology view — specimen/antibiotic/CLSI masters replace the grid. */
+  readonly microView = signal(false);
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
   private readonly _depts = signal<DeptRecord[]>([]);
@@ -631,6 +635,7 @@ export class TestsComponent implements OnInit {
       }
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
+      if (params['view'] === 'microbiology') this.microView.set(true);
     });
     this.loadTests();
     this.loadDepartments();
@@ -640,8 +645,12 @@ export class TestsComponent implements OnInit {
     this.gridApi = e.api;
   }
 
+  openOgView() { this.microView.set(false); this.ogView.set(true); }
+  openMicroView() { this.ogView.set(false); this.microView.set(true); }
+
   setType(t: TestType) {
     this.ogView.set(false);
+    this.microView.set(false);
     this._type.set(t);
     this._selectedDept.set(null);
     this.router.navigate([], {

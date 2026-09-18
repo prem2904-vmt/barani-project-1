@@ -27,7 +27,7 @@
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
-              [class.pf-tm-tab--active]="!ogView() && type() === v.value"
+              [class.pf-tm-tab--active]="!ogView() && !microView() && type() === v.value"
               (click)="setType(v.value)">
         {{ v.label }}
       </button>
@@ -35,8 +35,14 @@
     <button type="button"
             class="pf-tm-tab"
             [class.pf-tm-tab--active]="ogView()"
-            (click)="ogView.set(true)">
+            (click)="openOgView()">
       Option groups
+    </button>
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="microView()"
+            (click)="openMicroView()">
+      Microbiology
     </button>
     @if (inactiveCount() > 0 || showInactive()) {
       <label class="pf-tm-inactive-toggle">
@@ -51,6 +57,9 @@
     <!-- Shared option-group vocabularies, derived live from this tenant's
          tests — edit once, changes every linked parameter. -->
     <pf-option-groups-panel></pf-option-groups-panel>
+  } @else if (microView()) {
+    <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
+    <pf-micro-masters-panel></pf-micro-masters-panel>
   } @else {
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
     <!-- ── LEFT: departments ─────────────────────────────── -->
