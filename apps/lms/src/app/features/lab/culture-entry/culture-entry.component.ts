@@ -210,6 +210,32 @@ export class CultureEntryComponent implements OnInit {
   }
   @Output() valueChange = new EventEmitter<CultureResult>();
 
+  /**
+   * Organisms identified upstream (the case's Organism-identification stage).
+   * Each name not already present is appended with the specimen's default
+   * antibiotic panel — so the sensitivity table always mirrors what was
+   * identified. Merge-only: never removes or rewrites rows the tech already
+   * has, and deliberately bypasses the userEdited guard (an identification
+   * made AFTER the tech started on AST must still appear).
+   */
+  @Input() set seedOrganisms(names: string[] | null | undefined) {
+    if (!names?.length) return;
+    const cur = this._m();
+    const have = new Set((cur.organisms ?? []).map(o => o.name.trim().toLowerCase()));
+    const missing = names.map(n => n.trim()).filter(n => n && !have.has(n.toLowerCase()));
+    if (!missing.length) return;
+    const panel = panelForSpecimen(cur.specimen);
+    const next: CultureResult = {
+      ...cur, noGrowth: false,
+      organisms: [...(cur.organisms ?? []), ...missing.map(name => ({
+        name, antibiotics: panel.map(n => ({ name: n, zoneSize: null, interpretation: '' as const })),
+      }))],
+    };
+    this._m.set(next);
+    this.valueChange.emit(next);
+    this.organismsOpen.set(true);
+  }
+
   ngOnInit() {
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {

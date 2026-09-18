@@ -153,6 +153,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                       @if (astOpen()) {
                         <div class="pf-cse__astwrap">
                           <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
+                                            [seedOrganisms]="identifiedOrganisms()"
                                             (valueChange)="astValue.set($event)"></pf-culture-entry>
                         </div>
                       }
@@ -208,10 +209,23 @@ interface StageField { name: string; title: string; type: string; options: strin
                                   }
                                 </span>
                               } @else if (f.suggest === 'organisms') {
-                                <input type="text" class="pf-cse__ftext" [ngModel]="fieldValue(s.key, f.name)"
-                                       (focus)="ensurePicked(s)"
-                                       (ngModelChange)="setField(s.key, f.name, $event)"
-                                       [attr.list]="'pf-cw-organisms'" placeholder="Type to search organisms…" />
+                                <!-- Multi-organism: chips + search. The comma-joined
+                                     value feeds the AST stage's per-organism panels. -->
+                                <span class="pf-cse__orgs">
+                                  @for (name of orgList(s.key, f.name); track name) {
+                                    <span class="pf-cse__orgchip">{{ name }}
+                                      <button type="button" class="pf-cse__orgx" (click)="ensurePicked(s); removeOrg(s.key, f.name, name)"
+                                              [attr.aria-label]="'Remove ' + name">×</button>
+                                    </span>
+                                  }
+                                  <input type="text" class="pf-cse__ftext pf-cse__ftext--org" [ngModel]="orgSearch()"
+                                         (focus)="ensurePicked(s)"
+                                         (ngModelChange)="orgSearch.set($event)"
+                                         (change)="addOrg(s.key, f.name)"
+                                         (keydown.enter)="$event.preventDefault(); addOrg(s.key, f.name)"
+                                         [attr.list]="'pf-cw-organisms'"
+                                         [placeholder]="orgList(s.key, f.name).length ? 'Add another organism…' : 'Type to search organisms…'" />
+                                </span>
                                 <datalist id="pf-cw-organisms">
                                   @for (o of organismNames(); track o) { <option [value]="o"></option> }
                                 </datalist>
@@ -444,6 +458,16 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
     .pf-cse__astwrap { margin-top: 14px; }
+
+    /* Identification: multi-organism chips + search. */
+    .pf-cse__orgs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+    .pf-cse__orgchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600;
+      padding: 4px 6px 4px 11px; border-radius: 999px; color: var(--violet-text, #a78bfa);
+      background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.35); white-space: nowrap; }
+    .pf-cse__orgx { border: none; background: transparent; color: inherit; cursor: pointer;
+      font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 50%; }
+    .pf-cse__orgx:hover { color: #ef4444; background: rgba(239,68,68,.12); }
+    .pf-cse__ftext--org { flex: 1 1 220px; min-width: 180px; }
   `],
 })
 export class CultureWorkbenchComponent implements OnInit, OnDestroy {
@@ -464,6 +488,45 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly astOpen = signal(false);
   /** Master-driven organism names for the AST editor's picker. */
   readonly organismNames = signal<string[]>([]);
+
+  // ── Multi-organism identification → AST seeding ────────────────────────
+  /** In-progress text of the identification organism search box. */
+  readonly orgSearch = signal('');
+  /** The chips: the comma-joined field value split back into names. */
+  orgList(stageKey: string, field: string): string[] {
+    return (this.fieldValue(stageKey, field) ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+  addOrg(stageKey: string, field: string) {
+    const name = this.orgSearch().trim();
+    if (!name) return;
+    const list = this.orgList(stageKey, field);
+    if (!list.some(x => x.toLowerCase() === name.toLowerCase()))
+      this.setField(stageKey, field, [...list, name].join(', '));
+    this.orgSearch.set('');
+  }
+  removeOrg(stageKey: string, field: string, name: string) {
+    this.setField(stageKey, field, this.orgList(stageKey, field).filter(x => x !== name).join(', '));
+  }
+  /**
+   * Every organism named in the Organism-identification stage — the live chip
+   * draft while the stage is being worked, else the submitted stage values.
+   * Feeds the AST editor's seedOrganisms input, which appends a sensitivity
+   * panel per organism (merge-only), so the two stages can never disagree.
+   */
+  readonly identifiedOrganisms = computed<string[]>(() => {
+    const draft = (this.fieldValues()['identification']?.['organism'] ?? '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    if (draft.length) return draft;
+    const st = this.c()?.stages?.find(s => s.key === 'identification');
+    if (st?.valuesJson) {
+      try {
+        const o = JSON.parse(st.valuesJson) as { fields?: { name?: string; value?: string }[] };
+        const f = o.fields?.find(x => x.name === 'organism');
+        if (f?.value) return String(f.value).split(',').map(s => s.trim()).filter(Boolean);
+      } catch { /* unreadable stage payload → no seeds */ }
+    }
+    return [];
+  });
   /** Ticks every 30s so per-stage "held" timers update live. */
   private readonly now = signal(Date.now());
   private timer?: ReturnType<typeof setInterval>;
@@ -631,6 +694,9 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const m = this.astValue();
     if (m.noGrowth) return 'No growth';
     if (m.organisms?.length) return m.organisms.map(o => o.name).filter(Boolean).join(', ');
+    // Nothing entered here yet, but identification already knows the organisms.
+    const idents = this.identifiedOrganisms();
+    if (idents.length) return idents.join(', ') + ' — enter sensitivities';
     return '';
   }
 
