@@ -23,6 +23,8 @@ export interface CultureStageView {
 
 /** A culture case row (mirrors the backend CultureCaseDto). */
 export interface CultureCaseView {
+  /** CASE-LEVEL incubation reference timer (never a lock). */
+  incubateUntil?: string | null;
   orderTestId: string;
   caseState: string;
   sampleId?: string | null;

@@ -59,17 +59,42 @@ interface StageField { name: string; title: string; type: string; options: strin
               @if (techName()) {
                 <span class="pf-cse__tech"><span class="pf-cse__tech-dot"></span>{{ techName() }}</span>
               }
-              <!-- ONE incubation control for the whole case: while a plate is
-                   incubating it shows the countdown; otherwise it inoculates
-                   the next stage that needs it. -->
-              @if (incubatingStage(); as inc) {
-                <span class="pf-cse__incubpill" [title]="'Incubating for ' + inc.label">⏳ Incubating · {{ inc.label }} · ready in {{ incubateReadyIn(inc) }}</span>
-              } @else if (incubateTarget(); as tgt) {
-                <button type="button" class="pf-cse__incubbtn press" [disabled]="busy()" (click)="incubate(tgt)"
-                        [title]="'Start the incubation clock for ' + tgt.label">
-                  Inoculate &amp; incubate · {{ tgt.label }}
-                </button>
+              <!-- CASE-LEVEL incubation — a reference timer, never a lock:
+                   the bench keeps working every stage while it runs, and
+                   extends it in whole hours when the plate needs longer. -->
+              @if (cc.incubateUntil) {
+                <span class="pf-cse__incubpill" [class.pf-cse__incubpill--done]="incubDone()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                  </svg>
+                  {{ incubDone() ? 'Incubation complete' : ('Incubating · ready in ' + incubReadyIn()) }}
+                </span>
               }
+              <span class="pf-cse__incubwrap">
+                <button type="button" class="pf-cse__incubbtn press" [disabled]="busy()"
+                        (click)="incubOpen.set(!incubOpen())"
+                        [title]="cc.incubateUntil ? 'Add hours to the incubation timer' : 'Start the incubation reference timer'">
+                  {{ cc.incubateUntil ? '+ Hours' : 'Inoculate & incubate' }}
+                </button>
+                @if (incubOpen()) {
+                  <div class="pf-cse__incubpop">
+                    <p class="pf-cse__incublbl">{{ cc.incubateUntil && !incubDone() ? 'Extend incubation by' : 'Incubate for' }}</p>
+                    <div class="pf-cse__incubchips">
+                      @for (h of incubPresets; track h) {
+                        <button type="button" class="pf-cse__incubchip press" (click)="applyIncubation(h)">+{{ h }}h</button>
+                      }
+                    </div>
+                    <div class="pf-cse__incubcustom">
+                      <input type="number" class="pf-cse__incubinp" min="1" max="336" placeholder="hours"
+                             [ngModel]="incubCustom()" (ngModelChange)="incubCustom.set($event)"
+                             (keydown.enter)="incubCustom() && applyIncubation(incubCustom()!)" />
+                      <button type="button" class="pf-cse__incubgo press" [disabled]="!incubCustom()"
+                              (click)="applyIncubation(incubCustom()!)">Set</button>
+                    </div>
+                  </div>
+                }
+              </span>
               @if (cc.caseState === 'awaiting_signout') {
                 <span class="pf-cse__awaitpill">Awaiting sign-out</span>
               } @else if (allDone()) {
@@ -85,8 +110,7 @@ interface StageField { name: string; title: string; type: string; options: strin
               <span class="pf-cse__chip"
                     [class.pf-cse__chip--done]="s.state === 'done'"
                     [class.pf-cse__chip--active]="isMine(s)"
-                    [class.pf-cse__chip--held]="lockedByOther(s)"
-                    [class.pf-cse__chip--incub]="incubating(s)">
+                    [class.pf-cse__chip--held]="lockedByOther(s)">
                 @if (s.state === 'done') { <span class="pf-cse__chipdot">✓</span> }
                 {{ s.label }}
               </span>
@@ -103,7 +127,6 @@ interface StageField { name: string; title: string; type: string; options: strin
               <div class="pf-stg"
                    [class.pf-stg--done]="s.state === 'done'"
                    [class.pf-stg--locked]="lockedByOther(s)"
-                   [class.pf-stg--incub]="incubating(s)"
                    [class.pf-stg--mine]="isMine(s)">
                 <div class="pf-stg__card">
                   <header class="pf-stg__hdr">
@@ -112,17 +135,12 @@ interface StageField { name: string; title: string; type: string; options: strin
                       @if (s.state === 'done') { <span class="pf-stg__state c-done">Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}</span> }
                       @else if (isMine(s)) { <span class="pf-stg__state c-mine">You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
                       @else if (lockedByOther(s)) { <span class="pf-stg__state c-held">{{ s.holderName || 'In progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span> }
-                      @else if (incubating(s)) { <span class="pf-stg__state c-incub">Ready in {{ incubateReadyIn(s) }}</span> }
                     </div>
                     <div class="pf-stg__acts">
                       <!-- Stage-level note thread (same conversation model as the
                            standard result entry: tech ↔ validator, per test). -->
                       <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(s.key).length > 0"
                               (click)="toggleNote(s.key)" [attr.aria-expanded]="noteOpen(s.key)" title="Note on this stage">✎</button>
-                      @if (s.state !== 'done' && !lockedByOther(s) && requiresIncubation(s.key) && !incubating(s)) {
-                        <button type="button" class="pf-stg__ghost pf-stg__ghost--incub press" [disabled]="busy()" (click)="incubate(s)"
-                                [title]="'Start the incubation clock for ' + s.label">Inoculate &amp; incubate</button>
-                      }
                       @if (isMine(s) && s.state !== 'done') {
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="drop(s)">Drop</button>
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
@@ -143,8 +161,6 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <p class="pf-stg__summary">{{ readable(s.valuesJson || '') || 'Completed' }}</p>
                   } @else if (lockedByOther(s)) {
                     <p class="pf-stg__lockmsg">{{ s.holderName || 'Another tech' }} is working this stage.</p>
-                  } @else if (incubating(s)) {
-                    <p class="pf-stg__lockmsg">⏳ Incubating — ready in {{ incubateReadyIn(s) }}. This stage unlocks when the clock elapses.</p>
                   } @else {
                     <!-- Editable (mine, or open → first touch locks it). -->
                     @if (s.key === 'ast') {
@@ -445,6 +461,28 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave { font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px;
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
+    .pf-cse__incubwrap { position: relative; display: inline-flex; }
+    .pf-cse__incubpill--done { color: #34d399; border-color: rgba(52,211,153,.45); }
+    .pf-cse__incubpop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 230px;
+      padding: 12px; border-radius: 12px; background: var(--bg-card-solid, #17131f);
+      border: 1px solid var(--input-border-focus, rgba(139,92,246,.35));
+      box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.2); }
+    .pf-cse__incublbl { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--text-tertiary, #64748b); }
+    .pf-cse__incubchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .pf-cse__incubchip { padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      color: var(--violet-text, #a78bfa); background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.35); }
+    .pf-cse__incubchip:hover { background: rgba(124,58,237,.2); }
+    .pf-cse__incubcustom { display: flex; gap: 6px; }
+    .pf-cse__incubinp { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 9px; font-size: 13px;
+      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none;
+      -moz-appearance: textfield; appearance: textfield; }
+    .pf-cse__incubinp::-webkit-inner-spin-button, .pf-cse__incubinp::-webkit-outer-spin-button { display: none; }
+    .pf-cse__incubinp:focus { border-color: var(--input-border-focus); }
+    .pf-cse__incubgo { padding: 7px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
+      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
+    .pf-cse__incubgo:disabled { opacity: .5; cursor: default; }
+
     .pf-cse__astbtn { font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); background: transparent;
       border: 1px dashed rgba(124,58,237,.4); border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; text-align: left; }
     .pf-cse__astwrap { margin-top: 14px; }
@@ -784,39 +822,38 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     return s.state === 'picked' && !this.isMine(s);
   }
 
-  // ── Incubation ──────────────────────────────────────────────────────────
-  private readonly incubationStages = new Set(['growth', 'identification', 'ast']);
-  requiresIncubation(key: string): boolean { return this.incubationStages.has(key); }
-  /** True while a stage's incubation clock is still running. */
-  incubating(s: CultureStageView): boolean {
-    if (!s.incubateUntil) return false;
-    const t = new Date(s.incubateUntil).getTime();
-    return !Number.isNaN(t) && t > this.now();
+  // ── Case-level incubation (reference timer — locks nothing) ────────────
+  readonly incubPresets = [6, 12, 18, 24, 48];
+  readonly incubOpen = signal(false);
+  readonly incubCustom = signal<number | null>(null);
+  /** True when the case has a timer and it has elapsed. */
+  incubDone(): boolean {
+    const u = this.c()?.incubateUntil;
+    if (!u) return false;
+    const t = new Date(u).getTime();
+    return !Number.isNaN(t) && t <= this.now();
   }
   /** Live "ready in …" countdown (recomputes as `now` ticks). */
-  incubateReadyIn(s: CultureStageView): string {
-    if (!s.incubateUntil) return '';
-    const ms = new Date(s.incubateUntil).getTime() - this.now();
+  incubReadyIn(): string {
+    const u = this.c()?.incubateUntil;
+    if (!u) return '';
+    const ms = new Date(u).getTime() - this.now();
     if (ms <= 0) return 'now';
     const m = Math.floor(ms / 60_000);
     if (m < 60) return `${m}m`;
     return `${Math.floor(m / 60)}h ${m % 60}m`;
   }
-  incubate(s: CultureStageView) {
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/incubate`, {}));
+  /** Start or extend the timer by whole hours (preset chip or custom). */
+  applyIncubation(hours: number) {
+    const h = Math.round(hours);
+    if (!h || h < 1 || h > 336) { this.toasts.error('Hours must be between 1 and 336.'); return; }
+    this.incubOpen.set(false);
+    this.incubCustom.set(null);
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate`, { hours: h }),
+      `Incubation ${this.c()?.incubateUntil ? 'extended' : 'started'} · +${h}h`);
   }
-  /** The stage whose incubation clock is currently running (one at a time). */
-  readonly incubatingStage = computed(() =>
-    (this.c()?.stages ?? []).find(s => this.incubating(s)) ?? null);
-  /** The next stage the header button would inoculate: first not-done stage
-   *  that needs incubation and isn't already past its clock. */
-  readonly incubateTarget = computed(() => {
-    const stages = this.c()?.stages ?? [];
-    return stages.find(s => s.state !== 'done' && !this.lockedByOther(s)
-      && this.requiresIncubation(s.key) && !this.incubating(s)) ?? null;
-  });
 
-  private run(obs: Observable<CultureCaseView>, ok?: string) {
+    private run(obs: Observable<CultureCaseView>, ok?: string) {
     this.busy.set(true);
     obs.subscribe({
       next: c => {
@@ -841,7 +878,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
    *  meantime, the server refuses, we re-sync and the row grays out. */
   private readonly _picking = new Set<string>();
   ensurePicked(s: CultureStageView) {
-    if (s.state !== 'open' || this._picking.has(s.key) || this.incubating(s)) return;
+    if (s.state !== 'open' || this._picking.has(s.key)) return;
     this._picking.add(s.key);
     this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick`, {}).subscribe({
       next: c => { this._picking.delete(s.key); if (c) this.c.set(c); },
