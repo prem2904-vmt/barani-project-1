@@ -52,8 +52,27 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
         @if (mode() === 'capture') {
           <div class="pm-capture">
             @if (!isNative() && camStream()) {
-              <video #cam class="pm-cam" autoplay playsinline muted></video>
-              <p class="text-[12px] text-center mt-2 mb-3" style="color: var(--text-tertiary);">Frame the whole dish, top-down, then capture.</p>
+              <div class="pm-camwrap">
+                <video #cam class="pm-cam" autoplay playsinline muted></video>
+                <!-- Framing guide: put the whole dish inside the circle. -->
+                <svg class="pm-guide" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                  <path d="M0 0H400V300H0Z M200 150 m-122 0 a122 122 0 1 0 244 0 a122 122 0 1 0 -244 0 Z"
+                        fill="rgba(0,0,0,0.45)" fill-rule="evenodd"/>
+                  <circle cx="200" cy="150" r="122" fill="none" stroke="rgba(255,255,255,0.92)"
+                          stroke-width="2" stroke-dasharray="11 8"/>
+                  <circle cx="200" cy="150" r="2.5" fill="rgba(255,255,255,0.75)"/>
+                </svg>
+                @if (tilt() !== null) {
+                  <!-- Bubble level: centred + green when the phone is flat (top-down). -->
+                  <div class="pm-level" [class.pm-level--ok]="tiltOk()" [title]="tiltOk() ? 'Level' : 'Tilt the phone flat'">
+                    <span class="pm-level__bubble" [style.transform]="bubbleTransform()"></span>
+                  </div>
+                }
+              </div>
+              <p class="text-[12px] text-center mt-2 mb-3" style="color: var(--text-tertiary);">
+                {{ tilt() === null ? 'Fit the whole dish inside the circle, top-down, then capture.'
+                   : (tiltOk() ? 'Level — fit the dish inside the circle, then capture.' : 'Tilt the phone flat — shoot straight down at the plate.') }}
+              </p>
               <div class="flex flex-col gap-2 w-full max-w-xs">
                 <button type="button" class="pm-btn pm-btn--primary" (click)="captureFromVideo()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
@@ -237,7 +256,18 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
     .pm-icon { font-size: 16px; line-height: 1; color: var(--text-secondary); background: none; border: 1px solid var(--border-subtle); border-radius: 8px; cursor: pointer; padding: 5px 8px; }
     .pm-x { font-size: 24px; line-height: 1; color: var(--text-tertiary); background: none; border: none; cursor: pointer; padding: 0 6px; }
     .pm-capture { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 20px; min-height: 320px; }
-    .pm-cam { width: 100%; max-width: 520px; aspect-ratio: 4 / 3; border-radius: 12px; background: #000; object-fit: cover; border: 1px solid var(--glass-border); }
+    .pm-camwrap { position: relative; width: 100%; max-width: 520px; }
+    .pm-cam { width: 100%; aspect-ratio: 4 / 3; border-radius: 12px; background: #000; object-fit: cover; border: 1px solid var(--glass-border); display: block; }
+    .pm-guide { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 12px; pointer-events: none; }
+    .pm-level { position: absolute; right: 10px; bottom: 10px; width: 52px; height: 52px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.55); background: rgba(0,0,0,0.35); pointer-events: none;
+      display: flex; align-items: center; justify-content: center; }
+    .pm-level::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+      border: 1px dashed rgba(255,255,255,0.55); }
+    .pm-level__bubble { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;
+      transition: transform 0.12s linear, background 0.2s ease; }
+    .pm-level--ok { border-color: rgba(52,211,153,0.85); }
+    .pm-level--ok .pm-level__bubble { background: #34d399; }
     .pm-body { flex: 1; display: flex; min-height: 360px; }
     .pm-stage { position: relative; flex: 1; min-width: 0; background: #000; touch-action: pan-y; overflow: hidden; }
     .pm-dim { display: none; }
@@ -420,14 +450,41 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     this.mode.set('capture');
     if (!this.isNative()) void this.startCamera();
   }
+  // ── Capture guidance: tilt (bubble level) from device orientation ──
+  /** beta/gamma in degrees, or null when the device gives no orientation
+   *  (desktop webcams) — the guide then shows the reticle alone. */
+  readonly tilt = signal<{ beta: number; gamma: number } | null>(null);
+  private readonly onOrient = (ev: DeviceOrientationEvent) => {
+    if (ev.beta == null || ev.gamma == null) return;
+    this.tilt.set({ beta: ev.beta, gamma: ev.gamma });
+  };
+  /** Flat enough for a top-down shot (screen up, within ~10°). */
+  tiltOk(): boolean {
+    const t = this.tilt();
+    return !!t && Math.abs(t.beta) <= 10 && Math.abs(t.gamma) <= 10;
+  }
+  bubbleTransform(): string {
+    const t = this.tilt();
+    if (!t) return '';
+    const clamp = (v: number) => Math.max(-20, Math.min(20, v * 1.6));
+    return `translate(${clamp(t.gamma)}px, ${clamp(t.beta)}px)`;
+  }
+
   async startCamera() {
     this.camError.set('');
     const md = navigator.mediaDevices;
     if (!md?.getUserMedia) { this.camError.set('Camera not supported here — upload a photo instead.'); return; }
-    try { this._camStream.set(await md.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })); }
+    try {
+      this._camStream.set(await md.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }));
+      window.addEventListener('deviceorientation', this.onOrient);
+    }
     catch { this.camError.set('Camera unavailable or blocked — upload a photo instead.'); }
   }
-  stopCamera() { const s = this._camStream(); if (s) { s.getTracks().forEach(t => t.stop()); this._camStream.set(null); } }
+  stopCamera() {
+    window.removeEventListener('deviceorientation', this.onOrient);
+    this.tilt.set(null);
+    const s = this._camStream(); if (s) { s.getTracks().forEach(t => t.stop()); this._camStream.set(null); }
+  }
   captureFromVideo() {
     const v = this.camEl()?.nativeElement; if (!v || !v.videoWidth) return;
     const canvas = document.createElement('canvas'); canvas.width = v.videoWidth; canvas.height = v.videoHeight;
