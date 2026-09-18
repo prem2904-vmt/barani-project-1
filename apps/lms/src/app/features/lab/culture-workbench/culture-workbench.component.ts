@@ -238,7 +238,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                                      datalist) — searchable, checkboxes, stays open
                                      across picks. The comma-joined value feeds the
                                      AST stage's per-organism panels. -->
-                                <pf-select style="flex: 1; min-width: 260px; max-width: 520px;" size="sm"
+                                <pf-select style="width: 100%;" size="sm"
                                            [options]="organismOptions()" [multiple]="true" [searchable]="true"
                                            [values]="orgList(s.key, f.name)"
                                            placeholder="Select organisms…"
@@ -437,7 +437,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__opt--on { color: #fff; background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899));
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35); }
     /* Free-text fields sit in the same aligned row; keep them modest. */
-    .pf-cse__field .pf-cse__ftext { max-width: 520px; }
+    .pf-cse__field .pf-cse__ftext { width: 100%; max-width: none; justify-self: stretch; padding: 9px 12px; border-radius: 10px;
+      font-size: 13px; color: var(--text-primary); background: var(--input-bg);
+      border: 1px solid var(--input-border); outline: none; }
     @media (max-width: 760px) {
       .pf-cse__field, .pf-cse__field--noted { grid-template-columns: 1fr; gap: 5px; }
       .pf-stg__thread--field { margin-left: 0; }
