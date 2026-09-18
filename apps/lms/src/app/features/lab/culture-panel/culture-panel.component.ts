@@ -92,7 +92,13 @@ export interface CultureCaseView {
                   {{ c.patientName || '—' }} · {{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }
                 </span>
                 @if (inc) {
-                  <span class="pf-cc__incub">⏳ Incubating · {{ inc.label }} · ready in {{ readyIn(inc) }}</span>
+                  <span class="pf-cc__incub">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                    </svg>
+                    Incubating · {{ inc.label }} · ready in {{ readyIn(inc) }}
+                  </span>
                 } @else if (heldBy(c); as holder) {
                   <span class="pf-cc__now">{{ currentStageLabel(c) }} · {{ holder }}</span>
                 } @else {

@@ -39,7 +39,13 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
             <div class="text-sm font-bold" style="color: var(--text-primary);">Measure zones from plate</div>
             <div class="text-[11px]" style="color: var(--text-tertiary);">{{ stepHint() }}</div>
           </div>
-          <button type="button" class="pm-icon" (click)="fullscreen.set(!fullscreen())" [title]="fullscreen() ? 'Exit full screen' : 'Full screen'">{{ fullscreen() ? '🗗' : '⤢' }}</button>
+          <button type="button" class="pm-icon" (click)="fullscreen.set(!fullscreen())" [title]="fullscreen() ? 'Exit full screen' : 'Full screen'">
+            @if (fullscreen()) {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6H3"/><path d="M15 21v-6h6"/><path d="M3 15h6v6"/><path d="M21 9h-6V3"/></svg>
+            } @else {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+            }
+          </button>
           <button type="button" class="pm-x" (click)="close()" title="Close">×</button>
         </div>
 
@@ -49,12 +55,18 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
               <video #cam class="pm-cam" autoplay playsinline muted></video>
               <p class="text-[12px] text-center mt-2 mb-3" style="color: var(--text-tertiary);">Frame the whole dish, top-down, then capture.</p>
               <div class="flex flex-col gap-2 w-full max-w-xs">
-                <button type="button" class="pm-btn pm-btn--primary" (click)="captureFromVideo()">📸 Capture</button>
+                <button type="button" class="pm-btn pm-btn--primary" (click)="captureFromVideo()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                  Capture
+                </button>
                 <label class="pm-btn pm-btn--ghost text-center cursor-pointer">Upload a photo instead
                   <input type="file" accept="image/png,image/jpeg,image/webp" (change)="onFilePick($event)" hidden /></label>
               </div>
             } @else {
-              <div class="text-5xl mb-2">📷</div>
+              <svg class="mb-2" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--text-tertiary);">
+                <path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+              </svg>
               <p class="text-[13px] text-center mb-1" style="color: var(--text-secondary);">Take a clear, top-down photo of the plate with the whole dish in frame.</p>
               @if (camError()) { <p class="text-[12px] text-center mb-2" style="color: var(--red-text);">{{ camError() }}</p> }
               <div class="flex flex-col gap-2 w-full max-w-xs">
@@ -120,14 +132,20 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
               <!-- Zoom / pan / history toolbar -->
               @if (mode() === 'measure') {
                 <div class="pm-toolbar">
-                  <button type="button" class="pm-tool" [class.pm-tool--on]="panMode()" (click)="panMode.set(!panMode())" title="Pan">✋</button>
+                  <button type="button" class="pm-tool" [class.pm-tool--on]="panMode()" (click)="panMode.set(!panMode())" title="Pan">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
+                  </button>
                   <button type="button" class="pm-tool" (click)="zoomBtn(1.3)" title="Zoom in">＋</button>
                   <button type="button" class="pm-tool" (click)="zoomBtn(1/1.3)" title="Zoom out">－</button>
-                  <button type="button" class="pm-tool" (click)="resetView()" title="Fit">⤢</button>
+                  <button type="button" class="pm-tool" (click)="resetView()" title="Fit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                  </button>
                   <span class="pm-tool-sep"></span>
                   <button type="button" class="pm-tool" [disabled]="history.length === 0" (click)="undo()" title="Undo">↶</button>
                   <button type="button" class="pm-tool" [disabled]="future.length === 0" (click)="redo()" title="Redo">↷</button>
-                  <button type="button" class="pm-tool" [disabled]="zones().length === 0" (click)="clearAll()" title="Clear all">🗑</button>
+                  <button type="button" class="pm-tool" [disabled]="zones().length === 0" (click)="clearAll()" title="Clear all">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                  </button>
                 </div>
               }
 
