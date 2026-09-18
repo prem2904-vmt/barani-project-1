@@ -1,7 +1,9 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
@@ -144,6 +146,8 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
 })
 export class DoctorQueueComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
 
@@ -169,7 +173,9 @@ export class DoctorQueueComponent implements OnInit {
   }));
   countOf(f: QueueFilter): number { return this._rows().filter(r => r.status === f).length; }
 
-  ngOnInit() { this.load(); }
+  ngOnInit() { this.load();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('consults').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load()); }
   load() {
     this.loading.set(true);
     this.api.get<Consultation[]>('/api/opd/consultations').subscribe({

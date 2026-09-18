@@ -1,9 +1,11 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
@@ -2170,6 +2172,8 @@ const COUNTERS: CounterSpec[] = [
 })
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
@@ -2707,6 +2711,8 @@ export class MyWorkComponent implements OnInit {
     this.labCfg.ensureLoaded();
     this.refresh();
     this.refreshAllCounts();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('my_work', 'receive').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     // Departments feed sampleIdExample(), the "e.g. 012600001" hint in the scan
     // box. The removed Manual-entry toggle used to be the only thing that
     // loaded them, which would have frozen the hint at its '01' fallback.

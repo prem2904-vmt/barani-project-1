@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { Patient } from '../../../shared/models/patient.model';
 import { QueueItem, QueueMode } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -248,6 +249,7 @@ const TYPE_COLOR: Record<string, string> = {
 export class CollectionQueueComponent implements OnInit {
   readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
+  private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly _items = signal<QueueItem[]>([]);
@@ -273,6 +275,8 @@ export class CollectionQueueComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
     // Live refresh every 20s so wait-times + priority order stay current.
     interval(20_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
   }

@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
@@ -291,6 +293,8 @@ interface ResultSnapshot {
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
@@ -390,7 +394,9 @@ export class PendingValidationComponent implements OnInit {
     } catch { return false; }
   }
 
-  ngOnInit() { this.refresh(); }
+  ngOnInit() { this.refresh();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh()); }
 
   refresh() {
     const mine = this._tab() === 'mine';
