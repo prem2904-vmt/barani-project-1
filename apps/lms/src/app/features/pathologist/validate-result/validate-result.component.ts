@@ -32,6 +32,9 @@ interface ResultSnapshot {
   flags?: { critical: boolean; notifications: string[] };
 }
 
+/** One structured field of a culture stage (from /api/microbiology/stage-schema). */
+interface StageField { name: string; title: string; type: string; options: string[]; suggest?: string | null; }
+
 interface CultureStageSnap {
   key: string;
   label: string;
@@ -220,7 +223,32 @@ interface ValueRow {
                                 <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
                               }
                             } @else {
-                              @if (stageFields(sg.values); as sf) {
+                              @if (cultureEditing() && selected()?.id === st.id && schemaFor(sg.key); as sch) {
+                                <!-- The lab screen's own rows — one field per
+                                     row, the SAME options as full-width pills. -->
+                                <div class="pf-cedit">
+                                  @for (f of sch; track f.name) {
+                                    <div class="pf-cedit__row">
+                                      <span class="pf-cedit__lbl">{{ f.title }}</span>
+                                      @if (f.options.length) {
+                                        <div class="pf-cedit__opts">
+                                          @for (o of f.options; track o) {
+                                            <button type="button" class="pf-cedit__opt press"
+                                                    [class.pf-cedit__opt--on]="cfd(sg, f.name) === o"
+                                                    (click)="setCfd(sg, f.name, cfd(sg, f.name) === o ? '' : o)">{{ o }}</button>
+                                          }
+                                        </div>
+                                      } @else if (f.type === 'textarea') {
+                                        <textarea class="pf-cstage__editnotes" rows="2" [value]="cfd(sg, f.name)"
+                                                  (input)="setCfd(sg, f.name, $any($event.target).value)" placeholder="Optional…"></textarea>
+                                      } @else {
+                                        <input class="pf-cstage__edit" [value]="cfd(sg, f.name)"
+                                               (input)="setCfd(sg, f.name, $any($event.target).value)" placeholder="Optional…" />
+                                      }
+                                    </div>
+                                  }
+                                </div>
+                              } @else if (stageFields(sg.values); as sf) {
                                 @if (sf.length) {
                                   <dl class="pf-cstage__grid">
                                     @for (f of sf; track f.name) {
@@ -730,6 +758,14 @@ interface ValueRow {
     .pf-cstage__edit:focus, .pf-cstage__editnotes:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
     .pf-cstage__editedtag { padding: 1px 8px; border-radius: 9999px; font-size: 10.5px; font-weight: 700;
       color: #d97706; border: 1px solid rgba(245, 158, 11, 0.35); white-space: nowrap; }
+    .pf-cedit { display: flex; flex-direction: column; gap: 12px; }
+    .pf-cedit__lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .pf-cedit__opts { display: flex; width: 100%; gap: 6px; flex-wrap: wrap; }
+    .pf-cedit__opt { flex: 1 1 0; min-width: 90px; padding: 9px 10px; border-radius: 9999px; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-secondary); font-size: 12.5px; font-weight: 600; cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s; }
+    .pf-cedit__opt--on { background: var(--gradient-primary); color: #ffffff; border-color: transparent; }
+    @media (hover: hover) { .pf-cedit__opt:not(.pf-cedit__opt--on):hover { background: var(--glass-bg-hover); color: var(--text-primary); } }
     :root.dark .pf-cstage__editedtag { color: #fbbf24; }
     .pf-cstage__grid dt { margin: 0; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
     .pf-cstage__grid dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
@@ -1382,9 +1418,26 @@ export class ValidateResultComponent implements OnInit {
   readonly astDraft = signal<CultureResult | null>(null);
   private readonly _cfd = signal<Record<string, Record<string, string>>>({});
   private readonly _cnotes = signal<Record<string, string>>({});
+  /** The same field schema the lab bench renders (titles + option pills). */
+  private schemaLoaded = false;
+  readonly stageSchema = signal<Record<string, StageField[]>>({});
+  schemaFor(k: string): StageField[] | null {
+    const f = this.stageSchema()[k];
+    return f?.length ? f : null;
+  }
+  private loadStageSchema() {
+    if (this.schemaLoaded) return;
+    this.schemaLoaded = true;
+    this.api.get<Record<string, StageField[]>>('/api/microbiology/stage-schema').subscribe({
+      next: sch => this.stageSchema.set(sch ?? {}),
+      error: () => { this.schemaLoaded = false; }
+    });
+  }
+
   startCultureEdit() {
     const t = this._selected();
     if (!t) return;
+    this.loadStageSchema();
     const fd: Record<string, Record<string, string>> = {};
     const nd: Record<string, string> = {};
     for (const sg of this.cultureStagesFor(t)) {
@@ -1422,8 +1475,17 @@ export class ValidateResultComponent implements OnInit {
         v = this.astDraft() ?? sg.values;
       } else {
         const clone: Record<string, unknown> = { ...sg.values };
-        const fields = this.stageFields(sg.values);
-        if (fields.length) clone['fields'] = fields.map(f => ({ name: f.name, title: f.title, value: this.cfd(sg, f.name) }));
+        // Schema stages rebuild from the FULL field list (a validator may fill
+        // a field the bench skipped); others from the stored fields.
+        const sch = this.schemaFor(sg.key);
+        if (sch) {
+          clone['fields'] = sch
+            .filter(f => (this.cfd(sg, f.name) || '').trim())
+            .map(f => ({ name: f.name, title: f.title, value: this.cfd(sg, f.name) }));
+        } else {
+          const fields = this.stageFields(sg.values);
+          if (fields.length) clone['fields'] = fields.map(f => ({ name: f.name, title: f.title, value: this.cfd(sg, f.name) }));
+        }
         const note = this.cnote(sg);
         if (note || clone['notes'] != null) clone['notes'] = note;
         v = clone;
