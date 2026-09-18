@@ -110,14 +110,18 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                  editable in place. -->
             <div class="ce-abx">
               <div class="ce-abx__head" aria-hidden="true">
-                <span>Antimicrobial</span><span>CLSI reference</span><span>Zone</span><span>S / I / R</span><span></span>
+                <span>Antimicrobial</span>
+                <span class="ce-abx__col--s">S (mm)</span>
+                <span class="ce-abx__col--i">I (mm)</span>
+                <span class="ce-abx__col--r">R (mm)</span>
+                <span>Zone</span><span>Result</span><span></span>
               </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__name">{{ ab.name }}</span>
-                  <span class="ce-abx__bp" [class.ce-abx__bp--none]="!bpShort(org.name, ab.name)">
-                    {{ bpShort(org.name, ab.name) || '— manual' }}
-                  </span>
+                  <span class="ce-abx__bpv ce-abx__col--s">{{ bpS(org.name, ab.name) }}</span>
+                  <span class="ce-abx__bpv ce-abx__col--i">{{ bpI(org.name, ab.name) }}</span>
+                  <span class="ce-abx__bpv ce-abx__col--r">{{ bpR(org.name, ab.name) }}</span>
                   <span class="ce-abx__zonewrap">
                     <input type="number" class="ce-abx__zone" inputmode="numeric"
                            [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
@@ -197,8 +201,8 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     /* ── Antibiotic table: one aligned column set, verdict-tinted rows ── */
     .ce-abx { display: flex; flex-direction: column; gap: 4px; max-width: 1040px; }
     .ce-abx__head, .ce-abx__row {
-      display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(150px, 1fr) 118px 172px 30px;
-      gap: 12px; align-items: center;
+      display: grid; grid-template-columns: minmax(180px, 1fr) 62px 76px 62px 116px 172px 30px;
+      gap: 10px; align-items: center;
     }
     .ce-abx__head { padding: 2px 14px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
       text-transform: uppercase; color: var(--text-tertiary, #64748b); }
@@ -211,9 +215,13 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
     .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ce-abx__bp { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ce-abx__bp--none { color: var(--text-tertiary, #64748b); font-size: 11px; }
+    .ce-abx__bpv { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+      text-align: center; white-space: nowrap; }
+    .ce-abx__col--s { color: #34d399; }
+    .ce-abx__col--i { color: #fbbf24; }
+    .ce-abx__col--r { color: #f87171; }
+    .ce-abx__head .ce-abx__col--s, .ce-abx__head .ce-abx__col--i, .ce-abx__head .ce-abx__col--r { text-align: center; }
+    .ce-abx__row .ce-abx__bpv:where(:empty) { color: var(--text-tertiary); }
     .ce-abx__zonewrap { display: inline-flex; align-items: center; gap: 6px; }
     .ce-abx__zone { width: 68px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
       border-radius: 10px; background: var(--input-bg); border: 1px solid var(--input-border);
@@ -241,7 +249,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
       :host .ce-org__abxpick { width: 100%; }
       :host .ce-abx__row { display: flex; flex-wrap: wrap; gap: 6px 14px; }
       :host .ce-abx__name { flex-basis: 100%; }
-      :host .ce-abx__bp { order: 5; flex-basis: 100%; }
+      :host .ce-abx__bpv { font-size: 11.5px; }
     }
     @media (pointer: coarse) {
       :host .ce-abx__sirbtn { min-width: 44px; min-height: 44px; }
@@ -469,11 +477,20 @@ export class CultureEntryComponent implements OnInit {
   }
 
   isAuto(i: number, abi: number): boolean { return !this.manual.has(`${i}:${abi}`); }
-  /** Inline CLSI target shown under the drug name — the tech sees what zone
-   *  means S or R before measuring, instead of hunting a tooltip. */
-  bpShort(orgName?: string, abName?: string): string {
+  /** The CLSI columns: the zone that means Susceptible (≥ s), the
+   *  Intermediate window between the cutoffs, and Resistant (≤ r). */
+  bpS(orgName?: string, abName?: string): string {
     const bp = this.bpFor(orgName, abName);
-    return bp ? `S ≥ ${bp.s} · R ≤ ${bp.r} mm` : '';
+    return bp ? `≥ ${bp.s}` : '—';
+  }
+  bpI(orgName?: string, abName?: string): string {
+    const bp = this.bpFor(orgName, abName);
+    if (!bp) return '—';
+    return bp.s - 1 >= bp.r + 1 ? `${bp.r + 1}–${bp.s - 1}` : '—';
+  }
+  bpR(orgName?: string, abName?: string): string {
+    const bp = this.bpFor(orgName, abName);
+    return bp ? `≤ ${bp.r}` : '—';
   }
   /** Enter in a zone field hops to the next one — plate-reading rhythm. */
   focusNextZone(ev: Event) {
