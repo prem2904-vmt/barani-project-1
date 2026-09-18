@@ -10,6 +10,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureResult } from '../../../shared/models/culture.model';
+import { CultureEntryComponent } from '../../lab/culture-entry/culture-entry.component';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -59,7 +60,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, CultureEntryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -256,30 +257,10 @@ interface ValueRow {
                 } @else if ((c.organisms ?? []).length === 0) {
                   <p class="pf-culture-rev__empty">No organisms recorded.</p>
                 } @else {
-                  @for (org of c.organisms ?? []; track $index) {
-                    <div class="pf-culture-rev__org">
-                      <div class="pf-culture-rev__org-name">{{ org.name || 'Organism' }}</div>
-                      <table class="pf-culture-rev__ast">
-                        <thead>
-                          <tr><th>Antimicrobial</th><th class="w-16">Zone</th><th class="w-32">Interpretation</th></tr>
-                        </thead>
-                        <tbody>
-                          @for (ab of org.antibiotics; track $index) {
-                            <tr>
-                              <td>{{ ab.name }}</td>
-                              <td class="text-center">{{ ab.zoneSize != null ? ab.zoneSize + ' mm' : '—' }}</td>
-                              <td class="font-bold" [style.color]="interpTone(ab.interpretation)">{{ interpLabel(ab.interpretation) }}</td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  }
+                  <!-- The bench's own AST view, read-only — the validator
+                       reviews exactly what the tech saw. -->
+                  <pf-culture-entry [embedded]="true" [readonly]="true" [value]="c" />
                 }
-                @if (c.resistancePattern) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Resistance pattern</span> {{ c.resistancePattern }}</p> }
-                @if (c.intrinsicResistance) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Intrinsic resistance</span> {{ c.intrinsicResistance }}</p> }
-                @if (c.clinicalNotes) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Clinical notes</span> {{ c.clinicalNotes }}</p> }
-                @if (c.infectionControlAdvice) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Infection control advice</span> {{ c.infectionControlAdvice }}</p> }
               </div>
             } @else {
               <div class="pf-empty-block">No culture result recorded.</div>

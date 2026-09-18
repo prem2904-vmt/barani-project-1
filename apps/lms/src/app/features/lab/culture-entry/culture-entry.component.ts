@@ -26,7 +26,7 @@ interface Breakpoint {
   imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="space-y-4 pb-6">
+    <div class="space-y-4 pb-6" [class.ce--ro]="readonly">
       @if (!embedded) {
         <!-- Specimen / gram / colony — the standalone C&S form. The culture
              workbench captures these in their own stages, so embedded mode
@@ -397,6 +397,9 @@ interface Breakpoint {
     .ce-abx__mode--on { color: var(--violet-text, #a78bfa) !important; background: rgba(124,58,237,.16) !important; }
     .ce-org__modetgl { flex-shrink: 0; }
     .ce-org__modetgl button { padding: 6px 11px; font-size: 10.5px; }
+    /* Read-only review: same view, nothing editable. */
+    .ce--ro input, .ce--ro textarea, .ce--ro button, .ce--ro pf-select, .ce--ro pf-touch-btn { pointer-events: none; }
+    .ce--ro .ce-abx__addrow, .ce--ro .ce-abx__x, .ce--ro .ce-org__measure, .ce--ro pf-touch-btn { display: none; }
     .ce-modebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 4px; }
     .ce-modebar__lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
       color: var(--text-tertiary, #64748b); }
@@ -442,6 +445,8 @@ export class CultureEntryComponent implements OnInit {
   /** Workbench mode: specimen/gram/colony live in their own stages, and the
    *  organisms come from the Identification stage (read-only labels here). */
   @Input() embedded = false;
+  /** Review mode (validation screen): the exact bench view, nothing editable. */
+  @Input() readonly = false;
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly platform = inject(PlatformService);
