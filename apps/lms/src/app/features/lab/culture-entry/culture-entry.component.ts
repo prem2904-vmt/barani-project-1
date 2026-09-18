@@ -11,6 +11,7 @@ interface Breakpoint {
   organismGroup: string; antibiotic: string;
   susceptibleMin: number | null; resistantMax: number | null;
   shortLabel?: string | null; enabled?: boolean; organism?: string | null;
+  micS?: string | null; micI?: string | null; micR?: string | null;
 }
 
 /**
@@ -117,7 +118,14 @@ interface Breakpoint {
               </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
-                  <span class="ce-abx__name">{{ ab.name }}</span>
+                  <span class="ce-abx__namewrap">
+                    <span class="ce-abx__name">{{ ab.name }}</span>
+                    @if (micRef(org.name, ab); as m) {
+                      <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
+                        MIC µg/mL · <em class="ce-abx__col--s">{{ m.s }}</em> · <em class="ce-abx__col--i">{{ m.i }}</em> · <em class="ce-abx__col--r">{{ m.r }}</em>
+                      </span>
+                    }
+                  </span>
 
                   <!-- Wide: separated CLSI cutoffs (editable) -->
                   <span class="ce-abx__bpwide ce-abx__col--s">
@@ -268,8 +276,12 @@ interface Breakpoint {
     .ce-abx__row[data-interp="S"] { background: rgba(16,185,129,.06); }
     .ce-abx__row[data-interp="I"] { background: rgba(245,158,11,.06); }
     .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
+    .ce-abx__namewrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ce-abx__mic { font-size: 10.5px; color: var(--text-tertiary, #64748b); font-variant-numeric: tabular-nums;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ce-abx__mic em { font-style: normal; font-weight: 600; }
 
     /* Wide: boxed editable cutoffs + the I window, centered per column. */
     .ce-abx__bpwide { text-align: center; }
@@ -691,6 +703,15 @@ export class CultureEntryComponent implements OnInit {
       if (!best || (!best.organism && b.organism)) best = b;
     }
     return best?.enabled === false ? undefined : best;
+  }
+  /** MIC-only reference for a row (no zone cutoffs defined): shown so the
+   *  tech sees WHY the mm boxes are empty and what the MIC criteria are —
+   *  µg/mL values never enter the zone auto-interpretation. */
+  micRef(orgName: string | undefined, ab: AstRow): { s: string; i: string; r: string } | null {
+    if (ab.sMin != null || ab.rMax != null) return null;   // tech gave zone cutoffs
+    const b = this.effectiveRow(orgName, ab.name);
+    if (!b || b.susceptibleMin != null || (!b.micS && !b.micR)) return null;
+    return { s: b.micS || '—', i: b.micI || '—', r: b.micR || '—' };
   }
   private bpFor(orgName?: string, abName?: string): { s: number; r: number } | undefined {
     const b = this.effectiveRow(orgName, abName);
