@@ -72,11 +72,6 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                 {{ interpretedCount(oi) }}/{{ org.antibiotics.length }} interpreted
               </span>
               <span class="ce-org__spacer"></span>
-              <pf-select class="ce-org__abxpick" size="sm"
-                         [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
-                         [values]="abxValuesOf(oi)" placeholder="+ Add antibiotic"
-                         [triggerLabel]="'+ Add antibiotic'"
-                         (valuesChange)="syncAbx(oi, $event)"></pf-select>
               <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
                 <svg icon-left width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -111,17 +106,25 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
             <div class="ce-abx">
               <div class="ce-abx__head" aria-hidden="true">
                 <span>Antimicrobial</span>
-                <span class="ce-abx__col--s">S (mm)</span>
-                <span class="ce-abx__col--i">I (mm)</span>
-                <span class="ce-abx__col--r">R (mm)</span>
+                <span class="ce-abx__col--s">S ≥ mm</span>
+                <span class="ce-abx__col--i">I mm</span>
+                <span class="ce-abx__col--r">R ≤ mm</span>
                 <span>Zone</span><span>Result</span><span></span>
               </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__name">{{ ab.name }}</span>
-                  <span class="ce-abx__bpv ce-abx__col--s">{{ bpS(org.name, ab.name) }}</span>
-                  <span class="ce-abx__bpv ce-abx__col--i">{{ bpI(org.name, ab.name) }}</span>
-                  <span class="ce-abx__bpv ce-abx__col--r">{{ bpR(org.name, ab.name) }}</span>
+                  <span class="ce-abx__bpv ce-abx__col--s">
+                    <input type="number" class="ce-abx__bpin" inputmode="numeric"
+                           [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
+                           placeholder="—" title="Susceptible when zone ≥ this (mm) — editable" />
+                  </span>
+                  <span class="ce-abx__bpv ce-abx__col--i">{{ effI(org.name, ab) }}</span>
+                  <span class="ce-abx__bpv ce-abx__col--r">
+                    <input type="number" class="ce-abx__bpin" inputmode="numeric"
+                           [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
+                           placeholder="—" title="Resistant when zone ≤ this (mm) — editable" />
+                  </span>
                   <span class="ce-abx__zonewrap">
                     <input type="number" class="ce-abx__zone" inputmode="numeric"
                            [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
@@ -143,9 +146,14 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                   </span>
                   <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
                 </div>
-              } @empty {
-                <p class="ce-abx__none">No antibiotics on this panel yet — pick them from the Antibiotics dropdown.</p>
               }
+              <div class="ce-abx__addrow">
+                <pf-select class="ce-org__abxpick" size="sm"
+                           [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
+                           [values]="abxValuesOf(oi)" placeholder="+ Add antibiotic"
+                           [triggerLabel]="'+ Add antibiotic'"
+                           (valuesChange)="syncAbx(oi, $event)"></pf-select>
+              </div>
             </div>
           </section>
           }
@@ -217,6 +225,15 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ce-abx__bpv { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
       text-align: center; white-space: nowrap; }
+    .ce-abx__bpin { width: 54px; height: 32px; text-align: center; font-size: 12.5px; font-weight: 600;
+      border-radius: 8px; background: var(--input-bg); border: 1px solid var(--input-border);
+      color: inherit; outline: none; font-variant-numeric: tabular-nums;
+      -moz-appearance: textfield; appearance: textfield; }
+    .ce-abx__bpin::-webkit-inner-spin-button, .ce-abx__bpin::-webkit-outer-spin-button { display: none; }
+    .ce-abx__bpin:focus { border-color: var(--input-border-focus); }
+    .ce-abx__bpin::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+    .ce-abx__addrow { padding: 6px 14px 2px; }
+    .ce-abx__addrow .ce-org__abxpick { width: 240px; }
     .ce-abx__col--s { color: #34d399; }
     .ce-abx__col--i { color: #fbbf24; }
     .ce-abx__col--r { color: #f87171; }
@@ -495,28 +512,34 @@ export class CultureEntryComponent implements OnInit {
     const ab = this._m().organisms?.[i]?.antibiotics[abi];
     const name = this._m().organisms?.[i]?.name;
     if (!ab) return;
-    const bp = this.bpFor(name, ab.name);
+    const bp = this.effBp(name, ab);
     if (!bp || ab.zoneSize == null) return;
     const interp = ab.zoneSize >= bp.s ? 'S' : ab.zoneSize <= bp.r ? 'R' : 'I';
     if (interp !== ab.interpretation) this.setAb(i, abi, { interpretation: interp });
   }
 
   isAuto(i: number, abi: number): boolean { return !this.manual.has(`${i}:${abi}`); }
-  /** The CLSI columns: the zone that means Susceptible (≥ s), the
-   *  Intermediate window between the cutoffs, and Resistant (≤ r). */
-  bpS(orgName?: string, abName?: string): string {
-    const bp = this.bpFor(orgName, abName);
-    return bp ? `≥ ${bp.s}` : '—';
+  /** Effective cutoffs for a ROW: its own edits win over the CLSI table. */
+  private effBp(orgName: string | undefined, ab: AstRow): { s: number; r: number } | undefined {
+    const g = this.bpFor(orgName, ab.name);
+    const s = ab.sMin ?? g?.s;
+    const r = ab.rMax ?? g?.r;
+    return s != null && r != null ? { s, r } : undefined;
   }
-  bpI(orgName?: string, abName?: string): string {
-    const bp = this.bpFor(orgName, abName);
-    if (!bp) return '—';
-    return bp.s - 1 >= bp.r + 1 ? `${bp.r + 1}–${bp.s - 1}` : '—';
+  effS(orgName: string | undefined, ab: AstRow): number | null {
+    return ab.sMin ?? this.bpFor(orgName, ab.name)?.s ?? null;
   }
-  bpR(orgName?: string, abName?: string): string {
-    const bp = this.bpFor(orgName, abName);
-    return bp ? `≤ ${bp.r}` : '—';
+  effR(orgName: string | undefined, ab: AstRow): number | null {
+    return ab.rMax ?? this.bpFor(orgName, ab.name)?.r ?? null;
   }
+  /** The Intermediate window — derived, never edited directly. */
+  effI(orgName: string | undefined, ab: AstRow): string {
+    const s = this.effS(orgName, ab), r = this.effR(orgName, ab);
+    if (s == null || r == null) return '—';
+    return s - 1 >= r + 1 ? `${r + 1}–${s - 1}` : '—';
+  }
+  setBpS(i: number, abi: number, v: number | null) { this.setAb(i, abi, { sMin: v }); this.autoInterpret(i, abi); }
+  setBpR(i: number, abi: number, v: number | null) { this.setAb(i, abi, { rMax: v }); this.autoInterpret(i, abi); }
   /** Enter in a zone field hops to the next one — plate-reading rhythm. */
   focusNextZone(ev: Event) {
     ev.preventDefault();
@@ -598,8 +621,9 @@ export class CultureEntryComponent implements OnInit {
   readonly plateInterpret = (abName: string, mm: number): 'S' | 'I' | 'R' | '' => {
     const i = this.measureOrg();
     if (i == null) return '';
-    const orgName = this._m().organisms?.[i]?.name;
-    const bp = this.bpFor(orgName, abName);
+    const org = this._m().organisms?.[i];
+    const row = org?.antibiotics.find(a => a.name === abName);
+    const bp = row ? this.effBp(org?.name, row) : this.bpFor(org?.name, abName);
     if (!bp || mm == null) return '';
     return mm >= bp.s ? 'S' : mm <= bp.r ? 'R' : 'I';
   };

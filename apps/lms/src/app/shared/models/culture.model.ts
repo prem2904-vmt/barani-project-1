@@ -4,6 +4,11 @@ export interface AstRow {
   name: string;
   zoneSize?: number | null;
   interpretation: 'S' | 'I' | 'R' | '';
+  /** Per-row CLSI cutoff overrides (mm). When set they replace the seeded
+   *  breakpoint for THIS row's auto-interpretation and are stored with the
+   *  result — so the report records the cutoffs actually used. */
+  sMin?: number | null;
+  rMax?: number | null;
 }
 
 export interface CultureOrganism {
