@@ -231,6 +231,10 @@ interface ReportSnapshot {
     /** Analytical method (e.g. "Photometry"). Rendered as a dim sub-line
      *  under the panel header when the template's `showMethod` is on. */
     method?: string | null;
+    /** Test Master identity fields — selectable as report columns. */
+    code?: string | null;
+    shortName?: string | null;
+    section?: string | null;
   }>;
   /** Per-report signatories (validating pathologist + resulting technician),
    *  injected server-side from the users who signed off. When present, the PDF
@@ -1849,6 +1853,9 @@ interface PanelGroup {
   deptColumns?: ReportColumn[];
   specimen?: string;
   method?: string;
+  code?: string;
+  shortName?: string;
+  section?: string;
   referralLab?: string | null;
   /** undefined ⇒ treated as in NABL scope (no claim either way). */
   inScope?: boolean;
@@ -1872,6 +1879,9 @@ function buildPanelGroup(
     deptColumns: layout?.departmentColumns ?? undefined,
     specimen: ((t.sampleType ?? layout?.sampleType) ?? '').trim() || undefined,
     method: (t.method ?? '').trim() || undefined,
+    code: (t.code ?? '').trim() || undefined,
+    shortName: (t.shortName ?? '').trim() || undefined,
+    section: (t.section ?? '').trim() || undefined,
     referralLab: (t.referralLab ?? '').trim() || undefined,
     inScope: t.nablScope,
     rows: [],
@@ -2228,6 +2238,11 @@ function renderColumnarTable(
       case 'unit':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.unit ?? '').trim() && looksNumeric(r.result)));
       case 'range': return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.range ?? '').trim()));
       case 'flag':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.flag ?? '').trim()));
+      case 'method':     return groups.some(g => !!(g.method ?? '').trim());
+      case 'specimen':   return groups.some(g => !!(g.specimen ?? '').trim());
+      case 'code':       return groups.some(g => !!(g.code ?? '').trim());
+      case 'short_name': return groups.some(g => !!(g.shortName ?? '').trim());
+      case 'section':    return groups.some(g => !!(g.section ?? '').trim());
       case 'text':
       default:
         if (m.locked && (m.lockedValue ?? '').trim()) return true;
@@ -2324,6 +2339,12 @@ function renderColumnarTable(
           case 'unit':   return looksNumeric(r.result) ? (r.unit ?? '').trim() : '';
           case 'range':  return (r.range ?? '').trim();
           case 'flag':   return (r.flag ?? '').trim();
+          // Test-level sources print once per test block (first row).
+          case 'method':     return isFirst ? (g.method ?? '').trim() : '';
+          case 'specimen':   return isFirst ? (g.specimen ?? '').trim() : '';
+          case 'code':       return isFirst ? (g.code ?? '').trim() : '';
+          case 'short_name': return isFirst ? (g.shortName ?? '').trim() : '';
+          case 'section':    return isFirst ? (g.section ?? '').trim() : '';
           case 'text':
           default:
             if (m.locked) return (m.lockedValue ?? '').trim();

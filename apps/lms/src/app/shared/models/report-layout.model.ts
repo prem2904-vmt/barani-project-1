@@ -18,7 +18,8 @@
 // Department-level columns
 // ═══════════════════════════════════════════════════════════════
 
-export type ReportColumnType = 'name' | 'text' | 'result' | 'unit' | 'range' | 'flag';
+export type ReportColumnType = 'name' | 'text' | 'result' | 'unit' | 'range' | 'flag'
+  | 'method' | 'specimen' | 'code' | 'short_name' | 'section';
 
 export interface ReportColumn {
   id: string;
@@ -305,4 +306,10 @@ export const COLUMN_TYPE_OPTIONS: { value: ReportColumnType; label: string; desc
   { value: 'unit',   label: 'Unit',           description: 'Pulls from the test parameter\'s unit (e.g. g/dL)' },
   { value: 'range',  label: 'Reference range', description: 'Pulls from the parameter\'s normal range' },
   { value: 'flag',   label: 'Flag (computed)', description: 'Empty cell; row color/bold from conditions reads as the flag' },
+  // Test-level sources (the test's Basics) — printed once per test block.
+  { value: 'method',     label: 'Methodology',  description: "The test's analytical method (e.g. Hexokinase)" },
+  { value: 'specimen',   label: 'Specimen',     description: "The test's sample type (e.g. Serum)" },
+  { value: 'code',       label: 'Test code',    description: 'The Test Master code (e.g. BIO005)' },
+  { value: 'short_name', label: 'Short name',   description: "The test's short name (e.g. OGCT)" },
+  { value: 'section',    label: 'Section',      description: "The test's section (e.g. Glucose)" },
 ];
