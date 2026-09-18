@@ -620,14 +620,10 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const cached = this._groupCache[stageKey];
     if (cached) return cached;
     const fields = this.stageSchema()[stageKey] ?? [];
-    const bySig = new Map<string, StageField[]>();
-    for (const f of fields) {
-      if (f.options.length >= 2) {
-        const sig = f.options.join('');
-        bySig.set(sig, [...(bySig.get(sig) ?? []), f]);
-      }
-    }
-    const matrixSigs = new Set([...bySig.entries()].filter(([, fs]) => fs.length >= 3).map(([sig]) => sig));
+    // Owner's call (2026-09-18): no radio-dot tally matrix — every component
+    // renders as the same segmented PILL row (Nil | Few | Moderate | Many)
+    // the rest of the stage's fields use.
+    const matrixSigs = new Set<string>();
     const groups: Array<{ id: string; kind: 'matrix' | 'rows'; options: string[]; fields: StageField[] }> = [];
     for (const f of fields) {
       const sig = f.options.join('');
