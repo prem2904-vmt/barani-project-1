@@ -135,17 +135,19 @@ interface StageField { name: string; title: string; type: string; options: strin
             }
             <button type="button" class="pf-cse__branch pf-cse__branch--add" [disabled]="busy()"
                     (click)="newSubculture()">+ Subculture</button>
-            <span class="grow"></span>
-            <!-- The ordered specimen — picked at the billing desk, refinable
-                 here (drives the default antimicrobial panel + the report). -->
-            <span class="pf-cse__speclbl">Specimen</span>
-            <pf-select class="pf-cse__specsel" size="sm" [searchable]="true"
-                       [options]="specimenOpts()" [value]="c()?.specimen ?? ''"
-                       placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
+
             @if (selCaseId()) {
               <button type="button" class="pf-cse__branch pf-cse__branch--del" [disabled]="busy()"
                       (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
             }
+          </div>
+          <!-- The ordered specimen — picked at the billing desk, refinable
+               here (drives the default antimicrobial panel + the report). -->
+          <div class="pf-cse__specrow">
+            <span class="pf-cse__speclbl">Specimen</span>
+            <pf-select class="pf-cse__specsel" size="sm" [searchable]="true"
+                       [options]="specimenOpts()" [value]="c()?.specimen ?? ''"
+                       placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
           </div>
           <!-- Stage progress chips (mirrors the standard screen's test chips). -->
           <div class="pf-cse__chips">
@@ -525,9 +527,11 @@ interface StageField { name: string; title: string; type: string; options: strin
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
     .pf-cse__branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; }
+    .pf-cse__specrow { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; }
     .pf-cse__speclbl { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em;
-      text-transform: uppercase; color: var(--text-muted); margin-left: 8px; }
-    .pf-cse__specsel { min-width: 170px; }
+      text-transform: uppercase; color: var(--text-muted); }
+    .pf-cse__specsel { width: 210px; }
+    @media (max-width: 640px) { .pf-cse__specsel { flex: 1; width: auto; min-width: 0; } }
     .pf-cse__branch { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
       font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-secondary);
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
