@@ -123,10 +123,18 @@ interface Breakpoint {
             <div class="ce-abx">
               <div class="ce-abx__head" aria-hidden="true">
                 <span>Antimicrobial</span>
-                <span class="ce-abx__col--s">S ≥ mm</span>
-                <span class="ce-abx__col--i">I mm</span>
-                <span class="ce-abx__col--r">R ≤ mm</span>
-                <span>Zone</span><span>Result</span><span></span>
+                @if (mode() === 'mic') {
+                  <span class="ce-abx__col--s">S ≤ µg/mL</span>
+                  <span class="ce-abx__col--i">I µg/mL</span>
+                  <span class="ce-abx__col--r">R ≥ µg/mL</span>
+                  <span>MIC</span>
+                } @else {
+                  <span class="ce-abx__col--s">S ≥ mm</span>
+                  <span class="ce-abx__col--i">I mm</span>
+                  <span class="ce-abx__col--r">R ≤ mm</span>
+                  <span>Zone</span>
+                }
+                <span>Result</span><span></span>
               </div>
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
@@ -139,22 +147,40 @@ interface Breakpoint {
                     }
                   </span>
 
-                  <!-- Wide: separated CLSI cutoffs (editable) -->
-                  <span class="ce-abx__bpwide ce-abx__col--s">
-                    <input type="number" class="ce-abx__bpbox" inputmode="numeric"
-                           [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
-                           placeholder="—" title="Susceptible when zone ≥ this (mm) — editable" />
-                  </span>
-                  <span class="ce-abx__bpwide ce-abx__col--i">
-                    <input type="text" class="ce-abx__bpbox ce-abx__bpbox--i"
-                           [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
-                           placeholder="—" title="Intermediate window (e.g. 14–16) — typing it sets the S and R cutoffs around it" />
-                  </span>
-                  <span class="ce-abx__bpwide ce-abx__col--r">
-                    <input type="number" class="ce-abx__bpbox" inputmode="numeric"
-                           [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
-                           placeholder="—" title="Resistant when zone ≤ this (mm) — editable" />
-                  </span>
+                  <!-- Wide: separated CLSI cutoffs (editable), in the active mode's units -->
+                  @if (mode() === 'mic') {
+                    <span class="ce-abx__bpwide ce-abx__col--s">
+                      <input type="text" class="ce-abx__bpbox" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micS')" (ngModelChange)="setMicBp(oi, abi, 'micS', $event)"
+                             placeholder="—" title="Susceptible when MIC ≤ this (µg/mL) — editable" />
+                    </span>
+                    <span class="ce-abx__bpwide ce-abx__col--i">
+                      <input type="text" class="ce-abx__bpbox ce-abx__bpbox--i" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micI')" (ngModelChange)="setMicBp(oi, abi, 'micI', $event)"
+                             placeholder="—" title="Intermediate MIC (µg/mL) — editable" />
+                    </span>
+                    <span class="ce-abx__bpwide ce-abx__col--r">
+                      <input type="text" class="ce-abx__bpbox" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micR')" (ngModelChange)="setMicBp(oi, abi, 'micR', $event)"
+                             placeholder="—" title="Resistant when MIC ≥ this (µg/mL) — editable" />
+                    </span>
+                  } @else {
+                    <span class="ce-abx__bpwide ce-abx__col--s">
+                      <input type="number" class="ce-abx__bpbox" inputmode="numeric"
+                             [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
+                             placeholder="—" title="Susceptible when zone ≥ this (mm) — editable" />
+                    </span>
+                    <span class="ce-abx__bpwide ce-abx__col--i">
+                      <input type="text" class="ce-abx__bpbox ce-abx__bpbox--i"
+                             [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
+                             placeholder="—" title="Intermediate window (e.g. 14–16) — typing it sets the S and R cutoffs around it" />
+                    </span>
+                    <span class="ce-abx__bpwide ce-abx__col--r">
+                      <input type="number" class="ce-abx__bpbox" inputmode="numeric"
+                             [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
+                             placeholder="—" title="Resistant when zone ≤ this (mm) — editable" />
+                    </span>
+                  }
 
                   <span class="ce-abx__zonewrap">
                     @if (mode() === 'mic') {
@@ -189,28 +215,46 @@ interface Breakpoint {
                   <span class="ce-abx__cell ce-abx__cell--s" role="button" tabindex="0"
                         [class.ce-abx__cell--on]="ab.interpretation === 'S'"
                         (click)="setInterp(oi, abi, 'S')" (keydown.enter)="setInterp(oi, abi, 'S')">
-                    <span class="ce-abx__celllbl">S ≥</span>
-                    <input type="number" class="ce-abx__bpin" inputmode="numeric"
-                           [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
-                           placeholder="—" (click)="$event.stopPropagation()" />
-                    <span class="ce-abx__cellunit">mm</span>
+                    <span class="ce-abx__celllbl">{{ mode() === 'mic' ? 'S ≤' : 'S ≥' }}</span>
+                    @if (mode() === 'mic') {
+                      <input type="text" class="ce-abx__bpin" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micS')" (ngModelChange)="setMicBp(oi, abi, 'micS', $event)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                    } @else {
+                      <input type="number" class="ce-abx__bpin" inputmode="numeric"
+                             [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                      <span class="ce-abx__cellunit">mm</span>
+                    }
                   </span>
                   <span class="ce-abx__cell ce-abx__cell--i" role="button" tabindex="0"
                         [class.ce-abx__cell--on]="ab.interpretation === 'I'"
                         (click)="setInterp(oi, abi, 'I')" (keydown.enter)="setInterp(oi, abi, 'I')">
                     <span class="ce-abx__celllbl">I</span>
-                    <input type="text" class="ce-abx__bpin ce-abx__bpin--i"
-                           [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
-                           placeholder="—" (click)="$event.stopPropagation()" />
+                    @if (mode() === 'mic') {
+                      <input type="text" class="ce-abx__bpin ce-abx__bpin--i" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micI')" (ngModelChange)="setMicBp(oi, abi, 'micI', $event)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                    } @else {
+                      <input type="text" class="ce-abx__bpin ce-abx__bpin--i"
+                             [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                    }
                   </span>
                   <span class="ce-abx__cell ce-abx__cell--r" role="button" tabindex="0"
                         [class.ce-abx__cell--on]="ab.interpretation === 'R'"
                         (click)="setInterp(oi, abi, 'R')" (keydown.enter)="setInterp(oi, abi, 'R')">
-                    <span class="ce-abx__celllbl">R ≤</span>
-                    <input type="number" class="ce-abx__bpin" inputmode="numeric"
-                           [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
-                           placeholder="—" (click)="$event.stopPropagation()" />
-                    <span class="ce-abx__cellunit">mm</span>
+                    <span class="ce-abx__celllbl">{{ mode() === 'mic' ? 'R ≥' : 'R ≤' }}</span>
+                    @if (mode() === 'mic') {
+                      <input type="text" class="ce-abx__bpin" inputmode="decimal"
+                             [ngModel]="effMic(org.name, ab, 'micR')" (ngModelChange)="setMicBp(oi, abi, 'micR', $event)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                    } @else {
+                      <input type="number" class="ce-abx__bpin" inputmode="numeric"
+                             [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
+                             placeholder="—" (click)="$event.stopPropagation()" />
+                      <span class="ce-abx__cellunit">mm</span>
+                    }
                   </span>
 
                   <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
@@ -662,7 +706,7 @@ export class CultureEntryComponent implements OnInit {
       // MIC: S when value ≤ the S threshold, R when ≥ the R threshold.
       const b = this.effectiveRow(name, ab.name);
       const v = this.num(ab.micValue);
-      const s = this.num(b?.micS), r = this.num(b?.micR);
+      const s = this.num(ab.micS ?? b?.micS), r = this.num(ab.micR ?? b?.micR);
       if (v == null || (s == null && r == null)) return;
       if (s != null && v <= s) interp = 'S';
       else if (r != null && v >= r) interp = 'R';
@@ -717,6 +761,15 @@ export class CultureEntryComponent implements OnInit {
   }
   setBpS(i: number, abi: number, v: number | null) { this.setAb(i, abi, { sMin: v }); this.autoInterpret(i, abi); }
   setBpR(i: number, abi: number, v: number | null) { this.setAb(i, abi, { rMax: v }); this.autoInterpret(i, abi); }
+  /** Effective MIC cutoff for a ROW: its own edits win over the CLSI table. */
+  effMic(orgName: string | undefined, ab: AstRow, key: 'micS' | 'micI' | 'micR'): string {
+    return ab[key] ?? this.effectiveRow(orgName, ab.name)?.[key] ?? '';
+  }
+  setMicBp(i: number, abi: number, key: 'micS' | 'micI' | 'micR', raw: string | null) {
+    const t = (raw ?? '').trim();
+    this.setAb(i, abi, { [key]: t || null });
+    this.autoInterpret(i, abi);
+  }
   /** Enter in a zone field hops to the next one — plate-reading rhythm. */
   focusNextZone(ev: Event) {
     ev.preventDefault();
@@ -764,8 +817,8 @@ export class CultureEntryComponent implements OnInit {
   micRef(orgName: string | undefined, ab: AstRow): { s: string; i: string; r: string } | null {
     const b = this.effectiveRow(orgName, ab.name);
     if (!b || (!b.micS && !b.micR)) return null;
-    const show = this.mode() === 'mic'
-      || (b.susceptibleMin == null && ab.sMin == null && ab.rMax == null);
+    const show = this.mode() === 'zone'
+      && b.susceptibleMin == null && ab.sMin == null && ab.rMax == null;
     if (!show) return null;
     return { s: b.micS || '—', i: b.micI || '—', r: b.micR || '—' };
   }

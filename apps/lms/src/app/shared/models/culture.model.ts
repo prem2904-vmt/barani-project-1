@@ -11,6 +11,12 @@ export interface AstRow {
   rMax?: number | null;
   /** Measured MIC (µg/mL) — interpreted against the MIC breakpoints. */
   micValue?: string | null;
+  /** Per-row CLSI MIC-cutoff overrides (µg/mL, kept as entered — "≤8",
+   *  "8/4", "0.12-0.5"). Same contract as sMin/rMax: set = used for THIS
+   *  row's auto-interpretation and stored with the result. */
+  micS?: string | null;
+  micI?: string | null;
+  micR?: string | null;
 }
 
 export interface CultureOrganism {
