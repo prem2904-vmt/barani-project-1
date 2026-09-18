@@ -40,6 +40,9 @@ interface CultureStageSnap {
   /** Bench provenance — who completed the stage, and when. */
   doneByName?: string | null;
   doneAt?: string | null;
+  /** Validator amendment provenance. */
+  editedByName?: string | null;
+  editedAt?: string | null;
   values: Record<string, unknown>;
 }
 
@@ -197,6 +200,9 @@ interface ValueRow {
                               @if (sg.doneByName || sg.doneAt) {
                                 <span class="pf-cstage__who">{{ sg.doneByName || '—' }}@if (sg.doneAt) { · {{ sg.doneAt | date:'MMM d, h:mm a' }} }</span>
                               }
+                              @if (sg.editedByName) {
+                                <span class="pf-cstage__editedtag" [title]="sg.editedAt ? ('Amended ' + (sg.editedAt | date:'MMM d, h:mm a')) : 'Amended during validation'">edited · {{ sg.editedByName }}</span>
+                              }
                               <span class="grow"></span>
                               <button type="button" class="pf-prow__cbtn press"
                                       [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(stageKeyOf(sg))"
@@ -206,14 +212,25 @@ interface ValueRow {
                               </button>
                             </h3>
                             @if (sg.key === 'ast') {
-                              <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
+                              @if (cultureEditing() && !sg.caseId && selected()?.id === st.id) {
+                                <!-- THE lab entry screen, live — zones, cutoffs,
+                                     S/I/R, reading mode all editable. -->
+                                <pf-culture-entry [embedded]="true" [value]="astDraft()" (valueChange)="astDraft.set($event)" />
+                              } @else {
+                                <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
+                              }
                             } @else {
                               @if (stageFields(sg.values); as sf) {
                                 @if (sf.length) {
                                   <dl class="pf-cstage__grid">
                                     @for (f of sf; track f.name) {
                                       <div class="pf-cstage__fld">
-                                        <dt>{{ f.title }}</dt><dd>{{ f.value }}</dd>
+                                        <dt>{{ f.title }}</dt>
+                                        @if (cultureEditing() && selected()?.id === st.id) {
+                                          <input class="pf-cstage__edit" [value]="cfd(sg, f.name)"
+                                                 (input)="setCfd(sg, f.name, $any($event.target).value)"
+                                                 [attr.aria-label]="'Correct ' + f.title" />
+                                        } @else { <dd>{{ f.value }}</dd> }
                                         <button type="button" class="pf-prow__cbtn pf-cstage__fbtn press"
                                                 [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(fieldParam(sg, f.name))"
                                                 (click)="rowComment(st, fieldParam(sg, f.name))"
@@ -232,7 +249,11 @@ interface ValueRow {
                                   </div>
                                 }
                               }
-                              @if (stageNotes(sg.values)) { <p class="pf-cstage__notes">{{ stageNotes(sg.values) }}</p> }
+                              @if (cultureEditing() && selected()?.id === st.id && (stageNotes(sg.values) || !stageFields(sg.values).length)) {
+                                <textarea class="pf-cstage__editnotes" rows="2" [value]="cnote(sg)"
+                                          (input)="setCnote(sg, $any($event.target).value)"
+                                          [attr.aria-label]="'Notes for ' + sg.label"></textarea>
+                              } @else if (stageNotes(sg.values)) { <p class="pf-cstage__notes">{{ stageNotes(sg.values) }}</p> }
                             }
                             @if (selected()?.id === st.id && openThreadFor(sg); as th) {
                               <div class="pf-cstage__thread" (click)="$event.stopPropagation()">
@@ -442,6 +463,16 @@ interface ValueRow {
               <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" (click)="saveEdits()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
+            } @else if (cultureEditing()) {
+              <span class="pf-stickybar__meta">
+                <span class="pf-stickybar__dot" data-state="edit"></span>
+                Correcting the result · the edit will carry your name
+              </span>
+              <div class="flex-1"></div>
+              <button type="button" class="pf-btn pf-btn--ghost press" (click)="cancelCultureEdit()">Cancel</button>
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" (click)="saveCultureEdits()">
+                {{ saving() ? 'Saving…' : 'Save correction' }}
+              </button>
             } @else {
               <span class="pf-stickybar__meta">
                 @if (sampleTests().length > 1) {
@@ -478,11 +509,14 @@ interface ValueRow {
                           Reassign to another pathologist
                         </button>
                         @if (!isCulture()) {
-                          <!-- Culture values are a structured object; editing them as
-                               flat fields would corrupt the shape. Reject instead. -->
                           <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startEdit()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                             Edit values myself
+                          </button>
+                        } @else {
+                          <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startCultureEdit()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            Edit result myself
                           </button>
                         }
                       }
@@ -689,6 +723,14 @@ interface ValueRow {
     .pf-cstage__fld { position: relative; padding-right: 30px; }
     .pf-cstage__fbtn { position: absolute; top: -2px; right: 0; width: 26px; height: 26px; }
     .pf-cstage__thread { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(96, 165, 250, 0.04); border: 1px solid var(--glass-border); }
+    .pf-cstage__edit { width: 100%; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
+    .pf-cstage__editnotes { width: 100%; margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; resize: vertical;
+      font-family: inherit; background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
+    .pf-cstage__edit:focus, .pf-cstage__editnotes:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
+    .pf-cstage__editedtag { padding: 1px 8px; border-radius: 9999px; font-size: 10.5px; font-weight: 700;
+      color: #d97706; border: 1px solid rgba(245, 158, 11, 0.35); white-space: nowrap; }
+    :root.dark .pf-cstage__editedtag { color: #fbbf24; }
     .pf-cstage__grid dt { margin: 0; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
     .pf-cstage__grid dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-cstage__orgs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1333,6 +1375,78 @@ export class ValidateResultComponent implements OnInit {
     return (this.snapshotFor(t)?.values as CultureResult) ?? null;
   }
   readonly cultureResult = computed<CultureResult | null>(() => this.cultureResultFor(this._selected()));
+
+  // ── Validator corrects the culture result IN PLACE — the same lab entry
+  //    screens, saved through the amend endpoint with edit provenance. ──
+  readonly cultureEditing = signal(false);
+  readonly astDraft = signal<CultureResult | null>(null);
+  private readonly _cfd = signal<Record<string, Record<string, string>>>({});
+  private readonly _cnotes = signal<Record<string, string>>({});
+  startCultureEdit() {
+    const t = this._selected();
+    if (!t) return;
+    const fd: Record<string, Record<string, string>> = {};
+    const nd: Record<string, string> = {};
+    for (const sg of this.cultureStagesFor(t)) {
+      const k = this.stageKeyOf(sg);
+      fd[k] = Object.fromEntries(this.stageFields(sg.values).map(f => [f.name, f.value]));
+      nd[k] = this.stageNotes(sg.values);
+    }
+    this._cfd.set(fd);
+    this._cnotes.set(nd);
+    this.astDraft.set(structuredClone(this.cultureResultFor(t) ?? {}) as CultureResult);
+    this.cultureEditing.set(true);
+  }
+  cancelCultureEdit() {
+    this.cultureEditing.set(false);
+    this.astDraft.set(null);
+    this._cfd.set({});
+    this._cnotes.set({});
+  }
+  cfd(sg: CultureStageSnap, name: string): string { return this._cfd()[this.stageKeyOf(sg)]?.[name] ?? ''; }
+  setCfd(sg: CultureStageSnap, name: string, v: string) {
+    const k = this.stageKeyOf(sg);
+    this._cfd.update(m => ({ ...m, [k]: { ...(m[k] ?? {}), [name]: v } }));
+  }
+  cnote(sg: CultureStageSnap): string { return this._cnotes()[this.stageKeyOf(sg)] ?? ''; }
+  setCnote(sg: CultureStageSnap, v: string) {
+    const k = this.stageKeyOf(sg);
+    this._cnotes.update(m => ({ ...m, [k]: v }));
+  }
+  saveCultureEdits() {
+    const t = this._selected();
+    if (!t || this._saving()) return;
+    const stages = this.cultureStagesFor(t).map(sg => {
+      let v: unknown;
+      if (sg.key === 'ast' && !sg.caseId) {
+        v = this.astDraft() ?? sg.values;
+      } else {
+        const clone: Record<string, unknown> = { ...sg.values };
+        const fields = this.stageFields(sg.values);
+        if (fields.length) clone['fields'] = fields.map(f => ({ name: f.name, title: f.title, value: this.cfd(sg, f.name) }));
+        const note = this.cnote(sg);
+        if (note || clone['notes'] != null) clone['notes'] = note;
+        v = clone;
+      }
+      return { key: sg.key, caseId: sg.caseId ?? null, valuesJson: JSON.stringify(v) };
+    });
+    this._saving.set(true);
+    this.api.post<{ currentResult: string }>(`/api/microbiology/culture/${t.id}/amend`, { stages }).subscribe({
+      next: res => {
+        this._saving.set(false);
+        if (!res?.currentResult) { this.toasts.error('Could not save the correction'); return; }
+        this.cultureEditing.set(false);
+        const updated = { ...t, currentResult: res.currentResult };
+        this._selected.set(updated);
+        this._queue.update(q => q.map(x => x.id === t.id ? updated : x));
+        this.toasts.success('Result corrected — the edit carries your name');
+      },
+      error: e => {
+        this._saving.set(false);
+        this.toasts.error(ApiError.from(e).message);
+      }
+    });
+  }
 
   /** The bench's stage-by-stage record captured at sign-out. */
   cultureStagesFor(t: OrderTest | null): CultureStageSnap[] {
