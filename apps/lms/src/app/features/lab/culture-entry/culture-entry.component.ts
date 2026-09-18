@@ -56,7 +56,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               <span class="text-[13px] font-bold" style="color: var(--text-tertiary);">{{ oi + 1 }}.</span>
               <input type="text" class="pf-input flex-1 min-w-[200px]" list="pf-org-list" [ngModel]="org.name"
                 (ngModelChange)="setOrgName(oi, $event)" placeholder="Organism name" />
-              <pf-touch-btn size="sm" variant="secondary" (pressed)="addAb(oi)">
+              <pf-touch-btn size="sm" variant="secondary" (pressed)="startAddAb(oi)">
                 + Add antibiotic
               </pf-touch-btn>
               <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
@@ -98,7 +98,8 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                 @for (ab of org.antibiotics; track abi; let abi = $index) {
                   <tr>
                     <td class="py-0.5">
-                      <input type="text" class="pf-input pf-input--compact" [ngModel]="ab.name" (ngModelChange)="setName(oi, abi, $event)" placeholder="Antibiotic" />
+                      <!-- Master-controlled vocabulary — names are picked, never typed. -->
+                      <span class="text-[12px] font-medium" style="color: var(--text-primary);">{{ ab.name }}</span>
                     </td>
                     <td class="py-0.5 px-1">
                       <input type="number" class="pf-input pf-input--compact text-center"
@@ -129,6 +130,27 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                 }
               </tbody>
             </table></div>
+
+            @if (addingAb() === oi) {
+              <!-- Master-only picker: filter the antibiotic master, tap to add.
+                   No free text — the AST vocabulary is the antibiotic table. -->
+              <div class="mt-2 rounded-lg border p-2" style="border-color: var(--border-subtle);">
+                <input type="text" class="pf-input pf-input--compact w-full" [ngModel]="abQuery()"
+                       (ngModelChange)="abQuery.set($event)" placeholder="Search the antibiotic master…" autofocus />
+                <div class="mt-1 max-h-44 overflow-y-auto">
+                  @for (name of abCandidates(oi); track name) {
+                    <button type="button" class="block w-full text-left text-[12px] px-2 py-1.5 rounded-md pf-abx-opt"
+                            (click)="addAbFromMaster(oi, name)">{{ name }}</button>
+                  } @empty {
+                    <div class="text-[11.5px] px-2 py-2" style="color: var(--text-tertiary);">
+                      {{ abxNames().length ? 'No matching antibiotic — or already on the panel.' : 'Antibiotic master unavailable.' }}
+                    </div>
+                  }
+                </div>
+                <button type="button" class="text-[11.5px] mt-1 px-2 py-1" style="color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;"
+                        (click)="addingAb.set(null)">Cancel</button>
+              </div>
+            }
           </div>
           }
         }
@@ -168,6 +190,8 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     </div>
   `,
   styles: [`.pf-input--compact { padding: 4px 8px; font-size: 12px; }
+    .pf-abx-opt { color: var(--text-secondary); background: transparent; border: none; cursor: pointer; }
+    .pf-abx-opt:hover { color: var(--text-primary); background: rgba(124,58,237,.08); }
     /* ── Phone (additive; desktop untouched) ── */
     @media (max-width: 640px) {
       /* AST table scrolls sideways instead of crushing the antimicrobial
@@ -236,7 +260,14 @@ export class CultureEntryComponent implements OnInit {
     this.organismsOpen.set(true);
   }
 
+  /** The AST antibiotic vocabulary — names come ONLY from this master. */
+  readonly abxNames = signal<string[]>([]);
+
   ngOnInit() {
+    this.api.get<{ name: string }[]>('/api/microbiology/antibiotics').subscribe({
+      next: rows => this.abxNames.set((rows ?? []).map(a => a.name).filter(Boolean)),
+      error: () => { /* master unavailable → picker shows an empty-state note */ }
+    });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {
         const m = new Map<string, { s: number; r: number }>();
@@ -289,12 +320,27 @@ export class CultureEntryComponent implements OnInit {
     (this._m().organisms?.[i]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(i, abi));
   }
 
-  addAb(i: number) { this.updateOrg(i, o => ({ ...o, antibiotics: [...o.antibiotics, { name: '', zoneSize: null, interpretation: '' }] })); }
+  // ── Master-only antibiotic picker (no free text) ──────────────────
+  /** Index of the organism whose add-antibiotic picker is open. */
+  readonly addingAb = signal<number | null>(null);
+  readonly abQuery = signal('');
+  startAddAb(i: number) { this.addingAb.set(this.addingAb() === i ? null : i); this.abQuery.set(''); }
+  /** Master names matching the query, minus the ones already on this panel. */
+  abCandidates(i: number): string[] {
+    const q = this.abQuery().trim().toLowerCase();
+    const have = new Set((this._m().organisms?.[i]?.antibiotics ?? []).map(a => a.name.trim().toLowerCase()));
+    return this.abxNames()
+      .filter(n => !have.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q)))
+      .slice(0, 12);
+  }
+  addAbFromMaster(i: number, name: string) {
+    this.updateOrg(i, o => ({ ...o, antibiotics: [...o.antibiotics, { name, zoneSize: null, interpretation: '' }] }));
+    this.abQuery.set('');
+  }
   removeAb(i: number, abi: number) {
     this.manual.delete(`${i}:${abi}`);
     this.updateOrg(i, o => ({ ...o, antibiotics: o.antibiotics.filter((_, k) => k !== abi) }));
   }
-  setName(i: number, abi: number, name: string) { this.setAb(i, abi, { name }); this.autoInterpret(i, abi); }
   setZone(i: number, abi: number, zoneSize: number | null) { this.setAb(i, abi, { zoneSize }); this.autoInterpret(i, abi); }
   setInterp(i: number, abi: number, v: 'S' | 'I' | 'R') { this.manual.add(`${i}:${abi}`); this.setAb(i, abi, { interpretation: v }); }
 
