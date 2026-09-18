@@ -417,17 +417,18 @@ interface StageField { name: string; title: string; type: string; options: strin
       background: var(--input-bg); border: 1px solid var(--input-border); outline: none; resize: vertical; box-sizing: border-box; }
     .pf-cse__input:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
     /* Non-matrix structured fields — one aligned row per parameter. */
-    .pf-cse__fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 0 36px; }
+    /* One field per row; the pills claim the row's full width below. */
+    .pf-cse__fgrid { display: block; }
     .pf-cse__fcell { min-width: 0; }
-    .pf-cse__fcell--wide { grid-column: 1 / -1; }
     .pf-cse__field { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 14px;
       padding: 5px 0; }
     .pf-cse__field--noted { grid-template-columns: 180px minmax(0, 1fr) 28px; }
     .pf-cse__field-lbl { font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 1.35; }
-    .pf-cse__opts { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 9999px;
-      background: var(--glass-bg); border: 1px solid var(--glass-border); justify-self: start;
+    .pf-cse__opts { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 9999px;
+      width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); justify-self: stretch;
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-    .pf-cse__opt { display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 14px;
+    .pf-cse__opt { display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 14px;
+      flex: 1 1 0; min-width: 0;
       font-size: 12.5px; font-weight: 500; cursor: pointer; border-radius: 9999px; border: none; white-space: nowrap;
       color: var(--text-tertiary); background: transparent;
       transition: background .2s ease, color .2s ease, box-shadow .2s ease, transform .08s ease; }
