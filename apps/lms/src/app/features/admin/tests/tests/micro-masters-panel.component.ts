@@ -23,8 +23,13 @@ interface MicroAntibiotic {
   micTesting: boolean; reportingCategory: string | null;
 }
 interface Breakpoint {
-  organismGroup: string; antibiotic: string; susceptibleMin: number; resistantMax: number;
+  organismGroup: string; antibiotic: string;
+  susceptibleMin: number | null; resistantMax: number | null;
   discContent: number | null; source: string | null; version: string | null; tenant?: boolean;
+  shortLabel?: string | null; diskLabel?: string | null;
+  zoneI?: string | null; zoneSdd?: string | null;
+  micS?: string | null; micSdd?: string | null; micI?: string | null; micR?: string | null;
+  urineOnly?: boolean;
 }
 
 type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
@@ -98,12 +103,23 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
               <div class="pf-mm__slabel">Mapped antibiotics ({{ mappedFor(org).length }})</div>
               @for (b of mappedFor(org); track b.antibiotic) {
                 <div class="pf-mm__map">
-                  <span class="pf-mm__mapname">{{ b.antibiotic }}</span>
-                  <span class="pf-mm__mapbp">
-                    <em class="pf-mm__s">S ≥ {{ b.susceptibleMin }}</em>
-                    <em class="pf-mm__i">I {{ iWindow(b.susceptibleMin, b.resistantMax) }}</em>
-                    <em class="pf-mm__r">R ≤ {{ b.resistantMax }}</em>
+                  <span class="pf-mm__mapname">{{ b.antibiotic }}
+                    @if (b.shortLabel) { <span class="pf-mm__short">{{ b.shortLabel }}</span> }
                   </span>
+                  @if (b.susceptibleMin != null && b.resistantMax != null) {
+                    <span class="pf-mm__mapbp">
+                      <em class="pf-mm__s">S ≥ {{ b.susceptibleMin }}</em>
+                      <em class="pf-mm__i">I {{ iWindow(b.susceptibleMin, b.resistantMax) }}</em>
+                      <em class="pf-mm__r">R ≤ {{ b.resistantMax }}</em>
+                    </span>
+                  } @else {
+                    <span class="pf-mm__mapbp" title="MIC breakpoints only — no disk diffusion for this drug/organism">
+                      <em class="pf-mm__s">{{ b.micS || '—' }}</em>
+                      <em class="pf-mm__i">{{ b.micI || '—' }}</em>
+                      <em class="pf-mm__r">{{ b.micR || '—' }}</em>
+                      <em class="pf-mm__micnote">MIC</em>
+                    </span>
+                  }
                   @if (b.tenant) {
                     <span class="pf-mm__lab" title="Lab-authored mapping">lab</span>
                     <button type="button" class="pf-mm__mapx" (click)="removeMapping(org, b)"
@@ -191,6 +207,9 @@ type MasterKey = 'specimens' | 'organisms' | 'antibiotics' | 'breakpoints';
     .pf-mm__s { color: #34d399; }
     .pf-mm__i { color: #fbbf24; }
     .pf-mm__r { color: #f87171; }
+    .pf-mm__short { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--text-tertiary);
+      border: 1px solid var(--border-subtle); border-radius: 6px; padding: 0 5px; font-variant-numeric: tabular-nums; }
+    .pf-mm__micnote { font-size: 9px; font-weight: 800; letter-spacing: .06em; color: var(--text-tertiary); }
     .pf-mm__lab { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
       color: #a78bfa; border: 1px solid rgba(124,58,237,.4); border-radius: 999px; padding: 1px 7px; }
     .pf-mm__clsi { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
@@ -328,17 +347,37 @@ export class MicroMastersPanelComponent implements OnInit {
    *  its master Group first, then family keywords, else the group itself
    *  (which is where lab-authored rows for uncovered organisms live). */
   resolveGroup(org: MicroOrganism): string {
+    const name = org.name.toLowerCase();
+    // Name-level splits outrank the genus group (Salmonella is an
+    // Enterobacterales; both Neisseria share one master group).
+    if (name.includes('salmonella') || name.includes('shigella')) return 'Salmonella & Shigella';
+    if (name.includes('gonorrhoeae')) return 'Neisseria gonorrhoeae';
+    if (name.includes('meningitidis')) return 'Neisseria meningitidis';
     const s = (org.group || org.name).trim();
     const l = s.toLowerCase();
     for (const b of new Set(this.breakpoints().map(x => x.organismGroup)))
       if (b.toLowerCase() === l) return b;
+    if (l.includes('pneumococc')) return 'Pneumococcus';
+    if (l.includes('group a strep') || l.includes('group b strep') || l.includes('hemolytic strep') || l.includes('β-hemolytic'))
+      return 'β-Hemolytic Streptococcus';
+    if (l.includes('viridans') || l.includes('anginosus') || l.includes('nutritionally variant'))
+      return 'Viridans Group Streptococci';
+    if (l.includes('coagulase-negative')) return 'Coagulase-Negative Staphylococci';
     if (l.includes('staphylococc')) return 'Staphylococcus';
     if (l.includes('enterococc')) return 'Enterococcus';
-    if (l.includes('streptococc')) return 'Streptococcus';
     if (l.includes('pseudomon')) return 'Pseudomonas';
     if (l.includes('acinetobacter')) return 'Acinetobacter';
+    if (l.includes('stenotrophomonas') || l.includes('maltophilia')) return 'Stenotrophomonas';
+    if (l.includes('haemophilus')) return 'Haemophilus';
+    for (const k of ['bacteroides', 'prevotella', 'porphyromonas', 'fusobacterium', 'clostridi',
+      'cutibacterium', 'veillonella', 'anaerob', 'actinomyces', 'lactobacillus'])
+      if (l.includes(k)) return 'Anaerobes';
+    for (const k of ['achromobacter', 'aeromonas', 'burkholderia', 'comamonas', 'delftia',
+      'elizabethkingia', 'chryseobacterium', 'moraxella', 'ochrobactrum', 'pasteurella',
+      'ralstonia', 'shewanella', 'sphingomonas', 'vibrio', 'non-fermenter', 'gram-negative bacilli'])
+      if (l.includes(k)) return 'Other Non-Enterobacterales';
     for (const k of ['enterobacterales', 'escherichia', 'klebsiella', 'proteus', 'enterobacter',
-      'citrobacter', 'serratia', 'salmonella', 'shigella', 'morganella', 'providencia'])
+      'citrobacter', 'serratia', 'morganella', 'providencia'])
       if (l.includes(k)) return 'Enterobacterales';
     return s;
   }

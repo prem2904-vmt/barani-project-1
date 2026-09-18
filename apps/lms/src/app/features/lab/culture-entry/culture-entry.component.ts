@@ -7,7 +7,11 @@ import { PlateMeasureComponent } from './plate-measure.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
-interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin: number; resistantMax: number; }
+interface Breakpoint {
+  organismGroup: string; antibiotic: string;
+  susceptibleMin: number | null; resistantMax: number | null;
+  shortLabel?: string | null;
+}
 
 /**
  * Structured Culture & Sensitivity result entry — specimen, gram stain, colony
@@ -432,7 +436,9 @@ export class CultureEntryComponent implements OnInit {
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {
         const m = new Map<string, { s: number; r: number }>();
-        for (const b of list ?? []) m.set(`${b.organismGroup.toLowerCase()}|${b.antibiotic.toLowerCase()}`, { s: b.susceptibleMin, r: b.resistantMax });
+        for (const b of list ?? [])
+          if (b.susceptibleMin != null && b.resistantMax != null)
+            m.set(`${b.organismGroup.toLowerCase()}|${b.antibiotic.toLowerCase()}`, { s: b.susceptibleMin, r: b.resistantMax });
         this.bps = m;
         this.bpList = list ?? [];
         // Organisms seeded before the breakpoints arrived have empty panels —
@@ -660,22 +666,46 @@ export class CultureEntryComponent implements OnInit {
   private organismGroup(name?: string): string | null {
     const o = (name ?? '').trim().toLowerCase();
     if (!o) return null;
+    // Name-level splits outrank the master's genus group: Salmonella lives
+    // under Enterobacterales, and both Neisseria share one group.
+    if (o.includes('salmonella') || o.includes('shigella')) return 'Salmonella & Shigella';
+    if (o.includes('gonorrhoeae')) return 'Neisseria gonorrhoeae';
+    if (o.includes('meningitidis')) return 'Neisseria meningitidis';
     return this.normalizeGroup(this.orgGroups.get(o)) ?? this.normalizeGroup(o);
   }
   /** Map a group label or organism name onto one of the breakpoint table's
-   *  groups — exact match first, then family keywords. */
+   *  groups — Ed36 taxonomy: name-level splits first (Salmonella/Shigella and
+   *  the two Neisseria live under shared genus groups in the master), then an
+   *  exact group match, then family aliases and catch-alls. */
   private normalizeGroup(g?: string | null): string | null {
     const s = (g ?? '').trim().toLowerCase();
     if (!s) return null;
+    if (s.includes('salmonella') || s.includes('shigella')) return 'Salmonella & Shigella';
+    if (s.includes('gonorrhoeae')) return 'Neisseria gonorrhoeae';
+    if (s.includes('meningitidis')) return 'Neisseria meningitidis';
     for (const b of new Set(this.bpList.map(x => x.organismGroup)))
       if (b.toLowerCase() === s) return b;
+    if (s.includes('pneumococc')) return 'Pneumococcus';
+    if (s.includes('group a strep') || s.includes('group b strep') || s.includes('hemolytic strep') || s.includes('β-hemolytic'))
+      return 'β-Hemolytic Streptococcus';
+    if (s.includes('viridans') || s.includes('anginosus') || s.includes('nutritionally variant'))
+      return 'Viridans Group Streptococci';
+    if (s.includes('coagulase-negative')) return 'Coagulase-Negative Staphylococci';
     if (s.includes('staphylococc') || s.includes('mrsa') || s.includes('mssa')) return 'Staphylococcus';
     if (s.includes('enterococc')) return 'Enterococcus';
-    if (s.includes('streptococc')) return 'Streptococcus';
     if (s.includes('pseudomon')) return 'Pseudomonas';
     if (s.includes('acinetobacter')) return 'Acinetobacter';
+    if (s.includes('stenotrophomonas') || s.includes('maltophilia')) return 'Stenotrophomonas';
+    if (s.includes('haemophilus')) return 'Haemophilus';
+    for (const k of ['bacteroides', 'prevotella', 'porphyromonas', 'fusobacterium', 'clostridi',
+      'cutibacterium', 'veillonella', 'anaerob', 'actinomyces', 'lactobacillus'])
+      if (s.includes(k)) return 'Anaerobes';
+    for (const k of ['achromobacter', 'aeromonas', 'burkholderia', 'comamonas', 'delftia',
+      'elizabethkingia', 'chryseobacterium', 'moraxella', 'ochrobactrum', 'pasteurella',
+      'ralstonia', 'shewanella', 'sphingomonas', 'vibrio', 'non-fermenter', 'gram-negative bacilli'])
+      if (s.includes(k)) return 'Other Non-Enterobacterales';
     for (const k of ['enterobacterales', 'escherichia', 'e.coli', 'e. coli', 'klebsiella', 'proteus',
-      'enterobacter', 'citrobacter', 'serratia', 'salmonella', 'shigella', 'morganella', 'providencia', 'coliform'])
+      'enterobacter', 'citrobacter', 'serratia', 'morganella', 'providencia', 'coliform'])
       if (s.includes(k)) return 'Enterobacterales';
     return null;
   }
