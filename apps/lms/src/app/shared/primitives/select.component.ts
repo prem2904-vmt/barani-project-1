@@ -70,12 +70,12 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                  stays open — pick, keep typing, pick again. -->
             <input type="text" class="pf-dd__combox pf-dd__combox--multi"
                    [value]="search()"
-                   [placeholder]="compactMulti ? displayLabel : (selectedOptions.length ? 'Search…' : placeholder)"
+                   [placeholder]="triggerLabel ?? (compactMulti ? displayLabel : (selectedOptions.length ? 'Search…' : placeholder))"
                    (input)="onSearchInput($any($event.target).value)"
                    (keydown)="onPanelKey($event)"
                    (click)="$event.stopPropagation()" />
           } @else if (compactMulti || !selectedOptions.length) {
-            <span class="pf-dd__value" [class.pf-dd__value--ph]="!selectedOptions.length">{{ displayLabel }}</span>
+            <span class="pf-dd__value" [class.pf-dd__value--ph]="!selectedOptions.length && !triggerLabel">{{ triggerLabel ?? displayLabel }}</span>
           }
           <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -342,6 +342,9 @@ export class SelectComponent<T = unknown> implements OnDestroy {
    *  summary ("3 selected") — for panels whose selection is already rendered
    *  elsewhere (e.g. the AST rows below the control). */
   @Input() compactMulti = false;
+  /** Fixed caption for the compact trigger (e.g. "+ Add antibiotic") — reads
+   *  as an action instead of a count. */
+  @Input() triggerLabel?: string;
 
   /** Searchable mode: a filter box pinned at the top of the panel narrows
    *  the options as you type (flat options only — grouped selects ignore

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, On
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
-import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, panelForSpecimen } from '../../../shared/models/culture.model';
+import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -74,7 +74,8 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               <span class="ce-org__spacer"></span>
               <pf-select class="ce-org__abxpick" size="sm"
                          [options]="abxOptionsFor(oi)" [multiple]="true" [searchable]="true" [compactMulti]="true"
-                         [values]="abxValuesOf(oi)" placeholder="Antibiotics…"
+                         [values]="abxValuesOf(oi)" placeholder="+ Add antibiotic"
+                         [triggerLabel]="'+ Add antibiotic'"
                          (valuesChange)="syncAbx(oi, $event)"></pf-select>
               <pf-touch-btn size="sm" variant="secondary" (pressed)="openMeasure(oi)" title="Photograph the plate and measure zones on-screen">
                 <svg icon-left width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -265,6 +266,9 @@ export class CultureEntryComponent implements OnInit {
 
   // CLSI breakpoints (group|antibiotic → {s,r}) for zone auto-interpretation.
   private bps = new Map<string, { s: number; r: number }>();
+  /** The raw breakpoint rows — the SOURCE of each organism's default panel:
+   *  an organism starts with exactly the drugs CLSI can interpret for it. */
+  private bpList: Breakpoint[] = [];
   // Antibiotic rows whose S/I/R was set manually — never auto-overwritten.
   private readonly manual = new Set<string>();
 
@@ -295,11 +299,10 @@ export class CultureEntryComponent implements OnInit {
     const have = new Set((cur.organisms ?? []).map(o => o.name.trim().toLowerCase()));
     const missing = names.map(n => n.trim()).filter(n => n && !have.has(n.toLowerCase()));
     if (!missing.length) return;
-    const panel = panelForSpecimen(cur.specimen);
     const next: CultureResult = {
       ...cur, noGrowth: false,
       organisms: [...(cur.organisms ?? []), ...missing.map(name => ({
-        name, antibiotics: panel.map(n => ({ name: n, zoneSize: null, interpretation: '' as const })),
+        name, antibiotics: this.clsiRows(name),
       }))],
     };
     this._m.set(next);
@@ -320,6 +323,10 @@ export class CultureEntryComponent implements OnInit {
         const m = new Map<string, { s: number; r: number }>();
         for (const b of list ?? []) m.set(`${b.organismGroup.toLowerCase()}|${b.antibiotic.toLowerCase()}`, { s: b.susceptibleMin, r: b.resistantMax });
         this.bps = m;
+        this.bpList = list ?? [];
+        // Organisms seeded before the breakpoints arrived have empty panels —
+        // fill them now that we know which drugs CLSI covers.
+        this.backfillClsiPanels();
       },
       error: () => { /* offline → manual entry only */ }
     });
@@ -345,8 +352,7 @@ export class CultureEntryComponent implements OnInit {
   setNoGrowth(v: boolean) { this.patch({ noGrowth: v }); }
 
   addOrganism() {
-    const panel = panelForSpecimen(this._m().specimen);
-    const org: CultureOrganism = { name: '', antibiotics: panel.map(n => ({ name: n, zoneSize: null, interpretation: '' as const })) };
+    const org: CultureOrganism = { name: '', antibiotics: [] };
     this.commit({ ...this._m(), organisms: [...(this._m().organisms ?? []), org] });
     if (!this.organismsOpen()) {
       this.organismsOpen.set(true);
@@ -362,7 +368,12 @@ export class CultureEntryComponent implements OnInit {
   }
 
   setOrgName(i: number, name: string) {
-    this.updateOrg(i, o => ({ ...o, name }));
+    this.updateOrg(i, o => {
+      // Nothing entered yet → the panel follows the organism (its CLSI set).
+      const untouched = o.antibiotics.every(a => a.zoneSize == null && !a.interpretation);
+      const rows = untouched ? this.clsiRows(name) : null;
+      return { ...o, name, antibiotics: rows?.length ? rows : o.antibiotics };
+    });
     // Group may have changed → re-interpret this organism's non-manual rows.
     (this._m().organisms?.[i]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(i, abi));
   }
@@ -411,6 +422,38 @@ export class CultureEntryComponent implements OnInit {
 
   private setAb(i: number, abi: number, p: Partial<AstRow>) {
     this.updateOrg(i, o => ({ ...o, antibiotics: o.antibiotics.map((a, k) => k === abi ? { ...a, ...p } : a) }));
+  }
+
+  /** The organism's DEFAULT panel: every drug the CLSI table can interpret
+   *  for its group — so S/I/R fills itself. Anything else is added by hand
+   *  via + Add antibiotic. Empty when the group has no breakpoints. */
+  private clsiPanelFor(orgName: string): string[] {
+    const group = this.organismGroup(orgName);
+    if (!group) return [];
+    const names = new Set<string>();
+    for (const b of this.bpList)
+      if (b.organismGroup.toLowerCase() === group.toLowerCase()) names.add(b.antibiotic);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }
+  private clsiRows(orgName: string) {
+    return this.clsiPanelFor(orgName).map(n => ({ name: n, zoneSize: null, interpretation: '' as const }));
+  }
+  /** Fill CLSI panels onto organisms that are still empty (merge-only, and —
+   *  like seedOrganisms — without tripping the userEdited guard). */
+  private backfillClsiPanels() {
+    const cur = this._m();
+    let changed = false;
+    const orgs = (cur.organisms ?? []).map(o => {
+      if (o.antibiotics.length || !o.name.trim()) return o;
+      const rows = this.clsiRows(o.name);
+      if (!rows.length) return o;
+      changed = true;
+      return { ...o, antibiotics: rows };
+    });
+    if (!changed) return;
+    const next = { ...cur, organisms: orgs };
+    this._m.set(next);
+    this.valueChange.emit(next);
   }
 
   /** Auto-set S/I/R from the zone + CLSI breakpoint, unless manually overridden. */
