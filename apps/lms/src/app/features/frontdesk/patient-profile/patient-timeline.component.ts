@@ -56,12 +56,14 @@ interface TimelineItem {
   imports: [DatePipe, PdfCanvasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-tl">
+    <div class="pf-tl" [class.pf-tl--embedded]="embedded()">
       <header class="pf-tl__bar">
-        <button type="button" class="pf-tl__back" (click)="close.emit()" aria-label="Exit timeline">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          <span>Timeline</span>
-        </button>
+        @if (!embedded()) {
+          <button type="button" class="pf-tl__back" (click)="close.emit()" aria-label="Exit timeline">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <span>Timeline</span>
+          </button>
+        }
         <span class="pf-tl__bar-title">Patient Journey</span>
         @if (leftItems().length || picked().length) {
           <button type="button" class="pf-tl__cmp-btn" [class.on]="compareMode()" (click)="toggleCompare()">
@@ -69,9 +71,11 @@ interface TimelineItem {
             {{ compareMode() ? 'Done' : 'Compare' }}
           </button>
         }
-        <button type="button" class="pf-tl__x pf-tl__x--bar" (click)="close.emit()" aria-label="Close">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+        @if (!embedded()) {
+          <button type="button" class="pf-tl__x pf-tl__x--bar" (click)="close.emit()" aria-label="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
       </header>
 
       @if (visits().length === 0) {
@@ -277,7 +281,9 @@ interface TimelineItem {
     </div>
   `,
   styles: [`
-    :host {
+    :host { display: block; }
+    :host:has(.pf-tl--embedded) { height: 100%; }
+    .pf-tl:not(.pf-tl--embedded) {
       position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column;
       background:
         radial-gradient(ellipse 900px 520px at 10% -4%, rgba(124, 58, 237, 0.20) 0%, transparent 60%),
@@ -286,6 +292,18 @@ interface TimelineItem {
         linear-gradient(135deg, #0a0612 0%, #0d0818 30%, #12091f 55%, #0d0818 78%, #0a0612 100%);
     }
     .pf-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    /* Embedded (Consult Room): contained card, same visual world, no overlay. */
+    .pf-tl--embedded {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(168, 85, 247, 0.18);
+      background:
+        radial-gradient(ellipse 700px 420px at 10% -4%, rgba(124, 58, 237, 0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 640px 420px at 94% 6%, rgba(219, 39, 119, 0.11) 0%, transparent 60%),
+        linear-gradient(135deg, #0a0612 0%, #0d0818 35%, #12091f 60%, #0a0612 100%);
+    }
+    .pf-tl--embedded .pf-tl__bar { padding: 10px 16px; }
 
     .pf-tl__bar {
       flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
@@ -454,6 +472,9 @@ export class PatientTimelineComponent implements OnDestroy {
   private readonly svc = inject(PatientTimelineService);
 
   readonly patientId = input.required<string>();
+  /** Embedded mode (Consult Room): the journey lives INSIDE a host layout —
+   *  no fixed overlay, no exit chrome; it fills its container instead. */
+  readonly embedded = input(false);
   readonly close = output<void>();
 
   readonly ordersData = signal<Order[]>([]);

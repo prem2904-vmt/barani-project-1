@@ -59,7 +59,7 @@ interface VitalField {
           <div class="cr-grid">
             <!-- ══ The patient's story — journey, files, trends ══ -->
             <main class="cr-journey">
-              <pf-patient-timeline [patientId]="cc.patientId"></pf-patient-timeline>
+              <pf-patient-timeline [patientId]="cc.patientId" [embedded]="true"></pf-patient-timeline>
             </main>
 
             <!-- ══ The consult ══ -->
@@ -189,7 +189,9 @@ interface VitalField {
 
     .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
     @media (min-width: 1200px) { .cr-grid { grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; } }
-    .cr-journey { min-width: 0; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--glass-bg); padding: 8px 12px 12px; }
+    .cr-journey { min-width: 0; height: min(74vh, 820px); }
+    .cr-journey pf-patient-timeline { display: block; height: 100%; }
+    @media (max-width: 1199px) { .cr-journey { height: 60vh; } }
     .cr-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     @media (min-width: 1200px) { .cr-rail { position: sticky; top: 4px; } }
 
