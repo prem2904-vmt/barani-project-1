@@ -121,7 +121,11 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                            [ngModel]="effS(org.name, ab)" (ngModelChange)="setBpS(oi, abi, $event ?? null)"
                            placeholder="—" title="Susceptible when zone ≥ this (mm) — editable" />
                   </span>
-                  <span class="ce-abx__bpwide ce-abx__col--i ce-abx__iwin">{{ effI(org.name, ab) }}</span>
+                  <span class="ce-abx__bpwide ce-abx__col--i">
+                    <input type="text" class="ce-abx__bpbox ce-abx__bpbox--i"
+                           [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
+                           placeholder="—" title="Intermediate window (e.g. 14–16) — typing it sets the S and R cutoffs around it" />
+                  </span>
                   <span class="ce-abx__bpwide ce-abx__col--r">
                     <input type="number" class="ce-abx__bpbox" inputmode="numeric"
                            [ngModel]="effR(org.name, ab)" (ngModelChange)="setBpR(oi, abi, $event ?? null)"
@@ -164,7 +168,9 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
                         [class.ce-abx__cell--on]="ab.interpretation === 'I'"
                         (click)="setInterp(oi, abi, 'I')" (keydown.enter)="setInterp(oi, abi, 'I')">
                     <span class="ce-abx__celllbl">I</span>
-                    <span class="ce-abx__iwin">{{ effI(org.name, ab) }}</span>
+                    <input type="text" class="ce-abx__bpin ce-abx__bpin--i"
+                           [value]="effIVal(org.name, ab)" (change)="setBpI(oi, abi, $any($event.target).value)"
+                           placeholder="—" (click)="$event.stopPropagation()" />
                   </span>
                   <span class="ce-abx__cell ce-abx__cell--r" role="button" tabindex="0"
                         [class.ce-abx__cell--on]="ab.interpretation === 'R'"
@@ -269,6 +275,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-abx__bpbox::-webkit-inner-spin-button, .ce-abx__bpbox::-webkit-outer-spin-button { display: none; }
     .ce-abx__bpbox:focus { border-color: var(--input-border-focus); }
     .ce-abx__bpbox::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+    .ce-abx__bpbox--i { width: 76px; font-size: 12.5px; }
     .ce-abx__iwin { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
     .ce-abx__sirbtns { display: inline-flex; align-items: center; gap: 4px; }
     .ce-abx__sirbtn { width: 36px; height: 34px; border-radius: 9px; border: 1px solid var(--border-subtle);
@@ -301,6 +308,7 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-abx__bpin::-webkit-inner-spin-button, .ce-abx__bpin::-webkit-outer-spin-button { display: none; }
     .ce-abx__bpin:focus { box-shadow: inset 0 -2px 0 var(--input-border-focus, #8b5cf6); }
     .ce-abx__bpin::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+    .ce-abx__bpin--i { width: 52px; font-size: 12px; }
 
     .ce-abx__zonewrap { display: inline-flex; align-items: center; gap: 5px; }
     .ce-abx__zone { width: 74px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
@@ -601,6 +609,25 @@ export class CultureEntryComponent implements OnInit {
     const s = this.effS(orgName, ab), r = this.effR(orgName, ab);
     if (s == null || r == null) return '—';
     return s - 1 >= r + 1 ? `${r + 1}–${s - 1}` : '—';
+  }
+  /** The I window as an editable value ('' when unknown). */
+  effIVal(orgName: string | undefined, ab: AstRow): string {
+    const v = this.effI(orgName, ab);
+    return v === '—' ? '' : v;
+  }
+  /** Typing the I window ("14–16", "14-16", or a single number) sets the
+   *  cutoffs around it: R ≤ low−1, S ≥ high+1. Clearing it reverts the row
+   *  to the seeded CLSI values. */
+  setBpI(i: number, abi: number, raw: string) {
+    const t = (raw ?? '').trim();
+    if (!t) { this.setAb(i, abi, { sMin: null, rMax: null }); this.autoInterpret(i, abi); return; }
+    const m = t.match(/^(\d+)\s*[-–—]\s*(\d+)$/) ?? t.match(/^(\d+)$/);
+    if (!m) return;
+    const lo = parseInt(m[1], 10);
+    const hi = m[2] != null ? parseInt(m[2], 10) : lo;
+    const [a, b] = lo <= hi ? [lo, hi] : [hi, lo];
+    this.setAb(i, abi, { rMax: a - 1, sMin: b + 1 });
+    this.autoInterpret(i, abi);
   }
   setBpS(i: number, abi: number, v: number | null) { this.setAb(i, abi, { sMin: v }); this.autoInterpret(i, abi); }
   setBpR(i: number, abi: number, v: number | null) { this.setAb(i, abi, { rMax: v }); this.autoInterpret(i, abi); }
