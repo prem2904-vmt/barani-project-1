@@ -31,18 +31,18 @@ interface VitalField {
   imports: [FormsModule, SelectComponent, PatientTimelineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
-      <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
-        <div class="cr-head">
-          <button type="button" class="cr-back press" (click)="back()" aria-label="Back to queue">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <div class="min-w-0">
-            <h1 class="cr-title">{{ c()?.patientName || 'Consultation' }}</h1>
-            <p class="cr-sub">{{ c()?.patientInfo || '—' }} · Token {{ c()?.token }} · ₹{{ c()?.fee }}</p>
-          </div>
-          @if (c(); as cc) {
-            <span class="cr-status" [attr.data-status]="cc.status">
+    <section class="cr-shell">
+      @if (c(); as cc) {
+        <pf-patient-timeline [patientId]="cc.patientId" [embedded]="true" [hideTitle]="true"
+                             [extraNav]="consultNav" (extraChange)="onPane($event)">
+          <!-- The journey's top bar carries the consult identity + actions. -->
+          <div tl-bar class="crb">
+            <button type="button" class="crb__back press" (click)="back()" aria-label="Back to queue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span class="crb__name">{{ cc.patientName || 'Patient' }}</span>
+            <span class="crb__meta">{{ cc.patientInfo || '—' }} · Token {{ cc.token }} · ₹{{ cc.fee }}</span>
+            <span class="crb__status" [attr.data-status]="cc.status">
               @switch (cc.status) {
                 @case ('waiting') { Waiting }
                 @case ('in_consult') { In consult }
@@ -50,205 +50,163 @@ interface VitalField {
                 @case ('cancelled') { Cancelled }
               }
             </span>
-          }
-        </div>
-      </header>
-
-      <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-2">
-        @if (c(); as cc) {
-          <div class="cr-grid">
-            <!-- ══ The patient's story — journey, files, trends ══ -->
-            <main class="cr-journey">
-              <pf-patient-timeline [patientId]="cc.patientId" [embedded]="true"></pf-patient-timeline>
-            </main>
-
-            <!-- ══ The consult — one panel, tabbed ══ -->
-            <aside class="cr-rail">
-              <div class="cr-tabs" role="tablist" aria-label="Consult sections">
-                @for (t of tabs; track t.key) {
-                  <button type="button" class="cr-tab press" role="tab"
-                          [class.cr-tab--on]="tab() === t.key" [attr.aria-selected]="tab() === t.key"
-                          (click)="tab.set(t.key)">{{ t.label }}</button>
-                }
-              </div>
-
-              <div class="cr-pane">
-                @switch (tab()) {
-                  @case ('vitals') {
-                    <div class="cr-vgrid">
-                      @for (f of vitalFields; track f.key) {
-                        <label class="cr-vfield" [class.cr-vfield--flag]="vitalFlagged(f)">
-                          <span class="cr-vfield__lbl">{{ f.label }}</span>
-                          <span class="cr-vfield__wrap">
-                            <input type="number" inputmode="decimal" class="cr-vfield__in"
-                                   [ngModel]="vitals()[f.key]" (ngModelChange)="setVital(f.key, $event)"
-                                   [disabled]="readonly()" placeholder="—" />
-                            <em>{{ f.unit }}</em>
-                          </span>
-                        </label>
-                      }
-                    </div>
-                  }
-                  @case ('notes') {
-                    <label class="cr-lbl" for="cr-complaint">Complaint & findings</label>
-                    <textarea id="cr-complaint" class="cr-text" rows="5" [ngModel]="complaint()" (ngModelChange)="complaint.set($event); dirty.set(true)"
-                              [disabled]="readonly()" placeholder="Chief complaint, duration, examination findings…"></textarea>
-                    <label class="cr-lbl cr-lbl--gap" for="cr-diagnosis">Diagnosis</label>
-                    <input id="cr-diagnosis" type="text" class="cr-in" [ngModel]="diagnosis()" (ngModelChange)="diagnosis.set($event); dirty.set(true)"
-                           [disabled]="readonly()" placeholder="Provisional / final diagnosis" />
-                    <label class="cr-lbl cr-lbl--gap" for="cr-advice">Advice</label>
-                    <textarea id="cr-advice" class="cr-text" rows="3" [ngModel]="advice()" (ngModelChange)="advice.set($event); dirty.set(true)"
-                              [disabled]="readonly()" placeholder="Diet, rest, red flags to watch for…"></textarea>
-                  }
-                  @case ('rx') {
-                    @if (rx().length === 0 && readonly()) {
-                      <p class="cr-empty">No drugs prescribed.</p>
-                    }
-                    @for (r of rx(); track $index; let i = $index) {
-                      <div class="cr-rx">
-                        <input type="text" class="cr-in cr-rx__drug" [ngModel]="r.drug" (ngModelChange)="setRx(i, 'drug', $event)"
-                               [disabled]="readonly()" placeholder="Drug & strength" [attr.aria-label]="'Drug ' + (i + 1)" />
-                        <div class="cr-rx__row">
-                          <input type="text" class="cr-in cr-rx__dose" [ngModel]="r.dose" (ngModelChange)="setRx(i, 'dose', $event)"
-                                 [disabled]="readonly()" placeholder="Dose" aria-label="Dose" />
-                          <pf-select class="cr-rx__freq" size="sm" [options]="freqOpts" [value]="r.frequency"
-                                     placeholder="Frequency" [disabled]="readonly()"
-                                     (valueChange)="setRx(i, 'frequency', $event)"></pf-select>
-                          <input type="number" class="cr-in cr-rx__days" inputmode="numeric" [ngModel]="r.durationDays"
-                                 (ngModelChange)="setRx(i, 'durationDays', $event)" [disabled]="readonly()"
-                                 placeholder="Days" aria-label="Duration (days)" />
-                          @if (!readonly()) {
-                            <button type="button" class="cr-rx__x press" (click)="removeRx(i)" [attr.aria-label]="'Remove ' + (r.drug || 'drug')">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-                            </button>
-                          }
-                        </div>
-                        <input type="text" class="cr-in cr-rx__note" [ngModel]="r.instructions" (ngModelChange)="setRx(i, 'instructions', $event)"
-                               [disabled]="readonly()" placeholder="Instructions (after food, with water…)" aria-label="Instructions" />
-                      </div>
-                    }
-                    @if (!readonly()) {
-                      <button type="button" class="cr-add press" (click)="addRx()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                        Add drug
-                      </button>
-                    }
-                    <label class="cr-lbl cr-lbl--gap">Follow-up</label>
-                    <pf-select class="cr-follow" [options]="followOpts" [value]="followUp()" [disabled]="readonly()"
-                               (valueChange)="followUp.set($event); dirty.set(true)"></pf-select>
-                  }
-                }
-              </div>
-            </aside>
-          </div>
-        } @else if (!loading()) {
-          <div class="cr-missing">Consultation not found.</div>
-        }
-      </div>
-
-      @if (c(); as cc) {
-        <footer class="cr-bar">
-          <div class="cr-bar__inner">
-            <span class="cr-bar__meta">
-              @if (cc.status === 'done') {
-                <span class="cr-bar__dot" data-state="done"></span> Completed
-              } @else if (dirty()) {
-                <span class="cr-bar__dot" data-state="edit"></span> Unsaved changes
-              } @else {
-                <span class="cr-bar__dot" data-state="ok"></span> Consult in progress
-              }
-            </span>
-            <div class="flex-1"></div>
+            <span class="crb__grow"></span>
             @if (!readonly()) {
-              <button type="button" class="cr-btn cr-btn--ghost press" [disabled]="saving() || !dirty()" (click)="save(false)">
+              <button type="button" class="crb__btn press" [disabled]="saving() || !dirty()" (click)="save(false)">
                 {{ saving() ? 'Saving…' : 'Save draft' }}
               </button>
-              <button type="button" class="cr-btn cr-btn--primary press" [disabled]="saving()" (click)="save(true)">
+              <button type="button" class="crb__btn crb__btn--primary press" [disabled]="saving()" (click)="save(true)">
                 Complete consult
               </button>
-            } @else {
-              <button type="button" class="cr-btn cr-btn--ghost press" (click)="back()">Back to queue</button>
             }
           </div>
-        </footer>
+
+          <!-- The stage pane the journey shows when a consult nav item is active. -->
+          <div class="cr-pane-body">
+            @switch (pane()) {
+              @case ('vitals') {
+                <p class="cr-lbl">Vitals</p>
+                <div class="cr-vgrid">
+                  @for (f of vitalFields; track f.key) {
+                    <label class="cr-vfield" [class.cr-vfield--flag]="vitalFlagged(f)">
+                      <span class="cr-vfield__lbl">{{ f.label }}</span>
+                      <span class="cr-vfield__wrap">
+                        <input type="number" inputmode="decimal" class="cr-vfield__in"
+                               [ngModel]="vitals()[f.key]" (ngModelChange)="setVital(f.key, $event)"
+                               [disabled]="readonly()" placeholder="—" />
+                        <em>{{ f.unit }}</em>
+                      </span>
+                    </label>
+                  }
+                </div>
+              }
+              @case ('notes') {
+                <label class="cr-lbl" for="cr-complaint">Complaint & findings</label>
+                <textarea id="cr-complaint" class="cr-text" rows="5" [ngModel]="complaint()" (ngModelChange)="complaint.set($event); dirty.set(true)"
+                          [disabled]="readonly()" placeholder="Chief complaint, duration, examination findings…"></textarea>
+                <label class="cr-lbl cr-lbl--gap" for="cr-diagnosis">Diagnosis</label>
+                <input id="cr-diagnosis" type="text" class="cr-in" [ngModel]="diagnosis()" (ngModelChange)="diagnosis.set($event); dirty.set(true)"
+                       [disabled]="readonly()" placeholder="Provisional / final diagnosis" />
+                <label class="cr-lbl cr-lbl--gap" for="cr-advice">Advice</label>
+                <textarea id="cr-advice" class="cr-text" rows="3" [ngModel]="advice()" (ngModelChange)="advice.set($event); dirty.set(true)"
+                          [disabled]="readonly()" placeholder="Diet, rest, red flags to watch for…"></textarea>
+              }
+              @case ('rx') {
+                <p class="cr-lbl">Prescription</p>
+                @if (rx().length === 0 && readonly()) {
+                  <p class="cr-empty">No drugs prescribed.</p>
+                }
+                @for (r of rx(); track $index; let i = $index) {
+                  <div class="cr-rx">
+                    <input type="text" class="cr-in cr-rx__drug" [ngModel]="r.drug" (ngModelChange)="setRx(i, 'drug', $event)"
+                           [disabled]="readonly()" placeholder="Drug & strength" [attr.aria-label]="'Drug ' + (i + 1)" />
+                    <div class="cr-rx__row">
+                      <input type="text" class="cr-in cr-rx__dose" [ngModel]="r.dose" (ngModelChange)="setRx(i, 'dose', $event)"
+                             [disabled]="readonly()" placeholder="Dose" aria-label="Dose" />
+                      <pf-select class="cr-rx__freq" size="sm" [options]="freqOpts" [value]="r.frequency"
+                                 placeholder="Frequency" [disabled]="readonly()"
+                                 (valueChange)="setRx(i, 'frequency', $event)"></pf-select>
+                      <input type="number" class="cr-in cr-rx__days" inputmode="numeric" [ngModel]="r.durationDays"
+                             (ngModelChange)="setRx(i, 'durationDays', $event)" [disabled]="readonly()"
+                             placeholder="Days" aria-label="Duration (days)" />
+                      @if (!readonly()) {
+                        <button type="button" class="cr-rx__x press" (click)="removeRx(i)" [attr.aria-label]="'Remove ' + (r.drug || 'drug')">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                        </button>
+                      }
+                    </div>
+                    <input type="text" class="cr-in cr-rx__note" [ngModel]="r.instructions" (ngModelChange)="setRx(i, 'instructions', $event)"
+                           [disabled]="readonly()" placeholder="Instructions (after food, with water…)" aria-label="Instructions" />
+                  </div>
+                }
+                @if (!readonly()) {
+                  <button type="button" class="cr-add press" (click)="addRx()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Add drug
+                  </button>
+                }
+                <label class="cr-lbl cr-lbl--gap">Follow-up</label>
+                <pf-select class="cr-follow" [options]="followOpts" [value]="followUp()" [disabled]="readonly()"
+                           (valueChange)="followUp.set($event); dirty.set(true)"></pf-select>
+              }
+            }
+          </div>
+        </pf-patient-timeline>
+      } @else if (!loading()) {
+        <div class="cr-missing">Consultation not found.</div>
       }
     </section>
   `,
   styles: [`
     :host { display: block; height: 100%; overflow: hidden; }
-    .pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-    .pf-page__header { flex: 0 0 auto; }
-    .pf-page__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .cr-shell { height: 100%; padding: 8px 12px 10px; }
+    .cr-shell pf-patient-timeline { display: block; height: 100%; }
 
-    .cr-head { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; }
-    .cr-back { width: 38px; height: 38px; margin-left: -8px; border-radius: 11px; color: var(--text-primary);
-      background: transparent; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    @media (hover: hover) { .cr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
-    .cr-title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
-    .cr-sub { margin: 2px 0 0; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); }
-    .cr-status { margin-left: auto; padding: 4px 12px; border-radius: 9999px; font-size: 10.5px; font-weight: 700;
-      letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--glass-border); color: var(--text-tertiary); }
-    .cr-status[data-status='waiting']    { color: #d97706; border-color: rgba(245, 158, 11, 0.35); }
-    .cr-status[data-status='in_consult'] { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.4); }
-    :root.dark .cr-status[data-status='waiting'] { color: #fbbf24; }
+    /* ── The consult strip inside the journey's top bar ── */
+    .crb { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .crb__back { width: 32px; height: 32px; margin-left: -4px; border-radius: 9px; color: var(--text-primary, #fff);
+      background: transparent; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    @media (hover: hover) { .crb__back:hover { background: rgba(255, 255, 255, 0.08); } }
+    .crb__name { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .crb__meta { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: rgba(255, 255, 255, 0.55);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .crb__status { padding: 3px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); white-space: nowrap; }
+    .crb__status[data-status='waiting']    { color: #fbbf24; border-color: rgba(245, 158, 11, 0.45); }
+    .crb__status[data-status='in_consult'] { color: #c4b5fd; border-color: rgba(168, 85, 247, 0.5); }
+    .crb__grow { flex: 1; }
+    .crb__btn { height: 32px; padding: 0 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.18); background: transparent; color: rgba(255, 255, 255, 0.75);
+      cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, box-shadow .25s; }
+    .crb__btn:disabled { opacity: .45; cursor: not-allowed; }
+    @media (hover: hover) { .crb__btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: #fff; } }
+    .crb__btn--primary { background: var(--gradient-primary); color: #fff; border-color: transparent;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4); }
+    .crb__btn--primary:hover:not(:disabled) { box-shadow: 0 8px 22px rgba(124, 58, 237, 0.55); }
 
-    /* ONE screen: the grid fills the page body; only the rail pane and the
-       journey's own internals scroll. */
-    .pf-page__body { display: flex; }
-    .cr-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; width: 100%; }
-    .cr-journey { min-width: 0; min-height: 0; }
-    .cr-journey pf-patient-timeline { display: block; height: 100%; }
-    .cr-rail { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-radius: 16px;
-      border: 1px solid var(--glass-border); background: var(--glass-bg); overflow: hidden; }
-
-    .cr-tabs { flex: 0 0 auto; display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border-muted); }
-    .cr-tab { flex: 1; height: 32px; border-radius: 9999px; border: 1px solid transparent; background: transparent;
-      color: var(--text-tertiary); font-size: 12.5px; font-weight: 700; cursor: pointer;
-      transition: background .15s, color .15s; }
-    .cr-tab--on { background: var(--gradient-primary); color: #fff; }
-    @media (hover: hover) { .cr-tab:not(.cr-tab--on):hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
-
-    .cr-pane { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; padding-bottom: 84px; }
-
+    /* ── The consult pane (projected into the journey stage) ── */
+    .cr-pane-body { max-width: 720px; }
     .cr-lbl { display: block; margin: 0 0 8px; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
-    .cr-lbl--gap { margin-top: 14px; }
-    .cr-empty { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted, rgba(255,255,255,.45)); }
+    .cr-lbl--gap { margin-top: 16px; }
+    .cr-empty { margin: 0; font-size: 12.5px; color: var(--text-tertiary, rgba(255,255,255,.5)); }
 
-    .cr-bar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30;
-      padding: 0 16px; pointer-events: none; }
-    @media (min-width: 1280px) { .cr-bar { bottom: 1rem; } }
-    .cr-bar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
-      background: var(--bg-card-solid); border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
-    .cr-bar__meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-    .cr-bar__dot { width: 7px; height: 7px; border-radius: 9999px; }
-    .cr-bar__dot[data-state='ok']   { background: #a855f7; }
-    .cr-bar__dot[data-state='edit'] { background: #8b5cf6; animation: cr-pulse 1.8s infinite; }
-    .cr-bar__dot[data-state='done'] { background: var(--text-muted); }
-    @keyframes cr-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-    .cr-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 9999px;
-      font-size: 13px; font-weight: 600; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
-      transition: background .15s, color .15s, box-shadow .25s; }
-    .cr-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .cr-btn--ghost { background: transparent; color: var(--text-secondary); }
-    .cr-btn--ghost:hover:not(:disabled) { background: var(--glass-bg-hover); color: var(--text-primary); }
-    .cr-btn--primary { background: var(--gradient-primary); color: #fff; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4); }
-    .cr-btn--primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55); }
+    .cr-vgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; }
+    .cr-vfield { display: flex; flex-direction: column; gap: 3px; }
+    .cr-vfield__lbl { font-size: 11px; font-weight: 600; color: var(--text-secondary, rgba(255,255,255,.72)); }
+    .cr-vfield__wrap { display: flex; align-items: center; gap: 6px; }
+    .cr-vfield__in { width: 100%; min-width: 0; padding: 8px 10px; border-radius: 9px; font-size: 14px; font-weight: 600;
+      font-variant-numeric: tabular-nums; background: rgba(10, 8, 20, 0.6); border: 1px solid rgba(168, 85, 247, 0.22);
+      color: var(--text-primary, #fff); outline: none; }
+    .cr-vfield__in:focus { border-color: rgba(168, 85, 247, 0.55); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
+    .cr-vfield__wrap em { font-style: normal; font-size: 10.5px; color: var(--text-muted, rgba(255,255,255,.4)); white-space: nowrap; }
+    .cr-vfield--flag .cr-vfield__in { border-color: rgba(245, 158, 11, 0.6); color: #fbbf24; }
+
+    .cr-text, .cr-in { width: 100%; padding: 9px 11px; border-radius: 9px; font-size: 13px; background: rgba(10, 8, 20, 0.6);
+      border: 1px solid rgba(168, 85, 247, 0.22); color: var(--text-primary, #fff); outline: none; font-family: inherit; }
+    .cr-text { resize: vertical; }
+    .cr-text:focus, .cr-in:focus { border-color: rgba(168, 85, 247, 0.55); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
+    .cr-text:disabled, .cr-in:disabled, .cr-vfield__in:disabled { opacity: .7; }
+
+    .cr-rx { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; }
+    .cr-rx + .cr-rx { border-top: 1px solid rgba(168, 85, 247, 0.14); }
+    .cr-rx__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) 70px auto; gap: 6px; align-items: center; }
+    .cr-rx__x { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 9999px; border: none; background: transparent; color: var(--text-muted, rgba(255,255,255,.4)); cursor: pointer; }
+    @media (hover: hover) { .cr-rx__x:hover { color: #f87171; background: rgba(239, 68, 68, 0.12); } }
+    .cr-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
+      padding: 9px; border-radius: 10px; border: 1px dashed rgba(168, 85, 247, 0.35); background: transparent;
+      color: var(--text-tertiary, rgba(255,255,255,.55)); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    @media (hover: hover) { .cr-add:hover { color: #fff; background: rgba(168, 85, 247, 0.1); } }
+    .cr-follow { display: block; max-width: 220px; }
 
     .cr-missing { padding: 60px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
-    @media (max-width: 1199px) {
-      .pf-page__body { display: block; overflow-y: auto; }
-      .cr-grid { grid-template-columns: minmax(0, 1fr); }
-      .cr-journey { height: 58vh; }
-      .cr-rail { max-height: none; }
-      .cr-pane { overflow: visible; }
-    }
     @media (max-width: 640px) {
       :host .cr-text, :host .cr-in, :host .cr-vfield__in { font-size: 16px; }
-      :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height, 5.75rem) + 150px); }
+      .crb__meta { display: none; }
+      .crb__btn { padding: 0 10px; }
     }
-    @media (pointer: coarse) { :host .cr-btn { min-height: 44px; } :host .cr-rx__x { width: 38px; height: 38px; } }
+    @media (pointer: coarse) { :host .crb__btn { min-height: 40px; } :host .cr-rx__x { width: 38px; height: 38px; } }
   `]
 })
 export class ConsultRoomComponent implements OnInit {
@@ -266,12 +224,14 @@ export class ConsultRoomComponent implements OnInit {
     return s === 'done' || s === 'cancelled';
   });
 
-  readonly tabs: Array<{ key: 'vitals' | 'notes' | 'rx'; label: string }> = [
-    { key: 'vitals', label: 'Vitals' },
-    { key: 'notes', label: 'Notes' },
-    { key: 'rx', label: 'Prescription' },
+  /** Consult entries injected into the journey's LEFT rail. */
+  readonly consultNav = [
+    { id: 'vitals', label: 'Vitals', kind: 'Consult' },
+    { id: 'notes', label: 'Notes & diagnosis', kind: 'Consult' },
+    { id: 'rx', label: 'Prescription', kind: 'Consult' },
   ];
-  readonly tab = signal<'vitals' | 'notes' | 'rx'>('vitals');
+  readonly pane = signal<'vitals' | 'notes' | 'rx' | null>(null);
+  onPane(id: string | null) { this.pane.set(id as 'vitals' | 'notes' | 'rx' | null); }
 
   readonly vitals = signal<Vitals>({});
   readonly complaint = signal('');

@@ -64,7 +64,8 @@ interface TimelineItem {
             <span>Timeline</span>
           </button>
         }
-        <span class="pf-tl__bar-title">Patient Journey</span>
+        @if (!hideTitle()) { <span class="pf-tl__bar-title">Patient Journey</span> }
+        <ng-content select="[tl-bar]"></ng-content>
         @if (leftItems().length || picked().length) {
           <button type="button" class="pf-tl__cmp-btn" [class.on]="compareMode()" (click)="toggleCompare()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
@@ -98,6 +99,18 @@ interface TimelineItem {
               <button type="button" [class.on]="filter() === 'image'" (click)="filter.set('image')">Images</button>
             </div>
             @if (!compareMode()) {
+              @for (x of extraNav(); track x.id) {
+                <button type="button" class="pf-tl__item pf-tl__item--extra"
+                        [class.on]="viewMode() === 'extra' && extraSel() === x.id" (click)="showExtra(x.id)">
+                  <span class="pf-tl__item-ico extra">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2v2M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg>
+                  </span>
+                  <span class="pf-tl__item-body">
+                    <span class="pf-tl__item-name">{{ x.label }}</span>
+                    <span class="pf-tl__item-kind">{{ x.kind || 'Consult' }}</span>
+                  </span>
+                </button>
+              }
               <button type="button" class="pf-tl__item pf-tl__item--journey"
                       [class.on]="viewMode() === 'journey'" (click)="showJourney()">
                 <span class="pf-tl__item-ico journey">
@@ -184,6 +197,8 @@ interface TimelineItem {
               } @else {
                 <div class="pf-tl__hint-pane">Pick images or reports from any date on the timeline to compare them here.</div>
               }
+            } @else if (viewMode() === 'extra') {
+              <div class="pf-tl__extra"><ng-content></ng-content></div>
             } @else if (viewMode() === 'journey') {
               <div class="pf-tl__journey">
                 <div class="pf-tl__journey-title">Visit journey · {{ selectedVisit()?.date | date:'MMM d, y' }}</div>
@@ -304,6 +319,9 @@ interface TimelineItem {
         linear-gradient(135deg, #0a0612 0%, #0d0818 35%, #12091f 60%, #0a0612 100%);
     }
     .pf-tl--embedded .pf-tl__bar { padding: 10px 16px; }
+    .pf-tl__item-ico.extra { color: #c4b5fd; }
+    .pf-tl__item--extra.on { border-color: rgba(168, 85, 247, 0.55); }
+    .pf-tl__extra { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; }
 
     .pf-tl__bar {
       flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
@@ -475,6 +493,14 @@ export class PatientTimelineComponent implements OnDestroy {
   /** Embedded mode (Consult Room): the journey lives INSIDE a host layout —
    *  no fixed overlay, no exit chrome; it fills its container instead. */
   readonly embedded = input(false);
+  /** Host-supplied nav entries (Consult Room: Vitals / Notes / Prescription).
+   *  They join the LEFT rail above the visit items; selecting one swaps the
+   *  stage to the projected <ng-content> pane. */
+  readonly extraNav = input<Array<{ id: string; label: string; kind?: string }>>([]);
+  /** Hide the built-in "Patient Journey" bar title (host projects its own). */
+  readonly hideTitle = input(false);
+  readonly extraChange = output<string | null>();
+  readonly extraSel = signal<string | null>(null);
   readonly close = output<void>();
 
   readonly ordersData = signal<Order[]>([]);
@@ -496,7 +522,7 @@ export class PatientTimelineComponent implements OnDestroy {
   /** User-dragged footer height (px); null = auto/compact. */
   readonly footH = signal<number | null>(null);
   /** Right panel: the visit journey (Sankey) or a single file. */
-  readonly viewMode = signal<'journey' | 'file'>('journey');
+  readonly viewMode = signal<'journey' | 'file' | 'extra'>('journey');
   /** Left-list filter. */
   readonly filter = signal<'all' | 'report' | 'image'>('all');
 
@@ -870,9 +896,19 @@ export class PatientTimelineComponent implements OnDestroy {
     if (this.compareMode()) this.togglePick(it);
     else this.openSingle(it);
   }
-  showJourney() { this.viewMode.set('journey'); this.active.set(null); }
+  showJourney() {
+    this.viewMode.set('journey');
+    this.active.set(null);
+    if (this.extraSel() !== null) { this.extraSel.set(null); this.extraChange.emit(null); }
+  }
+  showExtra(id: string) {
+    this.viewMode.set('extra');
+    this.active.set(null);
+    if (this.extraSel() !== id) { this.extraSel.set(id); this.extraChange.emit(id); }
+  }
   async openSingle(it: TimelineItem | null) {
     this.viewMode.set('file');
+    if (this.extraSel() !== null) { this.extraSel.set(null); this.extraChange.emit(null); }
     this.active.set(it);
     if (it) await this.ensureUrl(it);
   }
