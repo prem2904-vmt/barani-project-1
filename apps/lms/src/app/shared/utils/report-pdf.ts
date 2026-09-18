@@ -1941,7 +1941,12 @@ function buildPanelGroup(
         });
       }
     }
-    return group;
+    // A configured layout whose grid resolved to ZERO param rows (e.g. an
+    // accidentally saved empty grid — HEM011, 2026-09-19 RCA) must never
+    // erase entered results from the report: fall through to the legacy
+    // values map instead of returning an empty panel that the profile
+    // merge silently drops.
+    if (group.rows.some(r => r.kind === 'param')) return group;
   }
 
   // Legacy values map.
