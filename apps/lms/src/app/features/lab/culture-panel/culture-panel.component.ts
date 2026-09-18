@@ -23,6 +23,12 @@ export interface CultureStageView {
 
 /** A culture case row (mirrors the backend CultureCaseDto). */
 export interface CultureCaseView {
+  /** Branching (git-style): id + parent link + branch name; the root GET
+   *  carries every subculture flat in subCultures. */
+  id?: string | null;
+  parentCaseId?: string | null;
+  label?: string | null;
+  subCultures?: CultureCaseView[] | null;
   /** CASE-LEVEL incubation reference timer (never a lock). */
   incubateUntil?: string | null;
   orderTestId: string;

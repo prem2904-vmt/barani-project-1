@@ -12,6 +12,7 @@ import { CultureCaseView, CultureStageView } from '../culture-panel/culture-pane
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { DialogService } from '../../../core/services/dialog.service';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -40,7 +41,7 @@ interface StageField { name: string; title: string; type: string; options: strin
       <div class="pf-cse__note">Loading…</div>
     } @else if (!c()) {
       <div class="pf-cse__note">Case not found.</div>
-    } @else if (c(); as cc) {
+    } @else if (view(); as cc) {
       <!-- ── Whole case, result-entry style: every stage a row, worked
            collaboratively (lock per stage, pick inline, notes autosave). ── -->
       <section class="pf-cse">
@@ -108,6 +109,33 @@ interface StageField { name: string; title: string; type: string; options: strin
               }
             </div>
           </div>
+          <!-- Branches: the primary + every subculture, git-checkout style. -->
+          <div class="pf-cse__branches">
+            <button type="button" class="pf-cse__branch" [class.pf-cse__branch--on]="!selCaseId()"
+                    (click)="selectCase(null)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/>
+              </svg>
+              Primary
+            </button>
+            @for (b of branches(); track b.id) {
+              <button type="button" class="pf-cse__branch" [class.pf-cse__branch--on]="selCaseId() === b.id"
+                      (click)="selectCase(b.id!)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9a9 9 0 0 0 9 9"/>
+                </svg>
+                {{ b.label || 'Subculture' }}
+              </button>
+            }
+            <button type="button" class="pf-cse__branch pf-cse__branch--add" [disabled]="busy()"
+                    (click)="newSubculture()">+ Subculture</button>
+            @if (selCaseId()) {
+              <button type="button" class="pf-cse__branch pf-cse__branch--del" [disabled]="busy()"
+                      (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
+            }
+          </div>
           <!-- Stage progress chips (mirrors the standard screen's test chips). -->
           <div class="pf-cse__chips">
             @for (s of cc.stages; track s.key) {
@@ -143,8 +171,8 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <div class="pf-stg__acts">
                       <!-- Stage-level note thread (same conversation model as the
                            standard result entry: tech ↔ validator, per test). -->
-                      <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(s.key).length > 0"
-                              (click)="toggleNote(s.key)" [attr.aria-expanded]="noteOpen(s.key)" title="Note on this stage">✎</button>
+                      <button type="button" class="pf-stg__note press" [class.pf-stg__note--has]="commentsFor(sk(s.key)).length > 0"
+                              (click)="toggleNote(sk(s.key))" [attr.aria-expanded]="noteOpen(sk(s.key))" title="Note on this stage">✎</button>
                       @if (isMine(s) && s.state !== 'done') {
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="drop(s)">Drop</button>
                         <button type="button" class="pf-stg__ghost press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
@@ -152,12 +180,12 @@ interface StageField { name: string; title: string; type: string; options: strin
                       }
                     </div>
                   </header>
-                  @if (noteOpen(s.key) || commentsFor(s.key).length > 0) {
+                  @if (noteOpen(sk(s.key)) || commentsFor(sk(s.key)).length > 0) {
                     <div class="pf-stg__thread">
-                      <pf-comment-thread [comments]="commentsFor(s.key)" currentRole="tech" [autoCompose]="true"
+                      <pf-comment-thread [comments]="commentsFor(sk(s.key))" currentRole="tech" [autoCompose]="true"
                                          [composeLabel]="'Add note on ' + s.label"
-                                         (add)="addComment(s.key, $event.body, $event.type)"
-                                         (reply)="replyComment(s.key, $event.parentId, $event.body)"></pf-comment-thread>
+                                         (add)="addComment(sk(s.key), $event.body, $event.type)"
+                                         (reply)="replyComment(sk(s.key), $event.parentId, $event.body)"></pf-comment-thread>
                     </div>
                   }
 
@@ -481,6 +509,15 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave { font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px;
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
+    .pf-cse__branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; }
+    .pf-cse__branch { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-secondary);
+      background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-cse__branch--on { color: var(--violet-text, #a78bfa); border-color: rgba(124,58,237,.5);
+      background: rgba(124,58,237,.12); }
+    .pf-cse__branch--add { border-style: dashed; color: var(--violet-text, #a78bfa); }
+    .pf-cse__branch--del { color: #f87171; border-style: dashed; border-color: rgba(239,68,68,.45); }
+    .pf-cse__branch:disabled { opacity: .5; cursor: default; }
     .pf-cse__incubwrap { position: relative; display: inline-flex; }
     .pf-cse__incubpill--done { color: #34d399; border-color: rgba(52,211,153,.45); background: rgba(16,185,129,.1); }
     .pf-cse__incubpop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 230px;
@@ -519,8 +556,29 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
+  /** The case TREE (root + subCultures) — every response carries it. */
   readonly c = signal<CultureCaseView | null>(null);
+  /** The selected branch (null = the primary). */
+  readonly selCaseId = signal<string | null>(null);
+  /** The case being WORKED — root or the selected subculture. */
+  readonly view = computed<CultureCaseView | null>(() => {
+    const t = this.c();
+    if (!t) return null;
+    const id = this.selCaseId();
+    if (!id) return t;
+    return (t.subCultures ?? []).find(s => s.id === id)
+      ?? t;                                     // branch deleted elsewhere → primary
+  });
+  readonly branches = computed<CultureCaseView[]>(() => this.c()?.subCultures ?? []);
+  /** caseId query for stage ops on a branch. */
+  private q(): string { const id = this.selCaseId(); return id ? `?caseId=${id}` : ''; }
+  /** Comment keys are branch-scoped so notes never bleed across branches. */
+  sk(stageKey: string): string {
+    const id = this.selCaseId();
+    return id ? `${stageKey}#${id.slice(0, 8)}` : stageKey;
+  }
   readonly loading = signal(true);
   readonly busy = signal(false);
   /** Per-stage draft notes (autosaved to localStorage), keyed by stage key. */
@@ -559,7 +617,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const draft = (this.fieldValues()['identification']?.['organism'] ?? '')
       .split(',').map(s => s.trim()).filter(Boolean);
     if (draft.length) return draft;
-    const st = this.c()?.stages?.find(s => s.key === 'identification');
+    const st = this.view()?.stages?.find(s => s.key === 'identification');
     if (st?.valuesJson) {
       try {
         const o = JSON.parse(st.valuesJson) as { fields?: { name?: string; value?: string }[] };
@@ -580,14 +638,14 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly focusStage = signal<string | null>(null);
 
   readonly subtitle = computed(() => {
-    const c = this.c();
+    const c = this.view();
     if (!c) return '';
     return [c.patientName, c.testName, c.departmentName].filter(Boolean).join(' · ');
   });
 
   /** Only the focused stage when one was picked; otherwise the whole case. */
   readonly visibleStages = computed(() => {
-    const all = this.c()?.stages ?? [];
+    const all = this.view()?.stages ?? [];
     const key = this.focusStage();
     if (!key) return all;
     const one = all.filter(s => s.key === key);
@@ -600,13 +658,13 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   });
 
   /** The AST stage (rendered inline via the culture-entry editor). */
-  readonly astStage = computed(() => this.c()?.stages?.find(s => s.key === 'ast') ?? null);
+  readonly astStage = computed(() => this.view()?.stages?.find(s => s.key === 'ast') ?? null);
   /** True when every stage is done — enables the case-level sign-out. */
   readonly allDone = computed(() => {
     const st = this.c()?.stages ?? [];
     return st.length > 0 && st.every(s => s.state === 'done');
   });
-  readonly doneCount = computed(() => (this.c()?.stages ?? []).filter(s => s.state === 'done').length);
+  readonly doneCount = computed(() => (this.view()?.stages ?? []).filter(s => s.state === 'done').length);
   /** The logged-in tech (shown as the header pill, like the standard entry). */
   readonly techName = computed(() => this.auth.user()?.displayName ?? '');
 
@@ -722,7 +780,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
   /** 1-based day counter from the case's creation date. */
   readonly dayNo = computed(() => {
-    const created = this.c()?.createdAt;
+    const created = this.view()?.createdAt;
     if (!created) return 1;
     const start = new Date(created).getTime();
     if (Number.isNaN(start)) return 1;
@@ -741,7 +799,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   back() { this.router.navigate(['/lab/my-work']); }
 
   // ── Draft autosave (per stage, in localStorage) ─────────────────────────
-  private draftKey(key: string) { return `pf.cw.draft.${this.id}.${key}`; }
+  private draftKey(key: string) { return `pf.cw.draft.${this.id}.${this.selCaseId() ?? 'root'}.${key}`; }
   onDraft(key: string, val: string) {
     this.drafts.update(d => ({ ...d, [key]: val }));
     try { localStorage.setItem(this.draftKey(key), val); } catch { /* ignore */ }
@@ -764,7 +822,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   // `<stage>` for the stage-level thread, `<stage>.<field>` per component.
   private readonly _comments = signal<OrderTestComment[]>([]);
   private readonly _noteOpen = signal<Set<string>>(new Set<string>());
-  paramKey(stageKey: string, field: string): string { return `${stageKey}.${field}`; }
+  paramKey(stageKey: string, field: string): string { return `${this.sk(stageKey)}.${field}`; }
   commentsFor(parameterName: string): OrderTestComment[] {
     return this._comments().filter(c => c.parameterName === parameterName);
   }
@@ -813,14 +871,78 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.api.get<CultureCaseView>(`/api/microbiology/culture/${this.id}`).subscribe({
       next: c => {
         this.c.set(c ?? null);
-        this.loadDrafts(c?.stages ?? []);
-        this.loadFieldDrafts(c?.stages ?? []);
-        // Rehydrate the AST editor from a saved/in-progress result.
-        const ast = c?.stages?.find(s => s.key === 'ast');
-        if (ast?.valuesJson) { try { this.astValue.set(JSON.parse(ast.valuesJson) as CultureResult); } catch { /* keep empty */ } }
+        this.rehydrateBranch();
         this.loading.set(false);
       },
       error: () => { this.loading.set(false); },
+    });
+  }
+
+  /** Load the SELECTED branch's drafts + AST editor state. */
+  private rehydrateBranch() {
+    const v = this.view();
+    this.loadDrafts(v?.stages ?? []);
+    this.loadFieldDrafts(v?.stages ?? []);
+    this.astValue.set({});
+    const ast = v?.stages?.find(s => s.key === 'ast');
+    if (ast?.valuesJson) { try { this.astValue.set(JSON.parse(ast.valuesJson) as CultureResult); } catch { /* keep empty */ } }
+    this.astOpen.set(false);
+  }
+
+  /** Switch branches like git checkout — each keeps its own stages, drafts,
+   *  AST editor state, notes and incubation clock. */
+  selectCase(id: string | null) {
+    if (this.selCaseId() === id) return;
+    this.selCaseId.set(id);
+    this.rehydrateBranch();
+  }
+
+  /** Fork a subculture off the SELECTED case (primary or another branch). */
+  async newSubculture() {
+    const label = await this.dialog.prompt({
+      title: 'New subculture',
+      message: 'Fork this culture onto fresh media — the branch gets its own growth, identification and sensitivity stages.',
+      placeholder: 'e.g. Blood agar re-streak',
+    });
+    if (label === null) return;
+    this.busy.set(true);
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/subculture`,
+      { label: (label || '').trim() || null, parentCaseId: this.selCaseId() }).subscribe({
+      next: t => {
+        this.busy.set(false);
+        if (t) {
+          this.c.set(t);
+          const subs = t.subCultures ?? [];
+          const newest = subs[subs.length - 1];
+          if (newest?.id) this.selectCase(newest.id);
+        }
+        this.toasts.success('Subculture created');
+      },
+      error: (e: { error?: { message?: string } }) => { this.busy.set(false); this.toasts.error(e?.error?.message || 'Could not create the subculture'); },
+    });
+  }
+
+  /** Delete the selected (abandoned) branch — never the primary. */
+  async deleteBranch() {
+    const v = this.view();
+    const id = this.selCaseId();
+    if (!id || !v) return;
+    const ok = await this.dialog.confirm({
+      title: `Delete "${v.label || 'this subculture'}"?`,
+      message: 'The branch and everything entered on it are removed. The primary culture is untouched.',
+      confirmLabel: 'Delete branch',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.busy.set(true);
+    this.api.delete<CultureCaseView>(`/api/microbiology/culture/${this.id}/subculture/${id}`).subscribe({
+      next: t => {
+        this.busy.set(false);
+        if (t) this.c.set(t);
+        this.selectCase(null);
+        this.toasts.success('Subculture deleted');
+      },
+      error: (e: { error?: { message?: string } }) => { this.busy.set(false); this.toasts.error(e?.error?.message || 'Could not delete the branch'); },
     });
   }
 
@@ -848,14 +970,14 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly incubCustom = signal<number | null>(null);
   /** True when the case has a timer and it has elapsed. */
   incubDone(): boolean {
-    const u = this.c()?.incubateUntil;
+    const u = this.view()?.incubateUntil;
     if (!u) return false;
     const t = new Date(u).getTime();
     return !Number.isNaN(t) && t <= this.now();
   }
   /** Live "ready in …" countdown (recomputes as `now` ticks). */
   incubReadyIn(): string {
-    const u = this.c()?.incubateUntil;
+    const u = this.view()?.incubateUntil;
     if (!u) return '';
     const ms = new Date(u).getTime() - this.now();
     if (ms <= 0) return 'now';
@@ -866,7 +988,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   /** Plate taken out — clear the timer. */
   stopIncubation() {
     this.incubOpen.set(false);
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate/stop`, {}),
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate/stop${this.q()}`, {}),
       'Incubation stopped');
   }
   /** Start or extend the timer by whole hours (preset chip or custom). */
@@ -875,8 +997,8 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     if (!h || h < 1 || h > 336) { this.toasts.error('Hours must be between 1 and 336.'); return; }
     this.incubOpen.set(false);
     this.incubCustom.set(null);
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate`, { hours: h }),
-      `Incubation ${this.c()?.incubateUntil ? 'extended' : 'started'} · +${h}h`);
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate${this.q()}`, { hours: h }),
+      `Incubation ${this.view()?.incubateUntil ? 'extended' : 'started'} · +${h}h`);
   }
 
     private run(obs: Observable<CultureCaseView>, ok?: string) {
@@ -896,7 +1018,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
 
   pick(s: CultureStageView) {
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick`, {}));
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick${this.q()}`, {}));
   }
 
   /** Auto-lock on first touch: an open stage is editable right away — the first
@@ -906,7 +1028,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   ensurePicked(s: CultureStageView) {
     if (s.state !== 'open' || this._picking.has(s.key)) return;
     this._picking.add(s.key);
-    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick`, {}).subscribe({
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/pick${this.q()}`, {}).subscribe({
       next: c => { this._picking.delete(s.key); if (c) this.c.set(c); },
       error: (e: { error?: { message?: string } }) => {
         this._picking.delete(s.key);
@@ -916,7 +1038,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     });
   }
   drop(s: CultureStageView) {
-    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/drop`, {}));
+    this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/drop${this.q()}`, {}));
   }
 
   /** Hand this stage to another tech (reuses the shared delegate picker). */
@@ -925,7 +1047,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   doDelegate(s: CultureStageView, toUserId: string) {
     this.delegating.set(null);
     this.busy.set(true);
-    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/delegate`, { toUserId }).subscribe({
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/delegate${this.q()}`, { toUserId }).subscribe({
       next: () => {
         this.busy.set(false);
         this.toasts.success(`${s.label} delegated`);
@@ -956,7 +1078,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       valuesJson = notes ? JSON.stringify({ notes }) : null;
     }
     this.busy.set(true);
-    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/submit`, { valuesJson }).subscribe({
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/submit${this.q()}`, { valuesJson }).subscribe({
       next: c => {
         this.busy.set(false);
         this.toasts.success(`${s.label} submitted`);
