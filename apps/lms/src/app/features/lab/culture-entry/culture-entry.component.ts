@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -104,27 +104,42 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
               }
             </header>
 
-            <!-- Compact multi-column rows — no table, no dead width. -->
+            <!-- Generous strips: drug + its CLSI targets on the left, a big
+                 mm field and the S/I/R verdict on the right. One column on
+                 phones/tabs, two on wide desktops — never a dead gap. -->
             <div class="ce-abx">
               @for (ab of org.antibiotics; track abi; let abi = $index) {
-                <div class="ce-abx__row">
-                  <span class="ce-abx__name" [title]="bpHint(org.name, ab.name)">{{ ab.name }}</span>
-                  <input type="number" class="ce-abx__zone"
-                         [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
-                         [title]="bpHint(org.name, ab.name)" placeholder="mm" />
+                <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
+                  <span class="ce-abx__id">
+                    <span class="ce-abx__name">{{ ab.name }}</span>
+                    @if (bpShort(org.name, ab.name); as h) {
+                      <span class="ce-abx__bp">CLSI · {{ h }}</span>
+                    } @else {
+                      <span class="ce-abx__bp">No breakpoint — set S/I/R by hand</span>
+                    }
+                  </span>
+                  <span class="ce-abx__zonewrap">
+                    <input type="number" class="ce-abx__zone" inputmode="numeric"
+                           [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
+                           (keydown.enter)="focusNextZone($event)" placeholder="—" />
+                    <span class="ce-abx__unit">mm</span>
+                  </span>
                   <span class="ce-abx__sir">
                     @for (v of ['S','I','R']; track v) {
                       <button type="button" class="ce-abx__sirbtn"
                         [style.borderColor]="ab.interpretation === v ? toneColor(v) : 'var(--border-subtle)'"
                         [style.color]="ab.interpretation === v ? '#fff' : 'var(--text-secondary)'"
                         [style.background]="ab.interpretation === v ? toneColor(v) : 'transparent'"
+                        [attr.aria-label]="ab.name + ': ' + v"
                         (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
                     }
-                    @if (isAuto(oi, abi) && ab.interpretation) {
-                      <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Click S/I/R to override.">auto</span>
-                    }
                   </span>
-                  <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
+                  <span class="ce-abx__tail">
+                    @if (isAuto(oi, abi) && ab.interpretation) {
+                      <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Tap S/I/R to override.">auto</span>
+                    }
+                    <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
+                  </span>
                 </div>
               } @empty {
                 <p class="ce-abx__none">No antibiotics on this panel yet — pick them from the Antibiotics dropdown.</p>
@@ -181,25 +196,39 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     .ce-org__spacer { flex: 1; }
     .ce-org__abxpick { width: 220px; flex-shrink: 0; }
 
-    /* ── Antibiotic rows: responsive multi-column grid, no dead width ── */
-    .ce-abx { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 2px 26px; }
-    .ce-abx__row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 8px; }
-    .ce-abx__row:hover { background: rgba(124,58,237,.05); }
-    .ce-abx__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: 12.5px; color: var(--text-primary); }
-    .ce-abx__zone { width: 56px; text-align: center; padding: 4px 4px; font-size: 12px; border-radius: 7px;
-      background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); outline: none;
-      font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+    /* ── Antibiotic strips: generous rows, big mm, verdict-tinted ── */
+    .ce-abx { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 8px 16px; }
+    .ce-abx__row { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: 12px;
+      border: 1px solid var(--border-subtle); background: var(--glass-bg);
+      transition: border-color .15s ease, background .2s ease; }
+    .ce-abx__row:hover { border-color: rgba(139,92,246,.45); }
+    .ce-abx__row[data-interp="S"] { background: rgba(16,185,129,.06); }
+    .ce-abx__row[data-interp="I"] { background: rgba(245,158,11,.06); }
+    .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
+    .ce-abx__id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ce-abx__bp { font-size: 10.5px; color: var(--text-tertiary, #64748b); font-variant-numeric: tabular-nums;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ce-abx__zonewrap { display: inline-flex; align-items: baseline; gap: 5px; flex-shrink: 0; }
+    .ce-abx__zone { width: 68px; height: 38px; text-align: center; font-size: 15px; font-weight: 600;
+      border-radius: 10px; background: var(--input-bg); border: 1px solid var(--input-border);
+      color: var(--input-text); outline: none; font-variant-numeric: tabular-nums;
+      -moz-appearance: textfield; appearance: textfield; }
     .ce-abx__zone::-webkit-inner-spin-button, .ce-abx__zone::-webkit-outer-spin-button { display: none; }
-    .ce-abx__zone:focus { border-color: var(--input-border-focus); }
-    .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); }
-    .ce-abx__sir { display: inline-flex; align-items: center; gap: 3px; }
-    .ce-abx__sirbtn { width: 27px; height: 25px; border-radius: 6px; border: 1px solid var(--border-subtle);
-      font-size: 11px; font-weight: 700; cursor: pointer; transition: transform .12s cubic-bezier(0.16,1,0.3,1); }
-    .ce-abx__sirbtn:active { transform: scale(0.94); }
-    .ce-abx__auto { font-size: 9px; color: var(--text-tertiary); }
-    .ce-abx__x { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
-      color: var(--text-tertiary); background: transparent; font-size: 13px; line-height: 1; }
+    .ce-abx__zone:focus { border-color: var(--input-border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
+    .ce-abx__zone::placeholder { color: var(--text-tertiary, #64748b); font-weight: 400; }
+    .ce-abx__unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary, #64748b); }
+    .ce-abx__sir { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .ce-abx__sirbtn { width: 34px; height: 32px; border-radius: 9px; border: 1px solid var(--border-subtle);
+      font-size: 12.5px; font-weight: 700; cursor: pointer;
+      transition: transform .12s cubic-bezier(0.16,1,0.3,1), background .15s ease, border-color .15s ease; }
+    .ce-abx__sirbtn:active { transform: scale(0.92); }
+    .ce-abx__tail { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; width: 52px; justify-content: flex-end; }
+    .ce-abx__auto { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--text-tertiary, #64748b); }
+    .ce-abx__x { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
+      color: var(--text-tertiary); background: transparent; font-size: 14px; line-height: 1; }
     .ce-abx__x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
     .ce-abx__none { grid-column: 1 / -1; margin: 4px 0; font-size: 12px; color: var(--text-tertiary); }
 
@@ -207,9 +236,12 @@ interface Breakpoint { organismGroup: string; antibiotic: string; susceptibleMin
     @media (max-width: 640px) {
       :host .ce-abx { grid-template-columns: 1fr; }
       :host .ce-org__abxpick { width: 100%; }
+      :host .ce-abx__row { flex-wrap: wrap; gap: 8px 12px; }
+      :host .ce-abx__id { flex-basis: 100%; }
     }
     @media (pointer: coarse) {
-      :host .ce-abx__sirbtn { min-width: 40px; min-height: 40px; }
+      :host .ce-abx__sirbtn { min-width: 44px; min-height: 44px; }
+      :host .ce-abx__zone { height: 44px; }
     }
 `]
 })
@@ -223,6 +255,7 @@ export class CultureEntryComponent implements OnInit {
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly platform = inject(PlatformService);
+  private readonly el = inject(ElementRef<HTMLElement>);
 
   // Camera measure-assist: index of the organism whose plate is being measured.
   readonly measureOrg = signal<number | null>(null);
@@ -390,6 +423,21 @@ export class CultureEntryComponent implements OnInit {
   }
 
   isAuto(i: number, abi: number): boolean { return !this.manual.has(`${i}:${abi}`); }
+  /** Inline CLSI target shown under the drug name — the tech sees what zone
+   *  means S or R before measuring, instead of hunting a tooltip. */
+  bpShort(orgName?: string, abName?: string): string {
+    const bp = this.bpFor(orgName, abName);
+    return bp ? `S ≥ ${bp.s} · R ≤ ${bp.r} mm` : '';
+  }
+  /** Enter in a zone field hops to the next one — plate-reading rhythm. */
+  focusNextZone(ev: Event) {
+    ev.preventDefault();
+    const host = this.el.nativeElement as HTMLElement;
+    const zones = Array.from(host.querySelectorAll<HTMLInputElement>('.ce-abx__zone'));
+    const i = zones.indexOf(ev.target as HTMLInputElement);
+    zones[i + 1]?.focus();
+    zones[i + 1]?.select();
+  }
   bpHint(orgName?: string, abName?: string): string {
     const bp = this.bpFor(orgName, abName);
     return bp ? `CLSI: S ≥ ${bp.s} mm, R ≤ ${bp.r} mm` : 'No CLSI breakpoint — enter S/I/R manually';

@@ -454,6 +454,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   /** Remove one chip without opening/closing the panel. */
   removeChip(opt: PfSelectOption<T>, ev: Event): void {
     ev.stopPropagation();
+    ev.preventDefault(); // same label-forwarding guard as toggle()
     const next = (this.values ?? []).filter(x => String(x) !== String(opt.value));
     this.values = next;
     this.valuesChange.emit(next);
@@ -462,6 +463,10 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   toggle(ev: MouseEvent): void {
     ev.stopPropagation();
+    // Inside a <label>, the click would also forward a synthetic click to the
+    // label's first button — landing OUTSIDE us, where the document-click
+    // handler would close the panel the instant it opened.
+    ev.preventDefault();
     if (this.disabled) return;
     if (!this.isOpen()) { this.openPanel(); } else { this.closePanel(); }
   }
