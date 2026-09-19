@@ -313,7 +313,7 @@
                   Shared list — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
                   Editing it in Test Master → Option groups changes all of them.
                 </p>
-              } @else {
+              } @else if (optCustom(0)) {
                 <div class="pf-newlist__row">
                   <label class="pf-mini-lbl">List name</label>
                   <input type="text" class="pf-input pf-input--compact pf-newlist__name"
@@ -351,6 +351,8 @@
                   <button type="button" class="pf-newlist__cancel press" (click)="cancelCustomOption(0)">Cancel</button>
                   <span class="pf-newlist__hint">Creates the shared list under Test Master → Option groups and maps it to this test.</span>
                 </div>
+              } @else {
+                <p class="pf-anslist__idle">Pick a shared list above — or “+ New list” to author your own.</p>
               }
             </div>
           }
@@ -668,7 +670,7 @@
                                 Shared group — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
                                 Changing it in Option groups affects all of them, including this test.
                               </p>
-                            } @else {
+                            } @else if (optCustom(i)) {
                               <span class="pf-mini-lbl">New option group — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
                               <div class="pf-otbl">
                                 <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
@@ -694,6 +696,8 @@
                                           (click)="addOptionRow(i)">+ Add option</button>
                                 </div>
                               </div>
+                            } @else {
+                              <p class="pf-anslist__idle">Pick an option group above — or “+ New option group”.</p>
                             }
                           </div>
                         }
