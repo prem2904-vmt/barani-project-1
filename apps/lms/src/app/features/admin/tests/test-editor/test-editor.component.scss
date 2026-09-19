@@ -781,16 +781,6 @@ select.pf-input--compact {
   color: var(--violet-text, #a78bfa); cursor: pointer; text-decoration: underline dotted; }
 .pf-linklike:hover { color: var(--violet-300, #c4b5fd); }
 
-/* Critical (panic) limits — its own labeled group, away from the range. */
-.pf-crit { margin-top: 4px; }
-.pf-crit__head { display: flex; align-items: baseline; gap: 8px; }
-.pf-crit__opt { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary, #64748b); }
-.pf-crit__sub { margin: 2px 0 10px; font-size: 11.5px; line-height: 1.5; max-width: 560px;
-  color: var(--text-tertiary, #64748b); }
-.pf-crit__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pf-crit__row pf-number-input { width: 110px; }
-.pf-crit__word { font-size: 12.5px; color: var(--text-secondary, #cbd5e1); }
-.pf-crit__unit { font-size: 12px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
 .pf-rb__num { width: 3.6rem; field-sizing: content; min-width: 2.6rem; max-width: 6.5rem;
   border: none; outline: none; background: transparent; text-align: right;
   font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
@@ -813,9 +803,9 @@ select.pf-input--compact {
 .pf-rb__add { padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
   color: var(--violet-text, #a78bfa); background: transparent; border: 1px dashed rgba(124,58,237,.45); }
 .pf-rb__add:hover { background: rgba(124,58,237,.08); }
-.pf-rb__finetune { font-size: 11.5px; font-weight: 600; color: var(--text-tertiary, #64748b);
-  background: none; border: 0; cursor: pointer; padding: 2px 0; text-decoration: underline dotted; }
-.pf-rb__finetune:hover { color: var(--violet-text, #c77dff); }
+.pf-rb--crit { margin-top: 14px; }
+.pf-judge--bare { margin-top: 14px; }
+.pf-judge--bare .pf-judge__bar { margin-top: 0; }
 
 /* ── Sticky section nav — wayfinding for the long form ── */
 /* Section rail — vertical on desktop, scrolling chips when narrow. */

@@ -412,7 +412,7 @@
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
                 }
               </div>
-            } @else {
+            } @else if (numericFields().length === 1) {
               @for (s of rangeSentences(); track s.ri) {
                 @if (rangeAt(s.i, s.ri); as r) {
                   <div class="pf-rb">
@@ -466,15 +466,49 @@
               }
               <div class="pf-rb__actions">
                 <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add a range for another group (men / women / children…)</button>
-                <button type="button" class="pf-rb__finetune" (click)="openAdvancedRanges()"
-                        title="Comparators (≥ / >) and custom print labels">Fine-tune (≥, custom label)…</button>
               </div>
 
-              <!-- Precise editor (advanced grid) -->
-              @if (advancedOpen()) {
-                <details class="pf-te2-adv" open>
-                  <summary class="pf-te2-adv-s">Edit reference ranges <span>precise</span></summary>
-                  <div class="space-y-5 mt-3">
+              <!-- Critical limits ride the same block: who → normal → critical. -->
+              <div class="pf-rb pf-rb--crit">
+                <div class="pf-rb__bar">
+                  <span class="pf-rb__word pf-rb__word--lead">Critically low</span>
+                  <span class="pf-rb__word">below</span>
+                  <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="—"
+                         [ngModel]="d.criticalLow" (ngModelChange)="patch({ criticalLow: toNum($event) })" />
+                  <span class="pf-rb__div"></span>
+                  <span class="pf-rb__word pf-rb__word--label">critically high</span>
+                  <span class="pf-rb__word">above</span>
+                  <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="—"
+                         [ngModel]="d.criticalHigh" (ngModelChange)="patch({ criticalHigh: toNum($event) })" />
+                  @if (d.unit) { <span class="pf-rb__unit">{{ d.unit }}</span> }
+                </div>
+                <div class="pf-rb__prints">Turns the entry screen red and flags the result critical — never printed as the range.</div>
+              </div>
+
+              @if (judgmentBand(); as jb) {
+                <div class="pf-judge pf-judge--bare">
+                  <div class="pf-judge__bar">
+                    <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
+                    <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
+                    <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
+                  </div>
+                  <div class="pf-judge__labels">
+                    <div class="pf-judge__lbl" [style.flex]="jb.red">
+                      @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
+                    </div>
+                    <div class="pf-judge__lbl" [style.flex]="jb.green">
+                      <span class="c-green">normal up to {{ jb.normalMax }}</span>
+                    </div>
+                    <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
+                      <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
+                    </div>
+                  </div>
+                </div>
+              }
+            } @else {
+              <!-- Several numeric values (a panel): each value gets its own
+                   range rows — shown directly, nothing tucked away. -->
+              <div class="space-y-5 mt-1">
                     @for (p of fields(); let i = $index; track i) {
                       @if (isNumericType(p.type)) {
                         <div class="pf-rr-block">
@@ -551,58 +585,9 @@
                         </div>
                       }
                     }
-                  </div>
-                </details>
-              }
+              </div>
             }
           </div>
-
-          <!-- Critical (panic) limits — the alarm, NOT the printed range -->
-          @if (numericFields().length > 0) {
-            <div class="pf-crit">
-              <div class="pf-crit__head">
-                <span class="pf-te2-h">Critical (panic) limits</span>
-                <span class="pf-crit__opt">optional</span>
-              </div>
-              <p class="pf-crit__sub">A safety alarm, separate from the reference range: outside these
-                the entry field turns red and the result is flagged critical. It never prints as the range.</p>
-              <div class="pf-crit__row">
-                <span class="pf-crit__word">Alarm when below</span>
-                <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
-                                 (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
-                <span class="pf-crit__word">or above</span>
-                <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
-                                 (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
-                @if (d.unit) { <span class="pf-crit__unit">{{ d.unit }}</span> }
-              </div>
-            </div>
-          }
-
-          <!-- The summary band: ranges + critical limits on one line -->
-          @if (judgmentBand(); as jb) {
-            <div class="pf-judge">
-              <div class="pf-judge__head">
-                <span class="pf-judge__title">Putting it together — how a value will be judged</span>
-                @if (jb.unit) { <span class="pf-judge__scale">{{ jb.unit }}</span> }
-              </div>
-              <div class="pf-judge__bar">
-                <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
-                <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
-                <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
-              </div>
-              <div class="pf-judge__labels">
-                <div class="pf-judge__lbl" [style.flex]="jb.red">
-                  @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
-                </div>
-                <div class="pf-judge__lbl" [style.flex]="jb.green">
-                  <span class="c-green">normal up to {{ jb.normalMax }}</span>
-                </div>
-                <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
-                  <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
-                </div>
-              </div>
-            </div>
-          }
 
           <!-- Values recorded — hidden for the common one-value test; the
                single field is managed by "What will the tech enter?" above. -->

@@ -387,10 +387,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return formatRange(bands[0]) ?? '';
   }
 
-  private readonly _advancedRanges = signal(false);
-  readonly advancedOpen = this._advancedRanges.asReadonly();
-  protected openAdvancedRanges() { this._advancedRanges.set(true); }
-  protected closeAdvancedRanges() { this._advancedRanges.set(false); }
 
   protected needsAdvancedRanges(p: FormField): boolean {
     const bands = p.referenceRanges ?? [];
@@ -401,7 +397,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected showAdvancedRanges(p: FormField): boolean {
-    return this._advancedRanges() || this.needsAdvancedRanges(p);
+    return this.needsAdvancedRanges(p);
   }
 
   protected firstBand(p: FormField): ReferenceRange {
