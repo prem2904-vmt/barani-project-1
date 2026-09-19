@@ -437,6 +437,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Reference-range GRID (Test Master's AG-Grid language) ──────────
   private readonly themeSvc = inject(ThemeService);
+  /** AG popup editors attach to <body> so they float ABOVE the panel instead
+   *  of clipping inside the grid's own stacking context. */
+  readonly gridPopupParent: HTMLElement | undefined =
+    typeof document !== 'undefined' ? document.body : undefined;
+  /** Left section rail hide/unhide — remembered across visits. */
+  readonly railHidden = signal<boolean>(
+    typeof localStorage !== 'undefined' && localStorage.getItem('pf-te2-rail') === 'hidden');
+  toggleRail() {
+    this.railHidden.update(v => !v);
+    try { localStorage.setItem('pf-te2-rail', this.railHidden() ? 'hidden' : 'shown'); } catch { /* private mode */ }
+  }
   readonly rangeGridTheme = computed(() =>
     (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight)
       .withParams({ rowHeight: 48, headerHeight: 42, cellHorizontalPadding: 14 }));

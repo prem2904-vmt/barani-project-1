@@ -24,13 +24,21 @@
       </div>
     </div>
     <div class="pf-te2-head__save">
+      <button type="button" class="pf-te2-rail-toggle press"
+              [title]="railHidden() ? 'Show the section menu' : 'Hide the section menu for more room'"
+              [attr.aria-pressed]="railHidden()" (click)="toggleRail()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>
+        </svg>
+        {{ railHidden() ? 'Menu' : 'Hide menu' }}
+      </button>
       <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveTest()">
         {{ saving() ? 'Saving…' : 'Save' }}
       </pf-touch-btn>
     </div>
   </header>
 
-  <div class="pf-te2">
+  <div class="pf-te2" [class.pf-te2--norail]="railHidden()">
     <!-- ═══════════ Section rail: one task at a time ═══════════ -->
     <nav class="pf-te2-nav" aria-label="Sections">
       @for (s of sectionNav(); track s.id) {
@@ -420,7 +428,7 @@
                   [rowData]="rangeRows()" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
                   [getRowId]="$any(rangeRowId)"
                   domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
-                  [singleClickEdit]="true"
+                  [singleClickEdit]="true" [popupParent]="gridPopupParent"
                   (cellValueChanged)="onRangeCellChanged($event)"
                   (cellClicked)="onRangeCellClicked($event)">
                 </ag-grid-angular>

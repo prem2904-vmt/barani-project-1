@@ -615,6 +615,14 @@ select.pf-input--compact {
 
 /* Workspace shell: section rail | one focused section | preview aside. */
 .pf-te2 { display: grid; grid-template-columns: 188px minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
+.pf-te2--norail { grid-template-columns: minmax(0, 1fr) 420px; }
+/* Desktop-only hide: the mobile chip nav must survive a remembered 'hidden'. */
+@media (min-width: 1181px) { .pf-te2--norail .pf-te2-nav { display: none; } }
+.pf-te2-rail-toggle { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  margin-right: 8px; border-radius: 10px; border: 1px solid var(--glass-border); background: transparent;
+  color: var(--text-secondary, #cbd5e1); font-size: 12px; font-weight: 600; cursor: pointer; }
+.pf-te2-rail-toggle:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
+@media (max-width: 1180px) { .pf-te2-rail-toggle { display: none; } .pf-te2--norail { grid-template-columns: 1fr; } }
 @media (max-width: 1180px) { .pf-te2 { grid-template-columns: 1fr; } }
 .pf-te2-main { min-width: 0; }
 .pf-te2-aside { position: sticky; top: 88px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
