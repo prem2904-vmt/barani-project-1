@@ -284,6 +284,25 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.patch({ departmentId: id });
   }
 
+  /** Culture-bench mark — the ONE marker the whole culture stack keys on:
+   *  `microFormat: 'culture_sensitivity'` in the Parameters wrapper. On = the
+   *  test lands on the Culture Bench at intake (case auto-created), routes to
+   *  the culture validation cockpit, and prints the culture report section.
+   *  Offered only for Microbiology tests. */
+  readonly isMicroDept = computed<boolean>(() => /micro/i.test(this.selectedDeptName()));
+  readonly cultureBench = computed<boolean>(() => {
+    try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
+    catch { return false; }
+  });
+  setCultureBench(on: boolean) {
+    const existing = (() => {
+      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
+    })();
+    if (on) existing.microFormat = 'culture_sensitivity';
+    else if (existing.microFormat === 'culture_sensitivity') delete existing.microFormat;
+    this.patch({ parametersJson: JSON.stringify(existing) });
+  }
+
   private readonly _referralLabs = signal<ReferralLab[]>([]);
   readonly referralLabs = this._referralLabs.asReadonly();
   readonly referralLabOptions = computed<PfSelectOption<string>[]>(() => {

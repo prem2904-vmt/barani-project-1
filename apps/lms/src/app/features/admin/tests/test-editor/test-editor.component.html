@@ -71,6 +71,19 @@
                          placeholder="— Select department —"
                          (valueChange)="onDeptPicked($event)"></pf-select>
             </div>
+            @if (d.type === 'individual' && isMicroDept()) {
+              <div class="pf-uf pf-uf--span">
+                <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="cultureBench()">
+                  <input type="checkbox" [checked]="cultureBench()"
+                         (change)="setCultureBench($any($event.target).checked)" />
+                  <span>Culture bench (C&amp;S workflow)</span>
+                </label>
+                <p class="pf-hint">
+                  When on, this test lands on the Culture Bench at lab intake —
+                  staged plates &amp; AST instead of the normal result-entry grid.
+                </p>
+              </div>
+            }
             @if (d.type === 'individual' || d.type === 'profile') {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
