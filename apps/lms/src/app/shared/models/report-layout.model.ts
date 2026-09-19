@@ -251,6 +251,10 @@ export interface ResolvedReportLayout {
    *  cascade: a profile's override wins for its whole block; a member's
    *  override applies only when the test is ordered standalone. */
   hasColumnOverride?: boolean;
+  /** Department-specific patient-strip arrangement — null/absent when the
+   *  department prints the tenant-default strip. Applied by the renderer
+   *  only when EVERY test on the report resolves to this one department. */
+  patientStrip?: { layout?: string; columns?: string[][] } | null;
   /** The department's columns — present ONLY when hasColumnOverride, so
    *  the renderer can fall back when a member's override must be ignored
    *  inside a profile block. */

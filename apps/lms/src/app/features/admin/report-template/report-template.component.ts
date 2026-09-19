@@ -270,6 +270,26 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
             @case ('patient') {
               <div class="pf-rt-flat">
                 <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Who is this strip for?</h4>
+                  <p class="pf-rtb-s">Default prints on every report. A department's own arrangement prints when a report holds ONLY that department's tests — e.g. Microbiology showing just name, age and sex.</p>
+                  <div class="pf-pt-scope">
+                    <div class="pf-pt-scope__sel">
+                      <pf-select [options]="$any(patientScopeOptions())" [value]="patientScope()"
+                                 (valueChange)="onPatientScopeChange($any($event))"></pf-select>
+                    </div>
+                    @if (patientScope() !== 'default') {
+                      @if (deptPatientConfigured()) { <span class="pf-pt-chip">CONFIGURED</span> }
+                      <button type="button" class="pf-pt-btn press"
+                              [disabled]="!deptPatientConfigured()"
+                              (click)="resetDeptPatient()">Reset to default</button>
+                      <button type="button" class="pf-pt-btn pf-pt-btn--primary press"
+                              [disabled]="!deptPatientDirty() || deptPatientSaving()"
+                              (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Patient block</h4>
                   <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
                 <div class="space-y-3">
@@ -277,7 +297,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                     <label class="pf-label">Patient block layout</label>
                     <pf-segmented
                       [options]="patientLayoutOptions"
-                      [value]="tpl().patientLayout ?? 'three-col'"
+                      [value]="patientLayoutValue()"
                       size="md"
                       (valueChange)="setPatientLayout($event)">
                     </pf-segmented>
@@ -288,7 +308,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Date &amp; time format</h4>
-                  <p class="pf-rtb-s">The date fields print inside the patient block using this format.</p>
+                  <p class="pf-rtb-s">The date fields print inside the patient block using this format.
+                    @if (patientScope() !== 'default') { <strong>Shared across departments — edits here change the Default.</strong> }
+                  </p>
                   <div class="pf-rt-datesgrid">
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
@@ -770,6 +792,19 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-rt-work input[type="range"] { width: 100%; accent-color: #a855f7; }
     .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
 
+    /* Department scope row for the patient strip */
+    .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pf-pt-scope__sel { flex: 1 1 240px; min-width: 220px; }
+    .pf-pt-chip { font-size: 10px; font-weight: 800; letter-spacing: .1em; padding: 4px 9px;
+      border-radius: 999px; color: #34d399; border: 1px solid rgba(52,211,153,.4);
+      background: rgba(52,211,153,.08); font-family: ui-monospace, monospace; }
+    .pf-pt-btn { height: 34px; padding: 0 14px; border-radius: 10px; font-size: 12.5px;
+      font-weight: 700; cursor: pointer; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-primary); }
+    .pf-pt-btn:disabled { opacity: .45; cursor: default; }
+    .pf-pt-btn--primary { border-color: transparent; color: #fff;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }
@@ -1047,8 +1082,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     effect(() => {
       const tpl = this._tpl();
       // Also depend on the columns being edited so the preview reflects the
-      // Columns tab live (per-department).
+      // Columns tab live (per-department), and on the patient-strip scope
+      // draft so a department arrangement previews as you drag.
       this.editedCols(); this.editedDeptName(); this.editedDeptCode();
+      this.patientScope(); this.patientCols(); this.deptPatientLayout();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
@@ -1110,10 +1147,17 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
           data = JSON.stringify(snap);
         } catch { /* keep the raw sample */ }
       }
+      // A department scope previews ITS draft arrangement — swap the strip
+      // fields on a copy so the preview shows what that department prints.
+      const effTpl = this.patientScope() === 'default' ? tpl : {
+        ...tpl,
+        patientLayout: this.deptPatientLayout(),
+        patientColumnsJson: JSON.stringify(this.patientCols()),
+      };
       const baseInput = {
         report: { id: 'preview-' + Date.now(), type: 'final',
                   createdAt: new Date().toISOString(), data },
-        template: tpl,
+        template: effTpl,
         resolvedLayouts: this.buildPreviewLayouts(),
         previewKeepEmptyColumns: onColumns,
       };
@@ -1185,6 +1229,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
     this.loadCustomPatientFields();
     this.initPatientCols();
+    this.api.get<{ id: string; name: string }[]>('/api/tenants/departments').subscribe({
+      next: d => this.departments.set((d ?? []).map(x => ({ id: x.id, name: x.name }))),
+    });
   }
 
   // ── Custom patient fields (from the Patient Registration form flow) ──
@@ -1284,7 +1331,101 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     return layout === 'four-col-grid' ? 4 : layout === 'stacked' ? 1 : 3;
   }
 
+  // ── Department-specific patient strip ─────────────────────
+  // 'default' edits the tenant template (autosaved with the page's Save);
+  // a department id edits that department's own arrangement, stored via
+  // /api/report-layout/department/{id}/patient and applied by the PDF
+  // renderer when a report holds only that department's tests.
+  readonly departments = signal<{ id: string; name: string }[]>([]);
+  readonly patientScope = signal<string>('default');
+  readonly patientScopeOptions = computed(() => [
+    { value: 'default', label: 'Default — all departments' },
+    ...this.departments().map(d => ({ value: d.id, label: d.name })),
+  ]);
+  readonly deptPatientConfigured = signal(false);
+  readonly deptPatientDirty = signal(false);
+  readonly deptPatientSaving = signal(false);
+  private readonly deptPatientLayout = signal<string>('three-col');
+
+  patientLayoutValue(): string {
+    return this.patientScope() === 'default'
+      ? (this._tpl().patientLayout ?? 'three-col')
+      : this.deptPatientLayout();
+  }
+
+  onPatientScopeChange(scope: string) {
+    this.patientScope.set(scope);
+    this.deptPatientDirty.set(false);
+    if (scope === 'default') { this.deptPatientConfigured.set(false); this.initPatientCols(); return; }
+    this.api.get<{ patient?: { layout?: string; columns?: string[][] } | null; configured?: boolean }>(
+      `/api/report-layout/department/${scope}/patient`).subscribe({
+      next: r => {
+        this.deptPatientConfigured.set(!!r?.configured);
+        const cols = r?.patient?.columns;
+        if (cols && cols.length && cols.some(c => Array.isArray(c))) {
+          const layout = r!.patient!.layout ?? 'three-col';
+          this.deptPatientLayout.set(layout);
+          this.patientCols.set(this.fitColumns(cols.map(c => [...(c ?? [])]), this.colCountFor(layout)));
+        } else {
+          // No override yet — the draft starts from the tenant default.
+          this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
+          this.seedPatientColsFromTemplate();
+        }
+      },
+      error: () => { this.patientScope.set('default'); this.deptPatientConfigured.set(false); this.initPatientCols(); },
+    });
+  }
+
+  saveDeptPatient() {
+    const dept = this.patientScope();
+    if (dept === 'default' || this.deptPatientSaving()) return;
+    this.deptPatientSaving.set(true);
+    this.api.post(`/api/report-layout/department/${dept}/patient`, {
+      patient: { layout: this.deptPatientLayout(), columns: this.patientCols() },
+    }).subscribe({
+      next: () => {
+        this.deptPatientSaving.set(false);
+        this.deptPatientConfigured.set(true);
+        this.deptPatientDirty.set(false);
+        this.toasts.success('Department patient strip saved');
+      },
+      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); },
+    });
+  }
+
+  resetDeptPatient() {
+    const dept = this.patientScope();
+    if (dept === 'default') return;
+    this.api.post(`/api/report-layout/department/${dept}/patient`, { patient: null }).subscribe({
+      next: () => {
+        this.deptPatientConfigured.set(false);
+        this.deptPatientDirty.set(false);
+        this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
+        this.seedPatientColsFromTemplate();
+        this.toasts.success('Back to the default strip');
+      },
+      error: (e: ApiError) => this.toasts.error(e?.message || 'Reset failed'),
+    });
+  }
+
+  /** Load the tenant-default arrangement into the editor WITHOUT touching
+   *  scope state — used to seed a fresh department draft. */
+  private seedPatientColsFromTemplate() {
+    const n = this.colCountFor(this.deptPatientLayout());
+    let cols: string[][] | null = null;
+    const saved = this._tpl().patientColumnsJson;
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.every(Array.isArray)) cols = arr;
+      } catch { cols = null; }
+    }
+    cols = cols ?? this.DEFAULT_PATIENT_COLS.map(c => [...c]);
+    this.patientCols.set(this.fitColumns(cols, n));
+  }
+
   private initPatientCols() {
+    if (this.patientScope() !== 'default') return;
     const n = this.colCountFor(this._tpl().patientLayout);
     let cols: string[][] | null = null;
     const saved = this._tpl().patientColumnsJson;
@@ -1337,6 +1478,11 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       : this.redistribute(this.patientCols(), n);
     this.patientCols.set(cols);
     this.patientColsCache.set(n, cols.map(c => [...c]));
+    if (this.patientScope() !== 'default') {
+      this.deptPatientLayout.set(layout);
+      this.deptPatientDirty.set(true);
+      return;
+    }
     const placed = new Set(cols.flat());
     const placedCustom = this.customPatientFields().filter(f => placed.has(f.name));
     this.patch({
@@ -1368,6 +1514,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       transferArrayItem(from, to, ev.previousIndex, ev.currentIndex);
     }
     this.patientCols.set(cols);                    // pool is derived → recomputes
+    if (this.patientScope() !== 'default') { this.deptPatientDirty.set(true); return; }
     // Persist the arrangement + the titles of any custom fields now placed in a
     // column (so the PDF can label them; placement is the single shown/hidden
     // control — no separate toggle).

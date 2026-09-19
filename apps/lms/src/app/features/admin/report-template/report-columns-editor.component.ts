@@ -11,7 +11,6 @@ import {
 } from '../../../shared/models/report-layout.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 
@@ -38,10 +37,10 @@ export interface ColumnsEditorState {
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, DragDropModule],
+  imports: [SelectComponent, TouchButtonComponent, LoadingLogoComponent, DragDropModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-tile tone="default" padding="lg" class="block">
+    <div class="pf-ce-root">
 
       <!-- ── Toolbar: department · status · actions ───────────────
            Host-managed mode (Test Master's per-test override) has no
@@ -88,7 +87,7 @@ export interface ColumnsEditorState {
           } @else {
             This strip IS the printed table for <strong>{{ selectedDeptName() }}</strong> — left to right,
             widths to scale. Drag a card to reorder · tap a card to edit it · tap the
-            <span class="pf-ce-chain-demo">🔗</span> between two cards to merge them into one cell
+            link dot between two cards to merge them into one cell
             (Result + Unit → "11.4 g/dL").
           }
         </p>
@@ -105,7 +104,7 @@ export interface ColumnsEditorState {
                  (click)="selectCol(i)">
               <span class="pf-ce-col__label">{{ c.label || '—' }}</span>
               <span class="pf-ce-col__meta">{{ typeLabel(c.type) }}@if (!hostManaged()) { · {{ c.width }}% }</span>
-              @if (c.locked) { <span class="pf-ce-col__lock" title="Locked value">🔒</span> }
+              @if (c.locked) { <span class="pf-ce-col__lock" title="Locked value"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> }
             </div>
             @if (!last) {
               <button type="button" class="pf-ce-chain press"
@@ -225,7 +224,7 @@ export interface ColumnsEditorState {
         @if (!hostManaged()) {
         <div class="pf-ce-inspector" style="margin-top: 16px;">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
-            <h4 style="margin:0; font-size:14px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
+            <h4 style="margin:0; font-size:13px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
             <pf-touch-btn size="sm" variant="primary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
               {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
             </pf-touch-btn>
@@ -238,30 +237,26 @@ export interface ColumnsEditorState {
           <ul class="pf-sig-list" cdkDropList (cdkDropListDropped)="dropSig($event)">
             @for (s of signatories(); track s._key; let i = $index) {
               <li class="pf-sig-row" cdkDrag>
-                <span class="pf-sig-grip" cdkDragHandle>⠿</span>
+                <span class="pf-sig-grip" cdkDragHandle><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg></span>
                 <span class="pf-sig-pos">{{ i + 1 }}</span>
-                <select class="pf-input pf-input--compact pf-sig-mode"
-                        [value]="s.mode" (change)="patchSig(i, { mode: $any($event.target).value })">
-                  <option value="role">Dynamic — by activity</option>
-                  <option value="user">Fixed — a person</option>
-                </select>
-                @if (s.mode === 'role') {
-                  <select class="pf-input pf-input--compact pf-sig-who"
-                          [value]="s.role" (change)="patchSig(i, { role: $any($event.target).value })">
-                    <option value="tested_by">Whoever tested (entered results)</option>
-                    <option value="validated_by">Whoever validated</option>
-                  </select>
-                } @else {
-                  <select class="pf-input pf-input--compact pf-sig-who"
-                          [value]="s.userId ?? ''" (change)="patchSig(i, { userId: $any($event.target).value || null })">
-                    <option value="">— pick a person —</option>
-                    @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }}</option> }
-                  </select>
-                }
+                <div class="pf-sig-mode">
+                  <pf-select size="sm" [options]="sigModeOptions" [value]="s.mode"
+                             (valueChange)="patchSig(i, { mode: $any($event) })"></pf-select>
+                </div>
+                <div class="pf-sig-who">
+                  @if (s.mode === 'role') {
+                    <pf-select size="sm" [options]="sigRoleOptions" [value]="s.role"
+                               (valueChange)="patchSig(i, { role: $any($event) })"></pf-select>
+                  } @else {
+                    <pf-select size="sm" [searchable]="true" [options]="sigUserOptions()" [value]="s.userId ?? ''"
+                               placeholder="— pick a person —"
+                               (valueChange)="patchSig(i, { userId: $any($event) || null })"></pf-select>
+                  }
+                </div>
                 <input type="text" class="pf-input pf-input--compact pf-sig-desig"
                        [value]="s.designation" (input)="patchSig(i, { designation: $any($event.target).value })"
                        placeholder="Designation (e.g. Consultant Pathologist)" />
-                <button type="button" class="pf-link-btn pf-link-btn--danger" (click)="removeSig(i)">✕</button>
+                <button type="button" class="pf-link-btn pf-link-btn--danger" (click)="removeSig(i)" aria-label="Remove signatory"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </li>
             } @empty {
               <li class="pf-ce-dim" style="padding: 6px 0;">No slots — the department signs automatically (Tested by + Validated by).</li>
@@ -276,20 +271,21 @@ export interface ColumnsEditorState {
       } @else {
         <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">Select a department to start.</p>
       }
-    </pf-tile>
+    </div>
   `,
   styles: [`
+    .pf-ce-root { display: block; }
     .grow { flex: 1; }
-    .pf-ce-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-    .pf-ce-hint { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); }
+    .pf-ce-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pf-ce-hint { margin: 0 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); }
     .pf-ce-chain-demo { font-size: 11px; }
 
     /* ── The strip ── */
-    .pf-ce-strip { display: flex; align-items: stretch; gap: 0; min-height: 72px; }
+    .pf-ce-strip { display: flex; align-items: stretch; gap: 0; min-height: 60px; }
     .pf-ce-col {
       position: relative; flex-basis: 0; min-width: 56px;
       display: flex; flex-direction: column; justify-content: center; gap: 2px;
-      padding: 10px 10px; cursor: pointer; user-select: none;
+      padding: 8px 9px; cursor: pointer; user-select: none;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25));
       border-radius: 10px; margin: 0 3px;
       background: rgba(255,255,255,0.03);
@@ -299,9 +295,9 @@ export interface ColumnsEditorState {
     /* Linked pair reads as ONE joined cell */
     .pf-ce-col--linkR { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; border-right-style: dashed; }
     .pf-ce-col--linkL { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; border-left-style: dashed; }
-    .pf-ce-col__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary, #e2e8f0);
+    .pf-ce-col__label { font-size: 12px; font-weight: 700; color: var(--text-primary, #e2e8f0);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pf-ce-col__meta { font-size: 10.5px; color: var(--text-tertiary, #94a3b8);
+    .pf-ce-col__meta { font-size: 10px; color: var(--text-tertiary, #94a3b8);
       font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pf-ce-col__lock { position: absolute; top: 4px; right: 6px; font-size: 10px; }
     .pf-ce-chain {
@@ -323,7 +319,7 @@ export interface ColumnsEditorState {
     .pf-ce-total--bad { color: #f87171; }
 
     /* ── Inspector ── */
-    .pf-ce-inspector { margin-top: 12px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+    .pf-ce-inspector { margin-top: 10px; padding: 12px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
       border-radius: 14px; background: rgba(255,255,255,0.02); }
     .pf-ce-insp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     .pf-ce-insp-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
@@ -359,7 +355,7 @@ export interface ColumnsEditorState {
     .pf-sig-grip { cursor: grab; color: var(--text-tertiary, #94a3b8); }
     .pf-sig-pos { width: 18px; text-align: center; font-size: 11px; font-weight: 700; color: var(--violet-400, #a78bfa);
       font-family: ui-monospace, monospace; }
-    .pf-sig-mode { width: 168px; }
+    .pf-sig-mode { width: 190px; flex: 0 0 auto; }
     .pf-sig-who { flex: 1; min-width: 150px; }
     .pf-sig-desig { flex: 1; min-width: 150px; }
 
@@ -479,6 +475,16 @@ export class ReportColumnsEditorComponent implements OnInit {
 
   // ── Signatories (per-department report sign-off slots) ──
   protected readonly users = signal<Array<{ id: string; displayName: string }>>([]);
+  protected readonly sigModeOptions = [
+    { value: 'role', label: 'Dynamic — by activity' },
+    { value: 'user', label: 'Fixed — a person' },
+  ];
+  protected readonly sigRoleOptions = [
+    { value: 'tested_by', label: 'Whoever tested (entered results)' },
+    { value: 'validated_by', label: 'Whoever validated' },
+  ];
+  protected readonly sigUserOptions = computed(() =>
+    this.users().map(u => ({ value: u.id, label: u.displayName })));
   protected readonly signatories = signal<Array<{ _key: string; mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>>([]);
   protected readonly sigSaving = signal(false);
   private sigKey(): string { return 's-' + Math.random().toString(36).slice(2, 9); }

@@ -564,6 +564,24 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     HEADER_RESERVE = 70;
   }
 
+  // ── Department-specific patient strip (owner's model, 2026-09-19) ──
+  // Each department may carry its own patient-block arrangement on its
+  // resolved layout. It applies ONLY when every test on this report
+  // resolves to that one department (a Micro-only report prints Micro's
+  // strip); mixed-department reports keep the tenant default, since the
+  // strip prints once for the whole document.
+  {
+    const layouts = (snap.tests ?? []).map(t => (t.testId ? resolvedLayouts[t.testId] : undefined));
+    const deptNames = new Set(layouts.map(l => l?.departmentName ?? '\u0000missing'));
+    if (layouts.length > 0 && deptNames.size === 1 && !deptNames.has('\u0000missing')) {
+      const strip = layouts[0]?.patientStrip;
+      if (strip && Array.isArray(strip.columns) && strip.columns.some(c => Array.isArray(c) && c.length > 0)) {
+        theme.patientColumns = strip.columns.map(c => [...c]);
+        if (strip.layout) theme.patientLayout = strip.layout as ResolvedTheme['patientLayout'];
+      }
+    }
+  }
+
   WM_LOGO_URL = template?.logoUrl ?? null;
   drawLetterhead(doc, practice, template?.logoUrl ?? null);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
