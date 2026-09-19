@@ -8,10 +8,9 @@ import { ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
 import { ImageUploadComponent } from './image-upload.component';
@@ -19,7 +18,7 @@ import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/uti
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 
-type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'signoff';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -32,9 +31,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
   imports: [
     FormsModule,
     DragDropModule,
-    ScreenHeaderComponent,
     SegmentedComponent,
-    TileComponent,
+    SelectComponent,
     ToggleComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
@@ -42,38 +40,42 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
-        eyebrow="Admin"
-        title="Report Template"
-        subtitle="Tune every visual element of the printed lab report — branding, colors, dates, signatures, footer.">
-        <pf-touch-btn actions size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
+    <section class="px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
+      <header class="pf-rt-head">
+        <div class="min-w-0">
+          <h1 class="pf-rt-title">Report designer</h1>
+          <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
+        </div>
+        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
-      </pf-screen-header>
+      </header>
 
-      <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-        <!-- ── Left: tabbed form. Every section pairs with the live PDF
-                preview on the right. ── -->
-        <div>
-          <!-- Section cards — each names what it changes, so the editor reads
-               as a map of the report instead of a row of cryptic tabs. -->
-          <nav class="pf-rt-nav mb-5" aria-label="Report template sections">
-            @for (s of sections; track s.value) {
-              <button type="button" class="pf-rt-nav__item press"
-                      [class.pf-rt-nav__item--on]="tab() === s.value"
-                      (click)="setTab(s.value)">
-                <span class="pf-rt-nav__t">{{ s.label }}</span>
-                <span class="pf-rt-nav__s">{{ s.desc }}</span>
-              </button>
-            }
-          </nav>
+      <div class="pf-rt-grid">
+        <!-- ── Section rail: one part of the report at a time. ── -->
+        <nav class="pf-rt-rail" aria-label="Report template sections">
+          @for (sec of sections; track sec.value) {
+            <button type="button" class="pf-rt-rail__item press"
+                    [class.pf-rt-rail__item--on]="tab() === sec.value"
+                    (click)="setTab(sec.value)" [title]="sec.desc">
+              <span class="pf-rt-rail__txt">{{ sec.label }}</span>
+            </button>
+          }
+        </nav>
 
+        <!-- ── Focused section panel. ── -->
+        <div class="pf-rt-work">
+          @if (activeSection(); as sec) {
+            <div class="pf-rt-work__hdr">
+              <h2 class="pf-rt-work__title">{{ sec.label }}</h2>
+              <p class="pf-rt-work__sub">{{ sec.desc }}</p>
+            </div>
+          }
           @switch (tab()) {
 
-            <!-- ────────── IDENTITY ────────── -->
-            @case ('identity') {
-              <pf-tile tone="default" padding="lg" class="block">
+            <!-- ══ LETTERHEAD — everything printed at the top of the page ══ -->
+            @case ('letterhead') {
+              <div class="pf-rt-flat">
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Branding</h4>
                   <p class="pf-rtb-s">The name and tagline printed at the top of every report — live below.</p>
@@ -127,8 +129,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">NABL accredited</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Display NABL badge on the report header.</p>
+                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">NABL accredited</p>
+                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Display NABL badge on the report header.</p>
                     </div>
                     <pf-toggle [checked]="tpl().nablAccredited"
                                (checkedChange)="patch({ nablAccredited: $event })">
@@ -151,12 +153,9 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   }
                   </div>
                 </div>
-              </pf-tile>
-            }
+              </div>
 
-            <!-- ────────── HEADER & LOGO ────────── -->
-            @case ('header') {
-              <pf-tile tone="default" padding="lg" class="block">
+              <div class="pf-rt-flat">
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Logo</h4>
                   <p class="pf-rtb-s">Upload once — position and size control where it sits in the letterhead.</p>
@@ -212,8 +211,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <div class="space-y-3">
                   <div class="pf-toggle-row">
                     <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Top accent bar</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Thin colored strip beneath the letterhead.</p>
+                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Top accent bar</p>
+                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Thin colored strip beneath the letterhead.</p>
                     </div>
                     <pf-toggle [checked]="tpl().topAccentBar ?? true"
                                (checkedChange)="patch({ topAccentBar: $event })">
@@ -223,8 +222,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <!-- ── Pre-printed letterpad mode ── -->
                   <div class="pf-toggle-row">
                     <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
+                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
+                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
                     </div>
                     <pf-toggle [checked]="tpl().letterpadMode ?? false"
                                (checkedChange)="patch({ letterpadMode: $event })">
@@ -244,27 +243,127 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   }
                   </div>
                 </div>
-              </pf-tile>
+              </div>
+
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Brand colours</h4>
+                  <p class="pf-rtb-s">The lab name and accent bar pick these up — live in the masthead above.</p>
+                  <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    @for (c of brandColorFields; track c.key) {
+                      <div>
+                        <label class="pf-label">{{ c.label }}</label>
+                        <label class="pf-color-field">
+                          <input type="color"
+                                 [ngModel]="colorOf(c.key) || c.fallback"
+                                 (ngModelChange)="patchKey(c.key, $event)" />
+                          <span class="pf-color-field__hex">{{ colorOf(c.key) || c.fallback }}</span>
+                        </label>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
             }
 
-            <!-- ────────── THEME ────────── -->
-            @case ('theme') {
-              <pf-tile tone="default" padding="lg" class="block">
+            <!-- ══ PATIENT STRIP ══ -->
+            @case ('patient') {
+              <div class="pf-rt-flat">
                 <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Colours</h4>
-                  <p class="pf-rtb-s">Brand and table colours used across the printed report.</p>
+                  <h4 class="pf-rtb-h">Patient block</h4>
+                  <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
+                <div class="space-y-3">
+                  <div>
+                    <label class="pf-label">Patient block layout</label>
+                    <pf-segmented
+                      [options]="patientLayoutOptions"
+                      [value]="tpl().patientLayout ?? 'three-col'"
+                      size="md"
+                      (valueChange)="setPatientLayout($event)">
+                    </pf-segmented>
+                  </div>
+
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Date &amp; time format</h4>
+                  <p class="pf-rtb-s">The date fields print inside the patient block using this format.</p>
+                  <div class="pf-rt-datesgrid">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label class="pf-label">Date format</label>
+                      <pf-select [options]="$any(dateFormatOptions)" [value]="dateFormatValue()"
+                                 (valueChange)="patch({ dateFormat: $any($event) })"></pf-select>
+                    </div>
+                    <div>
+                      <label class="pf-label">Time format</label>
+                      <pf-segmented [options]="timeFormatOptions" [value]="tpl().timeFormat ?? '12h'" size="sm"
+                                    (valueChange)="patch({ timeFormat: $event })"></pf-segmented>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="pf-label">Joiner between date and time</label>
+                    <pf-select [options]="$any(separatorOptions)" [value]="separatorValue()"
+                               (valueChange)="patch({ dateTimeSeparator: $any($event) })"></pf-select>
+                  </div>
+
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Arrange the fields</h4>
+                  <p class="pf-rtb-s">
+                    Drag a field <strong>into a column</strong> to print it (placement &amp; order = how it prints); drag it to <strong>Unused</strong> to hide it. The layout above sets the number of columns.</p>
+                  <div cdkDropListGroup>
+                    <div class="pf-pcols" [style.grid-template-columns]="'repeat(' + patientCols().length + ', minmax(0, 1fr))'">
+                      @for (col of patientCols(); track $index; let i = $index) {
+                        <div class="pf-pcol">
+                          <span class="pf-pcol-h">Column {{ i + 1 }}</span>
+                          <div class="pf-pcol-drop" cdkDropList [id]="'pcol-' + i"
+                               [cdkDropListData]="col"
+                               (cdkDropListDropped)="dropPatientItem($event)">
+                            @for (k of col; track k) {
+                              <div class="pf-pchip" cdkDrag>
+                                <svg class="pf-pchip-grip" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>{{ patientItemLabel(k) }}
+                              </div>
+                            }
+                            @if (col.length === 0) { <span class="pf-pcol-empty">Drop here</span> }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                    <p class="text-[11px] mt-3 mb-1" style="color: var(--text-muted);">Unused — not printed</p>
+                    <div class="pf-ppool" cdkDropList id="pcol-pool" [cdkDropListData]="patientPool()"
+                         (cdkDropListDropped)="dropPatientItem($event)">
+                      @for (k of patientPool(); track k) {
+                        <div class="pf-pchip pf-pchip--pool" cdkDrag>
+                          <svg class="pf-pchip-grip" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>{{ patientItemLabel(k) }}
+                        </div>
+                      }
+                      @if (patientPool().length === 0) { <span class="pf-pcol-empty">All fields are in columns — drag one here to hide it.</span> }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- ══ RESULTS TABLE — style ══ -->
+            @case ('table') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Table colours</h4>
+                  <p class="pf-rtb-s">Header row, body text and hairlines of the results table.</p>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  @for (c of colorFields; track c.key) {
+                  @for (c of tableColorFields; track c.key) {
                     <div>
                       <label class="pf-label">{{ c.label }}</label>
-                      <div class="flex items-center gap-2">
-                        <input type="color" class="pf-color-picker"
+                      <label class="pf-color-field">
+                        <input type="color"
                                [ngModel]="colorOf(c.key) || c.fallback"
                                (ngModelChange)="patchKey(c.key, $event)" />
-                        <span class="font-mono text-[11px]" style="color: var(--text-secondary);">
-                          {{ colorOf(c.key) || c.fallback }}
-                        </span>
-                      </div>
+                        <span class="pf-color-field__hex">{{ colorOf(c.key) || c.fallback }}</span>
+                      </label>
                     </div>
                   }
                 </div>
@@ -313,7 +412,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </div>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Zebra rows</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Zebra rows</span>
                     <pf-toggle [checked]="tpl().zebraRows ?? false"
                                (checkedChange)="patch({ zebraRows: $event })">
                     </pf-toggle>
@@ -364,7 +463,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     <div class="pf-toggle-row"
                          [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                          [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
-                      <span class="text-[14px]" style="color: var(--text-primary);">High value colour</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">High value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
                              [ngModel]="tpl().abnormalColor || '#dc2626'"
@@ -373,7 +472,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     <div class="pf-toggle-row"
                          [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                          [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
-                      <span class="text-[14px]" style="color: var(--text-primary);">Low value colour</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">Low value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
                              [ngModel]="tpl().abnormalLowColor || '#2563eb'"
@@ -387,14 +486,14 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   <h4 class="pf-rtb-h">Departments &amp; details</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Group by department</span>
                     <pf-toggle [checked]="tpl().groupByDepartment"
                                (checkedChange)="patch({ groupByDepartment: $event })">
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
                     <div class="flex flex-col pr-3">
-                      <span class="text-[14px]" style="color: var(--text-primary);">Each department on a new page</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">Each department on a new page</span>
                       <span class="text-[12px]" style="color: var(--text-tertiary);">Start every department's tests on a fresh page.</span>
                     </div>
                     <pf-toggle [checked]="tpl().departmentPageBreak ?? false"
@@ -402,108 +501,25 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Show method line</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Show method line</span>
                     <pf-toggle [checked]="tpl().showMethod"
                                (checkedChange)="patch({ showMethod: $event })">
                     </pf-toggle>
                   </div>
                 </div>
                 </div>
-              </pf-tile>
-            }
-
-            <!-- ────────── PATIENT BLOCK ────────── -->
-            @case ('patient') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Patient block</h4>
-                  <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
-                <div class="space-y-4">
-                  <div>
-                    <label class="pf-label">Patient block layout</label>
-                    <pf-segmented
-                      [options]="patientLayoutOptions"
-                      [value]="tpl().patientLayout ?? 'three-col'"
-                      size="md"
-                      (valueChange)="setPatientLayout($event)">
-                    </pf-segmented>
-                  </div>
-
-                  <!-- Date & time format — moved here since the date fields print
-                       inside the patient block (arrange them below). -->
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-3"
-                     style="color: var(--text-muted);">Date &amp; time format</p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label class="pf-label">Date format</label>
-                      <select class="pf-input" [ngModel]="dateFormatValue()"
-                              (ngModelChange)="patch({ dateFormat: $event })">
-                        @for (o of dateFormatOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
-                      </select>
-                    </div>
-                    <div>
-                      <label class="pf-label">Time format</label>
-                      <pf-segmented [options]="timeFormatOptions" [value]="tpl().timeFormat ?? '12h'" size="sm"
-                                    (valueChange)="patch({ timeFormat: $event })"></pf-segmented>
-                    </div>
-                  </div>
-                  <div class="mt-2">
-                    <label class="pf-label">Joiner between date and time</label>
-                    <select class="pf-input" [ngModel]="separatorValue()"
-                            (ngModelChange)="patch({ dateTimeSeparator: $event })">
-                      @for (o of separatorOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
-                    </select>
-                  </div>
-
-                  <!-- ── Unified drag-drop arranger (all layouts) ── -->
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-4"
-                     style="color: var(--text-muted);">Patient block — drag to arrange</p>
-                  <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
-                    Drag a field <strong>into a column</strong> to print it (placement &amp; order = how it prints); drag it to <strong>Unused</strong> to hide it. The layout above sets the number of columns.</p>
-                  <div cdkDropListGroup>
-                    <div class="pf-pcols" [style.grid-template-columns]="'repeat(' + patientCols().length + ', minmax(0, 1fr))'">
-                      @for (col of patientCols(); track $index; let i = $index) {
-                        <div class="pf-pcol">
-                          <span class="pf-pcol-h">Column {{ i + 1 }}</span>
-                          <div class="pf-pcol-drop" cdkDropList [id]="'pcol-' + i"
-                               [cdkDropListData]="col"
-                               (cdkDropListDropped)="dropPatientItem($event)">
-                            @for (k of col; track k) {
-                              <div class="pf-pchip" cdkDrag>
-                                <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
-                              </div>
-                            }
-                            @if (col.length === 0) { <span class="pf-pcol-empty">Drop here</span> }
-                          </div>
-                        </div>
-                      }
-                    </div>
-                    <p class="text-[11px] mt-3 mb-1" style="color: var(--text-muted);">Unused — not printed</p>
-                    <div class="pf-ppool" cdkDropList id="pcol-pool" [cdkDropListData]="patientPool()"
-                         (cdkDropListDropped)="dropPatientItem($event)">
-                      @for (k of patientPool(); track k) {
-                        <div class="pf-pchip pf-pchip--pool" cdkDrag>
-                          <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
-                        </div>
-                      }
-                      @if (patientPool().length === 0) { <span class="pf-pcol-empty">All fields are in columns — drag one here to hide it.</span> }
-                    </div>
-                  </div>
-                </div>
               </div>
-              </pf-tile>
             }
 
-            <!-- ────────── DATE & TIME ────────── -->
-            <!-- ────────── COLUMNS (per-dept results table) ────────── -->
+            <!-- ══ TABLE COLUMNS — per department ══ -->
             @case ('columns') {
               <pf-report-columns-editor (stateChange)="onColumnsState($event)">
               </pf-report-columns-editor>
             }
 
-            <!-- ────────── SIGN-OFF & FOOTER ────────── -->
-            @case ('signoff') {
-              <pf-tile tone="default" padding="lg" class="block">
+            <!-- ══ FOOTER ══ -->
+            @case ('footer') {
+              <div class="pf-rt-flat">
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Footer</h4>
                   <p class="pf-rtb-s">
@@ -551,44 +567,46 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   }
                 </div>
 
-                <div class="pf-divider mt-4"></div>
+                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Page extras</h4>
+                  <p class="pf-rtb-s">Optional bands and marks around the report body.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Sample Collection band</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Sample Collection band</span>
                     <pf-toggle [checked]="tpl().showSampleCollectionBand ?? true"
                                (checkedChange)="patch({ showSampleCollectionBand: $event })">
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">"Powered by Prefrontal" line</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">"Powered by Prefrontal" line</span>
                     <pf-toggle [checked]="tpl().showPoweredBy"
                                (checkedChange)="patch({ showPoweredBy: $event })">
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">QR code (verify online)</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">QR code (verify online)</span>
                     <pf-toggle [checked]="tpl().showQrCode"
                                (checkedChange)="patch({ showQrCode: $event })">
                     </pf-toggle>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Show pathologist name (legacy)</span>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Show pathologist name (legacy)</span>
                     <pf-toggle [checked]="tpl().showPathologistName"
                                (checkedChange)="patch({ showPathologistName: $event })">
                     </pf-toggle>
                   </div>
                 </div>
               </div>
-              </pf-tile>
+              </div>
             }
           }
         </div>
 
         <!-- ── Right: live PDF preview, shared by every section. ─────── -->
-        <aside class="lg:sticky lg:top-4 h-fit">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
-             style="color: var(--text-muted);">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
+        <aside class="pf-rt-aside">
+          <p class="pf-rt-aside__k">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
           <div class="pf-pdf-frame">
             @if (previewSafe()) {
               <iframe [src]="previewSafe()" title="Report PDF preview"
@@ -599,9 +617,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               </div>
             }
           </div>
-          <p class="text-[10px] mt-2" style="color: var(--text-tertiary);">
-            Preview uses a sample order. Save to apply this template to real reports.
-          </p>
+          <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
       </div>
     </section>
@@ -615,7 +631,7 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-wys-masthead__tag { font-size: 11.5px; color: #555; }
     .pf-wys-masthead__bar { height: 4px; border-radius: 2px; margin-top: 8px; }
 
-    .pf-wys-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pf-wys-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
     .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
       padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
@@ -636,15 +652,15 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-wys-thumb__paper--minimal .pf-wys-thumb__logo { display: none; }
     .pf-wys-thumb__paper--minimal .pf-wys-thumb__lines { left: 10px; }
 
-    .pf-wys-fonts { display: flex; flex-wrap: wrap; gap: 10px; }
-    .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 2px;
-      min-width: 92px; padding: 10px 12px; border-radius: 12px; cursor: pointer; background: transparent;
+    .pf-wys-fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 1px;
+      padding: 8px 6px; border-radius: 11px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
     .pf-wys-font--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
-    .pf-wys-font__sample { font-size: 18px; }
+    .pf-wys-font__sample { font-size: 15px; }
     .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
 
-    .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 116px; padding: 8px;
+    .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 7px;
       background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
     .pf-wys-mini i { display: block; height: 6px; border-radius: 2px; background: #e2e8f0; }
     .pf-wys-mini i:first-child { background: #64748b; }
@@ -669,30 +685,90 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-pcols::before { content: 'PATIENT BLOCK — AS PRINTED'; position: absolute; top: 6px; left: 12px;
       font-size: 9.5px; letter-spacing: 0.14em; color: var(--text-tertiary, #94a3b8); font-weight: 700; }
 
-    /* ── Titled setting blocks (same language as the columns editor) ── */
-    .pf-rtb { margin-bottom: 14px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
-      border-radius: 14px; background: rgba(255,255,255,0.02); }
-    .pf-rtb:last-child { margin-bottom: 0; }
-    .pf-rtb-h { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
-    .pf-rtb-s { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+    /* ── Titled setting groups — FLAT on the panel surface. The work panel
+       already provides the card; boxing each group again read as
+       card-in-card clutter. Groups separate with hairlines instead. ── */
+    .pf-rtb { margin: 0; padding: 16px 0; border: 0; border-radius: 0; background: transparent;
+      border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
+    .pf-rtb:first-child { border-top: 0; padding-top: 2px; }
+    .pf-rtb:last-child { padding-bottom: 0; }
+    .pf-rtb-h { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-rtb-s { margin: 0 0 12px; font-size: 11.5px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
 
-    /* ── Section-card nav (left pane) ── */
-    .pf-rt-nav {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;
+    /* Compact field vocabulary inside the panel (test-editor density). */
+    .pf-rt-work .pf-label { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 600;
+      color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-work .pf-input { padding: 8px 12px; font-size: 13.5px; border-radius: 10px; }
+    .pf-rt-work textarea.pf-input { font-size: 13px; line-height: 1.5; }
+    .pf-rt-work .pf-rtb .grid { row-gap: 12px; }
+
+    /* ── Workspace shell: rail | focused panel | preview (test-editor kin). ── */
+    .pf-rt-head { display: flex; align-items: flex-start; gap: 12px; padding: 6px 0 10px; }
+    .pf-rt-head > .min-w-0 { flex: 1; }
+    .pf-rt-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-rt-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-tertiary, #94a3b8); }
+
+    .pf-rt-grid { display: grid; grid-template-columns: 188px minmax(0, 1fr) minmax(400px, 40%); gap: 18px; align-items: start; }
+    @media (max-width: 1180px) { .pf-rt-grid { grid-template-columns: 1fr; } }
+
+    /* ── Section list (left panel). ── */
+    .pf-rt-rail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 70px; }
+    .pf-rt-rail__item { display: flex; align-items: center; height: 40px; padding: 0 14px;
+      border-radius: 11px; border: none; background: transparent; color: var(--text-secondary);
+      font-size: 13px; font-weight: 600; cursor: pointer; text-align: left;
+      transition: color .15s, background .15s; }
+    .pf-rt-rail__txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (hover: hover) {
+      .pf-rt-rail__item:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
     }
-    .pf-rt-nav__item {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-      padding: 10px 12px; text-align: left; cursor: pointer;
-      border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.18));
-      border-radius: 12px; background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+    .pf-rt-rail__item--on { color: var(--text-primary); font-weight: 700;
+      background: color-mix(in srgb, #a855f7 14%, transparent); }
+    @media (max-width: 1180px) {
+      .pf-rt-rail { position: sticky; top: 58px; z-index: 4; flex-direction: row; overflow-x: auto;
+        scrollbar-width: none; padding: 6px 0; background: var(--bg-primary, #0a0a15); }
+      .pf-rt-rail::-webkit-scrollbar { display: none; }
+      .pf-rt-rail__item { flex: 0 0 auto; height: 34px; }
     }
-    .pf-rt-nav__item:hover { border-color: rgba(168, 85, 247, 0.35); }
-    .pf-rt-nav__item--on {
-      border-color: var(--violet-500, #8b5cf6);
-      background: rgba(139, 92, 246, 0.1);
+
+    .pf-rt-work { min-width: 0; background: var(--glass-bg, rgba(255,255,255,.03));
+      border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px 20px 20px;
+      animation: rt-sec-in .18s cubic-bezier(0, 0, 0.2, 1); }
+    @media (prefers-reduced-motion: reduce) { .pf-rt-work { animation: none; } }
+    @keyframes rt-sec-in { from { opacity: .4; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    .pf-rt-work__hdr { padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--glass-border); }
+    .pf-rt-work__title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-rt-work__sub { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-flat + .pf-rt-flat .pf-rtb:first-child { border-top: 1px solid var(--glass-border); }
+
+    .pf-rt-aside { min-width: 0; }
+    .pf-rt-aside__k { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--text-tertiary); font-family: ui-monospace, monospace; }
+    .pf-rt-aside__hint { margin: 8px 0 0; font-size: 10.5px; color: var(--text-tertiary); }
+
+    /* Desktop: the page holds still; work panel + preview scroll internally. */
+    @media (min-width: 1181px) {
+      :host { display: block; height: 100%; overflow: hidden; }
+      .pf-rt-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+      .pf-rt-head { flex: 0 0 auto; }
+      .pf-rt-grid { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+      .pf-rt-rail { position: static; overflow-y: auto; min-height: 0; }
+      .pf-rt-work { height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+      .pf-rt-aside { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+      .pf-pdf-frame { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+      .pf-pdf-iframe { flex: 1 1 auto; min-height: 0; height: auto; }
     }
-    .pf-rt-nav__t { font-size: 13px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
-    .pf-rt-nav__s { font-size: 11px; line-height: 1.35; color: var(--text-tertiary, #94a3b8); }
+
+    /* Colour field: swatch + hex as ONE 38px control. */
+    .pf-color-field { display: flex; align-items: center; height: 38px; border-radius: 10px;
+      border: 1px solid var(--input-border, var(--glass-border)); background: var(--input-bg, rgba(255,255,255,.03));
+      overflow: hidden; cursor: pointer; }
+    .pf-color-field input[type="color"] { width: 42px; height: 46px; margin: -4px 0 -4px -4px;
+      border: 0; padding: 0; background: transparent; cursor: pointer; }
+    .pf-color-field__hex { padding: 0 10px; font-family: ui-monospace, monospace; font-size: 12px;
+      color: var(--text-secondary, #cbd5e1); }
+
+    .pf-rt-work input[type="range"] { width: 100%; accent-color: #a855f7; }
+    .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
 
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
@@ -716,8 +792,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-pchip.cdk-drag-preview { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
     .pf-pchip.cdk-drag-placeholder { opacity: 0.4; }
     .cdk-drop-list-dragging .pf-pchip:not(.cdk-drag-placeholder) { transition: transform 180ms cubic-bezier(0.2,0.8,0.2,1); }
-    .pf-toggle-row { display: flex; align-items: center;
-      justify-content: space-between; padding: 8px 12px; border-radius: 10px;
+    .pf-toggle-row { display: flex; align-items: center; align-self: start; gap: 12px;
+      justify-content: space-between; min-height: 40px; padding: 8px 12px; border-radius: 10px;
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-divider { height: 1px; background: var(--border-muted, #e2e8f0);
       margin: 8px 0; opacity: 0.6; }
@@ -778,25 +854,17 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly platform = inject(PlatformService);
 
-  readonly tabOptions: SegmentedOption<Tab>[] = [
-    { value: 'identity', label: 'Identity' },
-    { value: 'header',   label: 'Header & Logo' },
-    { value: 'theme',    label: 'Theme' },
-    { value: 'patient',  label: 'Patient' },
-    { value: 'columns',  label: 'Columns' },
-    { value: 'signoff',  label: 'Footer' },
-  ];
   /** Section cards for the left nav — a plain-words label + what it changes,
    *  so the admin never has to guess what lives behind a tab. */
   readonly sections: Array<{ value: Tab; label: string; desc: string }> = [
-    { value: 'identity',   label: 'Lab identity',      desc: 'Name, contact, address, NABL badge' },
-    { value: 'header',     label: 'Header & logo',     desc: 'Logo, header style, letterpad mode' },
-    { value: 'theme',      label: 'Style & table',     desc: 'Font, colours, abnormal highlighting' },
-    { value: 'patient',    label: 'Patient block',     desc: 'Which patient fields print, arranged how' },
-    { value: 'columns',    label: 'Report columns',    desc: 'Per-department table columns & widths' },
-    { value: 'signoff',    label: 'Footer', desc: 'Disclaimer, end-of-report, watermark' },
+    { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
+    { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
+    { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
+    { value: 'table',      label: 'Results table', desc: 'Font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
-  private readonly _tab = signal<Tab>('identity');
+  readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
+  private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
   setTab(t: Tab) {
     this._tab.set(t);
@@ -861,11 +929,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: ' | ',  label: '" | "  →  May 14, 2026 | 11:01 PM' },
   ];
 
-  readonly colorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
-    { key: 'primaryColor',    label: 'Primary',           fallback: '#1B3A6B' },
-    { key: 'accentColor',     label: 'Accent',            fallback: '#0066CC' },
-    { key: 'tableHeaderBg',   label: 'Table header bg',   fallback: '#ffffff' },
-    { key: 'tableHeaderText', label: 'Table header text', fallback: '#000000' },
+  /** Colours are homed by WHERE they print: brand in the letterhead,
+   *  the rest on the results table. */
+  readonly brandColorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
+    { key: 'primaryColor',    label: 'Lab name colour',   fallback: '#1B3A6B' },
+    { key: 'accentColor',     label: 'Accent bar',        fallback: '#0066CC' },
+  ];
+  readonly tableColorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
+    { key: 'tableHeaderBg',   label: 'Header row bg',     fallback: '#ffffff' },
+    { key: 'tableHeaderText', label: 'Header row text',   fallback: '#000000' },
     { key: 'bodyTextColor',   label: 'Body text',         fallback: '#1a1a1a' },
     { key: 'dividerColor',    label: 'Divider / hairline',fallback: '#cccccc' },
   ];
@@ -1105,7 +1177,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
-    if (initial && this.tabOptions.some(o => o.value === initial)) {
+    if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
