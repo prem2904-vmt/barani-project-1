@@ -136,6 +136,17 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly isWide = signal(typeof window !== 'undefined' && window.matchMedia(OrderCreateComponent.WEB_MQ).matches);
   private readonly _wideMql = typeof window !== 'undefined' ? window.matchMedia(OrderCreateComponent.WEB_MQ) : null;
   private readonly _onWideChange = (e: MediaQueryListEvent) => this.isWide.set(e.matches);
+  private readonly _onVisibleResync = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
+  };
+  private loadOrderableTests(): void {
+    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
+      // Belt and braces: even if a stale cache or future endpoint slips an
+      // inactive row through, it never reaches the picker.
+      next: l => this._tests.set((l ?? []).filter(t => t.isActive !== false)),
+      error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+    });
+  }
 
   private loadTrendEligible(patientId: string) {
     this.api.get<{ tests: TrendTest[] }>(`/api/patients/${patientId}/lab-trends`).subscribe({
@@ -740,10 +751,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
     // to inactive) must not appear in the picker.
-    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
-      next: l => this._tests.set(l ?? []),
-      error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
-    });
+    this.loadOrderableTests();
+    // Reception keeps this tab open all day: re-sync the orderable list when
+    // the tab comes back into view so a test/profile/package deactivated in
+    // the Test Master meanwhile drops out of search without a reload.
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVisibleResync);
 
     // Honor the tenant GST + discount switches in the cart preview. The slim
     // visibility endpoint is readable by reception — the full /api/config/billing
@@ -1669,6 +1681,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   ngOnDestroy() {
     this._wideMql?.removeEventListener('change', this._onWideChange);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVisibleResync);
     this.closeInvoicePreview();
   }
 
