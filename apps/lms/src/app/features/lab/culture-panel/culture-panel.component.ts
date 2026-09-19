@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, output, signal, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, output, signal, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 
@@ -151,6 +153,8 @@ export class CulturePanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly cases = signal<CultureCaseView[]>([]);
   readonly loading = signal(false);
@@ -163,6 +167,10 @@ export class CulturePanelComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.refresh();
     this.timer = setInterval(() => this.now.set(Date.now()), 30_000);
+    // Live queue: an intake ('receive') or a bench/stage mutation ('my_work')
+    // must surface here without a manual page refresh — the case row is
+    // auto-created by the queue endpoint on first fetch.
+    this.liveQ.on('my_work', 'receive').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
   }
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
 
