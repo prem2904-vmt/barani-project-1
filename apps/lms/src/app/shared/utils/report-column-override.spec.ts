@@ -161,4 +161,41 @@ describe('report column overrides', () => {
     expect(text).not.toContain('MEMBERCOL');
     expect(text).toContain('RANGEVAL99');
   });
+
+  it('override run keeps a just-added column even when it has no data yet', () => {
+    // The whole point of adding a 5th column on ONE test: it must print in
+    // that test's own run. Before, the empty-column economy silently dropped
+    // it and the override looked like a no-op.
+    const override = [
+      ...DEPT.map(c => ({ ...c, width: 20 })),
+      col('description', 'DESCCOL', 'text', 4, 40),
+    ];
+    const text = renderText(
+      [
+        { testId: 't1', name: 'Glucose', values: { Glucose: { value: '92', range: '70-99', unit: 'mg/dL' } } },
+        { testId: 't2', name: 'Urea', values: { Urea: { value: '28', range: '17-43', unit: 'mg/dL' } } },
+      ],
+      {
+        t1: gridLayout('t1', 'Glucose', glucoseParams,
+          { columns: override, hasColumnOverride: true, departmentColumns: DEPT }),
+        t2: gridLayout('t2', 'Urea', ureaParams),
+      },
+    );
+    expect(text).toContain('DESCCOL'); // empty column survives in the override run
+  });
+
+  it('a single-analyte test with an override gets its own heading band', () => {
+    // Compact (band-less) rendering is for the shared table; a test that
+    // broke out into its own run titles its block — uppercase band.
+    const override = [col('result', 'Result', 'result', 1, 60), col('unit', 'Unit', 'unit', 2, 40)];
+    const text = renderText(
+      [{ testId: 't1', name: 'Special Assay', values: { 'Special Assay': { value: '5', unit: 'U/L' } } }],
+      {
+        t1: gridLayout('t1', 'Special Assay',
+          [{ name: 'Special Assay', value: '5', unit: 'U/L' }],
+          { columns: override, hasColumnOverride: true, departmentColumns: DEPT }),
+      },
+    );
+    expect(text).toContain('SPECIAL ASSAY'); // heading band, not a bare compact row
+  });
 });

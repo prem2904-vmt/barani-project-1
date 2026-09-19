@@ -2049,19 +2049,25 @@ function renderContinuousTable(
     // in its own table run. With zero overrides there is exactly ONE run
     // whose columns are deptColumns(dg), i.e. the historical single call.
     const base = deptColumns(dg);
-    const runs: { cols: ReportColumn[]; key: string; groups: PanelGroup[] }[] = [];
+    const runs: { cols: ReportColumn[]; key: string; groups: PanelGroup[]; overridden: boolean }[] = [];
     for (const g of dg) {
-      const cols = g.columnsOverridden && g.columns?.length ? effectiveColumns(g.columns) : base;
+      const over = !!(g.columnsOverridden && g.columns?.length);
+      const cols = over ? effectiveColumns(g.columns!) : base;
       const key = JSON.stringify(cols);
       const last = runs[runs.length - 1];
       if (last && last.key === key) last.groups.push(g);
-      else runs.push({ cols, key, groups: [g] });
+      else runs.push({ cols, key, groups: [g], overridden: over });
     }
     for (let ri = 0; ri < runs.length; ri++) {
       // The signature reserve belongs to the department's LAST run only —
       // earlier runs may fill their pages fully.
       const runReserve = ri === runs.length - 1 ? reserve : 0;
-      y = renderColumnarTable(doc, runs[ri].groups, runs[ri].cols, y, practice, dept || null, runReserve);
+      // An override run renders the admin's configured columns EXACTLY — a
+      // just-added column with no data yet must still print (that column IS
+      // the point of the override); the empty-column economy applies only
+      // to the department's shared table.
+      y = renderColumnarTable(doc, runs[ri].groups, runs[ri].cols, y, practice, dept || null, runReserve,
+        runs[ri].overridden);
     }
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
@@ -2214,7 +2220,12 @@ function renderColumnarTable(
   /** Extra bottom margin held back for whatever follows this table on the same
    *  page — the department's signature block. Without it autoTable fills to
    *  MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
-  reserveBottom = 0
+  reserveBottom = 0,
+  /** True when `cfg` is a test's/profile's OWN column override (a break-out
+   *  run): configured columns print exactly as arranged — even empty ones —
+   *  and every group gets its heading band so the odd-width table reads as
+   *  its own titled block. */
+  overriddenRun = false
 ): number {
   if (groups.length === 0) return startY;
   if (startY > A4.h - MARGIN_BOTTOM - reserveBottom - 70) { startY = newPage(doc, practice); }
@@ -2255,9 +2266,11 @@ function renderColumnarTable(
         return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.texts?.[m.name] ?? '').trim()));
     }
   };
-  // Admin live-preview keeps EVERY configured column visible (structure
-  // fidelity beats economy there); the printed report still drops empties.
-  if (!PREVIEW_KEEP_EMPTY_COLS) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
+  // Admin live-preview and override runs keep EVERY configured column
+  // visible (structure fidelity beats economy — an override's just-added
+  // column must show even before it has data); the department's shared
+  // table still drops empties.
+  if (!PREVIEW_KEEP_EMPTY_COLS && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
@@ -2283,7 +2296,9 @@ function renderColumnarTable(
     // and no Method sub-line — the band + method treatment is reserved for
     // multi-parameter panels/profiles (CBC, LFT…). This matches the classic
     // report style: a 20-test biochem order reads as 20 rows, not 20 panels.
-    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab;
+    // An override run is the exception: its test broke out of the shared
+    // table on purpose, so it always titles its own block with a heading.
+    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab && !overriddenRun;
 
     if (!compact) {
       // Panel / profile header band — bold, full width.
