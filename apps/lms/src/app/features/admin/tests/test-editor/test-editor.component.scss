@@ -800,14 +800,26 @@ select.pf-input--compact {
     background: var(--bg-primary, #0a0a15); }
   .pf-te2-nav::-webkit-scrollbar { display: none; }
 }
-.pf-te2-nav__link { display: flex; align-items: center; gap: 9px; white-space: nowrap;
-  padding: 9px 12px; border-radius: 10px; border: 1px solid transparent;
+.pf-te2-nav__link { position: relative; display: flex; align-items: center; gap: 10px; white-space: nowrap;
+  height: 40px; padding: 0 12px 0 14px; border-radius: 11px; border: none;
   background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600;
-  cursor: pointer; text-align: left; transition: color .15s, background .15s, border-color .15s; }
-@media (hover: hover) { .pf-te2-nav__link:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); } }
-.pf-te2-nav__link--on { color: var(--text-primary); background: var(--glass-bg, rgba(255,255,255,.05));
-  border-color: rgba(168, 85, 247, .4); }
-@media (max-width: 1180px) { .pf-te2-nav__link { flex: 0 0 auto; } }
+  cursor: pointer; text-align: left; transition: color .15s, background .15s; }
+.pf-te2-nav__ic { flex-shrink: 0; opacity: .75; transition: opacity .15s; }
+.pf-te2-nav__txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pf-te2-nav__link .pf-te2-nav__dot { margin-left: auto; }
+@media (hover: hover) {
+  .pf-te2-nav__link:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
+  .pf-te2-nav__link:hover .pf-te2-nav__ic { opacity: 1; }
+}
+.pf-te2-nav__link--on { color: var(--text-primary); background: var(--glass-bg, rgba(255,255,255,.06)); }
+.pf-te2-nav__link--on .pf-te2-nav__ic { opacity: 1; color: var(--violet-text, #a78bfa); }
+/* Accent spine on the active item — reads as a selected rail, not a chip. */
+.pf-te2-nav__link--on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px;
+  border-radius: 3px; background: linear-gradient(180deg, #a855f7, #7c3aed); }
+@media (max-width: 1180px) {
+  .pf-te2-nav__link { flex: 0 0 auto; height: 34px; }
+  .pf-te2-nav__link--on::before { display: none; }
+}
 .pf-te2-nav__link:hover { color: var(--text-primary); background: rgba(124,58,237,.08); }
 .pf-te2-nav__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--glass-border); flex-shrink: 0;
   transition: background .15s ease; }

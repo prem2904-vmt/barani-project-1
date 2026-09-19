@@ -303,12 +303,14 @@ export class ReportStructureComponent {
       paragraph: { name: 'Text', hint: (s.template ?? '').toString().slice(0, 60) || 'fixed text on the report' },
       image: { name: 'Images', hint: 'attachments captured with the result' },
       chart: { name: 'Chart', hint: 'edit in the advanced editor' },
-      culture_line: { name: s.label || this.sourceLabel(s.source ?? ''), hint: this.sourceLabel(s.source ?? '') },
+      culture_line: { name: s.label || this.sourceLabel(s.source ?? ''), hint: SOURCE_HINTS[s.source ?? ''] ?? '' },
       culture_ast: { name: 'Sensitivity table (AST)', hint: 'organisms & antibiotics from the bench' },
     };
     const d = named[t] ?? { name: s.label || t || 'Block', hint: 'edit in the advanced editor' };
+    const name = s.label || d.name;
     return {
-      key: s.id ?? `s-${i}`, kind: t, name: s.label || d.name, hint: d.hint,
+      key: s.id ?? `s-${i}`, kind: t, name,
+      hint: d.hint.toLowerCase() === name.toLowerCase() ? '' : d.hint,
       hidden: s.hidden === true,
       canRename: t === 'culture_line' || t === 'paragraph',
       canDelete: t !== 'grid',
@@ -448,6 +450,22 @@ interface StructureRow {
   template?: string;
   implicit: boolean;
 }
+
+/** Friendly per-source second lines — what the line MEANS, never an echo
+ *  of its name. */
+const SOURCE_HINTS: Record<string, string> = {
+  specimen: 'picked at billing / the bench',
+  gramStain: 'bench Gram findings',
+  growth: 'growth-check stage',
+  id: 'identification stage',
+  colonyCount: 'prints when recorded',
+  organisms: 'named isolates',
+  resistancePattern: 'prints when written',
+  intrinsicResistance: 'prints when written',
+  clinicalNotes: 'prints when written',
+  infectionControlAdvice: 'prints when written',
+  note: 'bench summary line',
+};
 
 const CLASSIC_CULTURE: Array<{ type: string; label: string; hint: string; source?: string }> = [
   { type: 'culture_line', label: 'Specimen', hint: 'picked at billing / the bench', source: 'specimen' },
