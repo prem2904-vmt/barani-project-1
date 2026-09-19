@@ -121,6 +121,9 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                     </table>
                   </div>
                   <button type="button" class="rsd__link" (click)="customizeColumns.emit()">Change the columns</button>
+                  <!-- The Description COLUMN belongs to this table — its
+                       per-parameter wording is edited right here. -->
+                  <div class="rsd__descslot"><ng-content select="[descriptionEditor]"></ng-content></div>
                 }
                 @case ('paragraph') {
                   <textarea class="rsd__sentence" rows="2" [ngModel]="row.template || ''"
@@ -139,9 +142,6 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                 }
                 @case ('image') {
                   <p class="rsd__note">Attachments captured with the result print here.</p>
-                }
-                @case ('notes') {
-                  <p class="rsd__note">One line per parameter, beside its value — edited just below this list.</p>
                 }
                 @default {
                   <p class="rsd__note">{{ row.hint }} — fine-tuning lives in the advanced editor below.</p>
@@ -259,6 +259,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
     .rsd__link { align-self: flex-start; background: none; border: none; padding: 0; font-size: 12.5px;
       font-weight: 600; color: var(--violet-text, #a78bfa); cursor: pointer; }
     .rsd__link:hover { text-decoration: underline; }
+    .rsd__descslot:not(:empty) { margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--glass-border); }
 
     /* A sentence block IS the sentence. */
     .rsd__sentence { width: 100%; font-size: 13px; line-height: 1.55; color: var(--text-primary);
@@ -450,8 +451,6 @@ export class ReportStructureComponent {
     return [
       { key: 'implicit-grid', kind: 'grid', name: 'Results table',
         hint: '', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
-      { key: 'implicit-notes', kind: 'notes', name: 'Description column',
-        hint: 'edited below', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
     ];
   });
 

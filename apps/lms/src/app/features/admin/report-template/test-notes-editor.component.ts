@@ -90,28 +90,39 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                 <input type="text" class="pf-input pf-input--compact grow"
                        [value]="descriptionFor(name)"
                        (input)="setDescription(name, $any($event.target).value)"
-                       [placeholder]="descCondKind(name) === 'one' ? 'printed when the rule below does NOT match' : 'e.g. High in dehydration · Low in anaemia'" />
+                       [placeholder]="descCondKind(name) === 'ladder' ? 'otherwise — printed when no branch matches' : 'e.g. High in dehydration · Low in anaemia'" />
                 @if (descCondKind(name) === 'custom') {
                   <span class="pf-tl-desc-flag" title="This row carries print rules richer than one condition — edit them in the Advanced editor.">custom rules</span>
                 } @else {
                   <button type="button" class="pf-tl-desc-vary press" (click)="toggleDescCond(name)">
-                    {{ descCondKind(name) === 'one' ? '− remove condition' : '+ varies by value' }}
+                    {{ descCondKind(name) === 'ladder' ? '− remove conditions' : '+ varies by value' }}
                   </button>
                 }
               </div>
-              @if (descCondKind(name) === 'one') {
-                <div class="pf-tl-desc-cond">
-                  <span class="pf-tl-desc-w">If the value</span>
-                  <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="descCond(name).operator"
-                             (valueChange)="setDescCond(name, { operator: $any($event) })"></pf-select></div>
-                  <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
-                         [value]="descCond(name).value" placeholder="value"
-                         (input)="setDescCond(name, { value: $any($event.target).value })" />
-                  <span class="pf-tl-desc-w">print instead</span>
-                  <input type="text" class="pf-input pf-input--compact grow"
-                         [value]="descCond(name).text"
-                         (input)="setDescCond(name, { text: $any($event.target).value })"
-                         placeholder="e.g. Suggests dehydration — advise fluids and repeat" />
+              @if (descCondKind(name) === 'ladder') {
+                @for (r of descRules(name); track $index; let ri = $index; let last = $last) {
+                  <div class="pf-tl-desc-cond">
+                    <span class="pf-tl-desc-w pf-tl-desc-w--kw">{{ ri === 0 ? 'If' : 'else if' }} the value</span>
+                    <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="r.operator"
+                               (valueChange)="setDescRule(name, ri, { operator: $any($event) })"></pf-select></div>
+                    <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
+                           [value]="r.value" placeholder="value"
+                           (input)="setDescRule(name, ri, { value: $any($event.target).value })" />
+                    <span class="pf-tl-desc-w">print</span>
+                    <input type="text" class="pf-input pf-input--compact grow"
+                           [value]="r.text"
+                           (input)="setDescRule(name, ri, { text: $any($event.target).value })"
+                           placeholder="e.g. Suggests dehydration — advise fluids and repeat" />
+                    <button type="button" class="pf-tl-desc-x press" (click)="removeDescRule(name, ri)"
+                            title="Remove this branch" aria-label="Remove this branch">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                }
+                <div class="pf-tl-desc-cond pf-tl-desc-cond--else">
+                  <span class="pf-tl-desc-w pf-tl-desc-w--kw">otherwise</span>
+                  <span class="pf-tl-desc-w">the main description above prints — first matching branch wins.</span>
+                  <button type="button" class="pf-tl-desc-vary press" (click)="addDescRule(name)">+ else if…</button>
                 </div>
               }
             } @empty {
@@ -312,6 +323,11 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-desc-w { font-size: 12px; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
     .pf-tl-desc-op { min-width: 130px; }
     .pf-tl-desc-val { width: 84px; text-align: center; }
+    .pf-tl-desc-w--kw { font-weight: 700; color: var(--violet-text, #a78bfa); }
+    .pf-tl-desc-cond--else { background: transparent; border-left-style: dotted; }
+    .pf-tl-desc-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+      border: none; border-radius: 8px; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
+    .pf-tl-desc-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
       background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
@@ -595,44 +611,62 @@ export class TestNotesEditorComponent implements OnInit {
       (GridRowParameter & { conditions?: Array<Record<string, unknown>> }) | undefined;
     return row?.conditions;
   }
-  descCondKind(name: string): 'none' | 'one' | 'custom' {
-    const c = this.descRowConditions(name);
-    if (!c || c.length === 0) return 'none';
-    if (c.length !== 1) return 'custom';
-    const r = c[0] as { if?: Record<string, unknown>; else?: boolean; then?: Record<string, unknown> };
-    const p = r.if ?? {};
-    const t = (r.then ?? {}) as { cells?: Record<string, unknown> };
-    const thenKeys = Object.keys(r.then ?? {});
+  /** A LADDER = ordered simple branches, first match wins, base text = else.
+   *  [{if:{parameter,op,value}, then:{cells:{description}}}, …] — exactly how
+   *  the engine walks the conditions array. Anything richer is 'custom'. */
+  private isSimpleDescRule(r: Record<string, unknown>): boolean {
+    const p = (r['if'] ?? {}) as Record<string, unknown>;
+    const t = (r['then'] ?? {}) as { cells?: Record<string, unknown> };
+    const thenKeys = Object.keys(r['then'] ?? {});
     const cellKeys = Object.keys(t.cells ?? {});
-    const ok = !r.else && p['parameter'] != null && p['operator'] != null
+    return !r['else'] && p['parameter'] != null && p['operator'] != null
       && p['and'] == null && p['or'] == null
       && thenKeys.length === 1 && thenKeys[0] === 'cells'
       && cellKeys.length === 1 && cellKeys[0] === 'description';
-    return ok ? 'one' : 'custom';
   }
-  descCond(name: string): { operator: string; value: string; text: string } {
-    const r = this.descRowConditions(name)?.[0] as
-      { if?: { operator?: string; value?: unknown }; then?: { cells?: { description?: string } } } | undefined;
-    return {
-      operator: String(r?.if?.operator ?? '>'),
-      value: r?.if?.value == null ? '' : String(r.if.value),
-      text: String(r?.then?.cells?.description ?? ''),
-    };
+  descCondKind(name: string): 'none' | 'ladder' | 'custom' {
+    const c = this.descRowConditions(name);
+    if (!c || c.length === 0) return 'none';
+    return c.every(r => this.isSimpleDescRule(r)) ? 'ladder' : 'custom';
+  }
+  descRules(name: string): Array<{ operator: string; value: string; text: string }> {
+    return (this.descRowConditions(name) ?? []).map(r => {
+      const rr = r as { if?: { operator?: string; value?: unknown }; then?: { cells?: { description?: string } } };
+      return {
+        operator: String(rr.if?.operator ?? '>'),
+        value: rr.if?.value == null ? '' : String(rr.if.value),
+        text: String(rr.then?.cells?.description ?? ''),
+      };
+    });
   }
   toggleDescCond(name: string) {
-    if (this.descCondKind(name) === 'one') this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
-    else this.writeDescCond(name, { operator: '>', value: '', text: '' });
+    if (this.descCondKind(name) === 'ladder') {
+      this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
+    } else {
+      this.writeDescRules(name, [{ operator: '>', value: '', text: '' }]);
+    }
   }
-  setDescCond(name: string, patch: Partial<{ operator: string; value: string; text: string }>) {
-    if (this.descCondKind(name) !== 'one' && this.descCondKind(name) !== 'none') return;
-    this.writeDescCond(name, { ...this.descCond(name), ...patch });
+  addDescRule(name: string) {
+    this.writeDescRules(name, [...this.descRules(name), { operator: '>', value: '', text: '' }]);
   }
-  private writeDescCond(name: string, c: { operator: string; value: string; text: string }) {
-    const n = parseFloat(String(c.value).replace(',', '.'));
-    const v = String(c.value).trim() !== '' && Number.isFinite(n) && String(n) === String(c.value).trim() ? n : c.value;
+  removeDescRule(name: string, idx: number) {
+    const rules = this.descRules(name).filter((_, i) => i !== idx);
+    if (rules.length === 0) this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
+    else this.writeDescRules(name, rules);
+  }
+  setDescRule(name: string, idx: number, patch: Partial<{ operator: string; value: string; text: string }>) {
+    if (this.descCondKind(name) !== 'ladder') return;
+    const rules = this.descRules(name).map((r, i) => i === idx ? { ...r, ...patch } : r);
+    this.writeDescRules(name, rules);
+  }
+  private writeDescRules(name: string, rules: Array<{ operator: string; value: string; text: string }>) {
+    const coerce = (v: string): unknown => {
+      const n = parseFloat(String(v).replace(',', '.'));
+      return String(v).trim() !== '' && Number.isFinite(n) && String(n) === String(v).trim() ? n : v;
+    };
     this.mutateDescRow(name, row => {
-      (row as { conditions?: unknown }).conditions =
-        [{ if: { parameter: name, operator: c.operator, value: v }, then: { cells: { description: c.text } } }];
+      (row as { conditions?: unknown }).conditions = rules.map(c =>
+        ({ if: { parameter: name, operator: c.operator, value: coerce(c.value) }, then: { cells: { description: c.text } } }));
     });
   }
   /** Find-or-synthesize the parameter's grid row (same shape setDescription
