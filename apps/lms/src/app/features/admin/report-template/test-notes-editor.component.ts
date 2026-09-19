@@ -90,8 +90,30 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                 <input type="text" class="pf-input pf-input--compact grow"
                        [value]="descriptionFor(name)"
                        (input)="setDescription(name, $any($event.target).value)"
-                       placeholder="e.g. High in dehydration · Low in anaemia" />
+                       [placeholder]="descCondKind(name) === 'one' ? 'printed when the rule below does NOT match' : 'e.g. High in dehydration · Low in anaemia'" />
+                @if (descCondKind(name) === 'custom') {
+                  <span class="pf-tl-desc-flag" title="This row carries print rules richer than one condition — edit them in the Advanced editor.">custom rules</span>
+                } @else {
+                  <button type="button" class="pf-tl-desc-vary press" (click)="toggleDescCond(name)">
+                    {{ descCondKind(name) === 'one' ? '− remove condition' : '+ varies by value' }}
+                  </button>
+                }
               </div>
+              @if (descCondKind(name) === 'one') {
+                <div class="pf-tl-desc-cond">
+                  <span class="pf-tl-desc-w">If the value</span>
+                  <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="descCond(name).operator"
+                             (valueChange)="setDescCond(name, { operator: $any($event) })"></pf-select></div>
+                  <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
+                         [value]="descCond(name).value" placeholder="value"
+                         (input)="setDescCond(name, { value: $any($event.target).value })" />
+                  <span class="pf-tl-desc-w">print instead</span>
+                  <input type="text" class="pf-input pf-input--compact grow"
+                         [value]="descCond(name).text"
+                         (input)="setDescCond(name, { text: $any($event.target).value })"
+                         placeholder="e.g. Suggests dehydration — advise fluids and repeat" />
+                </div>
+              }
             } @empty {
               <p class="text-[12px] py-1" style="color: var(--text-tertiary);">This test has no parameters.</p>
             }
@@ -280,6 +302,16 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     </div>
   `,
   styles: [`
+    .pf-tl-desc-vary { flex-shrink: 0; background: none; border: none; padding: 2px 4px; font-size: 11.5px;
+      font-weight: 600; color: var(--violet-text, #a78bfa); cursor: pointer; white-space: nowrap; }
+    .pf-tl-desc-vary:hover { text-decoration: underline; }
+    .pf-tl-desc-flag { flex-shrink: 0; font-size: 11px; color: #d97706; white-space: nowrap; }
+    .pf-tl-desc-cond { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin: -2px 0 8px; padding: 8px 10px 8px 10px; border-left: 2px solid rgba(168,85,247,.35);
+      background: rgba(124,58,237,.05); border-radius: 0 10px 10px 0; }
+    .pf-tl-desc-w { font-size: 12px; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
+    .pf-tl-desc-op { min-width: 130px; }
+    .pf-tl-desc-val { width: 84px; text-align: center; }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
       background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
@@ -543,6 +575,94 @@ export class TestNotesEditorComponent implements OnInit {
       return next;
     });
   }
+  // ── Conditional descriptions ────────────────────────────────
+  // "High in dehydration" only when it IS high: one plain-words rule per
+  // parameter row, stored as the engine's OWN row conditions —
+  // [{ if:{parameter,operator,value}, then:{cells:{description: text}} }].
+  // The base description prints when the rule doesn't match. Anything richer
+  // (several rules, colors, other cells) is 'custom' and never rewritten.
+  readonly descOpOptions: PfSelectOption[] = [
+    { value: '>', label: 'is above' },
+    { value: '<', label: 'is below' },
+    { value: '>=', label: 'is at least' },
+    { value: '<=', label: 'is at most' },
+    { value: '=', label: 'equals' },
+    { value: '!=', label: 'is not' },
+  ];
+  private descRowConditions(name: string): Array<Record<string, unknown>> | undefined {
+    const g = this.sections().find(sec => sec.type === 'grid') as GridSection | undefined;
+    const row = (g?.rows ?? []).find(r => (r as GridRowParameter).parameter_name === name) as
+      (GridRowParameter & { conditions?: Array<Record<string, unknown>> }) | undefined;
+    return row?.conditions;
+  }
+  descCondKind(name: string): 'none' | 'one' | 'custom' {
+    const c = this.descRowConditions(name);
+    if (!c || c.length === 0) return 'none';
+    if (c.length !== 1) return 'custom';
+    const r = c[0] as { if?: Record<string, unknown>; else?: boolean; then?: Record<string, unknown> };
+    const p = r.if ?? {};
+    const t = (r.then ?? {}) as { cells?: Record<string, unknown> };
+    const thenKeys = Object.keys(r.then ?? {});
+    const cellKeys = Object.keys(t.cells ?? {});
+    const ok = !r.else && p['parameter'] != null && p['operator'] != null
+      && p['and'] == null && p['or'] == null
+      && thenKeys.length === 1 && thenKeys[0] === 'cells'
+      && cellKeys.length === 1 && cellKeys[0] === 'description';
+    return ok ? 'one' : 'custom';
+  }
+  descCond(name: string): { operator: string; value: string; text: string } {
+    const r = this.descRowConditions(name)?.[0] as
+      { if?: { operator?: string; value?: unknown }; then?: { cells?: { description?: string } } } | undefined;
+    return {
+      operator: String(r?.if?.operator ?? '>'),
+      value: r?.if?.value == null ? '' : String(r.if.value),
+      text: String(r?.then?.cells?.description ?? ''),
+    };
+  }
+  toggleDescCond(name: string) {
+    if (this.descCondKind(name) === 'one') this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
+    else this.writeDescCond(name, { operator: '>', value: '', text: '' });
+  }
+  setDescCond(name: string, patch: Partial<{ operator: string; value: string; text: string }>) {
+    if (this.descCondKind(name) !== 'one' && this.descCondKind(name) !== 'none') return;
+    this.writeDescCond(name, { ...this.descCond(name), ...patch });
+  }
+  private writeDescCond(name: string, c: { operator: string; value: string; text: string }) {
+    const n = parseFloat(String(c.value).replace(',', '.'));
+    const v = String(c.value).trim() !== '' && Number.isFinite(n) && String(n) === String(c.value).trim() ? n : c.value;
+    this.mutateDescRow(name, row => {
+      (row as { conditions?: unknown }).conditions =
+        [{ if: { parameter: name, operator: c.operator, value: v }, then: { cells: { description: c.text } } }];
+    });
+  }
+  /** Find-or-synthesize the parameter's grid row (same shape setDescription
+   *  builds), then apply fn to a copy — one write path for row patches. */
+  private mutateDescRow(name: string, fn: (row: GridRowParameter) => void): void {
+    this.sections.update(arr => {
+      const next = [...arr];
+      let gi = next.findIndex(sec => sec.type === 'grid');
+      if (gi < 0) {
+        const rows: GridRow[] = this.paramNamesFromTest().map(nm => ({
+          id: this.newId('row'), row_merge: false, parameter_name: nm, cells: {},
+        }) as unknown as GridRow);
+        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows } as unknown as ReportSection);
+        gi = next.length - 1;
+      }
+      const g = { ...(next[gi] as GridSection) };
+      g.rows = [...(g.rows ?? [])];
+      let ri = g.rows.findIndex(r => (r as GridRowParameter).parameter_name === name);
+      if (ri < 0) {
+        g.rows.push({ id: this.newId('row'), row_merge: false, parameter_name: name, cells: {} } as unknown as GridRow);
+        ri = g.rows.length - 1;
+      }
+      const row = { ...(g.rows[ri] as GridRowParameter) };
+      fn(row);
+      g.rows[ri] = row as unknown as GridRow;
+      next[gi] = g;
+      return next;
+    });
+  }
+
   /** Parameter names strictly from the test master (for row synthesis). */
   private paramNamesFromTest(): string[] {
     const host = this.parameters();
