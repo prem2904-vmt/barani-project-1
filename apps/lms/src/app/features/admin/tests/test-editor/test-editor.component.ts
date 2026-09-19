@@ -554,8 +554,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
     { field: 'criticalHigh', headerName: 'Critical high', minWidth: 108, flex: .8,
       cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
-    { field: 'prints', headerName: 'On the report', editable: false, minWidth: 130, flex: 1.3,
-      cellClass: 'pf-rrgrid__prints' },
+    { field: 'prints', headerName: 'On the report', minWidth: 150, flex: 1.5,
+      cellClass: 'pf-rrgrid__prints', tooltipField: 'prints',
+      cellEditor: 'agTextCellEditor' },
     { colId: 'del', headerName: '', editable: false, width: 44, maxWidth: 44, resizable: false,
       cellClass: 'pf-rrgrid__del',
       cellRenderer: () => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>' },
@@ -566,6 +567,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (f === 'sex') this.patchRangeAt(i, ri, { sex: e.data.sex });
     else if (f === 'ageUnit') this.patchRangeAt(i, ri, { ageUnit: e.data.ageUnit });
     else if (f === 'agePreset') this.setAgePreset(i, ri, e.data.agePreset);
+    else if (f === 'prints') {
+      // Editing the printed text writes the range's custom label; clearing it
+      // returns to the automatic wording.
+      const v = String(e.newValue ?? '').trim();
+      this.patchRangeAt(i, ri, { label: v || null });
+    }
     else if (f === 'minAge' || f === 'maxAge' || f === 'min' || f === 'max'
              || f === 'criticalLow' || f === 'criticalHigh') {
       this.patchRangeAt(i, ri, { [f]: this.toNum(e.data[f]) });
@@ -884,21 +891,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  Normal-marked options — and it's EDITABLE here: tap values to toggle
    *  what counts as expected. A switch flips the section between numeric
    *  bands and qualitative mode when a test carries both kinds. */
-  readonly rangeModeOptions = computed<SegmentedOption<'numeric' | 'qualitative'>[]>(() => [
-    {
-      value: 'numeric', label: 'Numeric range',
-      disabled: this.numericFields().length === 0,
-      hint: this.numericFields().length ? undefined
-        : "The result is a dropdown — a numeric range can't apply. Add a numeric parameter to enable.",
-    },
-    {
-      value: 'qualitative', label: 'Expected value',
-      disabled: this.qualFields().length === 0,
-      hint: this.qualFields().length ? undefined
-        : 'No dropdown parameter with options — nothing qualitative to mark as expected.',
-    },
-  ]);
-  readonly rangeModeChoice = signal<'numeric' | 'qualitative' | null>(null);
   /** Expected-value chips stay hidden (the option group below already shows
    *  the values) until the user explicitly opens the editor. */
   readonly qualEditing = signal(false);
@@ -907,9 +899,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       .map((f, i) => ({ f, i }))
       .filter(x => this.typeHasOptions(x.f.type) && this.rowsFor(x.i).length > 0)
       .map(x => ({ i: x.i, title: x.f.label || x.f.name || 'Result' })));
+  /** The mode FOLLOWS the entry kind — a number gets numeric ranges, a
+   *  choice gets its option group's expected value. No user toggle. */
   readonly effRangeMode = computed<'numeric' | 'qualitative'>(() =>
-    this.rangeModeChoice()
-    ?? (this.numericFields().length ? 'numeric' : this.qualFields().length ? 'qualitative' : 'numeric'));
+    this.numericFields().length ? 'numeric' : this.qualFields().length ? 'qualitative' : 'numeric');
 
   /** The expected values, as they'll print on the report. */
   normalsSummary(i: number): string {
@@ -1828,12 +1821,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this._saving.set(true);
     if (d.id) {
       this.api.patch<Test>(`/api/tests/${d.id}`, body).subscribe({
-        next: () => { this._saving.set(false); this.toasts.success('Updated'); this.back(); },
+        next: () => { this._saving.set(false); this.dirty.set(false); this.toasts.success('Saved'); },
         error: e => this.handleSaveError(e)
       });
     } else {
       this.api.post<Test>('/api/tests/', body).subscribe({
-        next: () => { this._saving.set(false); this.toasts.success('Created'); this.back(); },
+        next: t => {
+          this._saving.set(false); this.dirty.set(false); this.toasts.success('Created');
+          // Stay in the editor — future saves are updates on the new id.
+          this.router.navigate(['/admin/tests', t.id, 'edit'],
+            { queryParams: { type: d.type }, replaceUrl: true });
+        },
         error: e => this.handleSaveError(e)
       });
     }

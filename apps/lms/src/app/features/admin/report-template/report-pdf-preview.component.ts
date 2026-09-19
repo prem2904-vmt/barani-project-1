@@ -82,6 +82,9 @@ export class ReportPdfPreviewComponent implements OnDestroy {
   /** Explicit sample values (the advanced editor lets the admin type them);
    *  when set they replace the generated ones for the individual path. */
   readonly values = input<Record<string, unknown> | null>(null);
+  /** Unsaved draft Parameters JSON — the engine previews THESE instead of the
+   *  stored test, so range/unit edits show before Save. */
+  readonly parametersJson = input<string | null>(null);
   /** Non-empty = the target is a PROFILE: one snapshot row per member. */
   readonly profileMembers = input<PreviewProfileMember[]>([]);
   /** LIVE (possibly unsaved) column override — patched onto the target layout
@@ -219,7 +222,8 @@ export class ReportPdfPreviewComponent implements OnDestroy {
           };
         });
         layouts = await resolveReportLayouts<ResolvedReportLayout>(
-          (id, vals, _c, p) => this.layout.preview(id, vals, [], p),
+          (id, vals, _c, p) => this.layout.preview(id, vals, [], p,
+            id === this.testId() ? this.parametersJson() : null),
           snapshotTests as never,
           patient,
         );
@@ -228,7 +232,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
         const vals = this.values() && Object.keys(this.values()!).length > 0
           ? this.values()!
           : ReportPdfPreviewComponent.valuesFor(this.parameters());
-        const resolved = await this.layout.preview(testId, vals, [], patient);
+        const resolved = await this.layout.preview(testId, vals, [], patient, this.parametersJson());
         layouts = { [testId]: resolved };
         snapshotTests = [{
           testId,

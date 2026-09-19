@@ -93,12 +93,13 @@ export class ReportLayoutService {
     values: Record<string, unknown>,
     imageUrls: string[] = [],
     patient?: { sex?: string | null; age?: number | null },
+    parametersJson?: string | null,
   ): Promise<ResolvedReportLayout> {
     // Pass the patient's sex/age so the engine picks the matching reference range
     // (male/female/age-specific) instead of always the first one.
     return firstValueFrom(this.api.post<ResolvedReportLayout>(
       `/api/report-layout/preview/${testId}`,
-      { values, imageUrls, sex: patient?.sex ?? null, age: patient?.age ?? null },
+      { values, imageUrls, sex: patient?.sex ?? null, age: patient?.age ?? null, parametersJson: parametersJson ?? null },
     ));
   }
 }

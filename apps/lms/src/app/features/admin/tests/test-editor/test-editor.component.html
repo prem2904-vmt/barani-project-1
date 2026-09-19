@@ -383,13 +383,7 @@
                 <span class="pf-te2-h">Reference ranges — what counts as normal</span>
                 <p class="pf-rr2__sub">Prints on the report next to the result and decides the H&nbsp;/&nbsp;L flag.</p>
               </div>
-              @if (qualFields().length || numericFields().length) {
-                <!-- Always visible: it STATES the mode. A test's result is
-                     one or the other — the inapplicable side is disabled
-                     with the reason in its tooltip. -->
-                <pf-segmented size="sm" [options]="rangeModeOptions()" [value]="effRangeMode()"
-                              (valueChange)="rangeModeChoice.set($event)"></pf-segmented>
-              }
+
             </div>
             @if (effRangeMode() === 'qualitative' && qualFields().length) {
               <!-- The values live in the option group below — no need to
@@ -1017,6 +1011,7 @@
             [parameters]="parameterNames()"
             [profileMembers]="previewProfileMembers()"
             [columnsOverride]="liveColumnsOverride()"
+            [parametersJson]="d.parametersJson || null"
             [culture]="cultureBench()"
             [refreshToken]="previewToken()">
           </pf-report-pdf-preview>
