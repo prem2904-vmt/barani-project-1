@@ -811,14 +811,13 @@ select.pf-input--compact {
   .pf-te2-nav__link:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
   .pf-te2-nav__link:hover .pf-te2-nav__ic { opacity: 1; }
 }
-.pf-te2-nav__link--on { color: var(--text-primary); background: var(--glass-bg, rgba(255,255,255,.06)); }
+/* Active = a filled, violet-tinted row: fill + icon colour + weight carry
+   the selection, no accent bars. */
+.pf-te2-nav__link--on { color: var(--text-primary); font-weight: 700;
+  background: color-mix(in srgb, #a855f7 14%, transparent); }
 .pf-te2-nav__link--on .pf-te2-nav__ic { opacity: 1; color: var(--violet-text, #a78bfa); }
-/* Accent spine on the active item — reads as a selected rail, not a chip. */
-.pf-te2-nav__link--on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px;
-  border-radius: 3px; background: linear-gradient(180deg, #a855f7, #7c3aed); }
 @media (max-width: 1180px) {
   .pf-te2-nav__link { flex: 0 0 auto; height: 34px; }
-  .pf-te2-nav__link--on::before { display: none; }
 }
 .pf-te2-nav__link:hover { color: var(--text-primary); background: rgba(124,58,237,.08); }
 .pf-te2-nav__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--glass-border); flex-shrink: 0;
