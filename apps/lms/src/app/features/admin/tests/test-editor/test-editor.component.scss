@@ -216,6 +216,17 @@ select.pf-input--compact {
 }
 
 /* Report Layout tab: notes vs advanced structure. */
+/* Notes & description block — always visible under the print-order list. */
+.pf-lay-notes { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--glass-border); }
+.pf-lay-notes__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+
+/* The one power-user escape hatch. Quiet link; the editor expands inline. */
+.pf-lay-advwrap { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--glass-border); }
+.pf-lay-advlink { background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--text-tertiary); transition: color .15s; }
+.pf-lay-advlink:hover { color: var(--violet-text, #a78bfa); }
+.pf-lay-advwrap pf-test-layout-editor { display: block; margin-top: 14px; }
+
 .pf-lay-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px;
   background: var(--glass-bg); border: 1px solid var(--glass-border); margin-bottom: 12px; }
 .pf-lay-switch__btn { padding: 6px 13px; border: 0; border-radius: 8px; cursor: pointer;

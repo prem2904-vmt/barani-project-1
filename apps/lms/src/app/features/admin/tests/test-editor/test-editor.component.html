@@ -46,7 +46,7 @@
       <section id="sec-identity" class="pf-te2-sec">
         <div class="pf-te2-sec__label">
           <div class="pf-te2-sec__title">Basics</div>
-          <p class="pf-te2-sec__sub">What this is and where it lives.</p>
+          <p class="pf-te2-sec__sub">The test's name, department and codes.</p>
         </div>
         <div class="pf-te2-sec__body">
           <div class="pf-te2-grid">
@@ -127,8 +127,8 @@
       <!-- 02 Pricing & handling -->
       <section id="sec-pricing" class="pf-te2-sec">
         <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Pricing &amp; sample</div>
-          <p class="pf-te2-sec__sub">Billing, turnaround and how the sample is drawn.</p>
+          <div class="pf-te2-sec__title">Price &amp; sample</div>
+          <p class="pf-te2-sec__sub">What it costs, how long it takes, and how the sample is drawn.</p>
         </div>
         <div class="pf-te2-sec__body">
           <div class="pf-te2-grid">
@@ -210,7 +210,7 @@
       <!-- 03 Result & ranges -->
       <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack">
         <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Result &amp; ranges</div>
+          <div class="pf-te2-sec__title">Result entry</div>
           <p class="pf-te2-sec__sub">What the tech enters, and what counts as normal.</p>
           @if (!draft().resultType) { <div class="pf-te2-sec__warn">! result type not set</div> }
         </div>
@@ -846,30 +846,12 @@
       <!-- 04 Report -->
       <section id="sec-layout" class="pf-te2-sec pf-te2-sec--stack">
         <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Report</div>
-          <p class="pf-te2-sec__sub">How results are laid out on the printed report.</p>
+          <div class="pf-te2-sec__title">Printed report</div>
+          <p class="pf-te2-sec__sub">What the patient's PDF shows for this test — in print order. Drag to rearrange, tap the eye to hide a line.</p>
         </div>
         <div class="pf-te2-sec__body">
           @if (d.id) {
-            <div class="pf-lay-switch">
-              <button type="button" class="pf-lay-switch__btn" [class.pf-lay-switch__btn--on]="layoutView() === 'notes'"
-                      (click)="layoutView.set('notes')">Notes &amp; description</button>
-              <button type="button" class="pf-lay-switch__btn" [class.pf-lay-switch__btn--on]="layoutView() === 'advanced'"
-                      (click)="layoutView.set('advanced')">Advanced structure</button>
-            </div>
-
-            @if (!customizingColumns()) {
-              <p class="pf-lay-cols">
-                <span class="pf-lay-cols__k">Report columns</span>
-                <span class="pf-lay-cols__v">
-                  @if (testColumnsOverride(); as o) { Custom for this {{ d.type === 'individual' ? 'test' : d.type }} — {{ columnsLabel(o) }} }
-                  @else { Uses {{ selectedDeptName() || 'department' }} columns — {{ deptColumnsLabel() || 'defaults' }} }
-                </span>
-                <button type="button" class="pf-lay-cols__a" style="background:none;border:none;cursor:pointer;" (click)="startCustomizeColumns()">
-                  {{ testColumnsOverride() ? 'Edit columns' : 'Customize' }}
-                </button>
-              </p>
-            } @else {
+            @if (customizingColumns()) {
               <div class="pf-lay-colwrap">
                 <pf-report-columns-editor [hostManaged]="true" [initialColumns]="columnsEditorSeed()"
                   [sourceColumns]="deptColumnCfg()" (stateChange)="onColumnsState($event)"></pf-report-columns-editor>
@@ -883,20 +865,39 @@
                   </pf-touch-btn>
                 </div>
               </div>
+            } @else {
+              <!-- The report, as a list, in print order — the whole surface. -->
+              <pf-report-structure
+                [testId]="d.id || ''"
+                [culture]="cultureBench()"
+                [parameters]="parameterNames()"
+                [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
+                [reloadToken]="structureReload()"
+                (customizeColumns)="startCustomizeColumns()"></pf-report-structure>
             }
 
-            @if (layoutView() === 'notes') {
+            <!-- Notes & description — the friendly per-test wording editor. -->
+            <div class="pf-lay-notes">
+              <h3 class="pf-lay-notes__title">Notes &amp; description</h3>
               <pf-test-notes-editor class="block" [fixedTestId]="d.id || ''" [hidePreview]="true"
                 [parameters]="parameterNames()" [profileMembers]="previewProfileMembers()"
                 [columnsOverride]="liveColumnsOverride()"></pf-test-notes-editor>
-            } @else {
-              <pf-test-layout-editor class="block" [testId]="d.id || ''" [departmentId]="d.departmentId || ''"
-                [culture]="cultureBench()"
-                [parameters]="parameterNames()"></pf-test-layout-editor>
-            }
+            </div>
+
+            <!-- The one escape hatch: everything power-user lives in here. -->
+            <div class="pf-lay-advwrap">
+              <button type="button" class="pf-lay-advlink" (click)="toggleAdvanced()">
+                {{ layoutAdvancedOpen() ? 'Close the advanced editor' : 'Advanced editor — conditions, cell templates, charts' }}
+              </button>
+              @if (layoutAdvancedOpen()) {
+                <pf-test-layout-editor class="block" [testId]="d.id || ''" [departmentId]="d.departmentId || ''"
+                  [culture]="cultureBench()"
+                  [parameters]="parameterNames()"></pf-test-layout-editor>
+              }
+            </div>
           } @else {
             <p class="text-[13px]" style="color: var(--text-tertiary);">
-              <strong style="color: var(--text-secondary);">Report layout</strong> — save this test first, then design how its results print.
+              <strong style="color: var(--text-secondary);">Printed report</strong> — save this test first, then arrange how its results print.
             </p>
           }
         </div>

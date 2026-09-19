@@ -31,6 +31,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitiv
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
+import { ReportStructureComponent } from '../report-structure.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
@@ -160,7 +161,7 @@ function makeEmptyDraft(): DraftTest {
     SegmentedComponent,
     SelectComponent,
     TouchButtonComponent,
-    TestLayoutEditorComponent,
+    TestLayoutEditorComponent, ReportStructureComponent,
     TestNotesEditorComponent,
     TestConsumablesComponent,
     DragDropModule,
@@ -456,7 +457,16 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return bits.join(' · ');
   }
 
-  protected readonly layoutView = signal<'notes' | 'advanced'>('notes');
+  /** The one power-user escape hatch (old sections editor), collapsed by
+   *  default; closing it reloads the simple print-order list so both stay
+   *  in sync on the same stored layout. */
+  protected readonly layoutAdvancedOpen = signal(false);
+  protected readonly structureReload = signal(0);
+  toggleAdvanced() {
+    const open = !this.layoutAdvancedOpen();
+    this.layoutAdvancedOpen.set(open);
+    if (!open) this.structureReload.update(n => n + 1);
+  }
 
   private readonly _section = signal<TestSection>('identity');
   readonly section = this._section.asReadonly();
@@ -703,10 +713,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const okFor = (sec: TestSection) => checks.filter(c => c.action === sec).every(c => c.ok);
     const nav: Array<{ id: TestSection; label: string; ok: boolean }> = [
       { id: 'identity', label: 'Basics', ok: okFor('identity') },
-      { id: 'pricing', label: 'Pricing & sample', ok: okFor('pricing') && okFor('sample') },
-      { id: 'results', label: d.type === 'individual' ? 'Result & ranges'
+      { id: 'pricing', label: 'Price & sample', ok: okFor('pricing') && okFor('sample') },
+      { id: 'results', label: d.type === 'individual' ? 'Result entry'
           : d.type === 'profile' ? 'Members' : 'Package members', ok: okFor('results') },
-      { id: 'layout', label: 'Report', ok: okFor('layout') },
+      { id: 'layout', label: 'Printed report', ok: okFor('layout') },
     ];
     if (d.type === 'individual' && this.canManageInventory())
       nav.push({ id: 'consumables', label: 'Consumables', ok: okFor('consumables') });
