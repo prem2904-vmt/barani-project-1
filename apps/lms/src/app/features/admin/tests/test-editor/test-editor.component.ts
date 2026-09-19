@@ -269,7 +269,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   createOptionList(i: number) {
     const name = this.listNameFor(i).trim();
     const values = this.rowsFor(i).filter(r => (r.value ?? '').trim());
-    if (!name) { this.toasts.warning('Give the list a name'); return; }
+    if (!name) { this.toasts.warning('Give the option group a name'); return; }
     if (values.length === 0) { this.toasts.warning('Add at least one option value'); return; }
     this.patchField(i, { optionGroupName: name });
     this._customOpt.update(m => ({ ...m, [i]: false }));

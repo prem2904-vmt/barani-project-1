@@ -282,20 +282,20 @@
           @if (isSingleValue() && entryKind() === 'choice' && fields().length === 1) {
             <div class="pf-anslist">
               <div>
-                <span class="pf-te2-h">The answer list</span>
-                <p class="pf-rr2__sub">The tech picks one of these as the result. Lists are shared across tests —
-                  pick an existing one, or create your own below.</p>
+                <span class="pf-te2-h">The answer list — an option group</span>
+                <p class="pf-rr2__sub">The tech picks one of these as the result. Option groups are shared across tests —
+                  pick an existing one, or create your own.</p>
               </div>
               <div class="flex items-center gap-2 flex-wrap">
                 <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
                            [options]="ogGroupOptions()" [searchable]="true"
                            [value]="groupForField(0)?.code ?? ''"
-                           placeholder="— pick a list —"
+                           placeholder="— pick an option group —"
                            (valueChange)="applyOptionGroup(0, $event)"></pf-select>
                 @if (!optCustom(0)) {
                   <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
                           style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                          (click)="startCustomOption(0)">+ New list</button>
+                          (click)="startCustomOption(0)">+ New option group</button>
                 }
               </div>
               @if (optLocked(0) && groupForField(0); as g) {
@@ -315,7 +315,7 @@
                 </p>
               } @else if (optCustom(0)) {
                 <div class="pf-newlist__row">
-                  <label class="pf-mini-lbl">List name</label>
+                  <label class="pf-mini-lbl">Option group name</label>
                   <input type="text" class="pf-input pf-input--compact pf-newlist__name"
                          placeholder="e.g. Urine Colour · Positive / Negative"
                          [ngModel]="listNameFor(0)" (ngModelChange)="setListName(0, $event)" />
@@ -347,12 +347,12 @@
                 </div>
                 <div class="pf-newlist__actions">
                   <button type="button" class="pf-newlist__create press" [disabled]="creatingList()"
-                          (click)="createOptionList(0)">{{ creatingList() ? 'Creating…' : 'Create list' }}</button>
+                          (click)="createOptionList(0)">{{ creatingList() ? 'Creating…' : 'Create option group' }}</button>
                   <button type="button" class="pf-newlist__cancel press" (click)="cancelCustomOption(0)">Cancel</button>
-                  <span class="pf-newlist__hint">Creates the shared list under Test Master → Option groups and maps it to this test.</span>
+                  <span class="pf-newlist__hint">Creates the option group under Test Master → Option groups and maps it to this test.</span>
                 </div>
               } @else {
-                <p class="pf-anslist__idle">Pick a shared list above — or “+ New list” to author your own.</p>
+                <p class="pf-anslist__idle">Pick an option group above — or “+ New option group” to author your own.</p>
               }
             </div>
           }
