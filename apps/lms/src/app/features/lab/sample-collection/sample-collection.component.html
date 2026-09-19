@@ -145,29 +145,7 @@
             <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
           </div>
 
-          <!-- Sample source: Internal (default — the normal draw flow) vs
-               External (the specimen was brought in from outside: the draw is
-               skipped, every pending tube jumps to collected, and the footer
-               opens Dispatch/Done straight away). -->
-          <div class="pf-drawer__source" role="group" aria-label="Sample source">
-            <span class="pf-drawer__source-lbl">Sample source</span>
-            <div class="pf-drawer__source-seg">
-              <button type="button" class="pf-drawer__source-btn"
-                      [class.pf-drawer__source-btn--on]="sourceOf(g) === 'internal'"
-                      [disabled]="sourceBusy() || isDispatched(g)"
-                      (click)="setSource(g, 'internal')">Internal</button>
-              <button type="button" class="pf-drawer__source-btn"
-                      [class.pf-drawer__source-btn--on]="sourceOf(g) === 'external'"
-                      [disabled]="sourceBusy() || isDispatched(g)"
-                      (click)="setSource(g, 'external')">External</button>
-            </div>
-          </div>
-
-          @if (sourceOf(g) === 'external') {
-            <p class="pf-drawer__hint">Brought-in specimen — the draw is skipped and every tube is marked collected. Dispatch or Done when ready.</p>
-          } @else {
-            <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
-          }
+          <p class="pf-drawer__hint">Tap each vial as you draw it — or mark a brought-in specimen as External to skip its draw. When every vial is done, the order completes automatically.</p>
 
           <div class="pf-drawer__tubes">
             @for (s of orderedSamples(g); track s.id) {
@@ -434,6 +412,15 @@
                       @if (s.status === 'collected') { {{ s.collectedAt | date:'shortTime' }} }
                       @else { Dispatched }
                     </span>
+                    <!-- Brought-in tube: the External tag doubles as undo
+                         while the tube hasn't left the counter. -->
+                    @if (s.source === 'external') {
+                      <button type="button" class="pf-tube__ext pf-tube__ext--on"
+                              [disabled]="sourceBusy()"
+                              (pointerdown)="$event.stopPropagation()"
+                              (click)="toggleExternal(s, $event)"
+                              title="Brought-in specimen — tap to undo">External · undo</button>
+                    }
                   } @else {
                     <!-- Pending: series tubes carry their schedule state;
                          normal tubes keep the classic "Tap when drawn". -->
@@ -457,6 +444,17 @@
                       @default {
                         <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
                       }
+                    }
+                    <!-- Per-tube External mark: THIS specimen was brought in
+                         from outside — one tap collects it as brought-in with
+                         no draw (an order routinely has one walked-in sample
+                         among several in-house tubes). -->
+                    @if (dispatchSelect() === null && tubeState(s).kind !== 'locked') {
+                      <button type="button" class="pf-tube__ext"
+                              [disabled]="sourceBusy()"
+                              (pointerdown)="$event.stopPropagation()"
+                              (click)="toggleExternal(s, $event)"
+                              title="Mark as brought-in from outside — skips the draw">External</button>
                     }
                   }
                 </div>

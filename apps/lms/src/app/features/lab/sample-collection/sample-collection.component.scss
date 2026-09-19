@@ -292,34 +292,36 @@
       text-align: center;
     }
 
-    /* Sample source segmented toggle (Internal | External). */
-    .pf-drawer__source {
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-      margin-top: 16px;
+    /* Per-tube External mark — a small pill under the tube's stamp. Ghost
+     * (dashed) while unmarked; filled violet once the tube is brought-in
+     * (then it doubles as the undo). */
+    .pf-tube__ext {
+      margin-top: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--text-tertiary);
+      border: 1px dashed var(--glass-border, rgba(255, 255, 255, 0.2));
+      cursor: pointer;
+      transition: color .15s, border-color .15s, background .15s;
     }
-    .pf-drawer__source-lbl {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; color: var(--text-tertiary);
-    }
-    .pf-drawer__source-seg {
-      display: inline-flex; padding: 3px; border-radius: 10px;
-      background: var(--glass-bg, rgba(255,255,255,.04));
-      border: 1px solid var(--glass-border, rgba(255,255,255,.1));
-    }
-    .pf-drawer__source-btn {
-      height: 30px; padding: 0 16px; border: 0; border-radius: 8px;
-      background: transparent; color: var(--text-secondary);
-      font-size: 12.5px; font-weight: 600; cursor: pointer;
-      transition: background .15s, color .15s;
-    }
-    .pf-drawer__source-btn--on {
-      background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #ec4899));
-      color: #fff;
-    }
-    .pf-drawer__source-btn:disabled { opacity: .55; cursor: default; }
     @media (hover: hover) {
-      .pf-drawer__source-btn:not(.pf-drawer__source-btn--on):not(:disabled):hover { color: var(--text-primary); }
+      .pf-tube__ext:not(:disabled):hover {
+        color: var(--text-primary);
+        border-color: var(--violet-500, #8b5cf6);
+      }
     }
+    .pf-tube__ext--on {
+      border-style: solid;
+      color: var(--violet-text, #c4b5fd);
+      border-color: rgba(168, 85, 247, 0.45);
+      background: rgba(168, 85, 247, 0.12);
+    }
+    .pf-tube__ext:disabled { opacity: .55; cursor: default; }
 
     /* Tubes sit in a centred track. For 1-4 vials we use flex so they
      * genuinely centre across the screen instead of hugging the left column

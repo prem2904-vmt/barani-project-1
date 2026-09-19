@@ -409,39 +409,39 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return isOrderDispatched(g.samples);
   }
 
-  /** Sample source (order-level). External = the specimen was brought in
-   *  from outside: the draw is skipped and every pending tube jumps to
-   *  'collected' (server-marked brought-in) so Dispatch/Done opens up
-   *  immediately. Derived from the tubes so it survives refetches. */
-  sourceOf(g: OrderGroup): "internal" | "external" {
-    return g.samples.some((s) => s.source === "external")
-      ? "external"
-      : "internal";
-  }
+  /** Per-tube External mark: THIS tube was brought in from outside — one
+   *  tap collects it as brought-in (no draw, full collect machine on the
+   *  server incl. auto-receive workflows); tapping the mark again reverts
+   *  while the tube hasn't moved past the counter. Per-tube on purpose: an
+   *  order routinely has one walked-in specimen among several draws. */
   private readonly _sourceBusy = signal(false);
   readonly sourceBusy = this._sourceBusy.asReadonly();
-  async setSource(g: OrderGroup, source: "internal" | "external") {
-    if (this._sourceBusy() || this.sourceOf(g) === source || this.isDispatched(g)) return;
+  async toggleExternal(s: OrderSample, ev: Event) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    if (this._sourceBusy()) return;
+    const source = s.source === "external" ? "internal" : "external";
     this._sourceBusy.set(true);
     try {
-      await firstValueFrom(
-        this.api.patch(`/api/orders/${g.orderId}/sample-source`, { source }),
+      const updated = await firstValueFrom(
+        this.api.patch<OrderSample>(`/api/samples/${s.id}/source`, { source }),
       );
+      // Trust the server's resulting state (auto-receive workflows may land
+      // the tube on 'received' rather than 'collected').
       this._pending.update((list) =>
-        list.map((s) => {
-          if (s.orderId !== g.orderId) return s;
-          if (source === "external" && s.status === "pending")
-            return { ...s, status: "collected", source: "external" };
-          if (source === "internal" && s.status === "collected" && s.source === "external")
-            return { ...s, status: "pending", source: null };
-          return s;
-        }),
+        list.map((x) =>
+          x.id === s.id
+            ? { ...x, status: updated?.status ?? x.status, source: updated?.source ?? null,
+                collectedAt: updated?.collectedAt ?? undefined }
+            : x,
+        ),
       );
       this.toasts.success(
         source === "external"
-          ? "Marked brought-in — collection skipped"
-          : "Back to in-house collection",
+          ? "Marked External — no draw needed"
+          : "Back to in-house draw",
       );
+      if (source === "external") this.sampleCollected.emit();
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
