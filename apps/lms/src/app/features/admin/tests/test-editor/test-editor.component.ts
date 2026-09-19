@@ -480,12 +480,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   /** Rail click: highlight + smooth-scroll the section's card into view. */
   jumpToSection(v: TestSection) {
+    // One task at a time: the rail switches the WORKSPACE, it doesn't scroll
+    // a long page. Top of the section on every switch.
     this._section.set(v);
     this.ensureLayoutData();
-    if (typeof document !== 'undefined') {
-      if (typeof performance !== 'undefined') this._suppressSpyUntil = performance.now() + 700;
-      document.getElementById('sec-' + v)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   private _layoutLoaded = false;
   /** The Report-layout columns used to lazy-load on that tab; on one page the
@@ -1255,29 +1254,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Scroll-spy: highlight the rail item whose section card is at the top. */
-  private _spy: IntersectionObserver | null = null;
-  private _suppressSpyUntil = 0;
-  ngAfterViewInit(): void {
-    if (typeof IntersectionObserver === 'undefined' || typeof document === 'undefined') return;
-    this._spy = new IntersectionObserver(entries => {
-      // Ignore spy updates briefly after a click-jump so the tap wins.
-      if (performance.now() < this._suppressSpyUntil) return;
-      const onScreen = entries.filter(e => e.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      const top = onScreen[0]?.target?.id;
-      if (top && top.startsWith('sec-')) this._section.set(top.slice(4) as TestSection);
-    }, { rootMargin: '-96px 0px -60% 0px', threshold: 0 });
-    // Anchors render/re-render with data; observe on the next frame and re-scan lazily.
-    const scan = () => {
-      if (!this._spy) return;
-      for (const el of Array.from(document.querySelectorAll('[id^="sec-"]'))) this._spy.observe(el);
-    };
-    requestAnimationFrame(scan);
-    setTimeout(scan, 400);
-  }
+  // (The old scroll-spy is gone: the rail now switches the workspace to one
+  //  section at a time, so there is nothing to spy on.)
+  ngAfterViewInit(): void { /* workspace tabs need no post-render wiring */ }
   ngOnDestroy(): void {
-    this._spy?.disconnect(); this._spy = null;
     if (this._previewTimer) { clearTimeout(this._previewTimer); this._previewTimer = null; }
   }
 

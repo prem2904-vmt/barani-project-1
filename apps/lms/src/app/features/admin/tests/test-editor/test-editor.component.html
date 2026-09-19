@@ -30,19 +30,24 @@
     </div>
   </header>
 
-  <nav class="pf-te2-nav" aria-label="Sections">
-    @for (s of sectionNav(); track s.id) {
-      <button type="button" class="pf-te2-nav__link press" (click)="jumpToSection(s.id)">
-        <span class="pf-te2-nav__dot" [class.pf-te2-nav__dot--ok]="s.ok"></span>{{ s.label }}
-      </button>
-    }
-  </nav>
-
   <div class="pf-te2">
-    <!-- ═══════════════════════════ Main column ═══════════════════════════ -->
+    <!-- ═══════════ Section rail: one task at a time ═══════════ -->
+    <nav class="pf-te2-nav" aria-label="Sections">
+      @for (s of sectionNav(); track s.id) {
+        <button type="button" class="pf-te2-nav__link press"
+                [class.pf-te2-nav__link--on]="section() === s.id"
+                [attr.aria-current]="section() === s.id ? 'true' : null"
+                (click)="jumpToSection(s.id)">
+          <span class="pf-te2-nav__dot" [class.pf-te2-nav__dot--ok]="s.ok"></span>{{ s.label }}
+        </button>
+      }
+    </nav>
+
+    <!-- ═══════════════════════════ Workspace ═══════════════════════════ -->
     <div class="pf-te2-main">
 
-      <!-- 01 Basics -->
+      @if (section() === 'identity') {
+<!-- 01 Basics -->
       <section id="sec-identity" class="pf-te2-sec">
         <div class="pf-te2-sec__label">
           <div class="pf-te2-sec__title">Basics</div>
@@ -123,8 +128,10 @@
           </div>
         </div>
       </section>
+      }
 
-      <!-- 02 Pricing & handling -->
+      @if (section() === 'pricing') {
+<!-- 02 Pricing & handling -->
       <section id="sec-pricing" class="pf-te2-sec">
         <div class="pf-te2-sec__label">
           <div class="pf-te2-sec__title">Price &amp; sample</div>
@@ -205,7 +212,9 @@
           }
         </div>
       </section>
+      }
 
+      @if (section() === 'results') {
       @if (d.type === 'individual') {
       <!-- 03 Result & ranges -->
       <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack">
@@ -842,7 +851,9 @@
         </div>
       </section>
       }
+      }
 
+      @if (section() === 'layout') {
       <!-- 04 Report -->
       <section id="sec-layout" class="pf-te2-sec pf-te2-sec--stack">
         <div class="pf-te2-sec__label">
@@ -902,9 +913,10 @@
           }
         </div>
       </section>
+      }
 
       <!-- 05 Consumables -->
-      @if (d.type === 'individual' && canManageInventory()) {
+      @if (section() === 'consumables' && d.type === 'individual' && canManageInventory()) {
       <section id="sec-consumables" class="pf-te2-sec pf-te2-sec--stack">
         <div class="pf-te2-sec__label">
           <div class="pf-te2-sec__title">Consumables</div>
