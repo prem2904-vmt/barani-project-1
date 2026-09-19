@@ -440,8 +440,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly rangeGridTheme = computed(() =>
     (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight)
       .withParams({ rowHeight: 48, headerHeight: 42, cellHorizontalPadding: 14 }));
-  /** Row view-model: one reference band per row, editable in place. */
-  rangeRows(): Array<Record<string, unknown>> {
+  /** Row view-model: one reference band per row, editable in place.
+   *  MUST be a computed — a method here returns a fresh array every change
+   *  detection pass, which makes AG-Grid reset its rows and instantly close
+   *  any editor that tries to open (the click looks dead). */
+  readonly rangeRows = computed<Array<Record<string, unknown>>>(() => {
     const p = this.firstNumericField();
     if (!p) return [];
     const i = this.fields().indexOf(p);
@@ -454,7 +457,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
       prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
     }));
-  }
+  });
+  /** Stable row identity so edits survive row-data refreshes. */
+  readonly rangeRowId = (p: { data: { ri: number } }) => String(p.data.ri);
   readonly rangeDefaultColDef: ColDef = {
     editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
   };
