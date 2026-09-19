@@ -76,6 +76,11 @@ interface Breakpoint {
           @for (org of m().organisms ?? []; track oi; let oi = $index) {
           <section class="ce-org">
             <header class="ce-org__head">
+              @if (rhOn()) {
+                <input type="checkbox" class="ce-rh" [checked]="isShown('org:' + oi)"
+                       (change)="toggleShown('org:' + oi)"
+                       title="Print this organism on the report (unticked = hidden on the PDF only)" />
+              }
               @if (embedded) {
                 <!-- Identification owns WHICH organisms — here they are read-only. -->
                 <span class="ce-org__name">{{ org.name || 'Organism' }}</span>
@@ -139,6 +144,11 @@ interface Breakpoint {
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__namewrap">
+                    @if (rhOn()) {
+                      <input type="checkbox" class="ce-rh" [checked]="isShown('ast:' + oi + ':' + ab.name)"
+                             (change)="toggleShown('ast:' + oi + ':' + ab.name)"
+                             title="Print this antibiotic on the report (unticked = hidden on the PDF only)" />
+                    }
                     <span class="ce-abx__name">{{ ab.name }}</span>
                     @if (micRef(org.name, ab); as m) {
                       <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
@@ -275,22 +285,46 @@ interface Breakpoint {
 
       <!-- Notes -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1">
-          <span class="pf-label">Resistance pattern</span>
+        <div class="flex flex-col gap-1">
+          <span class="pf-label flex items-center gap-2">
+            @if (rhOn()) {
+              <input type="checkbox" class="ce-rh" [checked]="isShown('resistancePattern')"
+                     (change)="toggleShown('resistancePattern')" title="Print on the report (unticked = hidden on the PDF only)" />
+            }
+            Resistance pattern
+          </span>
           <textarea rows="2" class="pf-input" [ngModel]="m().resistancePattern" (ngModelChange)="patch({ resistancePattern: $event })"></textarea>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="pf-label">Intrinsic resistance</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="pf-label flex items-center gap-2">
+            @if (rhOn()) {
+              <input type="checkbox" class="ce-rh" [checked]="isShown('intrinsicResistance')"
+                     (change)="toggleShown('intrinsicResistance')" title="Print on the report (unticked = hidden on the PDF only)" />
+            }
+            Intrinsic resistance
+          </span>
           <textarea rows="2" class="pf-input" [ngModel]="m().intrinsicResistance" (ngModelChange)="patch({ intrinsicResistance: $event })"></textarea>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="pf-label">Clinical notes</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="pf-label flex items-center gap-2">
+            @if (rhOn()) {
+              <input type="checkbox" class="ce-rh" [checked]="isShown('clinicalNotes')"
+                     (change)="toggleShown('clinicalNotes')" title="Print on the report (unticked = hidden on the PDF only)" />
+            }
+            Clinical notes
+          </span>
           <textarea rows="2" class="pf-input" [ngModel]="m().clinicalNotes" (ngModelChange)="patch({ clinicalNotes: $event })"></textarea>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="pf-label">Infection control advice</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="pf-label flex items-center gap-2">
+            @if (rhOn()) {
+              <input type="checkbox" class="ce-rh" [checked]="isShown('infectionControlAdvice')"
+                     (change)="toggleShown('infectionControlAdvice')" title="Print on the report (unticked = hidden on the PDF only)" />
+            }
+            Infection control advice
+          </span>
           <textarea rows="2" class="pf-input" [ngModel]="m().infectionControlAdvice" (ngModelChange)="patch({ infectionControlAdvice: $event })"></textarea>
-        </label>
+        </div>
       </div>
 
       @if (measureOrg() !== null) {
@@ -399,6 +433,10 @@ interface Breakpoint {
     .ce-org__modetgl button { padding: 6px 11px; font-size: 10.5px; }
     /* Read-only review: same view, nothing editable. */
     .ce--ro input, .ce--ro textarea, .ce--ro button, .ce--ro pf-select, .ce--ro pf-touch-btn { pointer-events: none; }
+    /* Report-row checkboxes stay live even in readonly review — hiding a row
+       from the PDF is a review action, not a result edit. */
+    .ce--ro .ce-rh { pointer-events: auto; }
+    .ce-rh { width: 15px; height: 15px; accent-color: #8b5cf6; flex-shrink: 0; cursor: pointer; }
     .ce--ro .ce-abx__addrow, .ce--ro .ce-abx__x, .ce--ro .ce-org__measure, .ce--ro pf-touch-btn { display: none; }
     .ce-modebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 4px; }
     .ce-modebar__lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
@@ -447,6 +485,17 @@ export class CultureEntryComponent implements OnInit {
   @Input() embedded = false;
   /** Review mode (validation screen): the exact bench view, nothing editable. */
   @Input() readonly = false;
+  /** Report-row visibility (PDF-only hiding; bench data untouched). Keys the
+   *  parent has hidden — null = feature OFF (no checkboxes rendered). The
+   *  parent owns persistence (culture case report-hidden endpoint). */
+  @Input() reportHidden: string[] | null = null;
+  @Output() reportHiddenChange = new EventEmitter<string[]>();
+  rhOn(): boolean { return this.reportHidden !== null; }
+  isShown(key: string): boolean { return !(this.reportHidden ?? []).includes(key); }
+  toggleShown(key: string) {
+    const cur = this.reportHidden ?? [];
+    this.reportHiddenChange.emit(cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key]);
+  }
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly platform = inject(PlatformService);

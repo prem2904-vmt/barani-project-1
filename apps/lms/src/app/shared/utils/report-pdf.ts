@@ -2908,6 +2908,10 @@ function renderCultureSection(
   y += 26;
 
   const c = (t.result?.['values'] as PdfCulture | undefined) ?? {};
+  // Report-row visibility: keys the lab unticked at the bench / sign-out are
+  // hidden on the PATIENT PDF only — the bench record keeps everything.
+  const hiddenList = (t.result?.['hidden'] as string[] | undefined) ?? [];
+  const isRowHidden = (k: string): boolean => hiddenList.includes(k);
 
   const line = (label: string, value?: string): void => {
     if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
@@ -2920,8 +2924,8 @@ function renderCultureSection(
   };
 
   line('Specimen', c.specimen || (t.sampleType ?? ''));
-  line('Gram stain', c.gramStain);
-  line('Colony count', c.colonyCount);
+  if (!isRowHidden('gramStain')) line('Gram stain', c.gramStain);
+  if (!isRowHidden('colonyCount')) line('Colony count', c.colonyCount);
 
   if (c.noGrowth) {
     line('Result', 'No growth after 48 hours of aerobic incubation.');
@@ -2931,10 +2935,14 @@ function renderCultureSection(
   // Keep any organism that is named OR carries antibiotic data. A tech may
   // fill the whole sensitivity panel before naming the isolate — we must
   // never silently drop measured results and mislabel them "no growth".
-  const organisms = (c.organisms ?? []).filter(o =>
-    (o.name ?? '').trim() || (o.antibiotics ?? []).some(a => (a.name ?? '').trim()));
+  // Hidden keys use the ORIGINAL index (the bench's checkbox keys), while
+  // the printed numbering stays sequential over what actually prints.
+  const organisms = (c.organisms ?? [])
+    .map((o, i) => ({ o, i }))
+    .filter(({ o, i }) => !isRowHidden(`org:${i}`)
+      && ((o.name ?? '').trim() || (o.antibiotics ?? []).some(a => (a.name ?? '').trim())));
   const orgLabel = (o: PdfOrganism, i: number): string => (o.name ?? '').trim() || `Isolate ${i + 1}`;
-  const names = organisms.map((o, i) => `${i + 1}. ${orgLabel(o, i)}`).join('   ');
+  const names = organisms.map(({ o }, n) => `${n + 1}. ${orgLabel(o, n)}`).join('   ');
   line('Organism(s) isolated', names || 'No significant growth');
 
   const interpWord = (v?: string): { txt: string; color: string } => {
@@ -2946,10 +2954,10 @@ function renderCultureSection(
   };
 
   for (let idx = 0; idx < organisms.length; idx++) {
-    const org = organisms[idx];
+    const { o: org, i: origIdx } = organisms[idx];
     if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
     const rows = (org.antibiotics ?? [])
-      .filter(a => (a.name ?? '').trim())
+      .filter(a => (a.name ?? '').trim() && !isRowHidden(`ast:${origIdx}:${a.name}`))
       .map(a => {
         const w = interpWord(a.interpretation);
         return [
@@ -2991,10 +2999,10 @@ function renderCultureSection(
   });
   y += 4;
 
-  line('Resistance pattern', c.resistancePattern);
-  line('Intrinsic resistance', c.intrinsicResistance);
-  line('Clinical notes', c.clinicalNotes);
-  line('Infection control advice', c.infectionControlAdvice);
+  if (!isRowHidden('resistancePattern')) line('Resistance pattern', c.resistancePattern);
+  if (!isRowHidden('intrinsicResistance')) line('Intrinsic resistance', c.intrinsicResistance);
+  if (!isRowHidden('clinicalNotes')) line('Clinical notes', c.clinicalNotes);
+  if (!isRowHidden('infectionControlAdvice')) line('Infection control advice', c.infectionControlAdvice);
   return y;
 }
 

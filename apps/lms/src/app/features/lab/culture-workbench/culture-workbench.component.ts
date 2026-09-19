@@ -13,6 +13,7 @@ import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { DialogService } from '../../../core/services/dialog.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -220,6 +221,8 @@ interface StageField { name: string; title: string; type: string; options: strin
                         <div class="pf-cse__astwrap">
                           <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
                                             [seedOrganisms]="identifiedOrganisms()" [embedded]="true"
+                                            [reportHidden]="reportHidden()"
+                                            (reportHiddenChange)="setReportHidden($event)"
                                             (valueChange)="astValue.set($event)"></pf-culture-entry>
                         </div>
                       }
@@ -894,10 +897,22 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.api.get<CultureCaseView>(`/api/microbiology/culture/${this.id}`).subscribe({
       next: c => {
         this.c.set(c ?? null);
+        this.reportHidden.set(c?.reportHidden ?? []);
         this.rehydrateBranch();
         this.loading.set(false);
       },
       error: () => { this.loading.set(false); },
+    });
+  }
+
+  /** Report-row visibility (checkboxes in the AST editor): unticked rows are
+   *  hidden on the patient PDF only — the bench record is untouched. */
+  readonly reportHidden = signal<string[]>([]);
+  setReportHidden(keys: string[]) {
+    this.reportHidden.set(keys); // optimistic — the PUT reconciles below
+    this.api.put<{ hidden: string[] }>(`/api/microbiology/culture/${this.id}/report-hidden`, { keys }).subscribe({
+      next: r => { if (r?.hidden) this.reportHidden.set(r.hidden); },
+      error: e => this.toasts.error(ApiError.from(e).message),
     });
   }
 

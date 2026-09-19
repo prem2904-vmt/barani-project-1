@@ -218,9 +218,14 @@ interface ValueRow {
                               @if (cultureEditing() && !sg.caseId && selected()?.id === st.id) {
                                 <!-- THE lab entry screen, live — zones, cutoffs,
                                      S/I/R, reading mode all editable. -->
-                                <pf-culture-entry [embedded]="true" [value]="astDraft()" (valueChange)="astDraft.set($event)" />
+                                <pf-culture-entry [embedded]="true" [value]="astDraft()"
+                                                  [reportHidden]="cultureHiddenFor(st)"
+                                                  (reportHiddenChange)="setCultureHidden(st, $event)"
+                                                  (valueChange)="astDraft.set($event)" />
                               } @else {
-                                <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)" />
+                                <pf-culture-entry [embedded]="true" [readonly]="true" [value]="$any(sg.values)"
+                                                  [reportHidden]="!sg.caseId ? cultureHiddenFor(st) : null"
+                                                  (reportHiddenChange)="setCultureHidden(st, $event)" />
                               }
                             } @else {
                               @if (cultureEditing() && selected()?.id === st.id && schemaFor(sg.key); as sch) {
@@ -310,7 +315,9 @@ interface ValueRow {
                           @if ((cr.organisms ?? []).length) {
                             <div class="pf-cstage">
                               <h3 class="pf-cstage__name">Antibiotic sensitivity</h3>
-                              <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr" />
+                              <pf-culture-entry [embedded]="true" [readonly]="true" [value]="cr"
+                                                [reportHidden]="cultureHiddenFor(st)"
+                                                (reportHiddenChange)="setCultureHidden(st, $event)" />
                             </div>
                           } @else if (!cr.noGrowth) {
                             <p class="pf-culture-empty">No organisms recorded.</p>
@@ -1419,6 +1426,26 @@ export class ValidateResultComponent implements OnInit {
     return (this.snapshotFor(t)?.values as CultureResult) ?? null;
   }
   readonly cultureResult = computed<CultureResult | null>(() => this.cultureResultFor(this._selected()));
+
+  // ── Report-row visibility (culture): unticked rows are hidden on the
+  //    patient PDF only — the bench record and this review stay complete.
+  //    Initial state rides the sign-out snapshot's hidden[]; a toggle PUTs
+  //    the full list and the server refreshes the snapshot. ──
+  private readonly _cultureHidden = signal<Record<string, string[]>>({});
+  cultureHiddenFor(t: OrderTest | null): string[] {
+    if (!t) return [];
+    const local = this._cultureHidden()[t.id];
+    if (local) return local;
+    const snap = this.snapshotFor(t) as (ResultSnapshot & { hidden?: string[] }) | null;
+    return snap?.hidden ?? [];
+  }
+  setCultureHidden(t: OrderTest | null, keys: string[]) {
+    if (!t) return;
+    this._cultureHidden.update(m => ({ ...m, [t.id]: keys }));
+    this.api.put(`/api/microbiology/culture/${t.id}/report-hidden`, { keys }).subscribe({
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
+  }
 
   // ── Validator corrects the culture result IN PLACE — the same lab entry
   //    screens, saved through the amend endpoint with edit provenance. ──

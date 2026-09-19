@@ -29,6 +29,8 @@ export interface CultureCaseView {
    *  carries every subculture flat in subCultures. */
   id?: string | null;
   parentCaseId?: string | null;
+  /** Report-row keys hidden on the patient PDF (bench data unaffected). */
+  reportHidden?: string[] | null;
   label?: string | null;
   subCultures?: CultureCaseView[] | null;
   /** CASE-LEVEL incubation reference timer (never a lock). */
