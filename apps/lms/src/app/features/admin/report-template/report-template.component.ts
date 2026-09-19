@@ -1372,7 +1372,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
           this.seedPatientColsFromTemplate();
         }
       },
-      error: () => { this.patientScope.set('default'); this.deptPatientConfigured.set(false); this.initPatientCols(); },
+      error: (e: ApiError) => {
+        // Snap back to a safe state, but LOUDLY — a silent revert reads as
+        // "the switch does nothing" (it did, against an mw without this
+        // endpoint).
+        this.patientScope.set('default');
+        this.deptPatientConfigured.set(false);
+        this.initPatientCols();
+        this.toasts.error(e?.message || 'Could not load that department\'s strip — is the server up to date?');
+      },
     });
   }
 
