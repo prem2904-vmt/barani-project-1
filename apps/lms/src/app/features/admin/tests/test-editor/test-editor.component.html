@@ -413,68 +413,22 @@
                 }
               </div>
             } @else if (numericFields().length === 1) {
-              <!-- Full-width range rows: who · age · normal — one row per group. -->
-              <div class="pf-rt3">
-                <div class="pf-rt3__head">
-                  <span>Who</span><span>Age</span><span>Normal from</span><span>Normal to</span><span>On the report</span><span></span>
-                </div>
-                @for (s of rangeSentences(); track s.ri) {
-                  @if (rangeAt(s.i, s.ri); as r) {
-                    <div class="pf-rt3__row">
-                      <div class="pf-rt3__cell">
-                        <pf-select [options]="rangeSexOptions" [value]="r.sex ?? 'any'"
-                                   (valueChange)="patchRangeAt(s.i, s.ri, { sex: $any($event) })"></pf-select>
-                      </div>
-                      <div class="pf-rt3__cell pf-rt3__cell--age">
-                        <pf-select [options]="agePresetOptions()" [value]="agePresetFor(s.i, s.ri)"
-                                   (valueChange)="setAgePreset(s.i, s.ri, $any($event))"></pf-select>
-                        @if (agePresetFor(s.i, s.ri) === 'custom') {
-                          <div class="pf-rt3__agecustom">
-                            <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-rt3__agein" placeholder="from"
-                                   [ngModel]="r.minAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { minAge: toNum($event) })" />
-                            <span class="pf-rt3__w">to</span>
-                            <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-rt3__agein" placeholder="any"
-                                   [ngModel]="r.maxAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { maxAge: toNum($event) })" />
-                            <pf-select size="sm" [options]="ageUnitOptions" [value]="r.ageUnit ?? 'years'"
-                                       (valueChange)="patchRangeAt(s.i, s.ri, { ageUnit: $any($event) })"></pf-select>
-                          </div>
-                        }
-                      </div>
-                      <div class="pf-rt3__cell">
-                        <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="no low"
-                               [ngModel]="r.min" (ngModelChange)="patchRangeAt(s.i, s.ri, { min: toNum($event) })" />
-                      </div>
-                      <div class="pf-rt3__cell pf-rt3__cell--to">
-                        <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="no high"
-                               [ngModel]="r.max" (ngModelChange)="patchRangeAt(s.i, s.ri, { max: toNum($event) })" />
-                        @if (rangeUnitFor(s.i)) { <span class="pf-rt3__unit">{{ rangeUnitFor(s.i) }}</span> }
-                      </div>
-                      <div class="pf-rt3__cell pf-rt3__prints">
-                        @if (r.min != null || r.max != null) { “{{ s.prints }}” }
-                        @else { <span class="pf-rt3__todo">enter the limits</span> }
-                      </div>
-                      <button type="button" class="pf-rt3__x press" title="Remove this range" (click)="removeRange(s.i, s.ri)">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                      </button>
-                    </div>
-                  }
-                }
+              <!-- The range GRID — Test Master's AG-Grid language: one band per
+                   row, everything editable in place, criticals per sex/age. -->
+              <div class="pf-rrgrid-wrap">
+                <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
+                  [rowData]="rangeRows()" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
+                  domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
+                  (cellValueChanged)="onRangeCellChanged($event)"
+                  (cellClicked)="onRangeCellClicked($event)">
+                </ag-grid-angular>
                 <div class="pf-rt3__foot">
                   <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
                 </div>
-
-                <!-- Critical alarm — same table language, one row. -->
-                <div class="pf-rt3__crit">
-                  <span class="pf-rt3__critlbl">Critical alarm</span>
-                  <span class="pf-rt3__w">below</span>
-                  <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="—"
-                         [ngModel]="d.criticalLow" (ngModelChange)="patch({ criticalLow: toNum($event) })" />
-                  <span class="pf-rt3__w">or above</span>
-                  <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="—"
-                         [ngModel]="d.criticalHigh" (ngModelChange)="patch({ criticalHigh: toNum($event) })" />
-                  @if (d.unit) { <span class="pf-rt3__unit">{{ d.unit }}</span> }
-                  <span class="pf-rt3__crithint">turns the entry red and flags the result critical — not printed</span>
-                </div>
+                @if (d.criticalLow != null || d.criticalHigh != null) {
+                  <p class="pf-rrgrid__fallback">Rows without their own criticals use the test-wide alarm:
+                    below {{ d.criticalLow ?? '—' }} / above {{ d.criticalHigh ?? '—' }}{{ d.unit ? ' ' + d.unit : '' }}.</p>
+                }
               </div>
             } @else {
               <!-- Several numeric values (a panel): each value gets its own

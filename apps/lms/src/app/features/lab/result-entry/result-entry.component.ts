@@ -3347,13 +3347,18 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const v = parseFloat(String(raw));
     if (Number.isNaN(v)) return null;
 
-    if (p.criticalLow  !== undefined && v < p.criticalLow)  return { tone: 'critical', label: `Critical · below ${p.criticalLow}` };
-    if (p.criticalHigh !== undefined && v > p.criticalHigh) return { tone: 'critical', label: `Critical · above ${p.criticalHigh}` };
+    // Band-scoped criticals win (they follow the patient's sex/age group);
+    // the parameter-level pair is the fallback — mirrors mw flagging.
+    const band = this.rangeFor(p);
+    const critLow  = band?.criticalLow  ?? p.criticalLow;
+    const critHigh = band?.criticalHigh ?? p.criticalHigh;
+    if (critLow  != null && v < critLow)  return { tone: 'critical', label: `Critical · below ${critLow}` };
+    if (critHigh != null && v > critHigh) return { tone: 'critical', label: `Critical · above ${critHigh}` };
 
     // Shared flag rule (mirrors mw FlagOne): flags when EITHER bound exists,
     // so one-sided bands ("< 140", "≥ 40") finally flag instead of passing
     // everything through silently.
-    const fl = flagAgainst(this.rangeFor(p), v);
+    const fl = flagAgainst(band, v);
     if (fl === 'L') return { tone: 'low',  label: 'Low' };
     if (fl === 'H') return { tone: 'high', label: 'High' };
     if (fl === 'N') return { tone: 'normal', label: 'Normal' };

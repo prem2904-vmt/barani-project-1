@@ -122,6 +122,11 @@ export interface ReferenceRange {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
+  /** Band-scoped panic limits — critical low/high FOR THIS sex/age group
+   *  (owner's model, 2026-09-19: criticals depend on gender and age).
+   *  Absent = fall back to the parameter-level criticalLow/High. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
   /** Profile-scoped band (body fluids): only applies when the test is entered
    *  or reported UNDER the profile with this test code (e.g. CSF analysis).
    *  Mirrors mw `RangeDef.ProfileCode`. */

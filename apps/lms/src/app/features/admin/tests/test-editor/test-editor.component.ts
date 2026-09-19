@@ -28,6 +28,12 @@ import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } fr
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, ModuleRegistry } from 'ag-grid-community';
+import { ThemeService } from '../../../../core/services/theme.service';
+import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
@@ -152,6 +158,7 @@ function makeEmptyDraft(): DraftTest {
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
+    AgGridAngular,
     FormsModule,
     CurrencyInrPipe,
     NumberInputComponent,
@@ -426,20 +433,67 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'text',   label: 'Free text — a written finding' },
   ];
   readonly isSingleValue = computed(() => this.fields().length <= 1);
-  readonly rangeSexOptions: PfSelectOption<string>[] = [
-    { value: 'any', label: 'Everyone' },
-    { value: 'M',   label: 'Men' },
-    { value: 'F',   label: 'Women' },
+
+  // ── Reference-range GRID (Test Master's AG-Grid language) ──────────
+  private readonly themeSvc = inject(ThemeService);
+  readonly rangeGridTheme = computed(() => (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight));
+  /** Row view-model: one reference band per row, editable in place. */
+  rangeRows(): Array<Record<string, unknown>> {
+    const p = this.firstNumericField();
+    if (!p) return [];
+    const i = this.fields().indexOf(p);
+    return (p.referenceRanges ?? []).map((r, ri) => ({
+      i, ri,
+      sex: r.sex ?? 'any',
+      agePreset: this.agePresetFor(i, ri),
+      minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
+      min: r.min ?? null, max: r.max ?? null,
+      criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
+      prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
+    }));
+  }
+  readonly rangeDefaultColDef: ColDef = {
+    editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
+  };
+  readonly rangeColDefs: ColDef[] = [
+    { field: 'sex', headerName: 'Who', minWidth: 108, flex: 1,
+      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['any', 'M', 'F'] },
+      valueFormatter: p => (({ any: 'Everyone', M: 'Men', F: 'Women' }) as Record<string, string>)[String(p.value ?? 'any')] ?? 'Everyone' },
+    { field: 'agePreset', headerName: 'Age group', minWidth: 140, flex: 1.2,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: () => ({ values: [...this.agePresets.map(a => a.key), 'custom'] }),
+      valueFormatter: p => p.value === 'custom' ? 'Custom (edit ages →)'
+        : (this.agePresets.find(a => a.key === p.value)?.label ?? 'All ages') },
+    { field: 'minAge', headerName: 'From age', minWidth: 88, flex: .7, valueFormatter: p => p.value ?? '—' },
+    { field: 'maxAge', headerName: 'To age', minWidth: 82, flex: .7, valueFormatter: p => p.value ?? '—' },
+    { field: 'ageUnit', headerName: 'Age in', minWidth: 92, flex: .7,
+      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['years', 'months', 'days'] } },
+    { field: 'min', headerName: 'Low', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
+    { field: 'max', headerName: 'High', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
+    { field: 'criticalLow', headerName: 'Critical low', minWidth: 104, flex: .8,
+      cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
+    { field: 'criticalHigh', headerName: 'Critical high', minWidth: 108, flex: .8,
+      cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
+    { field: 'prints', headerName: 'On the report', editable: false, minWidth: 130, flex: 1.3,
+      cellClass: 'pf-rrgrid__prints' },
+    { colId: 'del', headerName: '', editable: false, width: 44, maxWidth: 44, resizable: false,
+      cellClass: 'pf-rrgrid__del',
+      cellRenderer: () => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>' },
   ];
-  readonly agePresetOptions = computed<PfSelectOption<string>[]>(() => [
-    ...this.agePresets.map(p => ({ value: p.key, label: p.label })),
-    { value: 'custom', label: 'Custom ages…' },
-  ]);
-  readonly ageUnitOptions: PfSelectOption<string>[] = [
-    { value: 'years', label: 'years' },
-    { value: 'months', label: 'months' },
-    { value: 'days', label: 'days' },
-  ];
+  onRangeCellChanged(e: CellValueChangedEvent) {
+    const i = e.data.i as number, ri = e.data.ri as number;
+    const f = e.colDef.field;
+    if (f === 'sex') this.patchRangeAt(i, ri, { sex: e.data.sex });
+    else if (f === 'ageUnit') this.patchRangeAt(i, ri, { ageUnit: e.data.ageUnit });
+    else if (f === 'agePreset') this.setAgePreset(i, ri, e.data.agePreset);
+    else if (f === 'minAge' || f === 'maxAge' || f === 'min' || f === 'max'
+             || f === 'criticalLow' || f === 'criticalHigh') {
+      this.patchRangeAt(i, ri, { [f]: this.toNum(e.data[f]) });
+    }
+  }
+  onRangeCellClicked(e: CellClickedEvent) {
+    if (e.colDef.colId === 'del') this.removeRange(e.data.i, e.data.ri);
+  }
   readonly entryKind = computed<string>(() => {
     const fs = this.fields();
     if (fs.length === 0) {

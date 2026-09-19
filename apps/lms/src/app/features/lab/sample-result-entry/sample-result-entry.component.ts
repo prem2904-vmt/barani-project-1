@@ -215,12 +215,16 @@ export class SampleResultEntryComponent {
     if (raw === undefined || raw === null || raw === "") return null;
     const v = Number(String(raw).trim());
     if (Number.isNaN(v)) return null;
-    if (p.criticalLow != null && v < p.criticalLow)
-      return { tone: "critical", label: `Critical · below ${p.criticalLow}` };
-    if (p.criticalHigh != null && v > p.criticalHigh)
-      return { tone: "critical", label: `Critical · above ${p.criticalHigh}` };
     const { sex, age } = this.patientSexAge();
-    const fl = flagAgainst(selectReferenceRange(this.bandsFor(t, p), sex, age), v);
+    const band = selectReferenceRange(this.bandsFor(t, p), sex, age);
+    // Band-scoped criticals win; parameter-level is the fallback (mirrors mw).
+    const critLow  = band?.criticalLow  ?? p.criticalLow;
+    const critHigh = band?.criticalHigh ?? p.criticalHigh;
+    if (critLow != null && v < critLow)
+      return { tone: "critical", label: `Critical · below ${critLow}` };
+    if (critHigh != null && v > critHigh)
+      return { tone: "critical", label: `Critical · above ${critHigh}` };
+    const fl = flagAgainst(band, v);
     if (fl === "L") return { tone: "low", label: "Low" };
     if (fl === "H") return { tone: "high", label: "High" };
     return null;
