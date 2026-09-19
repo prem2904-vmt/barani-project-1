@@ -821,6 +821,22 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     cursorY += 10;
   }
 
+  // Culture/narrative-only reports never enter the columnar table — the only
+  // place department signatories are drawn — so their sign-off block used to
+  // vanish entirely. Collect the special tests' department signatures and
+  // defer them below the End-of-Report marker like any final department.
+  if (inScope.length === 0 && outScope.length === 0 && special.length > 0 && !finalSigs.sigs) {
+    const sigs: ReportSignature[] = [];
+    const seen = new Set<string>();
+    for (const t of special) {
+      for (const sg of deptSigs.get((t.department ?? '').trim()) ?? []) {
+        const k = `${sg.name ?? ''}|${sg.signatureUrl ?? ''}`;
+        if (!seen.has(k)) { seen.add(k); sigs.push(sg); }
+      }
+    }
+    if (sigs.length) finalSigs.sigs = sigs;
+  }
+
   // (Pending-departments banner intentionally NOT printed — a preliminary
   // report should read clean; the "End of Preliminary Report" marker already
   // signals more results are coming.)
@@ -2909,7 +2925,9 @@ function renderCultureSection(
   if (y > A4.h - MARGIN_BOTTOM - 90) { y = newPage(doc, practice); }
 
   drawTestHeading(doc, t.name ?? 'Culture & Sensitivity', y);
-  y += 26;
+  // 34, not 26: the heading's hairline sits at y+22 and the first label's
+  // cap-height reached up into it ("SPECIMEN:" printed struck-through).
+  y += 34;
 
   const c = (t.result?.['values'] as PdfCulture | undefined) ?? {};
   // Report-row visibility: keys the lab unticked at the bench / sign-out are

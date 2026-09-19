@@ -24,11 +24,13 @@ interface StageSnap {
   values: { fields?: Array<{ name: string; title: string; value: string }>; notes?: string };
 }
 
-function renderCulture(values: CultureValues, hidden?: string[], stages?: StageSnap[]): string {
+function renderCulture(values: CultureValues, hidden?: string[], stages?: StageSnap[],
+                       deptSignatures?: Array<{ department?: string; signatures?: Array<{ name?: string; title?: string }> }>): string {
   const snap = {
     patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
     order: { id: 'o1', orderNumber: 'LAB-2609-000001', createdAt: '2026-09-19T00:00:00Z' },
     type: 'final',
+    ...(deptSignatures ? { deptSignatures } : {}),
     tests: [{
       testId: 'ct1',
       name: 'Bacterial Culture & Sensitivity',
@@ -108,6 +110,16 @@ describe('culture report-row visibility', () => {
     const some = renderCulture(VALUES, ['stage:gram:pus_cells'], stages);
     expect(some).not.toContain('PUSVAL');
     expect(some).toContain('YEASTVAL');
+  });
+
+  it('culture-only report still draws its department signatories', () => {
+    // The sign-off block is normally drawn by the columnar table, which a
+    // pure-culture report never enters — the signatures must defer to below
+    // the End-of-Report marker instead of vanishing.
+    const text = renderCulture(VALUES, undefined, undefined,
+      [{ department: 'Microbiology', signatures: [{ name: 'Dr SIGNATORYNAME', title: 'Consultant Microbiologist' }] }]);
+    expect(text).toContain('Dr SIGNATORYNAME');
+    expect(text).toContain('Consultant Microbiologist');
   });
 
   it('hidden summary lines vanish while the rest print', () => {
