@@ -19,7 +19,12 @@ interface CultureValues {
   resistancePattern?: string; clinicalNotes?: string;
 }
 
-function renderCulture(values: CultureValues, hidden?: string[]): string {
+interface StageSnap {
+  key: string; label: string; caseLabel?: string | null;
+  values: { fields?: Array<{ name: string; title: string; value: string }>; notes?: string };
+}
+
+function renderCulture(values: CultureValues, hidden?: string[], stages?: StageSnap[]): string {
   const snap = {
     patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
     order: { id: 'o1', orderNumber: 'LAB-2609-000001', createdAt: '2026-09-19T00:00:00Z' },
@@ -31,7 +36,8 @@ function renderCulture(values: CultureValues, hidden?: string[]): string {
       packageType: null,
       department: 'Microbiology',
       sampleType: 'Urine',
-      result: { microFormat: 'culture_sensitivity', values, ...(hidden ? { hidden } : {}) },
+      result: { microFormat: 'culture_sensitivity', values,
+                ...(hidden ? { hidden } : {}), ...(stages ? { stages } : {}) },
     }],
   };
   const doc = buildReportPdf({
@@ -83,6 +89,25 @@ describe('culture report-row visibility', () => {
     expect(text).not.toContain('Amikacin');
     expect(text).toContain('Klebsiella');
     expect(text).toContain('Meropenem');
+  });
+
+  it('root stage findings print as lines; hidden fields drop; branch stages stay bench-only', () => {
+    const stages: StageSnap[] = [
+      { key: 'gram', label: 'Gram / Direct smear', values: { fields: [
+        { name: 'pus_cells', title: 'Pus Cells', value: 'PUSVAL' },
+        { name: 'yeast', title: 'Yeast', value: 'YEASTVAL' },
+      ]}},
+      { key: 'gram', label: 'Sub gram', caseLabel: 'Blood agar', values: { fields: [
+        { name: 'pus_cells', title: 'Pus Cells', value: 'BRANCHVAL' },
+      ]}},
+    ];
+    const all = renderCulture(VALUES, [], stages);
+    expect(all).toContain('PUSVAL');
+    expect(all).toContain('YEASTVAL');
+    expect(all).not.toContain('BRANCHVAL');   // subculture stages are bench-only
+    const some = renderCulture(VALUES, ['stage:gram:pus_cells'], stages);
+    expect(some).not.toContain('PUSVAL');
+    expect(some).toContain('YEASTVAL');
   });
 
   it('hidden summary lines vanish while the rest print', () => {

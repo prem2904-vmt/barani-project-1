@@ -2889,6 +2889,10 @@ function renderLegacyTest(
 
 interface PdfAst { name?: string; interpretation?: string }
 interface PdfOrganism { name?: string; antibiotics?: PdfAst[] }
+interface PdfStageSnap {
+  key?: string; label?: string; caseLabel?: string | null;
+  values?: { fields?: Array<{ name?: string; title?: string; value?: string }>; notes?: string };
+}
 interface PdfCulture {
   specimen?: string; gramStain?: string; colonyCount?: string; noGrowth?: boolean;
   organisms?: PdfOrganism[]; resistancePattern?: string; intrinsicResistance?: string;
@@ -2926,6 +2930,21 @@ function renderCultureSection(
   line('Specimen', c.specimen || (t.sampleType ?? ''));
   if (!isRowHidden('gramStain')) line('Gram stain', c.gramStain);
   if (!isRowHidden('colonyCount')) line('Colony count', c.colonyCount);
+
+  // Bench stage findings (Gram / Growth / ID …): the workbench's structured
+  // fields ride result.stages — print each done ROOT stage as one line,
+  // honoring the per-row hide keys (stage:{key}:{field} / :notes). Branch
+  // (subculture) stages stay bench-only.
+  const stageSnaps = (t.result?.['stages'] as PdfStageSnap[] | undefined) ?? [];
+  for (const st of stageSnaps) {
+    if (st.key === 'ast' || st.caseLabel) continue;
+    const bits = (st.values?.fields ?? [])
+      .filter(f => (f.value ?? '').trim() && !isRowHidden(`stage:${st.key}:${f.name}`))
+      .map(f => `${f.title || f.name}: ${f.value}`);
+    const notes = (st.values?.notes ?? '').trim();
+    if (notes && !isRowHidden(`stage:${st.key}:notes`)) bits.push(`Note: ${notes}`);
+    if (bits.length) line(st.label || st.key || 'Stage', bits.join(' · '));
+  }
 
   if (c.noGrowth) {
     line('Result', 'No growth after 48 hours of aerobic incubation.');

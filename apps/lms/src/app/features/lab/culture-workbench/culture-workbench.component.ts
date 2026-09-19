@@ -240,7 +240,13 @@ interface StageField { name: string; title: string; type: string; options: strin
                             </div>
                             @for (f of g.fields; track f.name) {
                               <div class="pf-mx__row">
-                                <span class="pf-mx__lbl">{{ f.title }}</span>
+                                <span class="pf-mx__lbl">
+                                  @if (rhEnabled()) {
+                                    <input type="checkbox" class="pf-rh" [checked]="rhShown(s.key, f.name)"
+                                           (change)="rhToggle(s.key, f.name)"
+                                           title="Print on the report (unticked = hidden on the PDF only)" />
+                                  }
+                                  {{ f.title }}</span>
                                 @for (o of g.options; track o) {
                                   <button type="button" class="pf-mx__cell press"
                                           [class.pf-mx__cell--on]="fieldValue(s.key, f.name) === o"
@@ -271,7 +277,14 @@ interface StageField { name: string; title: string; type: string; options: strin
                           @for (f of g.fields; track f.name) {
                             <div class="pf-cse__fcell" [class.pf-cse__fcell--wide]="f.type === 'textarea' || f.suggest === 'organisms'">
                             <label class="pf-cse__field pf-cse__field--noted">
-                              <span class="pf-cse__field-lbl">{{ f.title }}</span>
+                              <span class="pf-cse__field-lbl">
+                                @if (rhEnabled()) {
+                                  <input type="checkbox" class="pf-rh" [checked]="rhShown(s.key, f.name)"
+                                         (click)="$event.stopPropagation()"
+                                         (change)="rhToggle(s.key, f.name)"
+                                         title="Print on the report (unticked = hidden on the PDF only)" />
+                                }
+                                {{ f.title }}</span>
                               @if (f.options.length) {
                                 <span class="pf-cse__opts" role="radiogroup" [attr.aria-label]="f.title">
                                   @for (o of f.options; track o) {
@@ -450,7 +463,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-mx__hopt { display: flex; align-items: center; justify-content: center; padding: 8px 6px;
       font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
       color: var(--text-tertiary); text-align: center; }
-    .pf-mx__lbl { display: flex; align-items: center; padding: 9px 14px;
+    .pf-mx__lbl { display: flex; align-items: center; gap: 8px; padding: 9px 14px;
       font-size: 12.5px; font-weight: 500; color: var(--text-secondary); line-height: 1.3; }
     .pf-mx__cell { display: flex; align-items: center; justify-content: center; min-height: 40px;
       cursor: pointer; background: transparent; border: none; border-left: 1px solid var(--glass-border); }
@@ -471,7 +484,10 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__field { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 14px;
       padding: 5px 0; }
     .pf-cse__field--noted { grid-template-columns: 180px minmax(0, 1fr) 28px; }
-    .pf-cse__field-lbl { font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 1.35; }
+    .pf-cse__field-lbl { display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 500; color: var(--text-secondary); line-height: 1.35; }
+    /* Report-row checkbox — checked = prints on the PDF; bench always shows. */
+    .pf-rh { width: 15px; height: 15px; accent-color: #8b5cf6; flex-shrink: 0; cursor: pointer; }
     .pf-cse__opts { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 9999px;
       width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); justify-self: stretch;
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -914,6 +930,17 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
       next: r => { if (r?.hidden) this.reportHidden.set(r.hidden); },
       error: e => this.toasts.error(ApiError.from(e).message),
     });
+  }
+  /** Stage-row checkboxes live on the PRIMARY only — the report prints the
+   *  root case's stages, so branch rows have nothing to hide. */
+  rhEnabled(): boolean { return this.selCaseId() === null; }
+  rhShown(stageKey: string, field: string): boolean {
+    return !this.reportHidden().includes(`stage:${stageKey}:${field}`);
+  }
+  rhToggle(stageKey: string, field: string) {
+    const k = `stage:${stageKey}:${field}`;
+    const cur = this.reportHidden();
+    this.setReportHidden(cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]);
   }
 
   /** Load the SELECTED branch's drafts + AST editor state. */

@@ -266,7 +266,13 @@ interface ValueRow {
                                   <dl class="pf-cstage__grid">
                                     @for (f of sf; track f.name) {
                                       <div class="pf-cstage__fld">
-                                        <dt>{{ f.title }}</dt>
+                                        <dt>
+                                          @if (!sg.caseId) {
+                                            <input type="checkbox" class="pf-rh" [checked]="stageRowShown(st, sg, f.name)"
+                                                   (change)="toggleStageRow(st, sg, f.name)"
+                                                   title="Print on the report (unticked = hidden on the PDF only)" />
+                                          }
+                                          {{ f.title }}</dt>
                                         @if (cultureEditing() && selected()?.id === st.id) {
                                           <input class="pf-cstage__edit" [value]="cfd(sg, f.name)"
                                                  (input)="setCfd(sg, f.name, $any($event.target).value)"
@@ -764,6 +770,9 @@ interface ValueRow {
     .pf-cstage__grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .pf-cstage__who { font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
     .pf-cstage__fld { position: relative; padding-right: 30px; }
+    .pf-cstage__fld dt { display: flex; align-items: center; gap: 7px; }
+    /* Report-row checkbox — checked = prints on the PDF; review always shows. */
+    .pf-rh { width: 14px; height: 14px; accent-color: #8b5cf6; flex-shrink: 0; cursor: pointer; }
     .pf-cstage__fbtn { position: absolute; top: -2px; right: 0; width: 26px; height: 26px; }
     .pf-cstage__thread { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(96, 165, 250, 0.04); border: 1px solid var(--glass-border); }
     .pf-cstage__edit { width: 100%; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -1445,6 +1454,16 @@ export class ValidateResultComponent implements OnInit {
     this.api.put(`/api/microbiology/culture/${t.id}/report-hidden`, { keys }).subscribe({
       error: e => this.toasts.error(ApiError.from(e).message),
     });
+  }
+  /** Stage-row visibility (root case only — the report prints root stages). */
+  stageRowShown(t: OrderTest | null, sg: CultureStageSnap, name: string): boolean {
+    return !this.cultureHiddenFor(t).includes(`stage:${sg.key}:${name}`);
+  }
+  toggleStageRow(t: OrderTest | null, sg: CultureStageSnap, name: string) {
+    if (!t || sg.caseId) return;
+    const k = `stage:${sg.key}:${name}`;
+    const cur = this.cultureHiddenFor(t);
+    this.setCultureHidden(t, cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]);
   }
 
   // ── Validator corrects the culture result IN PLACE — the same lab entry
