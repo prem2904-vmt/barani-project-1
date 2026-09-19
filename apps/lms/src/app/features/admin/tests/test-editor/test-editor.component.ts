@@ -243,12 +243,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'direct',   label: 'Direct',   hint: 'Result goes straight to reports' },
     { value: 'approval', label: 'Approval', hint: 'Needs pathologist validation' }
   ];
-  readonly resultTypeOptions: PfSelectOption<string>[] = [
-    { value: '',                  label: '— Not set —' },
-    { value: 'numeric',           label: 'Numeric' },
-    { value: 'text',              label: 'Text' },
-    { value: 'positive_negative', label: 'Positive / Negative' }
-  ];
   readonly reportFormatOptions: PfSelectOption<string>[] = [
     { value: '',            label: '— Not set —' },
     { value: 'tabular',     label: 'Tabular' },
@@ -423,6 +417,43 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   protected readonly numericFields = computed(() =>
     this.fields().filter(f => this.isNumericType(f.type)));
+
+  // ── Plain-language entry kind ─────────────────────────────────────
+  // Doctors think "what will the tech enter", not "parameters". For the
+  // common single-value test the ONE field is auto-managed: this control
+  // sets its type, and the field list stays out of sight. resultType is
+  // editor metadata only (nothing downstream consumes it) — kept in step
+  // for the checklist and older drafts.
+  readonly entryKindOptions: PfSelectOption<string>[] = [
+    { value: '',       label: '— pick one —' },
+    { value: 'number', label: 'A number — e.g. 118' },
+    { value: 'choice', label: 'A choice from a list — e.g. Positive / Negative' },
+    { value: 'text',   label: 'Free text — a written finding' },
+  ];
+  readonly isSingleValue = computed(() => this.fields().length <= 1);
+  readonly entryKind = computed<string>(() => {
+    const fs = this.fields();
+    if (fs.length === 0) {
+      const rt = this._draft().resultType;
+      return rt === 'numeric' ? 'number' : rt === 'choice' ? 'choice' : rt ? 'text' : '';
+    }
+    const t = fs[0].type;
+    if (this.isNumericType(t)) return 'number';
+    if (this.typeHasOptions(t)) return 'choice';
+    return 'text';
+  });
+  setEntryKind(kind: string) {
+    if (!kind) return;
+    if (this.fields().length === 0) {
+      this.addParameter();
+      const d = this._draft();
+      const label = (d.name ?? '').trim() || 'Result';
+      this.patchField(0, { label, name: this.deriveName(label, 'result'),
+                           unit: (d.unit ?? '').trim() || undefined });
+    }
+    this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : 'textarea' });
+    this.patch({ resultType: kind === 'number' ? 'numeric' : kind });
+  }
 
   protected startReferenceRange(): void {
     if (this.numericFields().length > 0) return;
@@ -798,8 +829,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       && !!d.departmentId && (d.price ?? 0) >= 0;
     rows.push({ label: 'Identity & pricing', ok: idOk, action: idOk ? undefined : 'identity' });
     if (d.type === 'individual') {
-      rows.push({ label: d.resultType ? 'Result type set' : 'Result type not set',
-                  ok: !!d.resultType, action: d.resultType ? undefined : 'results' });
+      const kindOk = !!this.entryKind() || !this.isSingleValue();
+      rows.push({ label: kindOk ? 'Entry type chosen' : 'Entry type not chosen',
+                  ok: kindOk, action: kindOk ? undefined : 'results' });
       const nf = this.numericFields();
       const rangesOk = nf.length > 0 && nf.every(f => (f.referenceRanges ?? []).length > 0);
       rows.push({ label: `Reference ranges${nf.length ? ' (' + nf.length + ')' : ''}`,

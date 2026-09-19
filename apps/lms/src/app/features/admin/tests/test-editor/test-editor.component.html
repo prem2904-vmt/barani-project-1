@@ -233,16 +233,18 @@
         <div class="pf-te2-sec__label">
           <div class="pf-te2-sec__title">Result entry</div>
           <p class="pf-te2-sec__sub">What the tech enters, and what counts as normal.</p>
-          @if (!draft().resultType) { <div class="pf-te2-sec__warn">! result type not set</div> }
+          @if (isSingleValue() && !entryKind()) { <div class="pf-te2-sec__warn">! choose what the tech enters</div> }
         </div>
         <div class="pf-te2-sec__body">
           <div class="pf-te2-grid">
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Result type</label>
-              <pf-select [options]="resultTypeOptions" [value]="d.resultType"
-                         (valueChange)="patch({ resultType: $event })"></pf-select>
-              <p class="pf-uf__hint">What the tech types in — a number, free text, or Positive&nbsp;/&nbsp;Negative.</p>
-            </div>
+            @if (isSingleValue()) {
+              <div class="pf-uf">
+                <label class="pf-uf__lbl">What will the tech enter?</label>
+                <pf-select [options]="entryKindOptions" [value]="entryKind()"
+                           (valueChange)="setEntryKind($any($event))"></pf-select>
+                <p class="pf-uf__hint">One result per test — everything below follows from this.</p>
+              </div>
+            }
             <!-- Unit and report format are NUMERIC concepts —
                  a dropdown-result test has no use for them. -->
             @if (numericFields().length > 0) {
@@ -260,6 +262,71 @@
               </div>
             }
           </div>
+
+          <!-- The answer list — the whole story for a single-choice test -->
+          @if (isSingleValue() && entryKind() === 'choice' && fields().length === 1) {
+            <div class="pf-anslist">
+              <div>
+                <span class="pf-te2-h">The answer list</span>
+                <p class="pf-rr2__sub">The tech picks one of these as the result. Lists are shared across tests —
+                  pick an existing one, or create your own below.</p>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
+                           [options]="ogGroupOptions()" [searchable]="true"
+                           [value]="groupForField(0)?.code ?? ''"
+                           placeholder="— pick a list —"
+                           (valueChange)="applyOptionGroup(0, $event)"></pf-select>
+                @if (!optCustom(0)) {
+                  <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
+                          style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                          (click)="startCustomOption(0)">+ New list</button>
+                }
+              </div>
+              @if (optLocked(0) && groupForField(0); as g) {
+                <div class="pf-optprev">
+                  @for (row of rowsFor(0); track $index) {
+                    <span class="pf-optprev__chip"
+                          [class.pf-optprev__chip--normal]="row.normal === true"
+                          [class.pf-optprev__chip--off]="row.active === false"
+                          [title]="row.normal === true ? 'Normal (expected) value' : (row.active === false ? 'Inactive — hidden from result entry' : '')">
+                      {{ row.value }}
+                    </span>
+                  }
+                </div>
+                <p class="text-xs" style="color: var(--text-tertiary, #64748b);">
+                  Shared list — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
+                  Editing it in Test Master → Option groups changes all of them.
+                </p>
+              } @else {
+                <span class="pf-mini-lbl">New list — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(0).length }}</span></span>
+                <div class="pf-otbl">
+                  <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
+                  @for (row of rowsFor(0); track $index; let ri = $index) {
+                    <div class="pf-otbl-row pf-otbl-row--nocode">
+                      <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                      <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
+                             (ngModelChange)="patchOptionRow(0, ri, { value: $event })" placeholder="Option value" />
+                      <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
+                             (ngModelChange)="patchOptionRow(0, ri, { normal: $event })" title="Normal (expected)" />
+                      <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
+                             (ngModelChange)="patchOptionRow(0, ri, { active: $event })" title="Inactive rows are hidden" />
+                      <span class="flex">
+                        <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(0, ri, -1)" title="Move up">↑</button>
+                        <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(0).length - 1" (click)="moveOptionRow(0, ri, 1)" title="Move down">↓</button>
+                      </span>
+                      <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(0, ri)" title="Remove option">✕</button>
+                    </div>
+                  }
+                  <div>
+                    <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                            style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                            (click)="addOptionRow(0)">+ Add option</button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
 
           <!-- Calculated result (if the test is a formula) -->
           @if (calcInfo(); as calc) {
@@ -338,8 +405,12 @@
               }
             } @else if (numericFields().length === 0) {
               <div class="pf-rr2__empty">
-                <p>No reference range set yet.</p>
-                <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
+                @if (entryKind() === 'text') {
+                  <p>Free-text results print exactly as written — there is no reference range to set.</p>
+                } @else {
+                  <p>No reference range set yet.</p>
+                  <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
+                }
               </div>
             } @else {
               @for (s of rangeSentences(); track s.ri) {
@@ -533,15 +604,25 @@
             </div>
           }
 
-          <!-- Parameters -->
+          <!-- Values recorded — hidden for the common one-value test; the
+               single field is managed by "What will the tech enter?" above. -->
           <div class="pf-param2-wrap">
-            <div class="pf-param2-head">
-              <span class="pf-te2-h">Parameters · {{ fields().length }}</span>
-              <button type="button" class="pf-rr2__add" (click)="addParameter()">+ Add parameter</button>
-            </div>
-            @if (fields().length === 0) {
-              <p class="text-[13px]" style="color: var(--text-tertiary);">No parameters yet. Add one to let lab staff enter results.</p>
+            @if (isSingleValue()) {
+              <p class="pf-single-note">
+                @if (fields().length === 1) {
+                  This test records <strong>one</strong> result — “{{ fields()[0].label || 'Result' }}”.
+                } @else {
+                  Pick above what the tech will enter — the result field is created for you.
+                }
+                Tests that record several values (a differential count, an analysis panel) can
+                <button type="button" class="pf-linklike" (click)="addParameter()">add another value</button>.
+              </p>
             } @else {
+            <div class="pf-param2-head">
+              <span class="pf-te2-h">Values recorded · {{ fields().length }}</span>
+              <button type="button" class="pf-rr2__add" (click)="addParameter()">+ Add another value</button>
+            </div>
+
               <ul class="flex flex-col list-none p-0 m-0">
                 @for (p of fields(); let i = $index; track p.id) {
                   @let open = expandedParamId() === p.id;
