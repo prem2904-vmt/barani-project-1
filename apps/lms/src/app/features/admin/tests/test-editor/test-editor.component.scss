@@ -746,13 +746,14 @@ select.pf-input--compact {
 /* ── Reference ranges as FULL-WIDTH ROWS — one range per row, column
    headers on top, '+ Add range' appends a complete row (the antibiotic-
    row language). ── */
-.pf-rt3 { display: flex; flex-direction: column; gap: 8px; }
-.pf-rt3__head, .pf-rt3__row { display: grid; align-items: center; gap: 10px;
-  grid-template-columns: minmax(120px, .9fr) minmax(150px, 1.2fr) 110px minmax(150px, auto) minmax(140px, 1.4fr) 34px; }
-.pf-rt3__head { padding: 0 2px; }
-.pf-rt3__head span { font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .08em; color: var(--text-muted, #64748b); }
-.pf-rt3__row { padding: 8px 2px; border-top: 1px solid var(--glass-border, rgba(148,163,184,.14)); }
+.pf-rt3 { display: flex; flex-direction: column; gap: 0; }
+.pf-rt3__head, .pf-rt3__row { display: grid; align-items: center; gap: 12px;
+  grid-template-columns: minmax(140px, 1fr) minmax(170px, 1.3fr) 120px minmax(170px, auto) minmax(150px, 1.4fr) 36px; }
+.pf-rt3__head { padding: 0 8px 8px; }
+.pf-rt3__head span { font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-tertiary, #94a3b8); }
+.pf-rt3__row { padding: 10px 8px; border-top: 1px solid var(--glass-border, rgba(148,163,184,.14)); }
+@media (hover: hover) { .pf-rt3__row:hover { background: rgba(255,255,255,.025); } }
 @keyframes pf-rt3-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .pf-rt3__row { animation: pf-rt3-in .32s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 @media (prefers-reduced-motion: reduce) { .pf-rt3__row { animation: none; } }
@@ -761,22 +762,22 @@ select.pf-input--compact {
 .pf-rt3__agecustom { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pf-rt3__agein { width: 64px; text-align: center; }
 .pf-rt3__cell--to { display: flex; align-items: center; gap: 8px; }
-.pf-rt3__num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
-.pf-rt3__unit { font-size: 12px; font-weight: 600; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
-.pf-rt3__w { font-size: 12px; color: var(--text-tertiary, #64748b); white-space: nowrap; }
-.pf-rt3__prints { font-size: 12px; color: var(--text-tertiary, #64748b); overflow: hidden;
+.pf-rt3__num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14.5px; }
+.pf-rt3__unit { font-size: 13px; font-weight: 600; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
+.pf-rt3__w { font-size: 13px; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
+.pf-rt3__prints { font-size: 13px; color: var(--text-secondary, #cbd5e1); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .pf-rt3__todo { color: #d97706; }
 .pf-rb__prints--todo { color: #d97706; }
 .pf-rt3__x { width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent;
   color: var(--text-tertiary, #64748b); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .pf-rt3__x:hover { color: #ef4444; background: rgba(239,68,68,.08); }
-.pf-rt3__foot { padding-top: 2px; }
-.pf-rt3__crit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px;
+.pf-rt3__foot { padding: 10px 8px 0; border-top: 1px solid var(--glass-border, rgba(148,163,184,.14)); }
+.pf-rt3__crit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px;
   padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(239,68,68,.25); background: rgba(239,68,68,.05); }
 .pf-rt3__crit .pf-rt3__num { width: 90px; }
-.pf-rt3__critlbl { font-size: 12.5px; font-weight: 700; color: #f87171; }
-.pf-rt3__crithint { font-size: 11px; color: var(--text-tertiary, #64748b); flex-basis: 100%; }
+.pf-rt3__critlbl { font-size: 13.5px; font-weight: 700; color: #f87171; }
+.pf-rt3__crithint { font-size: 12px; color: var(--text-tertiary, #94a3b8); flex-basis: 100%; }
 @media (min-width: 900px) { .pf-rt3__crithint { flex-basis: auto; margin-left: auto; text-align: right; max-width: 320px; } }
 @media (max-width: 860px) {
   .pf-rt3__head { display: none; }
@@ -787,8 +788,6 @@ select.pf-input--compact {
   color: var(--violet-text, #a78bfa); background: transparent; border: 1px dashed rgba(124,58,237,.45); }
 .pf-rb__add:hover { background: rgba(124,58,237,.08); }
 .pf-rb__add:active { transform: scale(0.97); transition: transform 100ms ease-out; }
-.pf-judge--bare { margin-top: 14px; }
-.pf-judge--bare .pf-judge__bar { margin-top: 0; }
 
 /* ── Sticky section nav — wayfinding for the long form ── */
 /* Section rail — vertical on desktop, scrolling chips when narrow. */

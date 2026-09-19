@@ -244,9 +244,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'approval', label: 'Approval', hint: 'Needs pathologist validation' }
   ];
   readonly reportFormatOptions: PfSelectOption<string>[] = [
-    { value: '',            label: '— Not set —' },
-    { value: 'tabular',     label: 'Tabular' },
-    { value: 'descriptive', label: 'Descriptive' }
+    { value: 'tabular',     label: 'Tabular — a row in the results table' },
+    { value: 'descriptive', label: 'Descriptive — a written paragraph' }
   ];
   readonly fastingOptions: SegmentedOption<boolean>[] = [
     { value: false, label: 'No' },
@@ -462,7 +461,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
                            unit: (d.unit ?? '').trim() || undefined });
     }
     this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : 'textarea' });
-    this.patch({ resultType: kind === 'number' ? 'numeric' : kind });
+    this.patch({ resultType: kind === 'number' ? 'numeric' : kind,
+                 reportFormat: this._draft().reportFormat || 'tabular' });
   }
 
   protected startReferenceRange(): void {
@@ -679,23 +679,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly firstNumericField = computed<FormField | null>(() => this.numericFields()[0] ?? null);
 
   /** Critical/normal/high band for the visual bar. Null when there's no numeric basis. */
-  readonly judgmentBand = computed<{
-    red: number; green: number; amber: number;
-    lo: number | null; normalMax: number | null; hi: number | null; unit: string;
-  } | null>(() => {
-    const d = this._draft();
-    const p = this.firstNumericField();
-    const band = p ? this.firstBand(p) : null;
-    const lo = d.criticalLow;
-    const hi = d.criticalHigh;
-    const normalMax = band?.max ?? null;
-    if (normalMax == null) return null;         // need a normal upper bound to draw
-    const loV = lo ?? 0;
-    const red = Math.max(loV, 0);
-    const green = Math.max(normalMax - loV, 1);
-    const amber = Math.max(green * 0.6, 1);     // display-only weight (real hi is in the label)
-    return { red, green, amber, lo, normalMax, hi, unit: (p?.unit || d.unit || '') };
-  });
 
   /** Reference ranges rendered as plain sentences (first numeric parameter). */
   // ── Simplified range editing (HCP-friendly) ─────────────────────────

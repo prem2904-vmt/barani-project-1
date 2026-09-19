@@ -256,7 +256,7 @@
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Report format</label>
-                <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
+                <pf-select [options]="reportFormatOptions" [value]="d.reportFormat || 'tabular'"
                            (valueChange)="patch({ reportFormat: $event })"></pf-select>
                 <p class="pf-uf__hint">Tabular = a row in the results table · Descriptive = a written paragraph.</p>
               </div>
@@ -422,11 +422,11 @@
                   @if (rangeAt(s.i, s.ri); as r) {
                     <div class="pf-rt3__row">
                       <div class="pf-rt3__cell">
-                        <pf-select size="sm" [options]="rangeSexOptions" [value]="r.sex ?? 'any'"
+                        <pf-select [options]="rangeSexOptions" [value]="r.sex ?? 'any'"
                                    (valueChange)="patchRangeAt(s.i, s.ri, { sex: $any($event) })"></pf-select>
                       </div>
                       <div class="pf-rt3__cell pf-rt3__cell--age">
-                        <pf-select size="sm" [options]="agePresetOptions()" [value]="agePresetFor(s.i, s.ri)"
+                        <pf-select [options]="agePresetOptions()" [value]="agePresetFor(s.i, s.ri)"
                                    (valueChange)="setAgePreset(s.i, s.ri, $any($event))"></pf-select>
                         @if (agePresetFor(s.i, s.ri) === 'custom') {
                           <div class="pf-rt3__agecustom">
@@ -475,27 +475,6 @@
                   @if (d.unit) { <span class="pf-rt3__unit">{{ d.unit }}</span> }
                   <span class="pf-rt3__crithint">turns the entry red and flags the result critical — not printed</span>
                 </div>
-
-                @if (judgmentBand(); as jb) {
-                  <div class="pf-judge pf-judge--bare">
-                    <div class="pf-judge__bar">
-                      <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
-                      <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
-                      <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
-                    </div>
-                    <div class="pf-judge__labels">
-                      <div class="pf-judge__lbl" [style.flex]="jb.red">
-                        @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
-                      </div>
-                      <div class="pf-judge__lbl" [style.flex]="jb.green">
-                        <span class="c-green">normal up to {{ jb.normalMax }}</span>
-                      </div>
-                      <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
-                        <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
-                      </div>
-                    </div>
-                  </div>
-                }
               </div>
             } @else {
               <!-- Several numeric values (a panel): each value gets its own
