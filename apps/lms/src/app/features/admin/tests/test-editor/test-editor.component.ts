@@ -1589,6 +1589,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  /** Any saved edit outside the draft (report structure, notes) lands in
+   *  the live preview through the same debounced token. */
+  refreshPreview(): void { this.bumpPreview(); }
+
   patch(p: Partial<DraftTest>) {
     this._draft.update(d => ({ ...d, ...p }));
     for (const k of Object.keys(p)) this.clearFieldError(k);

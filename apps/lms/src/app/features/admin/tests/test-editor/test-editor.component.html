@@ -884,6 +884,7 @@
                 [parameters]="parameterNames()"
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
+                (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()"></pf-report-structure>
             }
 
@@ -892,7 +893,7 @@
               <h3 class="pf-lay-notes__title">Notes &amp; description</h3>
               <pf-test-notes-editor class="block" [fixedTestId]="d.id || ''" [hidePreview]="true"
                 [parameters]="parameterNames()" [profileMembers]="previewProfileMembers()"
-                [columnsOverride]="liveColumnsOverride()"></pf-test-notes-editor>
+                [columnsOverride]="liveColumnsOverride()" (saved)="refreshPreview()"></pf-test-notes-editor>
             </div>
 
             <!-- The one escape hatch: everything power-user lives in here. -->
@@ -975,6 +976,7 @@
             [parameters]="parameterNames()"
             [profileMembers]="previewProfileMembers()"
             [columnsOverride]="liveColumnsOverride()"
+            [culture]="cultureBench()"
             [refreshToken]="previewToken()">
           </pf-report-pdf-preview>
         } @else {

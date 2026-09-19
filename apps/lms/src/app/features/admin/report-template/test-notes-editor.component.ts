@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal, output } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -675,6 +675,8 @@ export class TestNotesEditorComponent implements OnInit {
   }
 
   // ── Save ────────────────────────────────────────────────
+  /** Fires after a successful save — hosts refresh their live preview. */
+  readonly saved = output<void>();
   async save() {
     const testId = this.selectedTestId();
     if (!testId) return;
@@ -684,6 +686,7 @@ export class TestNotesEditorComponent implements OnInit {
       await this.layout.saveTestLayout(testId, payload);
       this.configured.set(true);
       this.toasts.success('Layout saved');
+      this.saved.emit();
       this.refreshPreview();
     } catch (e: unknown) {
       this.toasts.error(ApiError.from(e).message);
