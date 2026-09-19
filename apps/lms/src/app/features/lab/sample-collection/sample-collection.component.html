@@ -173,6 +173,28 @@
                     </svg>
                   </span>
                 }
+                <!-- External flag (top-left corner): THIS specimen was brought
+                     in from outside — one tap collects it as brought-in with
+                     no draw; on a marked tube the flag fills violet and
+                     doubles as undo. A corner flag, not an inline pill: the
+                     card body already owns tap-to-collect + hold-to-peek, so
+                     the mark needs its own clearly separated target. -->
+                @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
+                  <button type="button" class="pf-tube__extflag"
+                          [class.pf-tube__extflag--on]="s.source === 'external'"
+                          [disabled]="sourceBusy()"
+                          (pointerdown)="$event.stopPropagation()"
+                          (click)="toggleExternal(s, $event)"
+                          [title]="s.source === 'external'
+                            ? 'Brought in from outside — tap to undo'
+                            : 'Mark as brought in from outside (skips the draw)'"
+                          [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
+                          [attr.aria-pressed]="s.source === 'external'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
+                    </svg>
+                  </button>
+                }
                 <!-- Partial-dispatch selection mode: collected tubes show a
                      selection ring (check fills in when selected). -->
                 @if (dispatchSelect() !== null && s.status === 'collected') {
@@ -412,14 +434,8 @@
                       @if (s.status === 'collected') { {{ s.collectedAt | date:'shortTime' }} }
                       @else { Dispatched }
                     </span>
-                    <!-- Brought-in tube: the External tag doubles as undo
-                         while the tube hasn't left the counter. -->
                     @if (s.source === 'external') {
-                      <button type="button" class="pf-tube__ext pf-tube__ext--on"
-                              [disabled]="sourceBusy()"
-                              (pointerdown)="$event.stopPropagation()"
-                              (click)="toggleExternal(s, $event)"
-                              title="Brought-in specimen — tap to undo">External · undo</button>
+                      <span class="pf-tube__extlabel">Brought in</span>
                     }
                   } @else {
                     <!-- Pending: series tubes carry their schedule state;
@@ -444,17 +460,6 @@
                       @default {
                         <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
                       }
-                    }
-                    <!-- Per-tube External mark: THIS specimen was brought in
-                         from outside — one tap collects it as brought-in with
-                         no draw (an order routinely has one walked-in sample
-                         among several in-house tubes). -->
-                    @if (dispatchSelect() === null && tubeState(s).kind !== 'locked') {
-                      <button type="button" class="pf-tube__ext"
-                              [disabled]="sourceBusy()"
-                              (pointerdown)="$event.stopPropagation()"
-                              (click)="toggleExternal(s, $event)"
-                              title="Mark as brought-in from outside — skips the draw">External</button>
                     }
                   }
                 </div>

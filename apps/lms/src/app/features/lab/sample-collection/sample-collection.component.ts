@@ -416,6 +416,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  order routinely has one walked-in specimen among several draws. */
   private readonly _sourceBusy = signal(false);
   readonly sourceBusy = this._sourceBusy.asReadonly();
+  /** The flag shows on tubes that can still be marked: pending and not a
+   *  locked/not-yet-due series time point. */
+  canMarkExternal(s: OrderSample): boolean {
+    return s.status === "pending" && this.tubeState(s).kind !== "locked";
+  }
   async toggleExternal(s: OrderSample, ev: Event) {
     ev.stopPropagation();
     ev.preventDefault();
