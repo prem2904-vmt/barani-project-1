@@ -117,7 +117,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
           <ag-grid-angular
             style="width: 100%; height: 100%;"
-            [class]="gridTheme()"
+            [theme]="gridTheme()"
             [rowData]="filteredUsers()"
             [columnDefs]="userColDefs()"
             [context]="gridContext"
@@ -130,7 +130,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
           <ag-grid-angular
             style="width: 100%; height: 100%;"
-            [class]="gridTheme()"
+            [theme]="gridTheme()"
             [rowData]="filteredRoles()"
             [columnDefs]="roleColDefs()"
             [context]="gridContext"
