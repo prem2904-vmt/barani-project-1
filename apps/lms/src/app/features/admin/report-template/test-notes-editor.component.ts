@@ -90,25 +90,25 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                 <input type="text" class="pf-input pf-input--compact grow"
                        [value]="descriptionFor(name)"
                        (input)="setDescription(name, $any($event.target).value)"
-                       [placeholder]="descCondKind(name) === 'ladder' ? 'otherwise — printed when no branch matches' : 'e.g. High in dehydration · Low in anaemia'" />
+                       [placeholder]="descCondKind(name) === 'ladder' ? 'for any other result — when no line above matches' : 'e.g. High in dehydration · Low in anaemia'" />
                 @if (descCondKind(name) === 'custom') {
                   <span class="pf-tl-desc-flag" title="This row carries print rules richer than one condition — edit them in the Advanced editor.">custom rules</span>
                 } @else {
                   <button type="button" class="pf-tl-desc-vary press" (click)="toggleDescCond(name)">
-                    {{ descCondKind(name) === 'ladder' ? '− remove conditions' : '+ varies by value' }}
+                    {{ descCondKind(name) === 'ladder' ? '− same wording for every result' : '+ depends on the result' }}
                   </button>
                 }
               </div>
               @if (descCondKind(name) === 'ladder') {
                 @for (r of descRules(name); track $index; let ri = $index; let last = $last) {
                   <div class="pf-tl-desc-cond">
-                    <span class="pf-tl-desc-w pf-tl-desc-w--kw">{{ ri === 0 ? 'If' : 'else if' }} the value</span>
+                    <span class="pf-tl-desc-w pf-tl-desc-w--kw">When the result</span>
                     <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="r.operator"
                                (valueChange)="setDescRule(name, ri, { operator: $any($event) })"></pf-select></div>
                     <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
                            [value]="r.value" placeholder="value"
                            (input)="setDescRule(name, ri, { value: $any($event.target).value })" />
-                    <span class="pf-tl-desc-w">print</span>
+                    <span class="pf-tl-desc-w">say</span>
                     <input type="text" class="pf-input pf-input--compact grow"
                            [value]="r.text"
                            (input)="setDescRule(name, ri, { text: $any($event.target).value })"
@@ -120,9 +120,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                   </div>
                 }
                 <div class="pf-tl-desc-cond pf-tl-desc-cond--else">
-                  <span class="pf-tl-desc-w pf-tl-desc-w--kw">otherwise</span>
-                  <span class="pf-tl-desc-w">the main description above prints — first matching branch wins.</span>
-                  <button type="button" class="pf-tl-desc-vary press" (click)="addDescRule(name)">+ else if…</button>
+                  <span class="pf-tl-desc-w pf-tl-desc-w--kw">For any other result</span>
+                  <span class="pf-tl-desc-w">the description above prints. Lines are checked top to bottom — the first match is used.</span>
+                  <button type="button" class="pf-tl-desc-vary press" (click)="addDescRule(name)">+ Add another line</button>
                 </div>
               }
             } @empty {
