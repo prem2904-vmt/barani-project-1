@@ -98,6 +98,10 @@ export interface TestParameter {
    *  Active flag. `options`/`normalValue` are derived from it on save so
    *  older readers keep working. */
   optionRows?: TestOptionRow[];
+  /** Display name for the shared option group this parameter's rows form —
+   *  set when the list is created in the test editor; DeriveGroups prefers
+   *  it over the first linked parameter's title. */
+  optionGroupName?: string | null;
   referenceRanges?: ReferenceRange[];
   normalValue?: string;
   criticalLow?: number;

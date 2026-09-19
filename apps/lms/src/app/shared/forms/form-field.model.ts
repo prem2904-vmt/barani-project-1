@@ -252,6 +252,8 @@ export interface FormField {
   /** The test's own embedded option table rows ({code, value, normal,
    *  active}); `options`/`normalValue` derive from it on save. */
   optionRows?: import('../models/test.model').TestOptionRow[] | null;
+  /** Name for the shared option group formed by optionRows (see TestParameter). */
+  optionGroupName?: string | null;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

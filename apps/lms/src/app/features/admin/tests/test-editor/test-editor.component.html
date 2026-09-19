@@ -264,9 +264,10 @@
             @if (numericFields().length > 0) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Unit</label>
-                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.unit"
-                       (ngModelChange)="patch({ unit: $event })" placeholder="e.g. mg/dL" />
-                <p class="pf-uf__hint">Prints after the value — “118 mg/dL”.</p>
+                <pf-select [options]="unitOptions(d.unit)" [searchable]="true"
+                           [value]="d.unit || ''" placeholder="— pick a unit —"
+                           (valueChange)="patch({ unit: $any($event) })"></pf-select>
+                <p class="pf-uf__hint">Prints after the value — “118 mg/dL”. Type to search the unit list.</p>
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Report format</label>
@@ -313,7 +314,13 @@
                   Editing it in Test Master → Option groups changes all of them.
                 </p>
               } @else {
-                <span class="pf-mini-lbl">New list — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(0).length }}</span></span>
+                <div class="pf-newlist__row">
+                  <label class="pf-mini-lbl">List name</label>
+                  <input type="text" class="pf-input pf-input--compact pf-newlist__name"
+                         placeholder="e.g. Urine Colour · Positive / Negative"
+                         [ngModel]="listNameFor(0)" (ngModelChange)="setListName(0, $event)" />
+                </div>
+                <span class="pf-mini-lbl">Options — tick the normal (expected) one <span class="pf-option-count">{{ rowsFor(0).length }}</span></span>
                 <div class="pf-otbl">
                   <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
                   @for (row of rowsFor(0); track $index; let ri = $index) {
@@ -337,6 +344,12 @@
                             style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
                             (click)="addOptionRow(0)">+ Add option</button>
                   </div>
+                </div>
+                <div class="pf-newlist__actions">
+                  <button type="button" class="pf-newlist__create press" [disabled]="creatingList()"
+                          (click)="createOptionList(0)">{{ creatingList() ? 'Creating…' : 'Create list' }}</button>
+                  <button type="button" class="pf-newlist__cancel press" (click)="cancelCustomOption(0)">Cancel</button>
+                  <span class="pf-newlist__hint">Creates the shared list under Test Master → Option groups and maps it to this test.</span>
                 </div>
               }
             </div>
@@ -582,8 +595,13 @@
                           </label>
                           <label class="flex flex-col gap-1 min-w-0">
                             <span class="pf-mini-lbl">Unit</span>
-                            <input type="text" class="pf-input pf-input--compact" [ngModel]="p.unit"
-                                   [disabled]="!isNumericType(p.type)" (ngModelChange)="patchField(i, { unit: $event })" placeholder="—" />
+                            @if (isNumericType(p.type)) {
+                              <pf-select size="sm" [searchable]="true" [options]="unitOptions(p.unit)"
+                                         [value]="p.unit || ''" placeholder="—"
+                                         (valueChange)="patchField(i, { unit: $any($event) })"></pf-select>
+                            } @else {
+                              <input type="text" class="pf-input pf-input--compact" [ngModel]="p.unit" [disabled]="true" placeholder="—" />
+                            }
                           </label>
                         </div>
 

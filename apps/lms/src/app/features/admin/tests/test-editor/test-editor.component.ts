@@ -235,6 +235,49 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       if (rows.length === 0) return;
     }
   }
+  // ── Units: one shared vocabulary, typeahead everywhere ──────────────
+  private static readonly MEDICAL_UNITS: string[] = [
+    'mg/dL', 'g/dL', 'g/L', 'mg/L', 'µg/dL', 'µg/L', 'ng/mL', 'ng/dL', 'ng/L', 'pg/mL',
+    'mmol/L', 'µmol/L', 'nmol/L', 'pmol/L', 'mEq/L', 'mOsm/kg',
+    'IU/L', 'U/L', 'IU/mL', 'U/mL', 'mIU/mL', 'µIU/mL', 'mIU/L',
+    '%', 'ratio', 'titre', 'index',
+    'fL', 'pg', '×10³/µL', '×10⁶/µL', '×10⁹/L', '×10¹²/L',
+    '/µL', 'cells/µL', '/HPF', '/LPF', 'million/mL',
+    'mm/hr', 'seconds', 'minutes', 'mL/min/1.73m²',
+    'g/24h', 'mg/24h', 'mL/24h', 'copies/mL', 'ng/mL/hr', 'µg/g',
+  ];
+  /** Typeahead options — the standard list plus the current value (so a
+   *  legacy or hand-entered unit survives), plus a none entry. */
+  unitOptions(current: string | null | undefined): PfSelectOption<string>[] {
+    const cur = (current ?? '').trim();
+    const base = TestEditorComponent.MEDICAL_UNITS;
+    return [
+      { value: '', label: '— no unit —' },
+      ...(cur && !base.includes(cur) ? [{ value: cur, label: cur }] : []),
+      ...base.map(u => ({ value: u, label: u })),
+    ];
+  }
+
+  // ── Creating a NAMED shared list from inside the test ───────────────
+  readonly newListNames = signal<Record<number, string>>({});
+  readonly creatingList = signal(false);
+  listNameFor(i: number): string { return this.newListNames()[i] ?? ''; }
+  setListName(i: number, v: string) { this.newListNames.update(m => ({ ...m, [i]: v })); }
+  /** Name + values → save the test (rows become the shared group, the name
+   *  rides the parameter as optionGroupName) → the group appears in this
+   *  tenant's Test Master → Option groups immediately. */
+  createOptionList(i: number) {
+    const name = this.listNameFor(i).trim();
+    const values = this.rowsFor(i).filter(r => (r.value ?? '').trim());
+    if (!name) { this.toasts.warning('Give the list a name'); return; }
+    if (values.length === 0) { this.toasts.warning('Add at least one option value'); return; }
+    this.patchField(i, { optionGroupName: name });
+    this._customOpt.update(m => ({ ...m, [i]: false }));
+    this.creatingList.set(true);
+    this.saveTest();
+    setTimeout(() => { this.loadOptionGroups(); this.creatingList.set(false); }, 1200);
+  }
+
   private loadOptionGroups() {
     this.api.get<OgGroupLite[]>('/api/option-groups').subscribe({
       next: gs => this.ogGroups.set(gs ?? []),
@@ -1488,6 +1531,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       validHigh: p.validHigh ?? null,
       normalValue: p.normalValue ?? null,
       optionRows: p.optionRows ?? null,
+      optionGroupName: p.optionGroupName ?? null,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
         label: label ?? '',
@@ -1590,6 +1634,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       unit: f.unit ?? undefined,
       options: f.options?.map(o => o.label) ?? undefined,
       optionRows: f.optionRows ?? undefined,
+      optionGroupName: f.optionGroupName ?? undefined,
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,
