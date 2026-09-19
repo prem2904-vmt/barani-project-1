@@ -370,7 +370,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     /* Single-stage entry — mirrors the standard result-entry chrome. */
     .pf-cse { display: flex; flex-direction: column; min-height: calc(100dvh - 60px); }
     .pf-cse__hdr { position: sticky; top: 0; z-index: 5; padding: 10px 24px 8px;
-      background: var(--bg-card, #12121a); border-bottom: 1px solid var(--glass-border); }
+      /* OPAQUE page background — --bg-card is translucent glass in both
+         themes, which let stage cards bleed through the sticky header. */
+      background: var(--bg-secondary, #0f0f1a); border-bottom: 1px solid var(--glass-border); }
     .pf-cse__hdr-top { display: flex; align-items: flex-start; gap: 12px; }
     .pf-cse__back { flex-shrink: 0; font-size: 22px; line-height: 1; background: transparent; border: none;
       color: var(--text-secondary); cursor: pointer; padding: 2px 6px; margin-top: 4px; }
