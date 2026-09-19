@@ -2934,19 +2934,27 @@ function renderCultureSection(
   if (!isRowHidden('gramStain') && (c.gramStain ?? '').trim()) line('Gram stain', c.gramStain);
   if (!isRowHidden('colonyCount') && (c.colonyCount ?? '').trim()) line('Colony count', c.colonyCount);
 
-  // Bench stage findings (Gram / Growth / ID …): the workbench's structured
-  // fields ride result.stages — print each done ROOT stage as one line,
-  // honoring the per-row hide keys (stage:{key}:{field} / :notes). Branch
-  // (subculture) stages stay bench-only.
+  // Bench stage findings ride result.stages — printed under the CLASSIC
+  // C&S headings (owner's reference report): the gram stage composes the
+  // "Gram stain" line, growth its own line; the ID stage's organisms field
+  // is skipped when the AST already names the isolates (the "Organism(s)
+  // isolated" line below owns that). Per-row hide keys honored
+  // (stage:{key}:{field} / :notes); branch (subculture) stages stay
+  // bench-only.
+  const STAGE_HEADINGS: Record<string, string> = {
+    gram: 'Gram stain', growth: 'Growth', id: 'Organism identification',
+  };
+  const hasAstOrganisms = (c.organisms ?? []).some(o => (o.name ?? '').trim());
   const stageSnaps = (t.result?.['stages'] as PdfStageSnap[] | undefined) ?? [];
   for (const st of stageSnaps) {
     if (st.key === 'ast' || st.caseLabel) continue;
     const bits = (st.values?.fields ?? [])
       .filter(f => (f.value ?? '').trim() && !isRowHidden(`stage:${st.key}:${f.name}`))
+      .filter(f => !(st.key === 'id' && hasAstOrganisms && (f.name ?? '').toLowerCase().includes('organism')))
       .map(f => `${f.title || f.name}: ${f.value}`);
     const notes = (st.values?.notes ?? '').trim();
-    if (notes && !isRowHidden(`stage:${st.key}:notes`)) bits.push(`Note: ${notes}`);
-    if (bits.length) line(st.label || st.key || 'Stage', bits.join(' · '));
+    if (notes && !isRowHidden(`stage:${st.key}:notes`)) bits.push(notes);
+    if (bits.length) line(STAGE_HEADINGS[st.key ?? ''] || st.label || st.key || 'Stage', bits.join('; '));
   }
 
   if (c.noGrowth) {
