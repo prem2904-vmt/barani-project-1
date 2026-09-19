@@ -62,28 +62,36 @@
           </p>
           <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
         </div>
-        <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
-        @if (headerChips().length) {
+        <!-- Glimpse of every test kind on this tube (tube-as-probe). Skipped
+             when the tube-tab strip renders — the active tab carries it. -->
+        @if (headerChips().length && !s.siblings?.length) {
           <div class="pf-sre__chips">
             @for (c of headerChips(); track $index) {
               <span class="pf-sre__chip">{{ c }}</span>
             }
           </div>
         }
-        <!-- Sibling tubes of the SAME order (FBS in one tube, PPBS in the
-             next): one tap hops to the other tube's entry screen, so a
-             multi-tube order never reads as "only the last test is here". -->
+        <!-- Tubes of the SAME order (FBS in one tube, PPBS in the next) as a
+             browser-style tab strip on the header divider: the open tube is
+             the active tab, tapping a sibling tab switches to its entry
+             screen — a multi-tube order never reads as "only the last test
+             is here". -->
         @if (s.siblings?.length) {
-          <div class="pf-sre__sibs">
-            <span class="pf-sre__sibs-lbl">Also in this order:</span>
+          <div class="pf-sre__tabs" role="tablist" aria-label="Tubes in this order">
+            <span class="pf-sre__tab pf-sre__tab--active" role="tab" aria-selected="true">
+              <span class="pf-sre__tab-code">{{ s.barcode || 'This tube' }}</span>
+              @if (headerChips().length) {
+                <span class="pf-sre__tab-tests">{{ headerChips().join(', ') }}</span>
+              }
+            </span>
             @for (sb of s.siblings; track sb.id) {
-              <button type="button" class="pf-sre__sib"
-                      [class.pf-sre__sib--open]="sb.hasOpenWork"
+              <button type="button" class="pf-sre__tab" role="tab"
+                      aria-selected="false"
                       (click)="openSibling(sb.id)"
                       [title]="sb.tests.join(', ')">
-                <span class="pf-sre__sib-code">{{ sb.barcode || 'Tube' }}</span>
-                <span class="pf-sre__sib-tests">{{ sb.tests.join(', ') }}</span>
-                @if (sb.hasOpenWork) { <span class="pf-sre__sib-dot"></span> }
+                <span class="pf-sre__tab-code">{{ sb.barcode || 'Tube' }}</span>
+                <span class="pf-sre__tab-tests">{{ sb.tests.join(', ') }}</span>
+                @if (sb.hasOpenWork) { <span class="pf-sre__tab-dot"></span> }
               </button>
             }
           </div>
