@@ -812,7 +812,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
-      cursorY = renderCultureSection(doc, t, cursorY, practice);
+      cursorY = renderCultureSection(doc, t, cursorY, practice, layout);
     } else if (layout && layout.sections.length > 0) {
       cursorY = renderResolvedTest(doc, t, layout, cursorY, practice);
     } else {
@@ -2919,7 +2919,8 @@ function renderCultureSection(
   doc: jsPDF,
   t: NonNullable<ReportSnapshot['tests']>[number],
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  layout?: import('../models/report-layout.model').ResolvedReportLayout,
 ): number {
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 90) { y = newPage(doc, practice); }
@@ -2945,53 +2946,56 @@ function renderCultureSection(
     y += 11 + lines.length * 11 + 4;
   };
 
-  line('Specimen', c.specimen || (t.sampleType ?? ''));
-  // Empty summary lines are SKIPPED, not printed as "—": the bench captures
-  // gram/colony findings as stage fields (printed just below), so a dashed
-  // legacy line above them is pure noise.
-  if (!isRowHidden('gramStain') && (c.gramStain ?? '').trim()) line('Gram stain', c.gramStain);
-  if (!isRowHidden('colonyCount') && (c.colonyCount ?? '').trim()) line('Colony count', c.colonyCount);
-
-  // Bench stage findings ride result.stages — printed under the CLASSIC
-  // C&S headings (owner's reference report): the gram stage composes the
-  // "Gram stain" line, growth its own line; the ID stage's organisms field
-  // is skipped when the AST already names the isolates (the "Organism(s)
-  // isolated" line below owns that). Per-row hide keys honored
-  // (stage:{key}:{field} / :notes); branch (subculture) stages stay
-  // bench-only.
-  const STAGE_HEADINGS: Record<string, string> = {
-    gram: 'Gram stain', growth: 'Growth', id: 'Organism identification',
-  };
-  const hasAstOrganisms = (c.organisms ?? []).some(o => (o.name ?? '').trim());
+  // ── Composition helpers (shared by the classic and layout-driven paths) ──
   const stageSnaps = (t.result?.['stages'] as PdfStageSnap[] | undefined) ?? [];
-  for (const st of stageSnaps) {
-    if (st.key === 'ast' || st.caseLabel) continue;
+  /** One bench stage's ROOT findings as prose ("Pus Cells: Many; …; note"),
+   *  honoring the per-row hide keys. Branch (subculture) stages are
+   *  bench-only. */
+  const stageText = (key: string, opts?: { skipOrganisms?: boolean }): string => {
+    const st = stageSnaps.find(x => x.key === key && !x.caseLabel);
+    if (!st) return '';
     const bits = (st.values?.fields ?? [])
-      .filter(f => (f.value ?? '').trim() && !isRowHidden(`stage:${st.key}:${f.name}`))
-      .filter(f => !(st.key === 'id' && hasAstOrganisms && (f.name ?? '').toLowerCase().includes('organism')))
+      .filter(f => (f.value ?? '').trim() && !isRowHidden(`stage:${key}:${f.name}`))
+      .filter(f => !(opts?.skipOrganisms && (f.name ?? '').toLowerCase().includes('organism')))
       .map(f => `${f.title || f.name}: ${f.value}`);
     const notes = (st.values?.notes ?? '').trim();
-    if (notes && !isRowHidden(`stage:${st.key}:notes`)) bits.push(notes);
-    if (bits.length) line(STAGE_HEADINGS[st.key ?? ''] || st.label || st.key || 'Stage', bits.join('; '));
-  }
-
-  if (c.noGrowth) {
-    line('Result', 'No growth after 48 hours of aerobic incubation.');
-    return y;
-  }
-
-  // Keep any organism that is named OR carries antibiotic data. A tech may
-  // fill the whole sensitivity panel before naming the isolate — we must
-  // never silently drop measured results and mislabel them "no growth".
-  // Hidden keys use the ORIGINAL index (the bench's checkbox keys), while
-  // the printed numbering stays sequential over what actually prints.
+    if (notes && !isRowHidden(`stage:${key}:notes`)) bits.push(notes);
+    return bits.join('; ');
+  };
+  // Keep hidden keys using ORIGINAL organism indexes; numbering stays
+  // sequential over what actually prints.
   const organisms = (c.organisms ?? [])
     .map((o, i) => ({ o, i }))
     .filter(({ o, i }) => !isRowHidden(`org:${i}`)
       && ((o.name ?? '').trim() || (o.antibiotics ?? []).some(a => (a.name ?? '').trim())));
   const orgLabel = (o: PdfOrganism, i: number): string => (o.name ?? '').trim() || `Isolate ${i + 1}`;
-  const names = organisms.map(({ o }, n) => `${n + 1}. ${orgLabel(o, n)}`).join('   ');
-  line('Organism(s) isolated', names || 'No significant growth');
+  const organismNames = organisms.map(({ o }, n) => `${n + 1}. ${orgLabel(o, n)}`).join('   ');
+  const hasAstOrganisms = (c.organisms ?? []).some(o => (o.name ?? '').trim());
+
+  /** Text for one culture data source — '' means "skip the line". */
+  const sourceText = (src: string): string => {
+    switch (src) {
+      case 'specimen':    return (c.specimen || (t.sampleType ?? '')) ?? '';
+      case 'gramStain':   return isRowHidden('gramStain') ? '' : ((c.gramStain ?? '').trim() || stageText('gram'));
+      case 'growth':      return stageText('growth');
+      case 'id':          return stageText('id', { skipOrganisms: hasAstOrganisms });
+      case 'colonyCount': return isRowHidden('colonyCount') ? '' : (c.colonyCount ?? '').trim();
+      case 'organisms':   return organismNames || 'No significant growth';
+      case 'note':        return ((t.result?.['note'] as string | undefined) ?? '').trim();
+      case 'resistancePattern':      return isRowHidden(src) ? '' : (c.resistancePattern ?? '').trim();
+      case 'intrinsicResistance':    return isRowHidden(src) ? '' : (c.intrinsicResistance ?? '').trim();
+      case 'clinicalNotes':          return isRowHidden(src) ? '' : (c.clinicalNotes ?? '').trim();
+      case 'infectionControlAdvice': return isRowHidden(src) ? '' : (c.infectionControlAdvice ?? '').trim();
+      default: return '';
+    }
+  };
+  const DEFAULT_LABELS: Record<string, string> = {
+    specimen: 'Specimen', gramStain: 'Gram stain', growth: 'Growth',
+    id: 'Organism identification', colonyCount: 'Colony count',
+    organisms: 'Organism(s) isolated', note: 'Summary',
+    resistancePattern: 'Resistance pattern', intrinsicResistance: 'Intrinsic resistance',
+    clinicalNotes: 'Clinical notes', infectionControlAdvice: 'Infection control advice',
+  };
 
   const interpWord = (v?: string): { txt: string; color: string } => {
     const u = (v ?? '').toUpperCase();
@@ -3001,56 +3005,114 @@ function renderCultureSection(
     return { txt: '—', color: BLACK };
   };
 
-  for (let idx = 0; idx < organisms.length; idx++) {
-    const { o: org, i: origIdx } = organisms[idx];
-    if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
-    const rows = (org.antibiotics ?? [])
-      .filter(a => (a.name ?? '').trim() && !isRowHidden(`ast:${origIdx}:${a.name}`))
-      .map(a => {
-        const w = interpWord(a.interpretation);
-        return [
-          { content: a.name ?? '', styles: {} },
-          { content: w.txt, styles: { fontStyle: 'bold', textColor: w.color, halign: 'center' } },
-        ];
+  /** The AST block: per-organism antimicrobial tables + the S/R/M legend.
+   *  Under noGrowth it prints the classic "no growth" result line. */
+  const astBlock = (): void => {
+    if (c.noGrowth) {
+      line('Result', 'No growth after 48 hours of aerobic incubation.');
+      return;
+    }
+    for (let idx = 0; idx < organisms.length; idx++) {
+      const { o: org, i: origIdx } = organisms[idx];
+      if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
+      const rows = (org.antibiotics ?? [])
+        .filter(a => (a.name ?? '').trim() && !isRowHidden(`ast:${origIdx}:${a.name}`))
+        .map(a => {
+          const w = interpWord(a.interpretation);
+          return [
+            { content: a.name ?? '', styles: {} },
+            { content: w.txt, styles: { fontStyle: 'bold', textColor: w.color, halign: 'center' } },
+          ];
+        });
+      if (rows.length === 0) continue;
+      autoTable(doc, {
+        startY: y,
+        head: [[`Antimicrobial for ${orgLabel(org, idx)}`, 'Interpretation']],
+        body: rows as unknown as Array<Array<string>>,
+        margin: { left: MARGIN_X, right: MARGIN_X },
+        theme: 'plain',
+        styles: tableBodyStyles(),
+        headStyles: tableHeadStyles(),
+        bodyStyles: { fillColor: '#ffffff' },
+        columnStyles: { 0: { cellWidth: 340 }, 1: { cellWidth: 'auto' as unknown as number, halign: 'center' } },
       });
-    if (rows.length === 0) continue;
-    autoTable(doc, {
-      startY: y,
-      head: [[`Antimicrobial for ${orgLabel(org, idx)}`, 'Interpretation']],
-      body: rows as unknown as Array<Array<string>>,
-      margin: { left: MARGIN_X, right: MARGIN_X },
-      theme: 'plain',
-      styles: tableBodyStyles(),
-      headStyles: tableHeadStyles(),
-      bodyStyles: { fillColor: '#ffffff' },
-      columnStyles: { 0: { cellWidth: 340 }, 1: { cellWidth: 'auto' as unknown as number, halign: 'center' } },
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+    }
+
+    // Legend.
+    if (y > A4.h - MARGIN_BOTTOM - 40) { y = newPage(doc, practice); }
+    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEXT_DIM);
+    const legend = [
+      'S - Sensitive (clinically effective at standard therapeutic dose)',
+      'R - Resistant (clinically ineffective at standard or increased dose)',
+      'M - Intermediate (may be effective at higher dose or in concentrated body sites)',
+      'Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.',
+    ];
+    // Advance by the ACTUAL wrapped-line count — the last legend line wraps to
+    // two lines, so a fixed 10px step left the next block ("Resistance pattern")
+    // overlapping it.
+    legend.forEach(l => {
+      const lines = doc.splitTextToSize(l, A4.w - 2 * MARGIN_X) as string[];
+      doc.text(lines, MARGIN_X, y);
+      y += lines.length * 10;
     });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+    y += 4;
+  };
+
+  // ── LAYOUT-DRIVEN path: the admin arranged culture sections in the SAME
+  //    Test Master layout editor every other test uses. Only taken when the
+  //    layout actually holds culture sections — so untouched tests (and every
+  //    non-culture test, which never reaches this renderer) keep the exact
+  //    classic output below. ──
+  const cultureSecs = (layout?.sections ?? []).filter(sec => sec.isVisible !== false);
+  if (cultureSecs.some(sec => sec.type === 'culture_line' || sec.type === 'culture_ast')) {
+    for (const sec of cultureSecs) {
+      if (sec.type === 'culture_line') {
+        const src = (sec.content ?? '').trim();       // engine passes `source` via content
+        const txt = sourceText(src);
+        if (txt) line(sec.label || DEFAULT_LABELS[src] || src, txt);
+      } else if (sec.type === 'culture_ast') {
+        astBlock();
+      } else if (sec.type === 'paragraph' && (sec.content ?? '').trim()) {
+        if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
+        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        const lines = doc.splitTextToSize((sec.content ?? '').trim(), A4.w - 2 * MARGIN_X) as string[];
+        doc.text(lines, MARGIN_X, y);
+        y += lines.length * 11 + 6;
+      }
+      // grid/chart/image sections are not meaningful inside the culture
+      // block — ignored rather than guessed at.
+    }
+    return y;
   }
 
-  // Legend.
-  if (y > A4.h - MARGIN_BOTTOM - 40) { y = newPage(doc, practice); }
-  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEXT_DIM);
-  const legend = [
-    'S - Sensitive (clinically effective at standard therapeutic dose)',
-    'R - Resistant (clinically ineffective at standard or increased dose)',
-    'M - Intermediate (may be effective at higher dose or in concentrated body sites)',
-    'Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.',
-  ];
-  // Advance by the ACTUAL wrapped-line count — the last legend line wraps to
-  // two lines, so a fixed 10px step left the next block ("Resistance pattern")
-  // overlapping it.
-  legend.forEach(l => {
-    const lines = doc.splitTextToSize(l, A4.w - 2 * MARGIN_X) as string[];
-    doc.text(lines, MARGIN_X, y);
-    y += lines.length * 10;
-  });
-  y += 4;
+  // ── CLASSIC path (no customized layout): the reference C&S format.
+  //    Note: the legacy values.gramStain line and the bench gram STAGE line
+  //    are printed independently (pre-layout behaviour, spec-locked) — the
+  //    either/or collapse in sourceText('gramStain') is layout-mode only. ──
+  line('Specimen', sourceText('specimen'));
+  if (!isRowHidden('gramStain') && (c.gramStain ?? '').trim()) line('Gram stain', c.gramStain ?? '');
+  const colony = sourceText('colonyCount');
+  if (colony) line('Colony count', colony);
+  const gramStage = stageText('gram');
+  if (gramStage) line('Gram stain', gramStage);
+  const growth = sourceText('growth');
+  if (growth) line('Growth', growth);
+  const idLine = sourceText('id');
+  if (idLine) line('Organism identification', idLine);
 
-  if (!isRowHidden('resistancePattern') && (c.resistancePattern ?? '').trim()) line('Resistance pattern', c.resistancePattern);
-  if (!isRowHidden('intrinsicResistance') && (c.intrinsicResistance ?? '').trim()) line('Intrinsic resistance', c.intrinsicResistance);
-  if (!isRowHidden('clinicalNotes') && (c.clinicalNotes ?? '').trim()) line('Clinical notes', c.clinicalNotes);
-  if (!isRowHidden('infectionControlAdvice') && (c.infectionControlAdvice ?? '').trim()) line('Infection control advice', c.infectionControlAdvice);
+  if (c.noGrowth) {
+    line('Result', 'No growth after 48 hours of aerobic incubation.');
+    return y;
+  }
+
+  line('Organism(s) isolated', sourceText('organisms'));
+  astBlock();
+
+  for (const src of ['resistancePattern', 'intrinsicResistance', 'clinicalNotes', 'infectionControlAdvice']) {
+    const v = sourceText(src);
+    if (v) line(DEFAULT_LABELS[src], v);
+  }
   return y;
 }
 

@@ -118,6 +118,10 @@ const OPERATORS = [
                     <button type="button" data-type="paragraph" (click)="addAndCloseMenu('paragraph')">Paragraph (interpretation)</button>
                     <button type="button" data-type="chart"     (click)="addAndCloseMenu('chart')">Chart (gauge / bar)</button>
                     <button type="button" data-type="image"     (click)="addAndCloseMenu('image')">Image (attachments)</button>
+                    @if (culture()) {
+                      <button type="button" data-type="culture_line" (click)="addAndCloseMenu('culture_line')">Culture line (Gram / growth / notes)</button>
+                      <button type="button" data-type="culture_ast"  (click)="addAndCloseMenu('culture_ast')">AST table (per-organism)</button>
+                    }
                   </div>
                 }
               </div>
@@ -420,6 +424,21 @@ const OPERATORS = [
                     <ng-container *ngTemplateOutlet="sectionCondTpl; context: { c, ci, sec: s }"></ng-container>
                   }
                 </div>
+              }
+
+              <!-- ── CULTURE SECTIONS (offered only for culture tests) ── -->
+              @if (s.type === 'culture_line') {
+                <label class="pf-label-mini">Label on the report</label>
+                <input class="pf-input" [value]="s.label || ''"
+                       (input)="patchSection(selectedSectionIndex(), { label: $any($event.target).value })"
+                       placeholder="e.g. GRAM STAIN" />
+                <label class="pf-label-mini">Data source</label>
+                <pf-select [options]="cultureSourceOptions" [value]="asCultureLine(s).source"
+                           (valueChange)="patchSection(selectedSectionIndex(), $any({ source: $event }))"></pf-select>
+                <p class="pf-le-tip">The line's text comes from the culture bench (stage findings, notes). Empty sources are skipped on the PDF.</p>
+              }
+              @if (s.type === 'culture_ast') {
+                <p class="pf-le-tip">Per-organism antimicrobial tables + the S/R/M legend. Content comes from the bench AST stage — the bench's row checkboxes still hide individual antibiotics or organisms.</p>
               }
 
               <!-- ── CHART SECTION ── -->
@@ -1611,6 +1630,26 @@ export class TestLayoutEditorComponent {
    *  editor can surface the configured columns instead of asking admin
    *  to type column names blindly. */
   readonly departmentId = input<string>('');
+  /** True when the edited test is a culture (microFormat culture_sensitivity):
+   *  unlocks the culture-only section palette. Every other test keeps the
+   *  standard palette untouched. */
+  readonly culture = input<boolean>(false);
+  readonly cultureSourceOptions: PfSelectOption[] = [
+    { value: 'specimen', label: 'Specimen' },
+    { value: 'gramStain', label: 'Gram stain (bench gram stage)' },
+    { value: 'growth', label: 'Growth check' },
+    { value: 'id', label: 'Organism identification' },
+    { value: 'colonyCount', label: 'Colony count' },
+    { value: 'organisms', label: 'Organism(s) isolated' },
+    { value: 'resistancePattern', label: 'Resistance pattern' },
+    { value: 'intrinsicResistance', label: 'Intrinsic resistance' },
+    { value: 'clinicalNotes', label: 'Clinical notes' },
+    { value: 'infectionControlAdvice', label: 'Infection control advice' },
+    { value: 'note', label: 'Bench summary note' },
+  ];
+  asCultureLine(sec: ReportSection): { source: string } {
+    return sec as unknown as { source: string };
+  }
 
   /** Department columns the test inherits — fetched whenever departmentId
    *  changes. Empty array when the dept hasn't been configured yet (the
@@ -2445,6 +2484,10 @@ export class TestLayoutEditorComponent {
       case 'paragraph': s = { id, type: 'paragraph', order, template: '', conditions: [] }; break;
       case 'chart':     s = { id, type: 'chart', order, parameter: '', min: 0, max: 100, zones: [], conditions: [] }; break;
       case 'image':     s = { id, type: 'image', order, conditions: [] }; break;
+      // Culture-only building blocks — the palette offers them only when the
+      // host says the test is a culture (see the `culture` input).
+      case 'culture_line': s = { id, type: 'culture_line', order, source: 'gramStain', conditions: [] }; break;
+      case 'culture_ast':  s = { id, type: 'culture_ast', order, conditions: [] }; break;
     }
     this.mutateSections(arr => [...arr, s]);
   }

@@ -115,7 +115,11 @@ export interface ConditionRule {
 // Sections
 // ═══════════════════════════════════════════════════════════════
 
-export type ReportSectionType = 'grid' | 'paragraph' | 'chart' | 'image';
+export type ReportSectionType = 'grid' | 'paragraph' | 'chart' | 'image'
+  /* Culture-only building blocks (offered ONLY for culture_sensitivity
+     tests): a labelled summary line bound to a bench data source, and the
+     per-organism AST tables block. Other tests never see these types. */
+  | 'culture_line' | 'culture_ast';
 
 interface ReportSectionBase {
   id: string;
@@ -173,6 +177,22 @@ export interface ChartSection extends ReportSectionBase {
   chartType?: 'bar' | 'gauge';
 }
 
+/** One labelled line of the culture report ("GRAM STAIN: …"), bound to a
+ *  bench data source. The PDF composes the text from the sign-out snapshot;
+ *  empty sources are skipped. */
+export interface CultureLineSection extends ReportSectionBase {
+  type: 'culture_line';
+  /** specimen | gramStain | growth | id | colonyCount | organisms |
+   *  resistancePattern | intrinsicResistance | clinicalNotes |
+   *  infectionControlAdvice | note */
+  source: string;
+}
+
+/** The per-organism antimicrobial tables + S/R/M legend block. */
+export interface CultureAstSection extends ReportSectionBase {
+  type: 'culture_ast';
+}
+
 export interface ChartZone {
   from: number;
   to: number;
@@ -180,7 +200,8 @@ export interface ChartZone {
   label?: string;
 }
 
-export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection;
+export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection
+  | CultureLineSection | CultureAstSection;
 
 // ═══════════════════════════════════════════════════════════════
 // Per-test layout response

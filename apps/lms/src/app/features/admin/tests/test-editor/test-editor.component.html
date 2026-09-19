@@ -891,6 +891,7 @@
                 [columnsOverride]="liveColumnsOverride()"></pf-test-notes-editor>
             } @else {
               <pf-test-layout-editor class="block" [testId]="d.id || ''" [departmentId]="d.departmentId || ''"
+                [culture]="cultureBench()"
                 [parameters]="parameterNames()"></pf-test-layout-editor>
             }
           } @else {

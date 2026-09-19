@@ -25,7 +25,8 @@ interface StageSnap {
 }
 
 function renderCulture(values: CultureValues, hidden?: string[], stages?: StageSnap[],
-                       deptSignatures?: Array<{ department?: string; signatures?: Array<{ name?: string; title?: string }> }>): string {
+                       deptSignatures?: Array<{ department?: string; signatures?: Array<{ name?: string; title?: string }> }>,
+                       layoutSections?: Array<Record<string, unknown>>): string {
   const snap = {
     patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
     order: { id: 'o1', orderNumber: 'LAB-2609-000001', createdAt: '2026-09-19T00:00:00Z' },
@@ -44,7 +45,10 @@ function renderCulture(values: CultureValues, hidden?: string[], stages?: StageS
   };
   const doc = buildReportPdf({
     report: { id: 'r1', createdAt: '2026-09-19T00:00:00Z', data: JSON.stringify(snap) },
-    resolvedLayouts: {},
+    resolvedLayouts: layoutSections
+      ? { ct1: { testId: 'ct1', testName: 'Bacterial Culture & Sensitivity', departmentName: 'Microbiology',
+                 columns: [], sections: layoutSections } }
+      : {},
     template: null,
   } as never);
   return Buffer.from(doc.output('arraybuffer')).toString('latin1');
@@ -110,6 +114,35 @@ describe('culture report-row visibility', () => {
     const some = renderCulture(VALUES, ['stage:gram:pus_cells'], stages);
     expect(some).not.toContain('PUSVAL');
     expect(some).toContain('YEASTVAL');
+  });
+
+  it('a customized layout drives order + labels; classic stays without one', () => {
+    // Admin arranged: clinical notes FIRST under a custom label, then AST,
+    // and dropped the organisms line entirely — the renderer must follow.
+    const sections = [
+      { id: 'l1', type: 'culture_line', label: 'PHYSICIAN ADVICE', content: 'clinicalNotes', isVisible: true },
+      { id: 'a1', type: 'culture_ast', isVisible: true },
+      { id: 'p1', type: 'paragraph', content: 'CUSTOMPARAGRAPH', isVisible: true },
+    ];
+    const text = renderCulture(VALUES, undefined, undefined, undefined, sections);
+    expect(text).toContain('PHYSICIAN ADVICE');
+    expect(text).toContain('CLINNOTEVAL');
+    expect(text).toContain('Amikacin');            // AST block still renders
+    expect(text).toContain('CUSTOMPARAGRAPH');
+    expect(text).not.toContain('GRAMSTAINVAL');    // gram line not in the layout
+    // Order: advice label precedes the AST table head.
+    expect(text.indexOf('PHYSICIAN ADVICE')).toBeLessThan(text.indexOf('Antimicrobial for'));
+  });
+
+  it('layout mode still honors the row-hide checkboxes', () => {
+    const sections = [
+      { id: 'l1', type: 'culture_line', content: 'gramStain', isVisible: true },
+      { id: 'a1', type: 'culture_ast', isVisible: true },
+    ];
+    const text = renderCulture(VALUES, ['ast:0:Ciprofloxacin'], undefined, undefined, sections);
+    expect(text).toContain('GRAMSTAINVAL');
+    expect(text).not.toContain('Ciprofloxacin');
+    expect(text).toContain('Amikacin');
   });
 
   it('culture-only report still draws its department signatories', () => {
