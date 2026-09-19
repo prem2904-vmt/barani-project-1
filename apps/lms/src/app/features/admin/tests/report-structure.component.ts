@@ -141,7 +141,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                   <p class="rsd__note">Attachments captured with the result print here.</p>
                 }
                 @case ('notes') {
-                  <p class="rsd__note">The notes &amp; description edited below.</p>
+                  <p class="rsd__note">One line per parameter, beside its value — edited just below this list.</p>
                 }
                 @default {
                   <p class="rsd__note">{{ row.hint }} — fine-tuning lives in the advanced editor below.</p>
@@ -450,7 +450,7 @@ export class ReportStructureComponent {
     return [
       { key: 'implicit-grid', kind: 'grid', name: 'Results table',
         hint: '', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
-      { key: 'implicit-notes', kind: 'notes', name: 'Notes & description',
+      { key: 'implicit-notes', kind: 'notes', name: 'Description column',
         hint: 'edited below', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
     ];
   });

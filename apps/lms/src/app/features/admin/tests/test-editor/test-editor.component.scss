@@ -219,6 +219,7 @@ select.pf-input--compact {
 /* Notes & description block — always visible under the print-order list. */
 .pf-lay-notes { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--glass-border); }
 .pf-lay-notes__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.pf-lay-notes__sub { margin: 2px 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); max-width: 620px; }
 
 /* The one power-user escape hatch. Quiet link; the editor expands inline. */
 .pf-lay-advwrap { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--glass-border); }

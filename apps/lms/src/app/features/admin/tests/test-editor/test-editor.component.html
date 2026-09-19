@@ -927,10 +927,11 @@
                 (customizeColumns)="startCustomizeColumns()"></pf-report-structure>
             }
 
-            <!-- Notes & description — the friendly per-test wording editor. -->
+            <!-- Description column — what prints beside each parameter. -->
             <div class="pf-lay-notes">
-              <h3 class="pf-lay-notes__title">Notes &amp; description</h3>
-              <pf-test-notes-editor class="block" [fixedTestId]="d.id || ''" [hidePreview]="true"
+              <h3 class="pf-lay-notes__title">Description column</h3>
+              <p class="pf-lay-notes__sub">One line per parameter, printed in the report's Description column — e.g. “High in dehydration · Low in anaemia”. Sentences under the results live in the print order above.</p>
+              <pf-test-notes-editor class="block" [slim]="true" [fixedTestId]="d.id || ''" [hidePreview]="true"
                 [parameters]="parameterNames()" [profileMembers]="previewProfileMembers()"
                 [columnsOverride]="liveColumnsOverride()" (saved)="refreshPreview()"></pf-test-notes-editor>
             </div>

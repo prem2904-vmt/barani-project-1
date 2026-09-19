@@ -42,11 +42,11 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     <div class="grid gap-5 {{ hidePreview() ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.3fr_1fr]' }}">
 
       <!-- ─────────────── LEFT: section editor ─────────────── -->
-      <pf-tile tone="default" padding="lg" class="block">
+      <div class="block" [class.pf-tnotes-card]="!slim()">
 
         <!-- Test picker + status. The picker disappears when the host already
              knows the test (Test Master); the status pill stays useful. -->
-        <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4" [hidden]="slim()">
           <div class="flex items-center gap-3 pf-test-pick" [hidden]="!!fixedTestId()">
             <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Test</label>
@@ -97,7 +97,10 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             }
           </div>
 
-          <!-- ── 2 · NOTES & INTERPRETATION paragraphs ───────────── -->
+          <!-- ── 2 · NOTES & INTERPRETATION paragraphs ─────────────
+               Slim mode drops this: Sentence blocks on the print-order
+               surface author the same paragraph sections. -->
+          @if (!slim()) {
           <div class="pf-tl-block">
             <h4 class="pf-tl-h">Notes &amp; interpretation</h4>
             <p class="pf-tl-hint">
@@ -127,8 +130,10 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             }
             <button type="button" class="pf-link-btn" (click)="addParagraphPreset('Interpretation')">+ Add note block</button>
           </div>
+          }
 
           <!-- ── 3 · ADVANCED: raw table layout (kept, tucked away) ── -->
+          @if (!slim()) {
           <button type="button" class="pf-tl-adv-toggle press" (click)="showAdvanced.set(!showAdvanced())">
             {{ showAdvanced() ? '▾' : '▸' }} Advanced table layout
             <span class="pf-tl-adv-sub">custom rows &amp; per-cell templates — most tests don't need this</span>
@@ -229,6 +234,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
           </ul>
           <button type="button" class="pf-link-btn" (click)="addSection('grid')">+ Custom table section</button>
           }
+          }
 
           <!-- Save footer -->
           <div class="flex items-center justify-end gap-3 mt-4">
@@ -243,7 +249,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             Select a test to edit its report layout.
           </p>
         }
-      </pf-tile>
+      </div>
 
       <!-- ─────────────── RIGHT: live preview ───────────────
            The EXACT printed output: the same jsPDF pipeline as the patient
@@ -274,6 +280,8 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     </div>
   `,
   styles: [`
+    .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
+      background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
     .pf-tl-block { margin-bottom: 18px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
       border-radius: 14px; background: rgba(255,255,255,0.02); }
@@ -382,6 +390,10 @@ export class TestNotesEditorComponent implements OnInit {
    *  preview on the right), hide this editor's own preview pane and render the
    *  section editor full-width. */
   readonly hidePreview = input(false);
+  /** Slim mode (test editor): ONLY the Description column. Sentences are
+   *  authored on the print-order surface and power tools in Advanced —
+   *  repeating them here was three surfaces editing the same sections. */
+  readonly slim = input(false);
   /** Drive the editor from a KNOWN test (Test Master embeds it inside a test
    *  that is already open) instead of its own dropdown. When set, the picker
    *  row is hidden and the catalogue fetch is skipped entirely. */
