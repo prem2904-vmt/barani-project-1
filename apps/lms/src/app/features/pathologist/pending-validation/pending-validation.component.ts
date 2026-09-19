@@ -414,7 +414,19 @@ export class PendingValidationComponent implements OnInit {
   }
 
   openValidate(t: OrderTest) {
-    this.router.navigate(['/pathologist/validate', t.id]);
+    this.goToReview(t, [t]);
+  }
+
+  /** Validation review = the SAME screen the tech entered on (?validate=1).
+   *  Culture tubes keep the dedicated review (bench stage views + amend). */
+  private goToReview(t: OrderTest, siblings: OrderTest[]) {
+    const isCulture = siblings.some(x => (x.test?.parameters ?? '').includes('culture_sensitivity'));
+    const sampleId = t.subOrder?.id;
+    if (!isCulture && sampleId) {
+      this.router.navigate(['/lab/sample', sampleId], { queryParams: { validate: 1 } });
+    } else {
+      this.router.navigate(['/pathologist/validate', t.id]);
+    }
   }
 
   /** One-click: tapping a pending order goes straight to the validation screen
@@ -423,7 +435,7 @@ export class PendingValidationComponent implements OnInit {
    *  here after each, and the next test is one tap away. */
   openOrder(g: { items: OrderTest[] }) {
     const first = g.items[0];
-    if (first) this.router.navigate(['/pathologist/validate', first.id]);
+    if (first) this.goToReview(first, g.items);
   }
 
   async openReject(t: OrderTest) {

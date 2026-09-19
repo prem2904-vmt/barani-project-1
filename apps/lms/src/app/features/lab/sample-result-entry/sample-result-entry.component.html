@@ -170,7 +170,9 @@
     <!-- Phone: the primary action moves into the header as an icon (top-
          right) so the bottom is free. Submitted-and-awaiting state flips it
          to an undo. Hidden >=641px (which uses the bottom action bar). -->
-    @if (hasReopenable() && !hasWritable()) {
+    @if (validateMode()) {
+      <!-- Validation mode keeps the header clean — actions live in the footer. -->
+    } @else if (hasReopenable() && !hasWritable()) {
       <button
         type="button"
         class="pf-sre__hdr-action"
@@ -1130,6 +1132,27 @@
     </div>
 
     <footer class="pf-sre__footer">
+      @if (validateMode()) {
+        <span class="pf-sre__val-meta">
+          Submitted{{ submittedAtLabel() ? ' · ' + submittedAtLabel() : '' }} · awaiting validation
+        </span>
+        <button
+          type="button"
+          class="pf-sre__reopen"
+          [disabled]="submitting() || enteredTests().length === 0"
+          (click)="rejectTube()"
+        >
+          Reject
+        </button>
+        <button
+          type="button"
+          class="pf-sre__submit"
+          [disabled]="submitting() || enteredTests().length === 0"
+          (click)="validateTube()"
+        >
+          {{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}
+        </button>
+      } @else {
       @if (hasReopenable()) {
         <!-- Finished tube (submitted OR signed off) — Edit asks for a reason,
              pulls it back to this tech and unlocks the fields. Every re-open
@@ -1168,6 +1191,7 @@
               : "Submit All Results"
         }}
       </button>
+      }
     </footer>
 
     @if (lastFlags().length > 0) {

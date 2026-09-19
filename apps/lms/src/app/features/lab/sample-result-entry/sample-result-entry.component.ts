@@ -1168,8 +1168,73 @@ export class SampleResultEntryComponent {
     }
   }
 
+  /** VALIDATION mode (?validate=1): the pathologist reviews the tube on the
+   *  SAME screen the tech used — fields already render read-only for entered
+   *  tests; drafts/autosave stay off; the footer swaps to Reject / Validate. */
+  readonly validateMode = signal(false);
+
+  enteredTests() {
+    return (this._sample()?.tests ?? []).filter(t => t.status === 'entered');
+  }
+  /** When the tube was submitted (latest resultedAt across its tests). */
+  submittedAtLabel(): string {
+    const ts = (this._sample()?.tests ?? [])
+      .map(t => t.resultedAt).filter(Boolean).sort();
+    if (!ts.length) return '';
+    try { return new Date(ts[ts.length - 1] as string).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    catch { return ''; }
+  }
+
+  async validateTube() {
+    const targets = this.enteredTests();
+    if (!targets.length || this.submitting()) return;
+    this._submitting.set(true);
+    let ok = 0, lastErr = '';
+    for (const t of targets) {
+      try { await firstValueFrom(this.api.post(`/api/validation/${t.id}/validate`, { note: null })); ok++; }
+      catch (e) { lastErr = ApiError.from(e).message; }
+    }
+    this._submitting.set(false);
+    if (ok === targets.length) {
+      this.toasts.success(ok === 1 ? 'Result validated' : `${ok} results validated`);
+      void this.router.navigate(['/pathologist']);
+    } else {
+      this.toasts.error(lastErr || 'Some results could not be validated');
+      await this.load(this._sample()?.id ?? '');
+    }
+  }
+
+  async rejectTube() {
+    const targets = this.enteredTests();
+    if (!targets.length || this.submitting()) return;
+    const reason = await this.dialog.prompt({
+      title: 'Reject this tube?',
+      message: 'Every submitted result on this sample goes back to the technician for re-entry.',
+      placeholder: 'Reason for rejection…',
+      multiline: true,
+      required: true,
+      tone: 'danger',
+      confirmLabel: 'Reject results',
+    });
+    if (!reason) return;
+    this._submitting.set(true);
+    let ok = 0, lastErr = '';
+    for (const t of targets) {
+      try { await firstValueFrom(this.api.post(`/api/validation/${t.id}/reject`, { reason, note: null })); ok++; }
+      catch (e) { lastErr = ApiError.from(e).message; }
+    }
+    this._submitting.set(false);
+    if (ok === targets.length) {
+      this.toasts.success('Rejected — technician notified');
+      void this.router.navigate(['/pathologist']);
+    } else {
+      this.toasts.error(lastErr || 'Some results could not be rejected');
+    }
+  }
+
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get("sampleId");
+    this.validateMode.set(this.route.snapshot.queryParamMap.get('validate') === '1');
     if (!id) {
       this._loading.set(false);
       return;
@@ -1199,7 +1264,9 @@ export class SampleResultEntryComponent {
       this.prefillValues(sample ?? null);
       // Then overlay any locally-autosaved draft — typing that never
       // reached the server (app killed mid-entry) beats the prefill.
-      this.restoreDraft();
+      // (Never in VALIDATION mode: the pathologist must review exactly what
+      // the tech SUBMITTED, not a stale local draft on this device.)
+      if (!this.validateMode()) this.restoreDraft();
       // Calc fields: stored values that match their formula stay live-updating;
       // ones that differ were overridden. Needs the tenant for ISI/MNPT.
       this.tenantState.ensureLoaded();

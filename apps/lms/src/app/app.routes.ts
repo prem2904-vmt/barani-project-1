@@ -464,7 +464,9 @@ export const appRoutes: Route[] = [
         // the tube. Replaces the old per-test scan-then-enter-then-scan
         // flow for labs that prefer the tube as the unit of work.
         path: 'lab/sample/:sampleId',
-        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
+        // validate_result: the pathologist reviews the tube on this SAME
+        // screen (?validate=1) — read-only + Reject/Validate footer.
+        canActivate: [permissionGuard(['enter_result', 'edit_result', 'validate_result'])],
         loadComponent: () => import('./features/lab/sample-result-entry/sample-result-entry.component').then(m => m.SampleResultEntryComponent)
       },
       {

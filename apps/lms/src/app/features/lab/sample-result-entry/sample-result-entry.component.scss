@@ -1547,3 +1547,6 @@
 .pf-sre__sib-dot {
   width: 7px; height: 7px; border-radius: 999px; background: var(--violet-500, #8b5cf6); flex-shrink: 0;
 }
+
+/* Validation mode: submitted-by meta beside the Reject / Validate actions. */
+.pf-sre__val-meta { margin-right: auto; font-size: 12px; color: var(--text-secondary); align-self: center; }
