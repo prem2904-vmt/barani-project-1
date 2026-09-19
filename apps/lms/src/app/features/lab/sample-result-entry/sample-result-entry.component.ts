@@ -680,6 +680,26 @@ export class SampleResultEntryComponent {
 
   /** True if this parameter has at least one open thread — used to
       red-border the input so the tech focuses there. */
+  /** Per-parameter note toggles — lets ANYONE start a row conversation,
+   *  not just continue one that already exists (the crucial review tool:
+   *  the validator questions ONE value in place, the tech answers there). */
+  private readonly _openParamNotes = signal<Set<string>>(new Set());
+  paramNoteOpen(testId: string, name: string): boolean {
+    return this._openParamNotes().has(`${testId}:${name}`);
+  }
+  toggleParamNote(testId: string, name: string) {
+    const k = `${testId}:${name}`;
+    this._openParamNotes.update(set => {
+      const n = new Set(set);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      return n;
+    });
+  }
+  /** Comments author role follows the screen mode. */
+  commentRole(): 'tech' | 'validator' {
+    return this.validateMode() ? 'validator' : 'tech';
+  }
+
   hasOpenComment(testId: string, parameterName: string): boolean {
     return this._comments().some(
       (c) =>

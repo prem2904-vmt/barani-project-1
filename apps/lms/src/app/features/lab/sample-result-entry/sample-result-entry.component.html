@@ -459,6 +459,18 @@
                           {{ methodologyOf(p) }}
                         </td>
                         <td class="pf-sre__gc-note">
+                          <button
+                            type="button"
+                            class="pf-sre__gnote press"
+                            tabindex="-1"
+                            [class.pf-sre__gnote--has]="
+                              commentsFor(t.id, p.name).length > 0
+                            "
+                            (click)="toggleParamNote(t.id, p.name)"
+                            title="Note on this parameter"
+                          >
+                            ✎
+                          </button>
                           @if (idx === 0) {
                             @if (t.status === "re_entry") {
                               <span
@@ -491,13 +503,14 @@
                       </tr>
                       @if (
                         commentsFor(t.id, p.name).length > 0 ||
-                        hasOpenComment(t.id, p.name)
+                        hasOpenComment(t.id, p.name) ||
+                        paramNoteOpen(t.id, p.name)
                       ) {
                         <tr class="pf-sre__grow-comments">
                           <td colspan="6">
                             <pf-comment-thread
                               [comments]="commentsFor(t.id, p.name)"
-                              currentRole="tech"
+                              [currentRole]="commentRole()"
                               [composeLabel]="'Add note on this parameter'"
                               (add)="
                                 addParameterComment(
@@ -529,7 +542,7 @@
                         <td colspan="6">
                           <pf-comment-thread
                             [comments]="commentsFor(t.id, null)"
-                            currentRole="tech"
+                            [currentRole]="commentRole()"
                             (add)="
                               addOverallComment(
                                 t.id,
@@ -706,7 +719,7 @@
               <div class="pf-sre__test-comments">
                 <pf-comment-thread
                   [comments]="commentsFor(t.id, null)"
-                  currentRole="tech"
+                  [currentRole]="commentRole()"
                   (add)="addOverallComment(t.id, $event.body, $event.type)"
                   (reply)="
                     replyToOverall(t.id, $event.parentId, $event.body)
@@ -902,17 +915,30 @@
                         <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
                           {{ methodologyOf(p) }}
+                          <button
+                            type="button"
+                            class="pf-sre__gnote press"
+                            tabindex="-1"
+                            [class.pf-sre__gnote--has]="
+                              commentsFor(t.id, p.name).length > 0
+                            "
+                            (click)="toggleParamNote(t.id, p.name)"
+                            title="Note on this parameter"
+                          >
+                            ✎
+                          </button>
                         </td>
                       </tr>
                       @if (
                         commentsFor(t.id, p.name).length > 0 ||
-                        hasOpenComment(t.id, p.name)
+                        hasOpenComment(t.id, p.name) ||
+                        paramNoteOpen(t.id, p.name)
                       ) {
                         <tr class="pf-sre__grow-comments">
                           <td colspan="5">
                             <pf-comment-thread
                               [comments]="commentsFor(t.id, p.name)"
-                              currentRole="tech"
+                              [currentRole]="commentRole()"
                               [composeLabel]="'Add note on this parameter'"
                               (add)="
                                 addParameterComment(
@@ -1100,7 +1126,7 @@
                       <div class="pf-sre__param-comments">
                         <pf-comment-thread
                           [comments]="commentsFor(t.id, p.name)"
-                          currentRole="tech"
+                          [currentRole]="commentRole()"
                           [composeLabel]="'Add note on this parameter'"
                           (add)="
                             addParameterComment(
