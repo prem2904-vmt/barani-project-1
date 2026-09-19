@@ -184,9 +184,10 @@ describe('report column overrides', () => {
     expect(text).toContain('DESCCOL'); // empty column survives in the override run
   });
 
-  it('a single-analyte test with an override gets its own heading band', () => {
-    // Compact (band-less) rendering is for the shared table; a test that
-    // broke out into its own run titles its block — uppercase band.
+  it('a single-analyte test with an override stays compact — no heading band', () => {
+    // Owner 2026-09-19: the override run's own column-header strip IS the
+    // block's heading; a band would repeat the name the Investigation cell
+    // already prints ("INSULIN" band + "Insulin" row).
     const override = [col('result', 'Result', 'result', 1, 60), col('unit', 'Unit', 'unit', 2, 40)];
     const text = renderText(
       [{ testId: 't1', name: 'Special Assay', values: { 'Special Assay': { value: '5', unit: 'U/L' } } }],
@@ -196,6 +197,7 @@ describe('report column overrides', () => {
           { columns: override, hasColumnOverride: true, departmentColumns: DEPT }),
       },
     );
-    expect(text).toContain('SPECIAL ASSAY'); // heading band, not a bare compact row
+    expect(text).toContain('Special Assay');     // once, in the Investigation cell
+    expect(text).not.toContain('SPECIAL ASSAY'); // no uppercase band above it
   });
 });

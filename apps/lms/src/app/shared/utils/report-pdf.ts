@@ -2062,6 +2062,15 @@ function renderContinuousTable(
       // The signature reserve belongs to the department's LAST run only —
       // earlier runs may fill their pages fully.
       const runReserve = ri === runs.length - 1 ? reserve : 0;
+      // One row of air between runs, with a faint grey hairline so the eye
+      // sees where one table ends and the next (different columns) begins.
+      if (ri > 0) {
+        y += 5;
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(MARGIN_X, y, A4.w - MARGIN_X, y);
+        y += 5;
+      }
       // An override run renders the admin's configured columns EXACTLY — a
       // just-added column with no data yet must still print (that column IS
       // the point of the override); the empty-column economy applies only
@@ -2296,9 +2305,10 @@ function renderColumnarTable(
     // and no Method sub-line — the band + method treatment is reserved for
     // multi-parameter panels/profiles (CBC, LFT…). This matches the classic
     // report style: a 20-test biochem order reads as 20 rows, not 20 panels.
-    // An override run is the exception: its test broke out of the shared
-    // table on purpose, so it always titles its own block with a heading.
-    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab && !overriddenRun;
+    // This holds in an override run too (owner 2026-09-19): the run's own
+    // column-header strip is the block's heading — a band would just repeat
+    // the name the Investigation cell already prints.
+    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab;
 
     if (!compact) {
       // Panel / profile header band — bold, full width.
