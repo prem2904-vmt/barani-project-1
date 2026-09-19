@@ -2062,14 +2062,15 @@ function renderContinuousTable(
       // The signature reserve belongs to the department's LAST run only —
       // earlier runs may fill their pages fully.
       const runReserve = ri === runs.length - 1 ? reserve : 0;
-      // One row of air between runs, with a faint grey hairline so the eye
-      // sees where one table ends and the next (different columns) begins.
+      // A full blank line of air on either side of a faint grey hairline
+      // between runs, so the eye clearly sees where one table ends and the
+      // next (different columns) begins.
       if (ri > 0) {
-        y += 5;
+        y += 12;
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.5);
         doc.line(MARGIN_X, y, A4.w - MARGIN_X, y);
-        y += 5;
+        y += 12;
       }
       // An override run renders the admin's configured columns EXACTLY — a
       // just-added column with no data yet must still print (that column IS
