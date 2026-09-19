@@ -879,3 +879,7 @@ select.pf-input--compact {
   .pf-livewrap { flex: 1 1 auto; min-height: 0; }
   .pf-livewrap__pdf { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 }
+
+/* Slim save-state line above the preview (the retired publish card's only
+   surviving duty — the header owns the Save button). */
+.pf-savestate { font-size: 11.5px; font-weight: 600; padding: 2px 2px 0; flex: 0 0 auto; }

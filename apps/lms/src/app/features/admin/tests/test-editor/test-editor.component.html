@@ -937,30 +937,9 @@
 
     <!-- ═══════════════════════════ Right rail ═══════════════════════════ -->
     <aside class="pf-te2-aside">
-      <div class="pf-publish">
-        <div class="pf-publish__head">
-          <span class="pf-publish__title">Ready to publish?</span>
-          <span class="pf-publish__count" [class.pf-publish__count--warn]="!publishReady()">
-            {{ publishCount().done }} of {{ publishCount().total }}
-          </span>
-        </div>
-        @for (c of publishChecklist(); track c.label) {
-          <div class="pf-publish__row">
-            <span class="pf-publish__dot" [class.pf-publish__dot--ok]="c.ok" [class.pf-publish__dot--warn]="!c.ok">
-              @if (c.ok) { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> }
-              @else { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M12 5v9"/><path d="M12 18.5h.01"/></svg> }
-            </span>
-            <span class="pf-publish__lbl" [class.pf-publish__lbl--warn]="!c.ok">{{ c.label }}</span>
-            @if (c.action) { <button type="button" class="pf-publish__fix" (click)="jumpToSection(c.action)">Fix</button> }
-          </div>
-        }
-        <button type="button" class="pf-publish__save press" [disabled]="saving()" (click)="saveTest()">
-          {{ saving() ? 'Saving…' : 'Save changes' }}
-        </button>
-        <div class="pf-publish__status">
-          @if (dirty()) { <span class="c-amber">● unsaved changes</span> }
-          @else { <span class="c-green">● all changes saved</span> }
-        </div>
+      <div class="pf-savestate">
+        @if (dirty()) { <span class="c-amber">● unsaved changes</span> }
+        @else { <span class="c-green">● all changes saved</span> }
       </div>
 
       <div class="pf-livewrap">
