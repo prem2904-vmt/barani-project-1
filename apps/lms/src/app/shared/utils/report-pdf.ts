@@ -2928,8 +2928,11 @@ function renderCultureSection(
   };
 
   line('Specimen', c.specimen || (t.sampleType ?? ''));
-  if (!isRowHidden('gramStain')) line('Gram stain', c.gramStain);
-  if (!isRowHidden('colonyCount')) line('Colony count', c.colonyCount);
+  // Empty summary lines are SKIPPED, not printed as "—": the bench captures
+  // gram/colony findings as stage fields (printed just below), so a dashed
+  // legacy line above them is pure noise.
+  if (!isRowHidden('gramStain') && (c.gramStain ?? '').trim()) line('Gram stain', c.gramStain);
+  if (!isRowHidden('colonyCount') && (c.colonyCount ?? '').trim()) line('Colony count', c.colonyCount);
 
   // Bench stage findings (Gram / Growth / ID …): the workbench's structured
   // fields ride result.stages — print each done ROOT stage as one line,
@@ -3018,10 +3021,10 @@ function renderCultureSection(
   });
   y += 4;
 
-  if (!isRowHidden('resistancePattern')) line('Resistance pattern', c.resistancePattern);
-  if (!isRowHidden('intrinsicResistance')) line('Intrinsic resistance', c.intrinsicResistance);
-  if (!isRowHidden('clinicalNotes')) line('Clinical notes', c.clinicalNotes);
-  if (!isRowHidden('infectionControlAdvice')) line('Infection control advice', c.infectionControlAdvice);
+  if (!isRowHidden('resistancePattern') && (c.resistancePattern ?? '').trim()) line('Resistance pattern', c.resistancePattern);
+  if (!isRowHidden('intrinsicResistance') && (c.intrinsicResistance ?? '').trim()) line('Intrinsic resistance', c.intrinsicResistance);
+  if (!isRowHidden('clinicalNotes') && (c.clinicalNotes ?? '').trim()) line('Clinical notes', c.clinicalNotes);
+  if (!isRowHidden('infectionControlAdvice') && (c.infectionControlAdvice ?? '').trim()) line('Infection control advice', c.infectionControlAdvice);
   return y;
 }
 
