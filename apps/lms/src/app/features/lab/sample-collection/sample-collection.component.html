@@ -149,6 +149,29 @@
 
           <div class="pf-drawer__tubes">
             @for (s of orderedSamples(g); track s.id) {
+              <!-- Wrapper exists so the External flag can sit OUTSIDE the
+                   card's tap region (the card clips its children with
+                   overflow:hidden and owns tap-to-collect + hold-to-peek). -->
+              <div class="pf-tube-wrap">
+              <!-- External flag, perched on the card's top-left corner but
+                   outside its hit area: one tap collects THIS tube as
+                   brought-in with no draw; filled violet = marked (tap to
+                   undo while the tube hasn't left the counter). -->
+              @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
+                <button type="button" class="pf-tube__extflag"
+                        [class.pf-tube__extflag--on]="s.source === 'external'"
+                        [disabled]="sourceBusy()"
+                        (click)="toggleExternal(s, $event)"
+                        [title]="s.source === 'external'
+                          ? 'Brought in from outside — tap to undo'
+                          : 'Mark as brought in from outside (skips the draw)'"
+                        [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
+                        [attr.aria-pressed]="s.source === 'external'">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
+                  </svg>
+                </button>
+              }
               <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
                    list (a floating popover). A div, not <button>, so the hold /
                    pointer handling is clean. -->
@@ -172,28 +195,6 @@
                       <path d="M18 6 6 18M6 6l12 12"/>
                     </svg>
                   </span>
-                }
-                <!-- External flag (top-left corner): THIS specimen was brought
-                     in from outside — one tap collects it as brought-in with
-                     no draw; on a marked tube the flag fills violet and
-                     doubles as undo. A corner flag, not an inline pill: the
-                     card body already owns tap-to-collect + hold-to-peek, so
-                     the mark needs its own clearly separated target. -->
-                @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
-                  <button type="button" class="pf-tube__extflag"
-                          [class.pf-tube__extflag--on]="s.source === 'external'"
-                          [disabled]="sourceBusy()"
-                          (pointerdown)="$event.stopPropagation()"
-                          (click)="toggleExternal(s, $event)"
-                          [title]="s.source === 'external'
-                            ? 'Brought in from outside — tap to undo'
-                            : 'Mark as brought in from outside (skips the draw)'"
-                          [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
-                          [attr.aria-pressed]="s.source === 'external'">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
-                    </svg>
-                  </button>
                 }
                 <!-- Partial-dispatch selection mode: collected tubes show a
                      selection ring (check fills in when selected). -->
@@ -464,6 +465,7 @@
                   }
                 </div>
               </div>
+              </div><!-- /pf-tube-wrap -->
             }
           </div>
 
