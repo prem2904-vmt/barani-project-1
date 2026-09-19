@@ -17,7 +17,8 @@ const comment = (parameterName: string | null, over: Partial<OrderTestComment> =
 
 describe('CultureWorkbenchComponent — notes per stage / component', () => {
   it('paramKey() namespaces a component under its stage', () => {
-    expect(call(P.paramKey, {}, 'gram', 'pus_cells')).toBe('gram.pus_cells');
+    // paramKey rides sk() (branch namespacing): root case -> bare stage key.
+    expect(call(P.paramKey, { sk: P.sk, selCaseId: () => null }, 'gram', 'pus_cells')).toBe('gram.pus_cells');
   });
 
   it('commentsFor() splits one flat list into stage-level and per-component threads', () => {
@@ -39,38 +40,30 @@ describe('CultureWorkbenchComponent — notes per stage / component', () => {
   });
 });
 
-describe('CultureWorkbenchComponent — inoculate & incubate control', () => {
+describe('CultureWorkbenchComponent — case-level incubation timer + holds', () => {
   const now = Date.parse('2026-09-08T12:00:00Z');
-  const base = {
-    now: () => now,
-    incubationStages: new Set(['growth', 'identification', 'ast']),
-    requiresIncubation: P.requiresIncubation,
-    incubating: P.incubating,
-    isMine: P.isMine,
-    lockedByOther: P.lockedByOther,
-    auth: { user: () => ({ id: 'me' }) },
-  };
-  // incubateTarget is a computed created in the constructor; evaluate its
-  // body through a fresh instance-free replica of the same rule.
-  const target = (stages: CultureStageView[]) =>
-    stages.find(s => s.state !== 'done' && !call(base.lockedByOther, base, s)
-      && base.incubationStages.has(s.key) && !call(base.incubating, base, s)) ?? null;
+  const ctx = (incubateUntil: string | null) =>
+    ({ now: () => now, view: () => ({ incubateUntil }) });
 
-  it('offers the next incubation stage even while I hold it (the regression: it vanished once picked)', () => {
-    const growth = stage('growth', { state: 'picked', holderUserId: 'me' });
-    expect(target([stage('gram', { state: 'picked', holderUserId: 'me' }), growth])).toBe(growth);
+  it('incubReadyIn() counts down live, says "now" once elapsed, blank without a timer', () => {
+    expect(call(P.incubReadyIn, ctx(new Date(now + (2 * 60 + 15) * 60_000).toISOString()))).toBe('2h 15m');
+    expect(call(P.incubReadyIn, ctx(new Date(now + 25 * 60_000).toISOString()))).toBe('25m');
+    expect(call(P.incubReadyIn, ctx(new Date(now - 1_000).toISOString()))).toBe('now');
+    expect(call(P.incubReadyIn, ctx(null))).toBe('');
   });
 
-  it('never offers a stage another tech holds, a done stage, or a plate already resting', () => {
-    const held = stage('growth', { state: 'picked', holderUserId: 'other' });
-    const done = stage('identification', { state: 'done' });
-    const resting = stage('ast', { incubateUntil: new Date(now + 3_600_000).toISOString() });
-    expect(target([held, done, resting])).toBeNull();
+  it('incubDone() flips only after the timer elapses', () => {
+    expect(call(P.incubDone, ctx(new Date(now + 60_000).toISOString()))).toBe(false);
+    expect(call(P.incubDone, ctx(new Date(now - 60_000).toISOString()))).toBe(true);
+    expect(call(P.incubDone, ctx(null))).toBe(false);
   });
 
-  it('incubateReadyIn() shows the live countdown for the header pill and the card', () => {
-    const s = stage('growth', { incubateUntil: new Date(now + (2 * 60 + 15) * 60_000).toISOString() });
-    expect(call(P.incubateReadyIn, base, s)).toBe('2h 15m');
-    expect(call(P.incubating, base, s)).toBe(true);
+  it('hold semantics: my pick is mine, another tech\'s pick locks the stage', () => {
+    const auth = { auth: { user: () => ({ id: 'me' }) }, isMine: P.isMine };
+    const mine = stage('growth', { state: 'picked', holderUserId: 'me' });
+    const other = stage('growth', { state: 'picked', holderUserId: 'other' });
+    expect(call(P.isMine, auth, mine)).toBe(true);
+    expect(call(P.lockedByOther, auth, other)).toBe(true);
+    expect(call(P.lockedByOther, auth, mine)).toBe(false);
   });
 });
