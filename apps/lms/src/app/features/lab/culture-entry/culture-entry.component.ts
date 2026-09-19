@@ -144,12 +144,14 @@ interface Breakpoint {
               @for (ab of org.antibiotics; track abi; let abi = $index) {
                 <div class="ce-abx__row" [attr.data-interp]="ab.interpretation || null">
                   <span class="ce-abx__namewrap">
-                    @if (rhOn()) {
-                      <input type="checkbox" class="ce-rh" [checked]="isShown('ast:' + oi + ':' + ab.name)"
-                             (change)="toggleShown('ast:' + oi + ':' + ab.name)"
-                             title="Print this antibiotic on the report (unticked = hidden on the PDF only)" />
-                    }
-                    <span class="ce-abx__name">{{ ab.name }}</span>
+                    <span class="ce-abx__nameline">
+                      @if (rhOn()) {
+                        <input type="checkbox" class="ce-rh" [checked]="isShown('ast:' + oi + ':' + ab.name)"
+                               (change)="toggleShown('ast:' + oi + ':' + ab.name)"
+                               title="Print this antibiotic on the report (unticked = hidden on the PDF only)" />
+                      }
+                      <span class="ce-abx__name">{{ ab.name }}</span>
+                    </span>
                     @if (micRef(org.name, ab); as m) {
                       <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
                         MIC µg/mL · <em class="ce-abx__col--s">{{ m.s }}</em> · <em class="ce-abx__col--i">{{ m.i }}</em> · <em class="ce-abx__col--r">{{ m.r }}</em>
@@ -374,6 +376,8 @@ interface Breakpoint {
     .ce-abx__row[data-interp="I"] { background: rgba(245,158,11,.06); }
     .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
     .ce-abx__namewrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    /* Checkbox sits INLINE with the drug name (owner: "checkbox value", never stacked). */
+    .ce-abx__nameline { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
     .ce-abx__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ce-abx__mic { font-size: 10.5px; color: var(--text-tertiary, #64748b); font-variant-numeric: tabular-nums;
