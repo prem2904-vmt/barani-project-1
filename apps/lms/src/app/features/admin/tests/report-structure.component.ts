@@ -1,9 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
-import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
-import { FormsModule } from '@angular/forms';
-import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { AgGridAngular } from 'ag-grid-angular';
+import {
+  AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef,
+  ModuleRegistry, RowDragEndEvent,
+} from 'ag-grid-community';
+import { PfSelectOption } from '../../../shared/primitives/select.component';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { gridThemeDark, gridThemeLight } from './tests/tests.component';
+import { RangeSelectEditorComponent } from './test-editor/range-select-editor.component';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (conditions, grid rows, templates…) survive intact. */
@@ -13,25 +21,22 @@ type RawSection = Record<string, unknown> & {
 };
 
 /**
- * "What prints on the report" — the print-order surface of the test editor.
- *
- * The report, as a list, in the order it prints. Drag to rearrange, tap the
- * eye to keep a line off the PDF, click a name to rename it. Every change
- * saves itself. The builder vocabulary (sections, inspectors, conditions)
- * lives behind the single Advanced link the host renders below this list —
- * this surface is for the person who runs the lab, not the person who
- * built the software.
+ * "What prints on the report" — the print-order surface of the test editor,
+ * in the SAME grid language as the reference ranges: one block per row, drag
+ * the handle to reorder, edit names and content in place, click Prints to
+ * keep a line off the PDF. Every change saves itself.
  *
  * Storage: the SAME per-test layout sections every other part of the system
  * reads. A test with no saved layout shows its implicit structure (results
- * table + notes — or the classic C&S arrangement for cultures) read-only-ish;
- * the first real change materialises that structure as sections and carries
- * on. Unknown fields on existing sections are preserved verbatim.
+ * table + notes — or the classic C&S arrangement for cultures); the first
+ * real change materialises that structure as sections and carries on.
+ * Unknown fields on existing sections are preserved verbatim. The builder
+ * vocabulary stays behind the host's single Advanced link.
  */
 @Component({
   selector: 'pf-report-structure',
   standalone: true,
-  imports: [DragDropModule, FormsModule, SelectComponent],
+  imports: [AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rs">
@@ -40,85 +45,16 @@ type RawSection = Record<string, unknown> & {
           @for (i of [0,1,2]; track i) { <div class="rs__skel"></div> }
         </div>
       } @else {
-        <ul class="rs__list" cdkDropList (cdkDropListDropped)="drop($event)">
-          @for (row of rows(); track row.key) {
-            <li class="rs__row" cdkDrag [cdkDragDisabled]="renamingKey() === row.key"
-                [class.rs__row--off]="row.hidden"
-                [class.rs__row--open]="expandedKey() === row.key">
-              <div class="rs__row-main">
-                <span class="rs__grip" cdkDragHandle aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>
-                </span>
-
-                @if (renamingKey() === row.key) {
-                  <input class="rs__rename" type="text" [ngModel]="renameDraft()"
-                         (ngModelChange)="renameDraft.set($event)"
-                         (keydown.enter)="commitRename(row)" (blur)="commitRename(row)"
-                         (keydown.escape)="renamingKey.set(null)" />
-                } @else {
-                  <button type="button" class="rs__name" (click)="toggleExpand(row)"
-                          [attr.aria-expanded]="expandedKey() === row.key">
-                    <span class="rs__name-txt">{{ row.name }}</span>
-                    <span class="rs__hint">{{ row.hint }}</span>
-                  </button>
-                }
-
-                <span class="rs__row-actions">
-                  @if (row.canRename && renamingKey() !== row.key) {
-                    <button type="button" class="rs__act" (click)="startRename(row)" title="Rename this line">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                    </button>
-                  }
-                  @if (row.canHide) {
-                  <button type="button" class="rs__act" (click)="toggleHidden(row)"
-                          [title]="row.hidden ? 'Hidden from the report — tap to print it' : 'Prints on the report — tap to hide it'"
-                          [attr.aria-pressed]="row.hidden">
-                    @if (row.hidden) {
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 8 10 8a9.74 9.74 0 0 0 5.39-1.61"/><path d="M2 2l20 20"/></svg>
-                    } @else {
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/></svg>
-                    }
-                  </button>
-                  }
-                  @if (row.canDelete) {
-                    <button type="button" class="rs__act rs__act--danger" (click)="removeRow(row)" title="Remove this line from the report">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                    </button>
-                  }
-                </span>
-              </div>
-
-              @if (expandedKey() === row.key) {
-                <div class="rs__detail">
-                  @switch (row.kind) {
-                    @case ('culture_line') {
-                      <label class="rs__d-lbl">Where its text comes from</label>
-                      <pf-select size="sm" [options]="sourceOptions" [value]="row.source || ''"
-                                 (valueChange)="setSource(row, $event)"></pf-select>
-                    }
-                    @case ('paragraph') {
-                      <label class="rs__d-lbl">Text printed on the report</label>
-                      <textarea class="rs__d-text" rows="3" [ngModel]="row.template || ''"
-                                (ngModelChange)="setTemplate(row, $event)"
-                                placeholder="e.g. Kindly correlate clinically."></textarea>
-                    }
-                    @case ('grid') {
-                      <p class="rs__d-note">The results table — every parameter of this test, laid out on {{ columnsSummary() || 'the department columns' }}.
-                        <button type="button" class="rs__d-link" (click)="customizeColumns.emit()">Change the columns</button>
-                      </p>
-                    }
-                    @case ('culture_ast') {
-                      <p class="rs__d-note">Organisms and their antibiotic results from the culture bench, with the S / R / M legend. The bench's own checkboxes choose which rows print.</p>
-                    }
-                    @default {
-                      <p class="rs__d-note">Fine-tuning for this block lives in the advanced editor below.</p>
-                    }
-                  }
-                </div>
-              }
-            </li>
-          }
-        </ul>
+        <ag-grid-angular class="rs__grid" [theme]="gridTheme()"
+          [rowData]="rows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef"
+          domLayout="autoHeight" [getRowId]="$any(rowId)" [popupParent]="popupParent"
+          [singleClickEdit]="true" [stopEditingWhenCellsLoseFocus]="true"
+          [rowDragManaged]="true" [suppressMoveWhenRowDragging]="false"
+          [rowClassRules]="rowClassRules"
+          (rowDragEnd)="onRowDragEnd($event)"
+          (cellValueChanged)="onCellChanged($event)"
+          (cellClicked)="onCellClicked($event)">
+        </ag-grid-angular>
 
         <div class="rs__foot">
           <div class="rs__addwrap">
@@ -161,49 +97,22 @@ type RawSection = Record<string, unknown> & {
     .rs__skel { height: 46px; border-radius: 12px; background: var(--glass-bg); animation: rs-pulse 1.2s ease-in-out infinite; }
     @keyframes rs-pulse { 50% { opacity: .45; } }
 
-    .rs__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .rs__row {
-      border: 1px solid var(--glass-border); border-radius: 12px;
-      background: var(--glass-bg);
-      transition: border-color .15s, opacity .15s, background .15s;
-    }
-    .rs__row--off { opacity: .55; }
-    .rs__row--off .rs__name-txt { text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
-    .rs__row--open { border-color: rgba(168, 85, 247, .4); }
-    .rs__row.cdk-drag-preview { box-shadow: 0 12px 28px rgba(0, 0, 0, .35); background: var(--bg-secondary, #14141f); }
-    .rs__row.cdk-drag-placeholder { opacity: .25; }
-    .cdk-drop-list-dragging .rs__row { transition: transform 200ms cubic-bezier(0, 0, 0.2, 1); }
-
-    .rs__row-main { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 4px; min-height: 46px; }
-    .rs__grip { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 34px;
-      color: var(--text-tertiary); cursor: grab; flex-shrink: 0; touch-action: none; }
-    .rs__grip:active { cursor: grabbing; }
-
-    .rs__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px;
-      background: none; border: none; padding: 4px 2px; text-align: left; cursor: pointer; }
-    .rs__name-txt { font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rs__hint { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .rs__rename { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary);
-      background: var(--bg-secondary, rgba(0,0,0,.25)); border: 1px solid rgba(168,85,247,.5); border-radius: 8px; padding: 6px 10px; outline: none; }
-
-    .rs__row-actions { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
-    .rs__act { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
-      border-radius: 9px; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer;
-      transition: color .15s, background .15s; }
-    @media (hover: hover) {
-      .rs__act:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.06)); }
-      .rs__act--danger:hover { color: #f87171; background: rgba(244,63,94,.12); }
-    }
-
-    .rs__detail { padding: 2px 14px 12px 38px; display: flex; flex-direction: column; gap: 6px; }
-    .rs__d-lbl { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
-    .rs__d-text { width: 100%; font-size: 13px; color: var(--text-primary); background: var(--bg-secondary, rgba(0,0,0,.2));
-      border: 1px solid var(--glass-border); border-radius: 10px; padding: 8px 10px; resize: vertical; }
-    .rs__d-text:focus { outline: none; border-color: rgba(168,85,247,.5); }
-    .rs__d-note { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
-    .rs__d-link { background: none; border: none; padding: 0; margin-left: 6px; font-size: 12.5px; font-weight: 600;
-      color: var(--violet-text, #a78bfa); cursor: pointer; }
-    .rs__d-link:hover { text-decoration: underline; }
+    .rs__grid { width: 100%; }
+    .rs__grid .ag-cell { cursor: pointer; }
+    @media (hover: hover) { .rs__grid .ag-cell:hover { background: rgba(124,58,237,.06); } }
+    .rs__grid .rs-off .ag-cell { opacity: .55; }
+    .rs__grid .rs-off .rs-name { text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+    .rs-name { font-weight: 600; }
+    .rs-detail { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+    .rs-detail__txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rs-detail__txt--dim { color: var(--text-tertiary, #94a3b8); }
+    .rs-detail svg { color: var(--text-tertiary, #64748b); flex-shrink: 0; }
+    .rs-printed { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+    .rs-printed--on { color: #34d399; }
+    .rs-printed--off { color: var(--text-tertiary, #94a3b8); }
+    .rs-printed--always { color: var(--text-tertiary, #94a3b8); font-weight: 500; }
+    .rs-del { display: flex; align-items: center; justify-content: center; color: var(--text-tertiary, #64748b); }
+    .rs-del:hover { color: #f87171; }
 
     .rs__foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
     .rs__addwrap { position: relative; }
@@ -229,6 +138,7 @@ type RawSection = Record<string, unknown> & {
 export class ReportStructureComponent {
   private readonly layout = inject(ReportLayoutService);
   private readonly toasts = inject(ToastService);
+  private readonly themeSvc = inject(ThemeService);
 
   readonly testId = input<string>('');
   readonly culture = input<boolean>(false);
@@ -246,9 +156,6 @@ export class ReportStructureComponent {
   readonly saving = signal(false);
   readonly savedTick = signal(false);
   readonly addOpen = signal(false);
-  readonly expandedKey = signal<string | null>(null);
-  readonly renamingKey = signal<string | null>(null);
-  readonly renameDraft = signal('');
 
   /** Raw stored sections (null = no saved layout → implicit structure). */
   private readonly rawSections = signal<RawSection[] | null>(null);
@@ -273,6 +180,101 @@ export class ReportStructureComponent {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  // ── Grid plumbing ──────────────────────────────────────────
+  readonly gridTheme = computed(() =>
+    (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight)
+      .withParams({ rowHeight: 48, headerHeight: 42, cellHorizontalPadding: 14 }));
+  readonly popupParent: HTMLElement | undefined =
+    typeof document !== 'undefined' ? document.body : undefined;
+  readonly rowId = (p: { data: StructureRow }) => p.data.key;
+  readonly rowClassRules = { 'rs-off': (p: { data?: StructureRow }) => p.data?.hidden === true };
+  readonly defaultColDef: ColDef = {
+    editable: false, sortable: false, resizable: true, suppressHeaderMenuButton: true,
+  };
+  private static readonly CHEVRON =
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  readonly colDefs: ColDef[] = [
+    { field: 'name', headerName: 'Prints as', minWidth: 170, flex: 1.1, rowDrag: true,
+      cellClass: 'rs-name',
+      editable: p => p.data.canRename === true,
+      cellEditor: 'agTextCellEditor' },
+    { field: 'details', headerName: 'What it shows', minWidth: 220, flex: 1.7,
+      editable: p => p.data.kind === 'culture_line' || p.data.kind === 'paragraph',
+      valueGetter: p => p.data.kind === 'culture_line' ? (p.data.source ?? '')
+        : p.data.kind === 'paragraph' ? (p.data.template ?? '') : '',
+      valueSetter: p => { p.data.details = p.newValue; return true; },
+      cellEditorSelector: p => p.data.kind === 'culture_line'
+        ? { component: RangeSelectEditorComponent, popup: true,
+            params: { options: this.sourceOptions.map(o => ({ value: String(o.value), label: o.label })) } }
+        : { component: 'agLargeTextCellEditor', popup: true, params: { maxLength: 4000, rows: 6, cols: 46 } },
+      cellRenderer: (p: { data: StructureRow }) => this.detailsHtml(p.data) },
+    { field: 'printed', headerName: 'Prints', width: 110, minWidth: 100, maxWidth: 130,
+      valueGetter: p => !p.data.hidden,
+      cellRenderer: (p: { data: StructureRow }) => {
+        if (!p.data.canHide) return '<span class="rs-printed rs-printed--always">always</span>';
+        return p.data.hidden
+          ? '<span class="rs-printed rs-printed--off">No — hidden</span>'
+          : '<span class="rs-printed rs-printed--on">Yes</span>';
+      } },
+    { colId: 'del', headerName: '', width: 44, maxWidth: 44, resizable: false,
+      cellClass: 'rs-del',
+      cellRenderer: (p: { data: StructureRow }) => p.data.canDelete
+        ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+        : '' },
+  ];
+
+  /** Second column, rendered: what the block shows, plus a chevron when a
+   *  click edits it in place. */
+  private detailsHtml(r: StructureRow): string {
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (r.kind === 'culture_line') {
+      const label = this.sourceLabel(r.source ?? '');
+      const hint = SOURCE_HINTS[r.source ?? ''] ?? '';
+      return `<span class="rs-detail"><span class="rs-detail__txt">${esc(label)}` +
+        (hint ? ` <span class="rs-detail__txt--dim">· ${esc(hint)}</span>` : '') +
+        `</span>${ReportStructureComponent.CHEVRON}</span>`;
+    }
+    if (r.kind === 'paragraph') {
+      const t = (r.template ?? '').trim();
+      return `<span class="rs-detail"><span class="rs-detail__txt${t ? '' : ' rs-detail__txt--dim'}">` +
+        `${esc(t || 'tap to write the text that prints')}</span>${ReportStructureComponent.CHEVRON}</span>`;
+    }
+    if (r.kind === 'grid') {
+      return `<span class="rs-detail"><span class="rs-detail__txt rs-detail__txt--dim">` +
+        `${esc(this.columnsSummary() || 'every parameter, on the department columns')} — tap to change the columns</span></span>`;
+    }
+    return `<span class="rs-detail"><span class="rs-detail__txt rs-detail__txt--dim">${esc(r.hint)}</span></span>`;
+  }
+
+  onRowDragEnd(e: RowDragEndEvent) {
+    const keys: string[] = [];
+    e.api.forEachNode(n => { if (n.data) keys.push((n.data as StructureRow).key); });
+    const rows = this.rows();
+    const order = new Map(rows.map((r, i) => [r.key, i]));
+    if (keys.length !== rows.length) return;
+    const secs = this.materialised();
+    const next = keys.map(k => secs[order.get(k)!]).filter(Boolean);
+    this.commit(next);
+  }
+  onCellChanged(e: CellValueChangedEvent) {
+    const row = e.data as StructureRow;
+    if (e.colDef.field === 'name') {
+      const v = String(e.newValue ?? '').trim();
+      if (v) this.mutate(row.key, s => { s.label = v; });
+    } else if (e.colDef.field === 'details') {
+      const v = String(e.newValue ?? '');
+      if (row.kind === 'culture_line') this.mutate(row.key, s => { s.source = v; if (!s.label) s.label = this.sourceLabel(v); });
+      else if (row.kind === 'paragraph') this.mutate(row.key, s => { s.template = v; }, { debounce: true });
+    }
+  }
+  onCellClicked(e: CellClickedEvent) {
+    const row = e.data as StructureRow | undefined;
+    if (!row) return;
+    if (e.colDef.field === 'printed' && row.canHide) this.mutate(row.key, s => { s.hidden = s.hidden === true ? undefined : true; });
+    else if (e.colDef.colId === 'del' && row.canDelete) this.mutate(row.key, null);
+    else if (e.colDef.field === 'details' && row.kind === 'grid') this.customizeColumns.emit();
   }
 
   // ── Row view-model ─────────────────────────────────────────
@@ -336,40 +338,6 @@ export class ReportStructureComponent {
     return this.sourceOptions.find(o => o.value === v)?.label ?? v ?? '';
   }
 
-  // ── Mutations (all funnel through mutate → materialise + autosave) ──
-  toggleExpand(row: StructureRow) {
-    this.addOpen.set(false);
-    this.expandedKey.set(this.expandedKey() === row.key ? null : row.key);
-  }
-  startRename(row: StructureRow) {
-    this.renameDraft.set(row.name);
-    this.renamingKey.set(row.key);
-  }
-  commitRename(row: StructureRow) {
-    if (this.renamingKey() !== row.key) return;
-    const v = this.renameDraft().trim();
-    this.renamingKey.set(null);
-    if (!v || v === row.name) return;
-    this.mutate(row.key, s => { s.label = v; });
-  }
-  toggleHidden(row: StructureRow) {
-    this.mutate(row.key, s => { s.hidden = s.hidden === true ? undefined : true; });
-  }
-  removeRow(row: StructureRow) {
-    this.mutate(row.key, null);
-  }
-  setSource(row: StructureRow, v: string) {
-    this.mutate(row.key, s => { s.source = v; if (!s.label) s.label = this.sourceLabel(v); });
-  }
-  setTemplate(row: StructureRow, v: string) {
-    this.mutate(row.key, s => { s.template = v; }, { debounce: true });
-  }
-  drop(ev: CdkDragDrop<unknown>) {
-    if (ev.previousIndex === ev.currentIndex) return;
-    const secs = this.materialised();
-    moveItemInArray(secs, ev.previousIndex, ev.currentIndex);
-    this.commit(secs);
-  }
   addSection(type: string) {
     this.addOpen.set(false);
     const secs = this.materialised();
@@ -378,7 +346,6 @@ export class ReportStructureComponent {
     if (type === 'paragraph') s.template = '';
     secs.push(s);
     this.commit(secs);
-    this.expandedKey.set(s.id!);
   }
 
   /** Explicit sections — materialising the implicit structure on first edit. */
@@ -449,6 +416,8 @@ interface StructureRow {
   source?: string;
   template?: string;
   implicit: boolean;
+  /** Grid-editor scratch cell (valueSetter target); real state lives in sections. */
+  details?: string;
 }
 
 /** Friendly per-source second lines — what the line MEANS, never an echo
