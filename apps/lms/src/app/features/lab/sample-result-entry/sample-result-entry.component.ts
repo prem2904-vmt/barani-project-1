@@ -1200,8 +1200,17 @@ export class SampleResultEntryComponent {
   submittedAtLabel(): string {
     const ts = (this._sample()?.tests ?? [])
       .map(t => t.resultedAt).filter(Boolean).sort();
-    if (!ts.length) return '';
-    try { return new Date(ts[ts.length - 1] as string).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    return ts.length ? this.fmtShort(ts[ts.length - 1] as string) : '';
+  }
+  /** "Priya Raman · Sep 14, 2:51 AM" — who entered THIS test's result and
+   *  when. Shown per test section so the validator sees provenance in place. */
+  enteredByLabel(t: OrderTest): string {
+    if (!t.resultedByName) return '';
+    const when = t.resultedAt ? this.fmtShort(t.resultedAt) : '';
+    return when ? `${t.resultedByName} · ${when}` : t.resultedByName;
+  }
+  private fmtShort(iso: string): string {
+    try { return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
     catch { return ''; }
   }
 

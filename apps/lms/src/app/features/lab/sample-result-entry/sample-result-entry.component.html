@@ -49,16 +49,19 @@
     </button>
     @if (sample(); as s) {
       <div class="pf-sre__hdr-title">
-        <!-- Sample-focused header: the Sample ID (tube barcode) is the primary
-             identity; the patient is demoted to a small secondary line. -->
-        <p class="pf-sre__eyebrow">
-          {{ s.department?.code ?? "Tube" }} · {{ logicalCount() }} test{{
-            logicalCount() === 1 ? "" : "s"
-          }}
-          on this tube
-        </p>
-        <h1 class="pf-sre__title">{{ s.barcode || "—" }}</h1>
-        <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
+        <!-- Compact sample-focused header: barcode leads, with the dept ·
+             test-count eyebrow and the patient sharing its baseline row so
+             the header stays one dense identity line instead of a tall
+             stack of single-item rows. -->
+        <div class="pf-sre__idrow">
+          <h1 class="pf-sre__title">{{ s.barcode || "—" }}</h1>
+          <p class="pf-sre__eyebrow">
+            {{ s.department?.code ?? "Tube" }} · {{ logicalCount() }} test{{
+              logicalCount() === 1 ? "" : "s"
+            }}
+          </p>
+          <p class="pf-sre__pid">{{ formatPatient(s.order?.patient) }}</p>
+        </div>
         <!-- Glimpse of every test kind on this tube (tube-as-probe). -->
         @if (headerChips().length) {
           <div class="pf-sre__chips">
@@ -391,7 +394,14 @@
                       <!-- Multi-parameter member inside a profile: one slim
                          sub-label row, then its parameter rows. -->
                       <tr class="pf-sre__gsub">
-                        <td colspan="6">{{ t.test?.name ?? "Test" }}</td>
+                        <td colspan="6">
+                          {{ t.test?.name ?? "Test" }}
+                          @if (enteredByLabel(t)) {
+                            <span class="pf-sre__gwho" title="Entered by">{{
+                              enteredByLabel(t)
+                            }}</span>
+                          }
+                        </td>
                       </tr>
                     }
                     @for (
@@ -421,6 +431,19 @@
                               >
                             }
                           </span>
+                          <!-- Provenance for single-param tests: who entered
+                               it and when (flat rows have no card header to
+                               carry this; multi-param tests show it on their
+                               sub-label row instead). -->
+                          @if (
+                            idx === 0 &&
+                            parametersFor(t).length === 1 &&
+                            enteredByLabel(t)
+                          ) {
+                            <span class="pf-sre__gwho" title="Entered by">{{
+                              enteredByLabel(t)
+                            }}</span>
+                          }
                           @if (calcChip(t, p); as c) {
                             <span
                               class="pf-sre__calc-chip"
@@ -672,6 +695,11 @@
                 t.status === "entered" || t.status === "validated"
               ) {
                 <span class="pf-sre__test-pill">Entered</span>
+                @if (enteredByLabel(t)) {
+                  <span class="pf-sre__who" title="Entered by">{{
+                    enteredByLabel(t)
+                  }}</span>
+                }
               }
               <!-- Compact "+ Note" pill at the right edge of the header.
                Replaces the full-width "Add Overall Observation" button
@@ -1159,8 +1187,10 @@
 
     <footer class="pf-sre__footer">
       @if (validateMode()) {
+        <!-- Compact meta: just "Submitted <when>" — provenance lives on the
+             test sections now; truncates instead of squeezing the actions. -->
         <span class="pf-sre__val-meta">
-          Submitted{{ submittedAtLabel() ? ' · ' + submittedAtLabel() : '' }} · awaiting validation
+          Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}
         </span>
         <button
           type="button"

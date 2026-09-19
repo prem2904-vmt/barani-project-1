@@ -112,6 +112,8 @@ export interface OrderTest {
   currentResult?: string;
   resultedAt?: string;
   resultedBy?: string;
+  /** Display name of the tech who entered the result (annotated by the samples endpoint). */
+  resultedByName?: string;
   validatedAt?: string;
   validatedBy?: string;
   rejectedAt?: string;
