@@ -50,11 +50,15 @@ interface StageField { name: string; title: string; type: string; options: strin
           <div class="pf-cse__hdr-top">
             <button type="button" class="pf-cse__back" (click)="back()" aria-label="Back">‹</button>
             <div class="pf-cse__titles">
-              <div class="pf-cse__eyebrow">{{ (cc.departmentName || 'Microbiology') }} · Culture &amp; Sensitivity · Day {{ dayNo() }}</div>
-              <div class="pf-cse__id">{{ cc.barcode || cc.sampleId || cc.testName || 'Culture case' }}</div>
-              <div class="pf-cse__patient">
-                <span class="pf-cse__pt-name">{{ cc.patientName || 'Patient' }}</span>
-                <span class="pf-cse__mid">·</span>{{ cc.testName || 'Culture' }}
+              <!-- One dense identity line (same treatment as result entry):
+                   sample id leads, eyebrow + patient share its baseline. -->
+              <div class="pf-cse__idrow">
+                <div class="pf-cse__id">{{ cc.barcode || cc.sampleId || cc.testName || 'Culture case' }}</div>
+                <div class="pf-cse__eyebrow">{{ (cc.departmentName || 'Microbiology') }} · C&amp;S · Day {{ dayNo() }}</div>
+                <div class="pf-cse__patient">
+                  <span class="pf-cse__pt-name">{{ cc.patientName || 'Patient' }}</span>
+                  <span class="pf-cse__mid">·</span>{{ cc.testName || 'Culture' }}
+                </div>
               </div>
             </div>
             <div class="pf-cse__hdr-right">
@@ -114,6 +118,8 @@ interface StageField { name: string; title: string; type: string; options: strin
               }
             </div>
           </div>
+          <!-- One compact sub-row: branches · specimen · stage chips. -->
+          <div class="pf-cse__subrow">
           <!-- Branches: the primary + every subculture, git-checkout style. -->
           <div class="pf-cse__branches">
             <button type="button" class="pf-cse__branch" [class.pf-cse__branch--on]="!selCaseId()"
@@ -162,6 +168,7 @@ interface StageField { name: string; title: string; type: string; options: strin
               </span>
             }
           </div>
+          </div><!-- /pf-cse__subrow -->
         </header>
 
         <div class="pf-cse__scroll">
@@ -362,15 +369,16 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__note { padding: 48px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
     /* Single-stage entry — mirrors the standard result-entry chrome. */
     .pf-cse { display: flex; flex-direction: column; min-height: calc(100dvh - 60px); }
-    .pf-cse__hdr { position: sticky; top: 0; z-index: 5; padding: 16px 24px 12px;
+    .pf-cse__hdr { position: sticky; top: 0; z-index: 5; padding: 10px 24px 8px;
       background: var(--bg-card, #12121a); border-bottom: 1px solid var(--glass-border); }
     .pf-cse__hdr-top { display: flex; align-items: flex-start; gap: 12px; }
     .pf-cse__back { flex-shrink: 0; font-size: 22px; line-height: 1; background: transparent; border: none;
       color: var(--text-secondary); cursor: pointer; padding: 2px 6px; margin-top: 4px; }
     .pf-cse__titles { flex: 1; min-width: 0; }
-    .pf-cse__eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-cse__id { font-size: 25px; font-weight: 800; color: var(--text-primary); margin-top: 3px; line-height: 1.15; font-variant-numeric: tabular-nums; }
-    .pf-cse__patient { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+    .pf-cse__idrow { display: flex; align-items: baseline; gap: 2px 12px; flex-wrap: wrap; min-width: 0; }
+    .pf-cse__eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-cse__id { font-size: 19px; font-weight: 800; color: var(--text-primary); line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .pf-cse__patient { font-size: 12.5px; color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-cse__pt-name { font-weight: 600; color: var(--text-primary); }
     .pf-cse__mid { margin: 0 6px; opacity: .5; }
     .pf-cse__hdr-right { flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
@@ -379,7 +387,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tech-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
     .pf-cse__progresspill { font-size: 12px; font-weight: 700; color: var(--violet-text, #a78bfa);
       padding: 6px 12px; border-radius: 999px; background: rgba(124,58,237,0.14); }
-    .pf-cse__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-left: 34px; }
+    .pf-cse__chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-cse__chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
       padding: 3px 10px; border-radius: 999px; color: var(--text-tertiary);
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
@@ -545,8 +553,11 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplsave { font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px;
       color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
     .pf-cse__tplsave:disabled { opacity: .4; cursor: default; }
-    .pf-cse__branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; }
-    .pf-cse__specrow { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; }
+    /* One wrap row holds branches · specimen · stage chips — three stacked
+       rows collapsed into one line that wraps only when it must. */
+    .pf-cse__subrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 8px; }
+    .pf-cse__branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .pf-cse__specrow { display: flex; align-items: center; gap: 8px; }
     .pf-cse__speclbl { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em;
       text-transform: uppercase; color: var(--text-muted); }
     .pf-cse__specsel { width: 210px; }
