@@ -682,7 +682,7 @@ select.pf-input--compact {
 
 /* Reference ranges as sentences */
 .pf-rr2 { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 16px; background: var(--glass-bg); }
-.pf-rr2__head { display: flex; justify-content: space-between; align-items: baseline; }
+.pf-rr2__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .pf-rr2__empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; color: var(--text-secondary); font-size: 13px; }
 .pf-rangeln { display: flex; align-items: center; gap: 12px; }
 .pf-rangeln__txt { flex: 1; font-size: 13px; color: var(--text-secondary); min-width: 0; }
@@ -765,6 +765,22 @@ select.pf-input--compact {
 .pf-rb__word { align-self: center; font-size: 12px; color: var(--text-tertiary, #64748b); padding: 0 4px; }
 .pf-rb__word--label { font-size: 12.5px; font-weight: 500; font-style: italic; color: var(--text-secondary);
   padding: 0 4px 0 14px; }
+.pf-rb__word--lead { padding-left: 14px; font-size: 12.5px; }
+
+/* Field hints — one line under each control saying what it does. */
+.pf-uf__hint { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--text-tertiary, #64748b); }
+.pf-rr2__sub { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary, #64748b); }
+
+/* Critical (panic) limits — its own labeled group, away from the range. */
+.pf-crit { margin-top: 4px; }
+.pf-crit__head { display: flex; align-items: baseline; gap: 8px; }
+.pf-crit__opt { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary, #64748b); }
+.pf-crit__sub { margin: 2px 0 10px; font-size: 11.5px; line-height: 1.5; max-width: 560px;
+  color: var(--text-tertiary, #64748b); }
+.pf-crit__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-crit__row pf-number-input { width: 110px; }
+.pf-crit__word { font-size: 12.5px; color: var(--text-secondary, #cbd5e1); }
+.pf-crit__unit { font-size: 12px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
 .pf-rb__num { width: 3.6rem; field-sizing: content; min-width: 2.6rem; max-width: 6.5rem;
   border: none; outline: none; background: transparent; text-align: right;
   font-size: 13.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;

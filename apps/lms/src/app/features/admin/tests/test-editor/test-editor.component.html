@@ -241,29 +241,22 @@
               <label class="pf-uf__lbl">Result type</label>
               <pf-select [options]="resultTypeOptions" [value]="d.resultType"
                          (valueChange)="patch({ resultType: $event })"></pf-select>
+              <p class="pf-uf__hint">What the tech types in — a number, free text, or Positive&nbsp;/&nbsp;Negative.</p>
             </div>
-            <!-- Unit, report format and critical bounds are NUMERIC concepts —
+            <!-- Unit and report format are NUMERIC concepts —
                  a dropdown-result test has no use for them. -->
             @if (numericFields().length > 0) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Unit</label>
                 <input type="text" class="pf-input pf-uf__in" [ngModel]="d.unit"
                        (ngModelChange)="patch({ unit: $event })" placeholder="e.g. mg/dL" />
+                <p class="pf-uf__hint">Prints after the value — “118 mg/dL”.</p>
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Report format</label>
                 <pf-select [options]="reportFormatOptions" [value]="d.reportFormat"
                            (valueChange)="patch({ reportFormat: $event })"></pf-select>
-              </div>
-              <div class="pf-uf">
-                <label class="pf-uf__lbl">Critical low</label>
-                <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
-                                 (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
-              </div>
-              <div class="pf-uf">
-                <label class="pf-uf__lbl">Critical high</label>
-                <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
-                                 (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
+                <p class="pf-uf__hint">Tabular = a row in the results table · Descriptive = a written paragraph.</p>
               </div>
             }
           </div>
@@ -287,36 +280,13 @@
             </div>
           }
 
-          <!-- How this result will be judged -->
-          @if (judgmentBand(); as jb) {
-            <div class="pf-judge">
-              <div class="pf-judge__head">
-                <span class="pf-judge__title">How this result will be judged</span>
-                @if (jb.unit) { <span class="pf-judge__scale">{{ jb.unit }}</span> }
-              </div>
-              <div class="pf-judge__bar">
-                <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
-                <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
-                <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
-              </div>
-              <div class="pf-judge__labels">
-                <div class="pf-judge__lbl" [style.flex]="jb.red">
-                  {{ jb.lo ?? 0 }} @if (jb.lo != null) { <span class="c-red">critical &lt; {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
-                </div>
-                <div class="pf-judge__lbl" [style.flex]="jb.green">
-                  {{ jb.lo ?? 0 }} <span class="c-green">normal &lt; {{ jb.normalMax }}</span>
-                </div>
-                <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
-                  {{ jb.normalMax }} <span class="c-amber">high</span>@if (jb.hi != null) { · critical &gt; {{ jb.hi }} }
-                </div>
-              </div>
-            </div>
-          }
-
           <!-- Reference ranges as sentences -->
           <div class="pf-rr2">
             <div class="pf-rr2__head">
-              <span class="pf-te2-h">Reference ranges</span>
+              <div>
+                <span class="pf-te2-h">Reference ranges — what counts as normal</span>
+                <p class="pf-rr2__sub">Prints on the report next to the result and decides the H&nbsp;/&nbsp;L flag.</p>
+              </div>
               @if (qualFields().length || numericFields().length) {
                 <!-- Always visible: it STATES the mode. A test's result is
                      one or the other — the inapplicable side is disabled
@@ -377,6 +347,7 @@
                   <div class="pf-rb">
                     <!-- One seamless sentence-bar: Everyone · All ages · Normal 12.3 – 17.0 g/dL -->
                     <div class="pf-rb__bar">
+                      <span class="pf-rb__word pf-rb__word--lead">For</span>
                       <select class="pf-rb__sel" [ngModel]="r.sex ?? 'any'"
                               (ngModelChange)="patchRangeAt(s.i, s.ri, { sex: $event })" title="Who this range applies to">
                         <option value="any">Everyone</option>
@@ -401,11 +372,13 @@
                         </select>
                       }
                       <span class="pf-rb__div"></span>
-                      <span class="pf-rb__word pf-rb__word--label">normal</span>
-                      <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="low"
+                      <span class="pf-rb__word pf-rb__word--label">normal is</span>
+                      <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="no low"
+                             title="Lowest normal value — leave blank for none (prints as “< high”)"
                              [ngModel]="r.min" (ngModelChange)="patchRangeAt(s.i, s.ri, { min: toNum($event) })" />
-                      <span class="pf-rb__dash">–</span>
-                      <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="high"
+                      <span class="pf-rb__dash">to</span>
+                      <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="no high"
+                             title="Highest normal value — leave blank for none (prints as “> low”)"
                              [ngModel]="r.max" (ngModelChange)="patchRangeAt(s.i, s.ri, { max: toNum($event) })" />
                       @if (rangeUnitFor(s.i)) { <span class="pf-rb__unit">{{ rangeUnitFor(s.i) }}</span> }
                       <button type="button" class="pf-rb__x" title="Remove this range" (click)="removeRange(s.i, s.ri)">
@@ -421,9 +394,9 @@
                 }
               }
               <div class="pf-rb__actions">
-                <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add another group</button>
+                <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add a range for another group (men / women / children…)</button>
                 <button type="button" class="pf-rb__finetune" (click)="openAdvancedRanges()"
-                        title="Comparators (≥ / >) and custom print labels">Fine-tune…</button>
+                        title="Comparators (≥ / >) and custom print labels">Fine-tune (≥, custom label)…</button>
               </div>
 
               <!-- Precise editor (advanced grid) -->
@@ -512,6 +485,53 @@
               }
             }
           </div>
+
+          <!-- Critical (panic) limits — the alarm, NOT the printed range -->
+          @if (numericFields().length > 0) {
+            <div class="pf-crit">
+              <div class="pf-crit__head">
+                <span class="pf-te2-h">Critical (panic) limits</span>
+                <span class="pf-crit__opt">optional</span>
+              </div>
+              <p class="pf-crit__sub">A safety alarm, separate from the reference range: outside these
+                the entry field turns red and the result is flagged critical. It never prints as the range.</p>
+              <div class="pf-crit__row">
+                <span class="pf-crit__word">Alarm when below</span>
+                <pf-number-input [value]="d.criticalLow" [allowEmpty]="true" [step]="0.1"
+                                 (valueChange)="patch({ criticalLow: $event ?? null })"></pf-number-input>
+                <span class="pf-crit__word">or above</span>
+                <pf-number-input [value]="d.criticalHigh" [allowEmpty]="true" [step]="0.1"
+                                 (valueChange)="patch({ criticalHigh: $event ?? null })"></pf-number-input>
+                @if (d.unit) { <span class="pf-crit__unit">{{ d.unit }}</span> }
+              </div>
+            </div>
+          }
+
+          <!-- The summary band: ranges + critical limits on one line -->
+          @if (judgmentBand(); as jb) {
+            <div class="pf-judge">
+              <div class="pf-judge__head">
+                <span class="pf-judge__title">Putting it together — how a value will be judged</span>
+                @if (jb.unit) { <span class="pf-judge__scale">{{ jb.unit }}</span> }
+              </div>
+              <div class="pf-judge__bar">
+                <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
+                <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
+                <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
+              </div>
+              <div class="pf-judge__labels">
+                <div class="pf-judge__lbl" [style.flex]="jb.red">
+                  @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
+                </div>
+                <div class="pf-judge__lbl" [style.flex]="jb.green">
+                  <span class="c-green">normal up to {{ jb.normalMax }}</span>
+                </div>
+                <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
+                  <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
+                </div>
+              </div>
+            </div>
+          }
 
           <!-- Parameters -->
           <div class="pf-param2-wrap">
