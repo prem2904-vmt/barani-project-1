@@ -427,6 +427,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'text',   label: 'Free text — a written finding' },
   ];
   readonly isSingleValue = computed(() => this.fields().length <= 1);
+  readonly rangeSexOptions: PfSelectOption<string>[] = [
+    { value: 'any', label: 'Everyone' },
+    { value: 'M',   label: 'Men' },
+    { value: 'F',   label: 'Women' },
+  ];
+  readonly agePresetOptions = computed<PfSelectOption<string>[]>(() => [
+    ...this.agePresets.map(p => ({ value: p.key, label: p.label })),
+    { value: 'custom', label: 'Custom ages…' },
+  ]);
+  readonly ageUnitOptions: PfSelectOption<string>[] = [
+    { value: 'years', label: 'years' },
+    { value: 'months', label: 'months' },
+    { value: 'days', label: 'days' },
+  ];
   readonly entryKind = computed<string>(() => {
     const fs = this.fields();
     if (fs.length === 0) {

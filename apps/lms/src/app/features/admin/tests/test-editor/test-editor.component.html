@@ -413,98 +413,90 @@
                 }
               </div>
             } @else if (numericFields().length === 1) {
-              @for (s of rangeSentences(); track s.ri) {
-                @if (rangeAt(s.i, s.ri); as r) {
-                  <div class="pf-rb">
-                    <!-- One seamless sentence-bar: Everyone · All ages · Normal 12.3 – 17.0 g/dL -->
-                    <div class="pf-rb__bar">
-                      <span class="pf-rb__word pf-rb__word--lead">For</span>
-                      <select class="pf-rb__sel" [ngModel]="r.sex ?? 'any'"
-                              (ngModelChange)="patchRangeAt(s.i, s.ri, { sex: $event })" title="Who this range applies to">
-                        <option value="any">Everyone</option>
-                        <option value="M">Men</option>
-                        <option value="F">Women</option>
-                      </select>
-                      <span class="pf-rb__div"></span>
-                      <select class="pf-rb__sel" [ngModel]="agePresetFor(s.i, s.ri)"
-                              (ngModelChange)="setAgePreset(s.i, s.ri, $event)" title="Age group">
-                        @for (ap of agePresets; track ap.key) { <option [value]="ap.key">{{ ap.label }}</option> }
-                        <option value="custom">Custom ages…</option>
-                      </select>
-                      @if (agePresetFor(s.i, s.ri) === 'custom') {
-                        <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--age" placeholder="from"
-                               [ngModel]="r.minAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { minAge: toNum($event) })" />
-                        <span class="pf-rb__word">to</span>
-                        <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--age" placeholder="any"
-                               [ngModel]="r.maxAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { maxAge: toNum($event) })" />
-                        <select class="pf-rb__sel pf-rb__sel--unit" [ngModel]="r.ageUnit ?? 'years'"
-                                (ngModelChange)="patchRangeAt(s.i, s.ri, { ageUnit: $event })">
-                          <option value="years">yrs</option><option value="months">mo</option><option value="days">days</option>
-                        </select>
-                      }
-                      <span class="pf-rb__div"></span>
-                      <span class="pf-rb__word pf-rb__word--label">normal is</span>
-                      <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="no low"
-                             title="Lowest normal value — leave blank for none (prints as “< high”)"
-                             [ngModel]="r.min" (ngModelChange)="patchRangeAt(s.i, s.ri, { min: toNum($event) })" />
-                      <span class="pf-rb__dash">to</span>
-                      <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="no high"
-                             title="Highest normal value — leave blank for none (prints as “> low”)"
-                             [ngModel]="r.max" (ngModelChange)="patchRangeAt(s.i, s.ri, { max: toNum($event) })" />
-                      @if (rangeUnitFor(s.i)) { <span class="pf-rb__unit">{{ rangeUnitFor(s.i) }}</span> }
-                      <button type="button" class="pf-rb__x" title="Remove this range" (click)="removeRange(s.i, s.ri)">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              <!-- Full-width range rows: who · age · normal — one row per group. -->
+              <div class="pf-rt3">
+                <div class="pf-rt3__head">
+                  <span>Who</span><span>Age</span><span>Normal from</span><span>Normal to</span><span>On the report</span><span></span>
+                </div>
+                @for (s of rangeSentences(); track s.ri) {
+                  @if (rangeAt(s.i, s.ri); as r) {
+                    <div class="pf-rt3__row">
+                      <div class="pf-rt3__cell">
+                        <pf-select size="sm" [options]="rangeSexOptions" [value]="r.sex ?? 'any'"
+                                   (valueChange)="patchRangeAt(s.i, s.ri, { sex: $any($event) })"></pf-select>
+                      </div>
+                      <div class="pf-rt3__cell pf-rt3__cell--age">
+                        <pf-select size="sm" [options]="agePresetOptions()" [value]="agePresetFor(s.i, s.ri)"
+                                   (valueChange)="setAgePreset(s.i, s.ri, $any($event))"></pf-select>
+                        @if (agePresetFor(s.i, s.ri) === 'custom') {
+                          <div class="pf-rt3__agecustom">
+                            <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-rt3__agein" placeholder="from"
+                                   [ngModel]="r.minAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { minAge: toNum($event) })" />
+                            <span class="pf-rt3__w">to</span>
+                            <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-rt3__agein" placeholder="any"
+                                   [ngModel]="r.maxAge" (ngModelChange)="patchRangeAt(s.i, s.ri, { maxAge: toNum($event) })" />
+                            <pf-select size="sm" [options]="ageUnitOptions" [value]="r.ageUnit ?? 'years'"
+                                       (valueChange)="patchRangeAt(s.i, s.ri, { ageUnit: $any($event) })"></pf-select>
+                          </div>
+                        }
+                      </div>
+                      <div class="pf-rt3__cell">
+                        <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="no low"
+                               [ngModel]="r.min" (ngModelChange)="patchRangeAt(s.i, s.ri, { min: toNum($event) })" />
+                      </div>
+                      <div class="pf-rt3__cell pf-rt3__cell--to">
+                        <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="no high"
+                               [ngModel]="r.max" (ngModelChange)="patchRangeAt(s.i, s.ri, { max: toNum($event) })" />
+                        @if (rangeUnitFor(s.i)) { <span class="pf-rt3__unit">{{ rangeUnitFor(s.i) }}</span> }
+                      </div>
+                      <div class="pf-rt3__cell pf-rt3__prints">
+                        @if (r.min != null || r.max != null) { “{{ s.prints }}” }
+                        @else { <span class="pf-rt3__todo">enter the limits</span> }
+                      </div>
+                      <button type="button" class="pf-rt3__x press" title="Remove this range" (click)="removeRange(s.i, s.ri)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                       </button>
                     </div>
-                    @if (r.min != null || r.max != null) {
-                      <div class="pf-rb__prints">Report prints “{{ s.prints }}”</div>
-                    } @else {
-                      <div class="pf-rb__prints pf-rb__prints--todo">Enter the normal limits — nothing prints yet</div>
-                    }
+                  }
+                }
+                <div class="pf-rt3__foot">
+                  <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
+                </div>
+
+                <!-- Critical alarm — same table language, one row. -->
+                <div class="pf-rt3__crit">
+                  <span class="pf-rt3__critlbl">Critical alarm</span>
+                  <span class="pf-rt3__w">below</span>
+                  <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="—"
+                         [ngModel]="d.criticalLow" (ngModelChange)="patch({ criticalLow: toNum($event) })" />
+                  <span class="pf-rt3__w">or above</span>
+                  <input type="text" inputmode="decimal" class="pf-input pf-rt3__num" placeholder="—"
+                         [ngModel]="d.criticalHigh" (ngModelChange)="patch({ criticalHigh: toNum($event) })" />
+                  @if (d.unit) { <span class="pf-rt3__unit">{{ d.unit }}</span> }
+                  <span class="pf-rt3__crithint">turns the entry red and flags the result critical — not printed</span>
+                </div>
+
+                @if (judgmentBand(); as jb) {
+                  <div class="pf-judge pf-judge--bare">
+                    <div class="pf-judge__bar">
+                      <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
+                      <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
+                      <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
+                    </div>
+                    <div class="pf-judge__labels">
+                      <div class="pf-judge__lbl" [style.flex]="jb.red">
+                        @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
+                      </div>
+                      <div class="pf-judge__lbl" [style.flex]="jb.green">
+                        <span class="c-green">normal up to {{ jb.normalMax }}</span>
+                      </div>
+                      <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
+                        <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
+                      </div>
+                    </div>
                   </div>
                 }
-              }
-              <div class="pf-rb__actions">
-                <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add a range for another group (men / women / children…)</button>
               </div>
-
-              <!-- Critical limits ride the same block: who → normal → critical. -->
-              <div class="pf-rb pf-rb--crit">
-                <div class="pf-rb__bar">
-                  <span class="pf-rb__word pf-rb__word--lead">Critically low</span>
-                  <span class="pf-rb__word">below</span>
-                  <input type="text" inputmode="decimal" class="pf-rb__num" placeholder="—"
-                         [ngModel]="d.criticalLow" (ngModelChange)="patch({ criticalLow: toNum($event) })" />
-                  <span class="pf-rb__div"></span>
-                  <span class="pf-rb__word pf-rb__word--label">critically high</span>
-                  <span class="pf-rb__word">above</span>
-                  <input type="text" inputmode="decimal" class="pf-rb__num pf-rb__num--left" placeholder="—"
-                         [ngModel]="d.criticalHigh" (ngModelChange)="patch({ criticalHigh: toNum($event) })" />
-                  @if (d.unit) { <span class="pf-rb__unit">{{ d.unit }}</span> }
-                </div>
-                <div class="pf-rb__prints">Turns the entry screen red and flags the result critical — never printed as the range.</div>
-              </div>
-
-              @if (judgmentBand(); as jb) {
-                <div class="pf-judge pf-judge--bare">
-                  <div class="pf-judge__bar">
-                    <span class="pf-judge__seg pf-judge__seg--red" [style.flex]="jb.red"></span>
-                    <span class="pf-judge__seg pf-judge__seg--green" [style.flex]="jb.green"></span>
-                    <span class="pf-judge__seg pf-judge__seg--amber" [style.flex]="jb.amber"></span>
-                  </div>
-                  <div class="pf-judge__labels">
-                    <div class="pf-judge__lbl" [style.flex]="jb.red">
-                      @if (jb.lo != null) { <span class="c-red">critical below {{ jb.lo }}</span> } @else { <span class="c-mut">low</span> }
-                    </div>
-                    <div class="pf-judge__lbl" [style.flex]="jb.green">
-                      <span class="c-green">normal up to {{ jb.normalMax }}</span>
-                    </div>
-                    <div class="pf-judge__lbl pf-judge__lbl--r" [style.flex]="jb.amber">
-                      <span class="c-amber">high above {{ jb.normalMax }}</span>@if (jb.hi != null) { <span class="c-red"> · critical above {{ jb.hi }}</span> }
-                    </div>
-                  </div>
-                </div>
-              }
             } @else {
               <!-- Several numeric values (a panel): each value gets its own
                    range rows — shown directly, nothing tucked away. -->
