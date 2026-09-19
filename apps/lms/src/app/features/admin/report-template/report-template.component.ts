@@ -51,9 +51,16 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </pf-touch-btn>
       </header>
 
-      <div class="pf-rt-grid">
+      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden()">
         <!-- ── Section rail: one part of the report at a time. ── -->
         <nav class="pf-rt-rail" aria-label="Report template sections">
+          <div class="pf-rt-rail__head">
+            <span>Sections</span>
+            <button type="button" class="pf-rt-side-toggle" (click)="toggleRail()"
+                    title="Collapse panel" aria-label="Collapse section panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          </div>
           @for (sec of sections; track sec.value) {
             <button type="button" class="pf-rt-rail__item press"
                     [class.pf-rt-rail__item--on]="tab() === sec.value"
@@ -65,6 +72,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
+          @if (railHidden()) {
+            <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
+                    title="Show sections" aria-label="Show section panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+              Sections
+            </button>
+          }
           @if (activeSection(); as sec) {
             <div class="pf-rt-work__hdr">
               <h2 class="pf-rt-work__title">{{ sec.label }}</h2>
@@ -735,6 +749,21 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
     /* ── Section list (left panel). ── */
     .pf-rt-rail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 70px; }
+    .pf-rt-rail__head { display: flex; align-items: center; justify-content: space-between;
+      padding: 2px 6px 8px 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-side-toggle, .pf-rt-side-expand { display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px; border-radius: 8px; border: none; background: transparent;
+      color: var(--text-tertiary, #94a3b8); cursor: pointer; }
+    .pf-rt-side-toggle:hover, .pf-rt-side-expand:hover { background: var(--glass-bg-hover, rgba(255,255,255,.05)); color: var(--text-primary); }
+    .pf-rt-side-expand { margin: 0 0 10px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--glass-border); border-radius: 10px; }
+    .pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr) minmax(400px, 40%); }
+    @media (min-width: 1181px) { .pf-rt-grid--norail .pf-rt-rail { display: none; } }
+    @media (max-width: 1180px) {
+      .pf-rt-rail__head, .pf-rt-side-expand { display: none; }
+      .pf-rt-grid--norail { grid-template-columns: 1fr; }
+    }
     .pf-rt-rail__item { display: flex; align-items: center; height: 40px; padding: 0 14px;
       border-radius: 11px; border: none; background: transparent; color: var(--text-secondary);
       font-size: 13px; font-weight: 600; cursor: pointer; text-align: left;
@@ -901,6 +930,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
+  /** Left section list hide/unhide — Test Master departments pattern. */
+  readonly railHidden = signal<boolean>(
+    typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
+  toggleRail() {
+    this.railHidden.update(v => !v);
+    try { localStorage.setItem('pf-rt-rail', this.railHidden() ? 'hidden' : 'shown'); } catch { /* private mode */ }
+  }
+
   setTab(t: Tab) {
     this._tab.set(t);
     // Re-pull the form-flow fields when entering the Patient tab so the list
