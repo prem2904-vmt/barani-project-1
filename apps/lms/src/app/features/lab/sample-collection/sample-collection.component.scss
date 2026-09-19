@@ -292,6 +292,35 @@
       text-align: center;
     }
 
+    /* Sample source segmented toggle (Internal | External). */
+    .pf-drawer__source {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      margin-top: 16px;
+    }
+    .pf-drawer__source-lbl {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-tertiary);
+    }
+    .pf-drawer__source-seg {
+      display: inline-flex; padding: 3px; border-radius: 10px;
+      background: var(--glass-bg, rgba(255,255,255,.04));
+      border: 1px solid var(--glass-border, rgba(255,255,255,.1));
+    }
+    .pf-drawer__source-btn {
+      height: 30px; padding: 0 16px; border: 0; border-radius: 8px;
+      background: transparent; color: var(--text-secondary);
+      font-size: 12.5px; font-weight: 600; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .pf-drawer__source-btn--on {
+      background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #ec4899));
+      color: #fff;
+    }
+    .pf-drawer__source-btn:disabled { opacity: .55; cursor: default; }
+    @media (hover: hover) {
+      .pf-drawer__source-btn:not(.pf-drawer__source-btn--on):not(:disabled):hover { color: var(--text-primary); }
+    }
+
     /* Tubes sit in a centred track. For 1-4 vials we use flex so they
      * genuinely centre across the screen instead of hugging the left column
      * of an auto-fill grid. 5+ wraps naturally. */

@@ -409,6 +409,46 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return isOrderDispatched(g.samples);
   }
 
+  /** Sample source (order-level). External = the specimen was brought in
+   *  from outside: the draw is skipped and every pending tube jumps to
+   *  'collected' (server-marked brought-in) so Dispatch/Done opens up
+   *  immediately. Derived from the tubes so it survives refetches. */
+  sourceOf(g: OrderGroup): "internal" | "external" {
+    return g.samples.some((s) => s.source === "external")
+      ? "external"
+      : "internal";
+  }
+  private readonly _sourceBusy = signal(false);
+  readonly sourceBusy = this._sourceBusy.asReadonly();
+  async setSource(g: OrderGroup, source: "internal" | "external") {
+    if (this._sourceBusy() || this.sourceOf(g) === source || this.isDispatched(g)) return;
+    this._sourceBusy.set(true);
+    try {
+      await firstValueFrom(
+        this.api.patch(`/api/orders/${g.orderId}/sample-source`, { source }),
+      );
+      this._pending.update((list) =>
+        list.map((s) => {
+          if (s.orderId !== g.orderId) return s;
+          if (source === "external" && s.status === "pending")
+            return { ...s, status: "collected", source: "external" };
+          if (source === "internal" && s.status === "collected" && s.source === "external")
+            return { ...s, status: "pending", source: null };
+          return s;
+        }),
+      );
+      this.toasts.success(
+        source === "external"
+          ? "Marked brought-in — collection skipped"
+          : "Back to in-house collection",
+      );
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this._sourceBusy.set(false);
+    }
+  }
+
   /** Mark every collected tube on this order as dispatched to the lab. */
   async dispatchOrder(g: OrderGroup) {
     if (this._dispatching()) return;

@@ -145,7 +145,29 @@
             <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
           </div>
 
-          <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
+          <!-- Sample source: Internal (default — the normal draw flow) vs
+               External (the specimen was brought in from outside: the draw is
+               skipped, every pending tube jumps to collected, and the footer
+               opens Dispatch/Done straight away). -->
+          <div class="pf-drawer__source" role="group" aria-label="Sample source">
+            <span class="pf-drawer__source-lbl">Sample source</span>
+            <div class="pf-drawer__source-seg">
+              <button type="button" class="pf-drawer__source-btn"
+                      [class.pf-drawer__source-btn--on]="sourceOf(g) === 'internal'"
+                      [disabled]="sourceBusy() || isDispatched(g)"
+                      (click)="setSource(g, 'internal')">Internal</button>
+              <button type="button" class="pf-drawer__source-btn"
+                      [class.pf-drawer__source-btn--on]="sourceOf(g) === 'external'"
+                      [disabled]="sourceBusy() || isDispatched(g)"
+                      (click)="setSource(g, 'external')">External</button>
+            </div>
+          </div>
+
+          @if (sourceOf(g) === 'external') {
+            <p class="pf-drawer__hint">Brought-in specimen — the draw is skipped and every tube is marked collected. Dispatch or Done when ready.</p>
+          } @else {
+            <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
+          }
 
           <div class="pf-drawer__tubes">
             @for (s of orderedSamples(g); track s.id) {

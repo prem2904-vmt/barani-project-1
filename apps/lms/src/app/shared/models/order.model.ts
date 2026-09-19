@@ -56,6 +56,8 @@ export interface OrderSample {
    *  (space, colour). Null = fall back to the department container colour. */
   tubeColor?: string | null;
   status: string;
+  /** 'external' = specimen brought in from outside (draw skipped); null/absent = drawn in-house. */
+  source?: string | null;
   barcode?: string;
   qrCode?: string;
   collectedAt?: string;
