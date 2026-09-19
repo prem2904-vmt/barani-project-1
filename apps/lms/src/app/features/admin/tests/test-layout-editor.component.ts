@@ -96,6 +96,11 @@ const OPERATORS = [
               <div class="pf-le-stabs__scroll">
                 @if (sections().length === 0) {
                   <p class="pf-le-stabs__empty">No sections yet — add one to start.</p>
+                  @if (culture()) {
+                    <button type="button" class="pf-link-btn" (click)="seedCultureLayout()">
+                      Start from the classic C&amp;S structure
+                    </button>
+                  }
                 }
                 @for (s of sections(); track s.id) {
                   <button type="button" class="pf-le-stab"
@@ -561,6 +566,7 @@ const OPERATORS = [
                   [testId]="testId()"
                   [parameters]="parameters()"
                   [values]="sampleValues()"
+                  [culture]="culture()"
                   [refreshToken]="previewToken()">
                 </pf-report-pdf-preview>
               </div>
@@ -1649,6 +1655,25 @@ export class TestLayoutEditorComponent {
   ];
   asCultureLine(sec: ReportSection): { source: string } {
     return sec as unknown as { source: string };
+  }
+  /** One-tap starter for culture tests: seeds the classic C&S arrangement
+   *  (the reference report) as editable sections — rearrange from there. */
+  seedCultureLayout() {
+    const mk = (source: string, label: string, order: number): ReportSection =>
+      ({ id: newId(), type: 'culture_line', order, label, source, conditions: [] } as ReportSection);
+    const seeded: ReportSection[] = [
+      mk('specimen', 'Specimen', 1),
+      mk('gramStain', 'Gram stain', 2),
+      mk('growth', 'Growth', 3),
+      mk('colonyCount', 'Colony count', 4),
+      mk('organisms', 'Organism(s) isolated', 5),
+      { id: newId(), type: 'culture_ast', order: 6, conditions: [] } as ReportSection,
+      mk('resistancePattern', 'Resistance pattern', 7),
+      mk('intrinsicResistance', 'Intrinsic resistance', 8),
+      mk('clinicalNotes', 'Clinical notes', 9),
+      mk('infectionControlAdvice', 'Infection control advice', 10),
+    ];
+    this.mutateSections(() => seeded);
   }
 
   /** Department columns the test inherits — fetched whenever departmentId

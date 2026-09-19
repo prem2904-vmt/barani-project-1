@@ -87,6 +87,34 @@ export class ReportPdfPreviewComponent implements OnDestroy {
   /** LIVE (possibly unsaved) column override — patched onto the target layout
    *  before rendering so the columns editor previews before Save. */
   readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** True for culture (C&S) tests: the preview snapshot carries sample
+   *  culture data (gram stage, organisms, AST) with the culture microFormat
+   *  so the PDF shows the real culture block instead of an empty grid. */
+  readonly culture = input<boolean>(false);
+
+  private static readonly SAMPLE_CULTURE = {
+    microFormat: 'culture_sensitivity',
+    values: {
+      specimen: 'Urine',
+      colonyCount: '>100,000 CFU/mL',
+      organisms: [{ name: 'Escherichia coli', antibiotics: [
+        { name: 'Amikacin', interpretation: 'S' },
+        { name: 'Ciprofloxacin', interpretation: 'R' },
+        { name: 'Meropenem', interpretation: 'S' },
+      ]}],
+      resistancePattern: 'Ampicillin-resistant; carbapenems retained.',
+      clinicalNotes: 'Significant bacteriuria — correlate clinically.',
+    },
+    stages: [
+      { key: 'gram', label: 'Gram / Direct smear', values: { fields: [
+        { name: 'pus_cells', title: 'Pus Cells', value: 'Many' },
+        { name: 'gram_negative_bacilli', title: 'Gram-negative bacilli', value: 'Many' },
+      ], notes: 'GNB seen' } },
+      { key: 'growth', label: 'Growth check', values: { fields: [
+        { name: 'growth', title: 'Growth', value: 'Significant growth' },
+      ] } },
+    ],
+  };
   /** Bump to force a re-render (after Save, or a manual Refresh). */
   readonly refreshToken = input(0);
 
@@ -207,7 +235,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
           name: this.testName() || resolved.testName,
           department: this.department() || resolved.departmentName || 'Department',
           sampleType: this.sampleType() || resolved.sampleType || undefined,
-          result: { values: vals },
+          result: this.culture() ? ReportPdfPreviewComponent.SAMPLE_CULTURE : { values: vals },
         }];
       }
       if (seq !== this.renderSeq) return;   // superseded by a newer render
