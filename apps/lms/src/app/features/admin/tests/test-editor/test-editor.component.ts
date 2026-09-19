@@ -32,6 +32,7 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, ModuleRegistry } from 'ag-grid-community';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
+import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
@@ -436,7 +437,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Reference-range GRID (Test Master's AG-Grid language) ──────────
   private readonly themeSvc = inject(ThemeService);
-  readonly rangeGridTheme = computed(() => (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight));
+  readonly rangeGridTheme = computed(() =>
+    (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight)
+      .withParams({ rowHeight: 48, headerHeight: 42, cellHorizontalPadding: 14 }));
   /** Row view-model: one reference band per row, editable in place. */
   rangeRows(): Array<Record<string, unknown>> {
     const p = this.firstNumericField();
@@ -455,19 +458,37 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly rangeDefaultColDef: ColDef = {
     editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
   };
+  private static readonly SEX_OPTS: RangeSelectOption[] = [
+    { value: 'any', label: 'Everyone' }, { value: 'M', label: 'Men' }, { value: 'F', label: 'Women' },
+  ];
+  private static readonly AGE_UNIT_OPTS: RangeSelectOption[] = [
+    { value: 'years', label: 'years' }, { value: 'months', label: 'months' }, { value: 'days', label: 'days' },
+  ];
+  /** Chevroned display for dropdown cells — the cell LOOKS clickable. */
+  private ddCell(label: (v: unknown) => string) {
+    return (p: { value: unknown }) =>
+      `<span class="pf-rrgrid__dd"><span class="pf-rrgrid__dd-lbl">${label(p.value)}</span>` +
+      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>`;
+  }
   readonly rangeColDefs: ColDef[] = [
-    { field: 'sex', headerName: 'Who', minWidth: 108, flex: 1,
-      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['any', 'M', 'F'] },
-      valueFormatter: p => (({ any: 'Everyone', M: 'Men', F: 'Women' }) as Record<string, string>)[String(p.value ?? 'any')] ?? 'Everyone' },
-    { field: 'agePreset', headerName: 'Age group', minWidth: 140, flex: 1.2,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: () => ({ values: [...this.agePresets.map(a => a.key), 'custom'] }),
-      valueFormatter: p => p.value === 'custom' ? 'Custom (edit ages →)'
-        : (this.agePresets.find(a => a.key === p.value)?.label ?? 'All ages') },
-    { field: 'minAge', headerName: 'From age', minWidth: 88, flex: .7, valueFormatter: p => p.value ?? '—' },
-    { field: 'maxAge', headerName: 'To age', minWidth: 82, flex: .7, valueFormatter: p => p.value ?? '—' },
-    { field: 'ageUnit', headerName: 'Age in', minWidth: 92, flex: .7,
-      cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['years', 'months', 'days'] } },
+    { field: 'sex', headerName: 'Who', minWidth: 116, flex: 1,
+      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
+      cellEditorParams: { options: TestEditorComponent.SEX_OPTS },
+      cellRenderer: this.ddCell(v => (({ any: 'Everyone', M: 'Men', F: 'Women' }) as Record<string, string>)[String(v ?? 'any')] ?? 'Everyone') },
+    { field: 'agePreset', headerName: 'Age group', minWidth: 150, flex: 1.2,
+      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
+      cellEditorParams: () => ({ options: [
+        ...this.agePresets.map(a => ({ value: a.key, label: a.label })),
+        { value: 'custom', label: 'Custom (edit the age cells)' },
+      ] satisfies RangeSelectOption[] }),
+      cellRenderer: this.ddCell(v => v === 'custom' ? 'Custom'
+        : (this.agePresets.find(a => a.key === v)?.label ?? 'All ages')) },
+    { field: 'minAge', headerName: 'From age', minWidth: 88, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
+    { field: 'maxAge', headerName: 'To age', minWidth: 82, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
+    { field: 'ageUnit', headerName: 'Age in', minWidth: 100, flex: .7,
+      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
+      cellEditorParams: { options: TestEditorComponent.AGE_UNIT_OPTS },
+      cellRenderer: this.ddCell(v => String(v ?? 'years')) },
     { field: 'min', headerName: 'Low', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
     { field: 'max', headerName: 'High', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
     { field: 'criticalLow', headerName: 'Critical low', minWidth: 104, flex: .8,

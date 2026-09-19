@@ -747,6 +747,12 @@ select.pf-input--compact {
 .pf-rrgrid-wrap { display: flex; flex-direction: column; gap: 0; }
 .pf-rrgrid { width: 100%; }
 .pf-rrgrid__num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pf-rrgrid__dd { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; color: var(--text-primary, #e2e8f0); }
+.pf-rrgrid__dd svg { color: var(--text-tertiary, #64748b); flex-shrink: 0; }
+.pf-rrgrid__dd-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pf-rrgrid .ag-cell { cursor: pointer; }
+@media (hover: hover) { .pf-rrgrid .ag-cell:not(.pf-rrgrid__del):hover { background: rgba(124,58,237,.06); } }
 .pf-rrgrid__crit { color: #f87171; }
 .pf-rrgrid__prints { color: var(--text-tertiary, #94a3b8); }
 .pf-rrgrid__del { display: flex; align-items: center; justify-content: center; cursor: pointer;

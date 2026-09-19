@@ -419,6 +419,7 @@
                 <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
                   [rowData]="rangeRows()" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
                   domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
+                  [singleClickEdit]="true"
                   (cellValueChanged)="onRangeCellChanged($event)"
                   (cellClicked)="onRangeCellClicked($event)">
                 </ag-grid-angular>
