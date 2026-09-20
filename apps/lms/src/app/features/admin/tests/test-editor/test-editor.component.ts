@@ -1407,6 +1407,18 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Full-width tick-list under the Basics grid (owner: use the free space
    *  below to SHOW the profiles, not hide them in a dropdown). */
   readonly linkedProfileIds = computed<string[]>(() => this.linkedProfiles().map(p => p.id));
+
+  /** name → display title for the printed-report surfaces (mini table,
+   *  Description rows, condition dropdowns show titles; the stored
+   *  conditions keep engine NAMES). */
+  readonly parameterTitleMap = computed<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const fld of this._fields()) m[fld.name] = fld.label || fld.name;
+    return m;
+  });
+  /** Values with "Prints on the report" switched off. */
+  readonly unprintedParamNames = computed<string[]>(() =>
+    this._fields().filter(fld => fld.printOnReport === false).map(fld => fld.name));
   readonly profSearch = signal('');
   readonly visibleProfiles = computed<Test[]>(() => {
     const q = this.profSearch().trim().toLowerCase();
@@ -1679,6 +1691,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       optionRows: p.optionRows ?? null,
       optionGroupName: p.optionGroupName ?? null,
       attachments: p.attachments === true || undefined,
+      printOnReport: p.printOnReport === false ? false : undefined,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
         label: label ?? '',
@@ -1783,6 +1796,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       optionRows: f.optionRows ?? undefined,
       optionGroupName: f.optionGroupName ?? undefined,
       attachments: f.attachments === true || undefined,
+      printOnReport: f.printOnReport === false ? false : undefined,
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,

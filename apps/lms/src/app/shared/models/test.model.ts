@@ -114,6 +114,8 @@ export interface TestParameter {
   /** Photos & video at result entry for THIS value (per-row toggle); the
    *  Parameters-root `attachments: true` marker means every value. */
   attachments?: boolean;
+  /** Per-value print switch: false = recorded at the bench, never printed. */
+  printOnReport?: boolean;
 }
 
 export interface TestParametersBlob {

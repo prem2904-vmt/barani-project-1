@@ -227,6 +227,8 @@ export interface ColumnLock {
 export interface ParameterColumnLocks {
   id: string;
   parameterName: string;
+  /** Display title — prefer over humanizing parameterName. */
+  title?: string | null;
   /** Keyed by column.name. */
   columnLocks: Record<string, ColumnLock>;
   updatedAt?: string | null;
@@ -281,6 +283,7 @@ export interface ResolvedRow {
    *  "Test/Investigation" column when the configured layout doesn't
    *  already display the parameter name itself. */
   parameterName?: string;
+  title?: string | null;
   cells: Record<string, string>;
   /** The parameter's unit (e.g. "g/dL"), always populated from the test
    *  parameter metadata even when the layout has no Unit column — so the

@@ -86,7 +86,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             </p>
             @for (name of paramNames(); track name) {
               <div class="pf-tl-desc-row">
-                <span class="pf-tl-desc-name">{{ name }}</span>
+                <span class="pf-tl-desc-name">{{ titleFor(name) }}</span>
                 <input type="text" class="pf-input pf-input--compact grow"
                        [value]="descriptionFor(name)"
                        (input)="setDescription(name, $any($event.target).value)"
@@ -461,6 +461,11 @@ export class TestNotesEditorComponent implements OnInit {
    *  fields; the embedded editor has no catalogue). Fixes the empty preview /
    *  empty Description list for tests with no saved layout. */
   readonly parameters = input<string[]>([]);
+  /** name → display title ("erythrocyte_sedimentation_rate" → "ESR (Hourly)").
+   *  Conditions still store NAMES (the engine's identifiers); titles are
+   *  display-only. */
+  readonly parameterTitles = input<Record<string, string>>({});
+  titleFor(name: string): string { return this.parameterTitles()[name] || name; }
   /** Profile members from the host — lets a PROFILE preview print exactly as
    *  the report does (member rows + profile notes + column override). */
   readonly profileMembers = input<PreviewProfileMember[]>([]);

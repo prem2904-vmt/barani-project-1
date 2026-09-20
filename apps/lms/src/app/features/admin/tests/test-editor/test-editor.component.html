@@ -655,12 +655,20 @@
                   <div class="pf-vbatch__foot">
                     <pf-validation-editor [type]="p.type" [isRequired]="p.isRequired" [validation]="p.validation ?? null"
                       (change)="patchValidation(i, $event)"></pf-validation-editor>
-                    <label class="pf-rep-toggle pf-vbatch__attach" [class.pf-rep-toggle--on]="p.attachments === true"
-                           title="The tech can attach photos/video to THIS value; images can print on the report">
-                      <input type="checkbox" [checked]="p.attachments === true"
-                             (change)="patchField(i, { attachments: $any($event.target).checked || undefined })" />
-                      <span>Photos &amp; video</span>
-                    </label>
+                    <div class="pf-vbatch__switches">
+                      <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="p.printOnReport !== false"
+                             title="Off = the tech still records this value, but its row never prints on the patient's report">
+                        <input type="checkbox" [checked]="p.printOnReport !== false"
+                               (change)="patchField(i, { printOnReport: $any($event.target).checked ? undefined : false })" />
+                        <span>Prints on the report</span>
+                      </label>
+                      <label class="pf-rep-toggle pf-vbatch__attach" [class.pf-rep-toggle--on]="p.attachments === true"
+                             title="The tech can attach photos/video to THIS value; images can print on the report">
+                        <input type="checkbox" [checked]="p.attachments === true"
+                               (change)="patchField(i, { attachments: $any($event.target).checked || undefined })" />
+                        <span>Photos &amp; video</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               }
@@ -914,13 +922,15 @@
                 [culture]="cultureBench()"
                 [attachments]="attachmentsEnabled()"
                 [parameters]="parameterNames()"
+                [parameterTitles]="parameterTitleMap()"
+                [hiddenParams]="unprintedParamNames()"
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
                 (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()">
                 <div descriptionEditor>
                   <pf-test-notes-editor class="block" [slim]="true" [fixedTestId]="d.id || ''" [hidePreview]="true"
-                [parameters]="parameterNames()" [profileMembers]="previewProfileMembers()"
+                [parameters]="parameterNames()" [parameterTitles]="parameterTitleMap()" [profileMembers]="previewProfileMembers()"
                 [columnsOverride]="liveColumnsOverride()" (saved)="refreshPreview()"></pf-test-notes-editor>
                 </div>
               </pf-report-structure>

@@ -257,6 +257,8 @@ export interface FormField {
   /** Photos & video at result entry for THIS value (per-row toggle);
    *  the Parameters-root `attachments: true` marker means every value. */
   attachments?: boolean;
+  /** Per-value print switch: false = recorded at the bench, never printed. */
+  printOnReport?: boolean;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

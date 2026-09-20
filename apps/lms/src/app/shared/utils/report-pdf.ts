@@ -1998,7 +1998,7 @@ function buildPanelGroup(
         }
         group.rows.push({
           kind: 'param',
-          name: humanize(r.parameterName ?? ''),
+          name: r.title || humanize(r.parameterName ?? ''),
           result: resultText,
           range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
           // Prefer the Unit column when present; otherwise fall back to the
@@ -2710,7 +2710,7 @@ function renderGridSection(
       }];
     }
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
-    const paramTitle = humanize(r.parameterName ?? '');
+    const paramTitle = r.title || humanize(r.parameterName ?? '');
     const resultCol = cfgCols.find(c => c.type === 'result');
     const resultText = resultCol ? coerceCellText(r.cells[resultCol.name]) : '';
     // Engine condition colour: red/orange abnormal paints the row; green is an

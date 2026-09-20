@@ -103,7 +103,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                       <tbody>
                         @for (p of shownParams(); track p) {
                           <tr>
-                            <td class="rsd__td-name">{{ p }}</td>
+                            <td class="rsd__td-name">{{ titleFor(p) }}</td>
                             @for (c of columnLabels().slice(1); track $index) {
                               <td class="rsd__td-val" [class.rsd__td-val--value]="isResultCol(c)">
                                 {{ isResultCol(c) ? 'value' : '—' }}
@@ -318,6 +318,12 @@ export class ReportStructureComponent {
   readonly attachments = input<boolean>(false);
   /** Parameter names — the miniature table's rows + condition parameters. */
   readonly parameters = input<string[]>([]);
+  /** name → display title; conditions still store names. */
+  readonly parameterTitles = input<Record<string, string>>({});
+  /** Values switched off ("Prints on the report" unticked) — excluded from
+   *  the miniature table so it mirrors the actual print. */
+  readonly hiddenParams = input<string[]>([]);
+  titleFor(name: string): string { return this.parameterTitles()[name] || name; }
   /** "Specimen · Result · Unit · Reference range" — the table's columns. */
   readonly columnsSummary = input<string>('');
   /** Bumped by the host after the advanced editor closes → reload. */
@@ -365,8 +371,14 @@ export class ReportStructureComponent {
     return parts.length >= 2 ? parts : ['Investigation', 'Result', 'Unit', 'Reference range'];
   });
   private static readonly MAX_PREVIEW_ROWS = 6;
-  readonly shownParams = computed(() => this.parameters().slice(0, ReportStructureComponent.MAX_PREVIEW_ROWS));
-  readonly moreParams = computed(() => Math.max(0, this.parameters().length - ReportStructureComponent.MAX_PREVIEW_ROWS));
+  readonly shownParams = computed(() => {
+    const hidden = new Set(this.hiddenParams());
+    return this.parameters().filter(p => !hidden.has(p)).slice(0, ReportStructureComponent.MAX_PREVIEW_ROWS);
+  });
+  readonly moreParams = computed(() => {
+    const hidden = new Set(this.hiddenParams());
+    return Math.max(0, this.parameters().filter(p => !hidden.has(p)).length - ReportStructureComponent.MAX_PREVIEW_ROWS);
+  });
   isResultCol(label: string): boolean { return /result/i.test(label); }
 
   // ── If / else, in plain words ──────────────────────────────
@@ -384,7 +396,7 @@ export class ReportStructureComponent {
     { value: '!=', label: 'is not' },
   ];
   readonly paramOptions = computed<PfSelectOption[]>(() =>
-    this.parameters().map(p => ({ value: p, label: p })));
+    this.parameters().map(p => ({ value: p, label: this.titleFor(p) })));
 
   /** Classify a block's stored conditions into the plain-words model.
    *  Anything richer (nested and/or, colors, variables, several rules)
