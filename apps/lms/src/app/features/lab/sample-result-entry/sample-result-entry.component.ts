@@ -797,6 +797,7 @@ export class SampleResultEntryComponent {
   // reset the sample (which would disrupt in-progress typing). The manual
   // Save draft button stays exactly as-is.
   private scheduleServerAutosave() {
+    if (this.viewOnly()) return;   // read-only view never writes drafts
     if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
     this.autosaveTimer = setTimeout(() => {
       this.autosaveTimer = null;
@@ -1207,6 +1208,9 @@ export class SampleResultEntryComponent {
    *  SAME screen the tech used — fields already render read-only for entered
    *  tests; drafts/autosave stay off; the footer swaps to Reject / Validate. */
   readonly validateMode = signal(false);
+  /** Read-only VIEW (?view=1): inputs untouchable, no submit, no autosave —
+   *  opened from the Completed tab / reports queue to inspect results. */
+  readonly viewOnly = signal(false);
 
   enteredTests() {
     return (this._sample()?.tests ?? []).filter(t => t.status === 'entered');
@@ -1279,6 +1283,7 @@ export class SampleResultEntryComponent {
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get("sampleId");
     this.validateMode.set(this.route.snapshot.queryParamMap.get('validate') === '1');
+    this.viewOnly.set(this.route.snapshot.queryParamMap.get('view') === '1');
     if (!id) {
       this._loading.set(false);
       return;

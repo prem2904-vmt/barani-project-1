@@ -1732,3 +1732,20 @@
 .pf-sre__attach-param { color: var(--violet-text, #a78bfa); font-weight: 700; }
 /* Per-report value picker (culture-checkbox pattern). */
 .pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: #a855f7; flex-shrink: 0; }
+
+/* Read-only VIEW (?view=1): opened from Completed / reports to inspect. */
+.pf-sre__viewchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+  border-radius: 9999px; border: 1px solid rgba(167, 139, 250, 0.45);
+  background: rgba(124, 58, 237, 0.12); color: var(--violet-text, #a78bfa);
+  font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.pf-sre--view .pf-sre__footer,
+.pf-sre--view .pf-sre__hdr-action,
+.pf-sre--view .pf-sre__attach-btn,
+.pf-sre--view .pf-sre__attach-eye,
+.pf-sre--view .pf-sre__attach-x,
+.pf-sre--view .pf-sre__printpick { display: none !important; }
+.pf-sre--view input:not([type="checkbox"]),
+.pf-sre--view textarea,
+.pf-sre--view select,
+.pf-sre--view pf-select,
+.pf-sre--view input[type="checkbox"] { pointer-events: none !important; }

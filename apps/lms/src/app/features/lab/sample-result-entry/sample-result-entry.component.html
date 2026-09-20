@@ -1,6 +1,6 @@
 <!-- Full-width container matching FD/collect screens — was centered
      to 880px which left huge empty gutters on lab terminals. -->
-<section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
+<section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10" [class.pf-sre--view]="viewOnly()">
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
          (change)="onAttachPicked($event)" />
   <header class="pf-sre__hdr pf-sre__hdr--sticky">
@@ -102,6 +102,12 @@
     }
     <!-- Signed-in technician (right of header): name + medical
          registration ID (dash until the user adds one in My signature). -->
+    @if (viewOnly()) {
+      <span class="pf-sre__viewchip" title="Read-only view — nothing here can be changed">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+        Read-only
+      </span>
+    }
     <span class="pf-sre__tech" title="Signed-in technician">
       <svg
         width="14"

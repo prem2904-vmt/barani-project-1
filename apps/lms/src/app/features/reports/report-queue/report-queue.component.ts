@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from "@angular/common";
+import { firstValueFrom } from "rxjs";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
   ChangeDetectionStrategy,
@@ -487,6 +488,22 @@ export class ReportQueueComponent implements OnInit {
 
   view(r: Report) {
     this.router.navigate(["/reports/view", r.id]);
+  }
+
+  /** Open the bench's result-entry screen READ-ONLY for this order (owner
+   *  2026-09-20) — sibling-tube tabs inside the screen cover multi-tube
+   *  orders, so the first sample is enough of an entry point. */
+  async viewLabResults(r: Report) {
+    if (!r.orderId) return;
+    try {
+      const order = await firstValueFrom(
+        this.api.get<{ samples?: Array<{ id: string }> }>(`/api/orders/${r.orderId}`));
+      const sid = order?.samples?.[0]?.id;
+      if (!sid) { this.toasts.error("No sample found for this order."); return; }
+      void this.router.navigate(["/lab/sample", sid], { queryParams: { view: 1 } });
+    } catch {
+      this.toasts.error("Could not open the lab results.");
+    }
   }
 
   /** Download the report as a PDF (client-side render via jsPDF). Pulls

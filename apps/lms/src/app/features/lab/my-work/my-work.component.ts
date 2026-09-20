@@ -411,7 +411,11 @@ const COUNTERS: CounterSpec[] = [
             <li>
               <div class="pf-tq pf-tq--done">
                 <span class="pf-tq__cap" aria-hidden="true"></span>
-                <div class="pf-tq__main">
+                <div class="pf-tq__main pf-tq__main--link" role="link" tabindex="0"
+                     [attr.aria-label]="'View results for ' + (tube.barcode || tube.sampleId)"
+                     title="View results (read-only)"
+                     (click)="viewCompletedTube(tube)"
+                     (keydown.enter)="viewCompletedTube(tube)">
                   <div class="pf-tq__line">
                     <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
                     <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered'">
@@ -2569,6 +2573,12 @@ export class MyWorkComponent implements OnInit {
   /** Edit a finished tube: mandatory reason (the app's themed prompt), then
    *  the backend re-opens every submitted/validated test on it back to THIS
    *  tech — audited — and we drop the user into My Work where it landed. */
+  /** Open the sample's results READ-ONLY (owner 2026-09-20): inspect what
+   *  was entered without reopening anything for edit. */
+  viewCompletedTube(tube: { sampleId: string }) {
+    void this.router.navigate(['/lab/sample', tube.sampleId], { queryParams: { view: 1 } });
+  }
+
   async editCompletedTube(tube: { sampleId: string; barcode: string; tests: OrderTest[] }) {
     const reason = await this.dialog.prompt({
       title: 'Re-open for editing?',

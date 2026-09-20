@@ -373,6 +373,18 @@
         </div>
 
         <div class="pf-rq-actions">
+          @if (r.orderId) {
+          <!-- Open the bench's result-entry screen READ-ONLY — inspect what
+               was entered (values, notes, attachments) without touching it. -->
+          <button type="button" class="pf-rq-iconbtn" title="View the lab results (read-only)" (click)="viewLabResults(r)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>Results</span>
+          </button>
+          }
           @if (canEditResult() && r.orderId) {
           <!-- Pull the finished results back for correction (department picker
                + tech routing + reason live in the shared dialog). -->
