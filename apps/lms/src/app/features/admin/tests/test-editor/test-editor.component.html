@@ -456,85 +456,32 @@
                 }
               </div>
             } @else {
-              <!-- Several numeric values (a panel): each value gets its own
-                   range rows — shown directly, nothing tucked away. -->
-              <div class="space-y-5 mt-1">
-                    @for (p of fields(); let i = $index; track i) {
-                      @if (isNumericType(p.type)) {
-                        <div class="pf-rr-block">
-                          @if (numericFields().length > 1) {
-                            <div class="flex items-baseline gap-2 mb-2">
-                              <span class="text-sm font-semibold" style="color: var(--text-primary);">{{ p.name || 'Unnamed' }}</span>
-                              @if (p.unit) { <span class="text-[11px]" style="color: var(--text-tertiary);">{{ p.unit }}</span> }
-                            </div>
-                          }
-                          <div class="flex items-center justify-between mb-1">
-                            <span class="pf-mini-lbl">{{ bandsCaption(p) }}</span>
-                            <button type="button" class="text-xs font-medium c-violet" (click)="addRange(i)">+ Add range</button>
-                          </div>
-                          @for (r of (p.referenceRanges ?? []); track $index) {
-                            <div class="grid gap-2 grid-cols-2 md:grid-cols-6 items-end">
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Sex</span>
-                                <select class="pf-input pf-input--compact" [ngModel]="r.sex ?? 'any'"
-                                        (ngModelChange)="patchRangeAt(i, $index, { sex: $event })">
-                                  <option value="any">Any</option><option value="M">Male</option><option value="F">Female</option>
-                                </select>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Min age</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="1" [value]="r.minAge ?? null"
-                                                  (valueChange)="patchRangeAt(i, $index, { minAge: $event ?? null })"></pf-number-input>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Max age</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="1" [value]="r.maxAge ?? null"
-                                                  (valueChange)="patchRangeAt(i, $index, { maxAge: $event ?? null })"></pf-number-input>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Age unit</span>
-                                <select class="pf-input pf-input--compact" [ngModel]="r.ageUnit ?? 'years'"
-                                        (ngModelChange)="patchRangeAt(i, $index, { ageUnit: $event })">
-                                  <option value="years">Years</option><option value="months">Months</option><option value="days">Days</option>
-                                </select>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Normal min</span>
-                                <div class="flex items-end gap-1 pf-rr-bound">
-                                  <select class="pf-input pf-input--compact shrink-0" title="Lower-bound comparator"
-                                          [ngModel]="minOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { minOp: $event })">
-                                    <option value="gt">&gt;</option><option value="gte">&ge;</option>
-                                  </select>
-                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="min value" [value]="r.min ?? null"
-                                                    (valueChange)="patchRangeAt(i, $index, { min: $event ?? null })"></pf-number-input>
-                                </div>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Normal max</span>
-                                <div class="flex items-end gap-1 pf-rr-bound">
-                                  <select class="pf-input pf-input--compact shrink-0" title="Upper-bound comparator"
-                                          [ngModel]="maxOpShown(r)" (ngModelChange)="patchRangeAt(i, $index, { maxOp: $event })">
-                                    <option value="lt">&lt;</option><option value="lte">&le;</option>
-                                  </select>
-                                  <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" placeholder="max value" [value]="r.max ?? null"
-                                                    (valueChange)="patchRangeAt(i, $index, { max: $event ?? null })"></pf-number-input>
-                                  @if ((p.referenceRanges ?? []).length > 1) {
-                                    <button type="button" title="Remove range" class="shrink-0 px-1 c-red"
-                                            (click)="removeRange(i, $index)">×</button>
-                                  }
-                                </div>
-                              </label>
-                            </div>
-                            <label class="flex flex-col gap-0.5 min-w-0 -mt-1 mb-1">
-                              <span class="pf-mini-lbl">Prints as</span>
-                              <input type="text" class="pf-input pf-input--compact" [ngModel]="r.label ?? ''"
-                                     [placeholder]="autoRangeLabel(r)"
-                                     (ngModelChange)="patchRangeAt(i, $index, { label: $event || null })" />
-                            </label>
-                          }
+              <!-- Several numeric values (a panel): each value gets the SAME
+                   grid as a single-value test — stacked, one per value. -->
+              <div class="space-y-6 mt-1">
+                @for (p of fields(); let i = $index; track i) {
+                  @if (isNumericType(p.type)) {
+                    <div class="pf-rr-block">
+                      <div class="flex items-baseline gap-2 mb-2">
+                        <span class="text-sm font-semibold" style="color: var(--text-primary);">{{ p.label || p.name || 'Unnamed' }}</span>
+                        @if (p.unit) { <span class="text-[11px]" style="color: var(--text-tertiary);">{{ p.unit }}</span> }
+                      </div>
+                      <div class="pf-rrgrid-wrap">
+                        <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
+                          [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
+                          [getRowId]="$any(rangeRowId)"
+                          domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
+                          [singleClickEdit]="true" [popupParent]="gridPopupParent"
+                          (cellValueChanged)="onRangeCellChanged($event)"
+                          (cellClicked)="onRangeCellClicked($event)">
+                        </ag-grid-angular>
+                        <div class="pf-rt3__foot">
+                          <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
                         </div>
-                      }
-                    }
+                      </div>
+                    </div>
+                  }
+                }
               </div>
             }
           </div>

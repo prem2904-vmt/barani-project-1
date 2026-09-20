@@ -531,6 +531,30 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   });
   /** Stable row identity so edits survive row-data refreshes. */
   readonly rangeRowId = (p: { data: { ri: number } }) => String(p.data.ri);
+  /** Multi-value tests: one grid per numeric value — LITERALLY the same
+   *  editor as the single-value grid, stacked (owner: a 2nd value is "just
+   *  another row", never a different-looking editor). Same memoization rule
+   *  as rangeRows: one computed map, stable arrays per change-detection. */
+  private static readonly EMPTY_RANGE_ROWS: Array<Record<string, unknown>> = [];
+  readonly rangeRowsByField = computed<Map<number, Array<Record<string, unknown>>>>(() => {
+    const out = new Map<number, Array<Record<string, unknown>>>();
+    this.fields().forEach((p, i) => {
+      if (!this.isNumericType(p.type)) return;
+      out.set(i, (p.referenceRanges ?? []).map((r, ri) => ({
+        i, ri,
+        sex: r.sex ?? 'any',
+        agePreset: this.agePresetFor(i, ri),
+        minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
+        min: r.min ?? null, max: r.max ?? null,
+        criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
+        prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
+      })));
+    });
+    return out;
+  });
+  rangeRowsFor(i: number): Array<Record<string, unknown>> {
+    return this.rangeRowsByField().get(i) ?? TestEditorComponent.EMPTY_RANGE_ROWS;
+  }
   readonly rangeDefaultColDef: ColDef = {
     editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
   };
