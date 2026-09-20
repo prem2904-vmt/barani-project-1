@@ -856,6 +856,11 @@ export class SampleResultEntryComponent {
       case "select":
       case "radio":
       case "button_select":
+      // "options"/"choice": what the option-group mapper and the CP/urine
+      // option-table catalogs write (owner's bug: Urine Urobilinogen had a
+      // full option group but rendered as a free text box).
+      case "options":
+      case "choice":
         return "select";
       case "yesno":
       case "toggle":
@@ -863,8 +868,10 @@ export class SampleResultEntryComponent {
       case "date":
         return "date";
       default:
-        // Qualitative positive/negative-ish parameters (by options OR type)
-        // render as a dropdown, never a free text box.
+        // A parameter that CARRIES options is a dropdown no matter what its
+        // type string says; qualitative positive/negative-ish parameters
+        // get a dropdown too. Never a free text box for a curated list.
+        if ((p.optionRows?.length ?? 0) > 0 || (p.options?.length ?? 0) > 0) return "select";
         return qualitativeOptionsFor(p) ? "select" : "text";
     }
   }

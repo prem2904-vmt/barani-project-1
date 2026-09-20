@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
@@ -104,7 +103,6 @@ function coerceCellText(raw: unknown): string {
   selector: 'pf-report-viewer',
   standalone: true,
   imports: [
-    DatePipe,
     ScreenHeaderComponent,
     TouchButtonComponent,
     LoadingLogoComponent,

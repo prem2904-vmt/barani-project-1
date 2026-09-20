@@ -3247,7 +3247,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // InputKind here — silent fall-through would hide data-entry bugs.
   inputKindFor(p: TestParameter): InputKind {
     const field = this._fieldByName().get(p.name);
-    const t = field?.type ?? p.type;
+    // Widened: catalog data carries type strings ('options', 'choice') the
+    // FormFieldType union doesn't know.
+    const t = (field?.type ?? p.type) as string;
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':
@@ -3262,7 +3264,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'date':            return 'date';
       case 'time':            return 'time';
       case 'datetime':        return 'datetime';
-      case 'select':          return 'dropdown';
+      case 'select':
+      // "options"/"choice": the option-group mapper / option-table catalogs
+      // write these — a curated list must never render as a text box.
+      case 'options':
+      case 'choice':          return 'dropdown';
       case 'multiselect':     return 'chips-multi';
       case 'buttonSelect':
       case 'button_select':   return 'buttonSelect';
@@ -3292,7 +3298,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'table':
       case 'recursive':
       case 'recursivePages':  return 'stub';
-      default:                return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
+      default:
+        if ((p.optionRows?.length ?? 0) > 0 || (p.options?.length ?? 0) > 0) return 'dropdown';
+        return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
     }
   }
 
