@@ -1,7 +1,7 @@
 <!-- Full-width container matching FD/collect screens — was centered
      to 880px which left huge empty gutters on lab terminals. -->
 <section class="pf-sre px-4 md:px-8 lg:px-10 pt-6 pb-10">
-  <input type="file" #attachInput hidden accept="image/*,video/*"
+  <input type="file" #attachInput hidden multiple accept="image/*,video/*"
          (change)="onAttachPicked($event)" />
   <header class="pf-sre__hdr pf-sre__hdr--sticky">
     <!-- App-wide standard back chevron. Sits BEFORE the title and shows at

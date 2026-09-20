@@ -1557,31 +1557,37 @@ export class SampleResultEntryComponent {
   }
   async onAttachPicked(ev: Event) {
     const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = "";
     const targetId = this.attachTargetId;
-    if (!file || !targetId) return;
-    const kind: ResultAttachment["kind"] = file.type.startsWith("video/") ? "video" : "image";
-    if (file.size > (kind === "video" ? 30 : 5) * 1024 * 1024) {
-      this.toasts.error(kind === "video" ? "Video too large — max 30 MB" : "Image too large — max 5 MB");
-      return;
-    }
+    if (!files.length || !targetId) return;
     this.attachBusy.set(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file, file.name);
-      const resp = await this.http.post<{ success: boolean; data?: { url: string }; message?: string }>(
-        `${this.platform.getApiUrl()}/api/uploads/result-file`, fd).toPromise();
-      if (!resp?.success || !resp.data?.url) { this.toasts.error(resp?.message ?? "Upload failed"); return; }
       const target = { id: targetId };
-      const next: ResultAttachment[] = [...this.attachmentsFor(target), {
-        id: Math.random().toString(36).slice(2, 10),
-        url: resp.data.url,
-        kind,
-        show: kind === "image",       // images print by default; videos never
-        name: file.name,
-      }];
-      await this.saveAttachments(targetId, next);
+      let list = this.attachmentsFor(target);
+      for (const file of files) {
+        const kind: ResultAttachment["kind"] = file.type.startsWith("video/") ? "video" : "image";
+        if (file.size > (kind === "video" ? 30 : 5) * 1024 * 1024) {
+          this.toasts.error(`${file.name}: too large — max ${kind === "video" ? 30 : 5} MB`);
+          continue;
+        }
+        const fd = new FormData();
+        fd.append("file", file, file.name);
+        const resp = await this.http.post<{ success: boolean; data?: { url: string }; message?: string }>(
+          `${this.platform.getApiUrl()}/api/uploads/result-file`, fd).toPromise();
+        if (!resp?.success || !resp.data?.url) {
+          this.toasts.error(resp?.message ?? `${file.name}: upload failed`);
+          continue;
+        }
+        list = [...list, {
+          id: Math.random().toString(36).slice(2, 10),
+          url: resp.data.url,
+          kind,
+          show: kind === "image",       // images print by default; videos never
+          name: file.name,
+        }];
+      }
+      if (list !== this.attachmentsFor(target)) await this.saveAttachments(targetId, list);
     } catch {
       this.toasts.error("Upload failed — check the connection and try again.");
     } finally {
