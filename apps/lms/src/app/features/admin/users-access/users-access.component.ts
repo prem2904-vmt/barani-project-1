@@ -26,6 +26,7 @@ import { SignalingService } from '../../../core/services/signaling.service';
 import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { ROLE_INFO } from './permission-catalog';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -422,6 +423,18 @@ export class UsersAccessComponent implements OnInit {
       minWidth: 200,
       sortable: true,
       filter: true,
+    },
+    {
+      headerName: 'Who this is',
+      colId: 'who',
+      valueGetter: p => ROLE_INFO[p.data?.name ?? ''] ?? 'Custom role — open it to see exactly what it grants.',
+      flex: 2,
+      minWidth: 320,
+      wrapText: true,
+      autoHeight: true,
+      sortable: false,
+      filter: false,
+      cellStyle: { lineHeight: '1.5', fontSize: '12.5px', color: 'var(--text-tertiary)', paddingTop: '8px', paddingBottom: '8px' },
     },
     {
       headerName: 'Type',
