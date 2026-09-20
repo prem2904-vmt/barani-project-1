@@ -634,11 +634,27 @@
   color: #fca5a5;
   background: rgba(248, 113, 113, 0.06);
 }
-/* Status dot + per-test note button (last slim column). */
+/* Status dot + per-test note/attach buttons (last slim column).
+   width:1% + nowrap = shrink-to-fit, so the cell grows with however
+   many buttons a row carries instead of clipping the last one. */
 .pf-sre__gc-note {
-  width: 56px;
+  width: 1%;
   text-align: right;
   white-space: nowrap;
+}
+.pf-sre__gc-note .pf-sre__gnote,
+.pf-sre__gc-note .pf-sre__attach-btn {
+  vertical-align: middle;
+}
+.pf-sre__gc-note .pf-sre__gnote + .pf-sre__gnote,
+.pf-sre__gc-note .pf-sre__attach-btn {
+  margin-left: 6px;
+}
+/* Match the pencil's footprint inside the table row. */
+.pf-sre__gc-note .pf-sre__attach-btn {
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 8px;
 }
 .pf-sre__gdot {
   display: inline-block;
