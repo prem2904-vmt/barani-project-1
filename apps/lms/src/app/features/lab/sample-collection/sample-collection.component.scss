@@ -105,10 +105,23 @@
       display: grid;
       grid-template-columns: repeat(1, minmax(0, 1fr));
       gap: 12px;
+      /* The list is flex-stretched to fill the page; grid's default
+         align-content: stretch then distributes the LEFTOVER height between
+         row tracks — with two rows that shoved the second row halfway down
+         the screen. Pack rows at the top; the empty space stays below. */
+      align-content: start;
+      align-items: start;
     }
     @media (min-width: 768px) {
       .pf-sc__list {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    /* Wide lab monitors: three across so the queue reads as a board
+       instead of two cards floating in a void. */
+    @media (min-width: 1600px) {
+      .pf-sc__list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
     .pf-sc__list > li { min-width: 0; }
