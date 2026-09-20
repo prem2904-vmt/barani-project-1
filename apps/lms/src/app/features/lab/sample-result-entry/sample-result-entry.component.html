@@ -492,18 +492,24 @@
                           {{ methodologyOf(p) }}
                         </td>
                         <td class="pf-sre__gc-note">
-                          <button
-                            type="button"
-                            class="pf-sre__gnote press"
-                            tabindex="-1"
-                            [class.pf-sre__gnote--has]="
-                              commentsFor(t.id, p.name).length > 0
-                            "
-                            (click)="toggleParamNote(t.id, p.name)"
-                            title="Note on this parameter"
-                          >
-                            ✎
-                          </button>
+                          <!-- Single-value tests get ONE note affordance (the
+                               test-level one) — a parameter pencil AND a test
+                               pencil on the same row read as two mystery edit
+                               buttons. -->
+                          @if (parametersFor(t).length > 1) {
+                            <button
+                              type="button"
+                              class="pf-sre__gnote press"
+                              tabindex="-1"
+                              [class.pf-sre__gnote--has]="
+                                commentsFor(t.id, p.name).length > 0
+                              "
+                              (click)="toggleParamNote(t.id, p.name)"
+                              title="Note on this parameter"
+                            >
+                              ✎
+                            </button>
+                          }
                           @if (idx === 0) {
                             @if (t.status === "re_entry") {
                               <span
@@ -1047,18 +1053,22 @@
                         <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
                           {{ methodologyOf(p) }}
-                          <button
-                            type="button"
-                            class="pf-sre__gnote press"
-                            tabindex="-1"
-                            [class.pf-sre__gnote--has]="
-                              commentsFor(t.id, p.name).length > 0
-                            "
-                            (click)="toggleParamNote(t.id, p.name)"
-                            title="Note on this parameter"
-                          >
-                            ✎
-                          </button>
+                          <!-- Same one-pencil rule as the flat grid: the test
+                               header's + Note covers single-value tests. -->
+                          @if (parametersFor(t).length > 1) {
+                            <button
+                              type="button"
+                              class="pf-sre__gnote press"
+                              tabindex="-1"
+                              [class.pf-sre__gnote--has]="
+                                commentsFor(t.id, p.name).length > 0
+                              "
+                              (click)="toggleParamNote(t.id, p.name)"
+                              title="Note on this parameter"
+                            >
+                              ✎
+                            </button>
+                          }
                         </td>
                       </tr>
                       @if (
