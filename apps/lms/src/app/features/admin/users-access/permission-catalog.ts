@@ -209,6 +209,14 @@ export const ROLE_INFO: Record<string, string> = {
     'Collects samples at the patient’s home — a sample collector on the road.',
   'Pathologist':
     'The signing doctor. Reviews every result, signs reports out, and sends anything doubtful back to the bench.',
+  'Microbiologist':
+    'The microbiology doctor. Signs out cultures and micro reports, works the culture bench directly, and can amend a culture result during review.',
+  'Biochemist':
+    'The biochemistry doctor. Reviews and signs out biochemistry results — same signing powers as a pathologist.',
+  'Haematologist':
+    'The haematology doctor. Reviews and signs out haematology results — same signing powers as a pathologist.',
+  'Quality Manager':
+    'The NABL quality officer. Sees everything — dashboards, turnaround times, the audit trail — and changes nothing.',
   'Branch Manager':
     'Runs a branch — dashboards, turnaround times, audit trail and branch settings. Oversees the lab rather than operating it.',
   'Store Keeper':
