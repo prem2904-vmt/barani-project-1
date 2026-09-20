@@ -15,7 +15,6 @@ import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -106,7 +105,6 @@ function coerceCellText(raw: unknown): string {
   standalone: true,
   imports: [
     DatePipe,
-    ChipComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
     LoadingLogoComponent,
@@ -212,29 +210,6 @@ function coerceCellText(raw: unknown): string {
 
       <div class="pf-rv-scroll">
       @if (report(); as r) {
-        <!-- Status strip. Plain words, not raw enum values — "final" +
-             "pending" side by side read as a contradiction. The critical
-             alarm leads; report stage + delivery state say what they mean. -->
-        <div class="pf-rv-status">
-          <div class="flex items-center gap-2 flex-wrap">
-            @if (hasCritical()) {
-              <pf-chip tone="rose" size="sm">Critical result</pf-chip>
-            }
-            <pf-chip [tone]="r.type === 'preliminary' ? 'amber' : 'violet'" size="sm">
-              {{ r.type === 'preliminary' ? 'Preliminary report' : 'Final report' }}
-            </pf-chip>
-            @if (r.deliveryStatus === 'delivered') {
-              <pf-chip tone="emerald" size="sm">Delivered to patient</pf-chip>
-            } @else {
-              <pf-chip tone="default" size="sm">Not sent yet</pf-chip>
-            }
-          </div>
-          <p class="pf-rv-status__meta">
-            Generated {{ r.createdAt | date:'medium' }}
-            · #{{ r.id.slice(0, 8) }}
-          </p>
-        </div>
-
         <!-- The on-screen report IS the rendered PDF — the exact same file
              the Download button produces (jsPDF + tenant template + per-test
              layouts), painted page-by-page onto canvases so it renders
@@ -313,24 +288,6 @@ function coerceCellText(raw: unknown): string {
          devices with a home indicator under our own scroll chrome. */
       padding-bottom: calc(48px + env(safe-area-inset-bottom));
       -webkit-overflow-scrolling: touch;
-    }
-
-    .pf-rv-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 14px;
-      margin-bottom: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-    }
-    .pf-rv-status__meta {
-      margin: 0;
-      font-size: 11.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-tertiary);
     }
 
     .pf-rv-loading {
@@ -769,7 +726,6 @@ function coerceCellText(raw: unknown): string {
         overflow: visible !important;
         padding-bottom: 0 !important;
       }
-      .pf-rv-status,
       .pf-rv-loading,
       pf-screen-header { display: none !important; }
       .pf-paper {
@@ -924,13 +880,6 @@ function coerceCellText(raw: unknown): string {
          re-apply the canonical pill footprint here (88px + bottom safe-area)
          so the last report rows aren't hidden behind the pill. */
       .pf-rv-scroll { padding-bottom: var(--tab-nav-total-height); }
-
-      /* Status strip: chips + meta stack instead of cramping. */
-      .pf-rv-status {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }
 
       /* Tighter paper so the printable doesn't waste the narrow width. */
       .pf-paper { padding: 20px 16px; }
@@ -1088,9 +1037,6 @@ export class ReportViewerComponent implements OnInit {
     if (!d?.patient?.name) return 'Final report preview.';
     return `${d.patient.name} · ${d.order?.id?.slice(0, 8) ?? ''}`;
   });
-
-  readonly hasCritical = computed(() =>
-    (this.data()?.tests ?? []).some(t => t.result?.flags?.critical));
 
   readonly groupedTests = computed(() => {
     const tests = this.data()?.tests ?? [];
