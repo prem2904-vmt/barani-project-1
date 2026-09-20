@@ -83,20 +83,71 @@ export class NavBackService {
     const rawUrl = currentUrl || this.router.url;
     const normUrl = this.norm(rawUrl);
 
-    // Explicit section main route mappings
-    if (normUrl.startsWith('/admin/users') || normUrl.startsWith('/admin/roles')) {
-      if (normUrl.includes('/roles') || rawUrl.includes('tab=roles')) {
-        return '/admin/users?tab=roles';
-      }
+    // People & Access (cat=people)
+    if (normUrl === '/admin/users/invite' || (normUrl.startsWith('/admin/users/') && normUrl !== '/admin/users')) {
       return '/admin/users?tab=users';
     }
-    if (normUrl.startsWith('/admin/tests')) {
+    if (normUrl === '/admin/roles/new' || (normUrl.startsWith('/admin/roles/') && normUrl !== '/admin/roles')) {
+      return '/admin/users?tab=roles';
+    }
+    if (normUrl === '/admin/users' || normUrl === '/admin/roles' || normUrl === '/admin/audit') {
+      return '/admin/manage?cat=people';
+    }
+
+    // Branches & Organization (cat=org)
+    if (normUrl === '/admin/vendors' || normUrl === '/admin/referral-labs' || normUrl === '/admin/referring-network') {
+      return '/admin/partners';
+    }
+    if (
+      normUrl === '/admin/branches' ||
+      normUrl === '/admin/organization' ||
+      normUrl === '/admin/appointments' ||
+      normUrl === '/admin/partners' ||
+      normUrl === '/setup'
+    ) {
+      return '/admin/manage?cat=org';
+    }
+
+    // Finance (cat=finance)
+    if (normUrl === '/admin/billing' || normUrl === '/finance' || normUrl === '/finance/daily') {
+      return '/admin/manage?cat=finance';
+    }
+
+    // Platform & Automation (cat=automation)
+    if (normUrl.startsWith('/admin/workflows/')) {
+      const seg = normUrl.split('/').filter(Boolean);
+      return seg.length > 3 ? `/admin/workflows/${seg[2]}` : '/admin/workflows';
+    }
+    if (normUrl === '/admin/process' || normUrl === '/admin/workflows') {
+      return '/admin/manage?cat=automation';
+    }
+
+    // Settings hub landing
+    if (normUrl === '/admin/manage') {
+      return '/admin';
+    }
+
+    // Tests & Lab settings hub (/lab/settings)
+    if (normUrl.startsWith('/admin/tests/')) {
       const match = rawUrl.match(/[?&]type=([^&]+)/);
       if (match) {
         return `/admin/tests?type=${match[1]}`;
       }
       return '/admin/tests';
     }
+    if (
+      normUrl === '/admin/tests' ||
+      normUrl === '/admin/lab-settings' ||
+      normUrl.startsWith('/admin/lab-settings/') ||
+      normUrl === '/admin/reports' ||
+      normUrl === '/admin/notifications' ||
+      normUrl === '/admin/microbiology' ||
+      normUrl === '/admin/kpis'
+    ) {
+      return '/lab/settings';
+    }
+
+    // Frontdesk subroutes
     if (normUrl.startsWith('/frontdesk/appointments/')) {
       const match = rawUrl.match(/[?&]patientId=([^&]+)/);
       if (match && match[1]) {
@@ -122,6 +173,7 @@ export class NavBackService {
     if (normUrl.startsWith('/o/') || normUrl.startsWith('/p/')) {
       return '/frontdesk';
     }
+
     // Lab settings hub is an ADMIN surface reached from /admin, but its own
     // children (culture settings…) parent back to the hub.
     if (normUrl === '/lab/settings') {
@@ -139,23 +191,11 @@ export class NavBackService {
     if (normUrl.startsWith('/reports/')) {
       return '/reports';
     }
-    // Deep admin editors keep their intermediate level: a workflow FIELD
-    // editor returns to its workflow screen, not the admin home.
-    if (normUrl.startsWith('/admin/workflows/')) {
-      const seg = normUrl.split('/').filter(Boolean);
-      return seg.length > 3 ? `/admin/workflows/${seg[2]}` : '/admin/workflows';
-    }
-    if (normUrl.startsWith('/admin/lab-settings/')) {
-      return '/admin/lab-settings';
-    }
     if (normUrl.startsWith('/admin/opd/')) {
       return '/admin/opd';
     }
-    if (normUrl.startsWith('/admin/process/')) {
-      return '/admin/process';
-    }
     if (normUrl.startsWith('/admin/')) {
-      return '/admin';
+      return '/admin/manage';
     }
 
     // Generic: the LONGEST strict prefix that is a primary root — so
