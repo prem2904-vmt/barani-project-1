@@ -390,6 +390,7 @@ const COUNTERS: CounterSpec[] = [
            Read-only history with ONE action: Edit re-opens the whole tube
            (the unit of entry) back into this same tech's My Work after a
            mandatory reason, which the backend records in the audit trail. -->
+      <p class="pf-mw-completed-cap">Showing the last {{ completedDays }} days.</p>
       @if (completedLoading() && completedTubes().length === 0) {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           @for (i of [0,1,2]; track i) {
@@ -1538,6 +1539,8 @@ const COUNTERS: CounterSpec[] = [
     .pf-tq--done   { --tq-accent: #34d399; }
 
     /* Primary zone — the tap target for open / pick. */
+    .pf-mw-completed-cap { margin: 0 0 10px; font-size: 11.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
     .pf-tq__main {
       flex: 1 1 auto; min-width: 0;
       padding: 13px 12px 13px 16px;
@@ -2530,8 +2533,13 @@ export class MyWorkComponent implements OnInit {
    *  (subOrder id), plus the patient line, the test names, when it was
    *  finished and whether it is merely submitted or already validated. */
   readonly completedTubes = computed(() => {
+    // Belt-and-braces on the API's ?days window: the Completed tab only
+    // ever shows the last 7 days, whatever the server returns.
+    const cutoff = Date.now() - this.completedDays * 24 * 60 * 60 * 1000;
     const bySample = new Map<string, OrderTest[]>();
     for (const t of this._completed()) {
+      const done = t.validatedAt ?? t.resultedAt;
+      if (done && new Date(done).getTime() < cutoff) continue;
       const sid = t.subOrder?.id ?? t.id;
       if (!bySample.has(sid)) bySample.set(sid, []);
       bySample.get(sid)!.push(t);
