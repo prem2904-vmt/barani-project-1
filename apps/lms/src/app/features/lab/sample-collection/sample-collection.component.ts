@@ -657,21 +657,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
 
-  /** Unique ordered test names across the group's tubes — the card's
-   *  second line, so the collector knows WHAT they're drawing for
-   *  before opening the drawer. */
-  protected testNamesFor(g: OrderGroup): string[] {
-    const names: string[] = [];
-    const seen = new Set<string>();
-    for (const sm of g.samples) {
-      for (const t of sm.tests ?? []) {
-        const n = (t.test?.name ?? '').trim();
-        const k = n.toLowerCase();
-        if (n && !seen.has(k)) { seen.add(k); names.push(n); }
-      }
-    }
-    return names;
-  }
   /** "12 min waiting" — how long since the order was raised. */
   protected waitingLabel(g: OrderGroup): string {
     const ms = Date.now() - new Date(g.createdAt).getTime();
