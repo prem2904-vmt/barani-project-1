@@ -348,6 +348,23 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.patch({ parametersJson: JSON.stringify(existing) });
   }
 
+  /** Photos & video at result entry — opt-in per test. On = the tech's
+   *  result-entry screen shows the attach button for this result; images can
+   *  print on the report, videos stay bench-only. Stored as
+   *  `attachments: true` in the Parameters wrapper. */
+  readonly attachmentsEnabled = computed<boolean>(() => {
+    try { return JSON.parse(this._draft().parametersJson || '{}')?.attachments === true; }
+    catch { return false; }
+  });
+  setAttachmentsEnabled(on: boolean) {
+    const existing = (() => {
+      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
+    })();
+    if (on) existing.attachments = true;
+    else delete existing.attachments;
+    this.patch({ parametersJson: JSON.stringify(existing) });
+  }
+
   private readonly _referralLabs = signal<ReferralLab[]>([]);
   readonly referralLabs = this._referralLabs.asReadonly();
   readonly referralLabOptions = computed<PfSelectOption<string>[]>(() => {

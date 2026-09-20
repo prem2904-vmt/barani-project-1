@@ -709,6 +709,20 @@
               </ul>
             }
           </div>
+
+          <!-- Photos & video at result entry — opt-in so the paperclip only
+               shows where the lab actually wants microscopy shots. -->
+          <div class="pf-uf pf-uf--span">
+            <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="attachmentsEnabled()">
+              <input type="checkbox" [checked]="attachmentsEnabled()"
+                     (change)="setAttachmentsEnabled($any($event.target).checked)" />
+              <span>Photos &amp; video at result entry</span>
+            </label>
+            <p class="pf-hint">
+              When on, the tech can attach an image or a short video to this result —
+              and choose per image whether it prints on the report. Videos stay lab-only.
+            </p>
+          </div>
         </div>
       </section>
       } @else {

@@ -1525,6 +1525,22 @@ export class SampleResultEntryComponent {
   private readonly _attach = signal<Record<string, ResultAttachment[]>>({});
   private attachTargetId: string | null = null;
 
+  // Opt-in per test: the Test Master "Photos & video at result entry" toggle
+  // writes `attachments: true` into the Parameters wrapper. No flag = no
+  // paperclip (existing attachments stay visible so they can be removed).
+  private readonly _attachEnabledByTest = computed<Set<string>>(() => {
+    const out = new Set<string>();
+    for (const t of this._sample()?.tests ?? []) {
+      try {
+        if (JSON.parse(t.test?.parameters || "{}")?.attachments === true) out.add(t.id);
+      } catch { /* malformed parameters — leave disabled */ }
+    }
+    return out;
+  });
+  attachEnabled(t: { id: string }): boolean {
+    return this._attachEnabledByTest().has(t.id);
+  }
+
   attachmentsFor(t: { id: string }): ResultAttachment[] {
     const local = this._attach()[t.id];
     if (local) return local;
