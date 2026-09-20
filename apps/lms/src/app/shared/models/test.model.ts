@@ -111,6 +111,9 @@ export interface TestParameter {
   // and rejected at submit. Optional; unset = no plausibility check.
   validLow?: number;
   validHigh?: number;
+  /** Photos & video at result entry for THIS value (per-row toggle); the
+   *  Parameters-root `attachments: true` marker means every value. */
+  attachments?: boolean;
 }
 
 export interface TestParametersBlob {

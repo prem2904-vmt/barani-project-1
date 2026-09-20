@@ -254,6 +254,9 @@ export interface FormField {
   optionRows?: import('../models/test.model').TestOptionRow[] | null;
   /** Name for the shared option group formed by optionRows (see TestParameter). */
   optionGroupName?: string | null;
+  /** Photos & video at result entry for THIS value (per-row toggle);
+   *  the Parameters-root `attachments: true` marker means every value. */
+  attachments?: boolean;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

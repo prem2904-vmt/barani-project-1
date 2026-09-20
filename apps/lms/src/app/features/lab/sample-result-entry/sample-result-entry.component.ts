@@ -1531,21 +1531,42 @@ export class SampleResultEntryComponent {
   readonly attachBusy = signal(false);
   private readonly _attach = signal<Record<string, ResultAttachment[]>>({});
   private attachTargetId: string | null = null;
+  private attachTargetParam: string | null = null;
 
-  // Opt-in per test: the Test Master "Photos & video at result entry" toggle
-  // writes `attachments: true` into the Parameters wrapper. No flag = no
-  // paperclip (existing attachments stay visible so they can be removed).
-  private readonly _attachEnabledByTest = computed<Set<string>>(() => {
-    const out = new Set<string>();
+  // Opt-in per VALUE: each parameter's `attachments: true` (the batch toggle
+  // in Test Master) puts the paperclip on THAT row; the legacy Parameters-root
+  // `attachments: true` means every value. No flag = no paperclip (existing
+  // attachments stay visible so they can be removed).
+  private readonly _attachInfoByTest = computed<Map<string, { all: boolean; params: Set<string> }>>(() => {
+    const out = new Map<string, { all: boolean; params: Set<string> }>();
     for (const t of this._sample()?.tests ?? []) {
       try {
-        if (JSON.parse(t.test?.parameters || "{}")?.attachments === true) out.add(t.id);
+        const blob = JSON.parse(t.test?.parameters || "{}");
+        const all = blob?.attachments === true;
+        const params = new Set<string>();
+        for (const p of blob?.parameters ?? []) {
+          if (p?.attachments === true && p?.name) params.add(String(p.name));
+        }
+        if (all || params.size > 0) out.set(t.id, { all, params });
       } catch { /* malformed parameters — leave disabled */ }
     }
     return out;
   });
   attachEnabled(t: { id: string }): boolean {
-    return this._attachEnabledByTest().has(t.id);
+    return this._attachInfoByTest().has(t.id);
+  }
+  attachEnabledForParam(t: { id: string }, p: { name: string }): boolean {
+    const info = this._attachInfoByTest().get(t.id);
+    return !!info && (info.all || info.params.has(p.name));
+  }
+  attachCountForParam(t: { id: string }, p: { name: string }): number {
+    return this.attachmentsFor(t).filter((a) => a.param === p.name).length;
+  }
+  /** Chip prefix for a value-tagged attachment — the value's display title. */
+  attachParamTitle(t: OrderTest, a: ResultAttachment): string | null {
+    if (!a.param) return null;
+    const p = this.parametersFor(t).find(x => x.name === a.param);
+    return p?.title || p?.name || a.param;
   }
 
   attachmentsFor(t: { id: string }): ResultAttachment[] {
@@ -1558,8 +1579,9 @@ export class SampleResultEntryComponent {
   attachSrc(a: ResultAttachment): string {
     return /^https?:/i.test(a.url) ? a.url : this.platform.getApiUrl() + a.url;
   }
-  pickAttachment(t: { id: string }, input: HTMLInputElement) {
+  pickAttachment(t: { id: string }, input: HTMLInputElement, param?: string) {
     this.attachTargetId = t.id;
+    this.attachTargetParam = param ?? null;
     input.click();
   }
   async onAttachPicked(ev: Event) {
@@ -1592,6 +1614,7 @@ export class SampleResultEntryComponent {
           kind,
           show: kind === "image",       // images print by default; videos never
           name: file.name,
+          param: this.attachTargetParam ?? undefined,
         }];
       }
       if (list !== this.attachmentsFor(target)) await this.saveAttachments(targetId, list);
@@ -1626,4 +1649,6 @@ interface ResultAttachment {
   kind: "image" | "video";
   show: boolean;
   name?: string | null;
+  /** The value (parameter name) this file belongs to; absent = whole test. */
+  param?: string | null;
 }

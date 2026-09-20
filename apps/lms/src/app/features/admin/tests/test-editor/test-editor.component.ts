@@ -1566,6 +1566,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       normalValue: p.normalValue ?? null,
       optionRows: p.optionRows ?? null,
       optionGroupName: p.optionGroupName ?? null,
+      attachments: p.attachments === true || undefined,
       options: p.options?.map((label, i) => ({
         id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
         label: label ?? '',
@@ -1669,6 +1670,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       options: f.options?.map(o => o.label) ?? undefined,
       optionRows: f.optionRows ?? undefined,
       optionGroupName: f.optionGroupName ?? undefined,
+      attachments: f.attachments === true || undefined,
       referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
       normalValue: f.normalValue ?? undefined,
       criticalLow: f.criticalLow ?? undefined,

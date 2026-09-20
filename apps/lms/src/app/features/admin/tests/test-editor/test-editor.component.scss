@@ -930,3 +930,5 @@ select.pf-input--compact {
   font-size: 12px; cursor: pointer;
 }
 .pf-vbatch__x:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.5); }
+.pf-vbatch__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pf-vbatch__attach { flex-shrink: 0; }

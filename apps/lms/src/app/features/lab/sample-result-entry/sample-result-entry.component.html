@@ -538,8 +538,12 @@
                               ✎
                             </button>
                             @if (
-                              attachEnabled(t) || attachmentsFor(t).length > 0
+                              !attachEnabled(t) &&
+                              attachmentsFor(t).length > 0
                             ) {
+                              <!-- Legacy leftovers: attachments exist but no
+                                   row is flagged any more — keep them
+                                   reachable at test level. -->
                               <button
                                 type="button"
                                 class="pf-sre__attach-btn"
@@ -557,6 +561,26 @@
                                 }
                               </button>
                             }
+                          }
+                          <!-- Per-VALUE paperclip: the row's own photos/video
+                               switch from Test Master puts it on THIS row. -->
+                          @if (attachEnabledForParam(t, p)) {
+                            <button
+                              type="button"
+                              class="pf-sre__attach-btn"
+                              tabindex="-1"
+                              [disabled]="attachBusy()"
+                              (click)="pickAttachment(t, attachInput, p.name)"
+                              [title]="'Attach an image or video to ' + (p.title || p.name)"
+                              aria-label="Attach an image or video to this value"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                              @if (attachCountForParam(t, p) > 0) {
+                                <span class="pf-sre__attach-count">{{
+                                  attachCountForParam(t, p)
+                                }}</span>
+                              }
+                            </button>
                           }
                         </td>
                       </tr>
@@ -658,7 +682,10 @@
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                 </a>
               }
-              <span class="pf-sre__attach-name" [title]="a.name || ''">{{ a.name || a.kind }}</span>
+              <span class="pf-sre__attach-name" [title]="a.name || ''">
+                @if (attachParamTitle(t, a); as pt) {
+                  <span class="pf-sre__attach-param">{{ pt }} · </span>
+                }{{ a.name || a.kind }}</span>
               @if (a.kind === 'image') {
                 <button type="button" class="pf-sre__attach-eye"
                         [class.pf-sre__attach-eye--on]="a.show"
