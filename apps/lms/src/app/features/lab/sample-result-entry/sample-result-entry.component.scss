@@ -634,11 +634,12 @@
   color: #fca5a5;
   background: rgba(248, 113, 113, 0.06);
 }
-/* Status dot + per-test note/attach buttons (last slim column).
-   width:1% + nowrap = shrink-to-fit, so the cell grows with however
-   many buttons a row carries instead of clipping the last one. */
+/* Status dot + per-test note/attach buttons (last slim column). The
+   table is table-layout:fixed, so this must be a real width big enough
+   for the worst row (dot + param pencil + test pencil + paperclip with
+   count) — a percentage or shrink-to-fit clips the trailing button. */
 .pf-sre__gc-note {
-  width: 1%;
+  width: 128px;
   text-align: right;
   white-space: nowrap;
 }
