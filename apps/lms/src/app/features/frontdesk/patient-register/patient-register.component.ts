@@ -37,7 +37,8 @@ import { NavBackService } from '../../../core/services/nav-back.service';
       <pf-screen-header
         eyebrow="Frontdesk · Registration"
         [title]="patientId() ? 'Edit Patient Details' : 'Register Patient'"
-        subtitle="Capture the patient's details — name, contact, ID, and any extras you collect.">
+        subtitle="Capture the patient's details — name, contact, ID, and any extras you collect."
+        [parentRoute]="parentRoute()">
       </pf-screen-header>
 
       @if (!patientId() && config()) {
@@ -155,6 +156,10 @@ export class PatientRegisterComponent implements OnInit {
   readonly saving = this._saving.asReadonly();
 
   protected readonly patientId = signal<string | null>(null);
+  protected readonly parentRoute = computed(() => {
+    const pid = this.patientId();
+    return pid ? `/frontdesk/patients/${pid}` : '/frontdesk';
+  });
   /** ABHA (ABDM) create/verify wizard — edit mode only (needs a patient id). */
   protected readonly abhaWizardOpen = signal(false);
   onAbhaDone(p: Patient) {

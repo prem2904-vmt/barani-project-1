@@ -98,9 +98,24 @@ export class NavBackService {
       return '/admin/tests';
     }
     if (normUrl.startsWith('/frontdesk/appointments/')) {
+      const match = rawUrl.match(/[?&]patientId=([^&]+)/);
+      if (match && match[1]) {
+        return `/frontdesk/patients/${match[1]}`;
+      }
       return '/frontdesk/appointments';
     }
+    if (normUrl === '/frontdesk/patients/new' || normUrl === '/reception/patients/new') {
+      const match = rawUrl.match(/[?&]patientId=([^&]+)/);
+      if (match && match[1]) {
+        return `/frontdesk/patients/${match[1]}`;
+      }
+      return '/frontdesk';
+    }
     if (normUrl.startsWith('/frontdesk/')) {
+      const match = rawUrl.match(/[?&]patientId=([^&]+)/);
+      if (match && match[1] && normUrl !== '/frontdesk') {
+        return `/frontdesk/patients/${match[1]}`;
+      }
       return '/frontdesk';
     }
     // Shortlink screens (/o/:id order, /p/:id patient) live under the desk.
