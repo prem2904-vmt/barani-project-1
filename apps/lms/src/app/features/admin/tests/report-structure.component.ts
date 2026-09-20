@@ -141,7 +141,8 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                   <p class="rsd__note">Organisms and their antibiotic results from the culture bench, with the S / R / M legend. The bench's own checkboxes choose which rows print.</p>
                 }
                 @case ('image') {
-                  <p class="rsd__note">Attachments captured with the result print here.</p>
+                  <p class="rsd__note">Photos the tech marks “show” at result entry print here.
+                    Hidden = they stay in the lab record only — nothing on the PDF.</p>
                 }
                 @default {
                   <p class="rsd__note">{{ row.hint }} — fine-tuning lives in the advanced editor below.</p>
@@ -311,6 +312,10 @@ export class ReportStructureComponent {
 
   readonly testId = input<string>('');
   readonly culture = input<boolean>(false);
+  /** "Photos & video at result entry" is ON for this test → the print
+   *  order always carries an Images block (the linker: its Prints/Hidden
+   *  pill decides whether the tech's shown photos reach the PDF). */
+  readonly attachments = input<boolean>(false);
   /** Parameter names — the miniature table's rows + condition parameters. */
   readonly parameters = input<string[]>([]);
   /** "Specimen · Result · Unit · Reference range" — the table's columns. */
@@ -439,19 +444,34 @@ export class ReportStructureComponent {
   // ── Row view-model ─────────────────────────────────────────
   readonly rows = computed<StructureRow[]>(() => {
     const raw = this.rawSections();
-    if (raw) return raw.map((s, i) => this.rowFor(s, i));
+    // Attachments enabled but no Images block saved yet → an implicit one
+    // trails the list (mirrors materialised(), which appends it on edit).
+    const implicitImage: StructureRow = {
+      key: 'implicit-image', kind: 'image', name: 'Images',
+      hint: '', hidden: false, canRename: false, canDelete: false,
+      canHide: true, implicit: true,
+    };
+    if (raw) {
+      const out = raw.map((s, i) => this.rowFor(s, i));
+      if (this.attachments() && !raw.some(s => s.type === 'image')) out.push(implicitImage);
+      return out;
+    }
     // Implicit structure — what the report prints today without a layout.
     if (this.culture()) {
-      return CLASSIC_CULTURE.map((c, i) => ({
+      const out: StructureRow[] = CLASSIC_CULTURE.map((c, i) => ({
         key: `implicit-${i}`, kind: c.type, name: c.label, hint: c.hint,
         hidden: false, canRename: true, canDelete: c.type !== 'culture_ast',
         canHide: true, source: c.source, implicit: true,
       }));
+      if (this.attachments()) out.push(implicitImage);
+      return out;
     }
-    return [
+    const out: StructureRow[] = [
       { key: 'implicit-grid', kind: 'grid', name: 'Results table',
         hint: '', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
     ];
+    if (this.attachments()) out.push(implicitImage);
+    return out;
   });
 
   private rowFor(s: RawSection, i: number): StructureRow {
@@ -538,23 +558,35 @@ export class ReportStructureComponent {
     this.commit(secs);
   }
 
-  /** Explicit sections — materialising the implicit structure on first edit. */
+  /** Explicit sections — materialising the implicit structure on first edit.
+   *  MUST mirror rows() index-for-index: mutate() maps row → section by
+   *  position, so the implicit Images block appends here exactly when it
+   *  appends there. */
   private materialised(): RawSection[] {
+    const imageSec = (): RawSection => ({ id: newSecId(), type: 'image', order: 0, conditions: [] });
     const raw = this.rawSections();
-    if (raw) return raw.map(s => ({ ...s }));
+    if (raw) {
+      const secs = raw.map(s => ({ ...s }));
+      if (this.attachments() && !secs.some(s => s.type === 'image')) secs.push(imageSec());
+      return secs;
+    }
     if (this.culture()) {
-      return CLASSIC_CULTURE.map((c, i) => {
+      const secs = CLASSIC_CULTURE.map((c, i) => {
         const s: RawSection = { id: newSecId(), type: c.type, order: i + 1, label: c.label, conditions: [] };
         if (c.source) s.source = c.source;
         return s;
       });
+      if (this.attachments()) secs.push(imageSec());
+      return secs;
     }
     // Normal test: the implicit results table becomes a real grid section with
     // one row per parameter (mirrors the engine's own default synthesis).
-    return [{
+    const secs: RawSection[] = [{
       id: newSecId(), type: 'grid', order: 1, conditions: [],
       rows: this.parameters().map(p => ({ id: newSecId(), parameter_name: p, row_merge: false, cells: {} })),
     }];
+    if (this.attachments()) secs.push(imageSec());
+    return secs;
   }
 
   private mutate(key: string, fn: ((s: RawSection) => void) | null, opts?: { debounce?: boolean }) {

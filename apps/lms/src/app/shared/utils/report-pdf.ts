@@ -612,8 +612,11 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     // the profile's print instead (see the merge below) — so its layout can't
     // pull it out of the columnar table. Without this, a member that merely
     // carries a note escaped the merge and printed as a standalone block.
+    // Image sections don't count: every attachments-enabled test carries an
+    // Images block in its layout, and that alone must not pull a plain
+    // numeric test out of the columnar table.
     const narrative = !t.packageTestId
-      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid');
+      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image');
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       special.push(t);
     } else if (narrative) {
@@ -827,9 +830,14 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
 
   // Tech attachments for TABULAR tests — the columnar table has no
   // per-test section hook, so their shown images print here, labelled.
+  // The Test Master's Images block is the print switch: hidden (all image
+  // sections invisible) = lab-only traceability, nothing on the PDF.
   for (const t of tabular) {
     const imgs = (t as { images?: string[] | null }).images ?? [];
     if (!imgs.length) continue;
+    const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
+    const imgSecs = layout?.sections.filter(s => s.type === 'image') ?? [];
+    if (imgSecs.length > 0 && !imgSecs.some(s => s.isVisible)) continue;
     if (cursorY > A4.h - MARGIN_BOTTOM - 120) { cursorY = newPage(doc, practice); }
     cursorY = drawImagesBlock(doc, imgs, cursorY + 4, practice, `${t.name ?? 'Test'} — images`);
   }
@@ -849,9 +857,12 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     }
     {
       const imgs = (t as { images?: string[] | null }).images ?? [];
-      const hasImageSection = !!layout?.sections.some(sec =>
-        sec.isVisible && sec.type === 'image' && (sec.imageUrls?.length ?? 0) > 0);
-      if (imgs.length && !hasImageSection) {
+      const imgSecs = layout?.sections.filter(s => s.type === 'image') ?? [];
+      const drawnInLayout = imgSecs.some(s => s.isVisible && (s.imageUrls?.length ?? 0) > 0);
+      // All image sections hidden = the admin cut them from the PDF on
+      // purpose (lab-only traceability) — no fallback either.
+      const suppressed = imgSecs.length > 0 && !imgSecs.some(s => s.isVisible);
+      if (imgs.length && !drawnInLayout && !suppressed) {
         cursorY = drawImagesBlock(doc, imgs, cursorY + 2, practice, `${t.name ?? 'Test'} — images`);
       }
     }

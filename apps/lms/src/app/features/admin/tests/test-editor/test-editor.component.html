@@ -950,6 +950,7 @@
               <pf-report-structure
                 [testId]="d.id || ''"
                 [culture]="cultureBench()"
+                [attachments]="attachmentsEnabled()"
                 [parameters]="parameterNames()"
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
