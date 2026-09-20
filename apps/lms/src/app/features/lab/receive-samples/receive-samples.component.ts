@@ -286,7 +286,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             @if (embedded) {
               <!-- Compact row: avatar + name + Intake button. Sample-focused →
                    Sample ID is the headline, patient demoted below. -->
-              <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'">
+              <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'"
+                  [class.pf-rs-row--pending]="g.state === 'ready' || g.state === 'partial'"
+                  [class.pf-rs-row--received]="g.state === 'received'">
                 <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
                 @if (!labCfg.sampleFocused()) {
                   <!-- Desktop view (single line) -->
@@ -308,9 +310,14 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   <span class="pf-rs-row__chip" title="Tubes still at FD counter — ask reception to dispatch.">
                     Awaiting
                   </span>
+                } @else if (g.state === 'received') {
+                  <span class="pf-rs-row__chip pf-rs-row__chip--done" title="Received at the lab — drops off this list after 24 h.">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    Received
+                  </span>
                 } @else {
                   <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
-                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)">Intake</button>
+                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)">Receive</button>
                 }
               </li>
             } @else {
@@ -389,13 +396,13 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                       @case ('ready') {
                         <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
                                       class="w-full sm:w-auto">
-                          Mark Arrived
+                          Receive
                         </pf-touch-btn>
                       }
                       @case ('partial') {
                         <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
                                       class="w-full sm:w-auto">
-                          Mark Arrived ({{ g.tubeCount }})
+                          Receive ({{ g.tubeCount }})
                         </pf-touch-btn>
                       }
                       @case ('awaiting') {
@@ -403,6 +410,13 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                               style="background: rgba(245, 158, 11, 0.15); color: var(--amber-text);"
                               title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
                           ⚠ Not dispatched yet
+                        </span>
+                      }
+                      @case ('received') {
+                        <span class="px-3 py-1.5 text-[12px] font-semibold rounded-md text-center w-full sm:w-auto"
+                              style="background: rgba(52, 211, 153, 0.15); color: #34d399;"
+                              title="Received at the lab — drops off this list after 24 h.">
+                          ✓ Received
                         </span>
                       }
                     }
@@ -544,6 +558,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       border-color: rgba(168, 85, 247, 0.36);
     }
     .pf-rs-row--awaiting { opacity: 0.65; }
+    /* 24-h ledger colours: red = waiting for the lab to receive,
+       green = received (stays visible until the window ages it out). */
+    .pf-rs-row--pending { border-left: 3px solid rgba(248, 113, 113, 0.85); }
+    .pf-rs-row--received { border-left: 3px solid rgba(52, 211, 153, 0.85); background: rgba(52, 211, 153, 0.05); }
+    .pf-rs-row__chip--done { color: #34d399; border-color: rgba(52, 211, 153, 0.45);
+      background: rgba(52, 211, 153, 0.1); display: inline-flex; align-items: center; gap: 4px; }
     .pf-rs-row__name {
       font-size: 13.5px;
       font-weight: 600;
@@ -909,6 +929,12 @@ export class ReceiveSamplesComponent implements OnInit {
     else if (dispatched === 0 && notReady > 0) state = 'awaiting';
     else if (received > 0) state = 'partial';
     else state = 'ready';
+    // Ledger timestamp: the latest dispatch (or receipt) on the order —
+    // drives newest-first ordering.
+    const latestAt = samples.reduce<string | null>((acc, sm) => {
+      const t = (sm.dispatchedAt ?? sm.receivedAtLab) || null;
+      return t && (!acc || t > acc) ? t : acc;
+    }, null) ?? o.createdAt ?? null;
     return {
       orderId: o.id,
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
@@ -921,9 +947,12 @@ export class ReceiveSamplesComponent implements OnInit {
       totalTubes: total,
       sampleId: primarySample?.barcode ?? null,
       state,
+      latestAt,
       testLabels: this.uniqueTestNames(o)
     };
-  }).filter(g => g.state !== 'received'));
+  // 24-h LEDGER (owner 2026-09-20): received orders STAY, turned green —
+  // the API window ages them out after 24 h. Newest dispatch first.
+  }).sort((a, b) => (b.latestAt ?? '').localeCompare(a.latestAt ?? '')));
   /**
    * Sample-focused intake list: one row per TUBE, not per order. Three tubes
    * dispatched means three rows and a count of three — the whole point of the
@@ -934,7 +963,8 @@ export class ReceiveSamplesComponent implements OnInit {
    */
   readonly dispatchedTubes = computed(() => this._dispatched().flatMap(o => {
     const samples = (o.samples ?? []).filter(s =>
-      s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected');
+      s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected'
+      || s.status === 'received' || s.status === 'processing');
     return samples.map(sm => ({
       orderId: o.id,
       sampleDbId: sm.id ?? null,
@@ -944,16 +974,21 @@ export class ReceiveSamplesComponent implements OnInit {
       patientMrn: o.patient?.mrn?.trim() || '',
       patientNameAndAgeSex: o.patient ? formatPatientNameAgeSex(o.patient) : 'Patient',
       tubeCount: sm.status === 'dispatched' ? 1 : 0,
-      receivedCount: 0,
-      notReadyCount: sm.status === 'dispatched' ? 0 : 1,
+      receivedCount: sm.status === 'received' || sm.status === 'processing' ? 1 : 0,
+      notReadyCount: sm.status === 'pending' || sm.status === 'collected' ? 1 : 0,
       totalTubes: 1,
       sampleId: sm.barcode ?? null,
-      state: (sm.status === 'dispatched' ? 'ready' : 'awaiting') as 'ready' | 'awaiting',
+      state: (sm.status === 'dispatched' ? 'ready'
+        : sm.status === 'received' || sm.status === 'processing' ? 'received'
+        : 'awaiting') as 'ready' | 'awaiting' | 'received',
+      latestAt: (sm.dispatchedAt ?? sm.receivedAtLab) || null,
       testLabels: this.uniqueTestNames(o),
     }));
-  // Sequence by sample number — tubes land in the intake as 1, 2, 3, not in
-  // whatever order the orders happened to arrive from the API.
-  }).sort((a, b) => (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
+  // 24-h LEDGER: newest dispatch first — a tube sent an hour after the
+  // others tops the list; received rows stay (green) until the API's
+  // 24-h window ages them out. Ties fall back to the sample number.
+  }).sort((a, b) => ((b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
+      || (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
