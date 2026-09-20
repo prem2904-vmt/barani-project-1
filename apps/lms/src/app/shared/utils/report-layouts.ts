@@ -21,6 +21,9 @@ export interface LayoutSnapshotTest {
    *  notes the report prints for that group. */
   profileTestId?: string | null;
   result?: { values?: Record<string, unknown> } | null;
+  /** show=true image urls from the snapshot — resolve the layout with them
+   *  so `has_images` predicates + image sections light up. */
+  images?: string[] | null;
 }
 
 /** The subset of ReportLayoutService this needs — passed in so the helper stays
@@ -58,7 +61,7 @@ export async function resolveReportLayouts<T>(
       if (!t.testId) return;
       try {
         layouts[t.testId] = await preview(
-          t.testId, scalarValues(t.result?.values ?? {}), [], patient,
+          t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient,
         ) as T;
       } catch { /* no layout for this test — plain table */ }
     }),

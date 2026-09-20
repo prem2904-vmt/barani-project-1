@@ -602,7 +602,7 @@ export class ReportQueueComponent implements OnInit {
           resolvedLayouts[t.testId] = await svc.preview(
             t.testId,
             (t.result?.values ?? {}) as Record<string, unknown>,
-            [],
+            (t as { images?: string[] | null }).images ?? [],
             patient,
           );
         } catch {

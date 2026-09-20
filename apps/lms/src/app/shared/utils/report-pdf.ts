@@ -189,6 +189,8 @@ interface ReportSnapshot {
   } | null;
   pendingDepts?: string[];
   tests?: Array<{
+    /** Tech attachments marked show — printed as an images block. */
+    images?: string[] | null;
     testId?: string;
     name?: string;
     department?: string;
@@ -823,6 +825,15 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs, finalSigs);
   }
 
+  // Tech attachments for TABULAR tests — the columnar table has no
+  // per-test section hook, so their shown images print here, labelled.
+  for (const t of tabular) {
+    const imgs = (t as { images?: string[] | null }).images ?? [];
+    if (!imgs.length) continue;
+    if (cursorY > A4.h - MARGIN_BOTTOM - 120) { cursorY = newPage(doc, practice); }
+    cursorY = drawImagesBlock(doc, imgs, cursorY + 4, practice, `${t.name ?? 'Test'} — images`);
+  }
+
   // Narrative + microbiology blocks after the columnar results.
   // Canonical columns (already computed above) feed any grid section embedded
   // in a narrative test.
@@ -835,6 +846,14 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       cursorY = renderResolvedTest(doc, t, layout, cursorY, practice);
     } else {
       cursorY = renderLegacyTest(doc, t, cursorY, practice);
+    }
+    {
+      const imgs = (t as { images?: string[] | null }).images ?? [];
+      const hasImageSection = !!layout?.sections.some(sec =>
+        sec.isVisible && sec.type === 'image' && (sec.imageUrls?.length ?? 0) > 0);
+      if (imgs.length && !hasImageSection) {
+        cursorY = drawImagesBlock(doc, imgs, cursorY + 2, practice, `${t.name ?? 'Test'} — images`);
+      }
     }
     cursorY += 10;
   }
@@ -973,6 +992,16 @@ export async function preloadReportImages(
     } catch { /* malformed json — skip */ }
   }
   if (tpl?.signatureUrl) urls.add(tpl.signatureUrl);
+
+  // Result attachments: snapshot-level (tabular fallback) + any resolved
+  // image sections (positioned by the test's layout).
+  try {
+    const snap = JSON.parse(input.report.data ?? '{}') as ReportSnapshot;
+    for (const t of snap.tests ?? []) for (const u of t.images ?? []) urls.add(u);
+  } catch { /* malformed snapshot — images just won't preload */ }
+  for (const l of Object.values(input.resolvedLayouts ?? {})) {
+    for (const sec of l.sections ?? []) for (const u of sec.imageUrls ?? []) urls.add(u);
+  }
 
   const cache: Record<string, string> = {};
   await Promise.all(Array.from(urls).map(async u => {
@@ -2557,7 +2586,7 @@ function renderResolvedTest(
         y = renderParagraphSection(doc, sec, y);
         break;
       case 'image':
-        y = renderImageSection(doc, sec, y);
+        y = renderImageSection(doc, sec, y, practice);
         break;
       case 'chart':
         y = renderChartSection(doc, sec, y);
@@ -2798,14 +2827,64 @@ function renderParagraphSection(doc: jsPDF, sec: ResolvedSection, startY: number
   return y + 2;
 }
 
-function renderImageSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
-  const urls = sec.imageUrls ?? [];
+function renderImageSection(
+  doc: jsPDF, sec: ResolvedSection, startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>
+): number {
+  return drawImagesBlock(doc, sec.imageUrls ?? [], startY, practice);
+}
+
+/** Draw attached images for real — two per row, aspect kept, hairline
+ *  frames, page-break aware. URLs missing from IMG_CACHE degrade to the
+ *  old italic placeholder so the report never silently loses information. */
+function drawImagesBlock(
+  doc: jsPDF, urls: string[], startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>,
+  heading?: string
+): number {
   if (urls.length === 0) return startY;
-  doc.setFont(PDF_FONT, 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(TEXT_DIM);
-  doc.text(`[ ${urls.length} attached image${urls.length === 1 ? '' : 's'} ]`, MARGIN_X, startY + 11);
-  return startY + 18;
+  const usable = urls.filter(u => IMG_CACHE[u]);
+  let y = startY;
+  if (heading) {
+    doc.setFont(PDF_FONT, 'bolditalic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(heading.toUpperCase(), MARGIN_X, y + 10);
+    y += 16;
+  }
+  if (usable.length === 0) {
+    doc.setFont(PDF_FONT, 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(`[ ${urls.length} attached image${urls.length === 1 ? '' : 's'} ]`, MARGIN_X, y + 11);
+    return y + 18;
+  }
+  const gap = 12;
+  const maxW = (A4.w - 2 * MARGIN_X - gap) / 2;
+  const maxH = 180;
+  let x = MARGIN_X;
+  let rowH = 0;
+  for (const u of usable) {
+    const data = IMG_CACHE[u];
+    let w = maxW, h = maxH;
+    try {
+      const props = doc.getImageProperties(data);
+      const sc = Math.min(maxW / props.width, maxH / props.height, 1);
+      w = Math.max(40, props.width * sc);
+      h = Math.max(40, props.height * sc);
+    } catch { continue; }
+    if (x + w > A4.w - MARGIN_X + 1) { x = MARGIN_X; y += rowH + gap; rowH = 0; }
+    if (y + h > A4.h - MARGIN_BOTTOM) { y = newPage(doc, practice); x = MARGIN_X; rowH = 0; }
+    try {
+      doc.addImage(data, x, y, w, h);
+      doc.setDrawColor(HAIR);
+      doc.setLineWidth(0.5);
+      doc.rect(x, y, w, h);
+    } catch { continue; }
+    x += w + gap;
+    rowH = Math.max(rowH, h);
+  }
+  return y + rowH + 8;
 }
 
 function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {

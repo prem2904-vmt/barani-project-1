@@ -1682,3 +1682,30 @@
   text-transform: none;
   letter-spacing: normal;
 }
+
+/* ── Result attachments (images/videos with show-on-report toggles) ── */
+.pf-sre__attach-btn { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
+  border-radius: 9px; border: 1px solid var(--glass-border); background: transparent;
+  color: var(--text-tertiary, #94a3b8); cursor: pointer; flex-shrink: 0; }
+.pf-sre__attach-btn:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
+.pf-sre__attach-btn:disabled { opacity: .5; cursor: default; }
+.pf-sre__attach-count { font-size: 11px; font-weight: 700; color: var(--violet-text, #a78bfa); }
+.pf-sre__attach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.pf-sre__attach-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px;
+  border: 1px solid var(--glass-border); border-radius: 11px; background: var(--glass-bg);
+  transition: opacity .15s; }
+.pf-sre__attach-chip--off { opacity: .55; }
+.pf-sre__attach-thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05); }
+.pf-sre__attach-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pf-sre__attach-thumb--video { color: var(--text-secondary, #cbd5e1); }
+.pf-sre__attach-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; color: var(--text-secondary, #cbd5e1); }
+.pf-sre__attach-eye { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 8px; border: none; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
+.pf-sre__attach-eye--on { color: #34d399; }
+.pf-sre__attach-eye:hover { background: var(--glass-bg-hover, rgba(255,255,255,.06)); }
+.pf-sre__attach-record { font-size: 10px; color: var(--text-tertiary, #64748b); font-style: italic; }
+.pf-sre__attach-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border-radius: 8px; border: none; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
+.pf-sre__attach-x:hover { color: #f87171; background: rgba(239,68,68,.08); }

@@ -25,11 +25,13 @@ import {
 import { TenantStateService } from "../../../core/services/tenant-state.service";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
+import { HttpClient } from "@angular/common/http";
 import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
 import { NavBackService } from "../../../core/services/nav-back.service";
+import { PlatformService } from "../../../core/services/platform.service";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
 import {
@@ -103,6 +105,8 @@ function calcKey(testId: string, paramName: string): string {
 })
 export class SampleResultEntryComponent {
   private readonly host = inject(ElementRef);
+  private readonly http = inject(HttpClient);
+  private readonly platform = inject(PlatformService);
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -1512,4 +1516,85 @@ export class SampleResultEntryComponent {
   back() {
     this.router.navigate(["/lab/my-work"]);
   }
+
+  // ── Result attachments (owner's model, 2026-09-20) ───────────────────
+  // The tech attaches images/videos to a result; each image carries a
+  // show-on-report toggle (mirrors the culture bench's checkboxes — the
+  // bench keeps everything, only `show` images print). Videos never print.
+  readonly attachBusy = signal(false);
+  private readonly _attach = signal<Record<string, ResultAttachment[]>>({});
+  private attachTargetId: string | null = null;
+
+  attachmentsFor(t: { id: string }): ResultAttachment[] {
+    const local = this._attach()[t.id];
+    if (local) return local;
+    const raw = (t as { attachmentsJson?: string | null }).attachmentsJson;
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+  }
+  attachSrc(a: ResultAttachment): string {
+    return /^https?:/i.test(a.url) ? a.url : this.platform.getApiUrl() + a.url;
+  }
+  pickAttachment(t: { id: string }, input: HTMLInputElement) {
+    this.attachTargetId = t.id;
+    input.click();
+  }
+  async onAttachPicked(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    const targetId = this.attachTargetId;
+    if (!file || !targetId) return;
+    const kind: ResultAttachment["kind"] = file.type.startsWith("video/") ? "video" : "image";
+    if (file.size > (kind === "video" ? 30 : 5) * 1024 * 1024) {
+      this.toasts.error(kind === "video" ? "Video too large — max 30 MB" : "Image too large — max 5 MB");
+      return;
+    }
+    this.attachBusy.set(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      const resp = await this.http.post<{ success: boolean; data?: { url: string }; message?: string }>(
+        `${this.platform.getApiUrl()}/api/uploads/result-file`, fd).toPromise();
+      if (!resp?.success || !resp.data?.url) { this.toasts.error(resp?.message ?? "Upload failed"); return; }
+      const target = { id: targetId };
+      const next: ResultAttachment[] = [...this.attachmentsFor(target), {
+        id: Math.random().toString(36).slice(2, 10),
+        url: resp.data.url,
+        kind,
+        show: kind === "image",       // images print by default; videos never
+        name: file.name,
+      }];
+      await this.saveAttachments(targetId, next);
+    } catch {
+      this.toasts.error("Upload failed — check the connection and try again.");
+    } finally {
+      this.attachBusy.set(false);
+    }
+  }
+  toggleAttachmentShow(t: { id: string }, a: ResultAttachment) {
+    if (a.kind !== "image") return;
+    void this.saveAttachments(t.id,
+      this.attachmentsFor(t).map(x => x.id === a.id ? { ...x, show: !x.show } : x));
+  }
+  removeAttachment(t: { id: string }, a: ResultAttachment) {
+    void this.saveAttachments(t.id, this.attachmentsFor(t).filter(x => x.id !== a.id));
+  }
+  private async saveAttachments(otId: string, list: ResultAttachment[]) {
+    this._attach.update(m => ({ ...m, [otId]: list }));
+    try {
+      await firstValueFrom(this.api.put<{ id: string }>(
+        `/api/results/${otId}/attachments`, { attachments: list }));
+    } catch {
+      this.toasts.error("Could not save the attachments — retry.");
+    }
+  }
+}
+
+interface ResultAttachment {
+  id: string;
+  url: string;
+  kind: "image" | "video";
+  show: boolean;
+  name?: string | null;
 }
